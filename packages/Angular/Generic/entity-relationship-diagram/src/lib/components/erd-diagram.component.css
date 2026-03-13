@@ -53,7 +53,7 @@
 
 .control-btn:hover:not(:disabled) {
   background: var(--mj-bg-surface-sunken);
-  border-color: var(--mj-color-neutral-400);
+  border-color: var(--mj-border-strong);
   color: var(--mj-text-primary);
 }
 
@@ -126,7 +126,7 @@
 }
 
 .spinner-ring:nth-child(2) {
-  border-top-color: var(--mj-color-warning-500);
+  border-top-color: var(--mj-status-warning);
   animation-delay: 0.3s;
   transform: scale(0.8);
 }
@@ -162,29 +162,81 @@
   }
 }
 
-/* Node highlighting styles */
+/* ── Base node colors (override D3 presentation attributes) ── */
+:host ::ng-deep .erd-container svg .node .entity-rect {
+  fill: var(--mj-bg-surface-card);
+  stroke: var(--mj-text-primary);
+}
+
+:host ::ng-deep .erd-container svg .node .entity-header,
+:host ::ng-deep .erd-container svg .node .entity-header-bottom {
+  fill: var(--mj-brand-primary);
+}
+
+:host ::ng-deep .erd-container svg .node .entity-name {
+  fill: var(--mj-text-inverse);
+}
+
+/* Field backgrounds and text */
+:host ::ng-deep .erd-container svg .field-group.primary-key .field-bg {
+  fill: color-mix(in srgb, var(--mj-status-warning) 20%, var(--mj-bg-surface-card));
+}
+
+:host ::ng-deep .erd-container svg .field-group.primary-key .field-name,
+:host ::ng-deep .erd-container svg .field-group.primary-key .field-icon {
+  fill: var(--mj-text-primary);
+}
+
+:host ::ng-deep .erd-container svg .field-group.foreign-key .field-bg {
+  fill: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface-card));
+}
+
+:host ::ng-deep .erd-container svg .field-group.foreign-key .field-name,
+:host ::ng-deep .erd-container svg .field-group.foreign-key .field-icon {
+  fill: var(--mj-text-primary);
+}
+
+/* ── Link colors ── */
+:host ::ng-deep .erd-container svg .link-group .link-label-bg {
+  fill: var(--mj-bg-surface-card);
+  stroke: var(--mj-text-muted);
+}
+
+:host ::ng-deep .erd-container svg .link-group .link-label {
+  fill: var(--mj-text-muted);
+}
+
+:host ::ng-deep .erd-container svg .link-group .link {
+  stroke: var(--mj-text-muted);
+}
+
+:host ::ng-deep .erd-container svg #end-arrow path {
+  fill: var(--mj-text-muted);
+}
+
+/* ── Node highlighting styles ── */
 :host ::ng-deep .erd-container svg .node .entity-rect.highlighted {
-  stroke: var(--mj-status-success) !important;
-  stroke-width: 4px !important;
-  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--mj-status-success) 60%, transparent));
+  stroke: var(--mj-status-warning) !important;
+  stroke-width: 3px !important;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-status-warning) 50%, transparent));
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-rect {
-  stroke: #4CAF50 !important;
+  stroke: var(--mj-status-success) !important;
   stroke-width: 4px !important;
-  filter: drop-shadow(0 0 8px rgba(76, 175, 80, 0.5));
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--mj-status-success) 50%, transparent));
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-header {
-  fill: #388E3C !important;
+  fill: color-mix(in srgb, var(--mj-status-success) 85%, black) !important;
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-header-bottom {
-  fill: #388E3C !important;
+  fill: color-mix(in srgb, var(--mj-status-success) 85%, black) !important;
 }
 
 :host ::ng-deep .erd-container svg .node.selected .entity-name {
-  fill: white !important;
+  fill: var(--mj-text-inverse) !important;
   font-weight: bold !important;
 }
 
@@ -204,20 +256,30 @@
 }
 
 :host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-rect.connection-highlighted {
-  stroke: var(--mj-color-warning-500) !important;
+  stroke: var(--mj-status-warning) !important;
   stroke-width: 3px !important;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-color-warning-500) 50%, transparent));
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--mj-status-warning) 50%, transparent));
   opacity: 0.9;
 }
 
 :host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-header {
-  fill: var(--mj-color-warning-500) !important;
+  fill: var(--mj-status-warning) !important;
   opacity: 0.8;
 }
 
 :host ::ng-deep .erd-container svg .node.entity-connections-highlighted .entity-header-bottom {
-  fill: var(--mj-color-warning-500) !important;
+  fill: var(--mj-status-warning) !important;
   opacity: 0.8;
+}
+
+/* Self-referencing links — distinct green accent */
+:host ::ng-deep .erd-container svg .link-group.self-reference .link-label-bg {
+  fill: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface-card));
+  stroke: var(--mj-status-success);
+}
+
+:host ::ng-deep .erd-container svg .link-group.self-reference .link-label {
+  fill: color-mix(in srgb, var(--mj-status-success) 80%, var(--mj-text-primary));
 }
 
 /* Link styles */
@@ -263,6 +325,6 @@
 }
 
 :host ::ng-deep .erd-container svg .field-group:hover .field-bg {
-  fill: var(--mj-color-accent-300) !important;
+  fill: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface-card)) !important;
 }
 

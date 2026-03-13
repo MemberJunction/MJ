@@ -80,11 +80,11 @@
 }
 
 .toolbar-btn.close-btn {
-  background: rgba(255, 59, 48, 0.2);
+  background: color-mix(in srgb, var(--mj-status-error) 20%, transparent);
 }
 
 .toolbar-btn.close-btn:hover {
-  background: rgba(255, 59, 48, 0.4);
+  background: color-mix(in srgb, var(--mj-status-error) 40%, transparent);
 }
 
 .toolbar-btn i {
@@ -182,7 +182,7 @@
   }
 
   .toolbar-btn.close-btn:hover {
-    background: rgba(255, 59, 48, 0.2);
+    background: color-mix(in srgb, var(--mj-status-error) 20%, transparent);
   }
 
   .viewer-instructions {

@@ -447,7 +447,7 @@
                 <!-- Favorite Records (max 3) -->
                 <div class="qa-section" [class.collapsed]="!isQuickAccessSectionExpanded('favoriteRecords')">
                   <div class="qa-section-header" (click)="toggleQuickAccessSection('favoriteRecords')">
-                    <i class="fa-solid fa-star qa-section-icon" style="color: #f59e0b;"></i>
+                    <i class="fa-solid fa-star qa-section-icon" style="color: var(--mj-status-warning);"></i>
                     <span>Favorite Records</span>
                     <span class="qa-section-count">{{ quickAccessFavoriteRecords.length }}</span>
                     <i class="fa-solid fa-chevron-down qa-section-chevron"></i>
@@ -535,6 +535,9 @@
     [externalFilterState]="filterDialogState"
     [isSaving]="isSavingView"
     [DefaultSaveAsNew]="defaultSaveAsNew"
+    [PendingNewViewName]="pendingNewViewName"
+    [PendingNewViewDescription]="pendingNewViewDescription"
+    [PendingNewViewIsShared]="pendingNewViewIsShared"
     (close)="onCloseViewConfigPanel()"
     (save)="onSaveView($event)"
     (saveDefaults)="onSaveDefaultViewSettings($event)"
@@ -580,7 +583,7 @@
     [DefaultSaveAsNew]="defaultSaveAsNew"
     (Save)="onQuickSave($event)"
     (Close)="onQuickSaveClose()"
-    (OpenAdvanced)="onQuickSaveOpenAdvanced()">
+    (OpenAdvanced)="onQuickSaveOpenAdvanced($event)">
   </mj-quick-save-dialog>
 
   <!-- Duplicate View Dialog (F-005) -->

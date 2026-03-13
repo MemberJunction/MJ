@@ -22,11 +22,11 @@
   color: var(--mj-text-primary);
 }
 .nav-list .nav-item.active {
-  background: color-mix(in srgb, var(--app-color, #1976d2) 12%, var(--mj-bg-surface));
-  color: var(--app-color, #1976d2);
+  background: color-mix(in srgb, var(--app-color, var(--mj-brand-primary)) 12%, var(--mj-bg-surface));
+  color: var(--app-color, var(--mj-brand-primary));
 }
 .nav-list .nav-item.active i {
-  color: var(--app-color, #1976d2);
+  color: var(--app-color, var(--mj-brand-primary));
 }
 .nav-list .nav-item i {
   font-size: 16px;
@@ -36,7 +36,7 @@
   padding-right: 12px;
 }
 .nav-list .nav-item .badge {
-  background: #f44336;
+  background: var(--mj-status-error);
   color: white;
   border-radius: 10px;
   padding: 2px 6px;

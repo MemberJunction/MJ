@@ -1,5 +1,25 @@
 # @memberjunction/ng-query-viewer
 
+## 5.11.0
+
+### Minor Changes
+
+- a4c3c81: migration/metadata
+
+### Patch Changes
+
+- 457afcf: Add create/edit query drawer to Query Browser; fix full record toolbar; suppress duplicate empty state in query grid
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/ng-notifications@5.11.0
+  - @memberjunction/ng-code-editor@5.11.0
+  - @memberjunction/ng-shared-generic@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/ng-export-service@5.11.0
+  - @memberjunction/ng-markdown@5.11.0
+  - @memberjunction/export-engine@5.11.0
+  - @memberjunction/global@5.11.0
+
 ## 5.10.1
 
 ### Patch Changes

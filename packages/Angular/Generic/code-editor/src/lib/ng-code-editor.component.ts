@@ -15,9 +15,10 @@ import {
 import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
 
 import { indentWithTab } from '@codemirror/commands';
-import { LanguageDescription, indentUnit } from '@codemirror/language';
+import { HighlightStyle, LanguageDescription, indentUnit, syntaxHighlighting } from '@codemirror/language';
 import { Annotation, Compartment, EditorState, Extension, StateEffect } from '@codemirror/state';
-import { EditorView, highlightWhitespace, keymap, placeholder, lineNumbers, EditorView as EditorViewType } from '@codemirror/view';
+import { EditorView, highlightWhitespace, keymap, placeholder, lineNumbers } from '@codemirror/view';
+import { tags } from '@lezer/highlight';
 import { basicSetup, minimalSetup } from 'codemirror';
 
 // Import common language extensions
@@ -29,6 +30,12 @@ import { languages } from '@codemirror/language-data';
 
 // Import toolbar configuration
 import { ToolbarConfig, ToolbarButton, ToolbarButtonGroup, ToolbarActionEvent } from './toolbar-config';
+
+// Import composition token extension for SQL highlighting
+import { compositionTokenExtension, CompositionTokenClickEvent, CompositionTokenResolver, CompositionTokenInfo } from './composition-token-extension';
+
+// Import MJ Metadata for default hover resolution
+import { Metadata } from '@memberjunction/core';
 
 export type Setup = 'basic' | 'minimal' | null;
 
@@ -238,6 +245,9 @@ export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAcces
   /** Event emitted when a toolbar button is clicked */
   @Output() toolbarAction = new EventEmitter<ToolbarActionEvent>();
 
+  /** Event emitted when a {{query:"..."}} composition token is clicked in SQL mode */
+  @Output() CompositionTokenClick = new EventEmitter<CompositionTokenClickEvent>();
+
   /** Reference to the editor content container */
   @ViewChild('editorContent', { static: true }) editorContent!: ElementRef;
 
@@ -271,13 +281,126 @@ export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAcces
   private _highlightWhitespaceConf = new Compartment();
   private _languageConf = new Compartment();
 
+  /**
+   * Creates the CodeMirror EditorView.theme() extension using MJ semantic design tokens.
+   * CSS custom properties (var(--mj-*)) are used directly so the theme adapts
+   * automatically when dark mode toggles [data-theme="dark"].
+   */
+  private _buildMjTheme(): Extension {
+    return EditorView.theme({
+      '&': {
+        backgroundColor: 'var(--mj-bg-surface)',
+        color: 'var(--mj-text-primary)',
+      },
+      '&.cm-focused': {
+        outline: 'none',
+      },
+      '.cm-scroller': {
+        fontFamily: '"Consolas", "Monaco", "Courier New", monospace',
+        fontSize: 'var(--mj-text-sm)',
+      },
+      '.cm-content': {
+        minHeight: '100%',
+        color: 'var(--mj-text-primary)',
+      },
+      '.cm-gutters': {
+        backgroundColor: 'var(--mj-bg-surface-sunken)',
+        borderRight: '1px solid var(--mj-border-default)',
+        color: 'var(--mj-text-muted)',
+      },
+      '.cm-gutter.cm-lineNumbers .cm-gutterElement': {
+        color: 'var(--mj-text-muted)',
+      },
+      '.cm-activeLineGutter, .cm-activeLine': {
+        backgroundColor: 'color-mix(in srgb, var(--mj-brand-primary) 8%, transparent)',
+      },
+      '.cm-cursor, .cm-dropCursor': {
+        borderLeftColor: 'var(--mj-text-primary)',
+      },
+      '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': {
+        backgroundColor: 'color-mix(in srgb, var(--mj-brand-primary) 30%, transparent)',
+      },
+      '.cm-selectionMatch': {
+        backgroundColor: 'color-mix(in srgb, var(--mj-brand-primary) 15%, transparent)',
+      },
+      '.cm-searchMatch': {
+        backgroundColor: 'color-mix(in srgb, var(--mj-status-warning) 30%, transparent)',
+      },
+      '.cm-searchMatch.cm-searchMatch-selected': {
+        backgroundColor: 'color-mix(in srgb, var(--mj-status-warning) 50%, transparent)',
+      },
+      '.cm-foldPlaceholder': {
+        backgroundColor: 'var(--mj-bg-surface-sunken)',
+        border: '1px solid var(--mj-border-default)',
+        color: 'var(--mj-text-muted)',
+      },
+      '.cm-tooltip': {
+        backgroundColor: 'var(--mj-bg-surface-elevated, var(--mj-bg-surface))',
+        border: '1px solid var(--mj-border-default)',
+        color: 'var(--mj-text-primary)',
+      },
+      '.cm-tooltip-autocomplete': {
+        '& > ul > li[aria-selected]': {
+          backgroundColor: 'color-mix(in srgb, var(--mj-brand-primary) 15%, transparent)',
+          color: 'var(--mj-text-primary)',
+        },
+      },
+      '.cm-panels': {
+        backgroundColor: 'var(--mj-bg-surface-sunken)',
+        color: 'var(--mj-text-primary)',
+      },
+      '.cm-panels.cm-panels-top': {
+        borderBottom: '1px solid var(--mj-border-default)',
+      },
+      '.cm-panels.cm-panels-bottom': {
+        borderTop: '1px solid var(--mj-border-default)',
+      },
+    });
+  }
+
+  /**
+   * Creates the syntax highlighting extension using MJ-aware colors.
+   * These colors are chosen to be readable on both light and dark MJ surfaces.
+   */
+  private _buildMjHighlightStyle(): Extension {
+    const mjHighlight = HighlightStyle.define([
+      { tag: tags.keyword, color: 'var(--mj-syntax-keyword, #c678dd)' },
+      { tag: tags.operator, color: 'var(--mj-syntax-keyword, #c678dd)' },
+      { tag: tags.string, color: 'var(--mj-syntax-string, #98c379)' },
+      { tag: tags.number, color: 'var(--mj-syntax-number, #d19a66)' },
+      { tag: tags.bool, color: 'var(--mj-syntax-number, #d19a66)' },
+      { tag: tags.null, color: 'var(--mj-syntax-number, #d19a66)' },
+      { tag: tags.atom, color: 'var(--mj-syntax-number, #d19a66)' },
+      { tag: tags.propertyName, color: 'var(--mj-syntax-property, #61afef)' },
+      { tag: tags.variableName, color: 'var(--mj-syntax-variable, #e06c75)' },
+      { tag: tags.definition(tags.variableName), color: 'var(--mj-syntax-variable, #e06c75)' },
+      { tag: tags.function(tags.variableName), color: 'var(--mj-syntax-function, #61afef)' },
+      { tag: tags.typeName, color: 'var(--mj-syntax-type, #e5c07b)' },
+      { tag: tags.className, color: 'var(--mj-syntax-type, #e5c07b)' },
+      { tag: tags.comment, color: 'var(--mj-text-disabled)', fontStyle: 'italic' },
+      { tag: tags.lineComment, color: 'var(--mj-text-disabled)', fontStyle: 'italic' },
+      { tag: tags.blockComment, color: 'var(--mj-text-disabled)', fontStyle: 'italic' },
+      { tag: tags.meta, color: 'var(--mj-text-muted)' },
+      { tag: tags.link, color: 'var(--mj-brand-primary)', textDecoration: 'underline' },
+      { tag: tags.heading, color: 'var(--mj-text-primary)', fontWeight: 'bold' },
+      { tag: tags.emphasis, fontStyle: 'italic' },
+      { tag: tags.strong, fontWeight: 'bold' },
+      { tag: tags.punctuation, color: 'var(--mj-text-secondary)' },
+      { tag: tags.bracket, color: 'var(--mj-text-secondary)' },
+      { tag: tags.tagName, color: 'var(--mj-syntax-keyword, #c678dd)' },
+      { tag: tags.attributeName, color: 'var(--mj-syntax-property, #61afef)' },
+      { tag: tags.attributeValue, color: 'var(--mj-syntax-string, #98c379)' },
+    ]);
+    return syntaxHighlighting(mjHighlight);
+  }
+
   private _getAllExtensions() {
     const allExtensions: Extension[] = [
       this._updateListener,
 
       this._editableConf.of([]),
       this._readonlyConf.of([]),
-      this._themeConf.of([]),
+      this._themeConf.of([this._buildMjTheme(), this._buildMjHighlightStyle()]),
       this._placeholderConf.of([]),
       this._indentWithTabConf.of([]),
       this._indentUnitConf.of([]),
@@ -292,6 +415,14 @@ export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAcces
 
       // Add built-in language support if no custom language is loaded
       this._getBuiltInLanguageExtension(),
+
+      // Add composition token highlighting for SQL mode
+      ...(this._language.toLowerCase() === 'sql'
+        ? compositionTokenExtension({
+            OnTokenClick: (event) => this.CompositionTokenClick.emit(event),
+            OnTokenHover: (fullPath) => this.resolveCompositionToken(fullPath)
+          })
+        : []),
 
       ...this._extensions,
     ];
@@ -384,6 +515,48 @@ export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAcces
       buttonId: button.id,
       editor: this.view
     });
+  }
+
+  /**
+   * Resolves a composition token path to query metadata for the hover tooltip.
+   * Uses Metadata.Provider.Queries to look up the referenced query.
+   */
+  private resolveCompositionToken(fullPath: string): CompositionTokenInfo | null {
+    try {
+      const allQueries = Metadata.Provider.Queries;
+      const segments = fullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
+      if (segments.length === 0) return null;
+
+      const queryName = segments[segments.length - 1];
+      const categorySegments = segments.slice(0, -1);
+
+      // First try: exact match on Name + CategoryPath
+      let query = allQueries.find(q => {
+        if (q.Name !== queryName) return false;
+        if (categorySegments.length === 0) return true;
+        const expectedPath = '/' + categorySegments.join('/') + '/';
+        return q.CategoryPath === expectedPath;
+      });
+
+      // Second try: match on Name alone (ignore category) if no exact match
+      if (!query) {
+        query = allQueries.find(q => q.Name === queryName);
+      }
+
+      if (!query) return null;
+
+      return {
+        Name: query.Name,
+        Description: query.Description ?? undefined,
+        Status: query.Status,
+        Category: query.CategoryPath ? query.CategoryPath.replace(/^\/|\/$/g, '').replace(/\//g, ' / ') : undefined,
+        HasParameters: query.Parameters.length > 0,
+        Reusable: query.Reusable
+      };
+    } catch (e) {
+      console.warn('[composition-token] Error resolving token:', e);
+      return null;
+    }
   }
 
   /**

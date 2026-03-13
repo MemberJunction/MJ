@@ -5,15 +5,15 @@
     (close)="close()">
     <kendo-dialog-titlebar>
       <div style="display: flex; align-items: center; gap: 8px;">
-        <i class="fa-solid fa-play-circle" style="color: #007bff;"></i>
+        <i class="fa-solid fa-play-circle" style="color: var(--mj-brand-primary);"></i>
         Run Query: {{ query?.Name || 'Untitled' }}
       </div>
     </kendo-dialog-titlebar>
     <div style="display: flex; flex-direction: column; height: 100%; overflow-y: auto; overflow-x: hidden;">
       @if (isLoadingParams) {
         <div style="display: flex; align-items: center; justify-content: center; padding: 40px;">
-          <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: #6c757d; margin-right: 12px;"></i>
-          <span style="color: #6c757d;">Loading query parameters...</span>
+          <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; color: var(--mj-text-muted); margin-right: 12px;"></i>
+          <span style="color: var(--mj-text-muted);">Loading query parameters...</span>
         </div>
       } @else {
         <!-- Query Parameters Section -->
@@ -23,7 +23,7 @@
             style="margin-bottom: 16px; flex-shrink: 0;">
             <ng-template kendoExpansionPanelTitleDirective>
               <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
+                <i class="fa-solid fa-sliders" style="color: var(--mj-text-muted);"></i>
                 Query Parameters
                 <span class="badge" style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
                   {{ parameterPairs.length }}
@@ -31,31 +31,31 @@
               </span>
             </ng-template>
             <div style="padding: 12px 0;">
-              <div style="margin-bottom: 12px; color: #6c757d; font-size: 0.85em;">
+              <div style="margin-bottom: 12px; color: var(--mj-text-muted); font-size: 0.85em;">
                 <i class="fa-solid fa-info-circle"></i>
                 Configure parameter values for query execution.
               </div>
               <!-- Parameters List -->
               <div style="display: flex; flex-direction: column; gap: 16px;">
                 @for (param of parameterPairs; track param.name) {
-                  <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 16px;">
+                  <div style="background: var(--mj-bg-surface-sunken); border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 16px;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
                       <div>
-                        <label style="font-weight: 600; color: #495057; display: flex; align-items: center; gap: 6px;">
-                          <i class="fa-solid fa-at" style="color: #007bff;"></i>
+                        <label style="font-weight: 600; color: var(--mj-text-secondary); display: flex; align-items: center; gap: 6px;">
+                          <i class="fa-solid fa-at" style="color: var(--mj-brand-primary);"></i>
                           {{ param.name }}
                           @if (param.isRequired) {
                             <span style="color: #dc3545;">*</span>
                           }
                         </label>
                         @if (param.description) {
-                          <div style="font-size: 0.85em; color: #6c757d; margin-top: 4px;">
+                          <div style="font-size: 0.85em; color: var(--mj-text-muted); margin-top: 4px;">
                             {{ param.description }}
                           </div>
                         }
                       </div>
                       <div style="display: flex; gap: 8px; align-items: center;">
-                        <span class="badge" style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75em;">
+                        <span class="badge" style="background: var(--mj-text-muted); color: white; padding: 2px 6px; border-radius: 4px; font-size: 0.75em;">
                           {{ param.type }}
                         </span>
                         @if (!isParameterValid(param)) {
@@ -79,8 +79,8 @@
                       </kendo-textarea>
                     }
                     @if (param.defaultValue) {
-                      <div style="font-size: 0.8em; color: #6c757d; margin-top: 4px;">
-                        Default: <code style="background: #e9ecef; padding: 2px 4px; border-radius: 3px;">{{ param.defaultValue }}</code>
+                      <div style="font-size: 0.8em; color: var(--mj-text-muted); margin-top: 4px;">
+                        Default: <code style="background: var(--mj-bg-surface-sunken); padding: 2px 4px; border-radius: 3px;">{{ param.defaultValue }}</code>
                       </div>
                     }
                   </div>
@@ -89,7 +89,7 @@
             </div>
           </kendo-expansionpanel>
         } @else {
-          <div style="padding: 20px; background: #f8f9fa; border-radius: 6px; margin-bottom: 16px; text-align: center; color: #6c757d;">
+          <div style="padding: 20px; background: var(--mj-bg-surface-sunken); border-radius: 6px; margin-bottom: 16px; text-align: center; color: var(--mj-text-muted);">
             <i class="fa-solid fa-info-circle"></i> This query has no parameters.
           </div>
         }
@@ -99,10 +99,10 @@
           style="margin-bottom: 16px;">
           <ng-template kendoExpansionPanelTitleDirective>
             <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-              <i class="fa-solid fa-table-list" style="color: #6c757d;"></i>
+              <i class="fa-solid fa-table-list" style="color: var(--mj-text-muted);"></i>
               Pagination Settings
               @if (maxRows && maxRows > 0) {
-                <span class="badge" style="background: #6c757d; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                <span class="badge" style="background: var(--mj-text-muted); color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
                   {{ maxRows }} rows/page
                 </span>
               }
@@ -112,8 +112,8 @@
             <div style="display: flex; flex-direction: column; gap: 12px;">
               <!-- Max Rows -->
               <div style="display: flex; align-items: center; gap: 12px;">
-                <label style="font-weight: 600; color: #495057; white-space: nowrap; min-width: 100px;">
-                  <i class="fa-solid fa-list-ol" style="color: #6c757d; margin-right: 6px;"></i>
+                <label style="font-weight: 600; color: var(--mj-text-secondary); white-space: nowrap; min-width: 100px;">
+                  <i class="fa-solid fa-list-ol" style="color: var(--mj-text-muted); margin-right: 6px;"></i>
                   Max Rows:
                 </label>
                 <kendo-numerictextbox
@@ -123,14 +123,14 @@
                   placeholder="All rows"
                   style="width: 150px;">
                 </kendo-numerictextbox>
-                <span style="font-size: 0.85em; color: #6c757d;">
+                <span style="font-size: 0.85em; color: var(--mj-text-muted);">
                   Leave empty to return all rows
                 </span>
               </div>
               <!-- Start Row -->
               <div style="display: flex; align-items: center; gap: 12px;">
-                <label style="font-weight: 600; color: #495057; white-space: nowrap; min-width: 100px;">
-                  <i class="fa-solid fa-forward" style="color: #6c757d; margin-right: 6px;"></i>
+                <label style="font-weight: 600; color: var(--mj-text-secondary); white-space: nowrap; min-width: 100px;">
+                  <i class="fa-solid fa-forward" style="color: var(--mj-text-muted); margin-right: 6px;"></i>
                   Start Row:
                 </label>
                 <kendo-numerictextbox
@@ -140,7 +140,7 @@
                   placeholder="0"
                   style="width: 150px;">
                 </kendo-numerictextbox>
-                <span style="font-size: 0.85em; color: #6c757d;">
+                <span style="font-size: 0.85em; color: var(--mj-text-muted);">
                   0-based offset for pagination
                 </span>
               </div>
@@ -171,7 +171,7 @@
                   </span>
                 }
                 @if (runResult.ExecutionTime) {
-                  <span style="font-size: 0.8em; color: #6c757d; font-weight: normal;">
+                  <span style="font-size: 0.8em; color: var(--mj-text-muted); font-weight: normal;">
                     ({{ runResult.ExecutionTime }}ms)
                   </span>
                 }
@@ -181,11 +181,11 @@
               @if (runResult.Success) {
                 @if (resultRows.length > 0) {
                   <!-- Export and Pagination Controls -->
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #dee2e6;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid var(--mj-border-default);">
                     <!-- Pagination Info and Controls -->
                     <div style="display: flex; align-items: center; gap: 12px;">
                       @if (runResult.TotalRowCount > runResult.RowCount || startRow > 0) {
-                        <span style="font-size: 0.9em; color: #6c757d;">
+                        <span style="font-size: 0.9em; color: var(--mj-text-muted);">
                           Showing rows {{ startRow + 1 }} - {{ startRow + runResult.RowCount }} of {{ runResult.TotalRowCount }}
                         </span>
                         <div style="display: flex; gap: 4px;">
@@ -241,12 +241,12 @@
                     </div>
                   </div>
                   <!-- Results Grid -->
-                  <div class="results-table-container" style="flex: 1; overflow: auto; border: 1px solid #dee2e6; border-radius: 4px; min-height: 0;">
+                  <div class="results-table-container" style="flex: 1; overflow: auto; border: 1px solid var(--mj-border-default); border-radius: 4px; min-height: 0;">
                     <table class="results-table" style="width: 100%; border-collapse: collapse; font-size: 14px;">
-                      <thead style="position: sticky; top: 0; background: #f8f9fa; z-index: 10;">
+                      <thead style="position: sticky; top: 0; background: var(--mj-bg-surface-sunken); z-index: 10;">
                         <tr>
                           @for (col of resultColumns; track col.field) {
-                            <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; background: #f8f9fa; white-space: nowrap;">
+                            <th style="padding: 12px 16px; text-align: left; font-weight: 600; color: var(--mj-text-secondary); border-bottom: 2px solid var(--mj-border-default); background: var(--mj-bg-surface-sunken); white-space: nowrap;">
                               {{ col.title }}
                             </th>
                           }
@@ -254,9 +254,9 @@
                       </thead>
                       <tbody>
                         @for (row of resultRows; track $index) {
-                          <tr style="border-bottom: 1px solid #e9ecef; transition: background-color 0.2s;">
+                          <tr style="border-bottom: 1px solid var(--mj-border-default); transition: background-color 0.2s;">
                             @for (col of resultColumns; track col.field) {
-                              <td style="padding: 10px 16px; color: #212529; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                              <td style="padding: 10px 16px; color: var(--mj-text-primary); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
                                 [title]="row[col.field]">
                                 {{ row[col.field] || '' }}
                               </td>
@@ -266,14 +266,14 @@
                       </tbody>
                     </table>
                     @if (resultRows.length === 0) {
-                      <div style="padding: 40px; text-align: center; color: #6c757d;">
+                      <div style="padding: 40px; text-align: center; color: var(--mj-text-muted);">
                         <i class="fa-solid fa-table" style="font-size: 48px; margin-bottom: 12px; opacity: 0.3;"></i>
                         <p>No data in results</p>
                       </div>
                     }
                   </div>
                 } @else {
-                  <div style="display: flex; align-items: center; justify-content: center; height: 200px; color: #6c757d;">
+                  <div style="display: flex; align-items: center; justify-content: center; height: 200px; color: var(--mj-text-muted);">
                     <i class="fa-solid fa-inbox" style="font-size: 48px; margin-bottom: 12px;"></i>
                     <p>No results returned</p>
                   </div>

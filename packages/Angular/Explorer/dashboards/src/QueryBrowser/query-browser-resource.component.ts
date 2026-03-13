@@ -1,15 +1,17 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, NgZone, HostListener, ViewChild } from '@angular/core';
+import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { takeUntil, filter } from 'rxjs/operators';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, QueryInfo, QueryCategoryInfo, CompositeKey } from '@memberjunction/core';
-import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine, MJQueryEntity } from '@memberjunction/core-entities';
 import {
     QueryEntityLinkClickEvent,
     QueryRowClickEvent
 } from '@memberjunction/ng-query-viewer';
+import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 /**
  * Tree node for the query category hierarchy
  */
@@ -51,6 +53,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /** All queries the user has permission to run */
     public queries: QueryInfo[] = [];
     public filteredQueries: QueryInfo[] = [];
+    private filteredQueryIds = new Set<string>();
     public selectedQuery: QueryInfo | null = null;
     public searchText = '';
     public PanelWidth = QueryBrowserResourceComponent.DEFAULT_PANEL_WIDTH;
@@ -79,6 +82,29 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // Bound event handlers for resize (need references for removeEventListener)
     private boundOnResizeMove = this.onResizeMove.bind(this);
     private boundOnResizeEnd = this.onResizeEnd.bind(this);
+
+    // ========================================
+    // Drawer State (Create / Edit)
+    // ========================================
+
+    public ShowQueryDrawer = false;
+    public DrawerMode: 'create' | 'edit' = 'create';
+    public DrawerQueryId: string | null = null;
+    public DrawerName = '';
+    public DrawerSQL = '';
+    @ViewChild('drawerSqlEditor') private drawerSqlEditor: CodeEditorComponent | null = null;
+    public DrawerDescription = '';
+    public DrawerCategoryID = '';
+    public DrawerStatus: 'Pending' | 'Approved' | 'Rejected' | 'Expired' = 'Pending';
+    public IsSavingDrawer = false;
+    public DrawerNameError = false;
+    public DrawerSaveError: string | null = null;
+
+    /** Ordered status options for the drawer dropdown — all valid Query statuses */
+    public readonly DrawerStatuses: Array<'Pending' | 'Approved' | 'Rejected' | 'Expired'> =
+        ['Pending', 'Approved', 'Rejected', 'Expired'];
+
+    private initialDrawerSnapshot = '';
 
     constructor(
         private cdr: ChangeDetectorRef,
@@ -286,11 +312,11 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /** Get the CSS color for a query status */
     public getStatusColor(status: string): string {
         switch (status) {
-            case 'Approved':  return '#28a745';
-            case 'Pending':   return '#f59e0b';
-            case 'Rejected':  return '#dc3545';
-            case 'Expired':   return '#6c757d';
-            default:          return '#6c757d';
+            case 'Approved':  return 'var(--mj-status-success)';
+            case 'Pending':   return 'var(--mj-status-warning)';
+            case 'Rejected':  return 'var(--mj-status-error)';
+            case 'Expired':   return 'var(--mj-text-muted)';
+            default:          return 'var(--mj-text-muted)';
         }
     }
 
@@ -321,6 +347,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         }
 
         this.filteredQueries = result;
+        this.filteredQueryIds = new Set(result.map(q => q.ID.toLowerCase()));
     }
 
     /** Load saved status filter preferences */
@@ -429,7 +456,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public isQueryVisible(query: QueryInfo): boolean {
         if (!this.searchText) return true;
-        return this.filteredQueries.some(q => UUIDsEqual(q.ID, query.ID));
+        return this.filteredQueryIds.has(query.ID.toLowerCase());
     }
 
     public hasVisibleContent(node: CategoryNode): boolean {
@@ -450,8 +477,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public onEntityLinkClick(event: QueryEntityLinkClickEvent): void {
         // Look up the entity's actual primary key field name from metadata
-        const md = new Metadata();
-        const entity = md.Entities.find(e => e.Name === event.entityName);
+        const entity = this.metadata.Entities.find(e => e.Name === event.entityName);
         const pkField = entity?.FirstPrimaryKey;
         const pkFieldName = pkField?.Name || 'ID';
 
@@ -469,12 +495,244 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
     }
 
-    public openQueryDetails(query: QueryInfo, event: Event): void {
-        // Stop propagation so clicking the button doesn't also select the query
-        event.stopPropagation();
-        // Open the Query entity record
-        const compositeKey = CompositeKey.FromID(query.ID);
-        this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
+    public onCompositionTokenClick(event: CompositionTokenClickEvent): void {
+        // Find the referenced query by matching name and category path
+        const targetQuery = this.findQueryByCompositionPath(event.FullPath);
+        if (targetQuery) {
+            this.expandTreeToQuery(targetQuery);
+            this.selectQuery(targetQuery);
+        } else {
+            // Query not in the current list — could be filtered out or in a different status
+            console.warn(`Composition target query not found: "${event.FullPath}"`);
+        }
+    }
+
+    /**
+     * Find a query by its composition path (e.g., "Demos/Active Users").
+     * Matches the last segment as query name and preceding segments as category hierarchy.
+     */
+    private findQueryByCompositionPath(fullPath: string): QueryInfo | null {
+        const segments = fullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
+        if (segments.length === 0) return null;
+
+        const queryName = segments[segments.length - 1];
+        const categorySegments = segments.slice(0, -1);
+
+        // First try: exact match on Name + CategoryPath
+        let result = this.queries.find(q => {
+            if (q.Name !== queryName) return false;
+            if (categorySegments.length === 0) return true;
+            const expectedPath = '/' + categorySegments.join('/') + '/';
+            return q.CategoryPath === expectedPath;
+        });
+
+        // Fallback: match on Name alone if category path didn't match
+        if (!result) {
+            result = this.queries.find(q => q.Name === queryName);
+        }
+
+        return result ?? null;
+    }
+
+    /**
+     * Expand category tree nodes to reveal a specific query.
+     */
+    private expandTreeToQuery(query: QueryInfo): void {
+        const expandInNodes = (nodes: CategoryNode[]): boolean => {
+            for (const node of nodes) {
+                // Check if this node directly contains the query
+                if (node.queries.some(q => UUIDsEqual(q.ID, query.ID))) {
+                    node.expanded = true;
+                    return true;
+                }
+                // Check children recursively
+                if (expandInNodes(node.children)) {
+                    node.expanded = true;
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        expandInNodes(this.categoryTree);
+        this.cdr.markForCheck();
+    }
+
+    /** True when the current user has permission to create new queries. */
+    public get CanCreateQuery(): boolean {
+        const entity = this.metadata.EntityByName('MJ: Queries');
+        if (!entity || !this.metadata.CurrentUser) return false;
+        return entity.GetUserPermisions(this.metadata.CurrentUser).CanCreate;
+    }
+
+    /** True when the current user has permission to edit queries. */
+    public get CanEditQuery(): boolean {
+        const entity = this.metadata.EntityByName('MJ: Queries');
+        if (!entity || !this.metadata.CurrentUser) return false;
+        return entity.GetUserPermisions(this.metadata.CurrentUser).CanUpdate;
+    }
+
+    // ========================================
+    // Drawer — Open / Close
+    // ========================================
+
+    /** Close the drawer when Escape is pressed (if open). */
+    @HostListener('document:keydown.escape')
+    public OnEscapeKey(): void {
+        if (this.ShowQueryDrawer) {
+            this.CloseDrawer();
+        }
+    }
+
+    /** Open the drawer in create mode. */
+    public OpenCreateDrawer(): void {
+        this.DrawerMode = 'create';
+        this.DrawerQueryId = null;
+        this.DrawerName = '';
+        this.DrawerSQL = '';
+        this.DrawerDescription = '';
+        this.DrawerCategoryID = '';
+        this.DrawerStatus = 'Pending';
+        this.DrawerNameError = false;
+        this.DrawerSaveError = null;
+        this.captureDrawerSnapshot();
+        this.ShowQueryDrawer = true;
+        this.cdr.markForCheck();
+        setTimeout(() => this.drawerSqlEditor?.setValue(''), 0);
+    }
+
+    /**
+     * Open the drawer in edit mode, pre-populated from a QueryInfo.
+     * Stops event propagation so clicking the edit icon doesn't also select the query.
+     */
+    public OpenEditDrawer(query: QueryInfo, event?: Event): void {
+        if (event) event.stopPropagation();
+        this.DrawerMode = 'edit';
+        this.DrawerQueryId = query.ID;
+        this.DrawerName = query.Name ?? '';
+        this.DrawerSQL = query.SQL ?? '';
+        this.DrawerDescription = query.Description ?? '';
+        this.DrawerCategoryID = query.CategoryID ?? '';
+        this.DrawerStatus = query.Status ?? 'Pending';
+        this.DrawerNameError = false;
+        this.DrawerSaveError = null;
+        this.captureDrawerSnapshot();
+        this.ShowQueryDrawer = true;
+        this.cdr.markForCheck();
+        setTimeout(() => this.drawerSqlEditor?.setValue(this.DrawerSQL), 0);
+    }
+
+    /**
+     * Close the drawer. If dirty, ask for confirmation unless force=true.
+     */
+    public CloseDrawer(force = false): void {
+        if (!force && this.IsDrawerDirty) {
+            if (!confirm('You have unsaved changes. Discard them?')) return;
+        }
+        this.ShowQueryDrawer = false;
+        this.cdr.markForCheck();
+    }
+
+    /** Close drawer when clicking the backdrop. */
+    public OnDrawerBackdropClick(): void {
+        this.CloseDrawer();
+    }
+
+    // ========================================
+    // Drawer — Form Helpers
+    // ========================================
+
+    /** Update DrawerSQL when the code editor emits a change. */
+    public OnDrawerSQLChange(value: string): void {
+        this.DrawerSQL = value;
+    }
+
+    private get currentDrawerSnapshot(): string {
+        return JSON.stringify({
+            name: this.DrawerName,
+            sql: this.DrawerSQL,
+            description: this.DrawerDescription,
+            categoryID: this.DrawerCategoryID,
+            status: this.DrawerStatus,
+        });
+    }
+
+    private captureDrawerSnapshot(): void {
+        this.initialDrawerSnapshot = this.currentDrawerSnapshot;
+    }
+
+    public get IsDrawerDirty(): boolean {
+        return this.currentDrawerSnapshot !== this.initialDrawerSnapshot;
+    }
+
+    // ========================================
+    // Drawer — Save
+    // ========================================
+
+    /** Save the drawer form (create or edit). */
+    public async SaveDrawer(): Promise<void> {
+        this.DrawerNameError = !this.DrawerName.trim();
+        this.DrawerSaveError = null;
+        if (this.DrawerNameError) {
+            this.cdr.markForCheck();
+            return;
+        }
+
+        this.IsSavingDrawer = true;
+        this.cdr.markForCheck();
+
+        try {
+            const entity = await this.metadata.GetEntityObject<MJQueryEntity>('MJ: Queries');
+
+            if (this.DrawerMode === 'edit' && this.DrawerQueryId) {
+                const loaded = await entity.Load(this.DrawerQueryId);
+                if (!loaded) {
+                    this.DrawerSaveError = 'Could not load query record. Please refresh and try again.';
+                    return;
+                }
+            }
+
+            entity.Name = this.DrawerName.trim();
+            entity.SQL = this.DrawerSQL;
+            entity.Description = this.DrawerDescription;
+            entity.CategoryID = this.DrawerCategoryID || null;
+            entity.Status = this.DrawerStatus;
+
+            const saved = await entity.Save();
+            if (saved) {
+                const savedId = entity.ID;
+                this.ShowQueryDrawer = false;
+                await this.loadData(true);
+                const refreshed = this.queries.find(q => UUIDsEqual(q.ID, savedId));
+                if (refreshed) {
+                    this.selectedQuery = refreshed;
+                    this.expandCategoryForQuery(refreshed);
+                    this.updateUrl();
+                }
+            } else {
+                this.DrawerSaveError = 'Save failed. Please check your inputs and try again.';
+            }
+        } catch (e) {
+            console.error('Error saving query:', e);
+            this.DrawerSaveError = 'An unexpected error occurred while saving.';
+        } finally {
+            this.IsSavingDrawer = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    // ========================================
+    // Drawer — Open Full Record
+    // ========================================
+
+    /** Open the full entity form in a new tab (for sub-entity management). */
+    public OpenFullRecord(): void {
+        if (!this.DrawerQueryId) return;
+        this.navigationService.OpenEntityRecord(
+            'MJ: Queries',
+            CompositeKey.FromID(this.DrawerQueryId)
+        );
+        this.CloseDrawer(true);
     }
 
     // ========================================
@@ -515,17 +773,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
      * Query params: queryId
      */
     private parseUrlState(): { queryId?: string } | null {
-        const url = this.router.url;
-        const queryIndex = url.indexOf('?');
-        if (queryIndex === -1) return null;
-
-        const queryString = url.substring(queryIndex + 1);
-        const params = new URLSearchParams(queryString);
-        const queryId = params.get('queryId');
-
-        if (!queryId) return null;
-
-        return { queryId };
+        return this.parseUrlFromString(this.router.url);
     }
 
     /**

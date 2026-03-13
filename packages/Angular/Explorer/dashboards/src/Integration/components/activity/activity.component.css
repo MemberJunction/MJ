@@ -149,7 +149,7 @@
   flex-shrink: 0;
 }
 
-.dot-blue { background: var(--mj-color-info-500); }
+.dot-blue { background: var(--mj-brand-primary); }
 .dot-green { background: var(--mj-color-success-600); }
 .dot-red { background: var(--mj-status-error); }
 .dot-amber { background: var(--mj-status-warning); }
@@ -426,7 +426,7 @@
   margin: 0;
   padding: 10px 12px;
   background: var(--mj-text-primary);
-  color: #f1f5f9;
+  color: var(--mj-bg-surface-sunken);
   font-family: 'SF Mono', 'Menlo', 'Consolas', monospace;
   font-size: 11px;
   border-radius: 8px;
@@ -537,7 +537,7 @@
 
 .duration-bar-value {
   font-weight: 700;
-  color: var(--mj-color-info-500);
+  color: var(--mj-brand-primary);
   font-size: 12px;
 }
 
