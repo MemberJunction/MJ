@@ -11,9 +11,10 @@ import {
     ChangeDetectionStrategy, OnInit, OnDestroy, HostListener
 } from '@angular/core';
 import { MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { AgentResponseForm } from '@memberjunction/ai-core-plus';
 
 /**
  * Result returned when the panel closes after an action
@@ -25,21 +26,6 @@ export interface AgentRequestPanelResult {
     Request?: MJAIAgentRequestEntity;
     /** The action that was taken */
     Action: 'responded' | 'approved' | 'rejected' | 'cancelled';
-}
-
-/**
- * A single field definition parsed from ResponseSchema
- */
-interface ResponseFormField {
-    Name: string;
-    Label: string;
-    Type: string;
-    Required: boolean;
-    Options?: string[];
-    MinValue?: number;
-    MaxValue?: number;
-    DefaultValue?: string | number | boolean;
-    Placeholder?: string;
 }
 
 @Component({
@@ -59,8 +45,7 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
     public IsLoading = false;
     public IsSaving = false;
     public ResponseText = '';
-    public FormValues: Record<string, string | number | boolean> = {};
-    public FormFields: ResponseFormField[] = [];
+    public ResponseFormDefinition: AgentResponseForm | null = null;
 
     // Reassign state
     public ShowReassignDialog = false;
@@ -71,7 +56,6 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
     public IsSearchingUsers = false;
     public IsReassigning = false;
 
-    private _metadata = new Metadata();
     private reassignSearchTimeout: ReturnType<typeof setTimeout> | null = null;
 
     constructor(
@@ -115,7 +99,7 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
 
     /** Whether the request has a structured response form */
     public get HasResponseForm(): boolean {
-        return this.FormFields.length > 0;
+        return this.ResponseFormDefinition != null && (this.ResponseFormDefinition.questions?.length ?? 0) > 0;
     }
 
     /** Priority display label */
@@ -151,7 +135,6 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
         this.Request = request;
         this.IsOpen = true;
         this.ResponseText = '';
-        this.FormValues = {};
         this.initializeForm();
         this.cdr.markForCheck();
     }
@@ -291,33 +274,17 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Parse the ResponseSchema JSON and set up form fields.
-     * Supports the AgentResponseForm format (questions array with nested type objects)
-     * as well as a simple Fields array format.
+     * Parse the ResponseSchema JSON into an AgentResponseForm for the dynamic form component.
      */
     private initializeForm(): void {
-        this.FormFields = [];
-        this.FormValues = {};
+        this.ResponseFormDefinition = null;
 
         if (!this.Request?.ResponseSchema) return;
 
         try {
-            const schema = JSON.parse(this.Request.ResponseSchema);
-
-            // AgentResponseForm format: { title, description, questions: [...] }
+            const schema = JSON.parse(this.Request.ResponseSchema) as AgentResponseForm;
             if (schema?.questions && Array.isArray(schema.questions)) {
-                this.FormFields = schema.questions.map((q: Record<string, unknown>) => this.parseAgentResponseFormQuestion(q));
-            }
-            // Simple Fields array format: { Fields: [...] }
-            else if (schema?.Fields && Array.isArray(schema.Fields)) {
-                this.FormFields = schema.Fields.map((f: Record<string, unknown>) => this.parseSimpleFormField(f));
-            }
-
-            // Set default values
-            for (const field of this.FormFields) {
-                if (field.DefaultValue != null) {
-                    this.FormValues[field.Name] = field.DefaultValue;
-                }
+                this.ResponseFormDefinition = schema;
             }
         } catch {
             // If schema is invalid JSON, ignore — user can still provide free-text response
@@ -325,85 +292,15 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Parse an AgentResponseForm question into a ResponseFormField.
-     * AgentResponseForm questions have: { id, label, type: { type, options?, min?, max? }, required, helpText }
+     * Handle form submission from the dynamic form component.
+     * Called when user submits the structured response form.
      */
-    private parseAgentResponseFormQuestion(q: Record<string, unknown>): ResponseFormField {
-        const typeObj = q['type'] as Record<string, unknown> | string | undefined;
-        let fieldType = 'text';
-        let options: string[] | undefined;
-        let minValue: number | undefined;
-        let maxValue: number | undefined;
-
-        if (typeof typeObj === 'string') {
-            fieldType = this.mapAgentFormType(typeObj);
-        } else if (typeObj && typeof typeObj === 'object') {
-            fieldType = this.mapAgentFormType((typeObj['type'] as string) ?? 'text');
-            if (Array.isArray(typeObj['options'])) {
-                options = (typeObj['options'] as Array<Record<string, unknown>>).map(
-                    o => typeof o === 'string' ? o : (o['label'] as string) ?? (o['value'] as string) ?? ''
-                );
-            }
-            if (typeObj['min'] != null) minValue = typeObj['min'] as number;
-            if (typeObj['max'] != null) maxValue = typeObj['max'] as number;
-        }
-
-        return {
-            Name: (q['id'] as string) ?? '',
-            Label: (q['label'] as string) ?? (q['id'] as string) ?? '',
-            Type: fieldType,
-            Required: (q['required'] as boolean) ?? false,
-            Options: options,
-            MinValue: minValue,
-            MaxValue: maxValue,
-            DefaultValue: q['defaultValue'] as string | number | boolean | undefined,
-            Placeholder: (q['helpText'] as string) ?? (q['placeholder'] as string) ?? undefined
-        };
+    public OnFormSubmitted(formData: Record<string, unknown>): void {
+        this.lastFormData = formData;
     }
 
-    /**
-     * Map AgentResponseForm type strings to the simple field types used by the template.
-     */
-    private mapAgentFormType(agentType: string): string {
-        switch (agentType) {
-            case 'textarea':
-            case 'text':
-                return agentType;
-            case 'number':
-                return 'number';
-            case 'checkbox':
-            case 'boolean':
-                return 'checkbox';
-            case 'dropdown':
-            case 'select':
-                return 'dropdown';
-            case 'radio':
-            case 'buttongroup':
-                return 'dropdown'; // render as dropdown in panel context
-            case 'daterange':
-            case 'date':
-                return 'text'; // render as text input (date picker not yet available)
-            default:
-                return 'text';
-        }
-    }
-
-    /**
-     * Parse a simple { Name, Label, Type, ... } field definition.
-     */
-    private parseSimpleFormField(raw: Record<string, unknown>): ResponseFormField {
-        return {
-            Name: (raw['Name'] as string) ?? '',
-            Label: (raw['Label'] as string) ?? (raw['Name'] as string) ?? '',
-            Type: (raw['Type'] as string) ?? 'text',
-            Required: (raw['Required'] as boolean) ?? false,
-            Options: raw['Options'] as string[] | undefined,
-            MinValue: raw['MinValue'] as number | undefined,
-            MaxValue: raw['MaxValue'] as number | undefined,
-            DefaultValue: raw['DefaultValue'] as string | number | boolean | undefined,
-            Placeholder: raw['Placeholder'] as string | undefined
-        };
-    }
+    /** Stores the latest form data from the dynamic form */
+    private lastFormData: Record<string, unknown> | null = null;
 
     /**
      * Shared logic for submitting any response type
@@ -422,8 +319,8 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
             this.Request.Response = this.ResponseText || null;
             this.Request.RespondedAt = new Date();
 
-            if (this.HasResponseForm && Object.keys(this.FormValues).length > 0) {
-                this.Request.ResponseData = JSON.stringify(this.FormValues);
+            if (this.lastFormData && Object.keys(this.lastFormData).length > 0) {
+                this.Request.ResponseData = JSON.stringify(this.lastFormData);
             }
 
             const saved = await this.Request.Save();

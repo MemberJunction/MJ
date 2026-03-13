@@ -61,68 +61,13 @@
                 </div>
 
                 <!-- Dynamic Response Form (from ResponseSchema) -->
-                @if (HasResponseForm && IsActionable) {
+                @if (HasResponseForm && IsActionable && ResponseFormDefinition) {
                     <div class="section">
-                        <h4 class="section-title">Response Form</h4>
-                        <div class="form-fields">
-                            @for (field of FormFields; track field.Name) {
-                                <div class="form-field">
-                                    <label class="field-label" [for]="'field-' + field.Name">
-                                        {{ field.Label }}
-                                        @if (field.Required) {
-                                            <span class="required-marker">*</span>
-                                        }
-                                    </label>
-                                    @switch (field.Type) {
-                                        @case ('textarea') {
-                                            <textarea
-                                                [id]="'field-' + field.Name"
-                                                class="field-textarea"
-                                                [(ngModel)]="FormValues[field.Name]"
-                                                [placeholder]="field.Placeholder || ''"
-                                                rows="3">
-                                            </textarea>
-                                        }
-                                        @case ('number') {
-                                            <input
-                                                [id]="'field-' + field.Name"
-                                                type="number"
-                                                class="field-input"
-                                                [(ngModel)]="FormValues[field.Name]"
-                                                [min]="field.MinValue ?? null"
-                                                [max]="field.MaxValue ?? null"
-                                                [placeholder]="field.Placeholder || ''">
-                                        }
-                                        @case ('dropdown') {
-                                            <select
-                                                [id]="'field-' + field.Name"
-                                                class="field-select"
-                                                [(ngModel)]="FormValues[field.Name]">
-                                                <option value="">Select...</option>
-                                                @for (option of field.Options; track option) {
-                                                    <option [value]="option">{{ option }}</option>
-                                                }
-                                            </select>
-                                        }
-                                        @case ('checkbox') {
-                                            <input
-                                                [id]="'field-' + field.Name"
-                                                type="checkbox"
-                                                class="field-checkbox"
-                                                [(ngModel)]="FormValues[field.Name]">
-                                        }
-                                        @default {
-                                            <input
-                                                [id]="'field-' + field.Name"
-                                                type="text"
-                                                class="field-input"
-                                                [(ngModel)]="FormValues[field.Name]"
-                                                [placeholder]="field.Placeholder || ''">
-                                        }
-                                    }
-                                </div>
-                            }
-                        </div>
+                        <mj-dynamic-form
+                            [FormDefinition]="ResponseFormDefinition"
+                            [Disabled]="IsSaving"
+                            (FormSubmitted)="OnFormSubmitted($event)">
+                        </mj-dynamic-form>
                     </div>
                 }
 

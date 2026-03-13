@@ -1,16 +1,16 @@
-@if (isVisible) {
-  <div class="agent-response-form">
+@if (IsVisible) {
+  <div class="dynamic-form">
     <!-- Simple Choice Mode (single question, no title, buttongroup/radio) -->
-    @if (isSimpleChoice) {
+    @if (IsSimpleChoice) {
       <div class="simple-choice-buttons">
-        @for (option of getOptions(responseForm.questions[0]); track trackByValue($index, option)) {
+        @for (option of GetOptions(FormDefinition.questions[0]); track TrackByValue($index, option)) {
           <button
             kendoButton
-            [disabled]="disabled || isSubmitting"
-            (click)="onSimpleChoiceClick(option.value)"
+            [disabled]="Disabled || IsSubmitting"
+            (click)="OnSimpleChoiceClick(option.value)"
             class="choice-button"
             >
-            @if (hasIcon(option)) {
+            @if (HasIcon(option)) {
               <i class="fa {{ option.icon }}" aria-hidden="true"></i>
             }
             {{ option.label }}
@@ -19,75 +19,75 @@
       </div>
     }
     <!-- Full Form Mode (complex forms) -->
-    @if (!isSimpleChoice) {
-      <form [formGroup]="formGroup" (ngSubmit)="onSubmit()" class="response-form">
+    @if (!IsSimpleChoice) {
+      <form [formGroup]="FormGroup" (ngSubmit)="OnSubmit()" class="response-form">
         <!-- Form Title -->
-        @if (responseForm.title) {
-          <h3 class="form-title">{{ responseForm.title }}</h3>
+        @if (FormDefinition.title) {
+          <h3 class="form-title">{{ FormDefinition.title }}</h3>
         }
         <!-- Form Description -->
-        @if (responseForm.description) {
-          <p class="form-description">{{ responseForm.description }}</p>
+        @if (FormDefinition.description) {
+          <p class="form-description">{{ FormDefinition.description }}</p>
         }
         <!-- Questions (excludes footer choice question) -->
-        @if (mainQuestions.length > 0) {
+        @if (MainQuestions.length > 0) {
           <div class="form-questions">
-            @for (question of mainQuestions; track trackByQuestionId($index, question)) {
-              <mj-form-question
-                [question]="question"
-                [control]="getControl(question.id)"
+            @for (question of MainQuestions; track TrackByQuestionId($index, question)) {
+              <mj-dynamic-form-field
+                [Question]="question"
+                [Control]="GetControl(question.id)"
                 [formControlName]="question.id"
-              ></mj-form-question>
+              ></mj-dynamic-form-field>
             }
           </div>
         }
         <!-- Footer Actions -->
         <div class="form-actions">
           <!-- Footer Choice Buttons (replaces Submit when present) -->
-          @if (footerChoiceQuestion) {
-            @for (option of getOptions(footerChoiceQuestion); track trackByValue($index, option)) {
+          @if (FooterChoiceQuestion) {
+            @for (option of GetOptions(FooterChoiceQuestion); track TrackByValue($index, option)) {
               <button
                 kendoButton
                 type="button"
                 [themeColor]="'primary'"
-                [disabled]="disabled || isSubmitting"
-                (click)="onFooterChoiceClick(option.value)"
+                [disabled]="Disabled || IsSubmitting"
+                (click)="OnFooterChoiceClick(option.value)"
                 class="footer-choice-button"
                 >
-                @if (!isSubmitting) {
+                @if (!IsSubmitting) {
                   <span>
-                    @if (hasIcon(option)) {
+                    @if (HasIcon(option)) {
                       <i class="fa {{ option.icon }}" aria-hidden="true"></i>
                     }
                     {{ option.label }}
                   </span>
                 }
-                @if (isSubmitting) {
+                @if (IsSubmitting) {
                   <span>
-                    <span class="k-icon k-i-loading"></span>
+                    <i class="fa-solid fa-spinner fa-spin"></i>
                   </span>
                 }
               </button>
             }
           }
           <!-- Standard Submit Button (when no footer choice) -->
-          @if (showSubmitButton) {
+          @if (ShowSubmitButton) {
             <button
               kendoButton
               type="submit"
               [themeColor]="'primary'"
-              [disabled]="disabled || isSubmitting || formGroup.invalid"
+              [disabled]="Disabled || IsSubmitting || FormGroup.invalid"
               class="submit-button"
               >
-              @if (!isSubmitting) {
+              @if (!IsSubmitting) {
                 <span>
                   <i class="fa fa-check" aria-hidden="true"></i>
-                  {{ submitLabel }}
+                  {{ SubmitLabel }}
                 </span>
               }
-              @if (isSubmitting) {
+              @if (IsSubmitting) {
                 <span>
-                  <span class="k-icon k-i-loading"></span>
+                  <i class="fa-solid fa-spinner fa-spin"></i>
                   Submitting...
                 </span>
               }

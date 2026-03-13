@@ -19,6 +19,7 @@ import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 
 // MemberJunction modules
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { DynamicFormsModule } from '@memberjunction/ng-forms';
 
 // Panel components
 import { AgentRequestPanelComponent } from './panels/agent-request-panel/agent-request-panel.component';
@@ -39,7 +40,8 @@ import { AgentRequestDialogComponent } from './dialogs/agent-request-dialog.comp
         DropDownsModule,
         InputsModule,
         DateInputsModule,
-        SharedGenericModule
+        SharedGenericModule,
+        DynamicFormsModule
     ],
     exports: [
         AgentRequestPanelComponent,

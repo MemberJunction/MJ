@@ -240,33 +240,15 @@
     color: var(--mj-status-error-text);
 }
 
-/* Form Fields */
-.form-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-}
-
-.form-field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
+/* Shared field styles (used by reassign dialog and free-text response) */
 .field-label {
     font-size: 13px;
     font-weight: 500;
     color: var(--mj-text-primary);
 }
 
-.required-marker {
-    color: var(--mj-status-error);
-    margin-left: 2px;
-}
-
 .field-input,
-.field-textarea,
-.field-select {
+.field-textarea {
     padding: 8px 12px;
     border: 1px solid var(--mj-border-default);
     border-radius: 6px;
@@ -277,8 +259,7 @@
 }
 
 .field-input:focus,
-.field-textarea:focus,
-.field-select:focus {
+.field-textarea:focus {
     outline: none;
     border-color: var(--mj-border-focus);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
@@ -287,12 +268,6 @@
 .field-textarea {
     resize: vertical;
     min-height: 60px;
-}
-
-.field-checkbox {
-    width: 18px;
-    height: 18px;
-    accent-color: var(--mj-brand-primary);
 }
 
 .response-textarea {
