@@ -8,13 +8,20 @@
 
 import {
     Component, Input, Output, EventEmitter, ChangeDetectorRef,
-    ChangeDetectionStrategy, OnInit, OnDestroy, HostListener
+    ChangeDetectionStrategy, OnInit, OnDestroy, HostListener, ViewChild, ElementRef
 } from '@angular/core';
 import { MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
 import { RunView } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AgentResponseForm } from '@memberjunction/ai-core-plus';
+import { DynamicFormComponent } from '@memberjunction/ng-forms';
+
+const PANEL_WIDTH_SETTING_KEY = 'Explorer.AgentRequestPanelWidth';
+const DEFAULT_PANEL_WIDTH = 520;
+const MIN_PANEL_WIDTH = 360;
+const MAX_PANEL_WIDTH = 900;
 
 /**
  * Result returned when the panel closes after an action
@@ -42,10 +49,24 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
 
     @Output() Close = new EventEmitter<AgentRequestPanelResult>();
 
+    @ViewChild('dynamicForm') dynamicForm: DynamicFormComponent | undefined;
+    @ViewChild('panelElement') panelElement: ElementRef<HTMLDivElement> | undefined;
+
     public IsLoading = false;
     public IsSaving = false;
     public ResponseText = '';
     public ResponseFormDefinition: AgentResponseForm | null = null;
+    public PanelWidth = DEFAULT_PANEL_WIDTH;
+
+    /** Tracks whether a response was submitted so the Close event carries the right result */
+    private completedAction: 'responded' | 'approved' | 'rejected' | null = null;
+
+    // Resize state
+    public IsResizing = false;
+    private resizeStartX = 0;
+    private resizeStartWidth = 0;
+    private boundOnResizeMove: ((e: MouseEvent) => void) | null = null;
+    private boundOnResizeEnd: (() => void) | null = null;
 
     // Reassign state
     public ShowReassignDialog = false;
@@ -64,13 +85,14 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
     ) {}
 
     ngOnInit(): void {
+        this.loadPanelWidth();
         if (this.Request) {
             this.initializeForm();
         }
     }
 
     ngOnDestroy(): void {
-        // Cleanup
+        this.cleanupResizeListeners();
     }
 
     @HostListener('document:keydown.escape')
@@ -128,6 +150,28 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
         return new Date(this.Request.ExpiresAt) < new Date();
     }
 
+    /** Parsed ResponseData entries for read-only display */
+    public get ResponseDataEntries(): Array<{ key: string; label: string; value: string }> {
+        if (!this.Request?.ResponseData) return [];
+        try {
+            const data = JSON.parse(this.Request.ResponseData) as Record<string, unknown>;
+            return Object.entries(data).map(([key, value]) => ({
+                key,
+                label: this.getQuestionLabel(key),
+                value: String(value ?? '')
+            }));
+        } catch {
+            return [];
+        }
+    }
+
+    /** Look up a question's label from the ResponseSchema by its ID */
+    private getQuestionLabel(questionId: string): string {
+        if (!this.ResponseFormDefinition?.questions) return questionId;
+        const question = this.ResponseFormDefinition.questions.find(q => q.id === questionId);
+        return question?.label || questionId;
+    }
+
     /**
      * Opens the panel with a specific request
      */
@@ -135,6 +179,7 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
         this.Request = request;
         this.IsOpen = true;
         this.ResponseText = '';
+        this.completedAction = null;
         this.initializeForm();
         this.cdr.markForCheck();
     }
@@ -165,7 +210,13 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
      */
     public OnCancel(): void {
         this.IsOpen = false;
-        this.Close.emit({ Success: false, Action: 'cancelled' });
+        if (this.completedAction) {
+            // A response was submitted — tell the parent about the action taken
+            this.Close.emit({ Success: true, Request: this.Request!, Action: this.completedAction });
+            this.completedAction = null;
+        } else {
+            this.Close.emit({ Success: false, Action: 'cancelled' });
+        }
         this.cdr.markForCheck();
     }
 
@@ -273,6 +324,79 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
         }
     }
 
+    // ========================================================================
+    // Resize
+    // ========================================================================
+
+    /** Begin resizing when the user mousedowns on the resize handle */
+    public OnResizeStart(event: MouseEvent): void {
+        event.preventDefault();
+        this.IsResizing = true;
+        this.resizeStartX = event.clientX;
+        this.resizeStartWidth = this.PanelWidth;
+
+        this.boundOnResizeMove = (e: MouseEvent) => this.onResizeMove(e);
+        this.boundOnResizeEnd = () => this.onResizeEnd();
+        document.addEventListener('mousemove', this.boundOnResizeMove);
+        document.addEventListener('mouseup', this.boundOnResizeEnd);
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+    }
+
+    private onResizeMove(event: MouseEvent): void {
+        // Panel is on the right, so dragging left (negative deltaX) increases width
+        const deltaX = this.resizeStartX - event.clientX;
+        const newWidth = Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, this.resizeStartWidth + deltaX));
+        this.PanelWidth = newWidth;
+        this.cdr.markForCheck();
+    }
+
+    private onResizeEnd(): void {
+        this.IsResizing = false;
+        this.cleanupResizeListeners();
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+        this.savePanelWidth();
+        this.cdr.markForCheck();
+    }
+
+    private cleanupResizeListeners(): void {
+        if (this.boundOnResizeMove) {
+            document.removeEventListener('mousemove', this.boundOnResizeMove);
+            this.boundOnResizeMove = null;
+        }
+        if (this.boundOnResizeEnd) {
+            document.removeEventListener('mouseup', this.boundOnResizeEnd);
+            this.boundOnResizeEnd = null;
+        }
+    }
+
+    private loadPanelWidth(): void {
+        try {
+            const saved = UserInfoEngine.Instance.GetSetting(PANEL_WIDTH_SETTING_KEY);
+            if (saved) {
+                const parsed = parseInt(saved, 10);
+                if (!isNaN(parsed) && parsed >= MIN_PANEL_WIDTH && parsed <= MAX_PANEL_WIDTH) {
+                    this.PanelWidth = parsed;
+                }
+            }
+        } catch {
+            // UserInfoEngine may not be initialized yet — use default
+        }
+    }
+
+    private savePanelWidth(): void {
+        try {
+            UserInfoEngine.Instance.SetSettingDebounced(PANEL_WIDTH_SETTING_KEY, String(this.PanelWidth));
+        } catch {
+            // Silently ignore save failures
+        }
+    }
+
+    // ========================================================================
+    // Form handling
+    // ========================================================================
+
     /**
      * Parse the ResponseSchema JSON into an AgentResponseForm for the dynamic form component.
      */
@@ -292,15 +416,18 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Handle form submission from the dynamic form component.
-     * Called when user submits the structured response form.
+     * Collect current form values from the DynamicFormComponent's reactive FormGroup.
+     * This reads values directly so the user doesn't need to click the form's
+     * internal submit button before clicking the panel's action buttons.
      */
-    public OnFormSubmitted(formData: Record<string, unknown>): void {
-        this.lastFormData = formData;
+    private collectFormData(): Record<string, unknown> | null {
+        if (!this.dynamicForm?.FormGroup) return null;
+        const values = this.dynamicForm.FormGroup.value;
+        if (values && Object.keys(values).length > 0) {
+            return values;
+        }
+        return null;
     }
-
-    /** Stores the latest form data from the dynamic form */
-    private lastFormData: Record<string, unknown> | null = null;
 
     /**
      * Shared logic for submitting any response type
@@ -319,8 +446,9 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
             this.Request.Response = this.ResponseText || null;
             this.Request.RespondedAt = new Date();
 
-            if (this.lastFormData && Object.keys(this.lastFormData).length > 0) {
-                this.Request.ResponseData = JSON.stringify(this.lastFormData);
+            const formData = this.collectFormData();
+            if (formData) {
+                this.Request.ResponseData = JSON.stringify(formData);
             }
 
             const saved = await this.Request.Save();
@@ -328,8 +456,9 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
                 this.notificationService.CreateSimpleNotification(
                     `Agent request has been ${action} successfully.`, 'success', 3000
                 );
-                this.IsOpen = false;
-                this.Close.emit({ Success: true, Request: this.Request, Action: action });
+                // Keep panel open so the user can see their submitted response.
+                // Template auto-switches to read-only mode since IsActionable becomes false.
+                this.completedAction = action;
             } else {
                 this.notificationService.CreateSimpleNotification(
                     'Failed to save response. Please try again.', 'error', 5000

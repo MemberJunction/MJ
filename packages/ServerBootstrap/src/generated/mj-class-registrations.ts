@@ -201,10 +201,11 @@ import {
     PlanningDesignerAgent,
 } from '@memberjunction/ai-agent-manager';
 
-// @memberjunction/ai-agents (4 classes)
+// @memberjunction/ai-agents (5 classes)
 import {
     FlowAgentType,
     LoopAgentType,
+    MJAIAgentRequestEntityServer,
     MemoryManagerAgent,
     QueryBuilderAgent,
 } from '@memberjunction/ai-agents';
@@ -1072,6 +1073,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     PlanningDesignerAgent,
     FlowAgentType,
     LoopAgentType,
+    MJAIAgentRequestEntityServer,
     MemoryManagerAgent,
     QueryBuilderAgent,
     AnthropicLLM,
@@ -1585,7 +1587,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 663;
+export const CLASS_REGISTRATIONS_COUNT = 664;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

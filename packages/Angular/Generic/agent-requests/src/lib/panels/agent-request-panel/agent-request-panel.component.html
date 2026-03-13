@@ -1,6 +1,10 @@
 @if (IsOpen && Request) {
     <div class="panel-backdrop" (click)="OnBackdropClick()">
-        <div class="request-panel" [class.open]="IsOpen" (click)="$event.stopPropagation()">
+        <div class="request-panel" #panelElement [class.open]="IsOpen" [class.resizing]="IsResizing" [style.width.px]="PanelWidth" (click)="$event.stopPropagation()">
+            <!-- Resize Handle (left edge) -->
+            <div class="resize-handle" (mousedown)="OnResizeStart($event)">
+                <div class="resize-grip"></div>
+            </div>
             <!-- Header -->
             <div class="panel-header">
                 <div class="header-content">
@@ -63,10 +67,9 @@
                 <!-- Dynamic Response Form (from ResponseSchema) -->
                 @if (HasResponseForm && IsActionable && ResponseFormDefinition) {
                     <div class="section">
-                        <mj-dynamic-form
+                        <mj-dynamic-form #dynamicForm
                             [FormDefinition]="ResponseFormDefinition"
-                            [Disabled]="IsSaving"
-                            (FormSubmitted)="OnFormSubmitted($event)">
+                            [Disabled]="IsSaving">
                         </mj-dynamic-form>
                     </div>
                 }
@@ -91,11 +94,32 @@
                 }
 
                 <!-- Show existing response for already-handled requests -->
-                @if (!IsActionable && Request.Response) {
-                    <div class="section">
-                        <h4 class="section-title">Response</h4>
-                        <p class="response-text">{{ Request.Response }}</p>
-                    </div>
+                @if (!IsActionable && (Request.Response || Request.ResponseData)) {
+                    @if (ResponseDataEntries.length > 0) {
+                        <div class="section">
+                            <h4 class="section-title">Form Response</h4>
+                            <div class="response-data-grid">
+                                @for (entry of ResponseDataEntries; track entry.key) {
+                                    <div class="response-data-item">
+                                        <span class="response-data-label">{{ entry.label }}</span>
+                                        <span class="response-data-value">{{ entry.value }}</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                    @if (Request.Response) {
+                        <div class="section">
+                            <h4 class="section-title">
+                                @if (ResponseDataEntries.length > 0) {
+                                    Additional Comments
+                                } @else {
+                                    Response
+                                }
+                            </h4>
+                            <p class="response-text">{{ Request.Response }}</p>
+                        </div>
+                    }
                 }
             </div>
 
