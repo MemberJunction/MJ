@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
@@ -45,7 +45,11 @@ import {
     ActionChangeScope,
     MediaOutput,
     SecondaryScopeConfig,
-    SecondaryScopeValue
+    SecondaryScopeValue,
+    AgentResponseForm,
+    AgentRequestAssignmentStrategy,
+    parseAssignmentStrategy,
+    mergeAssignmentStrategies
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -224,6 +228,14 @@ export class BaseAgent {
      * @private
      */
     private _agentRun: MJAIAgentRunEntityExtended | null = null;
+
+    /**
+     * Stores the ID of an AIAgentRequest created when a Chat step fires.
+     * Populated by executeChatStep(), returned in ExecuteAgentResult.feedbackRequestId.
+     * Only set for root agents (depth 0), not sub-agents.
+     * @private
+     */
+    private _feedbackRequestId: string | null = null;
 
     /**
      * Access the current run for the agent
@@ -6788,7 +6800,12 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Executes a chat step - these should bubble up to the user for interaction.
      * Chat steps are terminal and indicate the agent needs user input.
-     * 
+     *
+     * For root agents (depth 0), this also creates a persistent AIAgentRequest row
+     * so the request is tracked even when the agent isn't running in a conversation.
+     * The feedbackRequestId is returned in ExecuteAgentResult for callers to use
+     * (e.g., sending notifications, syncing conversation responses).
+     *
      * @private
      */
     private async executeChatStep(
@@ -6796,10 +6813,16 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
         const stepEntity = await this.createStepEntity({ stepType: 'Chat', stepName: 'User Interaction', contextUser: params.contextUser });
-        
+
         // Chat steps are successful - they indicate a need for user interaction
         await this.finalizeStepEntity(stepEntity, true);
-        
+
+        // For root agents, create a persistent AIAgentRequest so the request is
+        // tracked in the dashboard and can be responded to outside a conversation.
+        if (this._depth === 0) {
+            await this.createFeedbackRequest(params, stepEntity, previousDecision);
+        }
+
         return {
             step: 'Chat',
             terminate: true,
@@ -6813,6 +6836,273 @@ The context is now within limits. Please retry your request with the recovered c
             actionableCommands: previousDecision.actionableCommands,
             automaticCommands: previousDecision.automaticCommands
         };
+    }
+
+    /**
+     * Creates a persistent AIAgentRequest row when a Chat step fires.
+     * Resolves the target user via the assignment chain:
+     *   1. contextUser (explicit caller)
+     *   2. AgentRun.UserID (run initiator)
+     *   3. Conversation.UserID (conversation fallback)
+     *   4. Agent.OwnerUserID (agent owner)
+     *   5. null (system-level, visible to admins)
+     *
+     * @private
+     */
+    private async createFeedbackRequest(
+        params: ExecuteAgentParams,
+        stepEntity: MJAIAgentRunStepEntityExtended,
+        previousDecision: BaseAgentNextStep
+    ): Promise<void> {
+        try {
+            const requestTypeId = await this.resolveRequestTypeId(previousDecision, params.contextUser);
+            const resolvedStrategy = await this.resolveAssignmentStrategy(params, requestTypeId);
+            const requestForUserId = this.resolveUserFromStrategy(resolvedStrategy, params);
+            const priority = resolvedStrategy?.priority ?? 50;
+            const expirationMinutes = resolvedStrategy?.expirationMinutes;
+
+            const request = await this._metadata.GetEntityObject<MJAIAgentRequestEntity>(
+                'MJ: AI Agent Requests',
+                params.contextUser
+            );
+            request.NewRecord();
+            request.AgentID = params.agent.ID;
+            request.RequestedAt = new Date();
+            request.RequestForUserID = requestForUserId;
+            request.Status = 'Requested';
+            request.Request = previousDecision.message || 'Agent needs user input';
+            request.RequestTypeID = requestTypeId;
+            request.ResponseSchema = previousDecision.responseForm
+                ? JSON.stringify(previousDecision.responseForm)
+                : null;
+            request.Priority = priority;
+            request.OriginatingAgentRunID = this._agentRun?.ID || null;
+            request.OriginatingAgentRunStepID = stepEntity.ID;
+
+            if (expirationMinutes != null && expirationMinutes > 0) {
+                request.ExpiresAt = new Date(Date.now() + expirationMinutes * 60_000);
+            }
+
+            const saved = await request.Save();
+            if (saved) {
+                this._feedbackRequestId = request.ID;
+                this.logStatus(
+                    `📋 Created feedback request ${request.ID} for user ${requestForUserId || '(system)'}`,
+                    true,
+                    params
+                );
+            } else {
+                LogError(`Failed to save AIAgentRequest for agent ${params.agent.Name}`);
+            }
+        } catch (error) {
+            // Don't let request creation failure break the agent execution
+            LogError(`Error creating feedback request: ${(error as Error).message}`);
+        }
+    }
+
+    /**
+     * Walks the assignment strategy resolution chain (bottom-up, first-non-null wins):
+     * 1. ExecuteAgentParams.assignmentStrategy (per-invocation)
+     * 2. Agent Type's AssignmentStrategy
+     * 3. Agent's Category AssignmentStrategy (walks up ParentID tree)
+     * 4. Request Type's DefaultAssignmentStrategy
+     * 5. Fallback: null (caller uses contextUser + warning)
+     * @private
+     */
+    private async resolveAssignmentStrategy(
+        params: ExecuteAgentParams,
+        requestTypeId: string | null
+    ): Promise<AgentRequestAssignmentStrategy | null> {
+        // 1. Per-invocation override (highest precedence)
+        if (params.assignmentStrategy) {
+            return params.assignmentStrategy;
+        }
+
+        // 2. Agent Type's AssignmentStrategy
+        const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID));
+        const typeStrategy = parseAssignmentStrategy(agentType?.AssignmentStrategy ?? null);
+        if (typeStrategy) {
+            return typeStrategy;
+        }
+
+        // 3. Agent's Category AssignmentStrategy (walk up ParentID tree)
+        const categoryStrategy = await this.resolveCategoryAssignmentStrategy(params);
+        if (categoryStrategy) {
+            return categoryStrategy;
+        }
+
+        // 4. Request Type's DefaultAssignmentStrategy
+        if (requestTypeId && this._requestTypeCache) {
+            const requestType = this._requestTypeCache.find(t => t.ID === requestTypeId);
+            if (requestType) {
+                const rtStrategy = parseAssignmentStrategy(requestType.DefaultAssignmentStrategy);
+                if (rtStrategy) {
+                    return rtStrategy;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Walks up the agent's category hierarchy looking for an AssignmentStrategy.
+     * Loads categories via RunView and caches them for the duration of this run.
+     * @private
+     */
+    private _categoryCache: Array<{ ID: string; ParentID: string | null; AssignmentStrategy: string | null }> | null = null;
+
+    private async resolveCategoryAssignmentStrategy(
+        params: ExecuteAgentParams
+    ): Promise<AgentRequestAssignmentStrategy | null> {
+        const categoryId = params.agent.CategoryID;
+        if (!categoryId) return null;
+
+        try {
+            // Load all categories if not cached
+            if (!this._categoryCache) {
+                const rv = new RunView();
+                const result = await rv.RunView<{ ID: string; ParentID: string | null; AssignmentStrategy: string | null }>({
+                    EntityName: 'MJ: AI Agent Categories',
+                    Fields: ['ID', 'ParentID', 'AssignmentStrategy'],
+                    ResultType: 'simple'
+                }, params.contextUser);
+                this._categoryCache = result.Success ? result.Results : [];
+            }
+
+            // Walk up the tree from the agent's category to the root
+            let currentId: string | null = categoryId;
+            const visited = new Set<string>(); // prevent infinite loops
+            while (currentId && !visited.has(currentId)) {
+                visited.add(currentId);
+                const cat = this._categoryCache.find(c => c.ID === currentId);
+                if (!cat) break;
+
+                const strategy = parseAssignmentStrategy(cat.AssignmentStrategy);
+                if (strategy) return strategy;
+
+                currentId = cat.ParentID;
+            }
+        } catch (error) {
+            LogError(`Error resolving category assignment strategy: ${(error as Error).message}`);
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolves the target user ID from a resolved assignment strategy.
+     * For simple strategies (RunUser, AgentOwner, SpecificUser), resolves immediately.
+     * For List/SharedInbox strategies, delegates to list-based resolution.
+     * Falls back to contextUser with a warning if no strategy is provided.
+     * @private
+     */
+    private resolveUserFromStrategy(
+        strategy: AgentRequestAssignmentStrategy | null,
+        params: ExecuteAgentParams
+    ): string | null {
+        if (!strategy) {
+            // No strategy resolved anywhere — fall back to contextUser + warning
+            if (params.contextUser?.ID) {
+                LogStatus(`⚠️ No assignment strategy configured for agent ${params.agent.Name}; defaulting to context user`);
+                return params.contextUser.ID;
+            }
+            LogStatus(`⚠️ No assignment strategy and no context user for agent ${params.agent.Name}; request will be unassigned`);
+            return null;
+        }
+
+        switch (strategy.type) {
+            case 'RunUser':
+                return params.contextUser?.ID
+                    ?? this._agentRun?.UserID
+                    ?? null;
+
+            case 'AgentOwner':
+                return params.agent.OwnerUserID ?? null;
+
+            case 'SpecificUser':
+                return strategy.userID ?? null;
+
+            case 'List':
+                // List-based resolution (RoundRobin, LeastBusy, Random) requires async DB lookups.
+                // For now, fall back to contextUser. Full list resolution is a future enhancement
+                // that will query ListDetail records and track assignment state.
+                LogStatus(`ℹ️ List-based assignment strategy configured but not yet implemented; defaulting to context user`);
+                return params.contextUser?.ID ?? null;
+
+            case 'SharedInbox':
+                // SharedInbox means "unassigned — anyone in the list can claim it"
+                return null;
+
+            default:
+                return params.contextUser?.ID ?? null;
+        }
+    }
+
+    /**
+     * Determines the request type ID based on the Chat step's context.
+     * - If the responseForm has only approve/reject-style buttons, uses "Approval"
+     * - If there's a responseForm with fields, uses "Information"
+     * - Otherwise defaults to "Information"
+     *
+     * Caches the request type lookup for the duration of this agent execution.
+     * @private
+     */
+    private _requestTypeCache: MJAIAgentRequestTypeEntity[] | null = null;
+
+    private async resolveRequestTypeId(
+        previousDecision: BaseAgentNextStep,
+        contextUser?: UserInfo
+    ): Promise<string | null> {
+        try {
+            // Load request types if not cached
+            if (!this._requestTypeCache) {
+                const rv = new RunView();
+                const result = await rv.RunView<MJAIAgentRequestTypeEntity>({
+                    EntityName: 'MJ: AI Agent Request Types',
+                    ResultType: 'entity_object'
+                }, contextUser);
+                this._requestTypeCache = result.Success ? result.Results : [];
+            }
+
+            // Determine type name based on responseForm content
+            let typeName = 'Information'; // default
+            if (previousDecision.responseForm) {
+                typeName = this.detectRequestTypeName(previousDecision.responseForm);
+            }
+
+            const matchedType = this._requestTypeCache.find(t => t.Name === typeName);
+            return matchedType?.ID || null;
+        } catch (error) {
+            LogError(`Error resolving request type: ${(error as Error).message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Inspects an AgentResponseForm to determine the best request type name.
+     * Returns "Approval" if the form is a simple two-option approve/reject pattern,
+     * otherwise returns "Information".
+     * @private
+     */
+    private detectRequestTypeName(form: AgentResponseForm): string {
+        const q = form.questions?.[0];
+        if (!q || form.questions.length !== 1) {
+            return 'Information';
+        }
+        const qType = q.type;
+        if ((qType.type === 'buttongroup' || qType.type === 'radio') && 'options' in qType) {
+            const opts = qType.options;
+            if (opts.length === 2) {
+                const labels = opts.map(o => o.label.toLowerCase());
+                const hasPositive = labels.some(l => l.includes('approv') || l.includes('yes') || l.includes('accept'));
+                const hasNegative = labels.some(l => l.includes('reject') || l.includes('no') || l.includes('deny'));
+                if (hasPositive && hasNegative) {
+                    return 'Approval';
+                }
+            }
+        }
+        return 'Information';
     }
 
     /**
@@ -7622,6 +7912,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // set status to Failed
                 this._agentRun.Status = 'Failed';
             }
+            else if (finalStep.step === 'Chat') {
+                // Chat steps mean the agent is waiting for human input
+                this._agentRun.Status = 'AwaitingFeedback';
+            }
             else {
                 this._agentRun.Status = 'Completed';
             }
@@ -7666,7 +7960,8 @@ The context is now within limits. Please retry your request with the recovered c
             memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
                 ? this._injectedMemory
                 : undefined,
-            mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined
+            mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined,
+            feedbackRequestId: this._feedbackRequestId || undefined
         };
     }
 

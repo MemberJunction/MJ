@@ -54,6 +54,7 @@
     "@memberjunction/ng-code-editor": "5.11.0",
     "@memberjunction/ng-container-directives": "5.11.0",
     "@memberjunction/ng-core-entity-forms": "5.11.0",
+    "@memberjunction/ng-agent-requests": "5.11.0",
     "@memberjunction/ng-credentials": "5.11.0",
     "@memberjunction/ng-dashboard-viewer": "5.11.0",
     "@memberjunction/ng-entity-viewer": "5.11.0",
