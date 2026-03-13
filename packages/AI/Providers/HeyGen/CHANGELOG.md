@@ -1,5 +1,12 @@
 # @memberjunction/ai-heygen
 
+## 5.11.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.11.0
+- @memberjunction/global@5.11.0
+
 ## 5.10.1
 
 ### Patch Changes

@@ -161,3 +161,4 @@ docker/workbench/.env.database
 # Integration e2e scripts (may contain secrets)
 packages/Integration/e2e/
 packages/Integration/e2e-screenshots/
+packages/MJExplorer/src/environments/environment.development.ts.msal.bak

@@ -1,5 +1,7 @@
 # @memberjunction/installer
 
+## 5.11.0
+
 ## 5.10.1
 
 ## 5.10.0

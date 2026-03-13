@@ -14,7 +14,7 @@
 .view-name {
   font-size: 15px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--mj-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -28,20 +28,20 @@
 }
 
 .view-name.editable:hover {
-  border-bottom-color: #3b82f6;
-  color: #2563eb;
+  border-bottom-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary-hover);
 }
 
 /* Name Input (inline edit) */
 .name-input {
   font-size: 15px;
   font-weight: 500;
-  color: #1f2937;
+  color: var(--mj-text-primary);
   padding: 2px 8px;
-  border: 1px solid #3b82f6;
+  border: 1px solid var(--mj-brand-primary);
   border-radius: 4px;
   outline: none;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   max-width: 250px;
 }
 
@@ -49,7 +49,7 @@
 .shared-badge {
   display: flex;
   align-items: center;
-  color: #6b7280;
+  color: var(--mj-text-muted);
   font-size: 13px;
 }
 
@@ -62,8 +62,8 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
   border-radius: 10px;
   font-size: 11px;
   font-weight: 600;
@@ -97,29 +97,29 @@
 }
 
 .action-btn.save-btn {
-  background: #3b82f6;
-  color: white;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
 }
 
 .action-btn.save-btn:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--mj-brand-primary-hover);
 }
 
 .action-btn.save-as-btn {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
 }
 
 .action-btn.save-as-btn:hover:not(:disabled) {
-  background: #d1d5db;
+  background: var(--mj-bg-surface-active);
 }
 
 .action-btn.revert-btn {
-  background: #e5e7eb;
-  color: #374151;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
 }
 
 .action-btn.revert-btn:hover:not(:disabled) {
-  background: #fecaca;
-  color: #dc2626;
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error);
 }

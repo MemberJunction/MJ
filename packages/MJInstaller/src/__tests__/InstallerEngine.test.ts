@@ -133,6 +133,79 @@ vi.mock('../models/InstallState.js', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/*  Mock adapters used by diagnostic report methods                    */
+/* ------------------------------------------------------------------ */
+
+const mockFsFileExists = vi.fn().mockResolvedValue(false);
+const mockFsReadText = vi.fn().mockResolvedValue('');
+const mockFsDirectoryExists = vi.fn().mockResolvedValue(false);
+vi.mock('../adapters/FileSystemAdapter.js', () => ({
+  FileSystemAdapter: vi.fn(function () {
+    return {
+      FileExists: mockFsFileExists,
+      ReadText: mockFsReadText,
+      DirectoryExists: mockFsDirectoryExists,
+      WriteText: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
+}));
+
+const mockReportRender = vi.fn().mockReturnValue('# Mock Report');
+const mockReportGenerate = vi.fn().mockResolvedValue('/test/dir/mj-diagnostic-report.md');
+const mockReportSnapshotConfigFiles = vi.fn().mockResolvedValue([]);
+const mockReportCheckKeyFiles = vi.fn().mockResolvedValue([]);
+vi.mock('../logging/ReportGenerator.js', () => ({
+  ReportGenerator: vi.fn(function () {
+    return {
+      Render: mockReportRender,
+      Generate: mockReportGenerate,
+      SnapshotConfigFiles: mockReportSnapshotConfigFiles,
+      CheckKeyFiles: mockReportCheckKeyFiles,
+      SanitizeConfig: vi.fn().mockReturnValue({}),
+    };
+  }),
+}));
+
+const mockProcessRunnerRun = vi.fn().mockResolvedValue({ ExitCode: 1, Stdout: '', Stderr: '', TimedOut: true });
+const mockProcessRunnerKillByPort = vi.fn();
+vi.mock('../adapters/ProcessRunner.js', () => ({
+  ProcessRunner: vi.fn(function () {
+    return {
+      Run: mockProcessRunnerRun,
+      killByPort: mockProcessRunnerKillByPort,
+    };
+  }),
+}));
+
+vi.mock('../logging/EventLogger.js', () => ({
+  EventLogger: vi.fn(function () {
+    return {
+      Attach: vi.fn(),
+      Detach: vi.fn(),
+      Clear: vi.fn(),
+      Entries: [],
+      Count: 0,
+    };
+  }),
+}));
+
+// Mock node:fs/promises to prevent actual file writes in report generation
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>();
+  return {
+    ...actual,
+    default: {
+      ...actual.default,
+      writeFile: vi.fn().mockResolvedValue(undefined),
+      readFile: actual.default.readFile,
+      access: actual.default.access,
+      mkdir: actual.default.mkdir,
+    },
+    writeFile: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
+/* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
@@ -548,7 +621,8 @@ describe('InstallerEngine', () => {
 
       await engine.Doctor('/test/dir');
 
-      expect(mockDiagnostics.AddCheck).toHaveBeenCalledTimes(2);
+      // 2 known-issue checks + 1 auth validation check (env.ts not found in test dir)
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledTimes(3);
       // First call: needs_patch → warn
       expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
         expect.objectContaining({ Status: 'warn', Name: 'Known issue: issue-1' })
@@ -556,6 +630,10 @@ describe('InstallerEngine', () => {
       // Second call: ok → pass
       expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
         expect.objectContaining({ Status: 'pass', Name: 'Known issue: issue-2' })
+      );
+      // Third call: auth validation warns that environment.ts is not found
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ Status: 'warn', Name: 'Explorer environment.ts' })
       );
     });
   });
@@ -753,6 +831,221 @@ describe('InstallerEngine', () => {
       const plan = await engine.CreatePlan({ Dir: '/test', Tag: 'v5.2.0' });
       const result = await engine.Run(plan); // No Yes option
       expect(result.Success).toBe(true);
+    });
+  });
+
+  // ── Doctor Report generation ───────────────────────────────────────
+
+  describe('Doctor Report generation', () => {
+    beforeEach(() => {
+      const mockDiagnostics = {
+        Checks: [],
+        HasFailures: false,
+        Failures: [],
+        Warnings: [],
+        LastInstall: null,
+        AddCheck: vi.fn(),
+        Environment: { OS: 'test', NodeVersion: 'v22', NpmVersion: '10', Architecture: 'x64' },
+      };
+      mockPreflightRunDiagnostics.mockResolvedValue(mockDiagnostics);
+      mockCodeGenRunKnownIssueChecks.mockResolvedValue([]);
+      mockInstallStateLoad.mockResolvedValue(null);
+      mockFsFileExists.mockResolvedValue(false);
+      mockReportRender.mockReturnValue('# Mock Report');
+      mockReportCheckKeyFiles.mockResolvedValue([]);
+      mockReportSnapshotConfigFiles.mockResolvedValue([]);
+    });
+
+    it('generates basic report with --report flag', async () => {
+      await engine.Doctor('/test/dir', { Report: true });
+
+      // CheckKeyFiles is always called for the report
+      expect(mockReportCheckKeyFiles).toHaveBeenCalledWith('/test/dir');
+      // Render is called to produce the markdown
+      expect(mockReportRender).toHaveBeenCalled();
+      // SnapshotConfigFiles is NOT called in basic mode
+      expect(mockReportSnapshotConfigFiles).not.toHaveBeenCalled();
+    });
+
+    it('does not generate report without --report flag', async () => {
+      await engine.Doctor('/test/dir');
+
+      expect(mockReportRender).not.toHaveBeenCalled();
+      expect(mockReportCheckKeyFiles).not.toHaveBeenCalled();
+    });
+
+    it('generates extended report with config snapshots and service logs', async () => {
+      await engine.Doctor('/test/dir', { ReportExtended: true });
+
+      // Extended mode should call SnapshotConfigFiles
+      expect(mockReportSnapshotConfigFiles).toHaveBeenCalledWith('/test/dir');
+      // Extended mode should call Render with ConfigFiles and ServiceLogs
+      expect(mockReportRender).toHaveBeenCalled();
+      const renderArg = mockReportRender.mock.calls[0][0];
+      expect(renderArg).toHaveProperty('ConfigFiles');
+      expect(renderArg).toHaveProperty('ServiceLogs');
+    });
+
+    it('ReportExtended implies Report', async () => {
+      await engine.Doctor('/test/dir', { ReportExtended: true, Report: false });
+
+      // Even though Report is false, ReportExtended should trigger report generation
+      expect(mockReportRender).toHaveBeenCalled();
+      expect(mockReportCheckKeyFiles).toHaveBeenCalled();
+    });
+
+    it('basic report does not include ConfigFiles or ServiceLogs', async () => {
+      await engine.Doctor('/test/dir', { Report: true });
+
+      expect(mockReportRender).toHaveBeenCalled();
+      const renderArg = mockReportRender.mock.calls[0][0];
+      expect(renderArg.ConfigFiles).toBeUndefined();
+      expect(renderArg.ServiceLogs).toBeUndefined();
+    });
+
+    it('emits log event with report path', async () => {
+      const logMessages: string[] = [];
+      engine.On('log', (e) => logMessages.push(e.Message));
+
+      await engine.Doctor('/test/dir', { Report: true });
+
+      expect(logMessages.some(m => m.includes('Diagnostic report saved to:'))).toBe(true);
+    });
+
+    it('basic report uses mj-diagnostic-report.md filename', async () => {
+      const logMessages: string[] = [];
+      engine.On('log', (e) => logMessages.push(e.Message));
+
+      await engine.Doctor('/test/dir', { Report: true });
+
+      expect(logMessages.some(m => m.includes('mj-diagnostic-report.md'))).toBe(true);
+    });
+
+    it('extended report uses mj-diagnostic-report-extended.md filename', async () => {
+      const logMessages: string[] = [];
+      engine.On('log', (e) => logMessages.push(e.Message));
+
+      await engine.Doctor('/test/dir', { ReportExtended: true });
+
+      expect(logMessages.some(m => m.includes('mj-diagnostic-report-extended.md'))).toBe(true);
+    });
+  });
+
+  // ── Auth validation checks ─────────────────────────────────────────
+
+  describe('Auth validation checks', () => {
+    beforeEach(() => {
+      mockCodeGenRunKnownIssueChecks.mockResolvedValue([]);
+      mockInstallStateLoad.mockResolvedValue(null);
+      mockFsFileExists.mockResolvedValue(false);
+    });
+
+    it('warns when environment.ts is not found', async () => {
+      const mockDiagnostics = {
+        Checks: [] as Array<{ Name: string; Status: string; Message: string; SuggestedFix?: string }>,
+        HasFailures: false,
+        Failures: [],
+        Warnings: [],
+        LastInstall: null,
+        AddCheck: vi.fn((check: { Name: string }) => mockDiagnostics.Checks.push(check as typeof mockDiagnostics.Checks[0])),
+        Environment: { OS: 'test', NodeVersion: 'v22', NpmVersion: '10', Architecture: 'x64' },
+      };
+      mockPreflightRunDiagnostics.mockResolvedValue(mockDiagnostics);
+
+      await engine.Doctor('/test/dir');
+
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ Name: 'Explorer environment.ts', Status: 'warn' })
+      );
+    });
+
+    it('validates MSAL auth with empty CLIENT_ID', async () => {
+      const mockDiagnostics = {
+        Checks: [] as Array<{ Name: string; Status: string; Message: string; SuggestedFix?: string }>,
+        HasFailures: false,
+        Failures: [],
+        Warnings: [],
+        LastInstall: null,
+        AddCheck: vi.fn(),
+        Environment: { OS: 'test', NodeVersion: 'v22', NpmVersion: '10', Architecture: 'x64' },
+      };
+      mockPreflightRunDiagnostics.mockResolvedValue(mockDiagnostics);
+
+      // Simulate environment.ts with MSAL but empty CLIENT_ID
+      mockFsFileExists.mockImplementation(async (filePath: string) => {
+        return filePath.includes('environment.ts');
+      });
+      mockFsReadText.mockResolvedValue(
+        `export const environment = {\n  AUTH_TYPE: 'msal',\n  CLIENT_ID: '',\n  TENANT_ID: 'some-tenant'\n};`
+      );
+
+      await engine.Doctor('/test/dir');
+
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ Name: 'MSAL CLIENT_ID', Status: 'fail' })
+      );
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ Name: 'MSAL TENANT_ID', Status: 'pass' })
+      );
+    });
+
+    it('validates MSAL auth with double-quoted keys (real-world format)', async () => {
+      const mockDiagnostics = {
+        Checks: [] as Array<{ Name: string; Status: string; Message: string; SuggestedFix?: string }>,
+        HasFailures: false,
+        Failures: [],
+        Warnings: [],
+        LastInstall: null,
+        AddCheck: vi.fn(),
+        Environment: { OS: 'test', NodeVersion: 'v22', NpmVersion: '10', Architecture: 'x64' },
+      };
+      mockPreflightRunDiagnostics.mockResolvedValue(mockDiagnostics);
+
+      mockFsFileExists.mockImplementation(async (filePath: string) => {
+        return filePath.includes('environment.ts');
+      });
+      // Real-world format: keys are double-quoted, AUTH_TYPE is unquoted
+      mockFsReadText.mockResolvedValue(
+        `export const environment = {\n  "CLIENT_ID": "7e6e6ecf-66ff-4733-9c60-1e6def949897",\n  "TENANT_ID": "ff10ade7-5d03-40a9-be28-cb7ab99670b1",\n  AUTH_TYPE: 'msal' as const\n};`
+      );
+
+      await engine.Doctor('/test/dir');
+
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ Name: 'MSAL CLIENT_ID', Status: 'pass' })
+      );
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ Name: 'MSAL TENANT_ID', Status: 'pass' })
+      );
+    });
+
+    it('validates Auth0 with populated fields', async () => {
+      const mockDiagnostics = {
+        Checks: [] as Array<{ Name: string; Status: string; Message: string; SuggestedFix?: string }>,
+        HasFailures: false,
+        Failures: [],
+        Warnings: [],
+        LastInstall: null,
+        AddCheck: vi.fn(),
+        Environment: { OS: 'test', NodeVersion: 'v22', NpmVersion: '10', Architecture: 'x64' },
+      };
+      mockPreflightRunDiagnostics.mockResolvedValue(mockDiagnostics);
+
+      mockFsFileExists.mockImplementation(async (filePath: string) => {
+        return filePath.includes('environment.ts');
+      });
+      mockFsReadText.mockResolvedValue(
+        `export const environment = {\n  AUTH_TYPE: 'auth0',\n  AUTH0_DOMAIN: 'test.auth0.com',\n  AUTH0_CLIENTID: 'abc123'\n};`
+      );
+
+      await engine.Doctor('/test/dir');
+
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ Name: 'Auth0 Domain', Status: 'pass' })
+      );
+      expect(mockDiagnostics.AddCheck).toHaveBeenCalledWith(
+        expect.objectContaining({ Name: 'Auth0 Client ID', Status: 'pass' })
+      );
     });
   });
 });

@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/cli
 
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/sql-converter@5.11.0
+  - @memberjunction/sqlserver-dataprovider@5.11.0
+  - @memberjunction/metadata-sync@5.11.0
+  - @memberjunction/ai-cli@5.11.0
+  - @memberjunction/codegen-lib@5.11.0
+  - @memberjunction/db-auto-doc@5.11.0
+  - @memberjunction/query-gen@5.11.0
+  - @memberjunction/server-bootstrap-lite@5.11.0
+  - @memberjunction/testing-cli@5.11.0
+  - @memberjunction/config@5.11.0
+  - @memberjunction/installer@5.11.0
+
 ## 5.10.1
 
 ### Patch Changes

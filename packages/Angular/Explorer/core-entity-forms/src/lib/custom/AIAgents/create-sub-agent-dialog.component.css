@@ -7,7 +7,7 @@
 
 .sub-agent-header {
   margin-bottom: 20px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--mj-border-default);
   padding-bottom: 15px;
 }
 
@@ -15,19 +15,19 @@
   margin: 0;
   font-size: 1.4em;
   font-weight: 600;
-  color: #333;
+  color: var(--mj-text-primary);
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
 .dialog-title i {
-  color: #007bff;
+  color: var(--mj-brand-primary);
 }
 
 .parent-info {
   margin: 8px 0 0 0;
-  color: #666;
+  color: var(--mj-text-secondary);
   font-size: 0.9em;
   display: flex;
   align-items: center;
@@ -35,7 +35,7 @@
 }
 
 .parent-info i {
-  color: #28a745;
+  color: var(--mj-status-success);
 }
 
 .loading-container {
@@ -44,12 +44,12 @@
   justify-content: center;
   gap: 10px;
   padding: 40px;
-  color: #666;
+  color: var(--mj-text-secondary);
 }
 
 .loading-container i {
   font-size: 1.2em;
-  color: #007bff;
+  color: var(--mj-brand-primary);
 }
 
 .sub-agent-form {
@@ -59,24 +59,24 @@
 }
 
 .form-section {
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--mj-bg-surface-sunken);
   border-radius: 8px;
   padding: 20px;
-  background-color: #f8f9fa;
+  background-color: var(--mj-bg-surface-card);
 }
 
 .section-title {
   margin: 0 0 15px 0;
   font-size: 1.1em;
   font-weight: 600;
-  color: #495057;
+  color: var(--mj-text-secondary);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .section-title i {
-  color: #007bff;
+  color: var(--mj-brand-primary);
 }
 
 .form-row {
@@ -97,7 +97,7 @@
 
 .form-group label {
   font-weight: 500;
-  color: #495057;
+  color: var(--mj-text-secondary);
   margin-bottom: 5px;
   font-size: 0.9em;
 }
@@ -115,7 +115,7 @@
 
 .form-control {
   padding: 8px 12px;
-  border: 1px solid #ced4da;
+  border: 1px solid var(--mj-border-strong);
   border-radius: 4px;
   font-size: 0.9em;
   transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
@@ -123,12 +123,12 @@
 
 .form-control:focus {
   outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
 }
 
 .form-control[readonly] {
-  background-color: #e9ecef;
+  background-color: var(--mj-bg-surface-sunken);
   opacity: 1;
 }
 
@@ -149,8 +149,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px;
-  background-color: #ffffff;
-  border: 1px solid #dee2e6;
+  background-color: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
   border-radius: 6px;
   transition: box-shadow 0.15s ease-in-out;
 }
@@ -167,39 +167,39 @@
 }
 
 .item-info i {
-  color: #007bff;
+  color: var(--mj-brand-primary);
   width: 16px;
   text-align: center;
 }
 
 .item-name {
   font-weight: 500;
-  color: #333;
+  color: var(--mj-text-primary);
 }
 
 .item-description {
-  color: #666;
+  color: var(--mj-text-secondary);
   font-size: 0.85em;
   margin-left: 10px;
 }
 
 .prompt-item .item-info i {
-  color: #28a745;
+  color: var(--mj-status-success);
 }
 
 .action-item .item-info i {
-  color: #ffc107;
+  color: var(--mj-status-warning);
 }
 
 .empty-state {
   text-align: center;
   padding: 30px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 
 .empty-state i {
   font-size: 2em;
-  color: #dee2e6;
+  color: var(--mj-border-default);
   margin-bottom: 10px;
 }
 
@@ -214,7 +214,7 @@
   gap: 10px;
   margin-top: 30px;
   padding-top: 20px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--mj-border-default);
 }
 
 .btn {
@@ -236,39 +236,39 @@
 }
 
 .btn-primary {
-  background-color: #007bff;
-  color: white;
+  background-color: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: #0056b3;
+  background-color: var(--mj-brand-primary-hover);
 }
 
 .btn-secondary {
-  background-color: #6c757d;
-  color: white;
+  background-color: var(--mj-text-muted);
+  color: var(--mj-text-inverse);
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background-color: #545b62;
+  background-color: var(--mj-text-secondary);
 }
 
 .btn-success {
-  background-color: #28a745;
-  color: white;
+  background-color: var(--mj-status-success);
+  color: var(--mj-text-inverse);
 }
 
 .btn-success:hover:not(:disabled) {
-  background-color: #1e7e34;
+  background-color: var(--mj-status-success);
 }
 
 .btn-danger {
-  background-color: #dc3545;
-  color: white;
+  background-color: var(--mj-status-error);
+  color: var(--mj-text-inverse);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background-color: #c82333;
+  background-color: var(--mj-status-error);
 }
 
 .btn-sm {
@@ -287,20 +287,20 @@
     padding: 15px;
     max-width: 95vw;
   }
-  
+
   .form-row {
     flex-direction: column;
     gap: 10px;
   }
-  
+
   .section-actions {
     flex-direction: column;
   }
-  
+
   .dialog-actions {
     flex-direction: column;
   }
-  
+
   .linked-item {
     flex-direction: column;
     align-items: flex-start;
@@ -310,11 +310,11 @@
 
 /* Validation styles */
 .form-control.ng-invalid.ng-touched {
-  border-color: #dc3545;
+  border-color: var(--mj-status-error);
 }
 
 .form-control.ng-valid.ng-touched {
-  border-color: #28a745;
+  border-color: var(--mj-status-success);
 }
 
 /* Custom scrollbar for dialog */
@@ -323,17 +323,17 @@
 }
 
 .sub-agent-dialog::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--mj-bg-surface-sunken);
   border-radius: 4px;
 }
 
 .sub-agent-dialog::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--mj-border-strong);
   border-radius: 4px;
 }
 
 .sub-agent-dialog::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--mj-text-disabled);
 }
 
 /* Ensure dialog appears above banner and other elements */

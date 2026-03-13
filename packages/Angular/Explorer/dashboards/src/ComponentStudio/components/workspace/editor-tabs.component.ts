@@ -66,8 +66,8 @@ import { ComponentStudioStateService } from '../../services/component-studio-sta
       align-items: center;
       padding: 0 8px;
       height: 38px;
-      background: var(--mat-sys-surface-container-low);
-      border-bottom: 1px solid var(--mat-sys-outline-variant);
+      background: var(--mj-bg-surface-sunken);
+      border-bottom: 1px solid var(--mj-border-default);
       flex-shrink: 0;
       gap: 2px;
     }
@@ -80,7 +80,7 @@ import { ComponentStudioStateService } from '../../services/component-studio-sta
       border: none;
       border-radius: 8px;
       background: transparent;
-      color: var(--mat-sys-on-surface-variant);
+      color: var(--mj-text-secondary);
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
@@ -90,13 +90,13 @@ import { ComponentStudioStateService } from '../../services/component-studio-sta
     }
 
     .tab-pill:hover {
-      background: var(--mat-sys-surface-container);
-      color: var(--mat-sys-on-surface);
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .tab-pill.active {
-      background: var(--mat-sys-surface);
-      color: var(--mat-sys-primary);
+      background: var(--mj-bg-surface);
+      color: var(--mj-brand-primary);
       font-weight: 600;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
