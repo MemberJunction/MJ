@@ -1,6 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import { exportCommand } from '@memberjunction/query-gen';
-import { loadMJConfig, initializeProvider } from '@memberjunction/metadata-sync';
 
 export default class Export extends Command {
   static description = 'Export queries from database to metadata files';
@@ -21,6 +19,9 @@ export default class Export extends Command {
   };
 
   async run(): Promise<void> {
+    const { exportCommand } = await import('@memberjunction/query-gen');
+    const { loadMJConfig, initializeProvider } = await import('@memberjunction/metadata-sync');
+
     const { flags } = await this.parse(Export);
 
     try {

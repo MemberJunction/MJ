@@ -1228,7 +1228,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
 
     this.nodes.forEach(node => {
       node.fields.forEach(field => {
-        if (field.relatedNodeId && !field.isPrimaryKey) {
+        if (field.relatedNodeId) {
           const sourceNode = nodeMap.get(node.id);
           const targetNode = nodeMap.get(field.relatedNodeId);
 
@@ -1460,7 +1460,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       .data(this.visibleLinks)
       .enter()
       .append('g')
-      .attr('class', 'link-group');
+      .attr('class', (d) => d.isSelfReference ? 'link-group self-reference' : 'link-group');
 
     link
       .append('path')
@@ -1473,12 +1473,10 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
 
     if (cfg.showRelationshipLabels) {
       // Add background rect for label (will be sized after text is rendered)
-      // Self-referencing links get a green background to stand out
+      // Self-referencing links get distinct styling via .self-reference CSS class
       link
         .append('rect')
         .attr('class', 'link-label-bg')
-        .attr('fill', (d) => d.isSelfReference ? '#e8f5e9' : 'white')
-        .attr('stroke', (d) => d.isSelfReference ? '#4CAF50' : colors.linkColor)
         .attr('stroke-width', 0.5)
         .attr('stroke-opacity', (d) => d.isSelfReference ? 0.6 : 0.4)
         .attr('rx', 2)
@@ -1489,7 +1487,6 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         .append('text')
         .attr('class', 'link-label')
         .attr('font-size', '10px')
-        .attr('fill', (d) => d.isSelfReference ? '#2e7d32' : colors.linkColor)
         .attr('text-anchor', 'middle')
         .attr('dominant-baseline', 'middle')
         .text((d) => d.sourceField.name || '');
@@ -1550,7 +1547,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       .attr('fill', colors.nodeHeader);
 
     // Node name
-    nodeGroup
+    const entityNameText = nodeGroup
       .append('text')
       .attr('class', 'entity-name')
       .attr('text-anchor', 'middle')
@@ -1559,6 +1556,11 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       .attr('font-weight', 'bold')
       .attr('fill', colors.nodeHeaderText)
       .text((d) => d.name);
+
+    // Truncate entity names that overflow the header
+    entityNameText.each((_d, i, nodes) => {
+      this.truncateTextElement(nodes[i] as SVGTextElement, cfg.nodeWidth - 16);
+    });
 
     // Add fields if configured
     if (cfg.showFieldDetails) {
@@ -1660,7 +1662,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
           .attr('fill', colors.primaryKeyText)
           .text('🔑');
 
-        fieldGroup
+        const pkNameEl = fieldGroup
           .append('text')
           .attr('class', 'field-name')
           .attr('x', -d.width / 2 + 25)
@@ -1668,7 +1670,10 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
           .attr('font-size', '11px')
           .attr('font-weight', 'bold')
           .attr('fill', colors.primaryKeyText)
-          .text(pk.name || '');
+          .text(pk.name || '')
+          .node();
+
+        if (pkNameEl) this.truncateTextElement(pkNameEl, d.width - 33);
 
         currentY += 20;
       });
@@ -1695,18 +1700,41 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
           .attr('fill', colors.foreignKeyText)
           .text('🔗');
 
-        fieldGroup
+        const fkNameEl = fieldGroup
           .append('text')
           .attr('class', 'field-name')
           .attr('x', -d.width / 2 + 25)
           .attr('y', currentY - 2)
           .attr('font-size', '11px')
           .attr('fill', colors.foreignKeyText)
-          .text(fk.name || '');
+          .text(fk.name || '')
+          .node();
+
+        if (fkNameEl) this.truncateTextElement(fkNameEl, d.width - 33);
 
         currentY += 20;
       });
     });
+  }
+
+  /** Truncate an SVG text element to fit within maxWidth, adding "…" if needed */
+  private truncateTextElement(textEl: SVGTextElement, maxWidth: number): void {
+    const original = textEl.textContent || '';
+    if (!original || textEl.getComputedTextLength() <= maxWidth) return;
+
+    // Binary search for the longest fitting substring
+    let lo = 0;
+    let hi = original.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      textEl.textContent = original.slice(0, mid) + '…';
+      if (textEl.getComputedTextLength() <= maxWidth) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    textEl.textContent = lo < original.length ? original.slice(0, lo) + '…' : original;
   }
 
   private attachNodeEventHandlers(
@@ -1978,6 +2006,13 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       if (fkIndex >= 0) {
         const fieldY = -sourceNode.height / 2 + 40 + sourceNode.primaryKeys.length * 20 + fkIndex * 20;
         connectY = sourceNode.y! + fieldY + 10;
+      } else {
+        // Check if the field is a primary key that also serves as a foreign key (IS-A pattern)
+        const pkIndex = sourceNode.primaryKeys.findIndex((pk) => pk.id === field.id);
+        if (pkIndex >= 0) {
+          const fieldY = -sourceNode.height / 2 + 40 + pkIndex * 20;
+          connectY = sourceNode.y! + fieldY + 10;
+        }
       }
     }
 
@@ -2074,8 +2109,8 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       .classed('highlighted', false)
       .classed('relationship-highlighted', false)
       .classed('connection-highlighted', false)
-      .style('stroke', this.mergedConfig.colors?.nodeBorder || '#333')
-      .style('stroke-width', '2px')
+      .style('stroke', null)
+      .style('stroke-width', null)
       .style('filter', null);
 
     this.svg.selectAll('.link-group')
@@ -2091,40 +2126,31 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
   private updateSelectionHighlighting(): void {
     if (!this.svg) return;
 
-    // Clear previous selection styling
+    // Clear previous selection styling — remove inline styles so CSS classes take over
     this.svg.selectAll('.node')
       .classed('selected', false)
       .select('.entity-rect')
-      .style('stroke', this.mergedConfig.colors?.nodeBorder || '#333')
-      .style('stroke-width', '2px')
+      .style('stroke', null)
+      .style('stroke-width', null)
       .style('filter', null);
 
     if (this.selectedNodeId) {
-      const selectedColor = this.mergedConfig.colors?.selectedBorder || '#4CAF50';
-
       this.svg.selectAll('.node')
         .filter((d: unknown) => (d as InternalNode).id === this.selectedNodeId)
-        .classed('selected', true)
-        .select('.entity-rect')
-        .style('stroke', selectedColor)
-        .style('stroke-width', '4px')
-        .style('filter', `drop-shadow(0 0 8px ${selectedColor}80)`);
+        .classed('selected', true);
     }
   }
 
   private updateHighlighting(): void {
     if (!this.svg) return;
 
-    const highlightColor = this.mergedConfig.colors?.highlightBorder || '#ff9800';
     const highlightSet = new Set(this.highlightedNodeIds);
 
     this.svg.selectAll('.node')
       .classed('highlighted', (d: unknown) => highlightSet.has((d as InternalNode).id))
       .filter((d: unknown) => highlightSet.has((d as InternalNode).id))
       .select('.entity-rect')
-      .style('stroke', highlightColor)
-      .style('stroke-width', '3px')
-      .style('filter', `drop-shadow(0 0 6px ${highlightColor}80)`);
+      .classed('highlighted', true);
   }
 
   private emitStateChange(): void {

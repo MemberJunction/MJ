@@ -1,7 +1,8 @@
 import { Component, Output, EventEmitter, Input, OnInit } from '@angular/core';
 import { CommunicationEngineBase, Message, ProcessedMessage } from '@memberjunction/communication-types';
 import { EntityInfo, RunView, RunViewParams } from '@memberjunction/core';
-import { TemplateContentEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
+import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
@@ -19,10 +20,10 @@ export class EntityCommunicationsPreviewComponent implements OnInit  {
   @Input() templateFilter: string | undefined;
   @Input() entityInfo: EntityInfo | undefined;
   @Input() runViewParams: RunViewParams | undefined;
-  @Output() templateSelected = new EventEmitter<TemplateEntityExtended>();
+  @Output() templateSelected = new EventEmitter<MJTemplateEntityExtended>();
 
-  templates: TemplateEntityExtended[] = [];
-  selectedTemplate: TemplateEntityExtended | null = null;
+  templates: MJTemplateEntityExtended[] = [];
+  selectedTemplate: MJTemplateEntityExtended | null = null;
   step: number = 1;
 
   public previewMessages: ProcessedMessage[] = [];
@@ -41,24 +42,24 @@ export class EntityCommunicationsPreviewComponent implements OnInit  {
   async loadTemplates() {
     // load up all template metadata
     const rv = new RunView();
-    const result = await rv.RunView<TemplateEntityExtended>(
+    const result = await rv.RunView<MJTemplateEntityExtended>(
       {
-        EntityName: "Templates",
+        EntityName: "MJ: Templates",
         ExtraFilter: `(IsActive = 1 AND (ActiveAt IS NULL OR ActiveAt <= GETDATE())) ${this.templateFilter ? `AND ${this.templateFilter}` : ''}`,
         ResultType: 'entity_object'
       }
     );
-    const content = await rv.RunView<TemplateContentEntity>({
-      EntityName: "Template Contents",
+    const content = await rv.RunView<MJTemplateContentEntity>({
+      EntityName: "MJ: Template Contents",
       ResultType: 'entity_object'
     })
     this.templates = result.Results;
     this.templates.forEach(template => {
-      template.Content = content.Results.filter(c => c.TemplateID === template.ID);
+      template.Content = content.Results.filter(c => UUIDsEqual(c.TemplateID, template.ID));
     });
   }
 
-  selectTemplate(template: TemplateEntityExtended) {
+  selectTemplate(template: MJTemplateEntityExtended) {
     this.selectedTemplate = template;
     this.templateSelected.emit(template);
     this.step = 2;

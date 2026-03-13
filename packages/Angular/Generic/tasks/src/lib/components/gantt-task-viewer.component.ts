@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnChanges, AfterViewInit, ElementRef, ViewChild, OnDestroy, HostListener } from '@angular/core';
 
-import { TaskEntity, TaskDependencyEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity, MJTaskDependencyEntity } from '@memberjunction/core-entities';
 import { gantt } from 'dhtmlx-gantt';
 import { TaskDetailPanelComponent } from './task-detail-panel.component';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Gantt chart view for tasks using DHTMLX Gantt
@@ -44,7 +45,7 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
   styles: [`
     .gantt-task-viewer {
       height: 100%;
-      background: white;
+      background: var(--mj-bg-surface);
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -65,21 +66,21 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
 
     .gantt-resizer {
       width: 4px;
-      background: #E5E7EB;
+      background: var(--mj-border-default);
       cursor: col-resize;
       flex-shrink: 0;
       transition: background 0.2s;
     }
 
     .gantt-resizer:hover {
-      background: #3B82F6;
+      background: var(--mj-brand-primary);
     }
 
     .task-detail-panel {
       min-width: 300px;
       max-width: 600px;
       height: 100%;
-      border-left: 1px solid #E5E7EB;
+      border-left: 1px solid var(--mj-border-default);
       flex-shrink: 0;
     }
 
@@ -91,8 +92,8 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
 
     :host ::ng-deep .gantt_grid_scale,
     :host ::ng-deep .gantt_task_scale {
-      background: #F9FAFB;
-      border-bottom: 2px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border-bottom: 2px solid var(--mj-border-default);
     }
 
     :host ::ng-deep .gantt_task .gantt_task_content {
@@ -102,7 +103,7 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
     .no-tasks {
       text-align: center;
       padding: 80px 20px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
     }
 
     .no-tasks i {
@@ -118,15 +119,15 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
   `]
 })
 export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDestroy {
-  @Input() tasks: TaskEntity[] = [];
-  @Input() taskDependencies: TaskDependencyEntity[] = [];
+  @Input() tasks: MJTaskEntity[] = [];
+  @Input() taskDependencies: MJTaskDependencyEntity[] = [];
   @Input() agentRunMap?: Map<string, string>; // Maps TaskID -> AgentRunID
-  @Output() taskClicked = new EventEmitter<TaskEntity>();
+  @Output() taskClicked = new EventEmitter<MJTaskEntity>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
   @ViewChild('ganttContainer', { static: false }) ganttContainer!: ElementRef<HTMLDivElement>;
 
-  public selectedTask: TaskEntity | null = null;
+  public selectedTask: MJTaskEntity | null = null;
   public detailPanelWidth: number = 400;
 
   private ganttInitialized = false;
@@ -221,7 +222,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
 
       // Attach click event
       gantt.attachEvent('onTaskClick', (id: string) => {
-        const originalTask = this.tasks.find(t => t.ID === id);
+        const originalTask = this.tasks.find(t => UUIDsEqual(t.ID, id));
         if (originalTask) {
           this.selectedTask = originalTask;
           this.taskClicked.emit(originalTask);
@@ -280,7 +281,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     }
   }
 
-  private convertToGanttFormat(tasks: TaskEntity[]): { data: any[], links: any[] } {
+  private convertToGanttFormat(tasks: MJTaskEntity[]): { data: any[], links: any[] } {
     const data: any[] = [];
     const links: any[] = [];
 
@@ -288,7 +289,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     console.log('🔗 Task dependencies:', this.taskDependencies);
 
     // Build a map of task ID to task for quick lookup
-    const taskMap = new Map<string, TaskEntity>();
+    const taskMap = new Map<string, MJTaskEntity>();
     tasks.forEach(t => taskMap.set(t.ID, t));
 
     // Build dependency map: taskId -> array of tasks it depends on
@@ -422,7 +423,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
       data.push(ganttTask);
     });
 
-    // Create links from TaskDependencyEntity records
+    // Create links from MJTaskDependencyEntity records
     this.taskDependencies.forEach((dep, index) => {
       links.push({
         id: dep.ID || `link_${index}`,
@@ -437,7 +438,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     return { data, links };
   }
 
-  private calculateDuration(task: TaskEntity): number {
+  private calculateDuration(task: MJTaskEntity): number {
     if (task.StartedAt && task.DueAt) {
       const startDate = new Date(task.StartedAt);
       const endDate = new Date(task.DueAt);
@@ -453,7 +454,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     return `${year}-${month}-${day} 00:00`;
   }
 
-  public getAgentRunId(task: TaskEntity): string | null {
+  public getAgentRunId(task: MJTaskEntity): string | null {
     return this.agentRunMap?.get(task.ID) || null;
   }
 
@@ -515,7 +516,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
       if (rootTask) {
         gantt.selectTask(rootTask.id);
         // Trigger task click event to open detail panel
-        const originalTask = this.tasks.find(t => t.ID === rootTask.id);
+        const originalTask = this.tasks.find(t => UUIDsEqual(t.ID, rootTask.id));
         if (originalTask) {
           this.selectedTask = originalTask;
           this.taskClicked.emit(originalTask);

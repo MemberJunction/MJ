@@ -22,7 +22,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Infographic Agent Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Infographic Agent Prompt",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -30,94 +30,94 @@
             "ID": "AEDF6C7D-3FA2-440A-9911-51B78552EA85"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.964Z",
-            "checksum": "e816448faded6b8d6bda8180e30c976530b1a7b5a0dadd4eb0f3bdcfcd68e7af"
+            "lastModified": "2026-02-13T21:09:23.320Z",
+            "checksum": "5269269e7180ec7426b2cc1a1a4e2f6722081eb2e0d8157e0d3fe907e800904c"
           }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Create SVG Chart",
+            "ActionID": "@lookup:MJ: Actions.Name=Create SVG Chart",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "1A77D18A-E149-4D6E-8971-3019269CAD2E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.965Z",
-            "checksum": "017773054aa09786b5f74ab920886a056cdf03e44cae1cb59be41cbf8a328544"
+            "lastModified": "2026-02-13T21:09:23.324Z",
+            "checksum": "65b9fff5cee41368bebd88a9eead48e77f9f8036d3c7c58b28dfe5f4b162179e"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Create SVG Diagram",
+            "ActionID": "@lookup:MJ: Actions.Name=Create SVG Diagram",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "CC5BA67F-5CD3-4B32-BFD5-93E3FD8328D4"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.966Z",
-            "checksum": "8b98c2634ae3f74b0db43356a707a2e10507926e674a3c8d8d52eda5610b402c"
+            "lastModified": "2026-02-13T21:09:23.327Z",
+            "checksum": "44bc09ae37cb92f15ab38fd6bd7649ea3ce68c87ea5208894a52004c9577413a"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Create SVG Word Cloud",
+            "ActionID": "@lookup:MJ: Actions.Name=Create SVG Word Cloud",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "2190BC58-9DCD-432D-98C3-B7B4EA732CCB"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.967Z",
-            "checksum": "0ba70a5528f6d5333a949199b5c874ba28300d40250c7e68479c69fdcf812489"
+            "lastModified": "2026-02-13T21:09:23.328Z",
+            "checksum": "7b428e942e75794088e08f6d8c10900fa27aacbb7b124074c87ace8068d10722"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Create SVG Network",
+            "ActionID": "@lookup:MJ: Actions.Name=Create SVG Network",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "AFE40518-6A33-4EED-AD11-3554B3E355CF"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.969Z",
-            "checksum": "ec7ea85529946cba92e7caf6aa886fa1113345c1a6eb050f417f691f2197ee80"
+            "lastModified": "2026-02-13T21:09:23.330Z",
+            "checksum": "2a7601288aeee54aef3d7097b3451c8880c1dfe5a4d83b0e75417ddeeac095ce"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Create SVG Infographic",
+            "ActionID": "@lookup:MJ: Actions.Name=Create SVG Infographic",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "2DFD4342-65D2-42B5-A384-DEADDD5F2BDB"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.970Z",
-            "checksum": "1d422db9fcfecd5e74fba2b8ad075f449951caa9a2546de1daa990519c0e38b0"
+            "lastModified": "2026-02-13T21:09:23.331Z",
+            "checksum": "61ddf147a29a5d27fade444172fcb3b5752dc808d448118a85914bffa00ed1d7"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Create SVG Sketch Diagram",
+            "ActionID": "@lookup:MJ: Actions.Name=Create SVG Sketch Diagram",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "D210BBEF-AD8A-4249-A3B6-3A24FE1E3340"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.971Z",
-            "checksum": "ec9f229c2517250eccf2c61e9980cdd79af3d83fe12ee1d4944caec93cc34cda"
+            "lastModified": "2026-02-13T21:09:23.332Z",
+            "checksum": "035a11491e2249b2a75c1ec416c1e4d5bb6a0f645f9c5abfd80afcde8106e8f8"
           }
         }
       ]

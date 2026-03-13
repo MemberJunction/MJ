@@ -2,12 +2,13 @@
  * Prompt execution engine combining Nunjucks templating with AI/Core
  */
 
-import * as nunjucks from 'nunjucks';
+import nunjucks from 'nunjucks';
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
 import { PromptFileLoader } from './PromptFileLoader.js';
 import { AIConfig } from '../types/config.js';
 import { PromptExecutionResult } from '../types/prompts.js';
 import { createLLMInstance } from '../utils/llm-factory.js';
+import { CleanAndParseJSON } from '@memberjunction/global';
 
 export type GuardrailCheckFn = () => { canContinue: boolean; reason?: string };
 
@@ -195,17 +196,18 @@ export class PromptEngine {
 
       let parsedResult: T;
       if (options?.responseFormat === 'JSON') {
-        try {
-          parsedResult = JSON.parse(content) as T;
-        } catch (parseError) {
+        // Use shared MJGlobal utility for JSON cleaning (handles markdown fences, double-escaping, etc.)
+        const parsed = CleanAndParseJSON<T>(content, true);
+        if (parsed === null) {
           return {
             success: false,
-            errorMessage: `Failed to parse JSON response: ${(parseError as Error).message}\n\nRaw content:\n${content}`,
+            errorMessage: `Failed to parse JSON response\n\nRaw content:\n${content}`,
             tokensUsed: usage?.totalTokens || 0,
             promptInput: renderedPrompt,
             promptOutput: content
           };
         }
+        parsedResult = parsed;
       } else {
         parsedResult = content as unknown as T;
       }
@@ -285,21 +287,21 @@ export class PromptEngine {
         const content = chatResult.data.choices[0].message.content;
         const usage = chatResult.data.usage;
 
-        try {
-          const parsed = JSON.parse(content) as T;
-          return {
-            success: true,
-            result: parsed,
-            tokensUsed: usage?.totalTokens || 0,
-            cost: usage?.cost
-          };
-        } catch (error) {
+        // Use shared MJGlobal utility for JSON cleaning (handles markdown fences, double-escaping, etc.)
+        const parsed = CleanAndParseJSON<T>(content, true);
+        if (parsed === null) {
           return {
             success: false,
-            errorMessage: `JSON parse error: ${(error as Error).message}`,
+            errorMessage: `JSON parse error`,
             tokensUsed: usage?.totalTokens || 0
           };
         }
+        return {
+          success: true,
+          result: parsed,
+          tokensUsed: usage?.totalTokens || 0,
+          cost: usage?.cost
+        };
       });
     } catch (error) {
       // If rendering or execution fails completely, return array of errors

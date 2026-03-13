@@ -1,9 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { RoleInfo } from '@memberjunction/core';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 import { AgentPermissionsService, PermissionRow } from '../services/agent-permissions.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** Simple name/ID pair for the grantee search-select */
 interface GranteeOption {
@@ -32,17 +33,17 @@ interface GranteeOption {
 })
 export class AgentPermissionsPanelComponent implements OnInit {
     /** The agent whose permissions are being managed */
-    private _agent: AIAgentEntityExtended | null = null;
+    private _agent: MJAIAgentEntityExtended | null = null;
 
     @Input()
-    set Agent(value: AIAgentEntityExtended | null) {
+    set Agent(value: MJAIAgentEntityExtended | null) {
         const prev = this._agent;
         this._agent = value;
         if (value && value !== prev) {
             this.loadData();
         }
     }
-    get Agent(): AIAgentEntityExtended | null {
+    get Agent(): MJAIAgentEntityExtended | null {
         return this._agent;
     }
 
@@ -179,7 +180,7 @@ export class AgentPermissionsPanelComponent implements OnInit {
 
         try {
             const existingEntity = this.EditingRowId
-                ? this.Rows.find(r => r.ID === this.EditingRowId)?.Entity
+                ? this.Rows.find(r => UUIDsEqual(r.ID, this.EditingRowId))?.Entity
                 : undefined;
 
             const saved = await this.permsSvc.SavePermission(
@@ -226,7 +227,7 @@ export class AgentPermissionsPanelComponent implements OnInit {
     private updateFilteredGrantees(): void {
         const query = this.SearchQuery.toLowerCase().trim();
         const source: GranteeOption[] = this.FormGrantType === 'user'
-            ? this.permsSvc.Users.map((u: UserEntity) => ({ ID: u.ID, Name: u.Name }))
+            ? this.permsSvc.Users.map((u: MJUserEntity) => ({ ID: u.ID, Name: u.Name }))
             : this.permsSvc.Roles.map((r: RoleInfo) => ({ ID: r.ID, Name: r.Name }));
 
         this.FilteredGrantees = query

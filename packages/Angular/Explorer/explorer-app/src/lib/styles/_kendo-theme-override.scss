@@ -5,6 +5,51 @@
 // Import this AFTER the Kendo theme in your main.scss
 
 // ===================================
+// KENDO CSS VARIABLE OVERRIDES
+// ===================================
+// Override Kendo's own CSS custom properties so ALL components
+// (pickers, popups, grids, inputs, etc.) respond to dark mode automatically.
+
+[data-theme="dark"] {
+  // Base component colors (buttons, pickers, inputs)
+  --kendo-color-base: var(--mj-bg-surface);
+  --kendo-color-base-hover: var(--mj-bg-surface-elevated);
+  --kendo-color-base-active: var(--mj-bg-surface-hover);
+  --kendo-color-on-base: var(--mj-text-primary);
+  --kendo-color-base-subtle: var(--mj-bg-surface-card);
+  --kendo-color-base-subtle-hover: var(--mj-bg-surface-elevated);
+  --kendo-color-base-subtle-active: var(--mj-bg-surface-hover);
+
+  // Surface / app background
+  --kendo-color-surface: var(--mj-bg-surface-card);
+  --kendo-color-surface-alt: var(--mj-bg-surface-elevated);
+  --kendo-color-on-app-surface: var(--mj-text-primary);
+  --kendo-color-app-surface: var(--mj-bg-page);
+
+  // Border colors
+  --kendo-color-border: var(--mj-border-default);
+  --kendo-color-border-alt: var(--mj-border-strong);
+
+  // Text colors
+  --kendo-color-subtle: var(--mj-text-muted);
+  --kendo-color-on-surface: var(--mj-text-primary);
+
+  // Primary
+  --kendo-color-primary: var(--mj-brand-primary);
+  --kendo-color-primary-hover: var(--mj-brand-primary-hover);
+  --kendo-color-primary-active: var(--mj-brand-primary-hover);
+  --kendo-color-primary-focus: var(--mj-brand-primary);
+  --kendo-color-on-primary: var(--mj-text-inverse);
+  --kendo-color-primary-subtle: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+
+  // Success / Error / Warning / Info
+  --kendo-color-success: var(--mj-status-success);
+  --kendo-color-error: var(--mj-status-error);
+  --kendo-color-warning: var(--mj-status-warning);
+  --kendo-color-info: var(--mj-status-info);
+}
+
+// ===================================
 // KENDO BUTTONS - Enhanced automatically
 // ===================================
 
@@ -21,6 +66,16 @@
   gap: 8px;
   line-height: 1.5;
   font-family: "Montserrat", sans-serif;
+  color: var(--mj-text-primary);
+
+  // Solid themed buttons must keep inverse text on colored backgrounds
+  &.k-button-solid-primary,
+  &.k-button-solid-info,
+  &.k-button-solid-success,
+  &.k-button-solid-warning,
+  &.k-button-solid-error {
+    color: var(--mj-text-inverse);
+  }
 
   // Hover effect for all buttons
   &:not(:disabled):hover {
@@ -29,23 +84,23 @@
 
   // Primary buttons
   &.k-primary {
-    background: var(--mj-blue);
-    border-color: var(--mj-blue);
-    color: var(--white-color);
+    background: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
 
     &:hover:not(:disabled) {
-      box-shadow: 0 4px 8px rgba(0, 118, 182, 0.3);
-      background: var(--mj-blue);
-      border-color: var(--mj-blue);
+      box-shadow: 0 4px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+      background: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
     }
   }
 
   // Flat/ghost buttons
   &.k-flat {
     &:hover:not(:disabled) {
-      background: var(--gray-600);
-      color: var(--mj-blue);
-      border-color: var(--mj-blue);
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
     }
   }
 
@@ -76,6 +131,12 @@
   }
 }
 
+// Outline button hover - Kendo default is too dark in dark mode
+.k-button-outline-base:hover,
+.k-button-outline-base.k-hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent) !important;
+}
+
 // ===================================
 // BUTTONGROUP BASE STYLING
 // ===================================
@@ -83,8 +144,8 @@
 .k-button-group {
   display: inline-flex;
   align-items: center;
-  background: var(--white-color);
-  border: 2px solid var(--gray-700);
+  background: var(--mj-bg-surface);
+  border: 2px solid var(--mj-border-default);
   border-radius: var(--border-radius);
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -106,19 +167,19 @@
 
   // Hover effect for the entire group
   &:hover {
-    border-color: var(--mj-blue);
+    border-color: var(--mj-brand-primary);
     box-shadow: 
-      0 4px 12px rgba(0, 118, 182, 0.15),
+      0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent),
       0 2px 6px rgba(0, 0, 0, 0.1);
     transform: translateY(-1px);
   }
 
   // Focus-within state
   &:focus-within {
-    border-color: var(--mj-blue);
+    border-color: var(--mj-brand-primary);
     box-shadow: 
-      0 0 0 3px rgba(0, 118, 182, 0.15),
-      0 4px 16px rgba(0, 118, 182, 0.2);
+      0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent),
+      0 4px 16px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
   }
 }
 
@@ -134,8 +195,8 @@ kendo-buttongroup button[kendoButton],
   border: none !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  background: var(--white-color);
-  color: var(--navy) !important;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary) !important;
   min-height: 44px;
   padding: 10px 20px;
   font-weight: 500;
@@ -149,7 +210,7 @@ kendo-buttongroup button[kendoButton],
 
   // Separator between buttons
   &:not(:last-child) {
-    border-right: 1px solid var(--gray-700) !important;
+    border-right: 1px solid var(--mj-border-default) !important;
   }
 
   // Icon styling
@@ -161,17 +222,17 @@ kendo-buttongroup button[kendoButton],
   // Default state
   &:not(.k-selected):not(.k-state-selected):not([aria-pressed="true"]) {
     &:hover {
-      background: var(--gray-600) !important;
-      color: var(--mj-blue) !important;
-      
+      background: var(--mj-bg-surface-hover) !important;
+      color: var(--mj-brand-primary) !important;
+
       i, .k-icon, .k-svg-icon {
-        color: var(--mj-blue) !important;
+        color: var(--mj-brand-primary) !important;
       }
     }
 
     &:active {
-      background: var(--light-blue) !important;
-      color: var(--navy) !important;
+      background: var(--mj-brand-accent) !important;
+      color: var(--mj-text-primary) !important;
     }
   }
 
@@ -179,8 +240,8 @@ kendo-buttongroup button[kendoButton],
   &.k-selected,
   &.k-state-selected,
   &[aria-pressed="true"] {
-    background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%) !important;
-    color: var(--white-color) !important;
+    background: linear-gradient(135deg, var(--mj-brand-primary) 0%, var(--mj-brand-primary-hover) 100%) !important;
+    color: var(--mj-text-inverse) !important;
     font-weight: 600;
     position: relative;
     
@@ -202,17 +263,17 @@ kendo-buttongroup button[kendoButton],
     }
 
     i, .k-icon, .k-svg-icon {
-      color: var(--white-color);
+      color: var(--mj-text-inverse);
     }
 
     &:hover {
-      background: linear-gradient(135deg, #0084d1 0%, var(--mj-blue) 100%);
+      background: linear-gradient(135deg, color-mix(in srgb, var(--mj-brand-primary) 80%, var(--mj-bg-surface)) 0%, var(--mj-brand-primary) 100%);
     }
   }
 
   // Focus state
   &:focus-visible {
-    outline: 2px solid var(--mj-blue);
+    outline: 2px solid var(--mj-brand-primary);
     outline-offset: -2px;
     z-index: 2;
   }
@@ -221,12 +282,12 @@ kendo-buttongroup button[kendoButton],
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
-    background: var(--gray-600);
-    color: var(--gray-800);
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-disabled);
 
     &:hover {
-      background: var(--gray-600);
-      color: var(--gray-800);
+      background: var(--mj-bg-surface-hover);
+      color: var(--mj-text-disabled);
     }
   }
 
@@ -248,12 +309,12 @@ kendo-buttongroup button[kendoButton],
 
 // Primary theme variant
 .k-button-group.k-button-group-primary {
-  border-color: var(--mj-blue);
-  background: var(--mj-blue);
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-brand-primary);
 
   .k-button {
-    background: var(--mj-blue);
-    color: var(--white-color);
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
     
     &:not(:last-child) {
       border-right-color: rgba(255, 255, 255, 0.2) !important;
@@ -261,30 +322,30 @@ kendo-buttongroup button[kendoButton],
 
     &:not(.k-selected):not(.k-state-selected) {
       &:hover {
-        background: #0084d1;
-        color: var(--white-color);
+        background: color-mix(in srgb, var(--mj-brand-primary) 80%, var(--mj-bg-surface));
+        color: var(--mj-text-inverse);
       }
     }
 
     &.k-selected,
     &.k-state-selected {
-      background: var(--navy);
-      color: var(--white-color);
+      background: var(--mj-brand-secondary);
+      color: var(--mj-text-inverse);
     }
   }
 }
 
 // Secondary theme variant
 .k-button-group.k-button-group-secondary {
-  border-color: var(--navy);
+  border-color: var(--mj-brand-secondary);
   
   .k-button {
-    color: var(--navy);
+    color: var(--mj-text-primary);
     
     &.k-selected,
     &.k-state-selected {
-      background: var(--navy);
-      color: var(--white-color);
+      background: var(--mj-brand-secondary);
+      color: var(--mj-text-inverse);
     }
   }
 }
@@ -363,7 +424,7 @@ kendo-buttongroup button[kendoButton],
   
   .k-button {
     border-right: none !important;
-    border-bottom: 1px solid var(--gray-700) !important;
+    border-bottom: 1px solid var(--mj-border-default) !important;
     border-radius: 0 !important;
     
     &:last-child {
@@ -403,7 +464,7 @@ kendo-buttongroup button[kendoButton],
       left: 0;
       right: 0;
       height: 3px;
-      background: var(--mj-blue);
+      background: var(--mj-brand-primary);
       transform: scaleX(0);
       transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
@@ -463,7 +524,7 @@ kendo-buttongroup button[kendoButton],
     .k-button {
       width: 100%;
       border-right: none !important;
-      border-bottom: 1px solid var(--gray-700) !important;
+      border-bottom: 1px solid var(--mj-border-default) !important;
       border-radius: 0 !important;
       
       &:last-child {
@@ -499,7 +560,7 @@ kendo-buttongroup button[kendoButton],
       
       &.k-selected,
       &.k-state-selected {
-        outline: 2px solid var(--white-color);
+        outline: 2px solid var(--mj-text-inverse);
         outline-offset: -4px;
       }
     }
@@ -554,27 +615,27 @@ kendo-buttongroup {
   button[kendoButton],
   button.k-button {
     // Reset any inherited black color
-    color: var(--navy) !important;
+    color: var(--mj-text-primary) !important;
     
     &:not(.k-selected):not(.k-state-selected):not([aria-pressed="true"]) {
-      background: var(--white-color) !important;
-      color: var(--navy) !important;
+      background: var(--mj-bg-surface) !important;
+      color: var(--mj-text-primary) !important;
       
       &:hover:not(:disabled) {
-        background: var(--gray-600) !important;
-        color: var(--mj-blue) !important;
+        background: var(--mj-bg-surface-hover) !important;
+        color: var(--mj-brand-primary) !important;
       }
     }
     
     &.k-selected,
     &.k-state-selected,
     &[aria-pressed="true"] {
-      background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%) !important;
-      color: var(--white-color) !important;
+      background: linear-gradient(135deg, var(--mj-brand-primary) 0%, var(--mj-brand-primary-hover) 100%) !important;
+      color: var(--mj-text-inverse) !important;
       
       &:hover {
-        background: linear-gradient(135deg, #0084d1 0%, var(--mj-blue) 100%) !important;
-        color: var(--white-color) !important;
+        background: linear-gradient(135deg, color-mix(in srgb, var(--mj-brand-primary) 80%, var(--mj-bg-surface)) 0%, var(--mj-brand-primary) 100%) !important;
+        color: var(--mj-text-inverse) !important;
       }
     }
   }
@@ -583,7 +644,7 @@ kendo-buttongroup {
 @media (prefers-color-scheme: dark) {
   .k-button-group {
     background: none !important;
-    border-color: var(--gray-700) !important;
+    border-color: var(--mj-border-default) !important;
   }
 }
 
@@ -591,16 +652,16 @@ kendo-buttongroup {
 .k-button-group[role="group"] {
   button[kendoButton][toggleable],
   .k-button[toggleable] {
-    color: var(--navy) !important;
+    color: var(--mj-text-primary) !important;
     
     &[aria-pressed="false"] {
-      background: var(--white-color) !important;
-      color: var(--navy) !important;
+      background: var(--mj-bg-surface) !important;
+      color: var(--mj-text-primary) !important;
     }
     
     &[aria-pressed="true"] {
-      background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%) !important;
-      color: var(--white-color) !important;
+      background: linear-gradient(135deg, var(--mj-brand-primary) 0%, var(--mj-brand-primary-hover) 100%) !important;
+      color: var(--mj-text-inverse) !important;
     }
   }
 }
@@ -614,22 +675,23 @@ kendo-buttongroup {
 .k-textarea,
 .k-input {
   border-radius: var(--border-radius);
-  border: 2px solid var(--gray-700);
+  border: 2px solid var(--mj-border-default);
   padding: 8px;
   font-size: 16px;
-  background: var(--white-color);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
   transition: var(--transition-time);
   font-family: "Montserrat", sans-serif;
 
   &:focus,
   &.k-focus {
     outline: none;
-    border-color: var(--mj-blue);
-    box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.2);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
   }
 
   &::placeholder {
-    color: var(--gray-800);
+    color: var(--mj-text-muted);
   }
   button {
     padding: 0 !important;
@@ -654,49 +716,46 @@ kendo-buttongroup {
 .k-combobox,
 .k-multiselect,
 .k-autocomplete {
-  border: 2px solid var(--gray-700);
-  border-radius: 12px;
-  background: var(--white-color);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  transition: all var(--mj-transition-base);
+  box-shadow: var(--mj-shadow-sm);
   min-height: 48px;
 
   &:hover:not(.k-disabled) {
-    border-color: var(--mj-blue);
-    box-shadow: 0 4px 12px rgba(0, 118, 182, 0.15);
-    transform: translateY(-1px);
+    border-color: var(--mj-brand-primary);
+    box-shadow: var(--mj-shadow-md);
   }
 
   &:focus-within,
   &.k-focus {
-    border-color: var(--mj-blue);
-    box-shadow: 
-      0 0 0 3px rgba(0, 118, 182, 0.15),
-      0 4px 16px rgba(0, 118, 182, 0.2);
-    transform: translateY(-1px);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
   }
 
   // Dropdown arrow button
   .k-select {
-    background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%);
+    background: var(--mj-brand-primary);
     border: none;
-    border-radius: 0 10px 10px 0;
+    border-radius: 0 var(--mj-radius-md) var(--mj-radius-md) 0;
     width: 40px;
-    transition: all 0.3s ease;
+    transition: all var(--mj-transition-base);
 
     .k-icon,
     .k-svg-icon {
-      color: var(--white-color);
+      color: var(--mj-text-inverse);
     }
 
     &:hover {
-      background: linear-gradient(135deg, #0084d1 0%, var(--mj-blue) 100%);
+      background: var(--mj-brand-primary-hover);
     }
   }
 
   // Active state
   &.k-state-active .k-select {
-    background: var(--navy);
+    background: var(--mj-brand-primary-hover);
   }
 }
 
@@ -704,13 +763,18 @@ kendo-buttongroup {
 .k-popup,
 .k-dropdown-popup,
 .k-list-container {
-  border: 2px solid var(--mj-blue);
-  background: var(--white-color);
-  box-shadow: 
-    0 20px 40px rgba(0, 0, 0, 0.15),
-    0 8px 24px rgba(0, 118, 182, 0.2);
-  margin-top: 8px;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  box-shadow: var(--mj-shadow-lg);
+  margin-top: 4px;
+  border-radius: var(--mj-radius-md);
   animation: dropdown-appear 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+// Dropdown list container
+.k-list {
+  background: var(--mj-bg-surface) !important;
+  color: var(--mj-text-primary) !important;
 }
 
 // Dropdown items
@@ -719,17 +783,20 @@ kendo-buttongroup {
   padding: 12px 16px;
   transition: all 0.2s ease;
   position: relative;
+  background: var(--mj-bg-surface) !important;
+  color: var(--mj-text-primary) !important;
 
   &:hover {
-    background: var(--light-blue);
-    color: var(--navy);
+    background: var(--mj-bg-surface-hover) !important;
+    color: var(--mj-text-primary) !important;
     padding-left: 20px;
   }
 
   &.k-selected,
-  &.k-state-selected {
-    background: linear-gradient(135deg, var(--mj-blue) 0%, #005a9e 100%);
-    color: var(--white-color);
+  &.k-state-selected,
+  &.k-focus.k-selected {
+    background: var(--mj-brand-primary) !important;
+    color: var(--mj-text-inverse) !important;
     font-weight: 600;
   }
 }
@@ -739,21 +806,21 @@ kendo-buttongroup {
 // ===================================
 
 .k-grid {
-  border: 2px solid var(--gray-700);
+  border: 2px solid var(--mj-border-default);
   border-radius: var(--border-radius);
   box-shadow: var(--shadow);
   overflow: hidden;
-  background: var(--mj-blue);
+  background: var(--mj-brand-primary);
 
   // Grid header
   .k-grid-header {
-    background: var(--mj-blue);
-    border-bottom: 2px solid var(--gray-700);
+    background: var(--mj-brand-primary);
+    border-bottom: 2px solid var(--mj-border-default);
 
     .k-header {
-      background: var(--mj-blue);
-      border-color: var(--light-blue);
-      color: var(--white-color);
+      background: var(--mj-brand-primary);
+      border-color: var(--mj-brand-accent);
+      color: var(--mj-text-inverse);
       font-weight: 600;
       font-size: 14px;
       text-transform: uppercase;
@@ -765,55 +832,55 @@ kendo-buttongroup {
   // Grid rows
   tbody tr {
     transition: all 0.2s ease;
-    border-bottom: 1px solid var(--gray-600);
+    border-bottom: 1px solid var(--mj-border-default);
 
     &.k-selected,
     &.k-state-selected {
-      background: rgba(0, 118, 182, 0.1);
-      border-left: 4px solid var(--mj-blue);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+      border-left: 4px solid var(--mj-brand-primary);
     }
 
     td {
       padding: 12px;
-      border-color: var(--gray-600);
-      color: var(--navy);
+      border-color: var(--mj-border-default);
+      color: var(--mj-text-primary);
       font-size: 14px;
     }
   }
 
   // Grid pager
   .k-pager-wrap {
-    background: var(--gray-600);
-    border-top: 2px solid var(--gray-700);
+    background: var(--mj-bg-surface-elevated);
+    border-top: 2px solid var(--mj-border-default);
     padding: 12px 16px;
 
     .k-pager-numbers .k-button {
-      border: 1px solid var(--gray-700);
-      background: var(--white-color);
-      color: var(--navy);
+      border: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
       border-radius: 6px;
       margin: 0 2px;
       min-width: 32px;
       height: 32px;
 
       &:hover {
-        background: var(--mj-blue);
-        color: var(--white-color);
-        border-color: var(--mj-blue);
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
+        border-color: var(--mj-brand-primary);
       }
 
       &.k-selected {
-        background: var(--mj-blue);
-        color: var(--white-color);
-        border-color: var(--mj-blue);
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
+        border-color: var(--mj-brand-primary);
       }
     }
   }
 
   // Grid toolbar
   .k-grid-toolbar {
-    background: var(--gray-600);
-    border-bottom: 1px solid var(--gray-700);
+    background: var(--mj-bg-surface-elevated);
+    border-bottom: 1px solid var(--mj-border-default);
     padding: 12px 16px;
   }
 }
@@ -832,16 +899,16 @@ kendo-buttongroup {
   display: block; // Override any inline-block defaults
 
   &:hover {
-    border-color: var(--light-blue);
+    border-color: var(--mj-brand-accent);
     box-shadow: 
-      0 8px 32px rgba(9, 35, 64, 0.12),
-      0 4px 16px rgba(0, 118, 182, 0.1);
+      0 8px 32px color-mix(in srgb, var(--mj-brand-secondary) 12%, transparent),
+      0 4px 16px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     transform: translateY(-4px);
   }
 
   .k-card-header {
-    background: var(--gray-600);
-    border-bottom: 1px solid var(--gray-600);
+    background: var(--mj-bg-surface-elevated);
+    border-bottom: 1px solid var(--mj-border-default);
     padding: 16px 20px;
   }
 
@@ -850,8 +917,8 @@ kendo-buttongroup {
   }
 
   .k-card-footer {
-    background: var(--gray-600);
-    border-top: 1px solid var(--gray-600);
+    background: var(--mj-bg-surface-elevated);
+    border-top: 1px solid var(--mj-border-default);
     padding: 16px 20px;
   }
 
@@ -881,14 +948,14 @@ kendo-buttongroup {
   border-radius: 20px;
   box-shadow: 
     0 25px 50px rgba(0, 0, 0, 0.25),
-    0 10px 30px rgba(0, 118, 182, 0.2);
-  border: 2px solid rgba(0, 118, 182, 0.1);
+    0 10px 30px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+  border: 2px solid color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   overflow: hidden;
 
   .k-dialog-titlebar,
   .k-window-titlebar {
-    background: linear-gradient(135deg, var(--gray-600) 0%, #f8f9fa 100%);
-    border-bottom: 2px solid var(--gray-600);
+    background: linear-gradient(135deg, var(--mj-bg-surface-elevated) 0%, var(--mj-bg-surface-card) 100%);
+    border-bottom: 2px solid var(--mj-border-default);
     padding: 24px 30px;
     position: relative;
 
@@ -905,7 +972,7 @@ kendo-buttongroup {
 
   .k-dialog-title,
   .k-window-title {
-    color: var(--navy);
+    color: var(--mj-text-primary);
     font-size: 1.5rem;
     font-weight: 600;
   }
@@ -915,14 +982,14 @@ kendo-buttongroup {
     border-radius: 50%;
     width: 40px;
     height: 40px;
-    background: rgba(170, 170, 170, 0.1);
-    border: 2px solid var(--gray-700);
+    background: color-mix(in srgb, var(--mj-text-disabled) 10%, transparent);
+    border: 2px solid var(--mj-border-default);
     transition: all 0.3s ease;
 
     &:hover {
-      background: #dc3545;
-      color: var(--white-color);
-      border-color: #dc3545;
+      background: var(--mj-status-error);
+      color: var(--mj-text-inverse);
+      border-color: var(--mj-status-error);
       transform: scale(1.1);
     }
   }
@@ -933,8 +1000,8 @@ kendo-buttongroup {
   }
 
   .k-dialog-actions {
-    background: var(--gray-600);
-    border-top: 2px solid var(--gray-600);
+    background: var(--mj-bg-surface-elevated);
+    border-top: 2px solid var(--mj-border-default);
     padding: 20px 30px;
     gap: 12px;
   }
@@ -968,6 +1035,36 @@ kendo-buttongroup {
 }
 
 // ===================================
+// KENDO PANELBAR - Enhanced automatically
+// ===================================
+
+.k-panelbar {
+  background: var(--mj-bg-surface-card);
+  border-color: var(--mj-border-default);
+  color: var(--mj-text-primary);
+
+  > .k-panelbar-header > .k-link {
+    background: var(--mj-bg-surface-elevated);
+    color: var(--mj-text-primary);
+    border-color: var(--mj-border-default);
+
+    &:hover {
+      background: var(--mj-bg-surface-hover);
+    }
+
+    .k-icon, .k-svg-icon {
+      color: var(--mj-text-muted);
+    }
+  }
+
+  .k-panelbar-item-content {
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-primary);
+    border-color: var(--mj-border-default);
+  }
+}
+
+// ===================================
 // KENDO FORM FIELDS - Enhanced automatically
 // ===================================
 
@@ -976,13 +1073,13 @@ kendo-buttongroup {
 
   .k-label {
     font-weight: 500;
-    color: var(--navy);
+    color: var(--mj-text-primary);
     margin-bottom: 0.5rem;
     font-size: 14px;
   }
 
   .k-form-error {
-    color: #dc3545;
+    color: var(--mj-status-error);
     font-size: 0.875rem;
     margin-top: 0.25rem;
   }
@@ -995,15 +1092,15 @@ kendo-buttongroup {
 .k-progressbar {
   height: 8px;
   border-radius: 4px;
-  background: var(--gray-600);
+  background: var(--mj-bg-surface-sunken);
 
   .k-progress-status-wrap {
     font-weight: 500;
-    color: var(--navy);
+    color: var(--mj-text-primary);
   }
 
   .k-selected {
-    background: var(--mj-blue);
+    background: var(--mj-brand-primary);
     border-radius: 4px;
   }
 }
@@ -1019,7 +1116,7 @@ kendo-buttongroup {
 }
 
 .k-loader {
-    color: var(--mj-blue);
+    color: var(--mj-brand-primary);
     position: absolute;
     left: 50%;
     top: 50%;
@@ -1032,24 +1129,24 @@ kendo-buttongroup {
 
 .k-tabstrip {
   .k-tabstrip-items-wrapper {
-    border-bottom: 2px solid var(--gray-700);
+    border-bottom: 2px solid var(--mj-border-default);
 
     .k-item {
-      color: var(--navy);
+      color: var(--mj-text-primary);
       font-weight: 500;
       transition: all 0.2s ease;
       padding: 12px 20px;
 
       &:hover {
-        background: var(--gray-600);
-        color: var(--mj-blue);
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-brand-primary);
       }
 
       &.k-active {
-        color: var(--mj-blue);
-        border-bottom: 3px solid var(--mj-blue) !important;
+        color: var(--mj-brand-primary);
+        border-bottom: 3px solid var(--mj-brand-primary) !important;
         font-weight: 600;
-        background: var(--white-color);
+        background: var(--mj-bg-surface);
       }
     }
   }
@@ -1135,8 +1232,99 @@ kendo-buttongroup {
 .k-button:focus-visible,
 .k-textbox:focus-visible,
 .k-dropdown:focus-visible {
-  outline: 2px solid var(--mj-blue);
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
+}
+
+// ===================================
+// KENDO DROPDOWNS & POPUPS
+// ===================================
+
+// Dropdown/picker base styling
+.k-picker-solid,
+.k-dropdownlist,
+.k-combobox,
+.k-autocomplete,
+.k-multiselect {
+  background-color: var(--mj-bg-surface) !important;
+  border-color: var(--mj-border-default) !important;
+  color: var(--mj-text-primary) !important;
+
+  .k-input-inner {
+    color: var(--mj-text-primary) !important;
+  }
+
+  &:hover,
+  &.k-hover {
+    background-color: var(--mj-bg-surface-elevated) !important;
+    border-color: var(--mj-border-strong) !important;
+  }
+
+  &:focus,
+  &.k-focus {
+    background-color: var(--mj-bg-surface) !important;
+    border-color: var(--mj-brand-primary) !important;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent) !important;
+  }
+
+  .k-input-button,
+  .k-select {
+    color: var(--mj-text-muted) !important;
+    background: transparent !important;
+  }
+}
+
+// Popup container (renders outside component scope at document body level)
+.k-popup,
+.k-animation-container .k-popup {
+  background: var(--mj-bg-surface-card) !important;
+  border-color: var(--mj-border-default) !important;
+  color: var(--mj-text-primary) !important;
+  box-shadow: var(--mj-shadow-lg);
+}
+
+// List container
+.k-list {
+  background: var(--mj-bg-surface-card) !important;
+  color: var(--mj-text-primary) !important;
+}
+
+// List items inside dropdowns
+.k-list-item,
+.k-list-optionlabel {
+  color: var(--mj-text-primary) !important;
+  background: transparent !important;
+
+  &:hover,
+  &.k-hover {
+    background: var(--mj-bg-surface-hover) !important;
+    color: var(--mj-text-primary) !important;
+  }
+
+  &.k-selected,
+  &.k-focus.k-selected {
+    background: var(--mj-brand-primary) !important;
+    color: var(--mj-text-inverse) !important;
+  }
+
+  &.k-focus:not(.k-selected) {
+    background: var(--mj-bg-surface-hover) !important;
+    color: var(--mj-text-primary) !important;
+  }
+}
+
+// Dropdown list header/group headers
+.k-list-group-sticky-header,
+.k-list-group-item {
+  background: var(--mj-bg-surface-elevated) !important;
+  color: var(--mj-text-secondary) !important;
+  border-color: var(--mj-border-default) !important;
+}
+
+// No data message
+.k-no-data,
+.k-nodata {
+  color: var(--mj-text-muted) !important;
 }
 
 // High contrast mode

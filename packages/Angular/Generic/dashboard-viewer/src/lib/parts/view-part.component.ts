@@ -1,9 +1,9 @@
 import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
 import { Metadata, EntityInfo } from '@memberjunction/core';
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
 
 /**
@@ -66,7 +66,7 @@ import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberj
             height: 100%;
             display: flex;
             flex-direction: column;
-            background: #fff;
+            background: var(--mj-bg-surface);
         }
 
         .loading-state,
@@ -77,7 +77,7 @@ import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberj
             align-items: center;
             justify-content: center;
             height: 100%;
-            color: #666;
+            color: var(--mj-text-secondary);
             text-align: center;
             padding: 24px;
         }
@@ -85,17 +85,17 @@ import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberj
         .error-state i,
         .empty-state i {
             font-size: 48px;
-            color: #ccc;
+            color: var(--mj-text-muted);
             margin-bottom: 16px;
         }
 
         .error-state i {
-            color: #d32f2f;
+            color: var(--mj-status-error);
         }
 
         .empty-state h4 {
             margin: 0 0 8px 0;
-            color: #333;
+            color: var(--mj-text-primary);
         }
 
         .empty-state p {
@@ -111,7 +111,7 @@ import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberj
 })
 export class ViewPartComponent extends BaseDashboardPart implements AfterViewInit, OnDestroy {
     public hasView = false;
-    public viewEntity: UserViewEntityExtended | null = null;
+    public viewEntity: MJUserViewEntityExtended | null = null;
     public entityInfo: EntityInfo | null = null;
     public viewMode: EntityViewMode = 'grid';
     public selectionMode: 'single' | 'multiple' = 'single';
@@ -148,7 +148,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
 
             if (viewId) {
                 // Load saved view by ID
-                const viewEntity = await md.GetEntityObject<UserViewEntityExtended>('User Views');
+                const viewEntity = await md.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views');
                 const loaded = await viewEntity.Load(viewId);
                 this.viewEntity = viewEntity; // IMPORTANT - only set this.viewEntity AFTER we have it loaded in the above
 
@@ -156,7 +156,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
                     throw new Error('View not found');
                 }
 
-                // Get entity info from the view - prefer ViewEntityInfo if available (set by UserViewEntityExtended.Load)
+                // Get entity info from the view - prefer ViewEntityInfo if available (set by MJUserViewEntityExtended.Load)
                 // Fall back to looking up by Entity name (virtual field) or EntityID
                 if (viewEntity.ViewEntityInfo) {
                     this.entityInfo = viewEntity.ViewEntityInfo;
@@ -164,7 +164,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
                     this.entityInfo = md.Entities.find(e => e.Name === viewEntity!.Entity) || null;
                 } else if (viewEntity.EntityID) {
                     // Last resort: look up by EntityID
-                    this.entityInfo = md.Entities.find(e => e.ID === viewEntity!.EntityID) || null;
+                    this.entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, viewEntity!.EntityID)) || null;
                 }
 
                 if (!this.entityInfo) {

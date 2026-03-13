@@ -1,4 +1,4 @@
-import { CompositeKey, LogError, KeyValuePair, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { CompositeKey, LogError, KeyValuePair, IsVerboseLoggingEnabled, PlatformSQL, IsPlatformSQL } from '@memberjunction/core';
 import { SafeJSONParse } from '@memberjunction/global';
 import { gql, GraphQLClient } from 'graphql-request'
 import { ActionItemInput, RolesAndUsersInput, SyncDataResult, SyncRolesAndUsersResult } from './rolesAndUsersType';
@@ -62,6 +62,20 @@ export class GraphQLSystemUserClient {
         this._client = new GraphQLClient(url, {
             headers
         });
+    }
+
+    /**
+     * Resolves a PlatformSQL union value to a plain string for GraphQL transport.
+     * GraphQL only supports scalar String types, so PlatformSQL objects must be
+     * resolved before serialization. Uses the `default` variant since the system
+     * user client does not know the remote server's database platform.
+     */
+    private resolvePlatformSQL(value: string | PlatformSQL | undefined): string | undefined {
+        if (value == null) return undefined;
+        if (IsPlatformSQL(value)) {
+            return value.default;
+        }
+        return value;
     }
 
     /**
@@ -302,7 +316,9 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { RunViewByNameSystemUser: RunViewSystemUserResult };
+            // Resolve PlatformSQL to plain strings before GraphQL transport
+            const resolvedInput = { ...input, ExtraFilter: this.resolvePlatformSQL(input.ExtraFilter), OrderBy: this.resolvePlatformSQL(input.OrderBy) };
+            const result = await this.Client.request(query, { input: resolvedInput }) as { RunViewByNameSystemUser: RunViewSystemUserResult };
             if (result && result.RunViewByNameSystemUser) {
                 return result.RunViewByNameSystemUser;
             } else {
@@ -349,7 +365,9 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { RunViewByIDSystemUser: RunViewSystemUserResult };
+            // Resolve PlatformSQL to plain strings before GraphQL transport
+            const resolvedInput = { ...input, ExtraFilter: this.resolvePlatformSQL(input.ExtraFilter), OrderBy: this.resolvePlatformSQL(input.OrderBy) };
+            const result = await this.Client.request(query, { input: resolvedInput }) as { RunViewByIDSystemUser: RunViewSystemUserResult };
             if (result && result.RunViewByIDSystemUser) {
                 return result.RunViewByIDSystemUser;
             } else {
@@ -396,7 +414,9 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { RunDynamicViewSystemUser: RunViewSystemUserResult };
+            // Resolve PlatformSQL to plain strings before GraphQL transport
+            const resolvedInput = { ...input, ExtraFilter: this.resolvePlatformSQL(input.ExtraFilter), OrderBy: this.resolvePlatformSQL(input.OrderBy) };
+            const result = await this.Client.request(query, { input: resolvedInput }) as { RunDynamicViewSystemUser: RunViewSystemUserResult };
             if (result && result.RunDynamicViewSystemUser) {
                 return result.RunDynamicViewSystemUser;
             } else {
@@ -444,7 +464,9 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const result = await this.Client.request(query, { input }) as { RunViewsSystemUser: RunViewSystemUserResult[] };
+            // Resolve PlatformSQL to plain strings before GraphQL transport
+            const resolvedInput = input.map(item => ({ ...item, ExtraFilter: this.resolvePlatformSQL(item.ExtraFilter), OrderBy: this.resolvePlatformSQL(item.OrderBy) }));
+            const result = await this.Client.request(query, { input: resolvedInput }) as { RunViewsSystemUser: RunViewSystemUserResult[] };
             if (result && result.RunViewsSystemUser) {
                 return result.RunViewsSystemUser;
             } else {
@@ -787,9 +809,16 @@ export class GraphQLSystemUserClient {
                 }
             }`
 
-            const variables: any = { ID: ID };
+            const variables: Record<string, unknown> = { ID: ID };
             if (options !== undefined) {
-                variables.options = options;
+                // Apply defaults for all required fields in DeleteOptionsInput
+                // The server requires all fields to be present
+                variables.options = {
+                    SkipEntityAIActions: options.SkipEntityAIActions ?? false,
+                    SkipEntityActions: options.SkipEntityActions ?? false,
+                    ReplayOnly: options.ReplayOnly ?? false,
+                    IsParentEntityDelete: options.IsParentEntityDelete ?? false
+                };
             }
 
             const result = await this.Client.request(query, variables) as { DeleteQuerySystemResolver: DeleteQueryResult };
@@ -803,11 +832,41 @@ export class GraphQLSystemUserClient {
                 };
             }
         }
-        catch (e) {
-            LogError(`GraphQLSystemUserClient::DeleteQuery - Error deleting query - ${e}`);
+        catch (e: unknown) {
+            // Extract detailed error information for debugging
+            let errorDetails = '';
+            if (e instanceof Error) {
+                errorDetails = e.message;
+                // Check for cause (common in fetch errors)
+                if ('cause' in e && e.cause) {
+                    const cause = e.cause as Error;
+                    errorDetails += ` | Cause: ${cause.message || cause}`;
+                    if ('code' in cause) {
+                        errorDetails += ` | Code: ${(cause as NodeJS.ErrnoException).code}`;
+                    }
+                }
+                // Check for response details (GraphQL client errors)
+                if ('response' in e) {
+                    const response = (e as { response?: { status?: number; errors?: unknown[] } }).response;
+                    if (response?.status) {
+                        errorDetails += ` | HTTP Status: ${response.status}`;
+                    }
+                    if (response?.errors) {
+                        errorDetails += ` | GraphQL Errors: ${JSON.stringify(response.errors)}`;
+                    }
+                }
+                // Include stack trace for debugging
+                if (e.stack) {
+                    console.error('DeleteQuery stack trace:', e.stack);
+                }
+            } else {
+                errorDetails = String(e);
+            }
+
+            LogError(`GraphQLSystemUserClient::DeleteQuery - Error deleting query - ${errorDetails}`);
             return {
                 Success: false,
-                ErrorMessage: e.toString()
+                ErrorMessage: errorDetails
             };
         }
     }
@@ -1420,13 +1479,17 @@ export interface RunViewByNameSystemUserInput {
      */
     ViewName: string;
     /**
-     * Additional WHERE clause conditions to apply (optional)
+     * Additional WHERE clause conditions to apply (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    ExtraFilter?: string;
+    ExtraFilter?: string | PlatformSQL;
     /**
-     * ORDER BY clause for sorting results (optional)
+     * ORDER BY clause for sorting results (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    OrderBy?: string;
+    OrderBy?: string | PlatformSQL;
     /**
      * Specific fields to return, if not specified returns all fields (optional)
      */
@@ -1486,13 +1549,17 @@ export interface RunViewByIDSystemUserInput {
      */
     ViewID: string;
     /**
-     * Additional WHERE clause conditions to apply (optional)
+     * Additional WHERE clause conditions to apply (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    ExtraFilter?: string;
+    ExtraFilter?: string | PlatformSQL;
     /**
-     * ORDER BY clause for sorting results (optional)
+     * ORDER BY clause for sorting results (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    OrderBy?: string;
+    OrderBy?: string | PlatformSQL;
     /**
      * Specific fields to return, if not specified returns all fields (optional)
      */
@@ -1552,13 +1619,17 @@ export interface RunDynamicViewSystemUserInput {
      */
     EntityName: string;
     /**
-     * Additional WHERE clause conditions to apply (optional)
+     * Additional WHERE clause conditions to apply (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    ExtraFilter?: string;
+    ExtraFilter?: string | PlatformSQL;
     /**
-     * ORDER BY clause for sorting results (optional)
+     * ORDER BY clause for sorting results (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    OrderBy?: string;
+    OrderBy?: string | PlatformSQL;
     /**
      * Specific fields to return, if not specified returns all fields (optional)
      */
@@ -1610,13 +1681,17 @@ export interface RunViewSystemUserInput {
      */
     EntityName: string;
     /**
-     * Additional WHERE clause conditions to apply (optional)
+     * Additional WHERE clause conditions to apply (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    ExtraFilter?: string;
+    ExtraFilter?: string | PlatformSQL;
     /**
-     * ORDER BY clause for sorting results (optional)
+     * ORDER BY clause for sorting results (optional).
+     * Accepts a plain string or a PlatformSQL object for multi-platform support.
+     * PlatformSQL objects are resolved to strings before GraphQL transport.
      */
-    OrderBy?: string;
+    OrderBy?: string | PlatformSQL;
     /**
      * Specific fields to return, if not specified returns all fields (optional)
      */
@@ -1924,7 +1999,7 @@ export interface QueryParameter {
 /**
  * Type for query entity information
  */
-export interface QueryEntity {
+export interface MJQueryEntity {
     ID: string;
     QueryID: string;
     EntityID: string;
@@ -2008,7 +2083,7 @@ export interface CreateQueryResult {
     /**
      * Array of entities referenced by the query (optional)
      */
-    Entities?: QueryEntity[];
+    Entities?: MJQueryEntity[];
     /**
      * Array of permissions created for the query (optional)
      */
@@ -2148,7 +2223,7 @@ export interface UpdateQueryResult {
     /**
      * Array of entities referenced by the query (optional)
      */
-    Entities?: QueryEntity[];
+    Entities?: MJQueryEntity[];
     /**
      * Array of permissions for the query (optional)
      */
@@ -2156,17 +2231,33 @@ export interface UpdateQueryResult {
 }
 
 /**
- * Delete options input type for controlling delete behavior
+ * Delete options input type for controlling delete behavior.
+ * All fields are optional - defaults will be applied if not provided.
  */
 export interface DeleteQueryOptionsInput {
     /**
-     * Whether to skip AI actions during deletion
+     * Whether to skip AI actions during deletion.
+     * @default false
      */
-    SkipEntityAIActions: boolean;
+    SkipEntityAIActions?: boolean;
     /**
-     * Whether to skip regular entity actions during deletion
+     * Whether to skip regular entity actions during deletion.
+     * @default false
      */
-    SkipEntityActions: boolean;
+    SkipEntityActions?: boolean;
+    /**
+     * When true, bypasses Validate() and actual database deletion but still
+     * invokes associated actions (AI Actions, Entity Actions, etc.).
+     * Used for replaying/simulating delete operations.
+     * @default false
+     */
+    ReplayOnly?: boolean;
+    /**
+     * When true, indicates this entity is being deleted as part of an IS-A parent chain
+     * initiated by a child entity.
+     * @default false
+     */
+    IsParentEntityDelete?: boolean;
 }
 
 /**

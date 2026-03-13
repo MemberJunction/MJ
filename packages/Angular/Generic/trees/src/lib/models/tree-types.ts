@@ -11,7 +11,7 @@
  * Branches can contain other branches and/or leaf nodes.
  */
 export interface TreeBranchConfig {
-    /** Entity name for branch nodes (e.g., 'Query Categories') */
+    /** Entity name for branch nodes (e.g., 'MJ: Query Categories') */
     EntityName: string;
 
     /** Field to display as node label (default: 'Name') */

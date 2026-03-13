@@ -2,7 +2,8 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { Subject } from 'rxjs';
 import { RunView, Metadata, EntityInfo, CompositeKey, UserInfo, EntityRecordNameInput } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
-import { VersionLabelEntityType, VersionLabelItemEntityType, VersionLabelRestoreEntityType, VersionLabelEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
+import { MJVersionLabelEntityType, MJVersionLabelItemEntityType, MJVersionLabelRestoreEntityType, MJVersionLabelEntity } from '@memberjunction/core-entities';
 import { MicroViewData, FieldChangeView } from '../types';
 import { EntityLinkClickEvent } from '../record-micro-view/record-micro-view.component';
 
@@ -75,8 +76,8 @@ interface RecordChangeRow {
     changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class MjLabelDetailComponent implements OnInit, OnDestroy {
-    @Input() Label!: VersionLabelEntityType;
-    @Input() AllLabels: VersionLabelEntityType[] = [];
+    @Input() Label!: MJVersionLabelEntityType;
+    @Input() AllLabels: MJVersionLabelEntityType[] = [];
     @Input() ItemCountMap = new Map<string, number>();
     @Output() Close = new EventEmitter<void>();
     @Output() LabelUpdated = new EventEmitter<void>();
@@ -89,8 +90,8 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
     public IsVisible = false;
 
     // Data
-    public LabelItems: VersionLabelItemEntityType[] = [];
-    public ChildLabels: VersionLabelEntityType[] = [];
+    public LabelItems: MJVersionLabelItemEntityType[] = [];
+    public ChildLabels: MJVersionLabelEntityType[] = [];
     public IsLoadingItems = true;
     public IsArchiving = false;
 
@@ -122,8 +123,8 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
     private dependenciesLoaded = false;
 
     // History tab (lazy)
-    public Restores: VersionLabelRestoreEntityType[] = [];
-    public RelatedLabels: VersionLabelEntityType[] = [];
+    public Restores: MJVersionLabelRestoreEntityType[] = [];
+    public RelatedLabels: MJVersionLabelEntityType[] = [];
     public IsLoadingHistory = false;
     private historyLoaded = false;
 
@@ -215,7 +216,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
 
         try {
             const md = new Metadata();
-            const label = await md.GetEntityObject<VersionLabelEntity>('MJ: Version Labels');
+            const label = await md.GetEntityObject<MJVersionLabelEntity>('MJ: Version Labels');
             await label.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.Label.ID }]));
             label.Status = 'Archived';
             const saved = await label.Save();
@@ -226,8 +227,10 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         } catch (e) {
             console.error('Error archiving label:', e);
         } finally {
-            this.IsArchiving = false;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                this.IsArchiving = false;
+                this.cdr.markForCheck();
+            });
         }
     }
 
@@ -236,7 +239,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
     // =========================================================================
 
     private computeChildLabels(): void {
-        this.ChildLabels = this.AllLabels.filter(l => l.ParentID === this.Label.ID);
+        this.ChildLabels = this.AllLabels.filter(l => UUIDsEqual(l.ParentID, this.Label.ID));
     }
 
     private async loadLabelItems(): Promise<void> {
@@ -245,7 +248,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
 
         try {
             const rv = new RunView();
-            const result = await rv.RunView<VersionLabelItemEntityType>({
+            const result = await rv.RunView<MJVersionLabelItemEntityType>({
                 EntityName: 'MJ: Version Label Items',
                 ExtraFilter: `VersionLabelID = '${this.Label.ID}'`,
                 ResultType: 'simple'
@@ -259,8 +262,10 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         } catch (e) {
             console.error('Error loading label items:', e);
         } finally {
-            this.IsLoadingItems = false;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                this.IsLoadingItems = false;
+                this.cdr.markForCheck();
+            });
         }
     }
 
@@ -296,9 +301,12 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
             input.CompositeKey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
 
             const results = await this.metadata.GetEntityRecordNames([input]);
-            if (results.length > 0 && results[0].Success && results[0].RecordName) {
-                this.OverviewRecordName = results[0].RecordName;
-                this.cdr.markForCheck();
+            const recordName = results.length > 0 && results[0].Success ? results[0].RecordName : undefined;
+            if (recordName) {
+                this.ngZone.run(() => {
+                    this.OverviewRecordName = recordName;
+                    this.cdr.markForCheck();
+                });
             }
         } catch (e) {
             console.error('Error loading overview record name:', e);
@@ -345,7 +353,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
      * Initial display name before lazy-loading (just the shortened raw ID).
      * Real names are loaded via loadGroupRecordNames() when the group is expanded.
      */
-    private buildInitialDisplayName(item: VersionLabelItemEntityType): string {
+    private buildInitialDisplayName(item: MJVersionLabelItemEntityType): string {
         const rawId = this.extractRawRecordId(item.RecordID ?? '');
         return rawId.length > 20 ? rawId.substring(0, 20) + '...' : rawId;
     }
@@ -429,7 +437,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
             let totalUnchanged = 0;
 
             // Group label items by entity
-            const entityItemMap = new Map<string, VersionLabelItemEntityType[]>();
+            const entityItemMap = new Map<string, MJVersionLabelItemEntityType[]>();
             for (const item of this.LabelItems) {
                 const entityId = item.EntityID ?? '';
                 if (!entityItemMap.has(entityId)) {
@@ -486,8 +494,10 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         } catch (e) {
             console.error('Error loading diff data:', e);
         } finally {
-            this.IsLoadingDiff = false;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                this.IsLoadingDiff = false;
+                this.cdr.markForCheck();
+            });
         }
     }
 
@@ -495,7 +505,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         if (!entityId || !recordId) return null;
 
         const result = await rv.RunView<RecordChangeRow>({
-            EntityName: 'Record Changes',
+            EntityName: 'MJ: Record Changes',
             ExtraFilter: `EntityID = '${entityId}' AND RecordID = '${recordId}'`,
             OrderBy: 'ChangedAt DESC',
             MaxRows: 1,
@@ -515,13 +525,13 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         try {
             const [oldResult, newResult] = await rv.RunViews([
                 {
-                    EntityName: 'Record Changes',
+                    EntityName: 'MJ: Record Changes',
                     ExtraFilter: `ID = '${oldChangeId}'`,
                     Fields: ['FullRecordJSON'],
                     ResultType: 'simple'
                 },
                 {
-                    EntityName: 'Record Changes',
+                    EntityName: 'MJ: Record Changes',
                     ExtraFilter: `ID = '${newChangeId}'`,
                     Fields: ['FullRecordJSON'],
                     ResultType: 'simple'
@@ -586,7 +596,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
                 return;
             }
 
-            const entityInfo = this.metadata.Entities.find(e => e.ID === entityId);
+            const entityInfo = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
             if (!entityInfo) {
                 this.DependencyTree = [];
                 this.dependenciesLoaded = true;
@@ -675,7 +685,7 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
 
         try {
             const rv = new RunView();
-            const result = await rv.RunView<VersionLabelRestoreEntityType>({
+            const result = await rv.RunView<MJVersionLabelRestoreEntityType>({
                 EntityName: 'MJ: Version Label Restores',
                 ExtraFilter: `VersionLabelID = '${this.Label.ID}'`,
                 OrderBy: '__mj_CreatedAt DESC',
@@ -689,9 +699,9 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
 
             // Find related labels (same entity + record)
             this.RelatedLabels = this.AllLabels.filter(l =>
-                l.ID !== this.Label.ID &&
-                l.EntityID === this.Label.EntityID &&
-                l.RecordID === this.Label.RecordID &&
+                !UUIDsEqual(l.ID, this.Label.ID) &&
+                UUIDsEqual(l.EntityID, this.Label.EntityID) &&
+                UUIDsEqual(l.RecordID, this.Label.RecordID) &&
                 l.RecordID != null
             );
 
@@ -699,8 +709,10 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         } catch (e) {
             console.error('Error loading history data:', e);
         } finally {
-            this.IsLoadingHistory = false;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                this.IsLoadingHistory = false;
+                this.cdr.markForCheck();
+            });
         }
     }
 
@@ -752,9 +764,11 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
         } catch (e) {
             console.error('Error loading record names for group:', group.EntityName, e);
         } finally {
-            group.IsLoadingNames = false;
-            group.NamesLoaded = true;
-            this.cdr.markForCheck();
+            this.ngZone.run(() => {
+                group.IsLoadingNames = false;
+                group.NamesLoaded = true;
+                this.cdr.markForCheck();
+            });
         }
     }
 
@@ -933,16 +947,21 @@ export class MjLabelDetailComponent implements OnInit, OnDestroy {
     // Display helpers
     // =========================================================================
 
+    /** Check if a label is the parent of the current Label (case-insensitive UUID comparison). */
+    public IsParentLabel(pl: MJVersionLabelEntityType): boolean {
+        return UUIDsEqual(pl.ID, this.Label.ParentID);
+    }
+
     public resolveEntityName(entityId: string | null | undefined): string {
         if (!entityId) return 'Unknown';
-        const entity = this.metadata.Entities.find(e => e.ID === entityId);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entity ? entity.Name : 'Unknown';
     }
 
     /** Resolve icon CSS class for an entity by ID, falling back to generic table icon. */
     public resolveEntityIcon(entityId: string): string {
         if (!entityId) return 'fa-solid fa-table';
-        const entity = this.metadata.Entities.find(e => e.ID === entityId);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entity?.Icon || 'fa-solid fa-table';
     }
 

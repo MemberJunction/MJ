@@ -7,9 +7,9 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { CreateAgentService, CreateAgentDialogResult, CreateAgentResult } from '@memberjunction/ng-agents';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface AgentFilter {
   searchTerm: string;
@@ -53,11 +53,11 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   public viewMode: 'grid' | 'list' = 'grid';
   public expandedAgentId: string | null = null;
 
-  public agents: AIAgentEntityExtended[] = [];
-  public filteredAgents: AIAgentEntityExtended[] = [];
+  public agents: MJAIAgentEntityExtended[] = [];
+  public filteredAgents: MJAIAgentEntityExtended[] = [];
 
   // Detail panel
-  public selectedAgent: AIAgentEntityExtended | null = null;
+  public selectedAgent: MJAIAgentEntityExtended | null = null;
   public detailPanelVisible = false;
 
   // Sorting state
@@ -73,7 +73,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     exposeAsAction: 'all'
   };
 
-  public selectedAgentForTest: AIAgentEntityExtended | null = null;
+  public selectedAgentForTest: MJAIAgentEntityExtended | null = null;
 
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
@@ -82,22 +82,22 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   /** Check if user can create AI Agents */
   public get UserCanCreateAgents(): boolean {
-    return this.checkEntityPermission('AI Agents', 'Create');
+    return this.checkEntityPermission('MJ: AI Agents', 'Create');
   }
 
   /** Check if user can read AI Agents */
   public get UserCanReadAgents(): boolean {
-    return this.checkEntityPermission('AI Agents', 'Read');
+    return this.checkEntityPermission('MJ: AI Agents', 'Read');
   }
 
   /** Check if user can update AI Agents */
   public get UserCanUpdateAgents(): boolean {
-    return this.checkEntityPermission('AI Agents', 'Update');
+    return this.checkEntityPermission('MJ: AI Agents', 'Update');
   }
 
   /** Check if user can delete AI Agents */
   public get UserCanDeleteAgents(): boolean {
-    return this.checkEntityPermission('AI Agents', 'Delete');
+    return this.checkEntityPermission('MJ: AI Agents', 'Delete');
   }
 
   /**
@@ -360,7 +360,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
     // Apply agent type filter
     if (this.currentFilters.agentType !== 'all') {
-      filtered = filtered.filter(agent => agent.TypeID === this.currentFilters.agentType);
+      filtered = filtered.filter(agent => UUIDsEqual(agent.TypeID, this.currentFilters.agentType));
     }
 
     // Apply parent agent filter
@@ -368,7 +368,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       if (this.currentFilters.parentAgent === 'none') {
         filtered = filtered.filter(agent => !agent.ParentID);
       } else {
-        filtered = filtered.filter(agent => agent.ParentID === this.currentFilters.parentAgent);
+        filtered = filtered.filter(agent => UUIDsEqual(agent.ParentID, this.currentFilters.parentAgent));
       }
     }
 
@@ -418,7 +418,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   /**
    * Apply sorting to the filtered list
    */
-  private applySorting(agents: AIAgentEntityExtended[]): AIAgentEntityExtended[] {
+  private applySorting(agents: MJAIAgentEntityExtended[]): MJAIAgentEntityExtended[] {
     return agents.sort((a, b) => {
       let valueA: string | boolean | null | undefined;
       let valueB: string | boolean | null | undefined;
@@ -468,7 +468,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   /**
    * Show the detail panel for an agent
    */
-  public showAgentDetails(agent: AIAgentEntityExtended, event?: Event): void {
+  public showAgentDetails(agent: MJAIAgentEntityExtended, event?: Event): void {
     if (event) {
       event.stopPropagation();
     }
@@ -501,22 +501,22 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   /**
    * Get the parent agent name if it exists
    */
-  public getParentAgentName(agent: AIAgentEntityExtended): string | null {
+  public getParentAgentName(agent: MJAIAgentEntityExtended): string | null {
     if (!agent.ParentID) return null;
-    const parent = this.agents.find(a => a.ID === agent.ParentID);
+    const parent = this.agents.find(a => UUIDsEqual(a.ID, agent.ParentID));
     return parent?.Name || 'Unknown Parent';
   }
 
   /**
    * Get agent type name
    */
-  public getAgentTypeName(agent: AIAgentEntityExtended): string {
+  public getAgentTypeName(agent: MJAIAgentEntityExtended): string {
     return agent.Type || 'Standard Agent';
   }
 
   public openAgentRecord(agentId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: agentId }]);
-    this.navigationService.OpenEntityRecord('AI Agents', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Agents', compositeKey);
   }
 
   /**
@@ -582,7 +582,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
       // Navigate to the new agent record
       const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: agent.ID }]);
-      this.navigationService.OpenEntityRecord('AI Agents', compositeKey);
+      this.navigationService.OpenEntityRecord('MJ: AI Agents', compositeKey);
 
       MJNotificationService.Instance.CreateSimpleNotification(
         `Agent "${agent.Name}" created successfully`,
@@ -599,7 +599,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     }
   }
 
-  public runAgent(agent: AIAgentEntityExtended): void {
+  public runAgent(agent: MJAIAgentEntityExtended): void {
     // Use the test harness service for window management features
     this.testHarnessService.openForAgent(agent.ID);
   }
@@ -609,7 +609,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     this.selectedAgentForTest = null;
   }
 
-  public getAgentIconColor(agent: AIAgentEntityExtended): string {
+  public getAgentIconColor(agent: MJAIAgentEntityExtended): string {
     // Generate a consistent color based on agent properties
     const colors = ['#17a2b8', '#28a745', '#ffc107', '#dc3545', '#6c757d', '#007bff'];
     const index = (agent.Name?.charCodeAt(0) || 0) % colors.length;
@@ -641,7 +641,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
    * Gets the agent's display icon
    * Prioritizes LogoURL, falls back to IconClass, then default robot icon
    */
-  public getAgentIcon(agent: AIAgentEntityExtended): string {
+  public getAgentIcon(agent: MJAIAgentEntityExtended): string {
     if (agent?.LogoURL) {
       // LogoURL is used in img tag, not here
       return '';
@@ -652,7 +652,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   /**
    * Checks if the agent has a logo URL (for image display)
    */
-  public hasLogoURL(agent: AIAgentEntityExtended): boolean {
+  public hasLogoURL(agent: MJAIAgentEntityExtended): boolean {
     return !!agent?.LogoURL;
   }
 

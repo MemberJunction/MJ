@@ -1,11 +1,11 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
 import { RunView, LogError } from '@memberjunction/core';
-import { ActionEntity, ActionCategoryEntity } from '@memberjunction/core-entities';
+import { MJActionEntity, MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
 
 interface CategoryTreeNode {
-  category: ActionCategoryEntity;
+  category: MJActionCategoryEntity;
   children: CategoryTreeNode[];
   level: number;
 }
@@ -20,9 +20,9 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
   @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
 
   public isLoading = true;
-  public actions: ActionEntity[] = [];
-  public filteredActions: ActionEntity[] = [];
-  public categories: Map<string, ActionCategoryEntity> = new Map();
+  public actions: MJActionEntity[] = [];
+  public filteredActions: MJActionEntity[] = [];
+  public categories: Map<string, MJActionCategoryEntity> = new Map();
   public categoryTree: CategoryTreeNode[] = [];
   public categoryDescendants: Map<string, Set<string>> = new Map();
 
@@ -84,11 +84,11 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
       
       const [actionsResult, categoriesResult] = await rv.RunViews([
         {
-          EntityName: 'Actions',
+          EntityName: 'MJ: Actions',
           OrderBy: 'Name'
         },
         {
-          EntityName: 'Action Categories',
+          EntityName: 'MJ: Action Categories',
           OrderBy: 'Name'
         }
       ]);
@@ -102,8 +102,8 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
         throw new Error('Failed to load data: ' + errors.join(', '));
       }
       
-      const actions = (actionsResult.Results || []) as ActionEntity[];
-      const categories = (categoriesResult.Results || []) as ActionCategoryEntity[];
+      const actions = (actionsResult.Results || []) as MJActionEntity[];
+      const categories = (categoriesResult.Results || []) as MJActionCategoryEntity[];
        
       this.actions = actions;
       this.populateCategoriesMap(categories);
@@ -119,7 +119,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
   }
 
 
-  private populateCategoriesMap(categories: ActionCategoryEntity[]): void {
+  private populateCategoriesMap(categories: MJActionCategoryEntity[]): void {
     this.categories.clear();
     categories.forEach(category => {
       this.categories.set(category.ID, category);
@@ -132,7 +132,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     this.buildDescendantMapping(categories);
   }
 
-  private buildCategoryOptions(categories: ActionCategoryEntity[]): void {
+  private buildCategoryOptions(categories: MJActionCategoryEntity[]): void {
     this.categoryOptions = [
       { text: 'All Categories', value: 'all' },
       ...categories.map(category => ({
@@ -142,7 +142,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     ];
   }
 
-  private buildCategoryTree(categories: ActionCategoryEntity[]): void {
+  private buildCategoryTree(categories: MJActionCategoryEntity[]): void {
     const categoryMap = new Map<string, CategoryTreeNode>();
     
     // First pass: create all nodes
@@ -177,7 +177,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     this.categoryTree = rootNodes;
   }
 
-  private buildDescendantMapping(categories: ActionCategoryEntity[]): void {
+  private buildDescendantMapping(categories: MJActionCategoryEntity[]): void {
     this.categoryDescendants.clear();
     
     // Initialize each category with itself
@@ -264,9 +264,9 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     this.selectedCategory$.next(categoryId);
   }
 
-  public openAction(action: ActionEntity): void {
+  public openAction(action: MJActionEntity): void {
     this.openEntityRecord.emit({
-      entityName: 'Actions',
+      entityName: 'MJ: Actions',
       recordId: action.ID
     });
   }
@@ -297,7 +297,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
    * Gets the icon class for an action
    * Falls back to type-based icon if no IconClass is set
    */
-  public getActionIcon(action: ActionEntity): string {
+  public getActionIcon(action: MJActionEntity): string {
     return action?.IconClass || this.getTypeIcon(action.Type);
   }
 

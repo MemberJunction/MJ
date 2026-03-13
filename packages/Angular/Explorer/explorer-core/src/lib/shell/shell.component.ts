@@ -14,8 +14,8 @@ import {
   NavItem
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
-import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
-import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService } from '@memberjunction/ng-shared';
+import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
+import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService } from '@memberjunction/ng-shared';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
@@ -25,7 +25,7 @@ import { SettingsDialogService } from './services/settings-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 
 /**
@@ -74,6 +74,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private animationSequence: AnimationStep[] = [];
   private currentAnimationIndex = 0;
   private animationSequenceTimeout: ReturnType<typeof setTimeout> | null = null;
+  // Loading recovery reset
+  ShowResetOption = false;
+  private loadingResetTimeout: ReturnType<typeof setTimeout> | null = null;
+  private readonly loadingResetDelayMs = 20_000; // 20 seconds before showing reset option
   currentLoadingText: string;
   currentLoadingColor: string;
   currentLoadingTextColor: string;
@@ -85,7 +89,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   userIconClass: string | null = null;
   userName = '';
   userEmail = '';
-  private userEntity: UserEntity | null = null;
+  private userEntity: MJUserEntity | null = null;
 
   // User menu plugin system
   private userMenu: BaseUserMenu | null = null;
@@ -108,7 +112,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   get leftOfSwitcherApps(): BaseApplication[] {
     return this.appManager.GetNavBarApps('Left of App Switcher')
-      .filter(app => !(app.HideNavBarIconWhenActive && app.ID === this.activeApp?.ID));
+      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
   }
 
   /**
@@ -117,7 +121,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   get leftOfUserMenuApps(): BaseApplication[] {
     return this.appManager.GetNavBarApps('Left of User Menu')
-      .filter(app => !(app.HideNavBarIconWhenActive && app.ID === this.activeApp?.ID));
+      .filter(app => !(app.HideNavBarIconWhenActive && UUIDsEqual(app.ID, this.activeApp?.ID)));
   }
 
   constructor(
@@ -135,7 +139,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
-    private commandPaletteService: CommandPaletteService
+    private commandPaletteService: CommandPaletteService,
+    private themeService: ThemeService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -379,7 +384,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         if (updateEvent.eventCode === EventCodes.AvatarUpdated) {
           const md = new Metadata();
           const currentUserInfo = md.CurrentUser;
-          const userEntity = await md.GetEntityObject<any>('Users');
+          const userEntity = await md.GetEntityObject<any>('MJ: Users');
           await userEntity.Load(currentUserInfo.ID);
           this.applyUserAvatar(userEntity);
         }
@@ -391,6 +396,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     this.initialized = true;
     this.waitingForFirstResource = true;
+
+    // Trigger initial URL sync: the Configuration BehaviorSubject already emitted
+    // its value when the shell subscribed (line above), but this.initialized was false
+    // at that point so syncUrlWithWorkspace() was skipped. Now that we're initialized,
+    // manually trigger the first URL sync to set the browser URL from workspace state.
+    const initConfig = this.workspaceManager.GetConfiguration();
+    if (initConfig && initConfig.activeTabId) {
+      await this.syncActiveAppWithTab(initConfig);
+      this.syncUrlWithWorkspace(initConfig);
+    }
 
     // Force change detection to sync Angular's expected values after all async
     // state changes (apps loaded, searchableEntities populated, etc.) to prevent
@@ -441,7 +456,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // 3. Either NOT in URL-based navigation mode, OR this IS a URL-based tab
     const shouldSetActiveApp = this.initialized &&
                               app &&
-                              currentActiveApp?.ID !== request.ApplicationId &&
+                              !UUIDsEqual(currentActiveApp?.ID, request.ApplicationId) &&
                               (!this.urlBasedNavigation || isUrlBasedTab);
 
     if (shouldSetActiveApp) {
@@ -492,7 +507,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Check if active app needs to be updated
     const currentActiveApp = this.appManager.GetActiveApp();
-    if (currentActiveApp?.ID !== tabAppId) {
+    if (!UUIDsEqual(currentActiveApp?.ID, tabAppId)) {
       // Update the active app to match the tab's application
       await this.appManager.SetActiveApp(tabAppId);
     }
@@ -507,7 +522,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Sync URL with active tab's resource
    */
-  private syncUrlWithWorkspace(config: WorkspaceConfiguration): void {
+  private async syncUrlWithWorkspace(config: WorkspaceConfiguration): Promise<void> {
     // Don't sync URL during URL-based navigation initialization
     if (this.urlBasedNavigation) {
       return;
@@ -524,7 +539,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Build resource URL from tab configuration
-    const resourceUrl = this.buildResourceUrl(activeTab);
+    const resourceUrl = await this.buildResourceUrl(activeTab);
     if (resourceUrl) {
       // Compare full URLs including query params to detect changes
       const currentUrl = this.router.url;
@@ -555,7 +570,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Find the tab that matches this URL
-    const matchingTab = this.findTabForUrl(url, config.tabs);
+    const matchingTab = await this.findTabForUrl(url, config.tabs);
 
     if (matchingTab && matchingTab.id !== config.activeTabId) {
       // Activate the matching tab
@@ -646,7 +661,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
 
         if (app) {
-          const navItems = app.GetNavItems();
+          const navItems = await app.GetNavItems();
           // Only auto-create tabs for apps with zero nav items
           // Apps with nav items should have had their tabs preserved
           if (navItems.length === 0) {
@@ -696,7 +711,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Find the tab that matches a given URL
    */
-  private findTabForUrl(url: string, tabs: WorkspaceTab[]): WorkspaceTab | null {
+  private async findTabForUrl(url: string, tabs: WorkspaceTab[]): Promise<WorkspaceTab | null> {
     // Parse the URL to extract resource info
     const urlPath = url.split('?')[0];
 
@@ -718,7 +733,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         if (!app) return false;
 
         const appMatches = tabAppName.toLowerCase() === app.Name.toLowerCase() ||
-                          tab.applicationId === app.ID;
+                          UUIDsEqual(tab.applicationId, app.ID);
         const navMatches = tabNavItemName.toLowerCase() === navItemName.toLowerCase();
 
         return appMatches && navMatches;
@@ -735,7 +750,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // First, try to find a tab with isAppDefault for this app
         const defaultTab = tabs.find(tab => {
           const tabConfig = tab.configuration || {};
-          return tab.applicationId === app.ID && tabConfig['isAppDefault'] === true;
+          return UUIDsEqual(tab.applicationId, app.ID) && tabConfig['isAppDefault'] === true;
         });
         if (defaultTab) {
           return defaultTab;
@@ -743,9 +758,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
         // Fallback for apps with zero nav items: match ANY tab belonging to this app
         // This handles the case where the default tab was replaced when navigating away
-        const navItems = app.GetNavItems();
+        const navItems = await app.GetNavItems();
         if (navItems.length === 0) {
-          return tabs.find(tab => tab.applicationId === app.ID) || null;
+          return tabs.find(tab => UUIDsEqual(tab.applicationId, app.ID)) || null;
         }
 
         return null;
@@ -956,7 +971,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Build a shareable resource URL from tab data.
    * Uses app.Path for cleaner URLs (e.g., /app/data-explorer instead of /app/Data%20Explorer)
    */
-  private buildResourceUrl(tab: WorkspaceTab): string | null {
+  private async buildResourceUrl(tab: WorkspaceTab): Promise<string | null> {
     const config = tab.configuration || {};
     const resourceType = (config['resourceType'] as string | undefined)?.toLowerCase();
     const recordId = tab.resourceRecordId;
@@ -1009,7 +1024,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       if (app) {
         // Prefer Path, fall back to Name
         const appPath = app.Path || app.Name;
-        const navItems = app.GetNavItems();
+        const navItems = await app.GetNavItems();
 
         // If app has nav items, try to find the matching one
         // Filter out dynamic nav items - they're generated from tab state and shouldn't affect URL building
@@ -1025,7 +1040,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             }
             // For non-Custom resources, match by ResourceType + RecordID
             if (item.ResourceType && item.RecordID) {
-              return item.ResourceType.toLowerCase() === resourceType && item.RecordID === recordId;
+              return item.ResourceType.toLowerCase() === resourceType && UUIDsEqual(item.RecordID, recordId);
             }
             return false;
           });
@@ -1219,7 +1234,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private startLoadingAnimation(): void {
     // Select the appropriate theme based on date and locale
     this.activeTheme = getActiveTheme();
-    console.log(`🎨 Loading theme: ${this.activeTheme.name}`);
 
     // Reset state
     this.usedMessageIndices = [0]; // Mark first message as used
@@ -1241,6 +1255,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.cycleToNextMessage();
       this.cdr.detectChanges();
     }, this.messageIntervalMs);
+
+    // Start the recovery reset timer - if loading hasn't completed after
+    // the delay, offer the user an option to clear cached data and reload
+    this.startLoadingResetTimer();
   }
 
   /**
@@ -1256,6 +1274,69 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       clearTimeout(this.animationSequenceTimeout);
       this.animationSequenceTimeout = null;
     }
+    // Cancel the recovery reset timer since loading completed successfully
+    this.cancelLoadingResetTimer();
+  }
+
+  /**
+   * Start a timer that shows a recovery reset option if loading takes too long.
+   * This helps users recover from stuck loading states caused by upgrades,
+   * corrupted cache, or bad stored state.
+   */
+  private startLoadingResetTimer(): void {
+    this.cancelLoadingResetTimer();
+    this.loadingResetTimeout = setTimeout(() => {
+      if (this.loading) {
+        this.ShowResetOption = true;
+        this.cdr.detectChanges();
+      }
+    }, this.loadingResetDelayMs);
+  }
+
+  /**
+   * Cancel the recovery reset timer.
+   */
+  private cancelLoadingResetTimer(): void {
+    if (this.loadingResetTimeout) {
+      clearTimeout(this.loadingResetTimeout);
+      this.loadingResetTimeout = null;
+    }
+    this.ShowResetOption = false;
+  }
+
+  /**
+   * Nuclear recovery: clear all browser-side cached data and reload the page.
+   * This clears localStorage, sessionStorage, and IndexedDB to recover
+   * from stuck loading states caused by corrupted or stale cached data.
+   */
+  ResetApplication(): void {
+    try {
+      // 1. Clear localStorage
+      localStorage.clear();
+
+      // 2. Clear sessionStorage
+      sessionStorage.clear();
+
+      // 3. Delete all IndexedDB databases
+      if (window.indexedDB?.databases) {
+        window.indexedDB.databases().then(databases => {
+          for (const db of databases) {
+            if (db.name) {
+              window.indexedDB.deleteDatabase(db.name);
+            }
+          }
+        }).catch(() => {
+          // databases() not supported in all browsers - proceed with reload
+        });
+      }
+    } catch (e) {
+      console.warn('Error during cache reset:', e);
+    }
+
+    // Give IndexedDB deletions a moment to initiate, then hard reload
+    setTimeout(() => {
+      location.reload();
+    }, 100);
   }
 
   /**
@@ -1472,7 +1553,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const app = this.appManager.GetAppById(appId);
       if (!app) {
         // Get app info from all system apps to show the name
-        const systemApp = this.appManager.GetAllSystemApps().find(a => a.ID === appId);
+        const systemApp = this.appManager.GetAllSystemApps().find(a => UUIDsEqual(a.ID, appId));
         const appName = systemApp?.Name || 'this application';
 
         // Clear loading indicator before showing dialog
@@ -1493,7 +1574,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       await this.appManager.SetActiveApp(appId);
 
       // Get the default nav item for this app (if any)
-      const navItems = app.GetNavItems();
+      const navItems = await app.GetNavItems();
       const defaultNavItem = navItems.find(item => item.isDefault);
 
       // Check if app has any tabs
@@ -1513,7 +1594,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         if (defaultNavItemTab) {
           // Found existing tab for default nav item - activate it
           this.workspaceManager.SetActiveTab(defaultNavItemTab.id);
-          const resourceUrl = this.buildResourceUrl(defaultNavItemTab);
+          const resourceUrl = await this.buildResourceUrl(defaultNavItemTab);
           if (resourceUrl) {
             this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
           }
@@ -1528,7 +1609,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
         // The workspace configuration subscription will trigger URL sync
         // but we can also manually trigger it here to ensure immediate update
-        const resourceUrl = this.buildResourceUrl(firstTab);
+        const resourceUrl = await this.buildResourceUrl(firstTab);
         if (resourceUrl) {
           this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
         }
@@ -1597,7 +1678,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const tabRequest = await app.CreateDefaultTab();
     if (tabRequest) {
       // Set the app as active first if it isn't already
-      if (this.activeApp?.ID !== app.ID) {
+      if (!UUIDsEqual(this.activeApp?.ID, app.ID)) {
         await this.appManager.SetActiveApp(app.ID);
       }
 
@@ -1607,25 +1688,42 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
-   * Handle navigation item click with shift-key and double-click detection
+   * Handle navigation item click with shift-key detection
    */
   onNavItemClick(event: NavItemClickEvent): void {
     if (!this.activeApp) {
       return;
     }
 
-    const { item, shiftKey, dblClick } = event;
+    const { item, shiftKey } = event;
 
     // Close mobile nav if open
     this.mobileNavOpen = false;
 
-    // Use NavigationService with forceNewTab option if shift was pressed or double-clicked
+    // Use NavigationService with forceNewTab option if shift was pressed
     this.navigationService.OpenNavItem(
       this.activeApp.ID,
       item,
       this.activeApp.GetColor(),
-      { forceNewTab: shiftKey || dblClick }
+      { forceNewTab: shiftKey }
     );
+  }
+
+  /**
+   * Handle dismiss of a dynamic nav item (remove from recent stack)
+   */
+  onNavItemDismiss(item: NavItem): void {
+    if (!this.activeApp) {
+      return;
+    }
+
+    // Delegate to HomeApplication's RemoveDynamicNavItem if available
+    const appWithRemove = this.activeApp as BaseApplication & {
+      RemoveDynamicNavItem?: (item: NavItem) => void;
+    };
+    if (typeof appWithRemove.RemoveDynamicNavItem === 'function') {
+      appWithRemove.RemoveDynamicNavItem(item);
+    }
   }
 
   /**
@@ -1689,7 +1787,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       currentApplication: this.activeApp as unknown as ApplicationInfoRef | null,
       workspaceManager: this.workspaceManager,
       authService: this.authBase,
-      openSettings: () => this.openSettingsDialog()
+      openSettings: () => this.openSettingsDialog(),
+      themePreference: this.themeService.Preference,
+      availableThemes: this.themeService.AvailableThemes,
+      appliedTheme: this.themeService.AppliedTheme
     };
 
     // Initialize menu
@@ -1706,6 +1807,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       if (this.userMenu) {
         this.userMenu.UpdateContext({
           developerModeEnabled: this.developerModeService.IsEnabled
+        });
+      }
+      this.refreshMenuElements();
+      this.cdr.detectChanges();
+    });
+
+    // Subscribe to theme preference changes to refresh menu
+    this.themeService.Preference$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe((pref) => {
+      if (this.userMenu) {
+        this.userMenu.UpdateContext({
+          themePreference: pref,
+          availableThemes: this.themeService.AvailableThemes,
+          appliedTheme: this.themeService.AppliedTheme
         });
       }
       this.refreshMenuElements();
@@ -1737,6 +1853,22 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    if (result.message?.startsWith('select-theme-')) {
+      const themeId = result.message.substring('select-theme-'.length);
+      await this.themeService.SetTheme(themeId);
+      // Explicitly update context after SetTheme completes, then fall through
+      // to the standard refresh below (subscription also refreshes, but this
+      // guarantees the menu updates even if the subscription's detectChanges
+      // runs at an awkward point in Angular's change detection cycle)
+      if (this.userMenu) {
+        this.userMenu.UpdateContext({
+          themePreference: this.themeService.Preference,
+          availableThemes: this.themeService.AvailableThemes,
+          appliedTheme: this.themeService.AppliedTheme
+        });
+      }
+    }
+
     if (result.message === 'reset-layout') {
       await this.onResetLayout();
       return;
@@ -1749,6 +1881,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Refresh menu elements (some items may have changed state)
     this.refreshMenuElements();
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Whether the currently applied theme is dark (used by the toggle switch in the template)
+   */
+  get IsDarkMode(): boolean {
+    const theme = this.themeService.GetThemeDefinition(this.themeService.AppliedTheme);
+    return theme?.BaseTheme === 'dark';
   }
 
   /**
@@ -1857,8 +1997,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       }]
     };
 
-    console.log('🔄 Resetting layout to fresh state:', freshConfig);
-
     // Update workspace configuration
     this.workspaceManager.UpdateConfiguration(freshConfig);
   }
@@ -1906,8 +2044,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       this.userName = currentUserInfo.FirstLast || currentUserInfo.Name || 'User';
       this.userEmail = currentUserInfo.Email || '';
 
-      // Load the full UserEntity to access avatar fields
-      const currentUserEntity = await md.GetEntityObject<UserEntity>('Users');
+      // Load the full MJUserEntity to access avatar fields
+      const currentUserEntity = await md.GetEntityObject<MJUserEntity>('MJ: Users');
       await currentUserEntity.Load(currentUserInfo.ID);
 
       // Store reference for user menu
@@ -2310,7 +2448,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     // Timeout - try to get from system apps as fallback
-    const systemApp = this.appManager.GetAllSystemApps().find(a => a.ID === appId);
+    const systemApp = this.appManager.GetAllSystemApps().find(a => UUIDsEqual(a.ID, appId));
     if (systemApp) {
       await this.navigateToApp(systemApp);
       this.appAccessDialog?.completeProcessing();
@@ -2343,6 +2481,11 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Redirect to the first available app (fallback)
    */
+  /** Case-insensitive UUID check whether an app is the currently active app. */
+  public IsActiveApp(app: BaseApplication): boolean {
+    return UUIDsEqual(app.ID, this.activeApp?.ID);
+  }
+
   private async redirectToFirstApp(apps: BaseApplication[]): Promise<void> {
     if (apps.length > 0) {
       const firstApp = apps[0];

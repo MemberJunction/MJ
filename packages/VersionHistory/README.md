@@ -1,159 +1,189 @@
 # @memberjunction/version-history
 
-Version labeling, snapshot capture, diff, and restore for MemberJunction records.
+Version labeling, snapshot capture, diff, and restore for MemberJunction records. Provides point-in-time versioning with full entity dependency graph awareness.
 
-## Architecture Overview
+## Overview
 
+The `@memberjunction/version-history` package enables developers to create named version labels that capture record state at specific points in time, compare changes between labels, and restore records to previous states while respecting entity dependency ordering.
+
+```mermaid
+graph TD
+    A["VersionHistoryEngine<br/>(Facade)"] --> B["LabelManager"]
+    A --> C["SnapshotBuilder"]
+    A --> D["DiffEngine"]
+    A --> E["RestoreEngine"]
+    A --> F["DependencyGraphWalker"]
+
+    B --> G["Version Labels"]
+    C --> H["Version Label Items"]
+    D --> I["DiffResult"]
+    E --> J["RestoreResult"]
+    F --> K["DependencyNode Tree"]
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#7c5295,stroke:#563a6b,color:#fff
+    style C fill:#7c5295,stroke:#563a6b,color:#fff
+    style D fill:#7c5295,stroke:#563a6b,color:#fff
+    style E fill:#7c5295,stroke:#563a6b,color:#fff
+    style F fill:#7c5295,stroke:#563a6b,color:#fff
+    style G fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style H fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style I fill:#b8762f,stroke:#8a5722,color:#fff
+    style J fill:#b8762f,stroke:#8a5722,color:#fff
+    style K fill:#b8762f,stroke:#8a5722,color:#fff
 ```
-VersionHistoryEngine (facade)
-├── LabelManager         — label CRUD and lifecycle
-├── SnapshotBuilder      — captures record state into label items (batched)
-├── DiffEngine           — compares snapshots between labels
-├── RestoreEngine        — applies labeled state back to records
-└── DependencyGraphWalker — traverses entity relationships
+
+## Installation
+
+```bash
+npm install @memberjunction/version-history
+```
+
+## Quick Start
+
+```typescript
+import { VersionHistoryEngine } from '@memberjunction/version-history';
+
+const engine = new VersionHistoryEngine();
+
+// Create a label capturing a record and its dependencies
+const { Label, CaptureResult } = await engine.CreateLabel({
+  Name: 'Before Refactor',
+  Scope: 'Record',
+  EntityName: 'AI Prompts',
+  RecordKey: promptKey,
+  IncludeDependencies: true,
+}, contextUser);
+
+// Later: see what changed since the label
+const diff = await engine.DiffLabelToCurrentState(Label.ID, contextUser);
+
+// Restore if needed
+const result = await engine.RestoreToLabel(Label.ID, {}, contextUser);
+```
+
+## Label Scopes
+
+| Scope | Description | Use Case |
+|-------|-------------|----------|
+| `Record` | Single record and its dependencies | Safe point before editing a specific record |
+| `Entity` | All records of a specific entity | Checkpoint before bulk updates |
+| `System` | All tracked entities | Full system snapshot before a release |
+
+## Architecture
+
+### Sub-Engines
+
+| Sub-Engine | Responsibility |
+|-----------|----------------|
+| **LabelManager** | Label CRUD and lifecycle management |
+| **SnapshotBuilder** | Captures record state into label items with batched queries |
+| **DependencyGraphWalker** | Traverses entity relationships to discover dependent records |
+| **DiffEngine** | Compares snapshots between labels or between a label and current state |
+| **RestoreEngine** | Applies labeled state back to records in dependency order |
+
+### Snapshot and Restore Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant VHE as VersionHistoryEngine
+    participant SB as SnapshotBuilder
+    participant DGW as DependencyGraphWalker
+    participant DB as Database
+
+    User->>VHE: CreateLabel(params)
+    VHE->>SB: CaptureRecord(labelId, entity, key)
+    SB->>DGW: WalkDependents(entity, key)
+    DGW->>DB: Query related records
+    DGW-->>SB: DependencyNode tree
+    SB->>DB: Save VersionLabelItem for each record
+    SB-->>VHE: CaptureResult
+
+    Note over User,DB: Time passes, records are modified
+
+    User->>VHE: RestoreToLabel(labelId, options)
+    VHE->>VHE: Create safety Pre-Restore label
+    VHE->>DB: Load snapshots, apply in dependency order
+    VHE-->>User: RestoreResult
 ```
 
 ## Dependency Graph Walker
 
-The walker discovers all records that should be included in a version label. It
-traverses both **reverse relationships** (child records that belong to the root)
-and **forward references** (records the root or its children point to).
+The walker discovers all records that should be included in a version label. It traverses both **reverse relationships** (child records that belong to the root) and **forward references** (records the root or its children point to).
 
 ### Two Key Mechanisms
 
 #### 1. EntityRelationship-Driven Reverse Walking
 
-Instead of scanning every entity in the system for foreign keys that point to the
-current entity (expensive O(N*M) scan), the walker uses the
-**EntityRelationship metadata** that MemberJunction already maintains.
-
-Each entity's `RelatedEntities` array defines which child entities are
-meaningful. These are auto-generated by CodeGen when FK relationships are
-detected, and admins can add/remove them. This means only explicitly registered
-children are walked — not every table that happens to have a matching FK.
+Instead of scanning every entity for foreign keys that point to the current entity, the walker uses **EntityRelationship metadata** that MemberJunction already maintains. Only explicitly registered children are walked.
 
 ```mermaid
 graph TD
-    A[AI Agents] -->|"EntityRelationship<br/>RelatedEntities"| B[AI Agent Prompts]
-    A -->|EntityRelationship| C[AI Agent Actions]
-    A -->|EntityRelationship| D[AI Agent Relationships]
-    A -->|EntityRelationship| E[AI Agent Models]
-    A -->|EntityRelationship| F[AI Agent Configurations]
-    A -.-x|"NOT walked<br/>(no EntityRelationship)"| G[Some Random Table<br/>with AgentID FK]
+    A["AI Agents"] -->|"EntityRelationship"| B["AI Agent Prompts"]
+    A -->|"EntityRelationship"| C["AI Agent Actions"]
+    A -->|"EntityRelationship"| D["AI Agent Relationships"]
+    A -->|"EntityRelationship"| E["AI Agent Models"]
+    A -.-x|"NOT walked"| G["Random Table with FK"]
 
-    style G fill:#fee,stroke:#c00,stroke-dasharray: 5 5
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style E fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style G fill:#b8762f,stroke:#8a5722,color:#fff
 ```
 
-#### 2. Ancestor Stack — Prevents Backtracking
+#### 2. Ancestor Stack -- Prevents Backtracking
 
-The walker maintains a **stack of entity type names** representing the path from
-root to the current node. When evaluating any relationship (reverse or forward),
-if the target entity type is already on the ancestor stack, it is **skipped**.
+The walker maintains a stack of entity type names representing the path from root to the current node. When evaluating any relationship, if the target entity type is already on the ancestor stack, it is skipped. This surgically prevents graph explosion without arbitrary depth limits.
 
-This surgically prevents graph explosion without arbitrary depth limits:
-
-```mermaid
-graph TD
-    Agent["AI Agents<br/>(root)"] --> AP["AI Agent Prompts<br/>(reverse)"]
-    AP --> Prompt["AI Prompts<br/>(forward via PromptID)"]
-    Prompt -.->|"BLOCKED<br/>AI Agent Prompts<br/>is on ancestor stack"| AP2["Other AI Agent Prompts<br/>referencing same prompt"]
-    Prompt --> Model["AI Models<br/>(forward via DefaultModelID)"]
-    Model -.->|"BLOCKED<br/>AI Prompts<br/>is on ancestor stack"| Prompt2["Other AI Prompts<br/>using same model"]
-
-    style AP2 fill:#fee,stroke:#c00,stroke-dasharray: 5 5
-    style Prompt2 fill:#fee,stroke:#c00,stroke-dasharray: 5 5
-```
-
-### Walk Algorithm — Step by Step
+### Walk Algorithm
 
 ```mermaid
 flowchart TD
-    Start([walkChildren called]) --> DepthCheck{Depth >= MaxDepth?}
-    DepthCheck -->|Yes| Stop([Return])
-    DepthCheck -->|No| Reverse[Walk Reverse Relationships]
+    Start(["walkChildren called"]) --> DepthCheck{"Depth >= MaxDepth?"}
+    DepthCheck -->|Yes| Stop(["Return"])
+    DepthCheck -->|No| Reverse["Walk Reverse Relationships"]
 
-    Reverse --> ReverseLoop{For each EntityRelationship<br/>on current entity}
-    ReverseLoop -->|Next rel| AncestorCheckR{Child entity<br/>on ancestor stack?}
-    AncestorCheckR -->|Yes| SkipR([Skip — would backtrack])
-    AncestorCheckR -->|No| LoadChildren[Load child records<br/>via RunView]
-    LoadChildren --> RegisterR[Register nodes + push<br/>child entity onto ancestors]
-    RegisterR --> RecurseR[Recurse walkChildren<br/>for each child]
-    RecurseR --> PopR[Pop child entity<br/>from ancestors]
-    PopR --> ReverseLoop
+    Reverse --> ReverseLoop{"For each EntityRelationship"}
+    ReverseLoop -->|Next| AncestorR{"On ancestor stack?"}
+    AncestorR -->|Yes| SkipR(["Skip"])
+    AncestorR -->|No| LoadChildren["Load child records"]
+    LoadChildren --> RecurseR["Recurse walkChildren"]
+    RecurseR --> ReverseLoop
 
-    ReverseLoop -->|Done| Forward[Walk Forward References]
-    Forward --> ForwardLoop{For each FK field<br/>on current entity}
-    ForwardLoop -->|Next FK| SystemCheck{System FK?<br/>UserID, CreatedBy, etc.}
-    SystemCheck -->|Yes| SkipF([Skip — infrastructure field])
-    SystemCheck -->|No| AncestorCheckF{Target entity<br/>on ancestor stack?}
-    AncestorCheckF -->|Yes| SkipF2([Skip — would backtrack])
-    AncestorCheckF -->|No| LoadTarget[Load referenced record<br/>via RunView]
-    LoadTarget --> RegisterF[Register node + push<br/>target entity onto ancestors]
-    RegisterF --> RecurseF[Recurse walkChildren<br/>for referenced record]
-    RecurseF --> PopF[Pop target entity<br/>from ancestors]
-    PopF --> ForwardLoop
+    ReverseLoop -->|Done| Forward["Walk Forward References"]
+    Forward --> ForwardLoop{"For each FK field"}
+    ForwardLoop -->|Next| SystemCheck{"System FK?"}
+    SystemCheck -->|Yes| SkipF(["Skip"])
+    SystemCheck -->|No| AncestorF{"On ancestor stack?"}
+    AncestorF -->|Yes| SkipF2(["Skip"])
+    AncestorF -->|No| LoadTarget["Load referenced record"]
+    LoadTarget --> RecurseF["Recurse walkChildren"]
+    RecurseF --> ForwardLoop
     ForwardLoop -->|Done| Stop
 
-    SkipR --> ReverseLoop
-    SkipF --> ForwardLoop
-    SkipF2 --> ForwardLoop
-
-    style SkipR fill:#fee,stroke:#c00
-    style SkipF fill:#fee,stroke:#c00
-    style SkipF2 fill:#fee,stroke:#c00
+    style SkipR fill:#b8762f,stroke:#8a5722,color:#fff
+    style SkipF fill:#b8762f,stroke:#8a5722,color:#fff
+    style SkipF2 fill:#b8762f,stroke:#8a5722,color:#fff
+    style Start fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style Stop fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
 
-### Concrete Example — Labeling an AI Agent
-
-Given an AI Agent with 2 prompts, 1 action, and 1 sub-agent (via AI Agent
-Relationships), the walker produces:
-
-```mermaid
-graph TD
-    Root["AI Agent (root)<br/>ancestors: [AI Agents]"]
-
-    Root --> AP1["AI Agent Prompt #1<br/>(reverse)<br/>ancestors: [..., AI Agent Prompts]"]
-    Root --> AP2["AI Agent Prompt #2<br/>(reverse)"]
-    Root --> AA["AI Agent Action<br/>(reverse)<br/>ancestors: [..., AI Agent Actions]"]
-    Root --> AR["AI Agent Relationship<br/>(reverse)<br/>ancestors: [..., AI Agent Relationships]"]
-
-    AP1 --> P1["AI Prompt #1<br/>(forward via PromptID)<br/>ancestors: [..., AI Prompts]"]
-    AP2 --> P2["AI Prompt #2<br/>(forward)"]
-    AA --> Act["Action<br/>(forward via ActionID)<br/>ancestors: [..., Actions]"]
-    AR --> SubAgent["Sub-Agent<br/>(forward via SubAgentID)<br/>ancestors: [..., AI Agents]"]
-
-    P1 --> M1["AI Model<br/>(forward via DefaultModelID)"]
-    P2 --> M1
-
-    SubAgent --> SAP["Sub-Agent's Prompt<br/>(reverse)"]
-    SAP --> SP["AI Prompt #3<br/>(forward)"]
-
-    P1 -.->|"BLOCKED: AI Agent Prompts on stack"| X1["Other Agent Prompts"]
-    M1 -.->|"BLOCKED: AI Prompts on stack"| X2["Other Prompts"]
-    Act -.->|"BLOCKED: skipped via EntityRel filter"| X3["Action Params (403 rows)"]
-
-    style X1 fill:#fee,stroke:#c00,stroke-dasharray: 5 5
-    style X2 fill:#fee,stroke:#c00,stroke-dasharray: 5 5
-    style X3 fill:#fee,stroke:#c00,stroke-dasharray: 5 5
-```
-
-**Result**: ~15-25 targeted records instead of 1,363 from the naive approach.
-
-### Why This Design
+### Design Rationale
 
 | Concern | Solution |
-|---|---|
-| Which children to walk? | **EntityRelationship** — admin-controlled, CodeGen-maintained |
-| Preventing graph explosion? | **Ancestor stack** — blocks backtracking to any entity type on current path |
-| Infrastructure FKs (UserID, etc.)? | **System FK skip list** — regex patterns for known infrastructure fields |
-| Cycle detection? | **Visited set** — `entityName::recordID` prevents revisiting any record |
-| Sub-agent recursion? | Ancestor stack is **path-based** — pops on backtrack, allowing re-entry from a different branch |
+|---------|----------|
+| Which children to walk? | **EntityRelationship** -- admin-controlled, CodeGen-maintained |
+| Preventing graph explosion? | **Ancestor stack** -- blocks backtracking to any entity type on current path |
+| Infrastructure FKs (UserID, etc.)? | **System FK skip list** -- regex patterns for known infrastructure fields |
+| Cycle detection? | **Visited set** -- `entityName::recordID` prevents revisiting any record |
+| Sub-agent recursion? | Ancestor stack is **path-based** -- pops on backtrack, allowing re-entry from a different branch |
 
 ### Forward FK Skip Patterns
 
-The following FK field name patterns are never followed during forward walking,
-as they reference system infrastructure (Users, audit fields) rather than
-business data:
+The following FK field name patterns are never followed during forward walking, as they reference system infrastructure rather than business data:
 
 - `CreatedByUserID`, `UpdatedByUserID`, `UserID`
 - `ContextUserID`, `ModifiedByUserID`
@@ -162,10 +192,9 @@ business data:
 - `AssignedToID`, `AssignedToUserID`
 - `EntityID` (polymorphic reference)
 
-## Snapshot Builder — Batched Capture
+## Snapshot Builder -- Batched Capture
 
-When capturing records into a version label, the SnapshotBuilder uses **batched
-queries** to minimize database round trips:
+When capturing records into a version label, the SnapshotBuilder uses **batched queries** to minimize database round trips:
 
 ```mermaid
 sequenceDiagram
@@ -180,23 +209,23 @@ sequenceDiagram
         DB-->>SB: Latest changes for all records in group
     end
 
-    Note over SB: Build lookup map:<br/>entityId::recordId → RecordChange
+    Note over SB: Build lookup map
 
     loop For each node without a RecordChange
-        SB->>DB: Create synthetic snapshot (Save)
+        SB->>DB: Create synthetic snapshot
     end
 
     loop For each node
-        SB->>DB: Create VersionLabelItem (Save)
+        SB->>DB: Create VersionLabelItem
     end
 ```
 
-**Before batching**: N individual RunView calls (946 for a 1363-record label).
+**Before batching**: N individual RunView calls.
 **After batching**: ~5-10 RunView calls (one per unique entity type in the graph).
 
-## API
+## API Reference
 
-### VersionHistoryEngine (main facade)
+### VersionHistoryEngine
 
 ```typescript
 const engine = new VersionHistoryEngine();
@@ -209,7 +238,7 @@ const { Label, CaptureResult } = await engine.CreateLabel({
     RecordKey: agentKey,
     IncludeDependencies: true,
     MaxDepth: 10,
-    ExcludeEntities: ['AI Agent Runs'],  // skip run history
+    ExcludeEntities: ['AI Agent Runs'],
 }, contextUser);
 
 // Diff against current state
@@ -222,8 +251,20 @@ const result = await engine.RestoreToLabel(Label.ID, { DryRun: true }, contextUs
 ### WalkOptions
 
 | Option | Default | Description |
-|---|---|---|
+|--------|---------|-------------|
 | `MaxDepth` | `10` | Maximum recursion depth |
 | `EntityFilter` | `[]` | Only include these entities (empty = all) |
 | `ExcludeEntities` | `[]` | Skip these entities entirely |
 | `IncludeDeleted` | `false` | Include soft-deleted records |
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/core` | Entity system, metadata, and CompositeKey |
+| `@memberjunction/core-entities` | VersionLabel entity types |
+| `@memberjunction/global` | Global state management |
+
+## License
+
+ISC

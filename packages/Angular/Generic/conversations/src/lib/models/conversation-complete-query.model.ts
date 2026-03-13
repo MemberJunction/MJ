@@ -1,15 +1,15 @@
 import {
-  ConversationDetailEntityType,
-  ConversationDetailRatingEntityType,
-  AIAgentRunEntityType,
-  ConversationDetailArtifactEntityType
+  MJConversationDetailEntityType,
+  MJConversationDetailRatingEntityType,
+  MJAIAgentRunEntityType,
+  MJConversationDetailArtifactEntityType
 } from '@memberjunction/core-entities';
 
 /**
  * Agent Run data returned in JSON format from GetConversationComplete query.
- * Uses the auto-generated AIAgentRunEntityType plus Agent view field.
+ * Uses the auto-generated MJAIAgentRunEntityType plus Agent view field.
  */
-export type AgentRunJSON = AIAgentRunEntityType & {
+export type AgentRunJSON = MJAIAgentRunEntityType & {
   Agent: string | null; // View field from join
 };
 
@@ -17,7 +17,7 @@ export type AgentRunJSON = AIAgentRunEntityType & {
  * Artifact data returned in JSON format from GetConversationComplete query.
  * Combines ConversationDetailArtifact and joined Artifact/ArtifactVersion data.
  */
-export type ArtifactJSON = ConversationDetailArtifactEntityType & {
+export type ArtifactJSON = MJConversationDetailArtifactEntityType & {
   ArtifactVersionID: string;
   VersionNumber: number;
   VersionName: string | null;
@@ -32,20 +32,20 @@ export type ArtifactJSON = ConversationDetailArtifactEntityType & {
 
 /**
  * Rating data returned in JSON format from GetConversationComplete query.
- * Uses the auto-generated ConversationDetailRatingEntityType plus UserName for display.
+ * Uses the auto-generated MJConversationDetailRatingEntityType plus UserName for display.
  */
-export type RatingJSON = ConversationDetailRatingEntityType & {
+export type RatingJSON = MJConversationDetailRatingEntityType & {
   UserName: string;
 };
 
 /**
  * Complete conversation detail data returned from GetConversationComplete query
- * Extends the base ConversationDetailEntityType with JSON-aggregated related data
+ * Extends the base MJConversationDetailEntityType with JSON-aggregated related data
  *
  * This type represents the raw query result BEFORE parsing JSON columns.
  * AgentRunsJSON and ArtifactsJSON are JSON strings that need to be parsed.
  */
-export type ConversationDetailComplete = ConversationDetailEntityType & {
+export type ConversationDetailComplete = MJConversationDetailEntityType & {
   /**
    * JSON string containing array of agent runs for this conversation detail
    * Parse with JSON.parse() to get AgentRunJSON[]
@@ -84,7 +84,7 @@ export type ConversationDetailComplete = ConversationDetailEntityType & {
  * Parsed conversation detail with typed related data
  * This is what you get AFTER parsing the JSON columns
  */
-export interface ConversationDetailParsed extends ConversationDetailEntityType {
+export interface ConversationDetailParsed extends MJConversationDetailEntityType {
   /**
    * Parsed array of agent runs (empty array if none exist)
    */

@@ -23,13 +23,13 @@ mj-flow-agent-editor {
     justify-content: center;
     padding: 40px 20px;
     text-align: center;
-    color: #94a3b8;
+    color: var(--mj-text-disabled);
 }
 
 .flow-empty-state i {
     font-size: 32px;
     margin-bottom: 12px;
-    color: #cbd5e1;
+    color: var(--mj-border-strong);
 }
 
 .flow-empty-state p {

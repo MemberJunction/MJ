@@ -1,7 +1,7 @@
 import { IMetadataProvider, LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
-import { TemplateContentEntity, TemplateEntityExtended, TemplateParamEntity } from "@memberjunction/core-entities";
-import * as nunjucks from 'nunjucks';
-import { MJGlobal } from "@memberjunction/global";
+import { MJTemplateContentEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
+import nunjucks from 'nunjucks';
+import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
 import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
   
@@ -9,16 +9,16 @@ import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templa
  * This class extends the nunjucks loader to allow adding templates directly to the loader
  */
 export class TemplateEntityLoader extends nunjucks.Loader {
-    public async: true; // tell nunjucks this is an async loader
+    public async = true; // tell nunjucks this is an async loader
 
-    private templates: { [templateId: string]: TemplateEntityExtended } = {};
+    private templates: { [templateId: string]: MJTemplateEntityExtended } = {};
 
     /**
      * Add a new template to the loader
      * @param templateId 
      * @param template 
      */
-    public AddTemplate(templateId: string, template: TemplateEntityExtended) {
+    public AddTemplate(templateId: string, template: MJTemplateEntityExtended) {
         this.templates[templateId] = template;
     }
 
@@ -66,7 +66,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
             // do this after the templates are loaded and doing it inside AdditionalLoading() ensures it is done after the templates are loaded and
             // only done once
             this._templateLoader = new TemplateEntityLoader();
-            this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
+            this._nunjucksEnv = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape: true, dev: true });
 
             // Add custom filters
             this.addCustomFilters();
@@ -87,7 +87,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
 
     public SetupNunjucks(): void {
         this._templateLoader = new TemplateEntityLoader();
-        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader, { autoescape: true, dev: true });
+        this._nunjucksEnv = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape: true, dev: true });
         
         // Add custom filters
         this.addCustomFilters();
@@ -134,7 +134,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
      */
     private _templateCache: Map<string, any> = new Map<string, any>();
 
-    public AddTemplate(templateEntity: TemplateEntityExtended) {
+    public AddTemplate(templateEntity: MJTemplateEntityExtended) {
         this._templateLoader.AddTemplate(templateEntity.ID, templateEntity);
     }
  
@@ -145,7 +145,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
      * @param templateContent the template content item (within the template)  
      * @param data 
      */
-    public async RenderTemplate(templateEntity: TemplateEntityExtended, templateContent: TemplateContentEntity, data: any, SkipValidation?: boolean): Promise<TemplateRenderResult> {
+    public async RenderTemplate(templateEntity: MJTemplateEntityExtended, templateContent: MJTemplateContentEntity, data: any, SkipValidation?: boolean): Promise<TemplateRenderResult> {
         try {
             if (!templateContent) {
                 return {
@@ -292,7 +292,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
      * - Handles all parameter types: Scalar, Array, Object, Record, Entity
      * - Content-specific parameter defaults override global parameter defaults
      */
-    protected mergeDefaultValues(templateEntity: TemplateEntityExtended, contentId: string, data: any): any {
+    protected mergeDefaultValues(templateEntity: MJTemplateEntityExtended, contentId: string, data: any): any {
         // Create a shallow copy of the input data
         const mergedData = { ...data };
         
@@ -300,7 +300,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
         const params = templateEntity.GetParametersForContent(contentId);
         
         // Group parameters by name to handle precedence
-        const paramsByName = new Map<string, TemplateParamEntity>();
+        const paramsByName = new Map<string, MJTemplateParamEntity>();
         
         // First add global parameters
         params.filter(p => !(p as any).TemplateContentID).forEach(p => {
@@ -308,7 +308,7 @@ export class TemplateEngineServer extends TemplateEngineBase {
         });
         
         // Then add/override with content-specific parameters
-        params.filter(p => (p as any).TemplateContentID === contentId).forEach(p => {
+        params.filter(p => UUIDsEqual((p as any).TemplateContentID, contentId)).forEach(p => {
             paramsByName.set(p.Name, p);
         });
         

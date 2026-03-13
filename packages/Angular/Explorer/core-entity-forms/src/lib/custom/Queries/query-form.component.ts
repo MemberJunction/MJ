@@ -1,11 +1,12 @@
-import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, AfterViewInit } from '@angular/core';
-import { QueryEntity, QueryParameterEntity, QueryCategoryEntity, QueryFieldEntity, QueryEntityEntity, QueryPermissionEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { QueryFormComponent } from '../../generated/Entities/Query/query.form.component';
-import { Metadata, RunView, RUN_QUERY_SQL_FILTERS } from '@memberjunction/core';
+import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, AfterViewInit, inject } from '@angular/core';
+import { MJQueryEntity, MJQueryParameterEntity, MJQueryCategoryEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { BaseFormComponent, FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
+import { MJQueryFormComponent } from '../../generated/Entities/MJQuery/mjquery.form.component';
+import { Metadata, RunView, RUN_QUERY_SQL_FILTERS, CompositeKey, QueryInfo, QueryDependencyInfo } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
+import { CodeEditorComponent, CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
+import { NavigationService } from '@memberjunction/ng-shared';
 import { Subject } from 'rxjs';
 
 interface CategoryTreeNode {
@@ -14,20 +15,19 @@ interface CategoryTreeNode {
     items?: CategoryTreeNode[];
 }
 
-@RegisterClass(BaseFormComponent, 'Queries') 
+@RegisterClass(BaseFormComponent, 'MJ: Queries')
 @Component({
   standalone: false,
     selector: 'mj-query-form',
     templateUrl: './query-form.component.html',
     styleUrls: ['../../../shared/form-styles.css', './query-form.component.css']
 })
-export class QueryFormExtendedComponent extends QueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
-    public override cdr!: ChangeDetectorRef;
-    public record!: QueryEntity;
-    public queryParameters: QueryParameterEntity[] = [];
-    public queryFields: QueryFieldEntity[] = [];
-    public queryEntities: QueryEntityEntity[] = [];
-    public queryPermissions: QueryPermissionEntity[] = [];
+export class MJQueryFormComponentExtended extends MJQueryFormComponent implements OnInit, OnDestroy, AfterViewInit {
+    public record!: MJQueryEntity;
+    public queryParameters: MJQueryParameterEntity[] = [];
+    public queryFields: MJQueryFieldEntity[] = [];
+    public queryEntities: MJQueryEntityEntity[] = [];
+    public queryPermissions: MJQueryPermissionEntity[] = [];
     public isLoadingParameters = false;
     public isLoadingFields = false;
     public isLoadingEntities = false;
@@ -36,23 +36,26 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     public showFiltersHelp = false;
     public showRunDialog = false;
     public showCategoryDialog = false;
-    
+    public categoryPathDisplay = '';
+
     // Expansion panel states
     public sqlPanelExpanded = true;
     public parametersPanelExpanded = false;
     public fieldsPanelExpanded = false;
     public entitiesPanelExpanded = false;
+    public technicalDescriptionPanelExpanded = false;
     public detailsPanelExpanded = false;
     public permissionsPanelExpanded = false;
+    public dependentsPanelExpanded = false;
     
     // Category data
     public categoryOptions: Array<{text: string, value: string}> = [
         { text: 'Select Category...', value: '' }
     ];
-    public categories: QueryCategoryEntity[] = [];
+    public categories: MJQueryCategoryEntity[] = [];
     public categoryTreeData: CategoryTreeNode[] = [];
     
-    // Status options
+    // Status options — matches MJQueryEntity.Status type from database CHECK constraint
     public statusOptions = [
         { text: 'Pending', value: 'Pending' },
         { text: 'Approved', value: 'Approved' },
@@ -60,20 +63,55 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         { text: 'Expired', value: 'Expired' }
     ];
 
+    // Toolbar config: hide non-functional buttons (delete/favorite/history are not wired
+    // in legacy [Form] mode) and section controls (custom form uses its own panel state).
+    public readonly ToolbarConfig: FormToolbarConfig = {
+        ...DEFAULT_TOOLBAR_CONFIG,
+        ShowDeleteButton: false,
+        ShowFavoriteButton: false,
+        ShowHistoryButton: false,
+        ShowListButton: false,
+        ShowSectionControls: false,
+        ShowSectionFilter: false,
+        AllowSectionReorder: false,
+        ShowSectionManager: false,
+    };
+
     @ViewChild('sqlEditor') sqlEditor: CodeEditorComponent | null = null;
     
     // SQL Filters for help display
     public sqlFilters = RUN_QUERY_SQL_FILTERS;
     
+    private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
+
+    /**
+     * Gets the QueryInfo metadata object for the current record, used to access Dependents.
+     */
+    public get CurrentQueryInfo(): QueryInfo | undefined {
+        if (!this.record?.ID) return undefined;
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.record.ID));
+    }
+
+    /**
+     * Gets queries that depend on (reference) this query via composition.
+     */
+    public get DependentQueries(): QueryDependencyInfo[] {
+        return this.CurrentQueryInfo?.Dependents ?? [];
+    }
     private isUpdatingEditorValue = false;
+    private isInitialLoad = true;
 
     async ngOnInit() {
         await super.ngOnInit();
-        
+
+        // During init, suppress per-method detectChanges to avoid NG0100.
+        // We do one unified detectChanges after everything completes.
+        this.isInitialLoad = true;
+
         // Load categories first to ensure they're available for the dropdown
         await this.loadCategories();
-        
+
         // Then load other data in parallel
         await Promise.all([
             this.loadQueryParameters(),
@@ -81,8 +119,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             this.loadQueryEntities(),
             this.loadQueryPermissions()
         ]);
-        
-        // Ensure form is properly initialized after all data is loaded
+
+        this.isInitialLoad = false;
         this.cdr.detectChanges();
     }
 
@@ -98,19 +136,6 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
 
         // Set initial SQL value in the editor
         this.updateEditorValue();
-        
-        // Ensure all form controls are properly initialized with data
-        setTimeout(() => {
-            // Force Angular to update all bindings
-            this.cdr.detectChanges();
-            
-            // If in edit mode, trigger another update to ensure Kendo components are initialized
-            if (this.EditMode) {
-                setTimeout(() => {
-                    this.cdr.detectChanges();
-                }, 50);
-            }
-        }, 100);
     }
  
     override EndEditMode(): void {
@@ -164,7 +189,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             this.isLoadingParameters = true;
             try {
                 const rv = new RunView();
-                const results = await rv.RunView<QueryParameterEntity>({
+                const results = await rv.RunView<MJQueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
                     OrderBy: 'Name ASC',
@@ -178,6 +203,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 console.error('Error loading query parameters:', error);
             } finally {
                 this.isLoadingParameters = false;
+                if (!this.isInitialLoad) this.cdr.detectChanges();
             }
         }
     }
@@ -187,8 +213,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             this.isLoadingFields = true;
             try {
                 const rv = new RunView();
-                const results = await rv.RunView<QueryFieldEntity>({
-                    EntityName: 'Query Fields',
+                const results = await rv.RunView<MJQueryFieldEntity>({
+                    EntityName: 'MJ: Query Fields',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
                     OrderBy: 'Sequence ASC, Name ASC',
                     ResultType: 'entity_object'
@@ -201,6 +227,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 console.error('Error loading query fields:', error);
             } finally {
                 this.isLoadingFields = false;
+                if (!this.isInitialLoad) this.cdr.detectChanges();
             }
         }
     }
@@ -210,8 +237,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             this.isLoadingEntities = true;
             try {
                 const rv = new RunView();
-                const results = await rv.RunView<QueryEntityEntity>({
-                    EntityName: 'Query Entities',
+                const results = await rv.RunView<MJQueryEntityEntity>({
+                    EntityName: 'MJ: Query Entities',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
                     OrderBy: 'Entity ASC',
                     ResultType: 'entity_object'
@@ -225,6 +252,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 console.error('Error loading query entities:', error);
             } finally {
                 this.isLoadingEntities = false;
+                if (!this.isInitialLoad) this.cdr.detectChanges();
             }
         }
     }
@@ -234,8 +262,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             this.isLoadingPermissions = true;
             try {
                 const rv = new RunView();
-                const results = await rv.RunView<QueryPermissionEntity>({
-                    EntityName: 'Query Permissions',
+                const results = await rv.RunView<MJQueryPermissionEntity>({
+                    EntityName: 'MJ: Query Permissions',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
                     OrderBy: 'Role ASC',
                     ResultType: 'entity_object'
@@ -248,6 +276,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 console.error('Error loading query permissions:', error);
             } finally {
                 this.isLoadingPermissions = false;
+                if (!this.isInitialLoad) this.cdr.detectChanges();
             }
         }
     }
@@ -255,8 +284,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     async loadCategories() {
         try {
             const rv = new RunView();
-            const results = await rv.RunView<QueryCategoryEntity>({
-                EntityName: 'Query Categories',
+            const results = await rv.RunView<MJQueryCategoryEntity>({
+                EntityName: 'MJ: Query Categories',
                 OrderBy: 'Name',
                 ResultType: 'entity_object'
             });
@@ -275,9 +304,12 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                 
                 // Build tree data after options are set
                 this.categoryTreeData = this.buildCategoryTree(this.categories);
-                
-                // Trigger change detection to update the view
-                this.cdr.detectChanges();
+
+                // Update cached category path display
+                this.updateCategoryPathDisplay();
+
+                // Trigger change detection to update the view (skip during init)
+                if (!this.isInitialLoad) this.cdr.detectChanges();
             }
         } catch (error) {
             console.error('Error loading categories:', error);
@@ -286,7 +318,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         }
     }
     
-    private buildCategoryTree(categories: QueryCategoryEntity[]): CategoryTreeNode[] {
+    private buildCategoryTree(categories: MJQueryCategoryEntity[]): CategoryTreeNode[] {
         const categoryMap = new Map<string, CategoryTreeNode>();
         const rootCategories: CategoryTreeNode[] = [];
         
@@ -326,19 +358,23 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     }
     
     getCategoryPath(): string {
-        if (!this.record.CategoryID) return '';
-        
+        if (!this.record?.CategoryID) return '';
+
         const findPath = (categoryId: string): string[] => {
-            const category = this.categories.find(c => c.ID === categoryId);
+            const category = this.categories.find(c => UUIDsEqual(c.ID, categoryId));
             if (!category) return [];
-            
+
             if (category.ParentID) {
                 return [...findPath(category.ParentID), category.Name];
             }
             return [category.Name];
         };
-        
+
         return findPath(this.record.CategoryID).join(' / ');
+    }
+
+    private updateCategoryPathDisplay(): void {
+        this.categoryPathDisplay = this.getCategoryPath();
     }
 
     async onCategoryChange(value: string) {
@@ -364,7 +400,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             try {
                 // Create new category with trimmed name
                 const md = new Metadata();
-                const newCategory = await md.GetEntityObject<QueryCategoryEntity>('Query Categories');
+                const newCategory = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories');
                 newCategory.Name = value.trim();
                 const saved = await newCategory.Save();
                 
@@ -443,11 +479,17 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             }
         }
 
+        // Warn if query is not approved
+        if (this.record.Status !== 'Approved') {
+            console.warn(`Executing query '${this.record.Name}' with status '${this.record.Status}'. Query has not been approved.`);
+        }
+
         // Reload parameters in case they were updated
         await this.loadQueryParameters();
 
-        // Show the run dialog
+        // Show the run dialog — set before detectChanges to avoid NG0100
         this.showRunDialog = true;
+        this.cdr.detectChanges();
     }
 
     /**
@@ -463,7 +505,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     async addParameter() {
         try {
             const md = new Metadata();
-            const newParam = await md.GetEntityObject<QueryParameterEntity>('MJ: Query Parameters');
+            const newParam = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters');
             newParam.QueryID = this.record.ID;
             newParam.Name = `param${this.queryParameters.length + 1}`;
             newParam.Type = 'string';
@@ -498,7 +540,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     /**
      * Edit a parameter
      */
-    async editParameter(param: QueryParameterEntity) {
+    async editParameter(param: MJQueryParameterEntity) {
         // TODO: Show parameter edit dialog
         console.log('Edit parameter:', param);
     }
@@ -506,7 +548,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     /**
      * Delete a parameter
      */
-    async deleteParameter(param: QueryParameterEntity) {
+    async deleteParameter(param: MJQueryParameterEntity) {
         if (!confirm(`Are you sure you want to delete parameter "${param.Name}"?`)) {
             return;
         }
@@ -543,7 +585,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     /**
      * Handle category creation from dialog
      */
-    async onCategoryCreated(newCategory: QueryCategoryEntity) {
+    async onCategoryCreated(newCategory: MJQueryCategoryEntity) {
         // Reload categories to include the new one
         await this.loadCategories();
         
@@ -581,7 +623,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
             } else {
                 try {
                     const md = new Metadata();
-                    const newCategory = await md.GetEntityObject<QueryCategoryEntity>('Query Categories');
+                    const newCategory = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories');
                     newCategory.Name = this.record.CategoryID.trim();
                     const saved = await newCategory.Save();
                     
@@ -628,7 +670,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         
         if (result) {
             this.updateUnsavedChangesFlag();
-            
+
             // Reload related data after successful save as server-side processes may have updated them
             if (this.record && this.record.ID) {
                 await Promise.all([
@@ -636,6 +678,8 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
                     this.loadQueryFields(),
                     this.loadQueryEntities()
                 ]);
+                this.updateCategoryPathDisplay();
+                this.cdr.detectChanges();
             }
         }
         
@@ -644,21 +688,80 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
 
     getStatusBadgeColor(): string {
         switch (this.record?.Status) {
-            case 'Approved':
-                return '#28a745';
-            case 'Pending':
-                return '#ffc107';
-            case 'Rejected':
-                return '#dc3545';
-            default:
-                return '#6c757d';
+            case 'Approved':  return '#28a745';
+            case 'Pending':   return '#f59e0b';
+            case 'Rejected':  return '#dc3545';
+            case 'Expired':   return '#6c757d';
+            default:          return '#6c757d';
         }
+    }
+
+    getStatusBannerIcon(): string {
+        switch (this.record?.Status) {
+            case 'Pending':   return 'fa-clock';
+            case 'Rejected':  return 'fa-times-circle';
+            case 'Expired':   return 'fa-archive';
+            default:          return 'fa-info-circle';
+        }
+    }
+
+    getStatusBannerMessage(): string {
+        switch (this.record?.Status) {
+            case 'Pending':   return 'It can be executed for testing but has not yet been approved.';
+            case 'Rejected':  return 'It was rejected and may need revision before approval.';
+            case 'Expired':   return 'It has expired and is no longer in active use.';
+            default:          return '';
+        }
+    }
+
+    /**
+     * Handle composition token click — navigate to the referenced query
+     */
+    onCompositionTokenClick(event: CompositionTokenClickEvent): void {
+        const md = new Metadata();
+        const segments = event.FullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
+        if (segments.length === 0) return;
+
+        const queryName = segments[segments.length - 1];
+        const categorySegments = segments.slice(0, -1);
+
+        // First try: exact match on Name + CategoryPath
+        let targetQuery = md.Queries.find(q => {
+            if (q.Name !== queryName) return false;
+            if (categorySegments.length === 0) return true;
+            const expectedPath = '/' + categorySegments.join('/') + '/';
+            return q.CategoryPath === expectedPath;
+        });
+
+        // Fallback: match on Name alone
+        if (!targetQuery) {
+            targetQuery = md.Queries.find(q => q.Name === queryName);
+        }
+
+        if (targetQuery) {
+            const compositeKey = CompositeKey.FromID(targetQuery.ID);
+            this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
+        } else {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Referenced query "${event.FullPath}" not found.`,
+                'warning',
+                3000
+            );
+        }
+    }
+
+    /**
+     * Navigate to a dependent query's record
+     */
+    onDependentQueryClick(dep: QueryDependencyInfo): void {
+        const compositeKey = CompositeKey.FromID(dep.QueryID);
+        this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
     }
 
     /**
      * Handle SQL value changes from the code editor
      */
-    onSQLChange(value: any) {
+    onSQLChange(value: string) {
         if (this.isUpdatingEditorValue || !this.record) {
             return;
         }
@@ -674,7 +777,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     async addField() {
         try {
             const md = new Metadata();
-            const newField = await md.GetEntityObject<QueryFieldEntity>('Query Fields');
+            const newField = await md.GetEntityObject<MJQueryFieldEntity>('MJ: Query Fields');
             newField.QueryID = this.record.ID;
             newField.Name = `field${this.queryFields.length + 1}`;
             newField.Description = '';
@@ -706,7 +809,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     /**
      * Delete a field
      */
-    async deleteField(field: QueryFieldEntity) {
+    async deleteField(field: MJQueryFieldEntity) {
         if (!confirm(`Are you sure you want to delete field "${field.Name}"?`)) {
             return;
         }
@@ -714,7 +817,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         try {
             const deleted = await field.Delete();
             if (deleted) {
-                this.queryFields = this.queryFields.filter(f => f.ID !== field.ID);
+                this.queryFields = this.queryFields.filter(f => !UUIDsEqual(f.ID, field.ID));
                 this.updateUnsavedChangesFlag();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Field deleted successfully',
@@ -738,7 +841,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     async addEntity() {
         try {
             const md = new Metadata();
-            const newEntity = await md.GetEntityObject<QueryEntityEntity>('Query Entities');
+            const newEntity = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities');
             newEntity.QueryID = this.record.ID;
             
             // Add to the list immediately for UI responsiveness
@@ -757,7 +860,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
     /**
      * Delete an entity
      */
-    async deleteEntity(entity: QueryEntityEntity) {
+    async deleteEntity(entity: MJQueryEntityEntity) {
         if (!confirm(`Are you sure you want to delete entity "${entity.Entity}"?`)) {
             return;
         }
@@ -765,7 +868,7 @@ export class QueryFormExtendedComponent extends QueryFormComponent implements On
         try {
             const deleted = await entity.Delete();
             if (deleted) {
-                this.queryEntities = this.queryEntities.filter(e => e.ID !== entity.ID);
+                this.queryEntities = this.queryEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
                 this.updateUnsavedChangesFlag();
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Entity deleted successfully',

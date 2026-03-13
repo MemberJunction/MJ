@@ -1,8 +1,8 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
-import * as archiver from "archiver";
-import * as unzipper from "unzipper";
+import archiver from "archiver";
+import unzipper from "unzipper";
 import { Readable } from "stream";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 import { BaseAction } from '@memberjunction/actions';

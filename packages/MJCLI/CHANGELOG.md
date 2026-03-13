@@ -1,5 +1,419 @@
 # Change Log - @memberjunction/cli
 
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/sql-converter@5.11.0
+  - @memberjunction/sqlserver-dataprovider@5.11.0
+  - @memberjunction/metadata-sync@5.11.0
+  - @memberjunction/ai-cli@5.11.0
+  - @memberjunction/codegen-lib@5.11.0
+  - @memberjunction/db-auto-doc@5.11.0
+  - @memberjunction/query-gen@5.11.0
+  - @memberjunction/server-bootstrap-lite@5.11.0
+  - @memberjunction/testing-cli@5.11.0
+  - @memberjunction/config@5.11.0
+  - @memberjunction/installer@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- Updated dependencies [a4ac83d]
+  - @memberjunction/codegen-lib@5.10.1
+  - @memberjunction/ai-cli@5.10.1
+  - @memberjunction/config@5.10.1
+  - @memberjunction/db-auto-doc@5.10.1
+  - @memberjunction/core@5.10.1
+  - @memberjunction/installer@5.10.1
+  - @memberjunction/metadata-sync@5.10.1
+  - @memberjunction/query-gen@5.10.1
+  - @memberjunction/sql-converter@5.10.1
+  - @memberjunction/sqlserver-dataprovider@5.10.1
+  - @memberjunction/server-bootstrap-lite@5.10.1
+  - @memberjunction/testing-cli@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+- Updated dependencies [f2df653]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/codegen-lib@5.10.0
+  - @memberjunction/ai-cli@5.10.0
+  - @memberjunction/db-auto-doc@5.10.0
+  - @memberjunction/metadata-sync@5.10.0
+  - @memberjunction/query-gen@5.10.0
+  - @memberjunction/sqlserver-dataprovider@5.10.0
+  - @memberjunction/server-bootstrap-lite@5.10.0
+  - @memberjunction/testing-cli@5.10.0
+  - @memberjunction/config@5.10.0
+  - @memberjunction/installer@5.10.0
+  - @memberjunction/sql-converter@5.10.0
+
+## 5.9.0
+
+### Minor Changes
+
+- 6214edf: feat: Provider-agnostic OpenApp Engine with configurable project layouts, package manager auto-detection, Azure SQL support, and MJ version fallback detection
+
+### Patch Changes
+
+- Updated dependencies [f991f6d]
+- Updated dependencies [194ddf2]
+  - @memberjunction/codegen-lib@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/sqlserver-dataprovider@5.9.0
+  - @memberjunction/ai-cli@5.9.0
+  - @memberjunction/server-bootstrap-lite@5.9.0
+  - @memberjunction/metadata-sync@5.9.0
+  - @memberjunction/query-gen@5.9.0
+  - @memberjunction/testing-cli@5.9.0
+  - @memberjunction/db-auto-doc@5.9.0
+  - @memberjunction/config@5.9.0
+  - @memberjunction/installer@5.9.0
+  - @memberjunction/sql-converter@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- 064cf3a: Make API key generation configurable via mj.config.cjs, fix codegen TVF sync and EntityRelationship deduplication, fix SQL logger post-processing, preserve version range prefixes in CLI bump command, and fix SkipProxyAgent crash on error responses
+- Updated dependencies [064cf3a]
+- Updated dependencies [0753249]
+  - @memberjunction/codegen-lib@5.8.0
+  - @memberjunction/core@5.8.0
+  - @memberjunction/metadata-sync@5.8.0
+  - @memberjunction/sqlserver-dataprovider@5.8.0
+  - @memberjunction/server-bootstrap-lite@5.8.0
+  - @memberjunction/ai-cli@5.8.0
+  - @memberjunction/db-auto-doc@5.8.0
+  - @memberjunction/query-gen@5.8.0
+  - @memberjunction/testing-cli@5.8.0
+  - @memberjunction/config@5.8.0
+  - @memberjunction/installer@5.8.0
+  - @memberjunction/sql-converter@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- 178e891: Add configurable migration request timeout via `dbRequestTimeout` in mj.config.cjs and `MJ_MIGRATION_REQUEST_TIMEOUT` environment variable. Passes `RequestTimeout` through to Skyway-Core's database connection options, allowing long-running migrations (e.g., large index builds) to complete without hitting the default 5-minute timeout.
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-cli@5.7.0
+  - @memberjunction/codegen-lib@5.7.0
+  - @memberjunction/db-auto-doc@5.7.0
+  - @memberjunction/query-gen@5.7.0
+  - @memberjunction/sqlserver-dataprovider@5.7.0
+  - @memberjunction/server-bootstrap-lite@5.7.0
+  - @memberjunction/metadata-sync@5.7.0
+  - @memberjunction/testing-cli@5.7.0
+  - @memberjunction/config@5.7.0
+  - @memberjunction/installer@5.7.0
+  - @memberjunction/sql-converter@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ai-cli@5.6.0
+  - @memberjunction/codegen-lib@5.6.0
+  - @memberjunction/db-auto-doc@5.6.0
+  - @memberjunction/metadata-sync@5.6.0
+  - @memberjunction/query-gen@5.6.0
+  - @memberjunction/sqlserver-dataprovider@5.6.0
+  - @memberjunction/server-bootstrap-lite@5.6.0
+  - @memberjunction/testing-cli@5.6.0
+  - @memberjunction/config@5.6.0
+  - @memberjunction/installer@5.6.0
+  - @memberjunction/sql-converter@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- 7ca2459: Viewing System fixes, CodeGen cleanup, startup performance
+- 1d3dec4: Add new headless, event-driven installer engine for MemberJunction. Features 9-phase install pipeline (preflight, scaffold, configure, database, platform compat, dependencies, migrate, codegen, smoke test), checkpoint/resume via state file, non-interactive CI/Docker mode (`--yes` + `--config`), `mj doctor` diagnostics, `--fast` optimistic mode, known-issue patching system, stdout-based service readiness detection, cross-platform Windows compatibility fixes, and 425 unit tests across 20 Vitest test files.
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [7ca2459]
+- Updated dependencies [bf2c142]
+- Updated dependencies [ee9f788]
+- Updated dependencies [1d3dec4]
+- Updated dependencies [df2457c]
+- Updated dependencies [6421543]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/server-bootstrap-lite@5.5.0
+  - @memberjunction/sqlserver-dataprovider@5.5.0
+  - @memberjunction/codegen-lib@5.5.0
+  - @memberjunction/sql-converter@5.5.0
+  - @memberjunction/installer@5.5.0
+  - @memberjunction/ai-cli@5.5.0
+  - @memberjunction/config@5.5.0
+  - @memberjunction/db-auto-doc@5.5.0
+  - @memberjunction/metadata-sync@5.5.0
+  - @memberjunction/query-gen@5.5.0
+  - @memberjunction/testing-cli@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.4.1
+- @memberjunction/codegen-lib@5.4.1
+- @memberjunction/config@5.4.1
+- @memberjunction/db-auto-doc@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/metadata-sync@5.4.1
+- @memberjunction/query-gen@5.4.1
+- @memberjunction/sqlserver-dataprovider@5.4.1
+- @memberjunction/server-bootstrap-lite@5.4.1
+- @memberjunction/testing-cli@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/codegen-lib@5.4.0
+  - @memberjunction/server-bootstrap-lite@5.4.0
+  - @memberjunction/metadata-sync@5.4.0
+  - @memberjunction/ai-cli@5.4.0
+  - @memberjunction/query-gen@5.4.0
+  - @memberjunction/sqlserver-dataprovider@5.4.0
+  - @memberjunction/testing-cli@5.4.0
+  - @memberjunction/db-auto-doc@5.4.0
+  - @memberjunction/config@5.4.0
+  - @memberjunction/core@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.3.1
+- @memberjunction/codegen-lib@5.3.1
+- @memberjunction/config@5.3.1
+- @memberjunction/db-auto-doc@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/metadata-sync@5.3.1
+- @memberjunction/query-gen@5.3.1
+- @memberjunction/sqlserver-dataprovider@5.3.1
+- @memberjunction/server-bootstrap-lite@5.3.1
+- @memberjunction/testing-cli@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- Updated dependencies [24d54d2]
+  - @memberjunction/codegen-lib@5.3.0
+  - @memberjunction/metadata-sync@5.3.0
+  - @memberjunction/ai-cli@5.3.0
+  - @memberjunction/server-bootstrap-lite@5.3.0
+  - @memberjunction/query-gen@5.3.0
+  - @memberjunction/sqlserver-dataprovider@5.3.0
+  - @memberjunction/testing-cli@5.3.0
+  - @memberjunction/db-auto-doc@5.3.0
+  - @memberjunction/config@5.3.0
+  - @memberjunction/core@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+- Updated dependencies [8d26189]
+  - @memberjunction/codegen-lib@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/server-bootstrap-lite@5.2.0
+  - @memberjunction/sqlserver-dataprovider@5.2.0
+  - @memberjunction/query-gen@5.2.0
+  - @memberjunction/ai-cli@5.2.0
+  - @memberjunction/metadata-sync@5.2.0
+  - @memberjunction/testing-cli@5.2.0
+  - @memberjunction/db-auto-doc@5.2.0
+  - @memberjunction/config@5.2.0
+
+## 5.1.0
+
+### Minor Changes
+
+- 61079e9: Add Open App system for installing, managing, and removing third-party apps via `mj app` CLI commands. Includes manifest validation, dependency resolution, schema isolation, migration execution, npm package management, and config-manager integration.
+
+### Patch Changes
+
+- Updated dependencies [f426d43]
+- Updated dependencies [ae7e9e7]
+  - @memberjunction/codegen-lib@5.1.0
+  - @memberjunction/server-bootstrap-lite@5.1.0
+  - @memberjunction/metadata-sync@5.1.0
+  - @memberjunction/db-auto-doc@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/query-gen@5.1.0
+  - @memberjunction/sqlserver-dataprovider@5.1.0
+  - @memberjunction/testing-cli@5.1.0
+  - @memberjunction/ai-cli@5.1.0
+  - @memberjunction/config@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- 93e1367: Replace flyway with skyway
+- Updated dependencies [737b56b]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/server-bootstrap-lite@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/sqlserver-dataprovider@5.0.0
+  - @memberjunction/ai-cli@5.0.0
+  - @memberjunction/codegen-lib@5.0.0
+  - @memberjunction/config@5.0.0
+  - @memberjunction/db-auto-doc@5.0.0
+  - @memberjunction/metadata-sync@5.0.0
+  - @memberjunction/query-gen@5.0.0
+  - @memberjunction/testing-cli@5.0.0
+
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ai-cli@4.4.0
+  - @memberjunction/codegen-lib@4.4.0
+  - @memberjunction/db-auto-doc@4.4.0
+  - @memberjunction/metadata-sync@4.4.0
+  - @memberjunction/query-gen@4.4.0
+  - @memberjunction/sqlserver-dataprovider@4.4.0
+  - @memberjunction/server-bootstrap-lite@4.4.0
+  - @memberjunction/testing-cli@4.4.0
+  - @memberjunction/config@4.4.0
+
+## 4.3.1
+
+### Patch Changes
+
+- f1b4a98: Restore singleton packages as regular dependencies in Angular Bootstrap and Explorer packages, and fix false positive error detection in CLI migrate command.
+- 690f6e0: no migration
+- Updated dependencies [86f6f48]
+- Updated dependencies [690f6e0]
+  - @memberjunction/codegen-lib@4.3.1
+  - @memberjunction/ai-cli@4.3.1
+  - @memberjunction/testing-cli@4.3.1
+  - @memberjunction/config@4.3.1
+  - @memberjunction/db-auto-doc@4.3.1
+  - @memberjunction/core@4.3.1
+  - @memberjunction/metadata-sync@4.3.1
+  - @memberjunction/query-gen@4.3.1
+  - @memberjunction/sqlserver-dataprovider@4.3.1
+  - @memberjunction/server-bootstrap-lite@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/ai-cli@4.3.0
+  - @memberjunction/server-bootstrap-lite@4.3.0
+  - @memberjunction/metadata-sync@4.3.0
+  - @memberjunction/codegen-lib@4.3.0
+  - @memberjunction/db-auto-doc@4.3.0
+  - @memberjunction/query-gen@4.3.0
+  - @memberjunction/sqlserver-dataprovider@4.3.0
+  - @memberjunction/testing-cli@4.3.0
+  - @memberjunction/config@4.3.0
+
+## 4.2.0
+
+### Patch Changes
+
+- Updated dependencies [65ac988]
+  - @memberjunction/codegen-lib@4.2.0
+  - @memberjunction/ai-cli@4.2.0
+  - @memberjunction/config@4.2.0
+  - @memberjunction/db-auto-doc@4.2.0
+  - @memberjunction/core@4.2.0
+  - @memberjunction/metadata-sync@4.2.0
+  - @memberjunction/query-gen@4.2.0
+  - @memberjunction/sqlserver-dataprovider@4.2.0
+  - @memberjunction/server-bootstrap-lite@4.2.0
+  - @memberjunction/testing-cli@4.2.0
+
+## 4.1.0
+
+### Patch Changes
+
+- 77839a9: Enable cascade deletes for AI Agent and Prompt entities, add cross-file dependency detection and --delete-db-only flag to MetadataSync for proper deletion ordering, fix CodeGen duplicate variable names for self-referential FKs, add requireConnectivity config to QueryGen, and add Gemini JSON parser support to DBAutoDoc.
+- 9fab8ca: ESM Compatibility
+- Updated dependencies [f54a9e4]
+- Updated dependencies [77839a9]
+- Updated dependencies [9fab8ca]
+- Updated dependencies [5af036f]
+  - @memberjunction/sqlserver-dataprovider@4.1.0
+  - @memberjunction/core@4.1.0
+  - @memberjunction/codegen-lib@4.1.0
+  - @memberjunction/db-auto-doc@4.1.0
+  - @memberjunction/metadata-sync@4.1.0
+  - @memberjunction/query-gen@4.1.0
+  - @memberjunction/server-bootstrap-lite@4.1.0
+  - @memberjunction/ai-cli@4.1.0
+  - @memberjunction/testing-cli@4.1.0
+  - @memberjunction/config@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- e9659be: Fix build error and eliminate warnings.
+- Updated dependencies [e9659be]
+- Updated dependencies [65b4274]
+- Updated dependencies [8366d44]
+- Updated dependencies [718b0ee]
+- Updated dependencies [5c7f6ab]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/metadata-sync@4.0.0
+  - @memberjunction/sqlserver-dataprovider@4.0.0
+  - @memberjunction/ai-cli@4.0.0
+  - @memberjunction/codegen-lib@4.0.0
+  - @memberjunction/config@4.0.0
+  - @memberjunction/db-auto-doc@4.0.0
+  - @memberjunction/core@4.0.0
+  - @memberjunction/query-gen@4.0.0
+  - @memberjunction/testing-cli@4.0.0
+  - @memberjunction/server-bootstrap-lite@4.0.0
+
 ## 3.4.0
 
 ### Minor Changes

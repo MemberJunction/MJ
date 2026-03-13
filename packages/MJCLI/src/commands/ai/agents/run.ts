@@ -1,5 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import { AgentService, OutputFormatter, ConversationService } from '@memberjunction/ai-cli';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 
@@ -45,8 +44,10 @@ export default class AgentsRun extends Command {
   };
 
   async run(): Promise<void> {
+    const { AgentService, OutputFormatter, ConversationService } = await import('@memberjunction/ai-cli');
+
     const { flags } = await this.parse(AgentsRun);
-    
+
     if (!flags.prompt && !flags.chat) {
       this.error('Either --prompt or --chat flag is required');
     }

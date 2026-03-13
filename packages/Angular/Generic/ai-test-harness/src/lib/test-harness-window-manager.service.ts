@@ -1,5 +1,5 @@
 import { Injectable, ComponentRef, ApplicationRef, Injector, createComponent, ViewContainerRef } from '@angular/core';
-import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { TestHarnessCustomWindowComponent, CustomWindowData } from './test-harness-custom-window.component';
 import { Observable, Subject } from 'rxjs';
 import { TestResult } from './test-harness-window.service';
@@ -32,7 +32,7 @@ export class TestHarnessWindowManagerService {
      */
     openAgentTestHarness(options: {
         agentId?: string;
-        agent?: AIAgentEntityExtended;
+        agent?: MJAIAgentEntityExtended;
         title?: string;
         width?: string | number;
         height?: string | number;
@@ -59,7 +59,7 @@ export class TestHarnessWindowManagerService {
      */
     openPromptTestHarness(options: {
         promptId?: string;
-        prompt?: AIPromptEntityExtended;
+        prompt?: MJAIPromptEntityExtended;
         title?: string;
         width?: string | number;
         height?: string | number;
@@ -115,7 +115,7 @@ export class TestHarnessWindowManagerService {
             
             // Get the appropriate icon based on mode and entity
             if (componentRef.instance.mode === 'agent' && componentRef.instance.agent) {
-                // For agents, use LogoURL since AIAgentEntityExtended doesn't have IconClass
+                // For agents, use LogoURL since MJAIAgentEntityExtended doesn't have IconClass
                 if (componentRef.instance.agent.LogoURL) {
                     iconUrl = componentRef.instance.agent.LogoURL;
                     icon = undefined; // Clear icon when using URL

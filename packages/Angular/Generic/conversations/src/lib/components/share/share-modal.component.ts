@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { ConversationEntity, ResourcePermissionEntity, UserEntity } from '@memberjunction/core-entities';
+import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef } from '@angular/core';
+import { MJConversationEntity, MJResourcePermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
@@ -135,7 +135,7 @@ interface SharePermission {
   `]
 })
 export class ShareModalComponent implements OnInit {
-  @Input() conversation!: ConversationEntity;
+  @Input() conversation!: MJConversationEntity;
   @Input() currentUser!: UserInfo;
   @Input() isOpen: boolean = false;
 
@@ -156,7 +156,8 @@ export class ShareModalComponent implements OnInit {
 
   constructor(
     private dialogService: DialogService,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
@@ -169,8 +170,8 @@ export class ShareModalComponent implements OnInit {
   private async loadPermissions(): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ResourcePermissionEntity>({
-        EntityName: 'Resource Permissions',
+      const result = await rv.RunView<MJResourcePermissionEntity>({
+        EntityName: 'MJ: Resource Permissions',
         ExtraFilter: `ResourceTypeID='${this.CONVERSATIONS_RESOURCE_TYPE_ID}' AND ResourceRecordID='${this.conversation.ID}' AND Status='Approved'`,
         ResultType: 'entity_object'
       });
@@ -179,8 +180,8 @@ export class ShareModalComponent implements OnInit {
         const permissionPromises = result.Results.map(async (perm) => {
           if (perm.UserID) {
             const userRv = new RunView();
-            const userResult = await userRv.RunView<UserEntity>({
-              EntityName: 'Users',
+            const userResult = await userRv.RunView<MJUserEntity>({
+              EntityName: 'MJ: Users',
               ExtraFilter: `ID='${perm.UserID}'`,
               ResultType: 'entity_object'
             });
@@ -204,6 +205,8 @@ export class ShareModalComponent implements OnInit {
       }
     } catch (error) {
       console.error('Failed to load permissions:', error);
+    } finally {
+      this.cdr.detectChanges();
     }
   }
 
@@ -235,8 +238,8 @@ export class ShareModalComponent implements OnInit {
     try {
       // Look up user by email
       const rv = new RunView();
-      const userResult = await rv.RunView<UserEntity>({
-        EntityName: 'Users',
+      const userResult = await rv.RunView<MJUserEntity>({
+        EntityName: 'MJ: Users',
         ExtraFilter: `Email='${email}'`,
         ResultType: 'entity_object'
       });
@@ -259,6 +262,7 @@ export class ShareModalComponent implements OnInit {
       this.permissions.push(newPermission);
       this.newUserEmail = '';
       this.toastService.success(`Access granted to ${user.Email}`);
+      this.cdr.detectChanges();
     } catch (error) {
       console.error('Failed to add user:', error);
       this.toastService.error('Failed to add user');
@@ -278,7 +282,7 @@ export class ShareModalComponent implements OnInit {
     try {
       if (permission.permissionId) {
         const md = new Metadata();
-        const permEntity = await md.GetEntityObject<ResourcePermissionEntity>('Resource Permissions');
+        const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
         await permEntity.Load(permission.permissionId);
 
         const deleteResult = await permEntity.Delete();
@@ -298,7 +302,7 @@ export class ShareModalComponent implements OnInit {
   private async savePermission(permission: SharePermission): Promise<void> {
     try {
       const md = new Metadata();
-      const permEntity = await md.GetEntityObject<ResourcePermissionEntity>('Resource Permissions');
+      const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
 
       if (permission.permissionId) {
         // Update existing permission

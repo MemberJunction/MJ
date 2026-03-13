@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseFileHandlerAction } from "../utilities/base-file-handler";
-import * as PDFDocument from "pdfkit";
+import PDFDocument from "pdfkit";
 import { marked } from "marked";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 import { BaseAction } from '@memberjunction/actions';

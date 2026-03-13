@@ -3,10 +3,11 @@ import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
-import { AIAgentTypeEntity, AIAgentPromptEntity, AIAgentActionEntity, ActionEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity, MJAIAgentPromptEntity, MJAIAgentActionEntity, MJActionEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentManagementService } from './ai-agent-management.service';
-import { AIPromptEntityExtended, AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { UUIDsEqual } from '@memberjunction/global';
 export interface CreateSubAgentConfig {
   /** Title for the dialog */
   title?: string;
@@ -22,13 +23,13 @@ export interface CreateSubAgentConfig {
 
 export interface CreateSubAgentResult {
   /** Created sub-agent entity (not saved to database) */
-  subAgent: AIAgentEntityExtended;
+  subAgent: MJAIAgentEntityExtended;
   /** Agent prompt link entities (not saved to database) */
-  agentPrompts?: AIAgentPromptEntity[];
+  agentPrompts?: MJAIAgentPromptEntity[];
   /** Agent action link entities (not saved to database) */
-  agentActions?: AIAgentActionEntity[];
+  agentActions?: MJAIAgentActionEntity[];
   /** Any new prompts created within the dialog */
-  newPrompts?: AIPromptEntityExtended[];
+  newPrompts?: MJAIPromptEntityExtended[];
   /** Any new prompt templates created within the dialog */
   newPromptTemplates?: any[];
   /** Any new template contents created within the dialog */
@@ -61,21 +62,21 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
   isSaving$ = new BehaviorSubject<boolean>(false);
   
   // Data
-  availableAgentTypes$ = new BehaviorSubject<AIAgentTypeEntity[]>([]);
-  availablePrompts$ = new BehaviorSubject<AIPromptEntityExtended[]>([]);
-  availableActions$ = new BehaviorSubject<ActionEntity[]>([]);
+  availableAgentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
+  availablePrompts$ = new BehaviorSubject<MJAIPromptEntityExtended[]>([]);
+  availableActions$ = new BehaviorSubject<MJActionEntity[]>([]);
   
   // Entities (not saved to database)
-  subAgentEntity: AIAgentEntityExtended | null = null;
-  linkedPrompts: AIPromptEntityExtended[] = [];
-  linkedActions: ActionEntity[] = [];
+  subAgentEntity: MJAIAgentEntityExtended | null = null;
+  linkedPrompts: MJAIPromptEntityExtended[] = [];
+  linkedActions: MJActionEntity[] = [];
   
   // Link entities for database relationships
-  agentPromptLinks: AIAgentPromptEntity[] = [];
-  agentActionLinks: AIAgentActionEntity[] = [];
+  agentPromptLinks: MJAIAgentPromptEntity[] = [];
+  agentActionLinks: MJAIAgentActionEntity[] = [];
   
   // Storage for new entities created within dialog
-  newlyCreatedPrompts: AIPromptEntityExtended[] = [];
+  newlyCreatedPrompts: MJAIPromptEntityExtended[] = [];
   newlyCreatedPromptTemplates: any[] = [];
   newlyCreatedTemplateContents: any[] = [];
 
@@ -107,7 +108,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
       executionMode: new FormControl('Sequential'),
       purpose: new FormControl(''),
       userMessage: new FormControl(''),
-      // systemMessage: new FormControl(''), // SystemMessage does not exist on AIAgentEntity
+      // systemMessage: new FormControl(''), // SystemMessage does not exist on MJAIAgentEntity
       modelSelectionMode: new FormControl('Agent Type'),
       temperature: new FormControl(0.1),
       topP: new FormControl(0.1),
@@ -143,7 +144,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
         },
         // Available prompts (index 1)
         {
-          EntityName: 'AI Prompts',
+          EntityName: 'MJ: AI Prompts',
           ExtraFilter: `Status = 'Active'`,
           OrderBy: 'Name ASC',
           MaxRows: 1000,
@@ -151,7 +152,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
         },
         // Available actions (index 2)
         {
-          EntityName: 'Actions',
+          EntityName: 'MJ: Actions',
           ExtraFilter: `Status = 'Active'`,
           OrderBy: 'Name ASC',
           MaxRows: 1000,
@@ -161,7 +162,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
 
       // Process agent types (index 0)
       if (results[0].Success && results[0].Results) {
-        this.availableAgentTypes$.next(results[0].Results as AIAgentTypeEntity[]);
+        this.availableAgentTypes$.next(results[0].Results as MJAIAgentTypeEntity[]);
         
         // Set default type if not specified
         if (!this.config.initialTypeID && results[0].Results.length > 0) {
@@ -171,7 +172,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
 
       // Process available prompts (index 1)
       if (results[1].Success && results[1].Results) {
-        this.availablePrompts$.next(results[1].Results as AIPromptEntityExtended[]);
+        this.availablePrompts$.next(results[1].Results as MJAIPromptEntityExtended[]);
       }
 
       // Process available actions (index 2)
@@ -183,7 +184,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
 
       // Create the sub-agent entity
       const md = new Metadata();
-      this.subAgentEntity = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+      this.subAgentEntity = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
       this.subAgentEntity.NewRecord();
       
       // Set default values
@@ -225,7 +226,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
     this.subAgentEntity.ExecutionMode = formValue.executionMode;
     this.subAgentEntity.Set('Purpose', formValue.purpose || '');
     this.subAgentEntity.Set('UserMessage', formValue.userMessage || '');
-    // Note: SystemMessage does not exist on AIAgentEntityExtended, removing this line
+    // Note: SystemMessage does not exist on MJAIAgentEntityExtended, removing this line
     this.subAgentEntity.ModelSelectionMode = formValue.modelSelectionMode;
     this.subAgentEntity.Set('Temperature', formValue.temperature);
     this.subAgentEntity.Set('TopP', formValue.topP);
@@ -251,8 +252,8 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
         next: async (result) => {
           if (result && result.selectedPrompts.length > 0) {
             // Filter out already linked prompts
-            const newPrompts = result.selectedPrompts.filter(prompt => 
-              !linkedPromptIds.includes(prompt.ID)
+            const newPrompts = result.selectedPrompts.filter(prompt =>
+              !linkedPromptIds.some(id => UUIDsEqual(id, prompt.ID))
             );
             
             if (newPrompts.length > 0) {
@@ -262,7 +263,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
               // Create agent prompt link entities
               const md = new Metadata();
               for (const prompt of newPrompts) {
-                const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
+                const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
                 agentPrompt.NewRecord();
                 agentPrompt.AgentID = this.subAgentEntity!.ID;
                 agentPrompt.PromptID = prompt.ID;
@@ -331,7 +332,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
               
               // Create agent prompt link entity
               const md = new Metadata();
-              const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
+              const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
               agentPrompt.NewRecord();
               agentPrompt.AgentID = this.subAgentEntity!.ID;
               agentPrompt.PromptID = result.prompt.ID;
@@ -391,8 +392,8 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
         next: async (selectedActions) => {
           if (selectedActions && selectedActions.length > 0) {
             // Filter out already linked actions
-            const newActions = selectedActions.filter(action => 
-              !linkedActionIds.includes(action.ID)
+            const newActions = selectedActions.filter(action =>
+              !linkedActionIds.some(id => UUIDsEqual(id, action.ID))
             );
             
             if (newActions.length > 0) {
@@ -402,7 +403,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
               // Create agent action link entities
               const md = new Metadata();
               for (const action of newActions) {
-                const agentAction = await md.GetEntityObject<AIAgentActionEntity>('AI Agent Actions');
+                const agentAction = await md.GetEntityObject<MJAIAgentActionEntity>('MJ: AI Agent Actions');
                 agentAction.NewRecord();
                 agentAction.AgentID = this.subAgentEntity!.ID;
                 agentAction.ActionID = action.ID;
@@ -441,21 +442,21 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  public removePrompt(prompt: AIPromptEntityExtended) {
+  public removePrompt(prompt: MJAIPromptEntityExtended) {
     // Remove from UI
-    const promptIndex = this.linkedPrompts.findIndex(p => p.ID === prompt.ID);
+    const promptIndex = this.linkedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
     if (promptIndex >= 0) {
       this.linkedPrompts.splice(promptIndex, 1);
     }
     
     // Remove from link entities
-    const linkIndex = this.agentPromptLinks.findIndex(ap => ap.PromptID === prompt.ID);
+    const linkIndex = this.agentPromptLinks.findIndex(ap => UUIDsEqual(ap.PromptID, prompt.ID));
     if (linkIndex >= 0) {
       this.agentPromptLinks.splice(linkIndex, 1);
     }
     
     // Remove from newly created prompts if it was created in this dialog
-    const newPromptIndex = this.newlyCreatedPrompts.findIndex(p => p.ID === prompt.ID);
+    const newPromptIndex = this.newlyCreatedPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
     if (newPromptIndex >= 0) {
       this.newlyCreatedPrompts.splice(newPromptIndex, 1);
     }
@@ -469,15 +470,15 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
     );
   }
 
-  public removeAction(action: ActionEntity) {
+  public removeAction(action: MJActionEntity) {
     // Remove from UI
-    const actionIndex = this.linkedActions.findIndex(a => a.ID === action.ID);
+    const actionIndex = this.linkedActions.findIndex(a => UUIDsEqual(a.ID, action.ID));
     if (actionIndex >= 0) {
       this.linkedActions.splice(actionIndex, 1);
     }
     
     // Remove from link entities
-    const linkIndex = this.agentActionLinks.findIndex(aa => aa.ActionID === action.ID);
+    const linkIndex = this.agentActionLinks.findIndex(aa => UUIDsEqual(aa.ActionID, action.ID));
     if (linkIndex >= 0) {
       this.agentActionLinks.splice(linkIndex, 1);
     }

@@ -17,17 +17,17 @@ import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import {
     ResourceData,
-    MCPServerEntity,
-    MCPServerConnectionEntity,
-    MCPServerToolEntity,
-    MCPToolExecutionLogEntity,
+    MJMCPServerEntity,
+    MJMCPServerConnectionEntity,
+    MJMCPServerToolEntity,
+    MJMCPToolExecutionLogEntity,
     MCPEngine,
     UserInfoEngine,
-    OAuthAuthorizationStateEntity,
-    OAuthClientRegistrationEntity,
-    OAuthTokenEntity
+    MJOAuthAuthorizationStateEntity,
+    MJOAuthClientRegistrationEntity,
+    MJOAuthTokenEntity
 } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
 
 /**
@@ -568,7 +568,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             const rv = new RunView();
             const [, logsResult] = await Promise.all([
                 MCPEngine.Instance.Config(forceRefresh),
-                rv.RunView<MCPToolExecutionLogEntity>({
+                rv.RunView<MJMCPToolExecutionLogEntity>({
                     EntityName: 'MJ: MCP Tool Execution Logs',
                     ExtraFilter: `StartedAt >= DATEADD(day, -7, GETUTCDATE())`,
                     OrderBy: 'StartedAt DESC',
@@ -651,32 +651,32 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     private enrichServerData(): void {
         for (const server of this.servers) {
-            server.ConnectionCount = this.connections.filter(c => c.MCPServerID === server.ID).length;
-            server.ToolCount = this.tools.filter(t => t.MCPServerID === server.ID).length;
+            server.ConnectionCount = this.connections.filter(c => UUIDsEqual(c.MCPServerID, server.ID)).length
+            server.ToolCount = this.tools.filter(t => UUIDsEqual(t.MCPServerID, server.ID)).length
         }
     }
 
     private enrichConnectionData(): void {
         for (const conn of this.connections) {
-            const server = this.servers.find(s => s.ID === conn.MCPServerID);
+            const server = this.servers.find(s => UUIDsEqual(s.ID, conn.MCPServerID));
             conn.ServerName = server?.Name ?? 'Unknown';
         }
     }
 
     private enrichToolData(): void {
         for (const tool of this.tools) {
-            const server = this.servers.find(s => s.ID === tool.MCPServerID);
+            const server = this.servers.find(s => UUIDsEqual(s.ID, tool.MCPServerID));
             tool.ServerName = server?.Name ?? 'Unknown';
         }
     }
 
     private enrichLogData(): void {
         for (const log of this.executionLogs) {
-            const conn = this.connections.find(c => c.ID === log.ConnectionID);
+            const conn = this.connections.find(c => UUIDsEqual(c.ID, log.ConnectionID));
             log.ConnectionName = conn?.Name ?? log.ConnectionName ?? 'Unknown';
             // Add server name via connection
             if (conn) {
-                const server = this.servers.find(s => s.ID === conn.MCPServerID);
+                const server = this.servers.find(s => UUIDsEqual(s.ID, conn.MCPServerID));
                 log.ServerName = server?.Name ?? 'Unknown';
             } else {
                 log.ServerName = log.ServerName ?? 'Unknown';
@@ -694,7 +694,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Maps database log entity to UI interface format
      * Handles column name differences between DB schema and UI interface
      */
-    private mapLogFromDatabase(dbLog: MCPToolExecutionLogEntity): MCPExecutionLogData {
+    private mapLogFromDatabase(dbLog: MJMCPToolExecutionLogEntity): MCPExecutionLogData {
         // Determine status from Success boolean
         let status: string;
         if (dbLog.Success === true) {
@@ -926,8 +926,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     public async deleteServer(server: MCPServerData): Promise<void> {
         // Check for related connections first
-        const relatedConnections = this.connections.filter((c: MCPConnectionData) => c.MCPServerID === server.ID);
-        const relatedTools = this.tools.filter((t: MCPToolData) => t.MCPServerID === server.ID);
+        const relatedConnections = this.connections.filter((c: MCPConnectionData) => UUIDsEqual(c.MCPServerID, server.ID));
+        const relatedTools = this.tools.filter((t: MCPToolData) => UUIDsEqual(t.MCPServerID, server.ID));
 
         if (relatedConnections.length > 0 || relatedTools.length > 0) {
             const parts: string[] = [];
@@ -974,7 +974,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
         try {
             const md = new Metadata();
-            const entity = await md.GetEntityObject<MCPServerEntity>('MJ: MCP Servers');
+            const entity = await md.GetEntityObject<MJMCPServerEntity>('MJ: MCP Servers');
             const loaded = await entity.Load(server.ID);
             if (!loaded) {
                 this.ErrorMessage = `Server not found: ${server.Name}`;
@@ -1002,7 +1002,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      */
     private async deleteToolInternal(toolId: string): Promise<void> {
         const md = new Metadata();
-        const entity = await md.GetEntityObject<MCPServerToolEntity>('MJ: MCP Server Tools');
+        const entity = await md.GetEntityObject<MJMCPServerToolEntity>('MJ: MCP Server Tools');
         const loaded = await entity.Load(toolId);
         if (!loaded) {
             throw new Error(`Tool not found`);
@@ -1039,7 +1039,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             console.log(`[MCPDashboard] Found ${logsResult.Results.length} execution logs to delete`);
             for (const log of logsResult.Results) {
                 console.log(`[MCPDashboard] Loading execution log ${log.ID}...`);
-                const logEntity = await md.GetEntityObject<MCPToolExecutionLogEntity>('MJ: MCP Tool Execution Logs');
+                const logEntity = await md.GetEntityObject<MJMCPToolExecutionLogEntity>('MJ: MCP Tool Execution Logs');
                 const loaded = await logEntity.Load(log.ID);
                 console.log(`[MCPDashboard] Load result for execution log ${log.ID}: ${loaded}`);
                 if (loaded) {
@@ -1067,7 +1067,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             console.log(`[MCPDashboard] Found ${authStatesResult.Results.length} OAuth Authorization States to delete`);
             for (const state of authStatesResult.Results) {
                 console.log(`[MCPDashboard] Loading OAuth Authorization State ${state.ID}...`);
-                const stateEntity = await md.GetEntityObject<OAuthAuthorizationStateEntity>('MJ: O Auth Authorization States');
+                const stateEntity = await md.GetEntityObject<MJOAuthAuthorizationStateEntity>('MJ: O Auth Authorization States');
                 const loaded = await stateEntity.Load(state.ID);
                 console.log(`[MCPDashboard] Load result for OAuth Authorization State ${state.ID}: ${loaded}`);
                 if (loaded) {
@@ -1095,7 +1095,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             console.log(`[MCPDashboard] Found ${clientRegsResult.Results.length} OAuth Client Registrations to delete`);
             for (const reg of clientRegsResult.Results) {
                 console.log(`[MCPDashboard] Loading OAuth Client Registration ${reg.ID}...`);
-                const regEntity = await md.GetEntityObject<OAuthClientRegistrationEntity>('MJ: O Auth Client Registrations');
+                const regEntity = await md.GetEntityObject<MJOAuthClientRegistrationEntity>('MJ: O Auth Client Registrations');
                 const loaded = await regEntity.Load(reg.ID);
                 console.log(`[MCPDashboard] Load result for OAuth Client Registration ${reg.ID}: ${loaded}`);
                 if (loaded) {
@@ -1123,7 +1123,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             console.log(`[MCPDashboard] Found ${tokensResult.Results.length} OAuth Tokens to delete`);
             for (const token of tokensResult.Results) {
                 console.log(`[MCPDashboard] Loading OAuth Token ${token.ID}...`);
-                const tokenEntity = await md.GetEntityObject<OAuthTokenEntity>('MJ: O Auth Tokens');
+                const tokenEntity = await md.GetEntityObject<MJOAuthTokenEntity>('MJ: O Auth Tokens');
                 const loaded = await tokenEntity.Load(token.ID);
                 console.log(`[MCPDashboard] Load result for OAuth Token ${token.ID}: ${loaded}`);
                 if (loaded) {
@@ -1141,7 +1141,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
         // Now delete the connection itself
         console.log('[MCPDashboard] All related records deleted. Now deleting the connection itself...');
-        const entity = await md.GetEntityObject<MCPServerConnectionEntity>('MJ: MCP Server Connections');
+        const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>('MJ: MCP Server Connections');
         const loaded = await entity.Load(connectionId);
         if (!loaded) {
             throw new Error(`Connection not found`);
@@ -1180,7 +1180,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     public async deleteConnection(connection: MCPConnectionData): Promise<void> {
         // Check for related execution logs
-        const relatedLogs = this.executionLogs.filter(l => l.ConnectionID === connection.ID);
+        const relatedLogs = this.executionLogs.filter(l => UUIDsEqual(l.ConnectionID, connection.ID));
 
         if (relatedLogs.length > 0) {
             if (!confirm(
@@ -1222,7 +1222,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Toggle tool card expansion for details view
      */
     public toggleToolExpand(tool: MCPToolData): void {
-        if (this.ExpandedToolId === tool.ID) {
+        if (UUIDsEqual(this.ExpandedToolId, tool.ID)) {
             this.ExpandedToolId = null;
         } else {
             this.ExpandedToolId = tool.ID;
@@ -1234,7 +1234,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Check if a tool card is expanded
      */
     public isToolExpanded(tool: MCPToolData): boolean {
-        return this.ExpandedToolId === tool.ID;
+        return UUIDsEqual(this.ExpandedToolId, tool.ID);
     }
 
     /**
@@ -1751,7 +1751,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         if (!log.InputArgs && !log.Result) {
             try {
                 const rv = new RunView();
-                const result = await rv.RunView<MCPToolExecutionLogEntity>({
+                const result = await rv.RunView<MJMCPToolExecutionLogEntity>({
                     EntityName: 'MJ: MCP Tool Execution Logs',
                     ExtraFilter: `ID='${log.ID}'`,
                     ResultType: 'simple'
@@ -1769,7 +1769,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
 
         // Enrich with server name
-        const connection = this.connections.find(c => c.ID === log.ConnectionID);
+        const connection = this.connections.find(c => UUIDsEqual(c.ID, log.ConnectionID));
         if (connection) {
             log.ServerName = connection.ServerName;
         }
@@ -1796,8 +1796,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.SelectedLog = null;
 
         // Open test tool dialog with pre-selected tool and connection
-        const tool = this.tools.find(t => t.ID === event.toolId);
-        const connection = this.connections.find(c => c.ID === event.connectionId);
+        const tool = this.tools.find(t => UUIDsEqual(t.ID, event.toolId));
+        const connection = this.connections.find(c => UUIDsEqual(c.ID, event.connectionId));
 
         if (tool) {
             this.TestToolServerID = tool.MCPServerID;
@@ -1819,7 +1819,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Toggles server card expansion
      */
     public toggleServerExpand(server: MCPServerData): void {
-        if (this.ExpandedServerID === server.ID) {
+        if (UUIDsEqual(this.ExpandedServerID, server.ID)) {
             this.ExpandedServerID = null;
         } else {
             this.ExpandedServerID = server.ID;
@@ -1833,7 +1833,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Toggles connection card expansion
      */
     public toggleConnectionExpand(conn: MCPConnectionData): void {
-        if (this.ExpandedConnectionID === conn.ID) {
+        if (UUIDsEqual(this.ExpandedConnectionID, conn.ID)) {
             this.ExpandedConnectionID = null;
         } else {
             this.ExpandedConnectionID = conn.ID;
@@ -1847,30 +1847,30 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Checks if a server card is expanded
      */
     public isServerExpanded(server: MCPServerData): boolean {
-        return this.ExpandedServerID === server.ID;
+        return UUIDsEqual(this.ExpandedServerID, server.ID);
     }
 
     /**
      * Checks if a connection card is expanded
      */
     public isConnectionExpanded(conn: MCPConnectionData): boolean {
-        return this.ExpandedConnectionID === conn.ID;
+        return UUIDsEqual(this.ExpandedConnectionID, conn.ID);
     }
 
     /**
      * Gets tools for a specific server
      */
     public getToolsForServer(serverId: string): MCPToolData[] {
-        return this.tools.filter(t => t.MCPServerID === serverId);
+        return this.tools.filter(t => UUIDsEqual(t.MCPServerID, serverId));
     }
 
     /**
      * Gets tools for a specific connection (via its server)
      */
     public getToolsForConnection(connectionId: string): MCPToolData[] {
-        const connection = this.connections.find(c => c.ID === connectionId);
+        const connection = this.connections.find(c => UUIDsEqual(c.ID, connectionId));
         if (!connection) return [];
-        return this.tools.filter(t => t.MCPServerID === connection.MCPServerID);
+        return this.tools.filter(t => UUIDsEqual(t.MCPServerID, connection.MCPServerID));
     }
 
     /**

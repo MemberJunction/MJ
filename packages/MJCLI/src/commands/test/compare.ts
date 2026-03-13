@@ -1,5 +1,4 @@
 import { Command, Flags, Args } from '@oclif/core';
-import { CompareCommand } from '@memberjunction/testing-cli';
 
 export default class TestCompare extends Command {
   static description = 'Compare test runs for regression detection';
@@ -54,6 +53,8 @@ export default class TestCompare extends Command {
   };
 
   async run(): Promise<void> {
+    const { CompareCommand } = await import('@memberjunction/testing-cli');
+
     const { args, flags } = await this.parse(TestCompare);
 
     try {

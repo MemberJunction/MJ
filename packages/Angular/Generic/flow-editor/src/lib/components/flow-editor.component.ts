@@ -15,6 +15,7 @@ import {
 } from '../interfaces/flow-types';
 import { FlowStateService } from '../services/flow-state.service';
 import { FlowLayoutService } from '../services/flow-layout.service';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 
 /**
  * Generic, entity-agnostic visual flow editor component.
@@ -181,7 +182,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   /** Programmatically select a node */
   SelectNode(nodeId: string): void {
     this.fFlow?.select([nodeId], []);
-    const node = this.Nodes.find(n => n.ID === nodeId) ?? null;
+    const node = this.Nodes.find(n => UUIDsEqual(n.ID, nodeId)) ?? null;
     this.NodeSelected.emit(node);
   }
 
@@ -196,7 +197,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** Update a node's visual status */
   SetNodeStatus(nodeId: string, status: FlowNode['Status'], message?: string): void {
-    const node = this.Nodes.find(n => n.ID === nodeId);
+    const node = this.Nodes.find(n => UUIDsEqual(n.ID, nodeId));
     if (node) {
       node.Status = status;
       node.StatusMessage = message;
@@ -207,7 +208,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   /** Update a node's visual properties and push a new object reference so
    *  OnPush child components (FlowNodeComponent) detect the change. */
   UpdateNode(nodeId: string, changes: Partial<Pick<FlowNode, 'Label' | 'Subtitle' | 'Icon' | 'Status' | 'StatusMessage' | 'IsStartNode' | 'Badges' | 'Data'>>): void {
-    const idx = this.Nodes.findIndex(n => n.ID === nodeId);
+    const idx = this.Nodes.findIndex(n => UUIDsEqual(n.ID, nodeId));
     if (idx === -1) return;
     // Create a new object reference so the OnPush FlowNodeComponent picks up the change
     this.Nodes[idx] = { ...this.Nodes[idx], ...changes };
@@ -216,7 +217,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   /** Update a connection's visual properties in-place (label, color, style, etc.) */
   UpdateConnection(connId: string, changes: Partial<Pick<FlowConnection, 'Label' | 'LabelIcon' | 'LabelIconColor' | 'LabelDetail' | 'Color' | 'Style' | 'Animated'>>): void {
-    const conn = this.Connections.find(c => c.ID === connId);
+    const conn = this.Connections.find(c => UUIDsEqual(c.ID, connId));
     if (!conn) return;
     Object.assign(conn, changes);
     this.cdr.detectChanges();
@@ -225,14 +226,14 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   /** Highlight a sequence of nodes (e.g., execution path) */
   HighlightPath(nodeIds: string[]): void {
     for (const node of this.Nodes) {
-      if (nodeIds.includes(node.ID)) {
+      if (nodeIds.some(id => UUIDsEqual(id, node.ID))) {
         node.Status = 'running';
       }
     }
     // Highlight connections along the path
     for (const conn of this.Connections) {
-      const srcIdx = nodeIds.indexOf(conn.SourceNodeID);
-      const tgtIdx = nodeIds.indexOf(conn.TargetNodeID);
+      const srcIdx = nodeIds.findIndex(id => UUIDsEqual(id, conn.SourceNodeID));
+      const tgtIdx = nodeIds.findIndex(id => UUIDsEqual(id, conn.TargetNodeID));
       if (srcIdx >= 0 && tgtIdx >= 0 && tgtIdx === srcIdx + 1) {
         conn.Animated = true;
       }
@@ -328,7 +329,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
     // Prevent duplicate connections
     const exists = this.Connections.some(
-      c => c.SourcePortID === sourcePortID && c.TargetPortID === targetPortID
+      c => UUIDsEqual(c.SourcePortID, sourcePortID) && UUIDsEqual(c.TargetPortID, targetPortID)
     );
     if (exists) return;
 
@@ -344,7 +345,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   protected onReassignConnection(event: FReassignConnectionEvent): void {
     if (this.ReadOnly) return;
 
-    const conn = this.Connections.find(c => c.ID === event.connectionId);
+    const conn = this.Connections.find(c => UUIDsEqual(c.ID, event.connectionId));
     if (!conn) return;
 
     // If dropped on empty space (no new target/source), discard the reassignment
@@ -379,9 +380,9 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
     // Prevent duplicates
     const duplicate = this.Connections.some(
-      c => c.ID !== conn.ID &&
-           c.SourcePortID === newSourcePortID &&
-           c.TargetPortID === newTargetPortID
+      c => !UUIDsEqual(c.ID, conn.ID) &&
+           UUIDsEqual(c.SourcePortID, newSourcePortID) &&
+           UUIDsEqual(c.TargetPortID, newTargetPortID)
     );
     if (duplicate) return;
 
@@ -453,11 +454,11 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     // that consumers clear their node state before the connection event opens
     // the connection properties panel.
     if (this.selectedNodeIDs.length === 1) {
-      const node = this.Nodes.find(n => n.ID === this.selectedNodeIDs[0]);
+      const node = this.Nodes.find(n => UUIDsEqual(n.ID, this.selectedNodeIDs[0]));
       this.ConnectionSelected.emit(null);
       this.NodeSelected.emit(node ?? null);
     } else if (this.selectedConnectionIDs.length === 1) {
-      const conn = this.Connections.find(c => c.ID === this.selectedConnectionIDs[0]);
+      const conn = this.Connections.find(c => UUIDsEqual(c.ID, this.selectedConnectionIDs[0]));
       this.NodeSelected.emit(null);
       this.ConnectionSelected.emit(conn ?? null);
     } else if (this.selectedNodeIDs.length === 0 && this.selectedConnectionIDs.length === 0) {
@@ -472,7 +473,7 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
     this.pushUndoState();
 
     for (const moved of event.fNodes) {
-      const node = this.Nodes.find(n => n.ID === moved.id);
+      const node = this.Nodes.find(n => UUIDsEqual(n.ID, moved.id));
       if (node) {
         const oldPosition = { ...node.Position };
         node.Position = { X: moved.position.x, Y: moved.position.y };
@@ -588,17 +589,17 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   }
 
   private removeNodeById(nodeId: string): void {
-    const node = this.Nodes.find(n => n.ID === nodeId);
+    const node = this.Nodes.find(n => UUIDsEqual(n.ID, nodeId));
     if (!node) return;
 
-    this.Nodes = this.Nodes.filter(n => n.ID !== nodeId);
+    this.Nodes = this.Nodes.filter(n => !UUIDsEqual(n.ID, nodeId));
 
     /* Remove connections attached to this node */
     const orphaned = this.Connections.filter(
-      c => c.SourceNodeID === nodeId || c.TargetNodeID === nodeId
+      c => UUIDsEqual(c.SourceNodeID, nodeId) || UUIDsEqual(c.TargetNodeID, nodeId)
     );
     this.Connections = this.Connections.filter(
-      c => c.SourceNodeID !== nodeId && c.TargetNodeID !== nodeId
+      c => !UUIDsEqual(c.SourceNodeID, nodeId) && !UUIDsEqual(c.TargetNodeID, nodeId)
     );
     for (const conn of orphaned) {
       this.ConnectionRemoved.emit(conn);
@@ -610,10 +611,10 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   }
 
   private removeConnectionById(connId: string): void {
-    const conn = this.Connections.find(c => c.ID === connId);
+    const conn = this.Connections.find(c => UUIDsEqual(c.ID, connId));
     if (!conn) return;
 
-    this.Connections = this.Connections.filter(c => c.ID !== connId);
+    this.Connections = this.Connections.filter(c => !UUIDsEqual(c.ID, connId));
     this.ConnectionRemoved.emit(conn);
     this.ConnectionsChanged.emit(this.Connections);
     this.cdr.detectChanges();
@@ -690,14 +691,14 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
   private findNodeByPortId(portId: string): string | null {
     for (const node of this.Nodes) {
       for (const port of node.Ports) {
-        if (port.ID === portId) {
+        if (UUIDsEqual(port.ID, portId)) {
           return node.ID;
         }
       }
     }
     // When fConnectOnNode is enabled, Foblex may send the node ID itself
     // instead of a port ID. Check for a direct node ID match as fallback.
-    const directMatch = this.Nodes.find(n => n.ID === portId);
+    const directMatch = this.Nodes.find(n => UUIDsEqual(n.ID, portId));
     if (directMatch) {
       return directMatch.ID;
     }
@@ -709,11 +710,11 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
    * This resolves the raw ID to the correct port ID for the given direction.
    */
   private resolvePortId(rawId: string, nodeId: string, direction: 'input' | 'output'): string {
-    const node = this.Nodes.find(n => n.ID === nodeId);
+    const node = this.Nodes.find(n => UUIDsEqual(n.ID, nodeId));
     if (!node) return rawId;
 
     // If the rawId already matches a port on this node, use it as-is
-    const exactPort = node.Ports.find(p => p.ID === rawId);
+    const exactPort = node.Ports.find(p => UUIDsEqual(p.ID, rawId));
     if (exactPort) return rawId;
 
     // Otherwise, find the first port matching the expected direction
@@ -744,23 +745,23 @@ export class FlowEditorComponent implements OnInit, OnDestroy {
 
   private removeSelectedItems(): void {
     // Remove selected connections
-    const removedConnections = this.Connections.filter(c => this.selectedConnectionIDs.includes(c.ID));
-    this.Connections = this.Connections.filter(c => !this.selectedConnectionIDs.includes(c.ID));
+    const removedConnections = this.Connections.filter(c => this.selectedConnectionIDs.some(id => UUIDsEqual(id, c.ID)));
+    this.Connections = this.Connections.filter(c => !this.selectedConnectionIDs.some(id => UUIDsEqual(id, c.ID)));
     for (const conn of removedConnections) {
       this.ConnectionRemoved.emit(conn);
     }
 
     // Remove selected nodes and their connections
-    const removedNodes = this.Nodes.filter(n => this.selectedNodeIDs.includes(n.ID));
-    this.Nodes = this.Nodes.filter(n => !this.selectedNodeIDs.includes(n.ID));
+    const removedNodes = this.Nodes.filter(n => this.selectedNodeIDs.some(id => UUIDsEqual(id, n.ID)));
+    this.Nodes = this.Nodes.filter(n => !this.selectedNodeIDs.some(id => UUIDsEqual(id, n.ID)));
 
     // Also remove connections attached to deleted nodes
-    const deletedNodeIDs = new Set(this.selectedNodeIDs);
+    const deletedNodeIDs = new Set(this.selectedNodeIDs.map(id => NormalizeUUID(id)));
     const orphanedConnections = this.Connections.filter(
-      c => deletedNodeIDs.has(c.SourceNodeID) || deletedNodeIDs.has(c.TargetNodeID)
+      c => deletedNodeIDs.has(NormalizeUUID(c.SourceNodeID)) || deletedNodeIDs.has(NormalizeUUID(c.TargetNodeID))
     );
     this.Connections = this.Connections.filter(
-      c => !deletedNodeIDs.has(c.SourceNodeID) && !deletedNodeIDs.has(c.TargetNodeID)
+      c => !deletedNodeIDs.has(NormalizeUUID(c.SourceNodeID)) && !deletedNodeIDs.has(NormalizeUUID(c.TargetNodeID))
     );
 
     for (const conn of orphanedConnections) {

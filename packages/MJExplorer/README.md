@@ -1,334 +1,205 @@
-# MemberJunction Explorer
+# MemberJunction Explorer (MJExplorer)
 
-MJExplorer is the primary user interface application for the MemberJunction framework. It provides a comprehensive, extensible web-based interface for managing entities, running reports, creating dashboards, and interacting with all aspects of a MemberJunction environment.
+The primary web-based user interface for the MemberJunction platform. Built with Angular 21, powered by ESBuild and Vite, and backed by a comprehensive library of MJ Angular packages for entity management, dashboards, reports, and AI interactions.
+
+## Architecture
+
+```mermaid
+graph TD
+    subgraph "MJExplorer (This Package)"
+        A[AppModule] --> B[AppComponent]
+        A --> C[Generated Entities]
+        A --> D[Class Registration Manifests]
+    end
+
+    subgraph "Angular Packages"
+        E["ng-explorer-app<br/>(Shell & Routing)"]
+        F["ng-explorer-core<br/>(Entity Browser)"]
+        G["ng-base-forms<br/>(Form Framework)"]
+        H["ng-core-entity-forms<br/>(Generated Forms)"]
+        I["ng-dashboards<br/>(Dashboard System)"]
+        J["ng-explorer-settings<br/>(Settings)"]
+        K["ng-auth-services<br/>(Auth)"]
+    end
+
+    A --> E
+    E --> F
+    E --> G
+    G --> H
+    E --> I
+    E --> J
+    E --> K
+
+    subgraph "UI Libraries"
+        L["Kendo UI"]
+        M["AG Grid"]
+        N["Golden Layout"]
+    end
+
+    subgraph "Data Layer"
+        O["GraphQL Data Provider"]
+        P["MJAPI Server"]
+    end
+
+    O --> P
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style E fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style F fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style G fill:#7c5295,stroke:#563a6b,color:#fff
+    style I fill:#7c5295,stroke:#563a6b,color:#fff
+    style K fill:#b8762f,stroke:#8a5722,color:#fff
+    style O fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Overview
 
-MJExplorer is built with Angular 21 and integrates seamlessly with the MemberJunction ecosystem to provide:
+MJExplorer is a thin Angular application shell that assembles a rich set of MemberJunction Angular packages into a complete user experience. The application itself contains minimal custom code -- the bulk of functionality lives in the `@memberjunction/ng-*` packages.
+
+**Key features:**
 
 - **Entity Management**: Browse, view, create, update, and delete records across all entities
 - **Custom Forms**: Extensible form system with both generated and custom form components
 - **Dashboards**: Interactive dashboard system with customizable widgets and layouts
-- **Reports**: Comprehensive reporting capabilities with export functionality
-- **User Views**: Create and manage custom views with filtering, sorting, and grouping
-- **Authentication**: Integrated authentication supporting both Microsoft Entra ID (MSAL) and Auth0
-- **Real-time Updates**: WebSocket support for real-time data synchronization
-- **File Management**: Integrated file storage and management capabilities
-- **Search**: Full-text search across entities and records
+- **Reports**: Comprehensive reporting with export functionality
+- **User Views**: Custom views with filtering, sorting, and grouping
+- **Authentication**: Microsoft Entra ID (MSAL) and Auth0 integration
+- **Real-time Updates**: WebSocket subscriptions for live data synchronization
+- **File Management**: Integrated file storage and management
+- **Full-text Search**: Search across entities and records
+- **AI Integration**: AI-powered features via the MJ AI subsystem
 
-## Installation
+## Prerequisites
 
-### Prerequisites
-
-- Node.js 18.x or higher
-- npm 9.x or higher
-- MemberJunction API server running (default: http://localhost:4000)
+- Node.js 18+ (20+ recommended)
+- npm 9+
+- MemberJunction API server running (default: `http://localhost:4000`)
 - Valid authentication configuration (MSAL or Auth0)
 
-### Setup
+## Getting Started
 
-1. Clone the MemberJunction repository
-2. Navigate to the MJExplorer package:
-   ```bash
-   cd packages/MJExplorer
-   ```
+### 1. Configure Authentication
 
-3. Install dependencies from the repository root:
-   ```bash
-   cd ../.. # Navigate to repository root
-   npm install
-   ```
-
-4. Configure your environment by copying and updating the environment file:
-   ```bash
-   cd packages/MJExplorer/src/environments
-   cp environment.ts environment.development.ts
-   # Edit environment.development.ts with your settings
-   ```
-
-## Configuration
-
-MJExplorer uses environment-specific configuration files located in `src/environments/`. Key configuration options include:
+Set up your authentication provider in `src/environments/`:
 
 ```typescript
+// environment.ts
 export const environment = {
-  // GraphQL API endpoints
-  GRAPHQL_URI: 'http://localhost:4000/',
-  GRAPHQL_WS_URI: 'ws://localhost:4000/',
-  
-  // Application URL
-  REDIRECT_URI: 'http://localhost:4200/',
-  
-  // Authentication settings (MSAL example)
-  CLIENT_ID: 'your-client-id',
-  TENANT_ID: 'your-tenant-id',
-  CLIENT_AUTHORITY: 'https://login.microsoftonline.com/your-tenant-id',
-  AUTH_TYPE: 'msal', // or 'auth0'
-  
-  // MemberJunction settings
-  MJ_CORE_SCHEMA_NAME: 'admin',
-  
-  // Performance settings
-  AUTOSAVE_DEBOUNCE_MS: 1200,
-  SEARCH_DEBOUNCE_MS: 800,
-  MIN_SEARCH_LENGTH: 3,
-  
-  // Application metadata
-  APPLICATION_NAME: 'Your App Name',
-  APPLICATION_INSTANCE: 'DEV',
-  production: false
+    production: false,
+    CLIENT_ID: 'your-azure-ad-client-id',
+    TENANT_ID: 'your-azure-ad-tenant-id',
+    MJ_CORE_WS_URL: 'ws://localhost:4000',
+    MJ_CORE_HTTP_URL: 'http://localhost:4000',
+    AUTH_TYPE: 'msal'  // or 'auth0'
 };
 ```
 
-### Authentication Configuration
-
-#### Microsoft Entra ID (MSAL)
-
-For MSAL authentication, ensure your Azure AD application is configured with:
-- Redirect URI matching your `REDIRECT_URI` setting
-- Implicit grant flow enabled (if required)
-- Appropriate API permissions
-
-#### Auth0
-
-For Auth0 authentication, configure:
-- `AUTH0_DOMAIN`: Your Auth0 domain
-- `AUTH0_CLIENTID`: Your Auth0 application client ID
-- Callback URL in Auth0 matching your `REDIRECT_URI`
-
-## Usage
-
-### Development Server
-
-Run the development server:
+### 2. Build
 
 ```bash
-npm run start
-```
-
-The application will be available at `http://localhost:4200/` by default.
-
-### Building
-
-Build the application:
-
-```bash
-# Development build
+# From workspace root
 npm run build
 
-# Production build
-npm run build -- --configuration production
-
-# Staging build
-npm run build:stage
+# Or just Explorer
+cd packages/MJExplorer && npm run build
 ```
 
-### Running Tests
+### 3. Start Development Server
 
 ```bash
-npm test
+npm run start:explorer
+# or
+cd packages/MJExplorer && npm start
 ```
 
-## Architecture
+The dev server starts on `http://localhost:4201` with Vite HMR for fast iteration.
 
-### Core Components
+## Build Pipeline
 
-#### App Component (`app.component.ts`)
+```mermaid
+graph LR
+    A[TypeScript + Angular] --> B[ESBuild]
+    B --> C[Vite Dev Server]
+    B --> D[Production Bundle]
+    E[prebuild] --> F["mj codegen manifest<br/>(Supplemental)"]
+    F --> B
 
-The root component that:
-- Initializes authentication
-- Sets up GraphQL client
-- Manages global error handling
-- Coordinates navigation
-
-#### Navigation System
-
-The application uses a drawer-based navigation system provided by `@memberjunction/ng-explorer-core`:
-- Dynamic menu items based on user permissions
-- Support for nested navigation
-- Responsive design for mobile devices
-
-#### Form System
-
-MJExplorer includes a sophisticated form generation system:
-- **Generated Forms**: Automatically created from entity metadata
-- **Custom Forms**: Hand-coded forms for complex business logic
-- **Form Sections**: Modular form components for reusability
-
-### Module Structure
-
-```
-MJExplorer/
-├── src/
-│   ├── app/
-│   │   ├── generated/          # Auto-generated entity forms
-│   │   ├── demo/              # Demo components (like HelloDashboard)
-│   │   ├── app.component.*    # Root application component
-│   │   └── app.module.ts      # Main application module
-│   ├── assets/                # Static assets (images, fonts)
-│   ├── environments/          # Environment configurations
-│   └── styles/               # Global styles and themes
-├── angular.json              # Angular CLI configuration
-└── package.json             # Package dependencies
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style C fill:#7c5295,stroke:#563a6b,color:#fff
+    style D fill:#7c5295,stroke:#563a6b,color:#fff
+    style F fill:#b8762f,stroke:#8a5722,color:#fff
 ```
 
-### Key Dependencies
+- Uses Angular's `application` builder powered by ESBuild
+- Dev server uses Vite with HMR for fast iteration
+- `@memberjunction/*` packages are excluded from Vite prebundling (they are symlinked workspace packages)
+- Source maps configured for full debugging of symlinked packages
 
-#### Angular Packages
-- `@angular/core`: ^18.0.2
-- `@angular/router`: ^18.0.2
-- `@angular/forms`: ^18.0.2
+## Class Registration Manifests
 
-#### MemberJunction Packages
-- `@memberjunction/core`: Core functionality and metadata
-- `@memberjunction/ng-explorer-core`: Navigation and layout components
-- `@memberjunction/ng-core-entity-forms`: Form generation system
-- `@memberjunction/ng-dashboards`: Dashboard framework
-- `@memberjunction/ng-user-view-grid`: Data grid components
-- `@memberjunction/graphql-dataprovider`: GraphQL data access
+MJExplorer uses dual manifests to prevent tree-shaking of `@RegisterClass`-decorated components:
 
-#### UI Framework
-- `@progress/kendo-angular-*`: Comprehensive UI component library
-- `@progress/kendo-theme-default`: Default theme styling
+1. **Pre-built manifest** (`@memberjunction/ng-bootstrap/mj-class-registrations`): All `@memberjunction/*` Angular packages
+2. **Supplemental manifest** (`src/app/generated/class-registrations-manifest.ts`): User-defined components, generated at `prebuild` with `--exclude-packages @memberjunction`
 
-## Custom Development
+## Project Structure
 
-### Creating Custom Forms
-
-For detailed guidance on custom form development, see the [Core Entity Forms documentation](../Angular/Explorer/core-entity-forms/README.md#custom-form-development-guide).
-
-### Adding Custom Dashboards
-
-The HelloDashboard component (`src/app/demo/hello-dashboard/`) provides a comprehensive example of creating custom dashboards. Key concepts:
-
-1. Extend `BaseDashboard` from `@memberjunction/ng-dashboards`
-2. Use `@RegisterClass` decorator for automatic registration
-3. Implement lifecycle methods: `initDashboard()`, `loadData()`, `Refresh()`
-4. Emit events for container communication
-5. Persist user state for preferences
-
-### Extending Navigation
-
-Add custom navigation items by creating components that integrate with the navigation system. See `demo/navigation-item.component.ts` for an example.
-
-## Integration with MemberJunction
-
-### Entity Management
-
-MJExplorer automatically generates forms for all entities defined in your MemberJunction metadata:
-
-```typescript
-// Entities are loaded via the generated entities library
-import { LoadGeneratedEntities } from 'mj_generatedentities';
-LoadGeneratedEntities();
+```
+packages/MJExplorer/
+  src/
+    app/
+      app.module.ts         # Root NgModule
+      app.component.ts      # Root component
+      generated/            # Class registration manifest
+      demo/                 # Demo/example components
+    environments/           # Environment-specific configs
+    assets/                 # Static assets
+  angular.json              # Angular build configuration
+  package.json
+  tsconfig.json
 ```
 
-### Data Access
+## Key Angular Package Dependencies
 
-The application uses GraphQL for all data operations:
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/ng-explorer-app` | Application shell, routing, navigation |
+| `@memberjunction/ng-explorer-core` | Entity browsing, list views |
+| `@memberjunction/ng-base-forms` | Form framework and base components |
+| `@memberjunction/ng-core-entity-forms` | Auto-generated entity CRUD forms |
+| `@memberjunction/ng-dashboards` | Dashboard framework and widgets |
+| `@memberjunction/ng-explorer-settings` | User and application settings |
+| `@memberjunction/ng-explorer-modules` | Additional feature modules |
+| `@memberjunction/ng-auth-services` | Authentication services (MSAL, Auth0) |
+| `@memberjunction/ng-bootstrap` | Angular class registration bootstrap |
+| `@memberjunction/ng-shared` | Shared components and utilities |
+| `@memberjunction/ng-tabstrip` | Tab-based navigation |
+| `@memberjunction/ng-timeline` | Timeline visualization |
+| `@memberjunction/ng-join-grid` | Relationship grid component |
+| `@memberjunction/ng-record-changes` | Version history display |
+| `@memberjunction/graphql-dataprovider` | GraphQL client for MJAPI |
 
-```typescript
-// GraphQL client setup in app.component.ts
-const config = new GraphQLProviderConfigData(
-  token,
-  environment.GRAPHQL_URI,
-  environment.GRAPHQL_WS_URI,
-  tokenRefreshFunction,
-  environment.MJ_CORE_SCHEMA_NAME
-);
-await setupGraphQLClient(config);
-```
+## UI Component Libraries
 
-### Metadata System
+| Library | Usage |
+|---------|-------|
+| Kendo UI for Angular | Grids, dropdowns, buttons, dialogs, inputs, navigation |
+| AG Grid | High-performance data grids |
+| Golden Layout | Flexible window management |
+| dhtmlx-gantt | Gantt chart visualization |
 
-Access entity metadata and system information:
+## Scripts
 
-```typescript
-import { Metadata } from '@memberjunction/core';
-
-const md = new Metadata();
-const entities = md.Entities;
-const currentUser = md.CurrentUser;
-```
-
-## Deployment
-
-### Production Build
-
-1. Update environment configuration for production
-2. Build the application:
-   ```bash
-   npm run build -- --configuration production
-   ```
-3. Deploy the contents of `dist/MJExplorer/` to your web server
-
-### Azure Static Web Apps
-
-The project includes `staticwebapp.config.json` for Azure Static Web Apps deployment. Configure:
-- Authentication providers
-- Routing rules
-- API proxying
-
-## Performance Optimization
-
-### Build Optimization
-
-- Tree shaking is carefully managed to prevent removal of dynamically loaded components
-- Lazy loading for feature modules
-- Production builds use optimization flags
-
-### Runtime Performance
-
-- Debounced autosave (configurable via `AUTOSAVE_DEBOUNCE_MS`)
-- Debounced search (configurable via `SEARCH_DEBOUNCE_MS`)
-- Virtual scrolling for large data sets
-- WebSocket connections for real-time updates
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Authentication Errors**
-   - Verify CLIENT_ID and TENANT_ID/AUTH0_DOMAIN settings
-   - Check redirect URI configuration
-   - Ensure tokens are not expired
-
-2. **GraphQL Connection Issues**
-   - Verify API server is running
-   - Check GRAPHQL_URI and GRAPHQL_WS_URI settings
-   - Review browser console for network errors
-
-3. **Missing Forms**
-   - Ensure entity metadata is properly configured
-   - Run code generation if forms are missing
-   - Check for TypeScript compilation errors
-
-### Debug Mode
-
-Enable detailed logging:
-
-```typescript
-import { SetProductionStatus, LogStatus } from '@memberjunction/core';
-SetProductionStatus(false); // Enable debug logging
-```
-
-## Contributing
-
-When contributing to MJExplorer:
-
-1. Follow the existing code style and patterns
-2. Update tests for new functionality
-3. Document new features and configuration options
-4. Ensure builds pass without errors
-5. Test across different authentication providers
+| Script | Description |
+|--------|-------------|
+| `npm start` | Start dev server on port 4201 with Vite HMR |
+| `npm run build` | Production build with ESBuild |
+| `npm run start:stage` | Start with staging configuration |
+| `npm run build:stage` | Build with staging configuration |
+| `npm run watch` | Build in watch mode |
+| `npm test` | Run unit tests |
 
 ## License
 
-MJExplorer is part of the MemberJunction framework. See the main project LICENSE file for details.
-
-## Support
-
-For support and documentation:
-- [MemberJunction Documentation](https://docs.memberjunction.org)
-- [GitHub Issues](https://github.com/MemberJunction/MJ/issues)
-- [Community Forum](https://community.memberjunction.org)
+ISC

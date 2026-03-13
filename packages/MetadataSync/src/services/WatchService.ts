@@ -7,7 +7,7 @@ import { loadEntityConfig, loadSyncConfig } from '../config';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { configManager } from '../lib/config-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
-import type { SqlLoggingSession } from '@memberjunction/sqlserver-dataprovider';
+import type { SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
 export interface WatchOptions {
   dir?: string;

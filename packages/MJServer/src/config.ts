@@ -140,6 +140,36 @@ const scheduledJobsSchema = z.object({
   staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
 });
 
+const queryDialectSchema = z.object({
+  /** When true, saving a Query entity auto-generates QuerySQL entries for configured target dialects */
+  autoConvertOnSave: zodBooleanWithTransforms().default(false),
+  /** List of SQLDialect PlatformKey values to auto-convert to (e.g., ['postgresql']) */
+  targetPlatforms: z.array(z.string()).optional().default([]),
+});
+
+const multiTenancySchema = z.object({
+  /** Master switch — when false (default), no tenant isolation is applied */
+  enabled: zodBooleanWithTransforms().default(false),
+  /** How the tenant ID is determined for each request */
+  contextSource: z.enum(['header', 'linkedEntity', 'custom']).default('header'),
+  /** HTTP header name used when contextSource is 'header' */
+  tenantHeader: z.string().default('X-Tenant-ID'),
+  /** Whether scopedEntities is an allowlist or denylist of entities to filter */
+  scopingStrategy: z.enum(['allowlist', 'denylist']).default('denylist'),
+  /** Entities included/excluded from tenant filtering based on scopingStrategy */
+  scopedEntities: z.array(z.string()).default([]),
+  /** When true, entities in the __mj core schema are never tenant-filtered */
+  autoExcludeCoreEntities: zodBooleanWithTransforms().default(true),
+  /** Default column name containing the tenant identifier */
+  defaultTenantColumn: z.string().default('OrganizationID'),
+  /** Per-entity overrides for the tenant column name: { "EntityName": "ColumnName" } */
+  entityColumnMappings: z.record(z.string()).default({}),
+  /** Roles that bypass tenant filtering entirely */
+  adminRoles: z.array(z.string()).default(['Admin', 'System']),
+  /** Write protection mode: 'strict' rejects, 'log' warns, 'off' skips validation */
+  writeProtection: z.enum(['strict', 'log', 'off']).default('strict'),
+});
+
 const telemetrySchema = z.object({
   enabled: zodBooleanWithTransforms().default(
     process.env.MJ_TELEMETRY_ENABLED !== 'false' // Enabled by default unless explicitly disabled
@@ -158,6 +188,8 @@ const configInfoSchema = z.object({
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
+  queryDialects: queryDialectSchema.optional().default({}),
+  multiTenancy: multiTenancySchema.optional().default({}),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -201,6 +233,8 @@ export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
+export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
+export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**

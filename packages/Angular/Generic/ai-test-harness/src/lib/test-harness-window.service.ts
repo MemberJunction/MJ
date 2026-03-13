@@ -1,6 +1,6 @@
 import { Injectable, ViewContainerRef, ComponentRef } from '@angular/core';
 import { WindowService, WindowRef, WindowSettings } from '@progress/kendo-angular-dialog';
-import { AIAgentEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AITestHarnessWindowComponent, AITestHarnessWindowData } from './ai-test-harness-window.component';
 import { Observable, Subject } from 'rxjs';
 
@@ -36,7 +36,7 @@ export class TestHarnessWindowService {
      */
     openAgentTestHarness(options: {
         agentId?: string;
-        agent?: AIAgentEntityExtended;
+        agent?: MJAIAgentEntityExtended;
         title?: string;
         width?: string | number;
         height?: string | number;
@@ -63,7 +63,7 @@ export class TestHarnessWindowService {
      */
     openPromptTestHarness(options: {
         promptId?: string;
-        prompt?: AIPromptEntityExtended;
+        prompt?: MJAIPromptEntityExtended;
         title?: string;
         width?: string | number;
         height?: string | number;

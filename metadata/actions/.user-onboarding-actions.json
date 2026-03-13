@@ -1,7 +1,7 @@
 [
   {
     "fields": {
-      "CategoryID": "@lookup:Action Categories.Name=User Management",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=User Management",
       "Name": "Validate Email Unique",
       "Description": "Validates that an email address is not already in use by another user in the system",
       "Type": "Custom",
@@ -12,7 +12,7 @@
       "DriverClass": "ValidateEmailUniqueAction"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -86,7 +86,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -123,13 +123,13 @@
       "ID": "540BFDE1-02B5-432C-9490-BD34AF853FE8"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:28.595Z",
-      "checksum": "7c47dfecb5c1eded5a71e00a1b1b6e3ab46320150d707f3f4ae645626dec82bb"
+      "lastModified": "2026-02-13T21:09:13.937Z",
+      "checksum": "a713702260523b3a3a09c8a8c26fe3535c7a8bd36fb0ee2b1a94a42fab3f7dea"
     }
   },
   {
     "fields": {
-      "CategoryID": "@lookup:Action Categories.Name=User Management",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=User Management",
       "Name": "Assign User Roles",
       "Description": "Assigns one or more roles to a user by creating UserRole associations. Accepts either a single role name (RoleName) or an array of role names (RoleNames).",
       "Type": "Custom",
@@ -141,7 +141,7 @@
       "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -269,7 +269,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -351,13 +351,13 @@
       "ID": "873F5441-D1A9-497B-AE32-F9D1A23843C6"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:28.596Z",
-      "checksum": "04f00abb3b3f261f90a9953b95f3cbf031844be626b6aa75df94a861859bb275"
+      "lastModified": "2026-02-13T21:09:13.938Z",
+      "checksum": "e5f1f7e3db21b1e6667a675dbc14eaf24ed686e3208b3187a655985565a14931"
     }
   },
   {
     "fields": {
-      "CategoryID": "@lookup:Action Categories.Name=User Management",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=User Management",
       "Name": "Create User",
       "Description": "Creates a new user in the MemberJunction system with validation and optional employee linking",
       "Type": "Custom",
@@ -369,7 +369,7 @@
       "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -535,7 +535,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -602,13 +602,13 @@
       "ID": "4A57DE26-16DB-47A4-82AB-DFC74B3152FA"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:28.597Z",
-      "checksum": "4260b2bde170318958a429d475c8b51093234c793667e2d8189e983cabf3bd35"
+      "lastModified": "2026-02-13T21:09:13.940Z",
+      "checksum": "880a8b1b363b7eca3dcf963ddc65148c1119eb5ccaf48928ae56874f5e065244"
     }
   },
   {
     "fields": {
-      "CategoryID": "@lookup:Action Categories.Name=User Management",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=User Management",
       "Name": "Create Employee",
       "Description": "Creates a new employee record in the MemberJunction system",
       "Type": "Custom",
@@ -620,7 +620,7 @@
       "ParentID": "2504E288-ADF7-4913-A627-AA14276BAA55"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -785,7 +785,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -852,8 +852,8 @@
       "ID": "CC9C1E62-8AB9-4A46-886D-66F6B4295982"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:28.598Z",
-      "checksum": "afb160d10c9cf714f0bf37ad15b3c1a92765e6984e3ca01611ed22fc82854a77"
+      "lastModified": "2026-02-13T21:09:13.941Z",
+      "checksum": "f290051fb765ae9cb4c65f143da0c4a3f4655b86e51c555c9e871f5b5e64d284"
     }
   }
 ]

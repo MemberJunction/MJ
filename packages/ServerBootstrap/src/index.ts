@@ -1,5 +1,5 @@
 /**
- * MemberJunction 3.0 Server Bootstrap
+ * MemberJunction Server Bootstrap
  *
  * Encapsulates all server initialization logic so MJAPI applications become minimal bootstrapping files.
  * This package provides a single `createMJServer` function that handles:
@@ -11,13 +11,14 @@
  * - Server startup with proper lifecycle hooks
  */
 
-import { serve, MJServerOptions, configInfo } from '@memberjunction/server';
+import { serve, MJServerOptions, ServerExtensibilityOptions } from '@memberjunction/server';
+import { DynamicPackageLoader, type DynamicPackageLoad, type DynamicLoadResult } from '@memberjunction/global';
 import { cosmiconfigSync } from 'cosmiconfig';
 
 /**
  * Configuration options for creating an MJ Server
  */
-export interface MJServerConfig {
+export interface MJServerConfig extends ServerExtensibilityOptions {
   /**
    * Path to mj.config.cjs or other config file (optional - will auto-discover if not provided)
    */
@@ -85,6 +86,74 @@ async function discoverAndLoadGeneratedPackages(configResult: any): Promise<void
 }
 
 /**
+ * Loads dynamic packages from installed Open Apps.
+ *
+ * Reads the `dynamicPackages.server` array from mj.config.cjs and uses
+ * DynamicPackageLoader to import each enabled package at runtime. This allows
+ * Open App server packages to register their classes via @RegisterClass
+ * decorators without requiring manual import statements.
+ *
+ * @param configResult - The loaded configuration result
+ */
+async function loadDynamicOpenAppPackages(configResult: { config: Record<string, unknown> }): Promise<DynamicLoadResult[]> {
+  const dynamicPackages = configResult.config?.dynamicPackages as { server?: DynamicPackageLoad[] } | undefined;
+  const serverPackages = dynamicPackages?.server;
+
+  if (!serverPackages || serverPackages.length === 0) {
+    return [];
+  }
+
+  console.log('Loading Open App dynamic packages...');
+  const results = await DynamicPackageLoader.LoadPackages(serverPackages);
+
+  for (const result of results) {
+    if (result.Success) {
+      const hasConfig = result.Result && Object.keys(result.Result).length > 0;
+      console.log(`  ✓ Loaded Open App package: ${result.PackageName}${hasConfig ? ' (returned extensibility config)' : ''}`);
+    } else {
+      console.error(`  ✗ Failed to load Open App package ${result.PackageName}: ${result.Error}`);
+    }
+  }
+  console.log('');
+
+  return results;
+}
+
+/**
+ * Array-valued keys on ServerExtensibilityOptions that can be merged
+ * from DynamicPackageResult values returned by Open App startup functions.
+ */
+const MERGEABLE_KEYS = [
+  'ExpressMiddlewareBefore',
+  'ExpressMiddlewarePostAuth',
+  'ExpressMiddlewareAfter',
+  'PreRunViewHooks',
+  'PostRunViewHooks',
+  'PreSaveHooks',
+  'ApolloPlugins',
+] as const;
+
+/**
+ * Merges extensibility options returned by a dynamic package startup function
+ * into the target server options. Array properties are concatenated.
+ */
+function mergeExtensibilityOptions(
+  target: MJServerOptions,
+  source: Record<string, unknown>
+): void {
+  for (const key of MERGEABLE_KEYS) {
+    const sourceArray = source[key];
+    if (Array.isArray(sourceArray)) {
+      const existing = (target as Record<string, unknown>)[key];
+      (target as Record<string, unknown>)[key] = [
+        ...(Array.isArray(existing) ? existing : []),
+        ...sourceArray,
+      ];
+    }
+  }
+}
+
+/**
  * Creates and starts a MemberJunction API server with minimal configuration.
  *
  * This is the primary entry point for MJ 3.0 applications. It:
@@ -123,7 +192,7 @@ async function discoverAndLoadGeneratedPackages(configResult: any): Promise<void
  * ```
  */
 export async function createMJServer(options: MJServerConfig = {}): Promise<void> {
-  console.log('🚀 MemberJunction 3.0 Server Bootstrap');
+  console.log('🚀 MemberJunction Server Bootstrap');
   console.log('=====================================\n');
 
   // Configuration has already been loaded and merged by MJServer's config.ts at module init time
@@ -145,6 +214,9 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   await discoverAndLoadGeneratedPackages(configResult);
   console.log('');
 
+  // Load dynamic packages from installed Open Apps and collect returned configs
+  const dynamicResults = await loadDynamicOpenAppPackages(configResult);
+
   // Build resolver paths - auto-discover standard locations if not provided
   // This enables truly minimal MJAPI files without needing to specify paths
   const resolverPaths = options.resolverPaths || [
@@ -161,11 +233,28 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
     console.log('');
   }
 
-  // Build server options
+  // Build server options — pass through all extensibility options
   const serverOptions: MJServerOptions = {
     onBeforeServe: options.beforeStart,
-    restApiOptions: options.restApiOptions
+    restApiOptions: options.restApiOptions,
+    // Extensibility options passthrough
+    ExpressMiddlewareBefore: options.ExpressMiddlewareBefore,
+    ExpressMiddlewarePostAuth: options.ExpressMiddlewarePostAuth,
+    ExpressMiddlewareAfter: options.ExpressMiddlewareAfter,
+    ConfigureExpressApp: options.ConfigureExpressApp,
+    ApolloPlugins: options.ApolloPlugins,
+    SchemaTransformers: options.SchemaTransformers,
+    PreRunViewHooks: options.PreRunViewHooks,
+    PostRunViewHooks: options.PostRunViewHooks,
+    PreSaveHooks: options.PreSaveHooks,
   };
+
+  // Merge extensibility options returned by dynamic package startup functions
+  for (const result of dynamicResults) {
+    if (result.Success && result.Result) {
+      mergeExtensibilityOptions(serverOptions, result.Result);
+    }
+  }
 
   // Start the MJ Server
   // The serve() function from @memberjunction/server handles:
@@ -184,4 +273,5 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
 }
 
 // Re-export types from @memberjunction/server for convenience
-export type { MJServerOptions } from '@memberjunction/server';
+export type { MJServerOptions, ServerExtensibilityOptions } from '@memberjunction/server';
+export type { PreRunViewHook, PostRunViewHook, PreSaveHook } from '@memberjunction/core';

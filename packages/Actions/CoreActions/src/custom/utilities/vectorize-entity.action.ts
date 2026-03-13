@@ -3,7 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 
 import { RegisterClass } from "@memberjunction/global";
 import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
-import { EntityDocumentEntity } from "@memberjunction/core-entities";
+import { MJEntityDocumentEntity } from "@memberjunction/core-entities";
 import { LogStatus } from "@memberjunction/core";
 
 /**
@@ -68,8 +68,8 @@ export class VectorizeEntityAction extends BaseAction {
         let vectorizer = new EntityVectorSyncer();
         await vectorizer.Config(false, params.ContextUser);
 
-        const entityDocuments: EntityDocumentEntity[] = await vectorizer.GetActiveEntityDocuments(entityNames);
-        let results: ActionResultSimple[] = await Promise.all(entityDocuments.map(async (entityDocument: EntityDocumentEntity) => {
+        const entityDocuments: MJEntityDocumentEntity[] = await vectorizer.GetActiveEntityDocuments(entityNames);
+        let results: ActionResultSimple[] = await Promise.all(entityDocuments.map(async (entityDocument: MJEntityDocumentEntity) => {
             try{
                 await vectorizer.VectorizeEntity({
                     entityID: entityDocument.EntityID,

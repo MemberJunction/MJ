@@ -1,5 +1,5 @@
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { VersionLabelEntity } from '@memberjunction/core-entities';
+import { MJVersionLabelEntity } from '@memberjunction/core-entities';
 import { CreateLabelParams, LabelFilter, VersionLabelStatus } from './types';
 import {
     ENTITY_VERSION_LABELS,
@@ -18,11 +18,11 @@ export class LabelManager {
      * Create a new version label and persist it. Does not capture any snapshot
      * items — the caller (VersionHistoryEngine) handles that separately.
      */
-    public async CreateLabel(params: CreateLabelParams, contextUser: UserInfo): Promise<VersionLabelEntity> {
+    public async CreateLabel(params: CreateLabelParams, contextUser: UserInfo): Promise<MJVersionLabelEntity> {
         this.validateCreateParams(params);
 
         const md = new Metadata();
-        const label = await md.GetEntityObject<VersionLabelEntity>(ENTITY_VERSION_LABELS, contextUser);
+        const label = await md.GetEntityObject<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, contextUser);
 
         label.Name = params.Name;
         label.Description = params.Description ?? null;
@@ -47,8 +47,8 @@ export class LabelManager {
     /**
      * Load a single version label by ID.
      */
-    public async GetLabel(labelId: string, contextUser: UserInfo): Promise<VersionLabelEntity> {
-        const label = await loadEntityById<VersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
+    public async GetLabel(labelId: string, contextUser: UserInfo): Promise<MJVersionLabelEntity> {
+        const label = await loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
         if (!label) {
             throw new Error(`Version label '${labelId}' not found`);
         }
@@ -58,14 +58,14 @@ export class LabelManager {
     /**
      * Query version labels with optional filters.
      */
-    public async GetLabels(filter: LabelFilter, contextUser: UserInfo): Promise<VersionLabelEntity[]> {
+    public async GetLabels(filter: LabelFilter, contextUser: UserInfo): Promise<MJVersionLabelEntity[]> {
         const rv = new RunView();
         const filterParts = this.buildFilterClauses(filter);
         const extraFilter = filterParts.length > 0 ? filterParts.join(' AND ') : '';
         const orderBy = filter.OrderBy ?? '__mj_CreatedAt DESC';
         const maxRows = filter.MaxResults ?? 100;
 
-        const result = await rv.RunView<VersionLabelEntity>({
+        const result = await rv.RunView<MJVersionLabelEntity>({
             EntityName: ENTITY_VERSION_LABELS,
             ExtraFilter: extraFilter,
             OrderBy: orderBy,
@@ -112,7 +112,7 @@ export class LabelManager {
         }
     }
 
-    private applyEntityScope(label: VersionLabelEntity, params: CreateLabelParams, md: Metadata): void {
+    private applyEntityScope(label: MJVersionLabelEntity, params: CreateLabelParams, md: Metadata): void {
         if (params.EntityName && (params.Scope === 'Entity' || params.Scope === 'Record')) {
             const entityInfo = md.EntityByName(params.EntityName);
             if (!entityInfo) {
@@ -122,7 +122,7 @@ export class LabelManager {
         }
     }
 
-    private applyRecordScope(label: VersionLabelEntity, params: CreateLabelParams): void {
+    private applyRecordScope(label: MJVersionLabelEntity, params: CreateLabelParams): void {
         if (params.RecordKey && params.Scope === 'Record') {
             label.RecordID = params.RecordKey.ToConcatenatedString();
         }

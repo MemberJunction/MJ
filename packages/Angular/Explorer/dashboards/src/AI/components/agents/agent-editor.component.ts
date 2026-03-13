@@ -1,14 +1,15 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { CreateAgentService, CreateAgentResult } from '@memberjunction/ng-agents';
 import { NavigationService } from '@memberjunction/ng-shared';
 import * as d3 from 'd3';
+import { UUIDsEqual } from '@memberjunction/global';
 
 interface AgentHierarchyNode {
   id: string;
   name: string;
-  agent: AIAgentEntityExtended;
+  agent: MJAIAgentEntityExtended;
   children?: AgentHierarchyNode[];
   parent?: AgentHierarchyNode;
   x?: number;
@@ -38,8 +39,8 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   public isLoading = false;
   public error: string | null = null;
-  public currentAgent: AIAgentEntityExtended | null = null;
-  public allAgents: AIAgentEntityExtended[] = [];
+  public currentAgent: MJAIAgentEntityExtended | null = null;
+  public allAgents: MJAIAgentEntityExtended[] = [];
   public hierarchyData: AgentHierarchyNode | null = null;
   public selectedNode: AgentHierarchyNode | null = null;
   public agentPrompts: AgentPrompt[] = [];
@@ -89,14 +90,14 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       // Load all agents to build hierarchy
       const rv = new RunView();
       const result = await rv.RunView({
-        EntityName: 'AI Agents',
+        EntityName: 'MJ: AI Agents',
         ExtraFilter: '',
         OrderBy: 'Name',
         MaxRows: 1000
       });
 
-      this.allAgents = result.Results as AIAgentEntityExtended[];
-      this.currentAgent = this.allAgents.find(a => a.ID === this.agentId) || null;
+      this.allAgents = result.Results as MJAIAgentEntityExtended[];
+      this.currentAgent = this.allAgents.find(a => UUIDsEqual(a.ID, this.agentId)) || null;
 
       if (this.currentAgent) {
         this.buildHierarchy();
@@ -127,19 +128,19 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     this.selectedNode = this.findNodeInHierarchy(this.hierarchyData, this.currentAgent.ID);
   }
 
-  private findRootAgent(agent: AIAgentEntityExtended): AIAgentEntityExtended {
+  private findRootAgent(agent: MJAIAgentEntityExtended): MJAIAgentEntityExtended {
     let current = agent;
     while (current.ParentID) {
-      const parent = this.allAgents.find(a => a.ID === current.ParentID);
+      const parent = this.allAgents.find(a => UUIDsEqual(a.ID, current.ParentID));
       if (!parent) break;
       current = parent;
     }
     return current;
   }
 
-  private buildHierarchyTree(agent: AIAgentEntityExtended): AgentHierarchyNode {
+  private buildHierarchyTree(agent: MJAIAgentEntityExtended): AgentHierarchyNode {
     const children = this.allAgents
-      .filter(a => a.ParentID === agent.ID)
+      .filter(a => UUIDsEqual(a.ParentID, agent.ID))
       .map(child => this.buildHierarchyTree(child));
 
     const node: AgentHierarchyNode = {
@@ -509,7 +510,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         await this.loadAgentData();
 
         // Navigate to the newly created agent record
-        this.navigationService.OpenEntityRecord('AI Agents', agent.PrimaryKey);
+        this.navigationService.OpenEntityRecord('MJ: AI Agents', agent.PrimaryKey);
       } else {
         const errorMessage = agent.LatestResult?.Message || 'Unknown error occurred while creating sub-agent';
         this.error = `Failed to create sub-agent: ${errorMessage}`;
@@ -538,7 +539,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   public openCurrentAgentRecord(): void {
     if (this.currentAgent) {
-      this.openEntityRecord.emit({ entityName: 'AI Agents', recordId: this.currentAgent.ID });
+      this.openEntityRecord.emit({ entityName: 'MJ: AI Agents', recordId: this.currentAgent.ID });
     }
   }
 }

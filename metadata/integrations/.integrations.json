@@ -1,0 +1,41 @@
+[
+  {
+    "fields": {
+      "Name": "Salesforce",
+      "Description": "Salesforce CRM integration for syncing contacts, accounts, opportunities, and custom objects",
+      "ClassName": "SalesforceConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": "https://login.salesforce.com",
+      "BatchMaxRequestCount": 200,
+      "BatchRequestWaitTime": 100,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=OAuth2 Client Credentials",
+      "Icon": "fa-brands fa-salesforce"
+    },
+    "primaryKey": {
+      "ID": "3EF73582-BC71-4189-9DF9-867F0D4B074B"
+    },
+    "sync": {
+      "lastModified": "2026-03-12T21:00:30.314Z",
+      "checksum": "a9cda723356f164d81a978e84b7dd676e36f90c5cc9958ee87ad42e8c6e26772"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Feed",
+      "Description": "File-based data import from CSV, Excel, JSON, and XML files",
+      "ClassName": "FileFeedConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": null,
+      "BatchMaxRequestCount": -1,
+      "BatchRequestWaitTime": -1,
+      "Icon": "fa-solid fa-file-csv"
+    },
+    "primaryKey": {
+      "ID": "D26F22CE-3CC8-4CF9-BC12-04E3C6893CAD"
+    },
+    "sync": {
+      "lastModified": "2026-03-12T21:00:30.299Z",
+      "checksum": "831ae64bfc6b7237a61c23bfaf19ed9df3533fd73916a0b0bbc18a32e43a4e54"
+    }
+  }
+]

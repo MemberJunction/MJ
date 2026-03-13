@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-cli",
   "type": "module",
-  "version": "3.4.0",
+  "version": "5.11.0",
   "description": "MemberJunction AI agent, prompt and action execution CLI, integrated with the main MJ CLI.",
   "keywords": [
     "oclif",
@@ -33,7 +33,9 @@
     "build": "tsc -b && tsc-alias -f",
     "prepack": "npm run build && oclif manifest && oclif readme",
     "postpack": "rimraf oclif.manifest.json",
-    "version": "oclif readme && git add README.md"
+    "version": "oclif readme && git add README.md",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "oclif": {
     "bin": "mj-ai",
@@ -50,22 +52,22 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
-    "@memberjunction/actions": "3.4.0",
-    "@memberjunction/ai": "3.4.0",
-    "@memberjunction/ai-agents": "3.4.0",
-    "@memberjunction/ai-anthropic": "3.4.0",
-    "@memberjunction/ai-betty-bot": "3.4.0",
-    "@memberjunction/ai-cerebras": "3.4.0",
-    "@memberjunction/ai-core-plus": "3.4.0",
-    "@memberjunction/ai-groq": "3.4.0",
-    "@memberjunction/ai-mistral": "3.4.0",
-    "@memberjunction/ai-openai": "3.4.0",
-    "@memberjunction/ai-prompts": "3.4.0",
-    "@memberjunction/core": "3.4.0",
-    "@memberjunction/core-actions": "3.4.0",
-    "@memberjunction/core-entities": "3.4.0",
-    "@memberjunction/core-entities-server": "3.4.0",
-    "@memberjunction/sqlserver-dataprovider": "3.4.0",
+    "@memberjunction/actions": "5.11.0",
+    "@memberjunction/ai": "5.11.0",
+    "@memberjunction/ai-agents": "5.11.0",
+    "@memberjunction/ai-anthropic": "5.11.0",
+    "@memberjunction/ai-betty-bot": "5.11.0",
+    "@memberjunction/ai-cerebras": "5.11.0",
+    "@memberjunction/ai-core-plus": "5.11.0",
+    "@memberjunction/ai-groq": "5.11.0",
+    "@memberjunction/ai-mistral": "5.11.0",
+    "@memberjunction/ai-openai": "5.11.0",
+    "@memberjunction/ai-prompts": "5.11.0",
+    "@memberjunction/core": "5.11.0",
+    "@memberjunction/core-actions": "5.11.0",
+    "@memberjunction/core-entities": "5.11.0",
+    "@memberjunction/core-entities-server": "5.11.0",
+    "@memberjunction/sqlserver-dataprovider": "5.11.0",
     "@oclif/core": "^3.27.0",
     "@oclif/plugin-help": "^6.2.37",
     "@oclif/plugin-version": "^2.2.36",
@@ -83,7 +85,8 @@
     "oclif": "^4.22.73",
     "rimraf": "6.1.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=20.0.0"

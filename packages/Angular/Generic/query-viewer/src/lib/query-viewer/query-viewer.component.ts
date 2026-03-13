@@ -12,9 +12,11 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RunQuery, RunQueryParams, Metadata, QueryInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { RunQueryResult } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { QueryDataGridComponent } from '../query-data-grid/query-data-grid.component';
 import {
     QueryGridSelectionMode,
@@ -144,6 +146,11 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
      */
     @Output() OpenQueryRecord = new EventEmitter<{ queryId: string; queryName: string }>();
 
+    /**
+     * Fired when a composition token ({{query:"..."}}) is clicked in the SQL info panel
+     */
+    @Output() CompositionTokenClick = new EventEmitter<CompositionTokenClickEvent>();
+
     // ========================================
     // View Children
     // ========================================
@@ -200,7 +207,7 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
         }
 
         // Load query info from metadata
-        this.QueryInfo = this.metadata.Queries.find(q => q.ID === this._queryId) || null;
+        this.QueryInfo = this.metadata.Queries.find(q => UUIDsEqual(q.ID, this._queryId)) || null;
 
         if (!this.QueryInfo) {
             this.LastError = `Query with ID ${this._queryId} not found`;
@@ -432,6 +439,10 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
 
     public OnOpenQueryRecord(event: { queryId: string; queryName: string }): void {
         this.OpenQueryRecord.emit(event);
+    }
+
+    public OnCompositionTokenClick(event: CompositionTokenClickEvent): void {
+        this.CompositionTokenClick.emit(event);
     }
 
     public Refresh(): void {

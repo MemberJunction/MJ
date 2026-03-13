@@ -236,7 +236,7 @@ export class SkipQueryInfo implements IQueryInfoBase {
     /**
      * Current status of the query in the approval workflow
      */
-    Status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete';
+    Status: 'Pending' | 'Approved' | 'Rejected' | 'Expired';
     /**
      * Value indicating the quality of the query, higher values mean better quality
      */
@@ -253,6 +253,11 @@ export class SkipQueryInfo implements IQueryInfoBase {
      * The name of the AI Model used to generate the embedding vector for this query.
      */
     EmbeddingModelName?: string;
+    /**
+     * Technical documentation of the query logic, performance considerations,
+     * and parameter usage. Supports markdown content including mermaid diagrams.
+     */
+    TechnicalDescription: string | null = null;
     /**
      * Field metadata for this query
      */

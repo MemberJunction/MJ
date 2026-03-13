@@ -1,26 +1,51 @@
 # @memberjunction/ai-vectors
 
-The MemberJunction AI Vectors Core package provides the foundational abstractions and base classes for working with vector embeddings, vector databases, and vector operations within the MemberJunction ecosystem.
+The core foundation package for vector operations in MemberJunction. Provides base classes, interfaces, and type definitions that all other vector packages build upon.
 
-## Overview
+## Architecture
 
-This package serves as the core foundation for vector-related operations in MemberJunction, providing:
-- Abstract interfaces for vector database and embedding operations
-- Base class implementation with entity integration
-- Type definitions for pagination and data handling
-- Seamless integration with MemberJunction's metadata system and AI engine
+```mermaid
+graph TD
+    subgraph Core["@memberjunction/ai-vectors"]
+        VB["VectorBase"]
+        IE["IEmbedding"]
+        IVD["IVectorDatabase"]
+        IVI["IVectorIndex"]
+        PT["PageRecordsParams"]
+    end
 
-## Features
+    subgraph MJCore["MemberJunction Core"]
+        MD["Metadata"]
+        RV["RunView"]
+        BE["BaseEntity"]
+        UI["UserInfo"]
+    end
 
-- **Core Interfaces**: Fundamental interface definitions for vector operations
-- **Base Classes**: Base implementation patterns for vector-related functionality
-- **Database Abstraction**: Interface for vector database operations
-- **Embedding Abstraction**: Interface for text embedding generation
-- **Entity Integration**: Seamless integration with MemberJunction entities
-- **Pagination Support**: Efficiently retrieve and process large sets of records
-- **Type Definitions**: Comprehensive TypeScript types for vector operations
-- **AI Model Integration**: Built-in support for accessing embedding models
-- **User Context Management**: Automatic handling of user context for entity operations
+    subgraph AIEngine["AI Engine"]
+        AIM["AIEngine.Instance"]
+        MOD["Embedding Models"]
+        VDB["Vector Databases"]
+    end
+
+    subgraph Consumers["Consumer Packages"]
+        SYNC["ai-vector-sync"]
+        DUPE["ai-vector-dupe"]
+    end
+
+    VB --> MD
+    VB --> RV
+    VB --> BE
+    VB --> AIM
+    AIM --> MOD
+    AIM --> VDB
+    SYNC --> VB
+    DUPE --> VB
+
+    style Core fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style MJCore fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style AIEngine fill:#b8762f,stroke:#8a5722,color:#fff
+    style Consumers fill:#7c5295,stroke:#563a6b,color:#fff
+```
 
 ## Installation
 
@@ -28,328 +53,220 @@ This package serves as the core foundation for vector-related operations in Memb
 npm install @memberjunction/ai-vectors
 ```
 
+## Overview
+
+This package serves as the shared foundation for all vector-related operations in MemberJunction. It provides:
+
+- **VectorBase** -- a base class that integrates with MemberJunction metadata, AI models, vector databases, and the entity system
+- **Interfaces** -- contracts for embedding generation (`IEmbedding`), vector database management (`IVectorDatabase`), and vector index CRUD (`IVectorIndex`)
+- **Type definitions** -- `PageRecordsParams` for paginated data retrieval across entities
+
+All higher-level vector packages (`ai-vector-sync`, `ai-vector-dupe`) extend `VectorBase` to inherit its data access, model lookup, and user context capabilities.
+
 ## Core Components
+
+### VectorBase Class
+
+The primary class that downstream packages extend. It wraps MemberJunction's `Metadata`, `RunView`, and `AIEngine` systems into a unified base for vector operations.
+
+```mermaid
+classDiagram
+    class VectorBase {
+        +Metadata : Metadata
+        +RunView : RunView
+        +CurrentUser : UserInfo
+        #GetRecordsByEntityID(entityID, recordIDs?) BaseEntity[]
+        #PageRecordsByEntityID~T~(params) T[]
+        #GetAIModel(id?) AIModelEntityExtended
+        #GetVectorDatabase(id?) VectorDatabaseEntity
+        #RunViewForSingleValue~T~(entityName, filter) T
+        #SaveEntity(entity) boolean
+        #BuildExtraFilter(compositeKeys) string
+    }
+
+    class EntityVectorSyncer {
+        +VectorizeEntity(params, user) VectorizeEntityResponse
+        +Config(forceRefresh, user) void
+    }
+
+    class DuplicateRecordDetector {
+        +getDuplicateRecords(params, user) PotentialDuplicateResponse
+    }
+
+    VectorBase <|-- EntityVectorSyncer
+    VectorBase <|-- DuplicateRecordDetector
+
+    style VectorBase fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style EntityVectorSyncer fill:#7c5295,stroke:#563a6b,color:#fff
+    style DuplicateRecordDetector fill:#7c5295,stroke:#563a6b,color:#fff
+```
+
+**Key capabilities:**
+
+| Method | Purpose |
+|---|---|
+| `GetRecordsByEntityID` | Load all entity records, optionally filtered by composite keys |
+| `PageRecordsByEntityID` | Paginated retrieval with configurable page size, result type, and filter |
+| `GetAIModel` | Locate an embedding model from `AIEngine.Instance.Models` by ID or get the first available |
+| `GetVectorDatabase` | Locate a vector database from `AIEngine.Instance.VectorDatabases` by ID or get the first available |
+| `RunViewForSingleValue` | Query for a single entity record matching a filter |
+| `SaveEntity` | Save a `BaseEntity` with the current user context automatically applied |
+| `BuildExtraFilter` | Convert an array of `CompositeKey` objects into a SQL filter string |
 
 ### Interfaces
 
-The package defines several key interfaces for vector operations:
-
 #### IEmbedding
 
-Interface for text embedding generation:
+Contract for text embedding providers:
 
 ```typescript
 interface IEmbedding {
-  createEmbedding(text: string, options?: any): any;
-  createBatchEmbedding(text: string[], options?: any): any;
+    createEmbedding(text: string, options?: unknown): unknown;
+    createBatchEmbedding(text: string[], options?: unknown): unknown;
 }
 ```
 
 #### IVectorDatabase
 
-Interface for vector database management:
+Contract for vector database management operations:
 
 ```typescript
 interface IVectorDatabase {
-  listIndexes(options?: any): any;
-  createIndex(options: any): any;
-  deleteIndex(indexID: any, options?: any): any;
-  editIndex(indexID: any, options?: any): any;
+    listIndexes(options?: unknown): unknown;
+    createIndex(options: unknown): unknown;
+    deleteIndex(indexID: unknown, options?: unknown): unknown;
+    editIndex(indexID: unknown, options?: unknown): unknown;
 }
 ```
 
 #### IVectorIndex
 
-Interface for vector index operations:
+Contract for CRUD operations on vector records within an index:
 
 ```typescript
 interface IVectorIndex {
-  createRecord(record: any, options?: any): any;
-  createRecords(records: any[], options?: any): any;
-  getRecord(recordID: any, options?: any): any;
-  getRecords(recordIDs: any[], options?: any): any;
-  updateRecord(record: any, options?: any): any;
-  updateRecords(records: any[], options?: any): any;
-  deleteRecord(recordID: any, options?: any): any;
-  deleteRecords(recordIDs: any[], options?: any): any;
+    createRecord(record: unknown, options?: unknown): unknown;
+    createRecords(records: unknown[], options?: unknown): unknown;
+    getRecord(recordID: unknown, options?: unknown): unknown;
+    getRecords(recordIDs: unknown[], options?: unknown): unknown;
+    updateRecord(record: unknown, options?: unknown): unknown;
+    updateRecords(records: unknown[], options?: unknown): unknown;
+    deleteRecord(recordID: unknown, options?: unknown): unknown;
+    deleteRecords(recordIDs: unknown[], options?: unknown): unknown;
 }
 ```
 
-### VectorBase Class
+### PageRecordsParams Type
 
-The `VectorBase` class serves as the foundation for vector operations, providing:
-
-- Integration with MemberJunction's metadata system
-- Entity record retrieval and manipulation
-- Pagination support for handling large datasets
-- Helper methods for AI model and vector database access
-- Automatic user context management for entity operations
-- Built-in RunView integration for flexible data querying
-
-#### Key Methods
-
-- `GetRecordsByEntityID(entityID: string, recordIDs?: CompositeKey[]): Promise<BaseEntity[]>` - Retrieve entity records with optional filtering
-- `PageRecordsByEntityID<T>(params: PageRecordsParams): Promise<T[]>` - Paginated entity record retrieval
-- `GetAIModel(id?: string): AIModelEntityExtended` - Access configured embedding models
-- `GetVectorDatabase(id?: string): VectorDatabaseEntity` - Access configured vector databases
-- `RunViewForSingleValue<T>(entityName: string, extraFilter: string): Promise<T | null>` - Query for single entity records
-- `SaveEntity(entity: BaseEntity): Promise<boolean>` - Save entities with proper user context
-
-### Type Definitions
-
-#### PageRecordsParams
-
-Type definition for paginated record retrieval:
+Configuration for paginated entity record retrieval:
 
 ```typescript
 type PageRecordsParams = {
-  EntityID: string | number;        // The ID of the entity to get records from
-  PageNumber: number;               // Page number (1-based)
-  PageSize: number;                 // Number of records per page
-  ResultType: "entity_object" | "simple" | "count_only";  // Type of result
-  Filter?: string;                  // Optional SQL filter
-}
+    EntityID: string | number;
+    PageNumber: number;
+    PageSize: number;
+    ResultType: "entity_object" | "simple" | "count_only";
+    Filter?: string;
+};
 ```
 
 ## Usage
 
-### Extending the Base Class
+### Extending VectorBase
 
-Create specialized vector operation classes by extending `VectorBase`:
+Create specialized vector processing classes by extending `VectorBase`:
 
 ```typescript
 import { VectorBase, PageRecordsParams } from '@memberjunction/ai-vectors';
 import { BaseEntity } from '@memberjunction/core';
 
 export class MyVectorProcessor extends VectorBase {
-  async processEntityRecords(entityId: string): Promise<void> {
-    // Get all entity records
-    const records = await this.GetRecordsByEntityID(entityId);
-    
-    // Process each record
-    for (const record of records) {
-      // Your vector processing logic here
-      console.log(`Processing ${record.EntityInfo.Name} record ${record.ID}`);
+    async processEntity(entityId: string): Promise<void> {
+        // Retrieve all records for an entity
+        const records = await this.GetRecordsByEntityID(entityId);
+
+        // Access configured AI models and vector databases
+        const model = this.GetAIModel();
+        const vectorDb = this.GetVectorDatabase();
+
+        for (const record of records) {
+            // Process each record with the embedding model and vector DB
+        }
     }
-  }
-  
-  async paginatedProcess(entityId: string): Promise<void> {
-    // Process records page by page
-    const params: PageRecordsParams = {
-      EntityID: entityId,
-      PageNumber: 1,
-      PageSize: 100,
-      ResultType: 'entity_object' as const
-    };
-    
-    const records = await this.PageRecordsByEntityID<BaseEntity>(params);
-    // Process paged records
-    console.log(`Retrieved ${records.length} records`);
-  }
-}
-```
 
-### Implementing the Interfaces
+    async processInPages(entityId: string): Promise<void> {
+        let page = 1;
+        let hasMore = true;
 
-Implement the interfaces to create specific provider implementations:
+        while (hasMore) {
+            const params: PageRecordsParams = {
+                EntityID: entityId,
+                PageNumber: page,
+                PageSize: 100,
+                ResultType: 'simple',
+                Filter: "Status = 'Active'"
+            };
 
-```typescript
-import { IEmbedding } from '@memberjunction/ai-vectors';
-
-export class OpenAIEmbedding implements IEmbedding {
-  constructor(private apiKey: string) {}
-  
-  async createEmbedding(text: string): Promise<number[]> {
-    // Implementation using OpenAI's embedding API
-  }
-  
-  async createBatchEmbedding(texts: string[]): Promise<number[][]> {
-    // Batch implementation
-  }
-}
-```
-
-### Working with Entity Records
-
-The package provides utilities for working with MemberJunction entities:
-
-```typescript
-import { VectorBase, PageRecordsParams } from '@memberjunction/ai-vectors';
-import { BaseEntity } from '@memberjunction/core';
-import { AIModelEntityExtended, VectorDatabaseEntity } from '@memberjunction/core-entities';
-
-class EntityVectorizer extends VectorBase {
-  async vectorizeEntities(entityId: string): Promise<void> {
-    // Get AI model for embeddings (defaults to first embedding model if no ID provided)
-    const embeddingModel: AIModelEntityExtended = this.GetAIModel();
-    console.log(`Using embedding model: ${embeddingModel.Name}`);
-    
-    // Get vector database (defaults to first configured vector DB)
-    const vectorDb: VectorDatabaseEntity = this.GetVectorDatabase();
-    console.log(`Using vector database: ${vectorDb.Name}`);
-    
-    // Process records in pages for memory efficiency
-    let pageNumber = 1;
-    let hasMoreRecords = true;
-    
-    while (hasMoreRecords) {
-      const params: PageRecordsParams = {
-        EntityID: entityId,
-        PageNumber: pageNumber,
-        PageSize: 50,
-        ResultType: 'entity_object' as const,
-        Filter: "IsActive = 1"  // Optional: add custom filtering
-      };
-      
-      const records = await this.PageRecordsByEntityID<BaseEntity>(params);
-      hasMoreRecords = records.length === params.PageSize;
-      pageNumber++;
-      
-      // Process the current page of records
-      for (const record of records) {
-        // Your vectorization logic here
-        // Example: Generate embeddings for record content
-      }
+            const records = await this.PageRecordsByEntityID<Record<string, unknown>>(params);
+            hasMore = records.length === 100;
+            page++;
+        }
     }
-  }
-  
-  async saveVectorizedEntity(entity: BaseEntity): Promise<boolean> {
-    // SaveEntity automatically adds user context
-    return await this.SaveEntity(entity);
-  }
 }
 ```
 
-### Advanced Entity Filtering
-
-Use composite keys for complex filtering scenarios:
+### Filtering with Composite Keys
 
 ```typescript
 import { VectorBase } from '@memberjunction/ai-vectors';
 import { CompositeKey } from '@memberjunction/core';
 
-class AdvancedVectorProcessor extends VectorBase {
-  async getSpecificRecords(entityId: string): Promise<void> {
-    // Build composite keys for specific records
-    const compositeKeys: CompositeKey[] = [
-      {
-        KeyValuePairs: [
-          { FieldName: 'Status', Value: 'Active' },
-          { FieldName: 'CategoryID', Value: '123' }
-        ]
-      },
-      {
-        KeyValuePairs: [
-          { FieldName: 'Status', Value: 'Pending' },
-          { FieldName: 'CategoryID', Value: '456' }
-        ]
-      }
-    ];
-    
-    // This will generate: (Status = 'Active' AND CategoryID = '123') OR (Status = 'Pending' AND CategoryID = '456')
-    const records = await this.GetRecordsByEntityID(entityId, compositeKeys);
-    console.log(`Found ${records.length} matching records`);
-  }
+class FilteredProcessor extends VectorBase {
+    async getSpecificRecords(entityId: string): Promise<void> {
+        const keys: CompositeKey[] = [
+            { KeyValuePairs: [{ FieldName: 'ID', Value: 'abc-123' }] },
+            { KeyValuePairs: [{ FieldName: 'ID', Value: 'def-456' }] }
+        ];
+
+        // Generates: (ID = 'abc-123') OR (ID = 'def-456')
+        const records = await this.GetRecordsByEntityID(entityId, keys);
+    }
 }
-```
-
-## Integration with MemberJunction
-
-This package works in harmony with other MemberJunction packages:
-
-```typescript
-import { VectorBase } from '@memberjunction/ai-vectors';
-import { AIEngine } from '@memberjunction/aiengine';
-import { Metadata, RunView } from '@memberjunction/core';
-
-// Your vector processing will have access to:
-// - Entity metadata
-// - AI models configuration
-// - Vector database configuration
-// - User context
 ```
 
 ## Package Ecosystem
 
-This core package serves as the foundation for a suite of vector-related packages:
+This package sits at the base of the MemberJunction vector package hierarchy:
 
-- `@memberjunction/ai-vectors` - Core abstractions (this package)
-- `@memberjunction/ai-vectordb` - Vector database interface
-- `@memberjunction/ai-vectors-memory` - In-memory vector similarity search
-- `@memberjunction/ai-vectors-sync` - Entity synchronization with vector databases
-- `@memberjunction/ai-vectors-pinecone` - Pinecone vector database implementation
-- `@memberjunction/ai-vectors-dupe` - Duplicate detection using vector similarity
-
-## Configuration
-
-The package automatically integrates with MemberJunction's configuration system:
-
-1. **AI Models**: Embedding models are configured in the MemberJunction metadata and accessed via `AIEngine.Instance`
-2. **Vector Databases**: Vector databases are configured similarly and accessed through the AI engine
-3. **User Context**: The current user context is automatically managed and passed to entity operations
-
-## Best Practices
-
-1. **Always extend VectorBase** for custom vector operations to ensure proper integration
-2. **Use pagination** when processing large datasets to avoid memory issues
-3. **Handle errors gracefully** - the base class methods throw exceptions that should be caught
-4. **Set user context** - The base class automatically manages user context for entity operations
-5. **Use type-safe generics** - When using `PageRecordsByEntityID`, specify the expected type
-
-## Error Handling
-
-The package provides clear error messages for common scenarios:
-
-```typescript
-try {
-  const model = this.GetAIModel('specific-model-id');
-} catch (error) {
-  // Will throw if no embedding model is configured
-  console.error('No AI Model Entity found');
-}
-
-try {
-  const records = await this.GetRecordsByEntityID('invalid-id');
-} catch (error) {
-  // Will throw if entity ID doesn't exist
-  console.error(`Entity with ID invalid-id not found.`);
-}
-```
+| Package | Depends On Core | Purpose |
+|---|---|---|
+| `@memberjunction/ai-vectordb` | No (peer) | Abstract vector database interface |
+| `@memberjunction/ai-vector-sync` | Yes | Entity-to-vector synchronization |
+| `@memberjunction/ai-vector-dupe` | Yes | Duplicate detection via vector similarity |
+| `@memberjunction/ai-vectors-memory` | No | In-memory vector search and clustering |
+| `@memberjunction/ai-vectors-pinecone` | No | Pinecone implementation of `VectorDBBase` |
 
 ## Dependencies
 
-- `@memberjunction/core`: ^2.43.0 - Core MemberJunction functionality
-- `@memberjunction/global`: ^2.43.0 - Global utilities
-- `@memberjunction/core-entities`: ^2.43.0 - Entity definitions
-- `@memberjunction/aiengine`: ^2.43.0 - AI engine integration
-- `@memberjunction/ai`: ^2.43.0 - AI abstractions
-- `@memberjunction/ai-vectordb`: ^2.43.0 - Vector database interfaces
-- `openai`: ^4.28.4 - OpenAI SDK (for embedding implementations)
-- `dotenv`: ^16.4.1 - Environment configuration
+| Package | Purpose |
+|---|---|
+| `@memberjunction/core` | Metadata, RunView, BaseEntity, UserInfo |
+| `@memberjunction/global` | MJGlobal class factory |
+| `@memberjunction/core-entities` | VectorDatabaseEntity and other entity types |
+| `@memberjunction/aiengine` | AIEngine singleton for model and database discovery |
+| `@memberjunction/ai` | Base AI abstractions |
+| `@memberjunction/ai-core-plus` | AIModelEntityExtended |
+| `@memberjunction/ai-vectordb` | VectorDBBase and related types |
 
 ## Development
 
-### Building
-
 ```bash
+# Build
 npm run build
-```
 
-### Development Mode
-
-```bash
+# Development mode
 npm run start
 ```
-
-## Contributing
-
-When contributing to this package:
-
-1. Follow the MemberJunction coding standards
-2. Ensure all interfaces remain generic and implementation-agnostic
-3. Add comprehensive TypeScript types
-4. Update this README with any new features or changes
-5. Test integration with dependent packages
 
 ## License
 

@@ -57,36 +57,125 @@ export class RecordDependencyAnalyzer {
   }
 
   /**
-   * Main entry point: analyzes all records in a file and returns them in dependency order
+   * Phase 1: Flatten records from a single file without analyzing dependencies.
+   *
+   * This method flattens records including nested relatedEntities and assigns unique IDs,
+   * but does NOT analyze dependencies. Use this when collecting records from multiple files
+   * before running global dependency analysis.
+   *
+   * After collecting records from all files, call `analyzeAllDependencies()` to resolve
+   * cross-file dependencies.
+   *
+   * @param records The records from a metadata file
+   * @param entityName The root entity name for these records
+   * @returns Flattened records (dependencies not yet resolved)
    */
-  public async analyzeFileRecords(
+  public flattenFileRecords(
     records: RecordData[],
     entityName: string
-  ): Promise<DependencyAnalysisResult> {
-    // Reset state
-    this.flattenedRecords = [];
-    this.recordIdMap.clear();
-    this.recordCounter = 0;
+  ): FlattenedRecord[] {
+    // Store the starting index to return only the newly added records
+    const startIndex = this.flattenedRecords.length;
 
-    // Step 1: Flatten all records (including nested relatedEntities)
+    // Flatten records (this adds to this.flattenedRecords and this.recordIdMap)
     this.flattenRecords(records, entityName);
 
-    // Step 2: Analyze dependencies between all flattened records
+    // Return only the records added from this file
+    return this.flattenedRecords.slice(startIndex);
+  }
+
+  /**
+   * Phase 2: Analyze dependencies across all collected records globally.
+   *
+   * This method should be called AFTER all files have been processed with `flattenFileRecords()`.
+   * It resolves @lookup, @parent, @root references and foreign key dependencies across
+   * ALL records, enabling correct cross-file dependency detection.
+   *
+   * @param allRecords All flattened records from all metadata files
+   * @returns Analysis result with sorted records, circular dependencies, etc.
+   */
+  public analyzeAllDependencies(
+    allRecords: FlattenedRecord[]
+  ): DependencyAnalysisResult {
+    // Set up state from the provided records
+    this.flattenedRecords = allRecords;
+    this.recordIdMap.clear();
+    for (const record of allRecords) {
+      this.recordIdMap.set(record.id, record);
+    }
+
+    // Analyze dependencies between ALL records (enables cross-file dependency detection)
     this.analyzeDependencies();
 
-    // Step 3: Detect circular dependencies
+    // Detect circular dependencies
     const circularDeps = this.detectCircularDependencies();
 
-    // Step 4: Perform topological sort
+    // Perform topological sort
     const sortedRecords = this.topologicalSort();
 
-    // Step 5: Build dependency graph for debugging
+    // Build dependency graph for debugging
     const dependencyGraph = new Map<string, Set<string>>();
     for (const record of this.flattenedRecords) {
       dependencyGraph.set(record.id, record.dependencies);
     }
 
-    // Step 6: Group records into dependency levels for parallel processing
+    // Group records into dependency levels for parallel processing
+    const dependencyLevels = this.groupByDependencyLevels(sortedRecords, dependencyGraph);
+
+    return {
+      sortedRecords,
+      circularDependencies: circularDeps,
+      dependencyGraph,
+      dependencyLevels
+    };
+  }
+
+  /**
+   * Resets the analyzer state. Call this before starting a new batch of files.
+   */
+  public reset(): void {
+    this.flattenedRecords = [];
+    this.recordIdMap.clear();
+    this.recordCounter = 0;
+  }
+
+  /**
+   * Main entry point: analyzes all records in a file and returns them in dependency order.
+   *
+   * @deprecated Use `flattenFileRecords()` + `analyzeAllDependencies()` for multi-file scenarios
+   * to enable cross-file dependency detection. This method only detects dependencies within
+   * a single file.
+   *
+   * @param records The records from a metadata file
+   * @param entityName The root entity name for these records
+   * @returns Analysis result with sorted records
+   */
+  public async analyzeFileRecords(
+    records: RecordData[],
+    entityName: string
+  ): Promise<DependencyAnalysisResult> {
+    // Reset state for single-file analysis (backward compatible behavior)
+    this.reset();
+
+    // Flatten records
+    this.flattenRecords(records, entityName);
+
+    // Analyze dependencies (only within this file's records)
+    this.analyzeDependencies();
+
+    // Detect circular dependencies
+    const circularDeps = this.detectCircularDependencies();
+
+    // Perform topological sort
+    const sortedRecords = this.topologicalSort();
+
+    // Build dependency graph for debugging
+    const dependencyGraph = new Map<string, Set<string>>();
+    for (const record of this.flattenedRecords) {
+      dependencyGraph.set(record.id, record.dependencies);
+    }
+
+    // Group records into dependency levels for parallel processing
     const dependencyLevels = this.groupByDependencyLevels(sortedRecords, dependencyGraph);
 
     return {

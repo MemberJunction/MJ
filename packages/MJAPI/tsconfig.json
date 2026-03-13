@@ -8,6 +8,13 @@
   "ts-node": {
     "esm": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "../../node_modules/@types/plotly.js"]
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "../../node_modules/@types/plotly.js",
+    "src/__tests__/**",
+    "src/**/*.test.ts"
+  ]
 }

@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ChangeDetectionStrategy } from '@angular/core';
-import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Tabular list view of agent steps and paths.
@@ -30,7 +31,7 @@ import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-e
               <tbody>
                 @for (step of Steps; track step) {
                   <tr
-                    [class.mj-step-list-row--selected]="SelectedStepID === step.ID"
+                    [class.mj-step-list-row--selected]="IsStepSelected(step)"
                     (click)="StepClicked.emit(step)">
                     <td class="mj-step-list-name">{{ step.Name }}</td>
                     <td>
@@ -213,13 +214,17 @@ import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-e
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class AgentStepListComponent {
-  @Input() Steps: AIAgentStepEntity[] = [];
-  @Input() Paths: AIAgentStepPathEntity[] = [];
+  @Input() Steps: MJAIAgentStepEntity[] = [];
+  @Input() Paths: MJAIAgentStepPathEntity[] = [];
   @Input() SelectedStepID: string | null = null;
 
-  @Output() StepClicked = new EventEmitter<AIAgentStepEntity>();
+  @Output() StepClicked = new EventEmitter<MJAIAgentStepEntity>();
 
-  getConfiguredItem(step: AIAgentStepEntity): string {
+  IsStepSelected(step: MJAIAgentStepEntity): boolean {
+    return UUIDsEqual(this.SelectedStepID, step.ID);
+  }
+
+  getConfiguredItem(step: MJAIAgentStepEntity): string {
     switch (step.StepType) {
       case 'Action': return step.Action || '—';
       case 'Prompt': return step.Prompt || '—';

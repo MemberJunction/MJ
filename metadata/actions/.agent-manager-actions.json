@@ -5,12 +5,12 @@
       "Description": "Finds the most relevant actions for a given task using semantic search with embeddings. Returns top N most similar actions based on task description. Used by Planning Designer Agent to discover relevant actions without searching through hundreds of options.",
       "DriverClass": "Find Candidate Actions",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
       "Status": "Active",
       "IconClass": "fa-solid fa-search"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -128,8 +128,8 @@
       "ID": "FD932133-CB1D-4C96-8EFC-14F0C8CE045B"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:55.629Z",
-      "checksum": "6421d9ad67eff05b4679226b2069bc0fc8a96c9eb1e0253b41f15240bddd385a"
+      "lastModified": "2026-02-13T21:08:42.193Z",
+      "checksum": "0312f52fb11decf0a33fe702515397bd8a135ecc20eff0bd755d5980d524d491"
     }
   },
   {
@@ -138,12 +138,12 @@
       "Description": "Loads the complete AgentSpec structure for an existing agent by ID. Returns full agent specification including all nested structures: Actions, SubAgents, Prompts, Steps, and Paths. Used by Agent Manager for modification workflow.",
       "DriverClass": "Load Agent Spec",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Agent Management",
       "Status": "Active",
       "IconClass": "fa-solid fa-download"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -205,8 +205,8 @@
       "ID": "3E7FB0AE-D63B-4478-B66A-98C887E51BF3"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:55.630Z",
-      "checksum": "00e22a59752b4e379e65b22209fd0f74d26d1689c95640d1e19e723b4d92501f"
+      "lastModified": "2026-02-13T21:08:42.194Z",
+      "checksum": "f46f75c834a922fe19c385f86d23952e8bdbed2cc13357dd6485fdb25cbb094d"
     }
   }
 ]

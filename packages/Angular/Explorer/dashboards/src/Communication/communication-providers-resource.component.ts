@@ -1,11 +1,11 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { ResourceData, CommunicationProviderEntity, CommunicationLogEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCommunicationProviderEntity, MJCommunicationLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 
 interface ProviderCardData {
-    Entity: CommunicationProviderEntity;
+    Entity: MJCommunicationProviderEntity;
     SentCount: number;
     SuccessRate: number;
     FailedCount: number;
@@ -113,7 +113,7 @@ interface ProviderCardData {
         height: 100%;
         padding: 24px;
         overflow-y: auto;
-        background: var(--mat-sys-surface-container);
+        background: var(--mj-bg-surface);
     }
     .providers-header {
         display: flex;
@@ -125,31 +125,31 @@ interface ProviderCardData {
         margin: 0;
         font-size: 18px;
         font-weight: 800;
-        color: var(--mat-sys-on-surface);
+        color: var(--mj-text-primary);
     }
     .providers-header p {
         margin: 4px 0 0;
         font-size: 13px;
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
     }
 
     .tb-btn {
         display: inline-flex; align-items: center;
         gap: 6px; padding: 8px 16px;
-        border: 1px solid var(--mat-sys-outline-variant);
-        border-radius: var(--mat-sys-corner-extra-small, 4px);
-        background: var(--mat-sys-surface-container-lowest);
-        color: var(--mat-sys-on-surface-variant);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 4px;
+        background: var(--mj-bg-surface-card);
+        color: var(--mj-text-secondary);
         font-size: 12px; font-weight: 600;
         cursor: pointer; transition: all 0.15s ease;
         font-family: inherit;
     }
     .tb-btn.primary {
-        background: var(--mat-sys-primary);
-        color: var(--mat-sys-on-primary, #fff);
-        border-color: var(--mat-sys-primary);
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
+        border-color: var(--mj-brand-primary);
     }
-    .tb-btn.primary:hover { filter: brightness(1.1); }
+    .tb-btn.primary:hover { background: var(--mj-brand-primary-hover); }
 
     .loading-state {
         display: flex;
@@ -165,15 +165,15 @@ interface ProviderCardData {
         gap: 16px;
     }
     .provider-card {
-        background: var(--mat-sys-surface-container-lowest);
-        border: 1px solid var(--mat-sys-outline-variant);
-        border-radius: var(--mat-sys-corner-medium, 12px);
+        background: var(--mj-bg-surface-card);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 12px;
         overflow: hidden;
         transition: all 0.15s ease;
     }
     .provider-card:hover {
-        box-shadow: 0 2px 6px 2px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
-        border-color: var(--mat-sys-outline);
+        box-shadow: 0 2px 8px var(--mj-shadow-md);
+        border-color: var(--mj-border-strong);
     }
     .provider-card.disabled { opacity: 0.65; }
 
@@ -185,25 +185,37 @@ interface ProviderCardData {
     }
     .provider-card-logo {
         width: 48px; height: 48px;
-        border-radius: var(--mat-sys-corner-medium, 12px);
+        border-radius: 12px;
         display: flex; align-items: center; justify-content: center;
         font-size: 22px; flex-shrink: 0;
-        background: var(--mat-sys-surface-container);
+        background: var(--mj-bg-surface-sunken);
     }
-    .provider-card-logo.sendgrid { background: #E8F4FD; color: #1A82E2; }
-    .provider-card-logo.twilio { background: #FEECEE; color: #F22F46; }
-    .provider-card-logo.gmail { background: #FEECED; color: #EA4335; }
-    .provider-card-logo.msgraph { background: #E6F0FA; color: #0078D4; }
+    .provider-card-logo.sendgrid {
+        background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+    }
+    .provider-card-logo.twilio {
+        background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-error);
+    }
+    .provider-card-logo.gmail {
+        background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-error);
+    }
+    .provider-card-logo.msgraph {
+        background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+    }
 
     .provider-card-title { flex: 1; min-width: 0; }
     .provider-card-name {
         font-size: 15px; font-weight: 700;
-        color: var(--mat-sys-on-surface);
+        color: var(--mj-text-primary);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .provider-card-desc {
         font-size: 12px;
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
         margin-top: 2px;
     }
     .provider-card-status {
@@ -212,8 +224,14 @@ interface ProviderCardData {
         padding: 3px 10px; border-radius: 10px;
         flex-shrink: 0;
     }
-    .provider-card-status.active { background: #d4f8e0; color: #1b873f; }
-    .provider-card-status.disabled { background: var(--mat-sys-surface-container-high); color: var(--mat-sys-on-surface-variant); }
+    .provider-card-status.active {
+        background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-success);
+    }
+    .provider-card-status.disabled {
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-muted);
+    }
 
     .provider-card-body { padding: 0 20px 16px; }
 
@@ -226,10 +244,13 @@ interface ProviderCardData {
         gap: 4px; padding: 4px 10px;
         border-radius: 12px; font-size: 11px; font-weight: 500;
     }
-    .capability-chip.supported { background: #d4f8e0; color: #1b873f; }
+    .capability-chip.supported {
+        background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-success);
+    }
     .capability-chip.unsupported {
-        background: var(--mat-sys-surface-container);
-        color: var(--mat-sys-outline);
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-muted);
         text-decoration: line-through;
     }
 
@@ -237,39 +258,39 @@ interface ProviderCardData {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
         gap: 12px; padding: 12px;
-        background: var(--mat-sys-surface-container-low);
-        border-radius: var(--mat-sys-corner-small, 8px);
+        background: var(--mj-bg-surface-sunken);
+        border-radius: 8px;
     }
     .provider-stat { text-align: center; }
     .provider-stat-value {
         font-size: 16px; font-weight: 800;
-        color: var(--mat-sys-on-surface);
+        color: var(--mj-text-primary);
     }
     .provider-stat-label {
         font-size: 10px;
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
         text-transform: uppercase; letter-spacing: 0.3px;
     }
 
     .provider-card-footer {
         display: flex;
-        border-top: 1px solid var(--mat-sys-outline-variant);
+        border-top: 1px solid var(--mj-border-default);
     }
     .provider-card-footer button {
         flex: 1; padding: 12px;
         border: none; background: transparent;
         font-size: 12px; font-weight: 600;
-        color: var(--mat-sys-primary);
+        color: var(--mj-brand-primary);
         cursor: pointer; transition: background 0.15s;
         font-family: inherit;
         display: flex; align-items: center;
         justify-content: center; gap: 6px;
     }
     .provider-card-footer button:hover {
-        background: var(--mat-sys-surface-container-low);
+        background: var(--mj-bg-surface-sunken);
     }
     .provider-card-footer button + button {
-        border-left: 1px solid var(--mat-sys-outline-variant);
+        border-left: 1px solid var(--mj-border-default);
     }
   `]
 })
@@ -299,13 +320,13 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
             const yesterdayIso = yesterday.toISOString();
 
             const [providersResult, logsResult] = await Promise.all([
-                rv.RunView<CommunicationProviderEntity>({
-                    EntityName: 'Communication Providers',
+                rv.RunView<MJCommunicationProviderEntity>({
+                    EntityName: 'MJ: Communication Providers',
                     OrderBy: 'Name ASC',
                     ResultType: 'entity_object'
                 }),
-                rv.RunView<CommunicationLogEntity>({
-                    EntityName: 'Communication Logs',
+                rv.RunView<MJCommunicationLogEntity>({
+                    EntityName: 'MJ: Communication Logs',
                     ExtraFilter: `MessageDate >= '${yesterdayIso}'`,
                     ResultType: 'entity_object'
                 })
@@ -323,7 +344,7 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
         }
     }
 
-    private buildProviderCard(provider: CommunicationProviderEntity, logs: CommunicationLogEntity[]): ProviderCardData {
+    private buildProviderCard(provider: MJCommunicationProviderEntity, logs: MJCommunicationLogEntity[]): ProviderCardData {
         const providerLogs = logs.filter(l => l.CommunicationProvider === provider.Name);
         const sent = providerLogs.length;
         const failed = providerLogs.filter(l => l.Status === 'Failed').length;
@@ -359,18 +380,18 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
         return '';
     }
 
-    public configureProvider(provider: CommunicationProviderEntity): void {
+    public configureProvider(provider: MJCommunicationProviderEntity): void {
         const pk = new CompositeKey();
-        pk.LoadFromEntityInfoAndRecord(new Metadata().Entities.find(e => e.Name === 'Communication Providers')!, provider);
-        this.navService.OpenEntityRecord('Communication Providers', pk);
+        pk.LoadFromEntityInfoAndRecord(new Metadata().Entities.find(e => e.Name === 'MJ: Communication Providers')!, provider);
+        this.navService.OpenEntityRecord('MJ: Communication Providers', pk);
     }
 
-    public viewProviderLogs(provider: CommunicationProviderEntity): void {
+    public viewProviderLogs(provider: MJCommunicationProviderEntity): void {
         console.log('View analytics for provider:', provider.Name);
     }
 
     public addNewProvider(): void {
-        this.navService.OpenEntityRecord('Communication Providers', new CompositeKey());
+        this.navService.OpenEntityRecord('MJ: Communication Providers', new CompositeKey());
     }
 
     async GetResourceDisplayName(data: ResourceData): Promise<string> {

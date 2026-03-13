@@ -44,6 +44,19 @@ const apiIntegrationsSchema = z.object({
        */
       cx: z.string().optional(),
     }).optional(),
+
+    /**
+     * Google Geocoding and Address Validation configuration
+     * Used by: Postal Code Lookup, Geocode Address, Reverse Geocode, Validate Address actions
+     * Get your API key from: https://console.cloud.google.com/apis/credentials
+     * Enable: Geocoding API and Address Validation API
+     */
+    geocoding: z.object({
+      /**
+       * Google Maps/Geocoding API key
+       */
+      apiKey: z.string().optional(),
+    }).optional(),
   }).optional(),
 });
 
@@ -92,6 +105,11 @@ export function getCoreActionsConfig(): CoreActionsConfig {
             cx: result.config?.google?.customSearch?.cx ||
                 result.config?.googleCustomSearchCx ||  // Backwards compatibility
                 process.env.GOOGLE_CUSTOM_SEARCH_CX,
+          },
+          geocoding: {
+            apiKey: result.config?.google?.geocoding?.apiKey ||
+                    process.env.GOOGLE_GEOCODING_API_KEY ||
+                    process.env.GOOGLE_MAPS_API_KEY,
           },
         },
       },

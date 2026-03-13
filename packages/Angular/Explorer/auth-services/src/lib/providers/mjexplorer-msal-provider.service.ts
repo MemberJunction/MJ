@@ -94,17 +94,17 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   }
 
   private async _performInitialization(): Promise<void> {
-    console.log('[MSAL] Starting initialization...');
+    console.debug('[MSAL] Starting initialization...');
     await this.auth.instance.initialize();
-    console.log('[MSAL] MSAL instance initialized');
+    console.debug('[MSAL] MSAL instance initialized');
 
     // Handle redirect immediately after initialization
     const redirectResponse = await this.auth.instance.handleRedirectPromise();
-    console.log('[MSAL] Redirect response:', redirectResponse ? 'Found' : 'None');
+    console.debug('[MSAL] Redirect response:', redirectResponse ? 'Found' : 'None');
 
     if (redirectResponse && redirectResponse.account) {
       // User just logged in via redirect
-      console.log('[MSAL] Processing redirect login');
+      console.debug('[MSAL] Processing redirect login');
       this.auth.instance.setActiveAccount(redirectResponse.account);
       this.updateAuthState(true);
 
@@ -113,14 +113,14 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       this.updateUserInfo(userInfo);
 
       this._initializationCompleted$.next(true);
-      console.log('[MSAL] Initialization completed (redirect login)');
+      console.debug('[MSAL] Initialization completed (redirect login)');
     } else {
       // Set active account if we have one from cache
       const accounts = this.auth.instance.getAllAccounts();
-      console.log('[MSAL] Cached accounts found:', accounts.length);
+      console.debug('[MSAL] Cached accounts found:', accounts.length);
 
       if (accounts.length > 0) {
-        console.log('[MSAL] Restoring session from cached account:', accounts[0].username);
+        console.debug('[MSAL] Restoring session from cached account:', accounts[0].username);
         this.auth.instance.setActiveAccount(accounts[0]);
         this.updateAuthState(true);
 
@@ -129,9 +129,9 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         this.updateUserInfo(userInfo);
 
         this._initializationCompleted$.next(true);
-        console.log('[MSAL] Initialization completed (cached session restored)');
+        console.debug('[MSAL] Initialization completed (cached session restored)');
       } else {
-        console.log('[MSAL] No cached accounts, user needs to log in');
+        console.debug('[MSAL] No cached accounts, user needs to log in');
       }
     }
 
@@ -215,7 +215,26 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       // First try to get cached token from account
       // This avoids unnecessary iframe calls that can timeout
       if (account.idToken) {
-        return account.idToken;
+        // Check if token is expired or about to expire (within 5-minute buffer)
+        // This prevents the race condition where proactive refresh hasn't completed
+        // but the cached token is already expired
+        if (this.isTokenValid(account.idToken, 300)) {
+          return account.idToken;
+        }
+
+        // Token expired or near-expiry — force a silent refresh
+        console.debug('[MSAL] Cached token expired or near-expiry, forcing silent refresh');
+        try {
+          const response = await this.auth.instance.acquireTokenSilent({
+            scopes: ['User.Read', 'email', 'profile'],
+            account: account,
+            forceRefresh: true
+          });
+          return response.idToken || null;
+        } catch (refreshError) {
+          console.warn('[MSAL] Silent refresh failed, returning expired cached token:', refreshError);
+          // Fall through to existing cache-only acquisition below
+        }
       }
 
       // If not in account, try silent token acquisition from cache only
@@ -307,7 +326,10 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   /**
    * Refresh token using MSAL's silent token acquisition
    *
-   * Uses acquireTokenSilent with forceRefresh to get new tokens
+   * MSAL 5.x Best Practices:
+   * - Pass account parameter for reliable silent acquisition
+   * - Use CacheLookupPolicy.Default for efficient cache → refresh token → iframe chain
+   * - Handle MSAL 5.x specific error codes (timed_out, no_tokens_found, etc.)
    */
   protected async refreshTokenInternal(): Promise<TokenRefreshResult> {
     try {
@@ -325,12 +347,12 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         };
       }
 
-      // IMPORTANT: Match original code exactly - no account parameter, no offline_access
-      // This allows MSAL to use lenient matching and successfully refresh tokens
+      // MSAL 5.x: Pass account for reliable silent acquisition
+      // Use Default policy for efficient cache → refresh token → iframe chain
       const response = await this.auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
-        cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork
-        // NOTE: Intentionally NOT passing account or offline_access to match original working code
+        account: account,
+        cacheLookupPolicy: CacheLookupPolicy.Default
       });
 
       if (!response.idToken) {
@@ -358,15 +380,29 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     } catch (error) {
       console.error('[MSAL] Token refresh failed:', error);
 
-      // Check if this is an iframe timeout or interaction required error
-      const errorCode = (error as any)?.errorCode;
-      if (errorCode === 'monitor_window_timeout' || error instanceof InteractionRequiredAuthError) {
+      // Handle MSAL 5.x error codes that require user interaction
+      // - timed_out: MSAL 5.x iframe timeout (replaces monitor_window_timeout from 3.x)
+      // - monitor_window_timeout: Legacy MSAL 3.x iframe timeout
+      // - no_tokens_found: No cached tokens available
+      // - no_account_error: Account not found in cache
+      // - InteractionRequiredAuthError: Server requires user interaction
+      const errorCode = (error as Record<string, unknown>)?.errorCode as string | undefined;
+      const interactionRequiredCodes = [
+        'monitor_window_timeout',
+        'timed_out',
+        'no_tokens_found',
+        'no_account_error',
+        'login_required',
+        'consent_required'
+      ];
+
+      if (interactionRequiredCodes.includes(errorCode || '') || error instanceof InteractionRequiredAuthError) {
         // Return INTERACTION_REQUIRED error - base class will call handleSessionExpiryInternal
         return {
           success: false,
           error: {
             type: AuthErrorType.INTERACTION_REQUIRED,
-            message: 'Silent token refresh failed - interaction required',
+            message: `Silent token refresh failed - interaction required (${errorCode || 'unknown'})`,
             userMessage: 'Your session has expired. Redirecting to login...',
             originalError: error
           }
@@ -383,7 +419,8 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   /**
    * Classify MSAL-specific errors into semantic types
    *
-   * Maps MSAL error classes to AuthErrorType enum
+   * Maps MSAL error classes to AuthErrorType enum.
+   * Updated for MSAL 5.x error codes.
    */
   protected classifyErrorInternal(error: unknown): StandardAuthError {
     const errorObj = error as Record<string, unknown>;
@@ -401,13 +438,31 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     }
 
     if (error instanceof BrowserAuthError) {
-      // Check specific error codes
+      // Check specific error codes - MSAL 5.x codes
       if (errorCode === 'user_cancelled' || message.includes('user cancelled')) {
         return {
           type: AuthErrorType.USER_CANCELLED,
           message,
           originalError: error,
           userMessage: 'Login was cancelled.'
+        };
+      }
+
+      // MSAL 5.x timeout and session errors that require interaction
+      const interactionRequiredCodes = [
+        'timed_out',
+        'monitor_window_timeout',
+        'no_tokens_found',
+        'no_account_error',
+        'login_required',
+        'consent_required'
+      ];
+      if (interactionRequiredCodes.includes(errorCode)) {
+        return {
+          type: AuthErrorType.INTERACTION_REQUIRED,
+          message,
+          originalError: error,
+          userMessage: 'Your session has expired. Please log in again.'
         };
       }
 
@@ -465,6 +520,30 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       await this.initialize();
     } else if (!this._initializationCompleted$.value) {
       await this._initPromise;
+    }
+  }
+
+  /**
+   * Check if a JWT token is still valid with an optional buffer period.
+   * Decodes the payload to read the `exp` claim without cryptographic verification
+   * (expiry is a timing check, not an authenticity check).
+   *
+   * @param token - The JWT string to check
+   * @param bufferSeconds - Number of seconds before actual expiry to consider the token invalid (default: 0)
+   * @returns true if the token's exp claim is beyond (now + buffer), false otherwise
+   */
+  private isTokenValid(token: string, bufferSeconds: number = 0): boolean {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) {
+        return false;
+      }
+      const payload = JSON.parse(atob(parts[1])) as { exp?: number };
+      const expiresAtMs = (payload.exp ?? 0) * 1000;
+      return expiresAtMs > Date.now() + (bufferSeconds * 1000);
+    } catch {
+      // If we can't decode the token, treat it as invalid
+      return false;
     }
   }
 
@@ -535,7 +614,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
    * After authentication, the app will reload and re-initialize with a fresh token.
    */
   protected async handleSessionExpiryInternal(): Promise<void> {
-    console.log('[MSAL] Redirecting to Microsoft login for re-authentication...');
+    console.debug('[MSAL] Redirecting to Microsoft login for re-authentication...');
 
     // Initiate redirect authentication - page will navigate away
     this.auth.loginRedirect({

@@ -1,17 +1,41 @@
 # @memberjunction/ai-vectordb
 
-The MemberJunction AI Vector Database package provides a standardized interface and base classes for working with vector databases in the MemberJunction ecosystem. This package serves as a common abstraction layer that allows different vector database implementations to be used interchangeably.
+A provider-agnostic abstraction layer for vector databases in MemberJunction. This package defines the abstract base class, type system, and query interfaces that concrete vector database implementations (such as Pinecone) must fulfill.
 
-## Features
+## Architecture
 
-- **Abstract Base Class**: Common API for all vector database implementations
-- **Index Management**: Create, list, edit, and delete vector indexes
-- **Record Operations**: Comprehensive CRUD operations for vector records
-- **Query Capabilities**: Flexible vector similarity search with filtering
-- **Type Definitions**: Comprehensive TypeScript type definitions
-- **Provider Agnostic**: Works with any vector database that implements the interface
-- **Standardized Response Format**: Consistent response format across providers
-- **Secure API Key Management**: Protected API key handling with validation
+```mermaid
+graph TD
+    subgraph Abstraction["@memberjunction/ai-vectordb"]
+        VDBB["VectorDBBase (abstract)"]
+        VR["VectorRecord"]
+        QO["QueryOptions"]
+        QR["QueryResponse / ScoredRecord"]
+        IDX["IndexDescription / IndexList"]
+        BR["BaseResponse"]
+    end
+
+    subgraph Implementations["Provider Implementations"]
+        PC["PineconeDatabase"]
+        CUSTOM["Custom Provider"]
+    end
+
+    subgraph Consumers["Consuming Packages"]
+        SYNC["ai-vector-sync"]
+        DUPE["ai-vector-dupe"]
+        CORE["ai-vectors (VectorBase)"]
+    end
+
+    PC -->|extends| VDBB
+    CUSTOM -->|extends| VDBB
+    SYNC --> VDBB
+    DUPE --> VDBB
+    CORE --> VDBB
+
+    style Abstraction fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style Implementations fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style Consumers fill:#7c5295,stroke:#563a6b,color:#fff
+```
 
 ## Installation
 
@@ -19,290 +43,259 @@ The MemberJunction AI Vector Database package provides a standardized interface 
 npm install @memberjunction/ai-vectordb
 ```
 
+## Overview
+
+This package provides:
+
+- **VectorDBBase** -- an abstract class that defines a complete API for vector database operations (index management + record CRUD + similarity queries)
+- **Record types** -- `VectorRecord`, `RecordValues`, `RecordSparseValues`, `RecordMetadata` for representing vectors and their metadata
+- **Query types** -- `QueryOptions`, `QueryResponse`, `ScoredRecord` for similarity search
+- **Index types** -- `IndexDescription`, `IndexList`, `IndexModelMetricEnum` for index configuration
+- **Response types** -- `BaseResponse` for standardized success/failure responses
+
+Concrete implementations like `@memberjunction/ai-vectors-pinecone` extend `VectorDBBase` to connect to specific vector database services.
+
 ## Core Components
 
-### VectorDBBase
+### VectorDBBase (Abstract Class)
 
-The abstract base class that all vector database providers must implement:
+All vector database providers must extend this class. The constructor requires an API key, which is validated and stored for subclass access via a protected getter.
 
-```typescript
-export abstract class VectorDBBase {
-  // Protected getter for API key access by subclasses
-  protected get apiKey(): string;
-  
-  constructor(apiKey: string);
-  
-  // Index operations
-  abstract listIndexes(): IndexList | Promise<IndexList>;
-  abstract getIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
-  abstract createIndex(params: CreateIndexParams): BaseResponse | Promise<BaseResponse>;
-  abstract deleteIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
-  abstract editIndex(params: EditIndexParams): BaseResponse | Promise<BaseResponse>;
-  abstract queryIndex(params: QueryOptions): BaseResponse | Promise<BaseResponse>;
-  
-  // Record operations
-  abstract createRecord(record: VectorRecord): BaseResponse | Promise<BaseResponse>;
-  abstract createRecords(record: VectorRecord[]): BaseResponse | Promise<BaseResponse>;
-  abstract getRecord(param: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
-  abstract getRecords(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
-  abstract updateRecord(record: UpdateOptions): BaseResponse | Promise<BaseResponse>;
-  abstract updateRecords(records: UpdateOptions): BaseResponse | Promise<BaseResponse>;
-  abstract deleteRecord(record: VectorRecord): BaseResponse | Promise<BaseResponse>;
-  abstract deleteRecords(records: VectorRecord[]): BaseResponse | Promise<BaseResponse>;
-}
+```mermaid
+classDiagram
+    class VectorDBBase {
+        <<abstract>>
+        #apiKey : string
+        +constructor(apiKey: string)
+        +listIndexes()* IndexList
+        +getIndex(params)* BaseResponse
+        +createIndex(params)* BaseResponse
+        +deleteIndex(params)* BaseResponse
+        +editIndex(params)* BaseResponse
+        +queryIndex(params)* BaseResponse
+        +createRecord(record)* BaseResponse
+        +createRecords(records)* BaseResponse
+        +getRecord(params)* BaseResponse
+        +getRecords(params)* BaseResponse
+        +updateRecord(record)* BaseResponse
+        +updateRecords(records)* BaseResponse
+        +deleteRecord(record)* BaseResponse
+        +deleteRecords(records)* BaseResponse
+    }
+
+    class PineconeDatabase {
+        +listIndexes() IndexList
+        +queryIndex(params) BaseResponse
+    }
+
+    VectorDBBase <|-- PineconeDatabase
+
+    style VectorDBBase fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style PineconeDatabase fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
 
-### Key Types and Interfaces
+The abstract methods support both synchronous and asynchronous return types via union types (`BaseResponse | Promise<BaseResponse>`), allowing implementations to choose the appropriate pattern.
+
+### Type System
 
 #### Vector Records
 
 ```typescript
-export type VectorRecord<T extends RecordMetadata = RecordMetadata> = {
-  id: string;                 // Unique identifier for the record
-  values: RecordValues;       // Vector embedding values (array of numbers)
-  sparseValues?: RecordSparseValues; // Optional sparse representation for hybrid search
-  metadata?: T;               // Optional metadata for filtering and identification
+// Core vector record with generic metadata support
+type VectorRecord<T extends RecordMetadata = RecordMetadata> = {
+    id: string;                          // Unique record identifier
+    values: RecordValues;                // Dense vector (array of numbers)
+    sparseValues?: RecordSparseValues;   // Optional sparse representation for hybrid search
+    metadata?: T;                        // Arbitrary filterable metadata
 };
 
-export type RecordValues = Array<number>;
+type RecordValues = Array<number>;
 
-export type RecordSparseValues = {
-  indices: Array<number>;     // List of indices where non-zero values are present
-  values: Array<number>;      // The values that correspond to the positions in indices
+type RecordSparseValues = {
+    indices: Array<number>;   // Non-zero positions
+    values: Array<number>;    // Corresponding values
 };
 
-export type RecordMetadataValue = string | boolean | number | Array<string>;
-export type RecordMetadata = Record<string, RecordMetadataValue>;
+type RecordMetadataValue = string | boolean | number | Array<string>;
+type RecordMetadata = Record<string, RecordMetadataValue>;
 ```
 
-#### Index Description
+#### Index Configuration
 
 ```typescript
-export type IndexDescription = {
-  name: string;               // Name of the index
-  dimension: number;          // Vector dimension size
-  metric: IndexModelMetricEnum; // Distance metric: 'cosine', 'euclidean', or 'dotproduct'
-  host: string;               // Host where the index is located
+type IndexDescription = {
+    name: string;                       // Index name (max 45 chars)
+    dimension: number;                  // Vector dimensionality
+    metric: IndexModelMetricEnum;       // 'cosine' | 'euclidean' | 'dotproduct'
+    host: string;                       // Hosting URL
 };
 ```
 
-#### Query Options
+#### Query Types
 
-For similarity search in vector databases:
+```mermaid
+graph LR
+    QPB["QueryParamsBase<br/>topK, includeValues,<br/>includeMetadata, filter"]
+    QBV["QueryByVectorValues<br/>+ vector"]
+    QBID["QueryByRecordId<br/>+ id"]
+    QO["QueryOptions"]
+
+    QPB --> QBV
+    QPB --> QBID
+    QBV --> QO
+    QBID --> QO
+
+    style QPB fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style QBV fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style QBID fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style QO fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ```typescript
-// Base query parameters
-export type QueryParamsBase = {
-  topK: number;              // Number of results to return
-  includeValues?: boolean;   // Whether to include vector values in results
-  includeMetadata?: boolean; // Whether to include metadata in results
-  filter?: object;           // Metadata filter to apply
+// Base query parameters shared by all query types
+type QueryParamsBase = {
+    topK: number;               // Number of results to return
+    includeValues?: boolean;    // Include vector values in results
+    includeMetadata?: boolean;  // Include metadata in results
+    filter?: object;            // Metadata filter
 };
 
-// Query by vector values
-export type QueryByVectorValues = QueryParamsBase & {
-  vector: RecordValues;      // The query vector to find similar vectors for
-};
+// Query by providing a vector directly
+type QueryByVectorValues = QueryParamsBase & { vector: RecordValues };
 
-// Query by record ID
-export type QueryByRecordId = QueryParamsBase & {
-  id: string;                // Use an existing record's vector to query
-};
+// Query using an existing record's vector
+type QueryByRecordId = QueryParamsBase & { id: string };
 
-// Combined query options type
-export type QueryOptions = QueryByRecordId | QueryByVectorValues;
+// Union type for all query configurations
+type QueryOptions = QueryByRecordId | QueryByVectorValues;
 ```
 
 #### Query Response
 
 ```typescript
-export type QueryResponse<T extends RecordMetadata = RecordMetadata> = {
-  matches: Array<ScoredRecord<T>>; // Results sorted by similarity
-  namespace: string;               // Namespace where query was executed
-  usage?: OperationUsage;          // Usage information
+type QueryResponse<T extends RecordMetadata = RecordMetadata> = {
+    matches: Array<ScoredRecord<T>>;  // Sorted by similarity
+    namespace: string;                 // Execution namespace
+    usage?: OperationUsage;            // Read unit consumption
 };
 
-export interface ScoredRecord<T extends RecordMetadata = RecordMetadata> extends VectorRecord<T> {
-  score?: number;                  // Similarity score (interpretation depends on metric)
+interface ScoredRecord<T> extends VectorRecord<T> {
+    score?: number;  // Similarity score (interpretation depends on metric)
 }
-
-export type OperationUsage = {
-  readUnits?: number;              // Number of read units consumed by operation
-};
 ```
 
-## Usage Examples
+#### Standardized Response
 
-While this package primarily provides interfaces and base classes, here's how it would be used with a concrete implementation:
-
-### Implementing a Vector Database Provider
-
-Create a provider by implementing the `VectorDBBase` abstract class:
+All operations return a `BaseResponse`:
 
 ```typescript
-import { VectorDBBase, VectorRecord, BaseResponse, CreateIndexParams } from '@memberjunction/ai-vectordb';
+type BaseResponse = {
+    success: boolean;
+    message: string;
+    data: unknown;
+};
+```
 
-class MyVectorDBProvider extends VectorDBBase {
-  constructor(apiKey: string) {
-    super(apiKey);
-  }
-  
-  async listIndexes() {
-    // Implementation for listing indexes
-    return {
-      indexes: [
-        // Index descriptions
-      ]
-    };
-  }
-  
-  async createIndex(params: CreateIndexParams): Promise<BaseResponse> {
-    // Implementation for creating an index
-    try {
-      // Provider-specific code
-      return {
-        success: true,
-        message: 'Index created successfully',
-        data: { /* index info */ }
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-        data: null
-      };
+## Usage
+
+### Implementing a Provider
+
+```typescript
+import {
+    VectorDBBase,
+    VectorRecord,
+    BaseResponse,
+    CreateIndexParams,
+    QueryOptions,
+    IndexList
+} from '@memberjunction/ai-vectordb';
+
+export class MyVectorDB extends VectorDBBase {
+    constructor(apiKey: string) {
+        super(apiKey); // Validates and stores the API key
     }
-  }
-  
-  // Implement remaining methods...
+
+    async listIndexes(): Promise<IndexList> {
+        // Call your vector DB API using this.apiKey
+        return { indexes: [] };
+    }
+
+    async createIndex(params: CreateIndexParams): Promise<BaseResponse> {
+        return { success: true, message: 'Created', data: { id: params.id } };
+    }
+
+    async queryIndex(params: QueryOptions): Promise<BaseResponse> {
+        // Perform similarity search
+        return { success: true, message: 'OK', data: { matches: [] } };
+    }
+
+    // ... implement remaining abstract methods
 }
 ```
 
-### Using a Vector Database Provider
-
-Once a provider is implemented, you can use it with a consistent API:
+### Consuming a Provider
 
 ```typescript
 import { VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
-import { MyVectorDBProvider } from './my-vector-db-provider';
 
-async function workWithVectors() {
-  // Initialize the provider
-  const vectorDB: VectorDBBase = new MyVectorDBProvider('your-api-key');
-  
-  // Create an index
-  const createResult = await vectorDB.createIndex({
-    id: 'my-index',
-    dimension: 1536,
-    metric: 'cosine' as IndexModelMetricEnum
-  });
-  
-  if (createResult.success) {
-    console.log('Index created:', createResult.data);
-  }
-  
-  // Insert a vector
-  const insertResult = await vectorDB.createRecord({
-    id: 'record-1',
-    values: [0.1, 0.2, 0.3, /* ... */],
-    metadata: {
-      category: 'document',
-      title: 'Sample Document'
+async function searchSimilar(vectorDB: VectorDBBase, embedding: number[]): Promise<void> {
+    // Insert a record
+    const record: VectorRecord = {
+        id: 'doc-001',
+        values: embedding,
+        metadata: { entity: 'Products', recordId: '12345' }
+    };
+    await vectorDB.createRecord(record);
+
+    // Query for similar vectors
+    const result = await vectorDB.queryIndex({
+        vector: embedding,
+        topK: 10,
+        includeMetadata: true
+    });
+
+    if (result.success) {
+        for (const match of result.data.matches) {
+            console.log(`Match: ${match.id} (score: ${match.score})`);
+        }
     }
-  });
-  
-  // Query for similar vectors
-  const queryResult = await vectorDB.queryIndex({
-    vector: [0.1, 0.2, 0.3, /* ... */],
-    topK: 5,
-    includeMetadata: true,
-    filter: {
-      category: 'document'
-    }
-  });
-  
-  if (queryResult.success) {
-    console.log('Similar vectors:', queryResult.data.matches);
-  }
 }
 ```
 
-## Provider Implementations
+## Distance Metrics
 
-MemberJunction provides implementations for popular vector databases:
+The `IndexModelMetricEnum` supports three metrics for similarity comparison:
 
-- `@memberjunction/ai-vectors-pinecone` - Implementation for Pinecone vector database
+| Metric | Description | Use Case |
+|---|---|---|
+| `cosine` | Measures angle between vectors (direction similarity) | Text embeddings, semantic search |
+| `euclidean` | Straight-line distance between points | Numeric features, specifications |
+| `dotproduct` | Measures both direction and magnitude alignment | Recommendation systems, weighted scoring |
 
-You can also create your own implementation for any vector database service by extending the `VectorDBBase` class.
+## Available Implementations
 
-## Integration with MemberJunction Ecosystem
+| Package | Vector Database |
+|---|---|
+| `@memberjunction/ai-vectors-pinecone` | Pinecone |
 
-This package integrates with the broader MemberJunction AI vector ecosystem:
-
-- `@memberjunction/ai-vectors` - Core vector functionality
-- `@memberjunction/ai-vectors-sync` - Synchronize entity data to vector databases
-- `@memberjunction/ai-vectors-dupe` - Duplicate detection using vector similarity
-
-## Error Handling
-
-The VectorDBBase constructor validates the API key and throws an error if it's empty or invalid:
-
-```typescript
-try {
-  const vectorDB = new MyVectorDBProvider('');
-} catch (error) {
-  // Error: API key cannot be empty
-}
-```
-
-All methods return a standardized `BaseResponse` format:
-
-```typescript
-export type BaseResponse = {
-  success: boolean;  // Whether the operation succeeded
-  message: string;   // Human-readable message about the operation
-  data: any;         // Operation-specific response data
-};
-```
-
-## Additional Types
-
-### Request Parameters
-
-```typescript
-export type BaseRequestParams = {
-  id: string;
-  data?: any;
-};
-
-export type CreateIndexParams = BaseRequestParams & {
-  dimension: number;
-  metric: IndexModelMetricEnum;
-  additionalParams?: any;
-};
-
-export type EditIndexParams = BaseRequestParams & {
-  // Additional fields specific to the provider
-};
-```
+Create additional implementations by extending `VectorDBBase` and registering with MemberJunction's class factory.
 
 ## Dependencies
 
-- `@memberjunction/core`: ^2.43.0 - MemberJunction core library
-- `@memberjunction/global`: ^2.43.0 - MemberJunction global utilities
-- `dotenv`: ^16.4.1 - Environment variable management
+| Package | Purpose |
+|---|---|
+| `@memberjunction/core` | Core MemberJunction functionality |
+| `@memberjunction/global` | Global utilities |
 
-## Development Dependencies
+## Development
 
-- `@types/node`: 20.14.2
-- `ts-node-dev`: ^2.0.0
-- `typescript`: ^5.4.5
+```bash
+# Build
+npm run build
 
-## Scripts
-
-- `npm run build` - Compile TypeScript to JavaScript
-- `npm run start` - Run the development server with ts-node-dev
-- `npm test` - Run tests (currently not implemented)
+# Development mode
+npm run start
+```
 
 ## License
 

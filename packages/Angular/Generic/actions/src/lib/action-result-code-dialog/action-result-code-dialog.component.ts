@@ -1,8 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { ActionResultCodeEntity } from '@memberjunction/core-entities';
+import { MJActionResultCodeEntity } from '@memberjunction/core-entities';
 
 export interface ActionResultCodeDialogResult {
-    ResultCode: ActionResultCodeEntity;
+    ResultCode: MJActionResultCodeEntity;
     Save: boolean;
 }
 
@@ -27,19 +27,19 @@ export interface ActionResultCodeDialogResult {
 })
 export class ActionResultCodeDialogComponent implements OnInit {
     // Private backing fields
-    private _resultCode!: ActionResultCodeEntity;
+    private _resultCode!: MJActionResultCodeEntity;
     private _isNew = false;
     private _editMode = false;
     private _isOpen = false;
 
     @Input()
-    set ResultCode(value: ActionResultCodeEntity) {
+    set ResultCode(value: MJActionResultCodeEntity) {
         this._resultCode = value;
         if (value) {
             this.loadResultCodeValues();
         }
     }
-    get ResultCode(): ActionResultCodeEntity {
+    get ResultCode(): MJActionResultCodeEntity {
         return this._resultCode;
     }
 

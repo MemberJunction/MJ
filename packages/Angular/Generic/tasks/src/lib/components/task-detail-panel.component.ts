@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges } from '@angular/core';
 
-import { TaskEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Task detail panel showing task information, agent details, and agent run
@@ -103,7 +104,7 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
     .task-detail-panel {
       width: 100%;
       height: calc(100% - 45px);
-      background: white;
+      background: var(--mj-bg-surface);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -111,11 +112,11 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
     .detail-header {
       padding: 20px;
-      border-bottom: 1px solid #E5E7EB;
+      border-bottom: 1px solid var(--mj-border-default);
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
       flex-shrink: 0;
     }
 
@@ -123,7 +124,7 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
       margin: 0;
       font-size: 18px;
       font-weight: 600;
-      color: #111827;
+      color: var(--mj-text-primary);
       flex: 1;
       padding-right: 12px;
     }
@@ -131,7 +132,7 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
     .close-detail-btn {
       background: none;
       border: none;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       cursor: pointer;
       padding: 4px;
       width: 28px;
@@ -144,8 +145,8 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
     }
 
     .close-detail-btn:hover {
-      background: #E5E7EB;
-      color: #111827;
+      background: var(--mj-border-default);
+      color: var(--mj-text-primary);
     }
 
     .detail-content {
@@ -167,7 +168,7 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
       display: block;
       font-size: 12px;
       font-weight: 600;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 6px;
@@ -176,7 +177,7 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
     .detail-field p {
       margin: 0;
       font-size: 14px;
-      color: #111827;
+      color: var(--mj-text-primary);
       line-height: 1.5;
     }
 
@@ -189,21 +190,21 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
     .progress-bar-detail {
       flex: 1;
       height: 8px;
-      background: #E5E7EB;
+      background: var(--mj-border-default);
       border-radius: 4px;
       overflow: hidden;
     }
 
     .progress-fill-detail {
       height: calc(100% - 69px);
-      background: #3B82F6;
+      background: var(--mj-brand-primary);
       transition: width 0.3s ease;
     }
 
     .detail-progress span {
       font-size: 13px;
       font-weight: 600;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       min-width: 40px;
     }
 
@@ -212,31 +213,31 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
       align-items: center;
       gap: 10px;
       padding: 10px 12px;
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 6px;
       cursor: pointer;
       transition: all 0.15s;
     }
 
     .agent-info:hover {
-      background: #E5E7EB;
+      background: var(--mj-border-default);
     }
 
     .agent-icon {
       font-size: 18px;
-      color: #3B82F6;
+      color: var(--mj-brand-primary);
     }
 
     .agent-name {
       flex: 1;
       font-size: 14px;
       font-weight: 500;
-      color: #111827;
+      color: var(--mj-text-primary);
     }
 
     .link-icon {
       font-size: 12px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .agent-run-link {
@@ -244,31 +245,31 @@ import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
       align-items: center;
       gap: 8px;
       padding: 10px 12px;
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 6px;
       cursor: pointer;
       transition: all 0.15s;
     }
 
     .agent-run-link:hover {
-      background: #E5E7EB;
+      background: var(--mj-border-default);
     }
 
     .agent-run-link span {
       flex: 1;
       font-size: 14px;
       font-weight: 500;
-      color: #111827;
+      color: var(--mj-text-primary);
     }
   `]
 })
 export class TaskDetailPanelComponent implements OnInit, OnChanges {
-  @Input() task!: TaskEntity;
+  @Input() task!: MJTaskEntity;
   @Input() agentRunId: string | null = null;
   @Output() closePanel = new EventEmitter<void>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
-  public agent: AIAgentEntityExtended | null = null;
+  public agent: MJAIAgentEntityExtended | null = null;
 
   ngOnInit(): void {
     this.loadAgentInfo();
@@ -286,7 +287,7 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
 
     // Get agent from AIEngineBase
     const agents = AIEngineBase.Instance.Agents;
-    this.agent = agents.find((a: AIAgentEntityExtended) => a.ID === this.task.AgentID) || null;
+    this.agent = agents.find((a: MJAIAgentEntityExtended) => UUIDsEqual(a.ID, this.task.AgentID)) || null;
   }
 
   public formatDateTime(date: Date | null): string {
@@ -304,7 +305,7 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
   public openAgent(): void {
     if (this.task.AgentID) {
       this.openEntityRecord.emit({
-        entityName: 'AI Agents',
+        entityName: 'MJ: AI Agents',
         recordId: this.task.AgentID
       });
     }

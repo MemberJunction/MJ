@@ -118,7 +118,7 @@
               @else {
                 @for (artifact of artifacts; track artifact.ID) {
                   <div class="artifact-item"
-                       [class.selected]="selectedArtifact?.ID === artifact.ID"
+                       [class.selected]="IsArtifactSelected(artifact)"
                        (click)="selectArtifact(artifact)">
                     <div class="artifact-content">
                       <div class="artifact-main">
@@ -162,7 +162,7 @@
               @else {
                 @for (collection of collections; track collection.ID) {
                   <div class="collection-item"
-                       [class.selected]="selectedCollection?.ID === collection.ID"
+                       [class.selected]="IsCollectionSelected(collection)"
                        (click)="selectCollection(collection)">
                     <div class="collection-icon">
                       <i class="fa-solid fa-folder"></i>
@@ -193,7 +193,7 @@
                 @else {
                   @for (artifact of collectionArtifacts; track artifact.ID) {
                     <div class="artifact-item"
-                         [class.selected]="selectedArtifact?.ID === artifact.ID"
+                         [class.selected]="IsArtifactSelected(artifact)"
                          (click)="selectArtifact(artifact)">
                       <div class="artifact-content">
                         <div class="artifact-main">
@@ -241,7 +241,7 @@
             <div class="version-list">
               @for (version of artifactVersions; track version.ID) {
                 <div class="version-item"
-                     [class.selected]="selectedVersion?.ID === version.ID"
+                     [class.selected]="IsVersionSelected(version)"
                      (click)="selectVersion(version)">
                   <div class="version-number">
                     <i class="fa-solid fa-code-branch"></i>

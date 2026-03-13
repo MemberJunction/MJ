@@ -2,7 +2,7 @@ import { CloudStorageBase } from "../generic/CloudStorageBase";
 import { UserInfo } from "@memberjunction/core";
 import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
 import dotenv from 'dotenv';
-import { ContentItemEntity } from "@memberjunction/core-entities";
+import { MJContentItemEntity } from "@memberjunction/core-entities";
 import { Metadata } from "@memberjunction/core";
 import path from "path";
 import { ContentSourceParams } from "../../Engine";
@@ -39,15 +39,15 @@ export class AutotagAzureBlob extends CloudStorageBase {
         }
     }
 
-    public async SetNewAndModifiedContentItems(contentSourceParams: ContentSourceParams, lastRunDate: Date, contextUser: UserInfo, prefix=''): Promise<ContentItemEntity[]> {
-        const contentItemsToProcess: ContentItemEntity[] = []
+    public async SetNewAndModifiedContentItems(contentSourceParams: ContentSourceParams, lastRunDate: Date, contextUser: UserInfo, prefix=''): Promise<MJContentItemEntity[]> {
+        const contentItemsToProcess: MJContentItemEntity[] = []
 
         for await (const blob of this.containerClient.listBlobsFlat()) {
             const filePath = path.join(this.containerName, blob.name)
             if (blob.properties.createdOn && blob.properties.createdOn > lastRunDate) {
                 // The file has been created, add a new record for this file
                 const md = new Metadata()
-                const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
+                const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser)
                 const text = await this.extractText(blob.name)
                 contentItem.ContentSourceID = contentSourceParams.contentSourceID
                 contentItem.Name = blob.name
@@ -65,7 +65,7 @@ export class AutotagAzureBlob extends CloudStorageBase {
             else if (blob.properties.lastModified && blob.properties.lastModified > lastRunDate) {
                 // The file has been modified, update the record for this file
                 const md = new Metadata()
-                const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
+                const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser)
                 const contentItemID = await this.engine.getContentItemIDFromURL(contentSourceParams, contextUser)
                 await contentItem.Load(contentItemID)
                 const text = await this.extractText(blob.name)

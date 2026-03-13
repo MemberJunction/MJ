@@ -15,25 +15,26 @@
 
   @if (showDropdown) {
     <div class="app-switcher-dropdown">
-      @for (app of apps; track app) {
-        <div
-          class="app-switcher-item"
-          [class.active]="app.ID === activeApp?.ID"
-          [class.loading]="app.ID === loadingAppId"
-          [style.--item-color]="app.GetColor()"
-          (click)="selectApp(app)">
-          @if (app.ID === loadingAppId) {
-            <i class="fa-solid fa-spinner fa-spin"></i>
-          }
-          @if (app.ID !== loadingAppId) {
-            <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
-          }
-          <span>{{ app.Name }}</span>
-        </div>
-      }
-      <!-- Divider -->
+      <div class="app-switcher-list">
+        @for (app of apps; track app) {
+          <div
+            class="app-switcher-item"
+            [class.active]="IsActiveApp(app)"
+            [class.loading]="IsLoadingApp(app)"
+            [style.--item-color]="app.GetColor()"
+            (click)="selectApp(app)">
+            @if (IsLoadingApp(app)) {
+              <i class="fa-solid fa-spinner fa-spin"></i>
+            }
+            @if (!IsLoadingApp(app)) {
+              <i [class]="app.Icon || 'fa-solid fa-cube'"></i>
+            }
+            <span>{{ app.Name }}</span>
+          </div>
+        }
+      </div>
+      <!-- Divider + Configure pinned at bottom -->
       <div class="app-switcher-divider"></div>
-      <!-- Configure option -->
       <div class="app-switcher-item configure-item" (click)="openConfigDialog()">
         <i class="fa-solid fa-gear"></i>
         <span>Configure...</span>
@@ -45,6 +46,6 @@
 <!-- App Configuration Dialog -->
 <mj-user-app-config
   #appConfigDialog
-  [(showDialog)]="showConfigDialog"
-  (configSaved)="onConfigSaved()">
+  [(ShowDialog)]="showConfigDialog"
+  (ConfigSaved)="onConfigSaved()">
 </mj-user-app-config>

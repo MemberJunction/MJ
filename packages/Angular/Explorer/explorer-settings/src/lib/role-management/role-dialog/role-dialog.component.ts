@@ -1,17 +1,17 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation, ChangeDetectorRef, NgZone } from '@angular/core';
 
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { Metadata } from '@memberjunction/core';
-import { RoleEntity } from '@memberjunction/core-entities';
+import { MJRoleEntity } from '@memberjunction/core-entities';
 
 export interface RoleDialogData {
-  role?: RoleEntity;
+  role?: MJRoleEntity;
   mode: 'create' | 'edit';
 }
 
 export interface RoleDialogResult {
   action: 'save' | 'cancel';
-  role?: RoleEntity;
+  role?: MJRoleEntity;
 }
 
 @Component({
@@ -27,6 +27,8 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Output() result = new EventEmitter<RoleDialogResult>();
 
   private fb = inject(FormBuilder);
+  private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone);
   private metadata = new Metadata();
 
   public roleForm: FormGroup;
@@ -116,14 +118,14 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
     this.error = null;
 
     try {
-      let role: RoleEntity;
+      let role: MJRoleEntity;
 
       if (this.isEditMode && this.data?.role) {
         // Edit existing role
         role = this.data.role;
       } else {
         // Create new role
-        role = await this.metadata.GetEntityObject<RoleEntity>('Roles');
+        role = await this.metadata.GetEntityObject<MJRoleEntity>('MJ: Roles');
         role.NewRecord();
       }
 
@@ -146,11 +148,17 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
 
       this.result.emit({ action: 'save', role });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving role:', error);
-      this.error = error.message || 'An unexpected error occurred';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'An unexpected error occurred';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 

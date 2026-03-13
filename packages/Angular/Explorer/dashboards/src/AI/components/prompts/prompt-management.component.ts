@@ -1,20 +1,20 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJAIPromptTypeEntity, MJAIPromptCategoryEntity, MJTemplateEntity, MJTemplateContentEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { RegisterClass } from '@memberjunction/global';
-import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
-interface PromptWithTemplate extends Omit<AIPromptEntityExtended, 'Template'> {
-  Template: string; // From AIPromptEntityExtended (view field)
-  TemplateEntity?: TemplateEntity; // Our added field for the actual template entity
-  TemplateContents?: TemplateContentEntity[];
+interface PromptWithTemplate extends Omit<MJAIPromptEntityExtended, 'Template'> {
+  Template: string; // From MJAIPromptEntityExtended (view field)
+  MJTemplateEntity?: MJTemplateEntity; // Our added field for the actual template entity
+  TemplateContents?: MJTemplateContentEntity[];
   CategoryName?: string;
   TypeName?: string;
 }
@@ -59,8 +59,8 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   // Data
   public prompts: PromptWithTemplate[] = [];
   public filteredPrompts: PromptWithTemplate[] = [];
-  public categories: AIPromptCategoryEntity[] = [];
-  public types: AIPromptTypeEntity[] = [];
+  public categories: MJAIPromptCategoryEntity[] = [];
+  public types: MJAIPromptTypeEntity[] = [];
 
   // Filtering
   public searchTerm = '';
@@ -89,7 +89,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   private loadingMessageInterval: any;
 
   private destroy$ = new Subject<void>();
-  public selectedPromptForTest: AIPromptEntityExtended | null = null;
+  public selectedPromptForTest: MJAIPromptEntityExtended | null = null;
 
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
@@ -98,22 +98,22 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
 
   /** Check if user can create AI Prompts */
   public get UserCanCreatePrompts(): boolean {
-    return this.checkEntityPermission('AI Prompts', 'Create');
+    return this.checkEntityPermission('MJ: AI Prompts', 'Create');
   }
 
   /** Check if user can read AI Prompts */
   public get UserCanReadPrompts(): boolean {
-    return this.checkEntityPermission('AI Prompts', 'Read');
+    return this.checkEntityPermission('MJ: AI Prompts', 'Read');
   }
 
   /** Check if user can update AI Prompts */
   public get UserCanUpdatePrompts(): boolean {
-    return this.checkEntityPermission('AI Prompts', 'Update');
+    return this.checkEntityPermission('MJ: AI Prompts', 'Update');
   }
 
   /** Check if user can delete AI Prompts */
   public get UserCanDeletePrompts(): boolean {
-    return this.checkEntityPermission('AI Prompts', 'Delete');
+    return this.checkEntityPermission('MJ: AI Prompts', 'Delete');
   }
 
   /**
@@ -331,12 +331,12 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
       this.types = AIEngineBase.Instance.PromptTypes;
 
       // Get cached data from TemplateEngineBase
-      const templates = TemplateEngineBase.Instance.Templates as TemplateEntity[];
+      const templates = TemplateEngineBase.Instance.Templates as MJTemplateEntity[];
       const templateContents = TemplateEngineBase.Instance.TemplateContents;
       
       // Create lookup maps
       const templateMap = new Map(templates.map(t => [t.ID, t]));
-      const templateContentMap = new Map<string, TemplateContentEntity[]>();
+      const templateContentMap = new Map<string, MJTemplateContentEntity[]>();
       
       templateContents.forEach(tc => {
         const contents = templateContentMap.get(tc.TemplateID) || [];
@@ -352,7 +352,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
         const template = templateMap.get(prompt.ID);
         
         // Add the extra properties directly to the entity
-        (prompt as any).TemplateEntity = template;
+        (prompt as any).MJTemplateEntity = template;
         (prompt as any).TemplateContents = template ? (templateContentMap.get(template.ID) || []) : [];
         (prompt as any).CategoryName = prompt.CategoryID ? categoryMap.get(prompt.CategoryID) || 'Unknown' : 'Uncategorized';
         (prompt as any).TypeName = prompt.TypeID ? typeMap.get(prompt.TypeID) || 'Unknown' : 'Untyped';
@@ -422,12 +422,12 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
       }
 
       // Category filter
-      if (this.selectedCategory !== 'all' && prompt.CategoryID !== this.selectedCategory) {
+      if (this.selectedCategory !== 'all' && !UUIDsEqual(prompt.CategoryID, this.selectedCategory)) {
         return false;
       }
 
       // Type filter
-      if (this.selectedType !== 'all' && prompt.TypeID !== this.selectedType) {
+      if (this.selectedType !== 'all' && !UUIDsEqual(prompt.TypeID, this.selectedType)) {
         return false;
       }
 
@@ -521,7 +521,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
 
   public openPrompt(promptId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: promptId }]);
-    this.navigationService.OpenEntityRecord('AI Prompts', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Prompts', compositeKey);
   }
 
   /**
@@ -574,7 +574,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   public createNewPrompt(): void {
     // Use the standard MemberJunction pattern to open a new AI Prompt form
     // Empty CompositeKey indicates a new record
-    this.navigationService.OpenEntityRecord('AI Prompts', new CompositeKey([]));
+    this.navigationService.OpenEntityRecord('MJ: AI Prompts', new CompositeKey([]));
   }
 
   public getPromptIcon(prompt: PromptWithTemplate): string {
@@ -599,9 +599,9 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
            this.selectedStatus !== 'all';
   }
 
-  public get filteredPromptsAsEntities(): AIPromptEntityExtended[] {
-    // The prompts are already AIPromptEntityExtended instances with extra properties
-    return this.filteredPrompts as AIPromptEntityExtended[];
+  public get filteredPromptsAsEntities(): MJAIPromptEntityExtended[] {
+    // The prompts are already MJAIPromptEntityExtended instances with extra properties
+    return this.filteredPrompts as MJAIPromptEntityExtended[];
   }
 
   public clearFilters(): void {

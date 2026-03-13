@@ -1,15 +1,45 @@
 # @memberjunction/templates-base-types
 
-Base types and core functionality for the MemberJunction templating system. This package provides the foundational classes, types, and metadata management for templates that can be used in both client and server environments.
+Base types and metadata caching engine for MemberJunction's templating system. Provides cached access to template metadata and can be used on both client and server.
+
+## Architecture
+
+```mermaid
+graph TD
+    subgraph "@memberjunction/templates-base-types"
+        A[TemplateEngineBase] --> B[Templates Cache]
+        A --> C[Template Contents]
+        A --> D[Template Params]
+        A --> E[Content Types]
+        A --> F[Categories]
+    end
+
+    subgraph "Loaded via Dataset"
+        G["Template_Metadata<br/>Dataset"]
+    end
+
+    G --> A
+
+    H["@memberjunction/templates<br/>(Server Engine)"] --> A
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style E fill:#7c5295,stroke:#563a6b,color:#fff
+    style F fill:#7c5295,stroke:#563a6b,color:#fff
+    style H fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Overview
 
-This package serves as the foundation for the MemberJunction templating system, providing:
+This package provides the foundational layer for MemberJunction's templating system:
 
-- **Base template engine class** for metadata management and caching
-- **Extended template entity** with additional functionality
-- **Core type definitions** for template rendering results
-- **Template metadata access** through a singleton pattern
+- **TemplateEngineBase**: Singleton engine that loads and caches all template metadata via the `Template_Metadata` dataset
+- **TemplateRenderResult**: Standard result type for template rendering operations
+- **Metadata Access**: Cached getters for templates, content types, categories, contents, and params
+- **Template Lookup**: Convenience method for finding templates by name (case-insensitive)
+- **Content Association**: Automatically associates template contents and params with their parent templates after loading
 
 ## Installation
 
@@ -17,72 +47,50 @@ This package serves as the foundation for the MemberJunction templating system, 
 npm install @memberjunction/templates-base-types
 ```
 
-## Core Components
+## Usage
 
-### TemplateEngineBase
-
-The `TemplateEngineBase` class provides a singleton engine for managing template metadata, including templates, content variations, parameters, and categories.
+### Initializing the Engine
 
 ```typescript
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 
-// Get the singleton instance
-const templateEngine = TemplateEngineBase.Instance;
+// Load template metadata
+await TemplateEngineBase.Instance.Config(false, contextUser);
 
-// Load template metadata (required before use)
-await templateEngine.Config();
-
-// Access templates
-const templates = templateEngine.Templates;
-
-// Find a specific template by name (case-insensitive)
-const template = templateEngine.FindTemplate('Welcome Email');
+// Force refresh
+await TemplateEngineBase.Instance.Config(true, contextUser);
 ```
 
-### TemplateEntityExtended
-
-An enhanced version of the base `TemplateEntity` that includes associated content and parameters as properties, along with utility methods.
+### Accessing Template Metadata
 
 ```typescript
-import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
+const engine = TemplateEngineBase.Instance;
 
-// Access template content and parameters
-const template: TemplateEntityExtended = templateEngine.FindTemplate('Invoice Template');
+// All templates (with Content and Params pre-associated)
+const templates = engine.Templates;
 
-// Get all content for the template
-const allContent = template.Content;
+// Find a template by name
+const emailTemplate = engine.FindTemplate('Welcome Email');
 
-// Get content by type
-const htmlContent = template.GetContentByType('HTML');
-const plainTextContent = template.GetContentByType('PlainText');
+// Access template contents and params
+const contents = emailTemplate.Content;
+const params = emailTemplate.Params;
 
-// Get the highest priority content
-const primaryContent = template.GetHighestPriorityContent();
-const primaryHtmlContent = template.GetHighestPriorityContent('HTML');
-
-// Validate input data against template parameters
-const validationResult = template.ValidateTemplateInput({
-    customerName: 'John Doe',
-    invoiceNumber: '12345'
-});
-
-if (!validationResult.Success) {
-    console.error('Validation errors:', validationResult.Errors);
-}
+// Other metadata
+const contentTypes = engine.TemplateContentTypes;
+const categories = engine.TemplateCategories;
 ```
 
 ### TemplateRenderResult
 
-A simple class representing the result of a template rendering operation.
-
 ```typescript
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 
-// Typically returned by rendering operations
+// Returned by rendering operations
 const result: TemplateRenderResult = {
     Success: true,
-    Output: '<html>Rendered content...</html>',
-    Message: undefined // Optional, typically used for error messages
+    Output: '<html>...</html>',
+    Message: undefined  // Only set on failure
 };
 ```
 
@@ -90,155 +98,48 @@ const result: TemplateRenderResult = {
 
 ### TemplateEngineBase
 
-#### Properties
-
-- `Templates: TemplateEntityExtended[]` - All loaded templates
-- `TemplateContentTypes: TemplateContentTypeEntity[]` - Available content types
-- `TemplateCategories: TemplateCategoryEntity[]` - Template categories
-- `TemplateContents: TemplateContentEntity[]` - All template content records
-- `TemplateParams: TemplateParamEntity[]` - All template parameters
-
-#### Methods
-
-- `static get Instance(): TemplateEngineBase` - Get the singleton instance
-- `async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider)` - Load template metadata
-- `FindTemplate(templateName: string): TemplateEntityExtended` - Find a template by name (case-insensitive)
-
-### TemplateEntityExtended
-
-#### Properties
-
-- `Content: TemplateContentEntity[]` - Associated content records
-- `Params: TemplateParamEntity[]` - Associated parameter definitions
-
-#### Methods
-
-- `GetContentByType(type: string): TemplateContentEntity[]` - Get all content of a specific type
-- `GetHighestPriorityContent(type?: string): TemplateContentEntity` - Get the highest priority content
-- `ValidateTemplateInput(data: any): ValidationResult` - Validate input data against parameter requirements
+| Member | Type | Description |
+|--------|------|-------------|
+| `Instance` | static getter | Singleton instance |
+| `Config()` | method | Load/refresh template metadata |
+| `Templates` | getter | All templates with associated contents and params |
+| `TemplateContentTypes` | getter | Available content types |
+| `TemplateCategories` | getter | Template categories |
+| `TemplateContents` | getter | All template content records |
+| `TemplateParams` | getter | All template parameter definitions |
+| `FindTemplate()` | method | Find template by name (case-insensitive) |
 
 ### TemplateRenderResult
 
-#### Properties
+| Property | Type | Description |
+|----------|------|-------------|
+| `Success` | boolean | Whether rendering succeeded |
+| `Output` | string | The rendered output |
+| `Message` | string (optional) | Error message on failure |
 
-- `Success: boolean` - Whether the rendering was successful
-- `Output: string` - The rendered output
-- `Message?: string` - Optional message (typically for errors)
+## Relationship to @memberjunction/templates
 
-## Usage Examples
+This package provides the **metadata caching layer** usable anywhere. The `@memberjunction/templates` package extends it with server-side Nunjucks rendering, custom extensions, and AI prompt integration.
 
-### Basic Template Metadata Access
+```mermaid
+graph LR
+    A["@memberjunction/templates-base-types<br/>(Metadata + Types)"] --> B["@memberjunction/templates<br/>(Server Rendering)"]
+    C[Client Code] --> A
+    D[Server Code] --> B
 
-```typescript
-import { TemplateEngineBase } from '@memberjunction/templates-base-types';
-
-async function loadTemplates() {
-    const engine = TemplateEngineBase.Instance;
-    
-    // Load metadata (only needed once)
-    await engine.Config();
-    
-    // List all active templates
-    const activeTemplates = engine.Templates.filter(t => t.IsActive);
-    
-    // Find templates by category
-    const emailTemplates = engine.Templates.filter(t => 
-        t.CategoryID === engine.TemplateCategories.find(c => c.Name === 'Email')?.ID
-    );
-    
-    console.log(`Found ${activeTemplates.length} active templates`);
-    console.log(`Found ${emailTemplates.length} email templates`);
-}
-```
-
-### Working with Template Content
-
-```typescript
-import { TemplateEngineBase, TemplateEntityExtended } from '@memberjunction/templates-base-types';
-
-async function getTemplateContent(templateName: string, contentType: string) {
-    const engine = TemplateEngineBase.Instance;
-    await engine.Config();
-    
-    const template = engine.FindTemplate(templateName);
-    if (!template) {
-        throw new Error(`Template "${templateName}" not found`);
-    }
-    
-    // Get specific content type
-    const content = template.GetHighestPriorityContent(contentType);
-    if (!content) {
-        throw new Error(`No ${contentType} content found for template "${templateName}"`);
-    }
-    
-    return content.TemplateText;
-}
-```
-
-### Template Parameter Validation
-
-```typescript
-import { TemplateEngineBase } from '@memberjunction/templates-base-types';
-
-async function validateTemplateData(templateName: string, inputData: any) {
-    const engine = TemplateEngineBase.Instance;
-    await engine.Config();
-    
-    const template = engine.FindTemplate(templateName);
-    if (!template) {
-        throw new Error(`Template "${templateName}" not found`);
-    }
-    
-    const validation = template.ValidateTemplateInput(inputData);
-    
-    if (!validation.Success) {
-        // Handle validation errors
-        validation.Errors.forEach(error => {
-            console.error(`Parameter ${error.Source}: ${error.Message}`);
-        });
-        throw new Error('Template validation failed');
-    }
-    
-    // Data is valid, proceed with rendering
-    return true;
-}
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style C fill:#b8762f,stroke:#8a5722,color:#fff
+    style D fill:#b8762f,stroke:#8a5722,color:#fff
 ```
 
 ## Dependencies
 
-This package depends on the following MemberJunction packages:
-
-- `@memberjunction/core` - Core MemberJunction functionality and base classes
-- `@memberjunction/core-entities` - Entity definitions for templates, content, and parameters
-- `@memberjunction/global` - Global utilities and decorators
-
-## Integration with Other MJ Packages
-
-This package serves as the foundation for:
-
-- **`@memberjunction/templates-engine`** - The full template rendering engine that builds on these base types
-- **Custom template extensions** - Third-party extensions can use these types for compatibility
-
-The base types ensure consistent template handling across the entire MemberJunction ecosystem, whether templates are being managed, validated, or rendered.
-
-## Build and Development
-
-```bash
-# Build the package
-npm run build
-
-# Watch for changes during development
-npm run start
-```
-
-The package is built using TypeScript and outputs to the `dist` directory. Type definitions are automatically generated during the build process.
-
-## Notes
-
-- This package intentionally has minimal dependencies to ensure it can be used in various environments
-- The `TemplateEngineBase` uses the singleton pattern to ensure consistent metadata access across an application
-- Template metadata is loaded from the MemberJunction database using the dataset system
-- The `@RegisterClass` decorator on `TemplateEntityExtended` ensures proper integration with the MJ entity system
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/core` | BaseEngine, UserInfo, IMetadataProvider |
+| `@memberjunction/core-entities` | Template entity types |
+| `@memberjunction/global` | MJGlobal class factory |
 
 ## License
 

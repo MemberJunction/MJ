@@ -2,18 +2,6 @@ import { Command, Flags } from '@oclif/core';
 import { confirm } from '@inquirer/prompts';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import {
-  PushService,
-  ValidationService,
-  FormattingService,
-  loadMJConfig,
-  loadSyncConfig,
-  initializeProvider,
-  getSyncEngine,
-  getSystemUser,
-  resetSyncEngine,
-  configManager,
-} from '@memberjunction/metadata-sync';
 import path from 'path';
 
 export default class Push extends Command {
@@ -32,6 +20,10 @@ export default class Push extends Command {
     ci: Flags.boolean({ description: 'CI mode - no prompts, fail on issues' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed field-level output' }),
     'no-validate': Flags.boolean({ description: 'Skip validation before push' }),
+    'delete-db-only': Flags.boolean({
+      description: 'Delete database-only records that reference records being deleted (prevents FK errors)',
+      default: false
+    }),
     'parallel-batch-size': Flags.integer({
       description: 'Number of records to process in parallel (default: 10)',
       default: 10,
@@ -49,6 +41,12 @@ export default class Push extends Command {
   };
 
   async run(): Promise<void> {
+    const {
+      PushService, ValidationService, FormattingService,
+      loadMJConfig, loadSyncConfig, initializeProvider,
+      getSyncEngine, getSystemUser, resetSyncEngine, configManager,
+    } = await import('@memberjunction/metadata-sync');
+
     const { flags } = await this.parse(Push);
     const spinner = ora();
     const startTime = Date.now();
@@ -135,6 +133,7 @@ export default class Push extends Command {
           dryRun: flags['dry-run'],
           verbose: flags.verbose,
           noValidate: flags['no-validate'],
+          deleteDbOnly: flags['delete-db-only'],
           parallelBatchSize: flags['parallel-batch-size'],
           include: includeFilter,
           exclude: excludeFilter,

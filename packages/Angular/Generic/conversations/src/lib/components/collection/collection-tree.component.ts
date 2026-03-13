@@ -1,10 +1,11 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { CollectionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata, LogError } from '@memberjunction/core';
 import { CollectionPermission, CollectionPermissionService } from '../../services/collection-permission.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 interface TreeNode {
-  collection: CollectionEntity;
+  collection: MJCollectionEntity;
   children: TreeNode[];
   expanded: boolean;
   level: number;
@@ -38,9 +39,9 @@ interface DragData {
           <div class="tree-node-wrapper">
             <div
               class="tree-node"
-              [class.selected]="node.collection.ID === selectedCollectionId"
+              [class.selected]="IsCollectionSelected(node)"
               [class.drag-over]="dragOverNodeId === node.collection.ID"
-              [class.dragging]="draggedNode?.collection?.ID === node.collection.ID"
+              [class.dragging]="IsCollectionDragging(node)"
               [style.padding-left.px]="node.level * 20"
               [draggable]="true"
               (click)="onSelectCollection(node.collection)"
@@ -86,9 +87,9 @@ interface DragData {
       <div class="tree-node-wrapper">
         <div
           class="tree-node"
-          [class.selected]="node.collection.ID === selectedCollectionId"
+          [class.selected]="IsCollectionSelected(node)"
           [class.drag-over]="dragOverNodeId === node.collection.ID"
-          [class.dragging]="draggedNode?.collection?.ID === node.collection.ID"
+          [class.dragging]="IsCollectionDragging(node)"
           [style.padding-left.px]="node.level * 20"
           [draggable]="true"
           (click)="onSelectCollection(node.collection)"
@@ -130,12 +131,12 @@ interface DragData {
   `,
   styles: [`
     .collection-tree { display: flex; flex-direction: column; height: 100%; }
-    .tree-header { padding: 16px; border-bottom: 1px solid #D9D9D9; display: flex; justify-content: space-between; align-items: center; }
+    .tree-header { padding: 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; justify-content: space-between; align-items: center; }
     .tree-header h3 { margin: 0; font-size: 16px; }
-    .btn-new { padding: 6px 10px; background: #0076B6; color: white; border: none; border-radius: 4px; cursor: pointer; }
-    .btn-new:hover { background: #005A8C; }
+    .btn-new { padding: 6px 10px; background: var(--mj-brand-primary); color: var(--mj-text-inverse); border: none; border-radius: 4px; cursor: pointer; }
+    .btn-new:hover { background: var(--mj-brand-primary-hover); }
     .tree-content { flex: 1; overflow-y: auto; position: relative; }
-    .tree-content.drag-over-root { background: rgba(0, 118, 182, 0.1); }
+    .tree-content.drag-over-root { background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); }
     .tree-node {
       padding: 8px 12px;
       cursor: move;
@@ -146,24 +147,24 @@ interface DragData {
       transition: all 0.2s ease;
       border: 2px solid transparent;
     }
-    .tree-node:hover { background: #F4F4F4; }
-    .tree-node.selected { background: #AAE7FD; }
+    .tree-node:hover { background: var(--mj-bg-surface-sunken); }
+    .tree-node.selected { background: var(--mj-brand-accent); }
     .tree-node.dragging {
       opacity: 0.4;
       cursor: grabbing;
     }
     .tree-node.drag-over {
-      background: rgba(0, 118, 182, 0.1);
-      border: 2px dashed #0076B6;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border: 2px dashed var(--mj-brand-primary);
       border-radius: 4px;
     }
-    .toggle-icon { font-size: 10px; color: #AAA; cursor: pointer; width: 12px; }
+    .toggle-icon { font-size: 10px; color: var(--mj-text-disabled); cursor: pointer; width: 12px; }
     .collection-icon { font-size: 14px; }
     .collection-name { flex: 1; font-size: 14px; user-select: none; }
     .node-actions { display: none; gap: 4px; }
     .tree-node:hover .node-actions { display: flex; }
-    .node-action-btn { padding: 4px 6px; background: transparent; border: none; cursor: pointer; border-radius: 3px; color: #666; }
-    .node-action-btn:hover { background: rgba(0,0,0,0.1); }
+    .node-action-btn { padding: 4px 6px; background: transparent; border: none; cursor: pointer; border-radius: 3px; color: var(--mj-text-muted); }
+    .node-action-btn:hover { background: var(--mj-bg-surface-sunken); }
   `]
 })
 export class CollectionTreeComponent implements OnInit {
@@ -172,11 +173,11 @@ export class CollectionTreeComponent implements OnInit {
   @Input() selectedCollectionId: string | null = null;
   @Input() userPermissions: Map<string, CollectionPermission> = new Map();
 
-  @Output() collectionSelected = new EventEmitter<CollectionEntity>();
-  @Output() collectionCreated = new EventEmitter<CollectionEntity>();
-  @Output() collectionDeleted = new EventEmitter<CollectionEntity>();
+  @Output() collectionSelected = new EventEmitter<MJCollectionEntity>();
+  @Output() collectionCreated = new EventEmitter<MJCollectionEntity>();
+  @Output() collectionDeleted = new EventEmitter<MJCollectionEntity>();
 
-  public collections: CollectionEntity[] = [];
+  public collections: MJCollectionEntity[] = [];
   public treeNodes: TreeNode[] = [];
   public draggedNode: TreeNode | null = null;
   public dragOverNodeId: string | null = null;
@@ -190,7 +191,7 @@ export class CollectionTreeComponent implements OnInit {
   private async loadCollections(): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<CollectionEntity>({
+      const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
         ExtraFilter: `EnvironmentID='${this.environmentId}'`,
         OrderBy: 'Sequence ASC, Name ASC',
@@ -211,8 +212,8 @@ export class CollectionTreeComponent implements OnInit {
     this.treeNodes = rootCollections.map(c => this.buildNode(c, 0));
   }
 
-  private buildNode(collection: CollectionEntity, level: number): TreeNode {
-    const children = this.collections.filter(c => c.ParentID === collection.ID);
+  private buildNode(collection: MJCollectionEntity, level: number): TreeNode {
+    const children = this.collections.filter(c => UUIDsEqual(c.ParentID, collection.ID));
     return {
       collection,
       children: children.map(c => this.buildNode(c, level + 1)),
@@ -226,7 +227,15 @@ export class CollectionTreeComponent implements OnInit {
     node.expanded = !node.expanded;
   }
 
-  onSelectCollection(collection: CollectionEntity): void {
+  IsCollectionSelected(node: TreeNode): boolean {
+    return UUIDsEqual(node.collection.ID, this.selectedCollectionId);
+  }
+
+  IsCollectionDragging(node: TreeNode): boolean {
+    return UUIDsEqual(this.draggedNode?.collection?.ID, node.collection.ID);
+  }
+
+  onSelectCollection(collection: MJCollectionEntity): void {
     this.selectedCollectionId = collection.ID;
     this.collectionSelected.emit(collection);
   }
@@ -234,10 +243,10 @@ export class CollectionTreeComponent implements OnInit {
   async onCreateCollection(parentId: string | null): Promise<void> {
     // Validate permission if creating child collection
     if (parentId) {
-      const parentCollection = this.collections.find(c => c.ID === parentId);
+      const parentCollection = this.collections.find(c => UUIDsEqual(c.ID, parentId));
       if (parentCollection) {
         // Check if user has Edit permission on parent
-        if (parentCollection.OwnerID && parentCollection.OwnerID !== this.currentUser.ID) {
+        if (parentCollection.OwnerID && !UUIDsEqual(parentCollection.OwnerID, this.currentUser.ID)) {
           const permission = await this.permissionService.checkPermission(
             parentId,
             this.currentUser.ID,
@@ -257,14 +266,14 @@ export class CollectionTreeComponent implements OnInit {
 
     try {
       const md = new Metadata();
-      const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
 
       collection.Name = name;
       collection.EnvironmentID = this.environmentId;
 
       if (parentId) {
         // Child collection - inherit parent's owner and set parent
-        const parentCollection = this.collections.find(c => c.ID === parentId);
+        const parentCollection = this.collections.find(c => UUIDsEqual(c.ID, parentId));
         collection.ParentID = parentId;
         collection.OwnerID = parentCollection?.OwnerID || this.currentUser.ID;
       } else {
@@ -283,9 +292,9 @@ export class CollectionTreeComponent implements OnInit {
     }
   }
 
-  async onDeleteCollection(collection: CollectionEntity): Promise<void> {
+  async onDeleteCollection(collection: MJCollectionEntity): Promise<void> {
     // Validate Delete permission
-    if (collection.OwnerID && collection.OwnerID !== this.currentUser.ID) {
+    if (collection.OwnerID && !UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
       const permission = await this.permissionService.checkPermission(
         collection.ID,
         this.currentUser.ID,
@@ -335,7 +344,7 @@ export class CollectionTreeComponent implements OnInit {
   onDragOver(event: DragEvent, targetNode: TreeNode): void {
     event.preventDefault(); // Required to allow drop
 
-    if (!this.draggedNode || this.draggedNode.collection.ID === targetNode.collection.ID) {
+    if (!this.draggedNode || UUIDsEqual(this.draggedNode.collection.ID, targetNode.collection.ID)) {
       event.dataTransfer!.dropEffect = 'none';
       return;
     }
@@ -365,7 +374,7 @@ export class CollectionTreeComponent implements OnInit {
     }
 
     // Don't allow dropping on itself
-    if (this.draggedNode.collection.ID === targetNode.collection.ID) {
+    if (UUIDsEqual(this.draggedNode.collection.ID, targetNode.collection.ID)) {
       this.dragOverNodeId = null;
       return;
     }
@@ -440,7 +449,7 @@ export class CollectionTreeComponent implements OnInit {
   }
 
   private isDescendant(potentialDescendant: TreeNode, ancestor: TreeNode): boolean {
-    if (potentialDescendant.collection.ParentID === ancestor.collection.ID) {
+    if (UUIDsEqual(potentialDescendant.collection.ParentID, ancestor.collection.ID)) {
       return true;
     }
 
@@ -454,9 +463,9 @@ export class CollectionTreeComponent implements OnInit {
   }
 
   // Permission checking methods
-  canEdit(collection: CollectionEntity): boolean {
+  canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) {
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
       return true;
     }
 
@@ -465,9 +474,9 @@ export class CollectionTreeComponent implements OnInit {
     return permission?.canEdit || false;
   }
 
-  canDelete(collection: CollectionEntity): boolean {
+  canDelete(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) {
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
       return true;
     }
 

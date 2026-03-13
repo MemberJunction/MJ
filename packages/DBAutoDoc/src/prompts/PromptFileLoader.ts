@@ -3,7 +3,7 @@
  * Pattern adapted from Templates package's TemplateEntityLoader
  */
 
-import * as nunjucks from 'nunjucks';
+import nunjucks from 'nunjucks';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 

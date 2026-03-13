@@ -20,7 +20,7 @@
             <div class="meta-info">
               @if (agent) {
                 <span class="agent-name">
-                  <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Agents', record.AgentID)">
+                  <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agents', record.AgentID)">
                     {{ agent.Name }}
                   </a>
                 </span>
@@ -212,7 +212,7 @@
                   <div class="detail-item">
                     <label>Agent</label>
                     <span>
-                      <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Agents', record.AgentID)">
+                      <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Agents', record.AgentID)">
                         {{ agent?.Name || 'N/A' }}
                       </a>
                     </span>
@@ -247,7 +247,7 @@
                     <label>Conversation ID</label>
                     <span>
                       @if (record.ConversationID) {
-                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('Conversations', record.ConversationID)">
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: Conversations', record.ConversationID)">
                           {{ record.ConversationID }}
                         </a>
                       }
@@ -260,7 +260,7 @@
                     <label>User</label>
                     <span>
                       @if (record.UserID) {
-                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('Users', record.UserID)">
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: Users', record.UserID)">
                           {{ record.User || 'N/A' }}
                         </a>
                       }
@@ -279,7 +279,7 @@
                     <label>Override Model</label>
                     <span>
                       @if (record.OverrideModelID) {
-                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Models', record.OverrideModelID)">
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Models', record.OverrideModelID)">
                           {{ record.OverrideModel || 'N/A' }}
                         </a>
                       }
@@ -292,7 +292,7 @@
                     <label>Override Vendor</label>
                     <span>
                       @if (record.OverrideVendorID) {
-                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Vendors', record.OverrideVendorID)">
+                        <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('MJ: AI Vendors', record.OverrideVendorID)">
                           {{ record.OverrideVendor || 'N/A' }}
                         </a>
                       }

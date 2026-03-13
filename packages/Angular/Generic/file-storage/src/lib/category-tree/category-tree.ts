@@ -1,10 +1,11 @@
 import { Component, EventEmitter, OnInit, Output } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
-import { FileCategoryEntity } from '@memberjunction/core-entities';
+import { MJFileCategoryEntity } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 
 import { ContextMenuSelectEvent } from '@progress/kendo-angular-menu';
 import { TreeItemAddRemoveArgs } from '@progress/kendo-angular-treeview';
+import { UUIDsEqual } from '@memberjunction/global';
 
 @Component({
   standalone: false,
@@ -19,9 +20,9 @@ export class CategoryTreeComponent implements OnInit {
   public showNew: boolean = false;
   public newCategoryName = '';
   public selectedKeys = [];
-  public renameFileCategory: FileCategoryEntity | undefined;
+  public renameFileCategory: MJFileCategoryEntity | undefined;
 
-  public categoriesData: FileCategoryEntity[] = [];
+  public categoriesData: MJFileCategoryEntity[] = [];
 
   private md = new Metadata();
 
@@ -41,8 +42,8 @@ export class CategoryTreeComponent implements OnInit {
 
   async handleDrop(e: TreeItemAddRemoveArgs) {
     console.log(e);
-    const sourceCategory: FileCategoryEntity = e.sourceItem.item.dataItem;
-    const targetCategory: FileCategoryEntity = e.destinationItem.item.dataItem;
+    const sourceCategory: MJFileCategoryEntity = e.sourceItem.item.dataItem;
+    const targetCategory: MJFileCategoryEntity = e.destinationItem.item.dataItem;
     sourceCategory.ParentID = targetCategory.ID;
 
     this.isLoading = true;
@@ -52,7 +53,7 @@ export class CategoryTreeComponent implements OnInit {
 
   async saveNewCategory() {
     this.isLoading = true;
-    const categoryEntity: FileCategoryEntity = await this.md.GetEntityObject('File Categories');
+    const categoryEntity: MJFileCategoryEntity = await this.md.GetEntityObject('MJ: File Categories');
     categoryEntity.NewRecord();
     categoryEntity.Name = this.newCategoryName;
     await categoryEntity?.Save();
@@ -61,7 +62,7 @@ export class CategoryTreeComponent implements OnInit {
     this.isLoading = false;
   }
 
-  async deleteCategory(fileCategory: FileCategoryEntity) {
+  async deleteCategory(fileCategory: MJFileCategoryEntity) {
     this.isLoading = true;
     const { ID } = fileCategory;
     const success = await fileCategory.Delete();
@@ -71,7 +72,7 @@ export class CategoryTreeComponent implements OnInit {
       return;
     }
 
-    this.categoriesData = this.categoriesData.filter((c) => c.ID !== ID);
+    this.categoriesData = this.categoriesData.filter((c) => !UUIDsEqual(c.ID, ID));
     this.clearSelection();
     this.isLoading = false;
   }
@@ -114,12 +115,12 @@ export class CategoryTreeComponent implements OnInit {
 
     const rv = new RunView();
     const result = await rv.RunView({
-      EntityName: 'File Categories',
+      EntityName: 'MJ: File Categories',
       ResultType: 'entity_object',
     });
 
     if (result.Success) {
-      this.categoriesData = <FileCategoryEntity[]>result.Results;
+      this.categoriesData = <MJFileCategoryEntity[]>result.Results;
     } else {
       throw new Error('Error loading file categories: ' + result.ErrorMessage);
     }

@@ -7,7 +7,7 @@ import {
     LogError,
     LogStatus,
 } from '@memberjunction/core';
-import { RecordChangeEntity, VersionLabelItemEntity } from '@memberjunction/core-entities';
+import { MJRecordChangeEntity, MJVersionLabelItemEntity } from '@memberjunction/core-entities';
 import { CaptureError, CaptureResult, CreateLabelProgressCallback, DependencyNode, WalkOptions } from './types';
 import { DependencyGraphWalker } from './DependencyGraphWalker';
 import {
@@ -577,10 +577,10 @@ export class SnapshotBuilder {
         recordId: string,
         recordData: Record<string, unknown>,
         contextUser: UserInfo
-    ): Promise<RecordChangeEntity | null> {
+    ): Promise<MJRecordChangeEntity | null> {
         try {
             const md = new Metadata();
-            const change = await md.GetEntityObject<RecordChangeEntity>(ENTITY_RECORD_CHANGES, contextUser);
+            const change = await md.GetEntityObject<MJRecordChangeEntity>(ENTITY_RECORD_CHANGES, contextUser);
 
             change.EntityID = entityInfo.ID;
             change.RecordID = recordId;
@@ -617,7 +617,7 @@ export class SnapshotBuilder {
         contextUser: UserInfo
     ): Promise<CaptureItemResult> {
         const md = new Metadata();
-        const item = await md.GetEntityObject<VersionLabelItemEntity>(ENTITY_VERSION_LABEL_ITEMS, contextUser);
+        const item = await md.GetEntityObject<MJVersionLabelItemEntity>(ENTITY_VERSION_LABEL_ITEMS, contextUser);
         item.VersionLabelID = labelId;
         item.RecordChangeID = recordChangeId;
         item.EntityID = entityInfo.ID;

@@ -8,6 +8,8 @@ import { AgGridModule } from 'ag-grid-angular';
 // MJ Components
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
+import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 
 // Query Viewer Components
 import { QueryDataGridComponent } from './query-data-grid/query-data-grid.component';
@@ -29,7 +31,9 @@ import { QueryInfoPanelComponent } from './query-info-panel/query-info-panel.com
         FormsModule,
         AgGridModule,
         SharedGenericModule,
-        ExportServiceModule
+        ExportServiceModule,
+        MarkdownModule,
+        CodeEditorModule
     ],
     exports: [
         QueryDataGridComponent,

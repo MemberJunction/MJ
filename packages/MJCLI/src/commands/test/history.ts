@@ -1,5 +1,4 @@
 import { Command, Flags } from '@oclif/core';
-import { HistoryCommand } from '@memberjunction/testing-cli';
 
 export default class TestHistory extends Command {
   static description = 'View test execution history';
@@ -46,6 +45,8 @@ export default class TestHistory extends Command {
   };
 
   async run(): Promise<void> {
+    const { HistoryCommand } = await import('@memberjunction/testing-cli');
+
     const { flags } = await this.parse(TestHistory);
 
     try {

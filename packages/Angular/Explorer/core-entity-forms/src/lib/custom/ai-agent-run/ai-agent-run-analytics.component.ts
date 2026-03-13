@@ -2,7 +2,8 @@ import { Component, Input, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetec
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
-import { AIPromptRunEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
+import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import * as d3 from 'd3';
 import { AIAgentRunCostService } from './ai-agent-run-cost.service';
 
@@ -117,7 +118,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   
   // Data
   agentRun: SimpleAgentRun | null = null;
-  allPromptRuns: AIPromptRunEntity[] = [];
+  allPromptRuns: MJAIPromptRunEntity[] = [];
   allActionLogs: SimpleActionLog[] = [];
   allSteps: SimpleAgentRunStep[] = [];
   subAgentRuns: SimpleAgentRun[] = [];
@@ -345,7 +346,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
           
         if (actionLogIds.length > 0) {
           const actionResult = await rv.RunView({
-            EntityName: 'Action Execution Logs',
+            EntityName: 'MJ: Action Execution Logs',
             ExtraFilter: `ID IN ('${actionLogIds.join("','")}')`
           });
           
@@ -499,7 +500,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
       metrics.byAction.set(actionName, actionMetric);
       
       // Update type metrics
-      // Action type is not directly available on ActionExecutionLogEntity
+      // Action type is not directly available on MJActionExecutionLogEntity
       const actionType = 'Action'; // Generic type for now
       const typeMetric = metrics.byType.get(actionType) || { count: 0, totalTime: 0, avgTime: 0 };
       typeMetric.count++;
@@ -1143,7 +1144,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   }
   
   getActionType(actionName: string): string {
-    // Action type is not directly available on ActionExecutionLogEntity
+    // Action type is not directly available on MJActionExecutionLogEntity
     return 'Action';
   }
   
@@ -1634,7 +1635,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
       
       if (result.Success && result.Results && result.Results.length > 0) {
         for (const childRun of result.Results) {
-          if (!agentRunIds.includes(childRun.ID)) {
+          if (!agentRunIds.some(id => UUIDsEqual(id, childRun.ID))) {
             agentRunIds.push(childRun.ID);
             await findChildRuns(childRun.ID); // Recursively find children
           }

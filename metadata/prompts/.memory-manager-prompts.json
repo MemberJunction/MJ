@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Memory Manager - Extract Notes",
       "Description": "Analyzes conversation threads to extract valuable notes for agent memory. Compares against existing notes to avoid redundancy and suggests merges where appropriate.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/memory-manager/extract-notes.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -13,14 +13,14 @@
       "MaxRetries": 2,
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1
           },
@@ -28,14 +28,14 @@
             "ID": "89C62BF4-C375-434B-B048-26EAAB948E10"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:27:33.774Z",
-            "checksum": "afa5f21741141bd915f9aff726e967f5cfe4fab89a7f28caaf780d442d5de0a2"
+            "lastModified": "2026-02-13T20:48:57.481Z",
+            "checksum": "ef984c07c8a2e347565cbf0caf2cfd6591367cd199e211b21c3992f2dc1a9e09"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 2
           },
@@ -43,8 +43,8 @@
             "ID": "E9355A3E-F2D5-4A5A-8ED1-FB380E8ACC63"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:27:33.787Z",
-            "checksum": "260f71673e97823d89ab81dbe8d4237257d7f7d22f4f1686a02b01f038fbe02d"
+            "lastModified": "2026-02-13T20:48:57.482Z",
+            "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
           }
         }
       ]
@@ -53,15 +53,15 @@
       "ID": "38129618-88C2-470F-9A32-A631AFB4371E"
     },
     "sync": {
-      "lastModified": "2026-02-01T00:27:33.597Z",
-      "checksum": "8b0b3ac7ed7a227f801fc74eee1ccd53c69d86410fffeea4820ead9a44037fcd"
+      "lastModified": "2026-02-13T20:48:57.250Z",
+      "checksum": "cb008a909b79bf3033d490e861b106ed8c1d06a16c98f76ebf2f45d20abffb19"
     }
   },
   {
     "fields": {
       "Name": "Memory Manager - Extract Examples",
       "Description": "Extracts high-quality examples from conversation message pairs with strong ratings. Identifies both positive examples to replicate and negative examples showing common mistakes.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/memory-manager/extract-examples.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -71,14 +71,14 @@
       "MaxRetries": 2,
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1
           },
@@ -86,14 +86,14 @@
             "ID": "40DB7D3A-CBEC-4CD0-B3AC-0835BEE57660"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:27:33.800Z",
-            "checksum": "afa5f21741141bd915f9aff726e967f5cfe4fab89a7f28caaf780d442d5de0a2"
+            "lastModified": "2026-02-13T20:48:57.483Z",
+            "checksum": "ef984c07c8a2e347565cbf0caf2cfd6591367cd199e211b21c3992f2dc1a9e09"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 2
           },
@@ -101,8 +101,8 @@
             "ID": "A45F90F2-41B9-4459-B728-89AE1C6B58E4"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:27:33.811Z",
-            "checksum": "260f71673e97823d89ab81dbe8d4237257d7f7d22f4f1686a02b01f038fbe02d"
+            "lastModified": "2026-02-13T20:48:57.484Z",
+            "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
           }
         }
       ]
@@ -111,15 +111,15 @@
       "ID": "14BFD6A6-57E0-4A5B-9AE0-579123DA495B"
     },
     "sync": {
-      "lastModified": "2026-01-27T03:47:56.171Z",
-      "checksum": "e5246897201fbffda0dd2d6f0291f5a1ea0f08901dc9859e42fbc2b73748c59a"
+      "lastModified": "2026-02-13T20:48:57.252Z",
+      "checksum": "75e6b30c4d4d5c32d5901df9df29898d5900353738f366e4902e679dc4a569b1"
     }
   },
   {
     "fields": {
       "Name": "Memory Manager - Deduplicate Example",
       "Description": "Evaluates whether a candidate example adds meaningful value compared to existing similar examples. Returns yes/no decision with reasoning to prevent example database bloat.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/memory-manager/deduplicate-example.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -129,14 +129,14 @@
       "MaxRetries": 1,
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1
           },
@@ -144,14 +144,14 @@
             "ID": "53136089-89F5-42E9-9630-8191C560F421"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:27:33.823Z",
-            "checksum": "afa5f21741141bd915f9aff726e967f5cfe4fab89a7f28caaf780d442d5de0a2"
+            "lastModified": "2026-02-13T20:48:57.485Z",
+            "checksum": "ef984c07c8a2e347565cbf0caf2cfd6591367cd199e211b21c3992f2dc1a9e09"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 2
           },
@@ -159,8 +159,8 @@
             "ID": "4BC850CA-17E8-4B20-8568-7337D8C31761"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:27:33.835Z",
-            "checksum": "260f71673e97823d89ab81dbe8d4237257d7f7d22f4f1686a02b01f038fbe02d"
+            "lastModified": "2026-02-13T20:48:57.486Z",
+            "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
           }
         }
       ]
@@ -169,15 +169,15 @@
       "ID": "DF15BA1D-59E2-4FE1-9469-DE6290C14B62"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:30.311Z",
-      "checksum": "caf91eea5274b957eeb413c3183de103d80e19fad34fa44f075dbde67e340a83"
+      "lastModified": "2026-02-13T20:48:57.253Z",
+      "checksum": "7d00eea4f74ff80105b863b1a2eac03fbbca9c33a89b2532422f3e841ce6a054"
     }
   },
   {
     "fields": {
       "Name": "Memory Manager - Deduplicate Note",
       "Description": "Evaluates whether a candidate note adds meaningful value compared to existing similar notes. Returns yes/no decision with reasoning to prevent note database bloat.",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/memory-manager/deduplicate-note.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
@@ -187,14 +187,14 @@
       "MaxRetries": 1,
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1
           },
@@ -202,14 +202,14 @@
             "ID": "88DAAB47-7003-4B90-9681-8020C3B57619"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:27:33.846Z",
-            "checksum": "afa5f21741141bd915f9aff726e967f5cfe4fab89a7f28caaf780d442d5de0a2"
+            "lastModified": "2026-02-13T20:48:57.487Z",
+            "checksum": "ef984c07c8a2e347565cbf0caf2cfd6591367cd199e211b21c3992f2dc1a9e09"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 2
           },
@@ -217,8 +217,8 @@
             "ID": "9DC4CA64-038D-4A95-ACD5-41CBF1B98F52"
           },
           "sync": {
-            "lastModified": "2026-02-01T00:27:33.855Z",
-            "checksum": "260f71673e97823d89ab81dbe8d4237257d7f7d22f4f1686a02b01f038fbe02d"
+            "lastModified": "2026-02-13T20:48:57.488Z",
+            "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
           }
         }
       ]
@@ -227,8 +227,66 @@
       "ID": "078FC278-15E6-4264-82C7-EE19EB79100E"
     },
     "sync": {
-      "lastModified": "2026-01-27T03:47:56.296Z",
-      "checksum": "6f949682df80c57c5f1cdee0ca014c15b4f60e9351995d56ef341e156230b4c8"
+      "lastModified": "2026-02-13T20:48:57.254Z",
+      "checksum": "fd91ff201533c1ca0a89e07834901b9b6e09e50851f96f137215fe2ed1f4fe05"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Memory Manager - Consolidate Notes",
+      "Description": "Consolidates semantically similar notes into a single comprehensive note that preserves all important information without redundancy.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/memory-manager/consolidate-notes.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "B1D449E1-5050-4E42-AE32-E58FD9617731"
+          },
+          "sync": {
+            "lastModified": "2026-02-13T20:48:57.489Z",
+            "checksum": "d37a2f44e38f7811f000f5f9511bd892bcb4ac927b36c9613e6758f2c5f17f5a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "5887401E-BF50-45AF-B4A1-35D6D30B070B"
+          },
+          "sync": {
+            "lastModified": "2026-02-13T20:48:57.490Z",
+            "checksum": "27c24599c2101f4c3e0d2813b7dfd3fbdcad2de8616dea292fd460535f9e5820"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "084F28BE-2F7E-406D-B80B-20B8EDB88950"
+    },
+    "sync": {
+      "lastModified": "2026-02-13T20:48:57.254Z",
+      "checksum": "a4c90fa66cf3478ca13c9ca8c45055a7363caa6d2b08faf2e459f3d72aa8d666"
     }
   }
 ]

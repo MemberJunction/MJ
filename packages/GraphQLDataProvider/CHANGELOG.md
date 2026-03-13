@@ -1,5 +1,310 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 5.11.0
+
+### Minor Changes
+
+- a4c3c81: migration/metadata
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/ai-core-plus@5.11.0
+  - @memberjunction/actions-base@5.11.0
+  - @memberjunction/interactive-component-types@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/global@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.10.1
+- @memberjunction/actions-base@5.10.1
+- @memberjunction/interactive-component-types@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- 4e298b7: Add TenantContext auto-sync from server to client via CurrentUserTenantContext resolver and dynamic headers API
+- 5ce18ff: no migration
+- Updated dependencies [f2df653]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+  - @memberjunction/actions-base@5.10.0
+  - @memberjunction/interactive-component-types@5.10.0
+  - @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ai-core-plus@5.9.0
+  - @memberjunction/actions-base@5.9.0
+  - @memberjunction/interactive-component-types@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- de9f2c0: Fix agent run info not displaying during live streaming by ensuring AIAgentRunDetailResult returns full run info data when the agent run is actively streaming
+- Updated dependencies [0753249]
+  - @memberjunction/core@5.8.0
+  - @memberjunction/ai-core-plus@5.8.0
+  - @memberjunction/actions-base@5.8.0
+  - @memberjunction/interactive-component-types@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/ai-core-plus@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/actions-base@5.7.0
+  - @memberjunction/interactive-component-types@5.7.0
+  - @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- 76eaabc: Fix SQL validation regex to allow legitimate string values containing SQL keywords, add PlatformSQL support to GraphQLSystemUserClient input types, and mark 25 deprecated AI model-vendor inference pairs as Inactive
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ai-core-plus@5.6.0
+  - @memberjunction/actions-base@5.6.0
+  - @memberjunction/interactive-component-types@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- 2b1d842: Add Qwen 3.5 Plus AI model metadata and revert diagnostic logging for component registry loading
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ai-core-plus@5.5.0
+  - @memberjunction/actions-base@5.5.0
+  - @memberjunction/interactive-component-types@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.4.1
+- @memberjunction/actions-base@5.4.1
+- @memberjunction/interactive-component-types@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- 8a11457: Add centralized fire-and-forget pattern for all long-running GraphQL mutations (RunTest, RunTestSuite, RunAIAgent, RunAIAgentFromConversationDetail) to avoid Azure's ~230s HTTP proxy timeout. Use fire-and-forget mutation to avoid Azure proxy timeouts on agent execution, allow \_\_ prefixed schema names in Open App manifest validation, add inlineSources to Angular tsconfig for vendor sourcemap support, and add .env.\* to gitignore
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ai-core-plus@5.4.0
+  - @memberjunction/actions-base@5.4.0
+  - @memberjunction/interactive-component-types@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.3.1
+- @memberjunction/actions-base@5.3.1
+- @memberjunction/interactive-component-types@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- a6aea29: Fix artifact auto-open for delegated sub-agent completions, add SSE-aware request method and fire-and-forget GraphQL mutation to prevent Azure proxy timeouts, fix WebSocket reconnection catch-up check, and remove crossOrigin CORS enforcement with fallback CDN support in React runtime
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ai-core-plus@5.3.0
+  - @memberjunction/actions-base@5.3.0
+  - @memberjunction/interactive-component-types@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- 5e5fab6: Standardize entity subclass naming with MJ-prefix rename map in CodeGen, update cross-package references to use new names, add share/edit/delete UI triggers to collections dashboard, add dbEncrypt CLI config, and fix stale entity name references in migration JSON config columns
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/ai-core-plus@5.2.0
+  - @memberjunction/actions-base@5.2.0
+  - @memberjunction/interactive-component-types@5.2.0
+  - @memberjunction/global@5.2.0
+
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+  - @memberjunction/global@5.1.0
+  - @memberjunction/ai-core-plus@5.1.0
+  - @memberjunction/actions-base@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/core-entities@5.1.0
+  - @memberjunction/interactive-component-types@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Minor Changes
+
+- a3e7cb6: migration
+
+### Patch Changes
+
+- 737b56b: Add SimpleQueryFieldInfo for query field lineage tracking in InteractiveComponents, sync DeleteOptionsInput fields with server schema in GraphQLDataProvider, and flatten tsconfig files in distribution for cleaner package builds
+- Updated dependencies [737b56b]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/interactive-component-types@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ai-core-plus@5.0.0
+  - @memberjunction/actions-base@5.0.0
+  - @memberjunction/global@5.0.0
+
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ai-core-plus@4.4.0
+  - @memberjunction/actions-base@4.4.0
+  - @memberjunction/interactive-component-types@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/global@4.4.0
+
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@4.3.1
+- @memberjunction/actions-base@4.3.1
+- @memberjunction/interactive-component-types@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/global@4.3.1
+
+## 4.3.0
+
+### Minor Changes
+
+- 564e1af: migration
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ai-core-plus@4.3.0
+  - @memberjunction/actions-base@4.3.0
+  - @memberjunction/interactive-component-types@4.3.0
+  - @memberjunction/global@4.3.0
+
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@4.2.0
+- @memberjunction/actions-base@4.2.0
+- @memberjunction/interactive-component-types@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [77839a9]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/core@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ai-core-plus@4.1.0
+  - @memberjunction/actions-base@4.1.0
+  - @memberjunction/interactive-component-types@4.1.0
+  - @memberjunction/global@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- 65b4274: migration
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- Updated dependencies [8366d44]
+- Updated dependencies [f159146]
+- Updated dependencies [718b0ee]
+- Updated dependencies [5c7f6ab]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/ai-core-plus@4.0.0
+  - @memberjunction/actions-base@4.0.0
+  - @memberjunction/interactive-component-types@4.0.0
+  - @memberjunction/core@4.0.0
+  - @memberjunction/core-entities@4.0.0
+  - @memberjunction/global@4.0.0
+
 ## 3.4.0
 
 ### Patch Changes

@@ -148,7 +148,8 @@ export type DashboardNavRequest =
     | OpenEntityRecordNavRequest
     | OpenDashboardNavRequest
     | OpenQueryNavRequest
-    | OpenApplicationNavRequest;
+    | OpenApplicationNavRequest
+    | OpenNavItemNavRequest;
 
 /**
  * Base interface for navigation requests
@@ -208,6 +209,20 @@ export interface OpenApplicationNavRequest extends BaseNavRequest {
     applicationId: string;
     /** Optional: Specific resource/tab within the app */
     resourceName?: string;
+}
+
+/**
+ * Request to navigate to a specific nav item within an application.
+ * Supports setting URL query parameters after navigation.
+ */
+export interface OpenNavItemNavRequest extends BaseNavRequest {
+    type: 'OpenNavItem';
+    /** Application name (e.g., 'Data Explorer'). If omitted, stays in current app. */
+    appName?: string;
+    /** Navigation item label within the app (e.g., 'Queries') */
+    navItemName: string;
+    /** URL query parameters to apply after navigation */
+    queryParams?: Record<string, string>;
 }
 
 /**

@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface AgentFilter {
   searchTerm: string;
@@ -19,8 +19,8 @@ interface AgentFilter {
   styleUrls: ['./agent-filter-panel.component.css']
 })
 export class AgentFilterPanelComponent implements OnInit {
-  @Input() agents: AIAgentEntityExtended[] = [];
-  @Input() filteredAgents: AIAgentEntityExtended[] = [];
+  @Input() agents: MJAIAgentEntityExtended[] = [];
+  @Input() filteredAgents: MJAIAgentEntityExtended[] = [];
   @Input() filters: AgentFilter = {
     searchTerm: '',
     agentType: 'all',
@@ -72,7 +72,7 @@ export class AgentFilterPanelComponent implements OnInit {
       
       // Add agent types to options
       const agentTypes = aiEngine.AgentTypes;
-      agentTypes.forEach((type: AIAgentTypeEntity) => {
+      agentTypes.forEach((type: MJAIAgentTypeEntity) => {
         this.agentTypeOptions.push({
           text: type.Name,
           value: type.ID

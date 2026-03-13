@@ -26,16 +26,20 @@ module.exports = {
   // Default excludes __mj since end-users shouldn't modify core entities
   excludeSchemas: ['sys', 'staging'],
 
-  // Custom SQL scripts specific to this monorepo
+  settings: [
+    { name: 'mj_core_schema', value: '__mj' },
+    { name: 'skip_database_generation', value: false },
+    { name: 'recompile_mj_views', value: true },
+    { name: 'auto_index_foreign_keys', value: true },
+  ],
+
+
+  // Custom SQL scripts specific to this monorepo - NO LONGER INCLUDING MJ_BASE_BEFORE_SQL.sql as of 5.3.0!
   customSQLScripts: [
-    {
-      scriptFile: './SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
-      when: 'before-all',
-    },
   ],
 
   // Soft PK/FK configuration for tables without database constraints
-  //additionalSchemaInfo: './config/database-metadata-config.json',
+  additionalSchemaInfo: './metadata/integrations/additionalSchemaInfo.json',
 
   // Output directories specific to monorepo structure
   output: [
@@ -158,7 +162,7 @@ module.exports = {
     ],
     entityTools: [
       {
-        schemaName: 'CRM',
+        schemaName: '*',
         entityName: '*',
         get: true,
         create: true,
@@ -187,7 +191,7 @@ module.exports = {
     enableA2AServer: true, // Override default (false)
     entityCapabilities: [
       {
-        schemaName: 'CRM',
+        schemaName: '*',
         entityName: '*',
         get: true,
         create: true,
@@ -205,7 +209,7 @@ module.exports = {
    */
 
   queryGen: {
-    includeEntities: ['Members'], // Override to specific entities
+    includeEntities: [], // Override to specific entities
   },
 
   /**
@@ -242,6 +246,37 @@ module.exports = {
    *
    * Supported provider types: 'msal' (Azure AD), 'auth0', 'okta', 'cognito', 'google'
    */
+
+  /**
+   * ====================
+   * API Key Generation
+   * ====================
+   *
+   * Configuration for API key generation parameters.
+   *
+   * WARNING: Changing these values after API keys have been issued will
+   * INVALIDATE all existing keys. Only modify before creating any keys,
+   * or be prepared to rotate all keys.
+   *
+   * All properties are optional and default to:
+   *   prefix: 'mj_sk_'       - Prefix prepended to generated keys
+   *   entropyBytes: 32        - Random bytes of entropy (64 hex chars / 43 base64url chars)
+   *   encoding: 'hex'         - Key body encoding: 'hex' or 'base64url'
+   *   hashAlgorithm: 'sha256' - Hash algorithm for key storage
+   *
+   * Example: base64url encoding with custom prefix for shorter keys:
+   *   apiKeyGeneration: {
+   *     prefix: 'skip-',
+   *     entropyBytes: 50,
+   *     encoding: 'base64url',
+   *   },
+   */
+  // apiKeyGeneration: {
+  //   prefix: 'mj_sk_',
+  //   entropyBytes: 32,
+  //   encoding: 'hex',
+  //   hashAlgorithm: 'sha256',
+  // },
 
   /**
    * ====================

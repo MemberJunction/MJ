@@ -18,8 +18,8 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata, RunView } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
-import { DashboardEngine, DashboardEntity, DashboardPartTypeEntity, DashboardCategoryEntity } from '@memberjunction/core-entities';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { DashboardEngine, MJDashboardEntity, MJDashboardPartTypeEntity, MJDashboardCategoryEntity } from '@memberjunction/core-entities';
 import { BreadcrumbNavigateEvent } from '../breadcrumb/dashboard-breadcrumb.component';
 import { ResolvedLayoutConfig } from 'golden-layout';
 import {
@@ -57,19 +57,19 @@ export class DashboardViewerComponent implements OnDestroy {
     // Inputs
     // ========================================
 
-    private _dashboard: DashboardEntity | null = null;
+    private _dashboard: MJDashboardEntity | null = null;
     private _dashboardId: string | null = null;
 
     /** The dashboard entity to display */
     @Input()
-    set dashboard(value: DashboardEntity | null) {
+    set dashboard(value: MJDashboardEntity | null) {
         const previous = this._dashboard;
         this._dashboard = value;
         if (value && value !== previous) {
             this.onDashboardChanged();
         }
     }
-    get dashboard(): DashboardEntity | null {
+    get dashboard(): MJDashboardEntity | null {
         return this._dashboard;
     }
 
@@ -135,7 +135,7 @@ export class DashboardViewerComponent implements OnDestroy {
     @Input() showEditButton = true;
 
     /** All categories for breadcrumb path resolution */
-    @Input() Categories: DashboardCategoryEntity[] = [];
+    @Input() Categories: MJDashboardCategoryEntity[] = [];
 
     /**
      * Computed: Should the toolbar be visible?
@@ -163,7 +163,7 @@ export class DashboardViewerComponent implements OnDestroy {
     @Output() panelInteraction = new EventEmitter<PanelInteractionEvent>();
 
     /** Emitted when the dashboard is saved */
-    @Output() dashboardSaved = new EventEmitter<DashboardEntity>();
+    @Output() dashboardSaved = new EventEmitter<MJDashboardEntity>();
 
     /** Emitted when an error occurs */
     @Output() error = new EventEmitter<{ message: string; error?: Error }>();
@@ -189,7 +189,7 @@ export class DashboardViewerComponent implements OnDestroy {
 
     public isLoading = false;
     public config: DashboardConfig | null = null;
-    public partTypes: DashboardPartTypeEntity[] = [];
+    public partTypes: MJDashboardPartTypeEntity[] = [];
     public hasUnsavedChanges = false;
 
     /**
@@ -259,7 +259,7 @@ export class DashboardViewerComponent implements OnDestroy {
             return;
         }
 
-        const partType = this.partTypes.find(pt => pt.ID === partTypeId);
+        const partType = this.partTypes.find(pt => UUIDsEqual(pt.ID, partTypeId));
         if (!partType) {
             this.error.emit({ message: `Unknown panel type: ${partTypeId}` });
             return;
@@ -366,7 +366,7 @@ export class DashboardViewerComponent implements OnDestroy {
     /**
      * Get available part types
      */
-    public getPartTypes(): DashboardPartTypeEntity[] {
+    public getPartTypes(): MJDashboardPartTypeEntity[] {
         return this.partTypes;
     }
 
@@ -381,10 +381,10 @@ export class DashboardViewerComponent implements OnDestroy {
     /**
      * Get the part type for a panel
      */
-    public getPartTypeForPanel(panelId: string): DashboardPartTypeEntity | null {
+    public getPartTypeForPanel(panelId: string): MJDashboardPartTypeEntity | null {
         const panel = this.getPanel(panelId);
         if (!panel) return null;
-        return this.partTypes.find(pt => pt.ID === panel.partTypeId) ?? null;
+        return this.partTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId)) ?? null;
     }
 
     /**
@@ -500,7 +500,7 @@ export class DashboardViewerComponent implements OnDestroy {
             this.cdr.detectChanges();
 
             const md = new Metadata();
-            const dashboard = await md.GetEntityObject<DashboardEntity>('Dashboards');
+            const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards');
             const loaded = await dashboard.Load(id);
 
             if (loaded) {
@@ -690,12 +690,12 @@ export class DashboardViewerComponent implements OnDestroy {
      * Panel comes directly from GL's componentState - no lookup needed.
      */
     private createPanelComponent(panel: DashboardPanel, container: HTMLElement): void {
-        const partType = this.partTypes.find(pt => pt.ID === panel.partTypeId);
+        const partType = this.partTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId));
 
         // Create the panel wrapper with header and content
         const wrapper = document.createElement('div');
         wrapper.className = 'dashboard-part-wrapper';
-        wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100%; background: #fff;';
+        wrapper.style.cssText = 'display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface);';
 
         // Only show header in edit mode - GL tabs already display the title in view mode
         if (this.isEditing) {
@@ -728,7 +728,7 @@ export class DashboardViewerComponent implements OnDestroy {
      */
     private createDynamicPartComponent(
         panel: DashboardPanel,
-        partType: DashboardPartTypeEntity | undefined,
+        partType: MJDashboardPartTypeEntity | undefined,
         container: HTMLElement
     ): ComponentRef<BaseDashboardPart> | null {
         if (!partType?.DriverClass) {
@@ -794,8 +794,8 @@ export class DashboardViewerComponent implements OnDestroy {
             align-items: center;
             gap: 8px;
             padding: 10px 12px;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-bottom: 1px solid #e0e0e0;
+            background: var(--mj-bg-surface-card);
+            border-bottom: 1px solid var(--mj-border-default);
             min-height: 40px;
         `;
 
@@ -803,8 +803,8 @@ export class DashboardViewerComponent implements OnDestroy {
         const titleSection = document.createElement('div');
         titleSection.style.cssText = 'display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;';
         titleSection.innerHTML = `
-            <i class="${panel.icon || 'fa-solid fa-puzzle-piece'}" style="color: #5c6bc0; font-size: 14px;"></i>
-            <span style="font-weight: 500; font-size: 14px; color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${panel.title}</span>
+            <i class="${panel.icon || 'fa-solid fa-puzzle-piece'}" style="color: var(--mj-brand-primary); font-size: 14px;"></i>
+            <span style="font-weight: 500; font-size: 14px; color: var(--mj-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${panel.title}</span>
         `;
         header.appendChild(titleSection);
 
@@ -826,19 +826,19 @@ export class DashboardViewerComponent implements OnDestroy {
                 border: none;
                 border-radius: 4px;
                 background: transparent;
-                color: #666;
+                color: var(--mj-text-secondary);
                 cursor: pointer;
                 transition: all 0.15s;
             `;
             configBtn.innerHTML = '<i class="fa-solid fa-cog" style="font-size: 12px;"></i>';
             configBtn.addEventListener('click', () => this.onConfigurePart(panelId));
             configBtn.addEventListener('mouseenter', () => {
-                configBtn.style.background = '#e0e0e0';
-                configBtn.style.color = '#333';
+                configBtn.style.background = 'var(--mj-border-default)';
+                configBtn.style.color = 'var(--mj-text-primary)';
             });
             configBtn.addEventListener('mouseleave', () => {
                 configBtn.style.background = 'transparent';
-                configBtn.style.color = '#666';
+                configBtn.style.color = 'var(--mj-text-secondary)';
             });
 
             // Remove button
@@ -854,19 +854,19 @@ export class DashboardViewerComponent implements OnDestroy {
                 border: none;
                 border-radius: 4px;
                 background: transparent;
-                color: #666;
+                color: var(--mj-text-secondary);
                 cursor: pointer;
                 transition: all 0.15s;
             `;
             removeBtn.innerHTML = '<i class="fa-solid fa-times" style="font-size: 12px;"></i>';
             removeBtn.addEventListener('click', () => this.onRemovePart(panelId));
             removeBtn.addEventListener('mouseenter', () => {
-                removeBtn.style.background = '#ffebee';
-                removeBtn.style.color = '#d32f2f';
+                removeBtn.style.background = 'color-mix(in srgb, var(--mj-status-error) 10%, transparent)';
+                removeBtn.style.color = 'var(--mj-status-error)';
             });
             removeBtn.addEventListener('mouseleave', () => {
                 removeBtn.style.background = 'transparent';
-                removeBtn.style.color = '#666';
+                removeBtn.style.color = 'var(--mj-text-secondary)';
             });
 
             actions.appendChild(configBtn);
@@ -877,7 +877,7 @@ export class DashboardViewerComponent implements OnDestroy {
         return header;
     }
 
-    private renderPartContent(panel: DashboardPanel, container: HTMLElement, partType: DashboardPartTypeEntity | undefined): void {
+    private renderPartContent(panel: DashboardPanel, container: HTMLElement, partType: MJDashboardPartTypeEntity | undefined): void {
         const config = panel.config;
 
         switch (config?.type) {
@@ -902,9 +902,9 @@ export class DashboardViewerComponent implements OnDestroy {
         const url = config['url'] as string | undefined;
         if (!url) {
             container.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
-                    <i class="fa-solid fa-globe" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
-                    <h4 style="margin: 0 0 8px 0; color: #333;">No URL Configured</h4>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
+                    <i class="fa-solid fa-globe" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
+                    <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">No URL Configured</h4>
                     <p style="margin: 0; font-size: 13px;">Click the configure button to set a URL for this part.</p>
                 </div>
             `;
@@ -937,9 +937,9 @@ export class DashboardViewerComponent implements OnDestroy {
         const entityName = config['entityName'] as string | undefined;
         if (!viewId && !entityName) {
             container.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
-                    <i class="fa-solid fa-table" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
-                    <h4 style="margin: 0 0 8px 0; color: #333;">No View Selected</h4>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
+                    <i class="fa-solid fa-table" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
+                    <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">No View Selected</h4>
                     <p style="margin: 0; font-size: 13px;">Click configure to select a view for this part.</p>
                 </div>
             `;
@@ -950,21 +950,21 @@ export class DashboardViewerComponent implements OnDestroy {
         const displayModeValue = config['displayMode'] as string | undefined;
         const displayMode = displayModeValue === 'grid' ? 'Grid View' : displayModeValue === 'cards' ? 'Card View' : 'Timeline View';
         container.innerHTML = `
-            <div style="display: flex; flex-direction: column; height: 100%; background: #fff;">
-                <div style="padding: 16px 20px; border-bottom: 1px solid #e0e0e0; background: #fafafa;">
+            <div style="display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface);">
+                <div style="padding: 16px 20px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card);">
                     <div style="display: flex; align-items: center; gap: 12px;">
-                        <i class="fa-solid fa-table" style="font-size: 20px; color: #5c6bc0;"></i>
+                        <i class="fa-solid fa-table" style="font-size: 20px; color: var(--mj-brand-primary);"></i>
                         <div>
-                            <div style="font-weight: 500; color: #333; font-size: 14px;">Entity View</div>
-                            <div style="font-size: 12px; color: #666;">${entityName || 'View ' + viewInfo}</div>
+                            <div style="font-weight: 500; color: var(--mj-text-primary); font-size: 14px;">Entity View</div>
+                            <div style="font-size: 12px; color: var(--mj-text-secondary);">${entityName || 'View ' + viewInfo}</div>
                         </div>
-                        <span style="margin-left: auto; padding: 4px 10px; background: #e3f2fd; color: #1976d2; border-radius: 12px; font-size: 11px; font-weight: 500;">${displayMode}</span>
+                        <span style="margin-left: auto; padding: 4px 10px; background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); color: var(--mj-brand-primary); border-radius: 12px; font-size: 11px; font-weight: 500;">${displayMode}</span>
                     </div>
                 </div>
-                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; padding: 24px;">
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--mj-text-muted); padding: 24px;">
                     <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
                     <p style="margin: 0; font-size: 13px;">Entity grid loading...</p>
-                    <p style="margin: 8px 0 0 0; font-size: 11px; color: #bbb;">Full implementation pending Angular integration</p>
+                    <p style="margin: 8px 0 0 0; font-size: 11px; color: var(--mj-text-muted);">Full implementation pending Angular integration</p>
                 </div>
             </div>
         `;
@@ -975,9 +975,9 @@ export class DashboardViewerComponent implements OnDestroy {
         const queryName = config['queryName'] as string | undefined;
         if (!queryId && !queryName) {
             container.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
-                    <i class="fa-solid fa-database" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
-                    <h4 style="margin: 0 0 8px 0; color: #333;">No Query Selected</h4>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
+                    <i class="fa-solid fa-database" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
+                    <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">No Query Selected</h4>
                     <p style="margin: 0; font-size: 13px;">Click configure to select a query for this part.</p>
                 </div>
             `;
@@ -987,21 +987,21 @@ export class DashboardViewerComponent implements OnDestroy {
         const autoRefreshSeconds = (config['autoRefreshSeconds'] as number) || 0;
         const queryInfo = queryName || (queryId ? queryId.substring(0, 8) + '...' : 'Unknown');
         container.innerHTML = `
-            <div style="display: flex; flex-direction: column; height: 100%; background: #fff;">
-                <div style="padding: 16px 20px; border-bottom: 1px solid #e0e0e0; background: #fafafa;">
+            <div style="display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface);">
+                <div style="padding: 16px 20px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card);">
                     <div style="display: flex; align-items: center; gap: 12px;">
-                        <i class="fa-solid fa-database" style="font-size: 20px; color: #5c6bc0;"></i>
+                        <i class="fa-solid fa-database" style="font-size: 20px; color: var(--mj-brand-primary);"></i>
                         <div>
-                            <div style="font-weight: 500; color: #333; font-size: 14px;">Query Results</div>
-                            <div style="font-size: 12px; color: #666;">${queryInfo}</div>
+                            <div style="font-weight: 500; color: var(--mj-text-primary); font-size: 14px;">Query Results</div>
+                            <div style="font-size: 12px; color: var(--mj-text-secondary);">${queryInfo}</div>
                         </div>
-                        <span style="margin-left: auto; padding: 4px 10px; background: #e8f5e9; color: #388e3c; border-radius: 12px; font-size: 11px; font-weight: 500;">${autoRefreshSeconds > 0 ? 'Refresh: ' + autoRefreshSeconds + 's' : 'Manual refresh'}</span>
+                        <span style="margin-left: auto; padding: 4px 10px; background: color-mix(in srgb, var(--mj-status-success) 10%, transparent); color: var(--mj-status-success); border-radius: 12px; font-size: 11px; font-weight: 500;">${autoRefreshSeconds > 0 ? 'Refresh: ' + autoRefreshSeconds + 's' : 'Manual refresh'}</span>
                     </div>
                 </div>
-                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; padding: 24px;">
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--mj-text-muted); padding: 24px;">
                     <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
                     <p style="margin: 0; font-size: 13px;">Query grid loading...</p>
-                    <p style="margin: 8px 0 0 0; font-size: 11px; color: #bbb;">Full implementation pending Angular integration</p>
+                    <p style="margin: 8px 0 0 0; font-size: 11px; color: var(--mj-text-muted);">Full implementation pending Angular integration</p>
                 </div>
             </div>
         `;
@@ -1011,9 +1011,9 @@ export class DashboardViewerComponent implements OnDestroy {
         const artifactId = config['artifactId'] as string | undefined;
         if (!artifactId) {
             container.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
-                    <i class="fa-solid fa-cube" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
-                    <h4 style="margin: 0 0 8px 0; color: #333;">No Artifact Selected</h4>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
+                    <i class="fa-solid fa-cube" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
+                    <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">No Artifact Selected</h4>
                     <p style="margin: 0; font-size: 13px;">Click configure to select an artifact for this part.</p>
                 </div>
             `;
@@ -1024,32 +1024,32 @@ export class DashboardViewerComponent implements OnDestroy {
         const artifactInfo = artifactId.substring(0, 8) + '...';
         const versionInfo = versionNumber ? `v${versionNumber}` : 'Latest';
         container.innerHTML = `
-            <div style="display: flex; flex-direction: column; height: 100%; background: #fff;">
-                <div style="padding: 16px 20px; border-bottom: 1px solid #e0e0e0; background: #fafafa;">
+            <div style="display: flex; flex-direction: column; height: 100%; background: var(--mj-bg-surface);">
+                <div style="padding: 16px 20px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card);">
                     <div style="display: flex; align-items: center; gap: 12px;">
-                        <i class="fa-solid fa-cube" style="font-size: 20px; color: #5c6bc0;"></i>
+                        <i class="fa-solid fa-cube" style="font-size: 20px; color: var(--mj-brand-primary);"></i>
                         <div>
-                            <div style="font-weight: 500; color: #333; font-size: 14px;">Artifact</div>
-                            <div style="font-size: 12px; color: #666;">ID: ${artifactInfo}</div>
+                            <div style="font-weight: 500; color: var(--mj-text-primary); font-size: 14px;">Artifact</div>
+                            <div style="font-size: 12px; color: var(--mj-text-secondary);">ID: ${artifactInfo}</div>
                         </div>
-                        <span style="margin-left: auto; padding: 4px 10px; background: #fce4ec; color: #c2185b; border-radius: 12px; font-size: 11px; font-weight: 500;">${versionInfo}</span>
+                        <span style="margin-left: auto; padding: 4px 10px; background: color-mix(in srgb, var(--mj-status-error) 10%, transparent); color: var(--mj-status-error); border-radius: 12px; font-size: 11px; font-weight: 500;">${versionInfo}</span>
                     </div>
                 </div>
-                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #999; padding: 24px;">
+                <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--mj-text-muted); padding: 24px;">
                     <i class="fa-solid fa-spinner fa-spin" style="font-size: 24px; margin-bottom: 12px;"></i>
                     <p style="margin: 0; font-size: 13px;">Artifact viewer loading...</p>
-                    <p style="margin: 8px 0 0 0; font-size: 11px; color: #bbb;">Full implementation pending Angular integration</p>
+                    <p style="margin: 8px 0 0 0; font-size: 11px; color: var(--mj-text-muted);">Full implementation pending Angular integration</p>
                 </div>
             </div>
         `;
     }
 
-    private renderPlaceholderPart(panel: DashboardPanel, container: HTMLElement, partType: DashboardPartTypeEntity | undefined): void {
+    private renderPlaceholderPart(panel: DashboardPanel, container: HTMLElement, partType: MJDashboardPartTypeEntity | undefined): void {
         const partTypeName = partType?.Name || 'Custom';
         container.innerHTML = `
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; text-align: center; padding: 24px;">
-                <i class="fa-solid fa-puzzle-piece" style="font-size: 48px; color: #ccc; margin-bottom: 16px;"></i>
-                <h4 style="margin: 0 0 8px 0; color: #333;">${partTypeName} Part</h4>
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary); text-align: center; padding: 24px;">
+                <i class="fa-solid fa-puzzle-piece" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
+                <h4 style="margin: 0 0 8px 0; color: var(--mj-text-primary);">${partTypeName} Part</h4>
                 <p style="margin: 0; font-size: 13px;">This part type is not yet fully implemented.</p>
             </div>
         `;

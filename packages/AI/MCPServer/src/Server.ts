@@ -14,6 +14,7 @@
  */
 
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
+import { UUIDsEqual } from "@memberjunction/global";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
@@ -24,7 +25,7 @@ import sql from "mssql";
 import { z } from "zod";
 import { initConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
-import { AIAgentEntityExtended, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, AIPromptEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
@@ -32,11 +33,11 @@ import { ChatMessage } from "@memberjunction/ai";
 import { CredentialEngine } from "@memberjunction/credentials";
 import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import * as http from 'http';
-import { ActionEntityExtended, RunActionParams } from "@memberjunction/actions-base";
+import { MJActionEntityExtended, RunActionParams } from "@memberjunction/actions-base";
 import { ActionEngineServer } from "@memberjunction/actions";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
-import { ActionParamEntity } from "@memberjunction/core-entities";
+import { MJActionParamEntity } from "@memberjunction/core-entities";
 // OAuth authentication imports
 import {
     MCPSessionContext as OAuthMCPSessionContext,
@@ -313,7 +314,7 @@ async function validateApiKey(
         }
 
         // Get user from UserCache to ensure EntityPermissions are loaded
-        const cachedUser = UserCache.Instance.Users.find(u => u.ID === validation.User?.ID);
+        const cachedUser = UserCache.Instance.Users.find(u => UUIDsEqual(u.ID, validation.User?.ID));
         if (!cachedUser) {
             return { valid: false, error: 'User not found in cache' };
         }
@@ -703,12 +704,19 @@ async function registerAllTools(
     systemUser: UserInfo
 ): Promise<void> {
     // Helper to register a tool with filter check and authorization
+    // Track tools registered on THIS server instance to prevent SDK duplicate registration errors
+    const registeredOnServer = new Set<string>();
     const addToolWithFilter = (config: ToolConfig): void => {
-        registeredToolNames.push(config.name);
-
         if (!shouldIncludeTool(config.name, activeFilterOptions)) {
             return;
         }
+
+        // Guard against duplicate registration on the same McpServer instance
+        if (registeredOnServer.has(config.name)) {
+            console.warn(`[MCP] Skipping duplicate tool registration: ${config.name}`);
+            return;
+        }
+        registeredOnServer.add(config.name);
 
         // Use registerTool with explicit type assertions to avoid infinite type inference
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -765,7 +773,7 @@ async function registerAllTools(
         name: "Get_Single_Entity",
         description: "Retrieves complete details for a single entity including all fields, relationships, and metadata. Use Get_Entity_List first to find entity names.",
         parameters: z.object({
-            entityName: z.string().describe("The exact name of the entity to retrieve (e.g., 'Users', 'AI Models')")
+            entityName: z.string().describe("The exact name of the entity to retrieve (e.g., 'Users', 'MJ: AI Models')")
         }),
         scopeInfo: (props) => ({ scopePath: 'entity:read', resource: props.entityName as string || '*' }),
         async execute(params: Record<string, unknown>) {
@@ -833,9 +841,6 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
 
         // Store filter options for use by tool registration
         activeFilterOptions = filterOptions;
-
-        // Clear any previously registered tool names
-        registeredToolNames.length = 0;
 
         if (!_config.mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");
@@ -1352,6 +1357,8 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
                 if (newSessionId) {
                     streamableTransports.set(newSessionId, transport);
                     console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
+                } else {
+                    console.warn(`[StreamableHTTP] WARNING: No session ID assigned after handleRequest`);
                 }
 
             } catch (error) {
@@ -1435,7 +1442,7 @@ async function loadActionTools(
                         categoryId: action.CategoryID,
                         type: action.Type,
                         status: action.Status,
-                        paramCount: actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action.ID).length
+                        paramCount: actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action.ID)).length
                     })));
                 }
             });
@@ -1462,10 +1469,10 @@ async function loadActionTools(
                         const actionEngine = ActionEngineServer.Instance;
                         await actionEngine.Config(false, sessionUser);
 
-                        let action: ActionEntityExtended | null = null;
+                        let action: MJActionEntityExtended | null = null;
 
                         if (props.actionId) {
-                            action = actionEngine.Actions.find((a: ActionEntityExtended) => a.ID === props.actionId) || null;
+                            action = actionEngine.Actions.find((a: MJActionEntityExtended) => UUIDsEqual(a.ID, props.actionId as string)) || null;
                             if (!action) {
                                 return JSON.stringify({
                                     success: false,
@@ -1473,7 +1480,7 @@ async function loadActionTools(
                                 });
                             }
                         } else if (props.actionName) {
-                            action = actionEngine.Actions.find((a: ActionEntityExtended) => a.Name?.toLowerCase() === (props.actionName as string)?.toLowerCase()) || null;
+                            action = actionEngine.Actions.find((a: MJActionEntityExtended) => a.Name?.toLowerCase() === (props.actionName as string)?.toLowerCase()) || null;
                             if (!action) {
                                 return JSON.stringify({
                                     success: false,
@@ -1488,13 +1495,13 @@ async function loadActionTools(
                         }
 
                         // Build action params
-                        const actionParams = actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action!.ID);
+                        const actionParams = actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action!.ID));
                         const paramsRecord = props.params as Record<string, unknown> | undefined;
                         const runParams: RunActionParams = {
                             Action: action,
                             ContextUser: sessionUser,
                             Filters: [],
-                            Params: actionParams.map((p: ActionParamEntity) => ({
+                            Params: actionParams.map((p: MJActionParamEntity) => ({
                                 Name: p.Name,
                                 Value: paramsRecord?.[p.Name] ?? p.DefaultValue,
                                 Type: (p.Type as 'Input' | 'Output' | 'Both') || 'Input'
@@ -1533,23 +1540,23 @@ async function loadActionTools(
                     const actionEngine = ActionEngineServer.Instance;
                     await actionEngine.Config(false, sessionUser);
 
-                    let action: ActionEntityExtended | null = null;
+                    let action: MJActionEntityExtended | null = null;
                     if (props.actionId) {
-                        action = actionEngine.Actions.find((a: ActionEntityExtended) => a.ID === props.actionId) || null;
+                        action = actionEngine.Actions.find((a: MJActionEntityExtended) => UUIDsEqual(a.ID, props.actionId as string)) || null;
                     } else if (props.actionName) {
-                        action = actionEngine.Actions.find((a: ActionEntityExtended) => a.Name?.toLowerCase() === (props.actionName as string)?.toLowerCase()) || null;
+                        action = actionEngine.Actions.find((a: MJActionEntityExtended) => a.Name?.toLowerCase() === (props.actionName as string)?.toLowerCase()) || null;
                     }
 
                     if (!action) {
                         return JSON.stringify({ error: "Action not found" });
                     }
 
-                    const params = actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action!.ID);
+                    const params = actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action!.ID));
                     return JSON.stringify({
                         actionId: action.ID,
                         actionName: action.Name,
                         description: action.Description,
-                        params: params.map((p: ActionParamEntity) => ({
+                        params: params.map((p: MJActionParamEntity) => ({
                             name: p.Name,
                             description: p.Description,
                             type: p.Type,
@@ -1562,6 +1569,8 @@ async function loadActionTools(
         }
 
         // Process each action tool configuration for specific action tools
+        // Track registered tool names to prevent duplicates from overlapping patterns
+        const registeredActionToolNames = new Set<string>();
         for (const tool of actionTools) {
             if (tool.execute) {
                 const actionPattern = tool.actionName || '*';
@@ -1569,6 +1578,13 @@ async function loadActionTools(
 
                 // Add specific execution tools for each matching action
                 for (const action of actions) {
+                    const safeName = (action.Name || 'Unknown').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+                    const toolName = `Execute_${safeName}_Action`;
+                    if (registeredActionToolNames.has(toolName)) {
+                        console.warn(`[MCP] Skipping duplicate action tool registration: ${toolName} (action: ${action.Name}, ID: ${action.ID})`);
+                        continue;
+                    }
+                    registeredActionToolNames.add(toolName);
                     addActionExecuteTool(addToolWithFilter, action, sessionContext);
                 }
             }
@@ -1584,16 +1600,16 @@ async function loadActionTools(
  * @param userContext - User context for ActionEngine configuration
  * @returns Array of matching action entities
  */
-async function discoverActions(pattern: string, category: string | undefined, userContext: UserInfo): Promise<ActionEntityExtended[]> {
+async function discoverActions(pattern: string, category: string | undefined, userContext: UserInfo): Promise<MJActionEntityExtended[]> {
     const actionEngine = ActionEngineServer.Instance;
     await actionEngine.Config(false, userContext);
 
-    let actions = actionEngine.Actions.filter((a: ActionEntityExtended) => a.Status === 'Active');
+    let actions = actionEngine.Actions.filter((a: MJActionEntityExtended) => a.Status === 'Active');
 
     // Filter by category if specified
     if (category && category !== '*') {
         const categoryLower = category.toLowerCase();
-        actions = actions.filter((a: ActionEntityExtended) => a.Category?.toLowerCase().includes(categoryLower));
+        actions = actions.filter((a: MJActionEntityExtended) => a.Category?.toLowerCase().includes(categoryLower));
     }
 
     // Filter by pattern
@@ -1604,7 +1620,7 @@ async function discoverActions(pattern: string, category: string | undefined, us
     const isWildcardPattern = pattern.includes('*');
     if (!isWildcardPattern) {
         // Exact match
-        return actions.filter((a: ActionEntityExtended) => a.Name === pattern);
+        return actions.filter((a: MJActionEntityExtended) => a.Name === pattern);
     }
 
     // Convert wildcard pattern to regex
@@ -1613,7 +1629,7 @@ async function discoverActions(pattern: string, category: string | undefined, us
         .replace(/\*/g, '.*'); // Convert * to .*
 
     const regex = new RegExp(`^${regexPattern}$`, 'i');
-    return actions.filter((a: ActionEntityExtended) => a.Name && regex.test(a.Name));
+    return actions.filter((a: MJActionEntityExtended) => a.Name && regex.test(a.Name));
 }
 
 /**
@@ -1625,11 +1641,11 @@ async function discoverActions(pattern: string, category: string | undefined, us
  */
 function addActionExecuteTool(
     addToolWithFilter: AddToolFn,
-    action: ActionEntityExtended,
+    action: MJActionEntityExtended,
     sessionContext: MCPSessionContext
 ): void {
     const actionEngine = ActionEngineServer.Instance;
-    const actionParams = actionEngine.ActionParams.filter((p: ActionParamEntity) => p.ActionID === action.ID);
+    const actionParams = actionEngine.ActionParams.filter((p: MJActionParamEntity) => UUIDsEqual(p.ActionID, action.ID));
 
     // Build Zod schema for action parameters
     const paramSchema: Record<string, z.ZodTypeAny> = {};
@@ -1680,7 +1696,7 @@ function addActionExecuteTool(
                     Action: action,
                     ContextUser: sessionUser,
                     Filters: [],
-                    Params: actionParams.map((p: ActionParamEntity) => ({
+                    Params: actionParams.map((p: MJActionParamEntity) => ({
                         Name: p.Name,
                         Value: props[p.Name] ?? p.DefaultValue,
                         Type: (p.Type as 'Input' | 'Output' | 'Both') || 'Input'
@@ -1782,10 +1798,10 @@ async function loadAgentTools(
                         const aiEngine = AIEngine.Instance;
                         await aiEngine.Config(false, sessionUser);
 
-                        let agent: AIAgentEntityExtended | null = null;
+                        let agent: MJAIAgentEntityExtended | null = null;
 
                         if (props.agentId) {
-                            agent = aiEngine.Agents.find(a => a.ID === props.agentId) || null;
+                            agent = aiEngine.Agents.find(a => UUIDsEqual(a.ID, props.agentId as string)) || null;
                             if (!agent) {
                                 return JSON.stringify({
                                     success: false,
@@ -1853,13 +1869,22 @@ async function loadAgentTools(
         }
 
         // Process each agent tool configuration for specific agent tools
+        // Track registered tool names to prevent duplicates from overlapping patterns
+        // or agents with the same name producing identical tool names
+        const registeredAgentToolNames = new Set<string>();
         for (const tool of agentTools) {
             const agentPattern = tool.agentName || "*";
             const agents = await discoverAgents(agentPattern, systemUser);
 
-            // Add tools for each matching agent
+            // Add tools for each matching agent (skip if already registered by a prior config entry)
             for (const agent of agents) {
                 if (tool.execute) {
+                    const toolName = `Execute_${(agent.Name || 'Unknown').replace(/\s+/g, '_')}_Agent`;
+                    if (registeredAgentToolNames.has(toolName)) {
+                        console.warn(`[MCP] Skipping duplicate agent tool registration: ${toolName} (agent: ${agent.Name}, ID: ${agent.ID})`);
+                        continue;
+                    }
+                    registeredAgentToolNames.add(toolName);
                     addAgentExecuteTool(addToolWithFilter, agent, sessionContext);
                 }
             }
@@ -1878,7 +1903,7 @@ async function loadAgentTools(
                 async execute(props) {
                     const sessionUser = sessionContext.user;
                     const md = new Metadata();
-                    const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
+                    const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
                     const loaded = await agentRun.Load(props.runId as string);
 
                     if (!loaded) {
@@ -1913,7 +1938,7 @@ async function loadAgentTools(
                     // Note: Actual cancellation would require the agent to check the cancellation token
                     // For now, we can update the status to indicate cancellation was requested
                     const md = new Metadata();
-                    const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
+                    const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
                     const loaded = await agentRun.Load(props.runId as string);
 
                     if (!loaded || agentRun.Status !== 'Running') {
@@ -2001,7 +2026,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
         async execute(props) {
             const sessionUser = sessionContext.user;
             const md = new Metadata();
-            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
+            const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', sessionUser);
             const loaded = await agentRun.Load(props.runId as string);
 
             if (!loaded) {
@@ -2010,7 +2035,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
 
             // Load all steps for this run
             const rv = new RunView();
-            const stepsResult = await rv.RunView<AIAgentRunStepEntityExtended>({
+            const stepsResult = await rv.RunView<MJAIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
                 ExtraFilter: `AgentRunID = '${props.runId}'`,
                 OrderBy: 'StepNumber',
@@ -2075,7 +2100,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
         async execute(props) {
             const sessionUser = sessionContext.user;
             const rv = new RunView();
-            const stepsResult = await rv.RunView<AIAgentRunStepEntityExtended>({
+            const stepsResult = await rv.RunView<MJAIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
                 ExtraFilter: `AgentRunID = '${props.runId}'`,
                 OrderBy: 'StepNumber',
@@ -2137,7 +2162,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
         async execute(props) {
             const sessionUser = sessionContext.user;
             const rv = new RunView();
-            const stepsResult = await rv.RunView<AIAgentRunStepEntityExtended>({
+            const stepsResult = await rv.RunView<MJAIAgentRunStepEntityExtended>({
                 EntityName: 'MJ: AI Agent Run Steps',
                 ExtraFilter: `AgentRunID = '${props.runId}'`,
                 OrderBy: 'StepNumber',
@@ -2225,7 +2250,7 @@ function loadQueryTools(addToolWithFilter: AddToolFn, sessionContext: MCPSession
                 try {
                     const rv = new RunView();
                     const result = await rv.RunView({
-                        EntityName: 'Queries',
+                        EntityName: 'MJ: Queries',
                         ExtraFilter: `Status = 'Active'`,
                         OrderBy: 'Name',
                         Fields: ['ID', 'Name', 'Description', 'CategoryID', 'Status'],
@@ -2438,7 +2463,7 @@ async function loadPromptTools(
                     // Filter by category
                     if (props.category && props.category !== '*') {
                         const categoryLower = (props.category as string).toLowerCase();
-                        prompts = prompts.filter((p: AIPromptEntityExtended) => p.Category?.toLowerCase().includes(categoryLower));
+                        prompts = prompts.filter((p: MJAIPromptEntityExtended) => p.Category?.toLowerCase().includes(categoryLower));
                     }
 
                     // Filter by pattern
@@ -2449,13 +2474,13 @@ async function loadPromptTools(
                                 .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
                                 .replace(/\*/g, '.*');
                             const regex = new RegExp(`^${regexPattern}$`, 'i');
-                            prompts = prompts.filter((p: AIPromptEntityExtended) => p.Name && regex.test(p.Name));
+                            prompts = prompts.filter((p: MJAIPromptEntityExtended) => p.Name && regex.test(p.Name));
                         } else {
-                            prompts = prompts.filter((p: AIPromptEntityExtended) => p.Name === pattern);
+                            prompts = prompts.filter((p: MJAIPromptEntityExtended) => p.Name === pattern);
                         }
                     }
 
-                    return JSON.stringify(prompts.map((p: AIPromptEntityExtended) => ({
+                    return JSON.stringify(prompts.map((p: MJAIPromptEntityExtended) => ({
                         id: p.ID,
                         name: p.Name,
                         description: p.Description || '',
@@ -2490,10 +2515,10 @@ async function loadPromptTools(
                         const aiEngine = AIEngine.Instance;
                         await aiEngine.Config(false, sessionUser);
 
-                        let prompt: AIPromptEntityExtended | undefined;
+                        let prompt: MJAIPromptEntityExtended | undefined;
 
                         if (props.promptId) {
-                            prompt = aiEngine.Prompts.find((p: AIPromptEntityExtended) => p.ID === props.promptId);
+                            prompt = aiEngine.Prompts.find((p: MJAIPromptEntityExtended) => UUIDsEqual(p.ID, props.promptId as string));
                             if (!prompt) {
                                 return JSON.stringify({
                                     success: false,
@@ -2501,7 +2526,7 @@ async function loadPromptTools(
                                 });
                             }
                         } else if (props.promptName) {
-                            prompt = aiEngine.Prompts.find((p: AIPromptEntityExtended) => p.Name?.toLowerCase() === (props.promptName as string)?.toLowerCase());
+                            prompt = aiEngine.Prompts.find((p: MJAIPromptEntityExtended) => p.Name?.toLowerCase() === (props.promptName as string)?.toLowerCase());
                             if (!prompt) {
                                 return JSON.stringify({
                                     success: false,
@@ -2599,7 +2624,7 @@ function loadCommunicationTools(addToolWithFilter: AddToolFn, sessionContext: MC
                 const sessionUser = sessionContext.user;
                 const rv = new RunView();
                 const result = await rv.RunView({
-                    EntityName: 'Communication Providers',
+                    EntityName: 'MJ: Communication Providers',
                     OrderBy: 'Name',
                     Fields: ['ID', 'Name', 'Description', 'Status', 'SupportsSending']
                 }, sessionUser);
@@ -2632,7 +2657,7 @@ function loadCommunicationTools(addToolWithFilter: AddToolFn, sessionContext: MC
  * @param userContext - Optional user context for AIEngine configuration
  * @returns Array of matching agent entities
  */
-async function discoverAgents(pattern: string, userContext?: UserInfo): Promise<AIAgentEntityExtended[]> {
+async function discoverAgents(pattern: string, userContext?: UserInfo): Promise<MJAIAgentEntityExtended[]> {
     const aiEngine = AIEngine.Instance;
     await aiEngine.Config(false, userContext);
 
@@ -2671,7 +2696,7 @@ async function discoverAgents(pattern: string, userContext?: UserInfo): Promise<
  */
 function addAgentExecuteTool(
     addToolWithFilter: AddToolFn,
-    agent: AIAgentEntityExtended,
+    agent: MJAIAgentEntityExtended,
     sessionContext: MCPSessionContext
 ): void {
     const agentRunner = new AgentRunner();

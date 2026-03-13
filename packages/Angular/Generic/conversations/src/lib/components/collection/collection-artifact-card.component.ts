@@ -1,5 +1,5 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
-import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
@@ -56,31 +56,31 @@ import { ArtifactIconService } from '@memberjunction/ng-artifacts';
     </div>
     `,
   styles: [`
-    .artifact-card { display: flex; gap: 16px; padding: 16px; border: 1px solid #E8E8E8; border-radius: 8px; cursor: pointer; transition: all 150ms ease; background: white; }
-    .artifact-card:hover { border-color: #0076B6; box-shadow: 0 2px 8px rgba(0,118,182,0.1); }
+    .artifact-card { display: flex; gap: 16px; padding: 16px; border: 1px solid var(--mj-border-default); border-radius: 8px; cursor: pointer; transition: all 150ms ease; background: var(--mj-bg-surface); }
+    .artifact-card:hover { border-color: var(--mj-brand-primary); box-shadow: var(--mj-shadow-sm); }
 
-    .card-icon { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 8px; background: #F0F8FF; color: #0076B6; font-size: 20px; }
+    .card-icon { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 8px; background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); font-size: 20px; }
 
     .card-content { flex: 1; min-width: 0; }
     .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
     .artifact-name { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .version-badge { padding: 2px 8px; background: #FFF3E0; color: #E65100; border-radius: 3px; font-size: 11px; font-weight: 600; font-family: monospace; }
-    .artifact-type { padding: 2px 8px; background: #E3F2FD; color: #1976D2; border-radius: 3px; font-size: 11px; font-weight: 500; text-transform: uppercase; }
+    .version-badge { padding: 2px 8px; background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface)); color: var(--mj-status-warning); border-radius: 3px; font-size: 11px; font-weight: 600; font-family: monospace; }
+    .artifact-type { padding: 2px 8px; background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); border-radius: 3px; font-size: 11px; font-weight: 500; text-transform: uppercase; }
 
-    .artifact-description { font-size: 13px; color: #666; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .artifact-description { font-size: 13px; color: var(--mj-text-muted); margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
-    .artifact-meta { display: flex; gap: 16px; font-size: 12px; color: #999; }
+    .artifact-meta { display: flex; gap: 16px; font-size: 12px; color: var(--mj-text-disabled); }
     .meta-item { display: flex; align-items: center; gap: 4px; }
 
     .card-actions { display: none; align-items: center; gap: 4px; }
     .artifact-card:hover .card-actions { display: flex; }
-    .action-btn { padding: 8px; background: transparent; border: none; cursor: pointer; border-radius: 4px; color: #666; transition: all 150ms ease; }
-    .action-btn:hover { background: #F4F4F4; color: #0076B6; }
+    .action-btn { padding: 8px; background: transparent; border: none; cursor: pointer; border-radius: 4px; color: var(--mj-text-muted); transition: all 150ms ease; }
+    .action-btn:hover { background: var(--mj-bg-surface-sunken); color: var(--mj-brand-primary); }
   `]
 })
 export class CollectionArtifactCardComponent implements OnInit, OnChanges {
-  @Input() artifact!: ArtifactEntity;
-  @Input() version?: ArtifactVersionEntity; // Optional version info
+  @Input() artifact!: MJArtifactEntity;
+  @Input() version?: MJArtifactVersionEntity; // Optional version info
   @Input() currentUser!: UserInfo;
 
   @Output() selected = new EventEmitter<any>();
@@ -94,7 +94,8 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
 
   constructor(
     private artifactPermissionService: ArtifactPermissionService,
-    private artifactIconService: ArtifactIconService
+    private artifactIconService: ArtifactIconService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   async ngOnInit(): Promise<void> {
@@ -126,6 +127,8 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
       );
     } catch (err) {
       console.error('Error loading artifact permissions:', err);
+    } finally {
+      this.cdr.detectChanges(); // zone.js 0.15: async permission checks don't trigger CD
     }
   }
 

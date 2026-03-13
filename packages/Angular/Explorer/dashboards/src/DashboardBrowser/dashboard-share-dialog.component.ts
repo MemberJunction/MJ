@@ -1,15 +1,16 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
-import { DashboardEntity, DashboardPermissionEntity, DashboardEngine, UserEntity } from '@memberjunction/core-entities';
+import { MJDashboardEntity, MJDashboardPermissionEntity, DashboardEngine, MJUserEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Represents a user share with their permissions
  */
 export interface UserSharePermission {
     /** The permission entity (may be new or existing) */
-    Permission: DashboardPermissionEntity;
+    Permission: MJDashboardPermissionEntity;
     /** The user being shared with */
-    User: UserEntity;
+    User: MJUserEntity;
     /** Whether this is a newly added share */
     IsNew: boolean;
     /** Whether this share has been marked for removal */
@@ -23,7 +24,7 @@ export interface ShareDialogResult {
     /** The action taken: 'save' or 'cancel' */
     Action: 'save' | 'cancel';
     /** The dashboard that was shared (only on save) */
-    Dashboard?: DashboardEntity;
+    Dashboard?: MJDashboardEntity;
 }
 
 /**
@@ -39,17 +40,17 @@ export interface ShareDialogResult {
 })
 export class DashboardShareDialogComponent implements OnChanges {
     @Input() Visible = false;
-    @Input() Dashboard: DashboardEntity | null = null;
+    @Input() Dashboard: MJDashboardEntity | null = null;
     @Output() Result = new EventEmitter<ShareDialogResult>();
 
     /** Current shares for this dashboard */
     public UserShares: UserSharePermission[] = [];
 
     /** All available users for sharing (excludes owner and already shared) */
-    public AvailableUsers: UserEntity[] = [];
+    public AvailableUsers: MJUserEntity[] = [];
 
     /** All users in the system */
-    private allUsers: UserEntity[] = [];
+    private allUsers: MJUserEntity[] = [];
 
     /** Loading state */
     public IsLoading = false;
@@ -94,8 +95,8 @@ export class DashboardShareDialogComponent implements OnChanges {
             const rv = new RunView();
 
             // Load all users
-            const usersResult = await rv.RunView<UserEntity>({
-                EntityName: 'Users',
+            const usersResult = await rv.RunView<MJUserEntity>({
+                EntityName: 'MJ: Users',
                 ExtraFilter: "IsActive = 1",
                 OrderBy: 'Name',
                 ResultType: 'entity_object'
@@ -111,7 +112,7 @@ export class DashboardShareDialogComponent implements OnChanges {
             // Build user shares list
             this.UserShares = [];
             for (const permission of existingShares) {
-                const user = this.allUsers.find(u => u.ID === permission.UserID);
+                const user = this.allUsers.find(u => UUIDsEqual(u.ID, permission.UserID));
                 if (user) {
                     this.UserShares.push({
                         Permission: permission,
@@ -148,14 +149,14 @@ export class DashboardShareDialogComponent implements OnChanges {
 
         // Exclude dashboard owner and already shared users
         this.AvailableUsers = this.allUsers.filter(user =>
-            user.ID !== this.Dashboard!.UserID && !sharedUserIds.has(user.ID)
+            !UUIDsEqual(user.ID, this.Dashboard!.UserID) && !sharedUserIds.has(user.ID)
         );
     }
 
     /**
      * Get filtered available users based on search
      */
-    public get FilteredAvailableUsers(): UserEntity[] {
+    public get FilteredAvailableUsers(): MJUserEntity[] {
         if (!this.UserSearchFilter.trim()) {
             return this.AvailableUsers.slice(0, 10); // Show first 10 by default
         }
@@ -179,11 +180,11 @@ export class DashboardShareDialogComponent implements OnChanges {
     /**
      * Add a user to the share list
      */
-    public async addUserShare(user: UserEntity): Promise<void> {
+    public async addUserShare(user: MJUserEntity): Promise<void> {
         if (!this.Dashboard) return;
 
         const md = new Metadata();
-        const permission = await md.GetEntityObject<DashboardPermissionEntity>('MJ: Dashboard Permissions');
+        const permission = await md.GetEntityObject<MJDashboardPermissionEntity>('MJ: Dashboard Permissions');
         permission.NewRecord();
         permission.DashboardID = this.Dashboard.ID;
         permission.UserID = user.ID;
@@ -334,7 +335,7 @@ export class DashboardShareDialogComponent implements OnChanges {
     /**
      * Get initials for a user (for avatar display)
      */
-    public getUserInitials(user: UserEntity): string {
+    public getUserInitials(user: MJUserEntity): string {
         const name = user.Name || user.Email || '?';
         const parts = name.split(' ');
         if (parts.length >= 2) {

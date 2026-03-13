@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunView } from "@memberjunction/core";
-import { ListEntity, ListDetailEntity } from "@memberjunction/core-entities";
+import { MJListEntity, MJListDetailEntity } from "@memberjunction/core-entities";
 
 /**
  * Action to find which lists a specific record belongs to.
@@ -53,7 +53,7 @@ export class GetRecordListMembershipAction extends BaseAction {
       let resolvedEntityId = entityId;
       if (entityName && !entityId) {
         const entityResult = await rv.RunView({
-          EntityName: 'Entities',
+          EntityName: 'MJ: Entities',
           ExtraFilter: `Name = '${entityName}'`,
           ResultType: 'entity_object'
         }, params.ContextUser);
@@ -70,8 +70,8 @@ export class GetRecordListMembershipAction extends BaseAction {
       }
 
       // Get list details for this record
-      const detailsResult = await rv.RunView<ListDetailEntity>({
-        EntityName: 'List Details',
+      const detailsResult = await rv.RunView<MJListDetailEntity>({
+        EntityName: 'MJ: List Details',
         ExtraFilter: `RecordID = '${recordId}'`,
         ResultType: 'entity_object'
       }, params.ContextUser);
@@ -107,8 +107,8 @@ export class GetRecordListMembershipAction extends BaseAction {
         listFilter += ` AND UserID = '${userId}'`;
       }
 
-      const listsResult = await rv.RunView<ListEntity>({
-        EntityName: 'Lists',
+      const listsResult = await rv.RunView<MJListEntity>({
+        EntityName: 'MJ: Lists',
         ExtraFilter: listFilter,
         OrderBy: 'Name',
         ResultType: 'entity_object'
@@ -134,7 +134,7 @@ export class GetRecordListMembershipAction extends BaseAction {
       }
 
       const membershipDetails: MembershipDetail[] = [];
-      const listMap = new Map<string, ListEntity>();
+      const listMap = new Map<string, MJListEntity>();
 
       for (const list of lists) {
         listMap.set(list.ID, list);

@@ -6,15 +6,15 @@
       "Description": "Dashboards contain collections of resources a user can browse",
       "Icon": "fa-solid fa-table-columns",
       "DriverClass": "DashboardResource",
-      "EntityID": "@lookup:Entities.Name=Dashboards",
-      "CategoryEntityID": "@lookup:Entities.Name=Dashboard Categories"
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Dashboards",
+      "CategoryEntityID": "@lookup:MJ: Entities.Name=MJ: Dashboard Categories"
     },
     "primaryKey": {
       "ID": "D8AFCCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:45.508Z",
-      "checksum": "f79989c05bb9d56f2eda989384329a50e8766f1c63078ca19b509b8afc64efd0"
+      "lastModified": "2026-02-13T21:08:23.839Z",
+      "checksum": "90b58322bb7ef58a506ed33e691a4956b46e21477846593c6996530f4c770c88"
     }
   },
   {
@@ -24,15 +24,15 @@
       "Description": "Queries contain stored queries that can be used as building blocks for analysis",
       "Icon": "fa-regular fa-file-code",
       "DriverClass": "QueryResource",
-      "EntityID": "@lookup:Entities.Name=Queries",
-      "CategoryEntityID": "@lookup:Entities.Name=Query Categories"
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Queries",
+      "CategoryEntityID": "@lookup:MJ: Entities.Name=MJ: Query Categories"
     },
     "primaryKey": {
       "ID": "D9AFCCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:45.509Z",
-      "checksum": "19c93e434c89e741bab6645afa2e3f27f46579a7e2e7def817af30400c16d6ea"
+      "lastModified": "2026-02-13T21:08:23.840Z",
+      "checksum": "313c58cab754f0861b05155263cfc407b5c152e38f04f6a1978fb4e19c40dc43"
     }
   },
   {
@@ -60,15 +60,15 @@
       "Description": "Reports are generated outputs from conversations a user has with the interface",
       "Icon": "fa-solid fa-chart-simple",
       "DriverClass": "ReportResource",
-      "EntityID": "@lookup:Entities.Name=Reports",
-      "CategoryEntityID": "@lookup:Entities.Name=Report Categories"
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Reports",
+      "CategoryEntityID": "@lookup:MJ: Entities.Name=MJ: Report Categories"
     },
     "primaryKey": {
       "ID": "DBAFCCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:45.512Z",
-      "checksum": "5df95e2b73f38aaace9a1fa50848f701319d5fe083b487c4bf78e8739ba36471"
+      "lastModified": "2026-02-13T21:08:23.841Z",
+      "checksum": "e58dac1ef6e0e3597745a1974834baed51983c4b5d8b8c113e5ff5b30ebf628c"
     }
   },
   {
@@ -96,15 +96,15 @@
       "Description": "User Views contain the metadata for the user viewing system of entity data",
       "Icon": "fa-solid fa-table",
       "DriverClass": "ViewResource",
-      "EntityID": "@lookup:Entities.Name=User Views",
-      "CategoryEntityID": "@lookup:Entities.Name=User View Categories"
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Views",
+      "CategoryEntityID": "@lookup:MJ: Entities.Name=MJ: User View Categories"
     },
     "primaryKey": {
       "ID": "DDAFCCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:45.514Z",
-      "checksum": "280fad13fab906eae4c4f184dbfdfca2bd82d787bb2d16bd57e9721025f531ef"
+      "lastModified": "2026-02-13T21:08:23.842Z",
+      "checksum": "2599f0dbb50edbe18dbc830c5f272b4c73b216556c95fb6e3aa5b4a6d374edd6"
     }
   },
   {
@@ -114,15 +114,15 @@
       "Description": "Lists contains sets of records from an Entity",
       "Icon": "fa-solid fa-rectangle-list",
       "DriverClass": "ListDetailResource",
-      "EntityID": "@lookup:Entities.Name=Lists",
-      "CategoryEntityID": "@lookup:Entities.Name=List Categories"
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Lists",
+      "CategoryEntityID": "@lookup:MJ: Entities.Name=MJ: List Categories"
     },
     "primaryKey": {
       "ID": "E64D433E-F36B-1410-8560-0041FA62858A"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:45.515Z",
-      "checksum": "2a2a6e10074c3adea5da292fceb8f1a6a509732e866a980d28745bea4cf20d46"
+      "lastModified": "2026-02-13T21:08:23.844Z",
+      "checksum": "e233c20d633246eac5b869eb61bc6ab1c6c4b15da45e7664982e1c2aa3a4cdad"
     }
   },
   {
@@ -132,15 +132,15 @@
       "Description": "Conversations include those with AI systems as well as other users",
       "Icon": "fa-regular fa-comments",
       "DriverClass": "ConversationResource",
-      "EntityID": "@lookup:Entities.Name=Conversations",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversations",
       "CategoryEntityID": null
     },
     "primaryKey": {
       "ID": "81D4BC3D-9FEB-EF11-B01A-286B35C04427"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:45.477Z",
-      "checksum": "69b8d229f0f0b002c7062f5c722dd580b91b05360d1f3cdcbc1e58d0090c6334"
+      "lastModified": "2026-02-13T21:08:23.828Z",
+      "checksum": "cf9e9e9e54b96766aa13261c75a2a0d4b13d93a25bffbbf78e7ff250c8e9898c"
     }
   },
   {
@@ -150,15 +150,15 @@
       "Description": "Versioned content artifacts including reports, dashboards, and forms",
       "Icon": "fa-solid fa-file-code",
       "DriverClass": "ArtifactResource",
-      "EntityID": "@lookup:Entities.Name=MJ: Conversation Artifacts",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Conversation Artifacts",
       "CategoryEntityID": null
     },
     "primaryKey": {
       "ID": "6BA617C4-0CBA-4C79-B037-456DF4B03D3D"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:45.478Z",
-      "checksum": "215a40c8d6e2218c50d7763a60a0cec2fde0a1f4e3ba4936b94e96240c987fa6"
+      "lastModified": "2026-02-13T21:08:23.829Z",
+      "checksum": "c02fc6a8323da62ef03046c6bb6e216675d90c7296fe6aa849cbcfb657019384"
     }
   },
   {

@@ -5,7 +5,6 @@ import { FormsModule } from '@angular/forms';
 
 // MemberJunction
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
-import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 
 // Dashboards
@@ -37,7 +36,6 @@ import { SpeakerService } from './services/speaker.service';
 
     // MemberJunction
     BaseFormsModule,
-    FormToolbarModule,
     ContainerDirectivesModule
   ],
   providers: [

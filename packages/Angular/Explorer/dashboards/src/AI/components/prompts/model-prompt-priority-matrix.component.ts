@@ -1,9 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
-import { AIPromptModelEntity } from '@memberjunction/core-entities';
+import { MJAIPromptModelEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { AIModelEntityExtended, AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { UUIDsEqual } from '@memberjunction/global';
 
 interface PromptModelAssociation {
   promptId: string;
@@ -12,7 +13,7 @@ interface PromptModelAssociation {
   modelName: string;
   priority: number;
   status: string;
-  association: AIPromptModelEntity | null;
+  association: MJAIPromptModelEntity | null;
   isNew: boolean;
   isModified: boolean;
 }
@@ -31,17 +32,17 @@ interface MatrixCell {
   styleUrls: ['./model-prompt-priority-matrix.component.css']
 })
 export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
-  @Input() selectedPrompts: AIPromptEntityExtended[] = [];
-  @Input() selectedModels: AIModelEntityExtended[] = [];
+  @Input() selectedPrompts: MJAIPromptEntityExtended[] = [];
+  @Input() selectedModels: MJAIModelEntityExtended[] = [];
   @Input() readonly = false;
   
   @Output() associationsChange = new EventEmitter<PromptModelAssociation[]>();
   @Output() stateChange = new EventEmitter<any>();
-  @Output() promptSelected = new EventEmitter<AIPromptEntityExtended>();
+  @Output() promptSelected = new EventEmitter<MJAIPromptEntityExtended>();
   
   // Data
-  public prompts: AIPromptEntityExtended[] = [];
-  public models: AIModelEntityExtended[] = [];
+  public prompts: MJAIPromptEntityExtended[] = [];
+  public models: MJAIModelEntityExtended[] = [];
   public associations: PromptModelAssociation[] = [];
   public matrix: MatrixCell[][] = [];
   
@@ -110,10 +111,10 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     }
   }
   
-  private async loadPrompts(): Promise<AIPromptEntityExtended[]> {
+  private async loadPrompts(): Promise<MJAIPromptEntityExtended[]> {
     const rv = new RunView();
     const result = await rv.RunView({
-      EntityName: 'AI Prompts',
+      EntityName: 'MJ: AI Prompts',
       ExtraFilter: "Status = 'Active'",
       OrderBy: 'Name',
       UserSearchString: '',
@@ -122,16 +123,16 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     });
     
     if (result && result.Success && result.Results) {
-      return result.Results as AIPromptEntityExtended[];
+      return result.Results as MJAIPromptEntityExtended[];
     } else {
       throw new Error('Failed to load AI prompts');
     }
   }
   
-  private async loadModels(): Promise<AIModelEntityExtended[]> {
+  private async loadModels(): Promise<MJAIModelEntityExtended[]> {
     const rv = new RunView();
     const result = await rv.RunView({
-      EntityName: 'AI Models',
+      EntityName: 'MJ: AI Models',
       ExtraFilter: "IsActive = 1",
       OrderBy: 'Name',
       UserSearchString: '',
@@ -140,13 +141,13 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     });
     
     if (result && result.Success && result.Results) {
-      return result.Results as AIModelEntityExtended[];
+      return result.Results as MJAIModelEntityExtended[];
     } else {
       throw new Error('Failed to load AI models');
     }
   }
   
-  private async loadAssociations(): Promise<AIPromptModelEntity[]> {
+  private async loadAssociations(): Promise<MJAIPromptModelEntity[]> {
     const rv = new RunView();
     const result = await rv.RunView({
       EntityName: 'MJ: AI Prompt Models',
@@ -158,19 +159,19 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     });
     
     if (result && result.Success && result.Results) {
-      return result.Results as AIPromptModelEntity[];
+      return result.Results as MJAIPromptModelEntity[];
     } else {
       throw new Error('Failed to load prompt-model associations');
     }
   }
   
-  private buildAssociations(dbAssociations: AIPromptModelEntity[]): void {
+  private buildAssociations(dbAssociations: MJAIPromptModelEntity[]): void {
     this.associations = [];
     
     // Create associations for existing database records
     dbAssociations.forEach(dbAssoc => {
-      const prompt = this.prompts.find(p => p.ID === dbAssoc.PromptID);
-      const model = this.models.find(m => m.ID === dbAssoc.ModelID);
+      const prompt = this.prompts.find(p => UUIDsEqual(p.ID, dbAssoc.PromptID));
+      const model = this.models.find(m => UUIDsEqual(m.ID, dbAssoc.ModelID));
       
       if (prompt && model) {
         this.associations.push({
@@ -196,7 +197,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
       
       this.models.forEach((model, modelIndex) => {
         const association = this.associations.find(a => 
-          a.promptId === prompt.ID && a.modelId === model.ID
+          UUIDsEqual(a.promptId, prompt.ID) && UUIDsEqual(a.modelId, model.ID)
         );
         
         this.matrix[promptIndex][modelIndex] = {
@@ -209,7 +210,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     });
   }
   
-  private canAssignModelToPrompt(prompt: AIPromptEntityExtended, model: AIModelEntityExtended): boolean {
+  private canAssignModelToPrompt(prompt: MJAIPromptEntityExtended, model: MJAIModelEntityExtended): boolean {
     // Check model type compatibility
     if (prompt.OutputType && model.AIModelTypeID) {
       // Add business logic for compatibility checking
@@ -249,8 +250,8 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     }
     
     const cellKey = this.getCellKey(
-      this.prompts.findIndex(p => p.ID === cell.promptId),
-      this.models.findIndex(m => m.ID === cell.modelId)
+      this.prompts.findIndex(p => UUIDsEqual(p.ID, cell.promptId)),
+      this.models.findIndex(m => UUIDsEqual(m.ID, cell.modelId))
     );
     
     if (this.selectedCells.has(cellKey)) {
@@ -330,8 +331,8 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
   }
   
   public createAssociation(promptId: string, modelId: string, priority: number = 1): void {
-    const prompt = this.prompts.find(p => p.ID === promptId);
-    const model = this.models.find(m => m.ID === modelId);
+    const prompt = this.prompts.find(p => UUIDsEqual(p.ID, promptId));
+    const model = this.models.find(m => UUIDsEqual(m.ID, modelId));
     
     if (!prompt || !model) return;
     
@@ -432,15 +433,15 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
       
       for (const association of this.associations) {
         if (association.isNew || association.isModified) {
-          let entity: AIPromptModelEntity;
+          let entity: MJAIPromptModelEntity;
           
           if (association.association) {
             // Update existing
-            entity = await md.GetEntityObject<AIPromptModelEntity>('MJ: AI Prompt Models', md.CurrentUser);
+            entity = await md.GetEntityObject<MJAIPromptModelEntity>('MJ: AI Prompt Models', md.CurrentUser);
             await entity.Load(association.association.ID);
           } else {
             // Create new
-            entity = await md.GetEntityObject<AIPromptModelEntity>('MJ: AI Prompt Models', md.CurrentUser);
+            entity = await md.GetEntityObject<MJAIPromptModelEntity>('MJ: AI Prompt Models', md.CurrentUser);
           }
           
           entity.PromptID = association.promptId;
@@ -567,7 +568,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
     URL.revokeObjectURL(url);
   }
 
-  public selectPrompt(prompt: AIPromptEntityExtended): void {
+  public selectPrompt(prompt: MJAIPromptEntityExtended): void {
     this.promptSelected.emit(prompt);
   }
 }

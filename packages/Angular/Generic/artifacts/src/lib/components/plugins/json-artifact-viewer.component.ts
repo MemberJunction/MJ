@@ -3,7 +3,7 @@ import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { RunView } from '@memberjunction/core';
-import { ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
+import { MJArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
 
 /**
  * Viewer component for JSON artifacts.
@@ -74,17 +74,18 @@ import { ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
       justify-content: flex-end;
       gap: 8px;
       padding: 8px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #dee2e6;
+      background: var(--mj-bg-surface-sunken);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .btn-icon {
       padding: 6px 12px;
-      background: white;
-      border: 1px solid #ccc;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-strong);
       border-radius: 4px;
       cursor: pointer;
       font-size: 12px;
+      color: var(--mj-text-secondary);
       display: flex;
       align-items: center;
       gap: 6px;
@@ -92,8 +93,8 @@ import { ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
     }
 
     .btn-icon:hover {
-      background: #e9ecef;
-      border-color: #999;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-text-disabled);
     }
 
     .display-content {
@@ -107,7 +108,7 @@ import { ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
     .html-iframe {
       width: 100%;
       border: none;
-      background: white;
+      background: var(--mj-bg-surface);
       display: block;
     }
 
@@ -116,7 +117,7 @@ import { ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
       padding: 20px;
       overflow: auto;
       min-height: 0;
-      background: white;
+      background: var(--mj-bg-surface);
     }
 
     .json-editor-container {
@@ -134,7 +135,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public displayMarkdown: string | null = null;
   public displayHtml: string | null = null;
   public htmlBlobUrl: SafeResourceUrl | null = null;
-  private versionAttributes: ArtifactVersionAttributeEntity[] = [];
+  private versionAttributes: MJArtifactVersionAttributeEntity[] = [];
   private unsafeBlobUrl: string | null = null; // Keep unsafe URL for cleanup
 
   /**
@@ -197,7 +198,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactVersionAttributeEntity>({
+      const result = await rv.RunView<MJArtifactVersionAttributeEntity>({
         EntityName: 'MJ: Artifact Version Attributes',
         ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
         ResultType: 'entity_object'
@@ -306,15 +307,20 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
           iframeDoc.head.appendChild(style);
         }
 
-        // Inject width override to ensure content fills iframe
+        // Inject width guardrails to prevent iframe content from causing horizontal overflow
         const widthOverride = iframeDoc.createElement('style');
         widthOverride.textContent = `
+          html, body {
+            max-width: 100% !important;
+            overflow-x: hidden !important;
+          }
           body {
-            max-width: none !important;
-            width: 100% !important;
             margin: 20px 10px 5px 20px !important; /* top right bottom left */
             padding: 0 !important;
             box-sizing: border-box !important;
+          }
+          img, svg, table, pre {
+            max-width: 100% !important;
           }
         `;
         iframeDoc.head.appendChild(widthOverride);
@@ -344,22 +350,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         // Set iframe height to match content (with a bit of padding)
         iframe.style.height = `${contentHeight + 20}px`;
 
-        // Get the iframe's actual width (excluding borders)
-        const iframeWidth = iframe.clientWidth;
-
-        // Force body to use full iframe width with consistent margins
-        if (iframeDoc.body) {
-          const marginSize = 20; // 20px margins on each side
-          const bodyWidth = iframeWidth - (marginSize * 2);
-
-          iframeDoc.body.style.width = `${bodyWidth}px`;
-          iframeDoc.body.style.maxWidth = 'none';
-          iframeDoc.body.style.margin = `${marginSize}px`;
-          iframeDoc.body.style.padding = '0';
-          iframeDoc.body.style.boxSizing = 'border-box';
-        }
-
-        console.log('📦 Iframe resized - Height:', contentHeight + 20, 'px, Width:', iframeWidth, 'px');
+        console.log('📦 Iframe resized - Height:', contentHeight + 20, 'px');
       }
     }
   }

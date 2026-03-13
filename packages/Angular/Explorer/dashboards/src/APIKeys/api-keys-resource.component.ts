@@ -1,8 +1,8 @@
 import { Component, OnInit, OnDestroy, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
-import { APIKeyEntity, APIScopeEntity, APIKeyUsageLogEntity, APIApplicationEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJAPIKeyEntity, MJAPIScopeEntity, MJAPIKeyUsageLogEntity, MJAPIApplicationEntity, ResourceData } from '@memberjunction/core-entities';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 import { Subject } from 'rxjs';
 import { APIKeyFilter, APIKeyListComponent } from './api-key-list.component';
@@ -78,10 +78,10 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     public NeverUsedKeys = 0;
 
     // Data collections
-    public APIKeys: APIKeyEntity[] = [];
+    public APIKeys: MJAPIKeyEntity[] = [];
     public RecentActivity: ActivityItem[] = [];
     public ScopeStats: ScopeStat[] = [];
-    public TopUsedKeys: APIKeyEntity[] = [];
+    public TopUsedKeys: MJAPIKeyEntity[] = [];
 
     // Dialog states
     public ShowCreateDialog = false;
@@ -91,7 +91,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     // Default UI config for categories without explicit configuration
     private readonly defaultUIConfig = {
         icon: 'fa-solid fa-ellipsis',
-        color: '#6b7280'
+        color: 'var(--mj-text-muted)'
     };
 
     // Dynamic category UI configs built from root scopes
@@ -162,7 +162,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      */
     private async loadAPIKeys(): Promise<void> {
         const rv = new RunView();
-        const result = await rv.RunView<APIKeyEntity>({
+        const result = await rv.RunView<MJAPIKeyEntity>({
             EntityName: 'MJ: API Keys',
             OrderBy: '__mj_CreatedAt DESC',
             ResultType: 'entity_object'
@@ -218,7 +218,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
         const rv = new RunView();
 
         // Load usage logs
-        const usageResult = await rv.RunView<APIKeyUsageLogEntity>({
+        const usageResult = await rv.RunView<MJAPIKeyUsageLogEntity>({
             EntityName: 'MJ: API Key Usage Logs',
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 20,
@@ -367,7 +367,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     /**
      * Open edit panel for a key
      */
-    public openEditPanel(key: APIKeyEntity): void {
+    public openEditPanel(key: MJAPIKeyEntity): void {
         this.SelectedKeyId = key.ID;
         this.ShowEditPanel = true;
     }
@@ -375,7 +375,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     /**
      * Handle key from list selected
      */
-    public onKeySelected(key: APIKeyEntity): void {
+    public onKeySelected(key: MJAPIKeyEntity): void {
         this.openEditPanel(key);
     }
 
@@ -529,7 +529,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     /**
      * Get expiration status class
      */
-    public getExpirationClass(key: APIKeyEntity): string {
+    public getExpirationClass(key: MJAPIKeyEntity): string {
         if (!key.ExpiresAt) return '';
 
         const now = new Date();
@@ -547,7 +547,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      * View activity for a key
      */
     public onActivityClick(activity: ActivityItem): void {
-        const key = this.APIKeys.find(k => k.ID === activity.keyId);
+        const key = this.APIKeys.find(k => UUIDsEqual(k.ID, activity.keyId));
         if (key) {
             this.openEditPanel(key);
         }

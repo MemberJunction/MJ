@@ -4,7 +4,8 @@ import {
     UserInfo,
     LogError,
 } from '@memberjunction/core';
-import { VersionLabelEntity, VersionLabelItemEntityType } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
+import { MJVersionLabelEntity, MJVersionLabelItemEntityType } from '@memberjunction/core-entities';
 import {
     DiffResult,
     DiffSummary,
@@ -42,8 +43,8 @@ export class DiffEngine {
         contextUser: UserInfo
     ): Promise<DiffResult> {
         // Short-circuit: identical labels produce an empty diff
-        if (fromLabelId === toLabelId) {
-            const label = await loadEntityById<VersionLabelEntity>(ENTITY_VERSION_LABELS, fromLabelId, contextUser);
+        if (UUIDsEqual(fromLabelId, toLabelId)) {
+            const label = await loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, fromLabelId, contextUser);
             const labelName = label ? label.Name : fromLabelId;
             return {
                 FromLabelID: fromLabelId,
@@ -56,8 +57,8 @@ export class DiffEngine {
         }
 
         const [fromLabel, toLabel] = await Promise.all([
-            loadEntityById<VersionLabelEntity>(ENTITY_VERSION_LABELS, fromLabelId, contextUser),
-            loadEntityById<VersionLabelEntity>(ENTITY_VERSION_LABELS, toLabelId, contextUser),
+            loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, fromLabelId, contextUser),
+            loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, toLabelId, contextUser),
         ]);
         if (!fromLabel) throw new Error(`Version label '${fromLabelId}' not found`);
         if (!toLabel) throw new Error(`Version label '${toLabelId}' not found`);
@@ -92,7 +93,7 @@ export class DiffEngine {
         labelId: string,
         contextUser: UserInfo
     ): Promise<DiffResult> {
-        const label = await loadEntityById<VersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
+        const label = await loadEntityById<MJVersionLabelEntity>(ENTITY_VERSION_LABELS, labelId, contextUser);
         if (!label) throw new Error(`Version label '${labelId}' not found`);
 
         const fromIndex = await this.buildSnapshotIndex(labelId, contextUser);
@@ -134,7 +135,7 @@ export class DiffEngine {
             sqlEquals('RecordID', recordId),
         ].join(' AND ');
 
-        const result = await rv.RunView<VersionLabelItemEntityType>({
+        const result = await rv.RunView<MJVersionLabelItemEntityType>({
             EntityName: ENTITY_VERSION_LABEL_ITEMS,
             ExtraFilter: filter,
             Fields: ['ID', 'RecordChangeID', 'EntityID', 'RecordID'],
@@ -163,7 +164,7 @@ export class DiffEngine {
      */
     private async buildSnapshotIndex(labelId: string, contextUser: UserInfo): Promise<SnapshotIndex> {
         const rv = new RunView();
-        const result = await rv.RunView<VersionLabelItemEntityType>({
+        const result = await rv.RunView<MJVersionLabelItemEntityType>({
             EntityName: ENTITY_VERSION_LABEL_ITEMS,
             ExtraFilter: sqlEquals('VersionLabelID', labelId),
             Fields: ['ID', 'RecordChangeID', 'EntityID', 'RecordID'],
@@ -289,7 +290,7 @@ export class DiffEngine {
      * Resolve an entity name from metadata by ID, with fallback.
      */
     private resolveEntityName(md: Metadata, entityId: string): string {
-        const entityInfo = md.Entities.find(e => e.ID === entityId);
+        const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entityInfo?.Name ?? `Unknown(${entityId})`;
     }
 
@@ -346,7 +347,7 @@ export class DiffEngine {
         }
 
         // Same RecordChange ID → Unchanged
-        if (fromChangeId === toChangeId) {
+        if (UUIDsEqual(fromChangeId, toChangeId)) {
             return this.buildUnchangedDiff(entityName, recordId);
         }
 

@@ -176,6 +176,8 @@ import { VersionHistoryDiffResourceComponent } from './VersionHistory/components
 import { VersionHistoryRestoreResourceComponent } from './VersionHistory/components/restore-resource.component';
 import { VersionHistoryGraphResourceComponent } from './VersionHistory/components/graph-resource.component';
 import { VersionsModule } from '@memberjunction/ng-versions';
+// Integration Dashboard Module
+import { IntegrationModule } from './Integration/integration.module';
 
 
 
@@ -350,7 +352,8 @@ import { VersionsModule } from '@memberjunction/ng-versions';
     ActionsModule,
     AgentsModule,
     MarkdownModule,
-    VersionsModule
+    VersionsModule,
+    IntegrationModule
   ],
   providers: [
     AIInstrumentationService,
@@ -446,7 +449,9 @@ import { VersionsModule } from '@memberjunction/ng-versions';
     VersionHistoryLabelsResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryRestoreResourceComponent,
-    VersionHistoryGraphResourceComponent
+    VersionHistoryGraphResourceComponent,
+    // Integration Dashboard Module (re-exports its components)
+    IntegrationModule
   ]
 })
 export class DashboardsModule { }

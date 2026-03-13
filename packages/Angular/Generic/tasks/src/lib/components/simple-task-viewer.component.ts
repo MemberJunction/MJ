@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnChanges, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TaskEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskDetailPanelComponent } from './task-detail-panel.component';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Simple list view for tasks
@@ -18,7 +19,7 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
             <div
               class="task-item"
               [class.completed]="task.Status === 'Complete'"
-              [class.selected]="selectedTask?.ID === task.ID"
+              [class.selected]="IsTaskSelected(task)"
               (click)="onTaskClick(task)">
               <!-- Status Icon -->
               <div class="status-icon" [class.complete]="task.Status === 'Complete'">
@@ -94,7 +95,7 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
   styles: [`
     .simple-task-viewer {
       height: 100%;
-      background: #FAFAFA;
+      background: var(--mj-bg-surface-sunken);
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -114,19 +115,19 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
     }
 
     .task-list.with-detail {
-      border-right: 1px solid #E5E7EB;
+      border-right: 1px solid var(--mj-border-default);
     }
 
     .list-resizer {
       width: 4px;
-      background: #E5E7EB;
+      background: var(--mj-border-default);
       cursor: col-resize;
       flex-shrink: 0;
       transition: background 0.2s;
     }
 
     .list-resizer:hover {
-      background: #3B82F6;
+      background: var(--mj-brand-primary);
     }
 
     .task-detail-panel {
@@ -141,8 +142,8 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
       align-items: flex-start;
       gap: 12px;
       padding: 16px;
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-card);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       margin-bottom: 8px;
       transition: all 0.2s;
@@ -150,20 +151,20 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
     }
 
     .task-item:hover {
-      border-color: #3B82F6;
-      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: var(--mj-shadow-sm);
       transform: translateY(-1px);
     }
 
     .task-item.selected {
-      border-color: #3B82F6;
-      background: #EFF6FF;
-      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .task-item.completed {
-      background: #F9FAFB;
-      border-color: #D1D5DB;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-border-strong);
     }
 
     .status-icon {
@@ -173,14 +174,14 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #FEF3C7;
-      color: #F59E0B;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
       flex-shrink: 0;
     }
 
     .status-icon.complete {
-      background: #D1FAE5;
-      color: #10B981;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .task-content {
@@ -206,7 +207,7 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
 
     .task-title {
       font-weight: 600;
-      color: #111827;
+      color: var(--mj-text-primary);
       font-size: 14px;
       display: flex;
       align-items: center;
@@ -214,13 +215,13 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
     }
 
     .task-title.completed-text {
-      color: #6B7280;
+      color: var(--mj-text-muted);
       text-decoration: line-through;
       text-decoration-thickness: 1.5px;
     }
 
     .completed-check {
-      color: #10B981;
+      color: var(--mj-status-success);
       font-size: 12px;
     }
 
@@ -228,7 +229,7 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
       display: flex;
       gap: 12px;
       font-size: 12px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       white-space: nowrap;
     }
 
@@ -238,7 +239,7 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
 
     .task-description {
       font-size: 13px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       margin-bottom: 8px;
       line-height: 1.5;
     }
@@ -253,25 +254,25 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
     .progress-bar-compact {
       width: 80px;
       height: 4px;
-      background: #E5E7EB;
+      background: var(--mj-border-default);
       border-radius: 2px;
       overflow: hidden;
     }
 
     .progress-fill-compact {
       height: 100%;
-      background: #3B82F6;
+      background: var(--mj-brand-primary);
       transition: width 0.3s ease;
     }
 
     .progress-fill-compact.complete {
-      background: #10B981;
+      background: var(--mj-status-success);
     }
 
     .progress-text-compact {
       font-size: 10px;
       font-weight: 600;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       min-width: 30px;
       text-align: right;
     }
@@ -279,7 +280,7 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
     .no-tasks {
       text-align: center;
       padding: 60px 20px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
     }
 
     .no-tasks i {
@@ -295,12 +296,16 @@ import { TaskDetailPanelComponent } from './task-detail-panel.component';
   `]
 })
 export class SimpleTaskViewerComponent implements OnChanges {
-  @Input() tasks: TaskEntity[] = [];
+  @Input() tasks: MJTaskEntity[] = [];
   @Input() agentRunMap?: Map<string, string>; // Maps TaskID -> AgentRunID
-  @Output() taskClicked = new EventEmitter<TaskEntity>();
+  @Output() taskClicked = new EventEmitter<MJTaskEntity>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
-  public selectedTask: TaskEntity | null = null;
+  public selectedTask: MJTaskEntity | null = null;
+
+  public IsTaskSelected(task: MJTaskEntity): boolean {
+    return UUIDsEqual(this.selectedTask?.ID, task.ID);
+  }
   public detailPanelWidth: number = 400;
 
   private isResizing = false;
@@ -311,12 +316,12 @@ export class SimpleTaskViewerComponent implements OnChanges {
     // Tasks are already loaded
   }
 
-  public onTaskClick(task: TaskEntity): void {
+  public onTaskClick(task: MJTaskEntity): void {
     this.selectedTask = task;
     this.taskClicked.emit(task);
   }
 
-  public getAgentRunId(task: TaskEntity): string | null {
+  public getAgentRunId(task: MJTaskEntity): string | null {
     return this.agentRunMap?.get(task.ID) || null;
   }
 

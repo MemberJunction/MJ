@@ -1,0 +1,3 @@
+- GetDatasetByName most of this can go in the GenericDatabaseProvider and it can define abstract methods for the SQL bits and PG and SQL Server can implement those.
+- same for GetDatasetStatusByName and GetColumnsForDatasetItem and ProcessEntityRows
+- GetApplicationMetadata, GetAuditLogTypeMetadata,GetUserMetadata, GetAuthorizationMetadata should all be in generic and new abstract methods should be added there to return just the SQL and then we can call ExecuteSQL in the generic layer which will route to the sub-class to actually execute so really only thing in PG and SQL is the defintion of the SQL statements

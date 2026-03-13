@@ -705,3 +705,74 @@ export interface ResolvedTestVariables {
  * Variable value type union
  */
 export type TestVariableValue = string | number | boolean | Date;
+
+// ============================================================================
+// TEST RUN OUTPUT SYSTEM
+// ============================================================================
+
+/**
+ * An individual output item emitted by a test driver during execution.
+ * The engine persists each item as a TestRunOutput entity record.
+ * Supports any media type — images, video, audio, text, JSON, HTML, etc.
+ */
+export interface TestRunOutputItem {
+  /**
+   * Name matching TestRunOutputType.Name (e.g., "Screenshot", "Log", "Video")
+   */
+  outputTypeName: string;
+
+  /**
+   * Chronological ordering for storyboarding outputs across steps
+   */
+  sequence: number;
+
+  /**
+   * Which step produced this output (for step-based tests like Computer Use)
+   */
+  stepNumber?: number;
+
+  /**
+   * Human-readable label (e.g., "Step 3 Screenshot")
+   */
+  name?: string;
+
+  /**
+   * Additional context about this output
+   */
+  description?: string;
+
+  /**
+   * MIME type of the output data (e.g., "image/png", "text/plain", "video/mp4")
+   */
+  mimeType?: string;
+
+  /**
+   * Base64-encoded binary data (images, audio, video) or text content (logs, JSON, HTML)
+   */
+  inlineData?: string;
+
+  /**
+   * Size of the output data in bytes
+   */
+  fileSizeBytes?: number;
+
+  /**
+   * Width in pixels for image or video outputs
+   */
+  width?: number;
+
+  /**
+   * Height in pixels for image or video outputs
+   */
+  height?: number;
+
+  /**
+   * Duration in seconds for audio or video outputs
+   */
+  durationSeconds?: number;
+
+  /**
+   * Additional metadata as JSON (e.g., URL at time of capture, tool calls, error info)
+   */
+  metadata?: Record<string, unknown>;
+}

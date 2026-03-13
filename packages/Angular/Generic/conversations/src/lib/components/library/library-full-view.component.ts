@@ -1,6 +1,6 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { CollectionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity } from '@memberjunction/core-entities';
 
 /**
  * Full-panel Collections view component
@@ -288,8 +288,8 @@ export class LibraryFullViewComponent implements OnInit {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
-  public collections: CollectionEntity[] = [];
-  public filteredCollections: CollectionEntity[] = [];
+  public collections: MJCollectionEntity[] = [];
+  public filteredCollections: MJCollectionEntity[] = [];
   public searchQuery: string = '';
   public isLoading: boolean = false;
   public breadcrumbs: Array<{ id: string; name: string }> = [];
@@ -308,7 +308,7 @@ export class LibraryFullViewComponent implements OnInit {
       const filter = `EnvironmentID='${this.environmentId}'` +
                      (this.currentCollectionId ? ` AND ParentID='${this.currentCollectionId}'` : ' AND ParentID IS NULL');
 
-      const result = await rv.RunView<CollectionEntity>(
+      const result = await rv.RunView<MJCollectionEntity>(
         {
           EntityName: 'MJ: Collections',
           ExtraFilter: filter,
@@ -346,7 +346,7 @@ export class LibraryFullViewComponent implements OnInit {
     }
   }
 
-  openCollection(collection: CollectionEntity): void {
+  openCollection(collection: MJCollectionEntity): void {
     this.breadcrumbs.push({ id: collection.ID, name: collection.Name });
     this.currentCollectionId = collection.ID;
     this.searchQuery = '';

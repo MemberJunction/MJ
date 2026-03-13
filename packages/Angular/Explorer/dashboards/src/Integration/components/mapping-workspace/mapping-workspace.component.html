@@ -1,0 +1,840 @@
+<div class="mapping-workspace">
+  <div class="workspace-header">
+    <h2><i class="fa-solid fa-diagram-project"></i> Mapping Workspace</h2>
+  </div>
+
+  @if (IsLoadingIntegrations) {
+    <mj-loading text="Loading integrations..." size="medium"></mj-loading>
+  } @else {
+    <div class="workspace-body">
+      <!-- ============================================================ -->
+      <!-- LEFT PANEL: Integration selector + Entity map list -->
+      <!-- ============================================================ -->
+      <div class="left-panel">
+        <div class="integration-selector">
+          <label class="panel-label">Integration</label>
+          <kendo-dropdownlist
+            [data]="Integrations"
+            [textField]="'Name'"
+            [valueField]="'ID'"
+            [valuePrimitive]="true"
+            [(ngModel)]="SelectedIntegrationID"
+            (valueChange)="OnIntegrationChange($event)"
+            [defaultItem]="{ ID: '', Name: '-- Select --' }">
+          </kendo-dropdownlist>
+        </div>
+
+        @if (IsLoadingEntityMaps) {
+          <mj-loading text="Loading entity maps..." size="small"></mj-loading>
+        } @else if (SelectedIntegrationID) {
+          <!-- Entity Map Header -->
+          <div class="entity-map-header">
+            <span class="panel-label" style="margin: 0;">Entity Maps</span>
+            <div class="header-actions">
+              <button kendoButton [look]="'flat'" [size]="'small'"
+                      (click)="OpenAddPanel()" title="Add entity map">
+                <i class="fa-solid fa-plus"></i> Add Map
+              </button>
+            </div>
+          </div>
+
+          <!-- ==================== ADD MAP PANEL ==================== -->
+          @if (ShowAddPanel) {
+            <div class="add-map-panel">
+              <div class="add-panel-top">
+                <h5><i class="fa-solid fa-plus-circle"></i> Add Entity Map</h5>
+                <button class="add-panel-close" (click)="CloseAddPanel()">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+
+              <!-- Source Object Dropdown -->
+              <div class="form-group">
+                <label>Source Object</label>
+                @if (IsDiscoveringObjects) {
+                  <div class="source-loading">
+                    <i class="fa-solid fa-spinner fa-spin"></i> Discovering objects...
+                  </div>
+                } @else if (DiscoverError) {
+                  <div class="discover-error-inline">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    {{ DiscoverError }}
+                  </div>
+                } @else if (DiscoveredObjects.length === 0) {
+                  <div class="discover-error-inline">
+                    No objects found in external system.
+                  </div>
+                } @else {
+                  <kendo-dropdownlist
+                    [data]="DiscoveredObjects"
+                    [textField]="'Label'"
+                    [valueField]="'Name'"
+                    [valuePrimitive]="true"
+                    [(ngModel)]="SelectedSourceObjectName"
+                    (valueChange)="OnSourceObjectChange($event)"
+                    [filterable]="true"
+                    [defaultItem]="{ Name: '', Label: 'Select source object...' }">
+                  </kendo-dropdownlist>
+                }
+              </div>
+
+              <!-- Target Mode Toggle -->
+              <div class="target-mode-toggle">
+                <button class="target-mode-btn"
+                        [class.active]="TargetMode === 'existing'"
+                        (click)="SetTargetMode('existing')">
+                  <i class="fa-solid fa-database"></i> Existing Entity
+                </button>
+                <button class="target-mode-btn"
+                        [class.active]="TargetMode === 'new'"
+                        (click)="SetTargetMode('new')">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> New Entity
+                </button>
+              </div>
+
+              <!-- Existing entity picker -->
+              @if (TargetMode === 'existing') {
+                <div class="form-group">
+                  <label>Target MJ Entity</label>
+                  @if (IsLoadingEntities) {
+                    <mj-loading text="Loading..." size="small"></mj-loading>
+                  } @else {
+                    <kendo-dropdownlist
+                      [data]="MJEntities"
+                      [textField]="'Name'"
+                      [valueField]="'ID'"
+                      [valuePrimitive]="true"
+                      [(ngModel)]="SelectedEntityID"
+                      [filterable]="true"
+                      [defaultItem]="{ ID: null, Name: 'Select entity...' }">
+                    </kendo-dropdownlist>
+                  }
+                </div>
+              }
+
+              <!-- New entity form -->
+              @if (TargetMode === 'new') {
+                <div class="new-entity-form">
+                  <div class="section-label">Define New Entity</div>
+                  <div class="form-group">
+                    <label>DB Schema</label>
+                    <kendo-combobox
+                      [data]="DBSchemas"
+                      [(ngModel)]="NewEntitySchemaName"
+                      (valueChange)="OnSchemaNameChange()"
+                      [allowCustom]="true"
+                      [filterable]="true"
+                      [placeholder]="'Select or type schema...'">
+                    </kendo-combobox>
+                  </div>
+                  <div class="form-row">
+                    <div class="form-group">
+                      <label>Table Name</label>
+                      <input kendoTextBox [(ngModel)]="NewEntityTableName"
+                             [placeholder]="SuggestedTableName || 'Table name'" />
+                      @if (SuggestedTableName && !NewEntityTableName) {
+                        <span class="auto-hint">Suggested: {{ SuggestedTableName }}</span>
+                      }
+                    </div>
+                    <div class="form-group">
+                      <label>Entity Name</label>
+                      <input kendoTextBox [(ngModel)]="NewEntityName"
+                             [placeholder]="SuggestedEntityName || 'Entity name'" />
+                    </div>
+                  </div>
+
+                  <!-- DDL Preview -->
+                  @if (SelectedSourceObjectName && NewEntitySchemaName && NewEntityTableName) {
+                    <div class="ddl-preview-section">
+                      <button kendoButton [look]="'outline'" [size]="'small'"
+                              [disabled]="IsGeneratingDDL"
+                              (click)="PreviewDDL()">
+                        @if (IsGeneratingDDL) {
+                          <i class="fa-solid fa-spinner fa-spin"></i> Generating...
+                        } @else {
+                          <i class="fa-solid fa-database"></i> Preview DDL
+                        }
+                      </button>
+                      @if (DDLPreviewError) {
+                        <div class="discover-error-inline" style="margin-top: 8px;">
+                          <i class="fa-solid fa-triangle-exclamation"></i> {{ DDLPreviewError }}
+                        </div>
+                      }
+                      @if (DDLPreviewContent) {
+                        <pre class="ddl-preview-code">{{ DDLPreviewContent }}</pre>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+
+              <!-- Sync direction -->
+              <div class="form-group">
+                <label>Sync Direction</label>
+                <kendo-dropdownlist
+                  [data]="['Pull', 'Push', 'Bidirectional']"
+                  [(ngModel)]="AddSyncDirection">
+                </kendo-dropdownlist>
+              </div>
+
+              <!-- Save / Cancel -->
+              <div class="add-form-actions">
+                <button kendoButton [themeColor]="'primary'" [size]="'small'"
+                        [disabled]="!IsAddFormValid || IsSavingEntityMap"
+                        (click)="SaveAddMap()">
+                  @if (IsSavingEntityMap) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+                  } @else if (TargetMode === 'new') {
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Create Pending Map
+                  } @else {
+                    <i class="fa-solid fa-check"></i> Add Map
+                  }
+                </button>
+                <button kendoButton [size]="'small'" (click)="CloseAddPanel()">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          }
+
+          <!-- Search -->
+          @if (AllMaps.length > 0) {
+            <div class="search-box">
+              <input kendoTextBox
+                     [(ngModel)]="EntityMapSearchText"
+                     placeholder="Search entity maps..." />
+            </div>
+          }
+
+          <!-- Entity Map List -->
+          @if (AllMaps.length === 0 && !ShowAddPanel) {
+            <p class="empty-hint">
+              No entity maps configured.
+              <a href="javascript:void(0)" (click)="OpenAddPanel()" style="color: var(--mj-brand-primary);">Add one</a>
+            </p>
+          } @else if (FilteredMaps.length === 0 && AllMaps.length > 0) {
+            <p class="empty-hint">No matches for "{{ EntityMapSearchText }}".</p>
+          } @else {
+            <div class="entity-map-list">
+              @for (item of FilteredMaps; track item.ID) {
+                <div class="entity-map-item"
+                     [class.selected]="IsSelectedMap(item.ID)"
+                     [class.pending]="item.IsPending"
+                     (click)="OnMapSelect(item)">
+                  <div class="em-top-row">
+                    <span class="em-name">{{ item.SourceName }}</span>
+                    <span class="em-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+                    <span class="em-entity">{{ item.TargetName }}</span>
+                  </div>
+                  <div class="em-bottom-row">
+                    <div class="em-badges">
+                      <span class="badge badge-direction">{{ item.SyncDirection }}</span>
+                      @if (item.IsPending) {
+                        <span class="badge badge-pending">Pending</span>
+                      }
+                    </div>
+                    <div class="em-actions">
+                      <button class="em-delete" title="Delete"
+                              (click)="OnDeleteMap(item, $event)">
+                        <i class="fa-solid fa-trash-can"></i>
+                      </button>
+                      @if (!item.IsPending && item.RealMap) {
+                        <kendo-switch
+                          [(ngModel)]="item.RealMap.SyncEnabled"
+                          [size]="'small'"
+                          (valueChange)="OnToggleEntityMap(item.RealMap)">
+                        </kendo-switch>
+                      }
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        }
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- CENTER PANEL: Field mapping / Pending entity / Placeholder -->
+      <!-- ============================================================ -->
+      <div class="center-panel">
+        @if (!SelectedMapID) {
+          <!-- No selection placeholder -->
+          <div class="placeholder-message">
+            <i class="fa-solid fa-hand-pointer"></i>
+            <p>Select an entity map from the left panel to view and edit field mappings.</p>
+          </div>
+        } @else if (SelectedPendingMap) {
+          <!-- ==================== PENDING ENTITY VIEW ==================== -->
+          <div class="pending-entity-panel">
+            <div class="pending-icon"><i class="fa-solid fa-clock"></i></div>
+            <h3>Pending Entity: {{ SelectedPendingMap.EntityName }}</h3>
+            <p>
+              This entity map is waiting for the target entity
+              <strong>{{ SelectedPendingMap.SchemaName }}.{{ SelectedPendingMap.TableName }}</strong>
+              to be created. Run the DDL migration and CodeGen to activate this mapping.
+            </p>
+
+            <!-- Progress stepper -->
+            <div class="pending-steps">
+              <div class="step">
+                <div class="step-circle done"><i class="fa-solid fa-check"></i></div>
+                <span class="step-label">Map Created</span>
+              </div>
+              <div class="step-connector" [class.done]="SelectedPendingMap.DDLContent"></div>
+              <div class="step">
+                <div class="step-circle" [ngClass]="GetPendingStepStatus(SelectedPendingMap, 2)">
+                  @if (SelectedPendingMap.DDLContent) {
+                    <i class="fa-solid fa-check"></i>
+                  } @else {
+                    2
+                  }
+                </div>
+                <span class="step-label">DDL Generated</span>
+              </div>
+              <div class="step-connector"></div>
+              <div class="step">
+                <div class="step-circle future">3</div>
+                <span class="step-label">Deploy & CodeGen</span>
+              </div>
+              <div class="step-connector"></div>
+              <div class="step">
+                <div class="step-circle future">4</div>
+                <span class="step-label">Ready to Sync</span>
+              </div>
+            </div>
+
+            <!-- DDL content -->
+            @if (SelectedPendingMap.DDLContent) {
+              <div class="ddl-preview-inline">
+                <h4 style="font-size: 14px; margin-bottom: 8px;">
+                  <i class="fa-solid fa-database"></i> Generated DDL
+                </h4>
+                <pre class="ddl-code-block">{{ SelectedPendingMap.DDLContent }}</pre>
+                <div class="ddl-actions">
+                  <button kendoButton [look]="'outline'" [size]="'small'"
+                          (click)="CopyDDLToClipboard(SelectedPendingMap.DDLContent)">
+                    <i class="fa-solid fa-copy"></i> Copy DDL
+                  </button>
+                </div>
+              </div>
+            }
+
+            <!-- Source fields list -->
+            @if (SelectedPendingMap.SourceFields.length > 0) {
+              <div class="pending-fields-section">
+                <h4 style="font-size: 14px; margin: 16px 0 8px;">
+                  <i class="fa-solid fa-list"></i> Source Fields
+                  <span style="color: var(--mj-text-muted); font-weight: 400;">({{ SelectedPendingMap.SourceFields.length }})</span>
+                </h4>
+                <div class="pending-fields-list">
+                  @for (field of SelectedPendingMap.SourceFields; track field.Name) {
+                    <div class="pending-field-item">
+                      <span class="pending-field-name">{{ field.Name }}</span>
+                      <span class="pending-field-type">{{ field.Type }}</span>
+                      @if (field.IsPrimaryKey) {
+                        <i class="fa-solid fa-key key-icon" title="Key field"></i>
+                      }
+                      @if (field.IsRequired) {
+                        <span class="pending-field-req">*</span>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        } @else if (IsLoadingFieldMaps) {
+          <mj-loading text="Loading field maps..." size="medium"></mj-loading>
+        } @else {
+          <!-- ==================== FIELD MAPPING EDITOR ==================== -->
+
+          <!-- Auto-map banner -->
+          @if (ShowAutoMapBanner) {
+            <div class="auto-map-banner">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <div class="banner-text">
+                <p><strong>{{ AutoMapCount }} field{{ AutoMapCount !== 1 ? 's' : '' }} auto-mapped</strong> by matching source and destination field names.</p>
+              </div>
+              <button kendoButton [look]="'flat'" [size]="'small'" (click)="DismissAutoMapBanner()">
+                <i class="fa-solid fa-times"></i>
+              </button>
+            </div>
+          }
+
+          <!-- Validation warnings -->
+          @if (ActiveEditableFields.length > 0 && !MappingValidation.IsValid) {
+            <div class="validation-banner">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <div class="validation-warnings">
+                @for (warning of MappingValidation.Warnings; track warning) {
+                  <span>{{ warning }}</span>
+                }
+              </div>
+            </div>
+          }
+
+          <div class="field-mapping-header">
+            <h3 class="panel-title">
+              Field Mappings
+              <span class="field-count">({{ ActiveEditableFields.length }})</span>
+            </h3>
+            <div class="field-mapping-actions">
+              <button kendoButton [look]="'outline'" [size]="'small'"
+                      [disabled]="IsLoadingSourceFields"
+                      (click)="RerunAutoMap()" title="Auto-match source and destination fields by name">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map
+              </button>
+              <button kendoButton [look]="'outline'" [size]="'small'"
+                      (click)="AddFieldMapping()">
+                <i class="fa-solid fa-plus"></i> Add Field
+              </button>
+              <button kendoButton [themeColor]="'primary'" [size]="'small'"
+                      [disabled]="!HasDirtyFields || IsSavingFields"
+                      (click)="SaveFieldMappings()">
+                @if (IsSavingFields) {
+                  <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+                } @else {
+                  <i class="fa-solid fa-floppy-disk"></i> Save
+                }
+              </button>
+            </div>
+          </div>
+
+          @if (ActiveEditableFields.length === 0) {
+            <p class="empty-hint">
+              No field mappings yet.
+              <a href="javascript:void(0)" (click)="AddFieldMapping()" style="color: var(--mj-brand-primary);">Add one</a>
+            </p>
+          } @else {
+            <div class="field-map-cards">
+              @for (field of ActiveEditableFields; track field; let i = $index) {
+                <div class="field-map-card" [class.validation-error]="field.IsRequired && !field.DestinationFieldName"
+                     [class.has-transform]="field.TransformPipeline.length > 0">
+
+                  <!-- Main mapping row -->
+                  <div class="fmc-row">
+                    <!-- Source column -->
+                    <div class="fmc-source">
+                      @if (field.IsNew) {
+                        <input type="text" class="fmc-input" [(ngModel)]="field.SourceFieldName"
+                               (ngModelChange)="OnFieldChanged(field)" placeholder="Source field name" />
+                      } @else {
+                        <div class="fmc-field-name">{{ field.SourceFieldName }}</div>
+                        <div class="fmc-badges">
+                          @if (field.SourceFieldType) {
+                            <span class="fmc-badge badge-type">{{ field.SourceFieldType }}</span>
+                          }
+                          @if (field.IsSourcePK) {
+                            <span class="fmc-badge badge-pk" title="Primary Key"><i class="fa-solid fa-key"></i> PK</span>
+                          }
+                          @if (field.IsSourceRequired) {
+                            <span class="fmc-badge badge-req" title="Required">REQ</span>
+                          }
+                          @if (field.IsSourceReadOnly) {
+                            <span class="fmc-badge badge-ro" title="Read-Only">RO</span>
+                          }
+                        </div>
+                      }
+                    </div>
+
+                    <!-- Transform indicator -->
+                    <div class="fmc-transform-zone">
+                      @if (field.TransformPipeline.length > 1) {
+                        <button class="fmc-transform-pill" (click)="ToggleTransformEditor(field)"
+                                [title]="field.TransformPipeline.length + ' transform step(s)'">
+                          <i [class]="GetTransformIcon(field.TransformPipeline[0].Type)"></i>
+                          <span>{{ GetTransformLabel(field.TransformPipeline[0].Type) }}</span>
+                          <span class="fmc-step-count">+{{ field.TransformPipeline.length - 1 }}</span>
+                        </button>
+                      } @else {
+                        <button class="fmc-transform-pill fmc-transform-direct" (click)="ToggleTransformEditor(field)"
+                                title="Click to change transform type">
+                          <i class="fa-solid fa-arrow-right"></i>
+                          <span>{{ field.TransformPipeline.length > 0 ? GetTransformLabel(field.TransformPipeline[0].Type) : 'Direct' }}</span>
+                        </button>
+                      }
+                    </div>
+
+                    <!-- Destination column -->
+                    <div class="fmc-dest">
+                      @if (DestinationFields.length > 0) {
+                        <select class="fmc-select" [(ngModel)]="field.DestinationFieldName"
+                                (ngModelChange)="OnFieldChanged(field)">
+                          <option value="">-- Select destination --</option>
+                          @for (df of DestinationFields; track df.ID) {
+                            <option [value]="df.Name">{{ df.Name }}</option>
+                          }
+                        </select>
+                      } @else {
+                        <input type="text" class="fmc-input" [(ngModel)]="field.DestinationFieldName"
+                               (ngModelChange)="OnFieldChanged(field)" placeholder="Destination field" />
+                      }
+                    </div>
+
+                    <!-- Sync flags -->
+                    <div class="fmc-flags">
+                      <label class="fmc-flag" title="Key field for matching">
+                        <input type="checkbox" [(ngModel)]="field.IsKeyField"
+                               (ngModelChange)="OnFieldChanged(field)" />
+                        <i class="fa-solid fa-key"></i>
+                      </label>
+                      <label class="fmc-flag" title="Required field">
+                        <input type="checkbox" [(ngModel)]="field.IsRequired"
+                               (ngModelChange)="OnFieldChanged(field)" />
+                        <span class="fmc-req-star">*</span>
+                      </label>
+                    </div>
+
+                    <!-- Remove button -->
+                    <button class="fmc-remove" title="Remove mapping" (click)="RemoveFieldMapping(i)">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+
+                  <!-- Transform pipeline editor (expandable) -->
+                  @if (field.ShowTransformEditor && field.TransformPipeline.length > 0) {
+                    <div class="fmc-transform-editor">
+                      <div class="fmc-te-header">
+                        <span class="fmc-te-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Transform Pipeline</span>
+                        <button class="fmc-te-add" (click)="AddTransformStep(field)" title="Add another step">
+                          <i class="fa-solid fa-plus"></i> Add Step
+                        </button>
+                      </div>
+                      @for (step of field.TransformPipeline; track $index; let si = $index) {
+                        <div class="fmc-te-step">
+                          <div class="fmc-te-step-header">
+                            <span class="fmc-te-step-num">{{ si + 1 }}</span>
+                            <select class="fmc-te-type-select" [ngModel]="step.Type"
+                                    (ngModelChange)="OnTransformTypeChange(field, step, $event)">
+                              @for (tt of TransformTypes; track tt.Value) {
+                                <option [value]="tt.Value">{{ tt.Label }}</option>
+                              }
+                            </select>
+                            <select class="fmc-te-error-select" [(ngModel)]="step.OnError"
+                                    (ngModelChange)="OnTransformConfigChange(field)" title="On error">
+                              <option value="Fail">Fail</option>
+                              <option value="Skip">Skip row</option>
+                              <option value="Null">Set null</option>
+                            </select>
+                            <button class="fmc-te-remove-step" (click)="RemoveTransformStep(field, si)" title="Remove step">
+                              <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                          </div>
+
+                          <!-- Config editors per type -->
+                          <div class="fmc-te-config">
+                            @switch (step.Type) {
+                              @case ('direct') {
+                                <div class="fmc-te-field">
+                                  <label>Default value (when source is null)</label>
+                                  <input type="text" class="fmc-input" [ngModel]="step.Config['DefaultValue'] ?? ''"
+                                         (ngModelChange)="step.Config['DefaultValue'] = $event; OnTransformConfigChange(field)"
+                                         placeholder="Leave empty for no default" />
+                                </div>
+                              }
+                              @case ('regex') {
+                                <div class="fmc-te-row">
+                                  <div class="fmc-te-field">
+                                    <label>Pattern</label>
+                                    <input type="text" class="fmc-input mono" [ngModel]="step.Config['Pattern'] ?? ''"
+                                           (ngModelChange)="step.Config['Pattern'] = $event; OnTransformConfigChange(field)"
+                                           placeholder="e.g. (\d{3})-(\d{4})" />
+                                  </div>
+                                  <div class="fmc-te-field">
+                                    <label>Replacement</label>
+                                    <input type="text" class="fmc-input mono" [ngModel]="step.Config['Replacement'] ?? ''"
+                                           (ngModelChange)="step.Config['Replacement'] = $event; OnTransformConfigChange(field)"
+                                           placeholder="e.g. $1$2" />
+                                  </div>
+                                  <div class="fmc-te-field fmc-te-sm">
+                                    <label>Flags</label>
+                                    <input type="text" class="fmc-input mono" [ngModel]="step.Config['Flags'] ?? 'g'"
+                                           (ngModelChange)="step.Config['Flags'] = $event; OnTransformConfigChange(field)"
+                                           placeholder="gi" />
+                                  </div>
+                                </div>
+                              }
+                              @case ('split') {
+                                <div class="fmc-te-row">
+                                  <div class="fmc-te-field">
+                                    <label>Delimiter</label>
+                                    <input type="text" class="fmc-input mono" [ngModel]="step.Config['Delimiter'] ?? ','"
+                                           (ngModelChange)="step.Config['Delimiter'] = $event; OnTransformConfigChange(field)"
+                                           placeholder="," />
+                                  </div>
+                                  <div class="fmc-te-field fmc-te-sm">
+                                    <label>Part index (0-based)</label>
+                                    <input type="number" class="fmc-input" [ngModel]="step.Config['Index'] ?? 0"
+                                           (ngModelChange)="step.Config['Index'] = +$event; OnTransformConfigChange(field)"
+                                           min="0" />
+                                  </div>
+                                </div>
+                              }
+                              @case ('combine') {
+                                <div class="fmc-te-field">
+                                  <label>Source fields to combine</label>
+                                  <div class="fmc-combine-chips">
+                                    @for (sf of GetAvailableSourceFields(); track sf) {
+                                      <button class="fmc-chip" [class.selected]="IsCombineFieldSelected(step.Config, sf)"
+                                              (click)="ToggleCombineField(step.Config, sf); OnTransformConfigChange(field)">
+                                        {{ sf }}
+                                      </button>
+                                    }
+                                  </div>
+                                </div>
+                                <div class="fmc-te-field fmc-te-sm">
+                                  <label>Separator</label>
+                                  <input type="text" class="fmc-input mono" [ngModel]="step.Config['Separator'] ?? ' '"
+                                         (ngModelChange)="step.Config['Separator'] = $event; OnTransformConfigChange(field)"
+                                         placeholder=" " />
+                                </div>
+                              }
+                              @case ('lookup') {
+                                <div class="fmc-te-field">
+                                  <label>Value mapping</label>
+                                  <div class="fmc-lookup-table">
+                                    @for (entry of GetLookupEntries(step.Config); track $index) {
+                                      <div class="fmc-lookup-row">
+                                        <input type="text" class="fmc-input" [value]="entry.key" placeholder="Source value"
+                                               (change)="UpdateLookupEntry(step.Config, entry.key, $any($event.target).value, entry.value); OnTransformConfigChange(field)" />
+                                        <i class="fa-solid fa-arrow-right fmc-lookup-arrow"></i>
+                                        <input type="text" class="fmc-input" [value]="entry.value" placeholder="Mapped value"
+                                               (change)="UpdateLookupEntry(step.Config, entry.key, entry.key, $any($event.target).value); OnTransformConfigChange(field)" />
+                                        <button class="fmc-lookup-del" (click)="RemoveLookupEntry(step.Config, entry.key); OnTransformConfigChange(field)">
+                                          <i class="fa-solid fa-times"></i>
+                                        </button>
+                                      </div>
+                                    }
+                                    <button class="fmc-lookup-add" (click)="AddLookupEntry(step.Config); OnTransformConfigChange(field)">
+                                      <i class="fa-solid fa-plus"></i> Add mapping
+                                    </button>
+                                  </div>
+                                </div>
+                                <div class="fmc-te-field fmc-te-sm">
+                                  <label>Default (when no match)</label>
+                                  <input type="text" class="fmc-input" [ngModel]="step.Config['Default'] ?? ''"
+                                         (ngModelChange)="step.Config['Default'] = $event; OnTransformConfigChange(field)"
+                                         placeholder="null" />
+                                </div>
+                              }
+                              @case ('format') {
+                                <div class="fmc-te-row">
+                                  <div class="fmc-te-field fmc-te-sm">
+                                    <label>Format type</label>
+                                    <select class="fmc-select" [ngModel]="step.Config['FormatType'] ?? 'date'"
+                                            (ngModelChange)="step.Config['FormatType'] = $event; OnTransformConfigChange(field)">
+                                      <option value="date">Date</option>
+                                      <option value="number">Number</option>
+                                      <option value="string">String</option>
+                                    </select>
+                                  </div>
+                                  <div class="fmc-te-field">
+                                    <label>Format string</label>
+                                    <input type="text" class="fmc-input mono" [ngModel]="step.Config['FormatString'] ?? 'ISO'"
+                                           (ngModelChange)="step.Config['FormatString'] = $event; OnTransformConfigChange(field)"
+                                           placeholder="ISO or decimal places" />
+                                  </div>
+                                </div>
+                              }
+                              @case ('coerce') {
+                                <div class="fmc-te-field fmc-te-sm">
+                                  <label>Target type</label>
+                                  <select class="fmc-select" [ngModel]="step.Config['TargetType'] ?? 'string'"
+                                          (ngModelChange)="step.Config['TargetType'] = $event; OnTransformConfigChange(field)">
+                                    <option value="string">String</option>
+                                    <option value="number">Number</option>
+                                    <option value="boolean">Boolean</option>
+                                    <option value="date">Date</option>
+                                  </select>
+                                </div>
+                              }
+                              @case ('substring') {
+                                <div class="fmc-te-row">
+                                  <div class="fmc-te-field fmc-te-sm">
+                                    <label>Start index</label>
+                                    <input type="number" class="fmc-input" [ngModel]="step.Config['Start'] ?? 0"
+                                           (ngModelChange)="step.Config['Start'] = +$event; OnTransformConfigChange(field)"
+                                           min="0" />
+                                  </div>
+                                  <div class="fmc-te-field fmc-te-sm">
+                                    <label>Length (blank = to end)</label>
+                                    <input type="number" class="fmc-input" [ngModel]="step.Config['Length'] ?? ''"
+                                           (ngModelChange)="step.Config['Length'] = $event ? +$event : undefined; OnTransformConfigChange(field)"
+                                           min="1" />
+                                  </div>
+                                </div>
+                              }
+                              @case ('custom') {
+                                <div class="fmc-te-field">
+                                  <label>JavaScript expression <span class="fmc-te-hint">(use <code>value</code> and <code>fields</code>)</span></label>
+                                  <textarea class="fmc-input mono fmc-textarea" [ngModel]="step.Config['Expression'] ?? 'value'"
+                                            (ngModelChange)="step.Config['Expression'] = $event; OnTransformConfigChange(field)"
+                                            placeholder="value.toUpperCase()" rows="2"></textarea>
+                                </div>
+                              }
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Data Preview Section -->
+          <div class="data-preview-section">
+            <div class="preview-actions">
+              <button kendoButton [look]="'outline'" [size]="'small'"
+                      [disabled]="IsLoadingSourcePreview"
+                      (click)="LoadSourcePreview()">
+                <i class="fa-solid fa-cloud-arrow-down"></i> Preview Source
+              </button>
+              <button kendoButton [look]="'outline'" [size]="'small'"
+                      [disabled]="IsLoadingDestPreview"
+                      (click)="LoadDestPreview()">
+                <i class="fa-solid fa-database"></i> Preview Destination
+              </button>
+            </div>
+
+            @if (ShowSourcePreview) {
+              <div class="preview-panel">
+                <div class="preview-panel-header">
+                  <h4><i class="fa-solid fa-cloud"></i> Source Data Preview</h4>
+                  <button class="add-panel-close" (click)="CloseSourcePreview()">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+                @if (IsLoadingSourcePreview) {
+                  <mj-loading text="Loading source data..." size="small"></mj-loading>
+                } @else if (SourcePreviewData.length === 0) {
+                  <p class="empty-hint">No source data available.</p>
+                } @else {
+                  <div class="preview-table-wrapper">
+                    <table class="preview-table">
+                      <thead>
+                        <tr>
+                          @for (col of GetPreviewColumns(SourcePreviewData); track col) {
+                            <th>{{ col }}</th>
+                          }
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (row of SourcePreviewData; track $index) {
+                          <tr>
+                            @for (col of GetPreviewColumns(SourcePreviewData); track col) {
+                              <td>{{ FormatPreviewValue(row[col]) }}</td>
+                            }
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              </div>
+            }
+
+            @if (ShowDestPreview) {
+              <div class="preview-panel">
+                <div class="preview-panel-header">
+                  <h4><i class="fa-solid fa-database"></i> Destination Data Preview</h4>
+                  <button class="add-panel-close" (click)="CloseDestPreview()">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
+                </div>
+                @if (IsLoadingDestPreview) {
+                  <mj-loading text="Loading destination data..." size="small"></mj-loading>
+                } @else if (DestPreviewData.length === 0) {
+                  <p class="empty-hint">No destination data available.</p>
+                } @else {
+                  <div class="preview-table-wrapper">
+                    <table class="preview-table">
+                      <thead>
+                        <tr>
+                          @for (col of GetPreviewColumns(DestPreviewData); track col) {
+                            <th>{{ col }}</th>
+                          }
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (row of DestPreviewData; track $index) {
+                          <tr>
+                            @for (col of GetPreviewColumns(DestPreviewData); track col) {
+                              <td>{{ FormatPreviewValue(row[col]) }}</td>
+                            }
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- RIGHT PANEL: Last run details -->
+      <!-- ============================================================ -->
+      <div class="right-panel">
+        <h4 class="panel-label">Last Run Details</h4>
+        @if (!SelectedIntegrationID) {
+          <p class="empty-hint">Select an integration to see run details.</p>
+        } @else if (IsLoadingRunDetails) {
+          <mj-loading text="Loading..." size="small"></mj-loading>
+        } @else if (!LatestRun) {
+          <p class="empty-hint">No runs found.</p>
+        } @else {
+          <div class="run-summary-card">
+            <div class="run-summary-row">
+              <span class="label">Status</span>
+              <span class="run-status" [class]="'status-' + RunStatusColor">
+                {{ LatestRun.Status }}
+              </span>
+            </div>
+            <div class="run-summary-row">
+              <span class="label">Started</span>
+              <span>{{ FormatDate(LatestRun.StartedAt) }}</span>
+            </div>
+            <div class="run-summary-row">
+              <span class="label">Total Records</span>
+              <span>{{ LatestRun.TotalRecords | number }}</span>
+            </div>
+            <div class="run-summary-row">
+              <span class="label">Run By</span>
+              <span>{{ LatestRun.RunByUser }}</span>
+            </div>
+          </div>
+
+          @if (RunEntityDetails.length > 0) {
+            <h4 class="panel-label" style="margin-top: 16px;">Per-Entity Stats</h4>
+            @for (detail of RunEntityDetails; track detail.EntityID) {
+              <div class="entity-stat-card">
+                <div class="entity-stat-name">{{ detail.Entity }}</div>
+                <div class="entity-stat-grid">
+                  <div class="mini-stat">
+                    <span class="mini-val">{{ detail.RecordsCreated }}</span>
+                    <span class="mini-label">Created</span>
+                  </div>
+                  <div class="mini-stat">
+                    <span class="mini-val">{{ detail.RecordsUpdated }}</span>
+                    <span class="mini-label">Updated</span>
+                  </div>
+                  <div class="mini-stat">
+                    <span class="mini-val" [class.has-errors]="detail.RecordsErrored > 0">
+                      {{ detail.RecordsErrored }}
+                    </span>
+                    <span class="mini-label">Errors</span>
+                  </div>
+                </div>
+              </div>
+            }
+          }
+        }
+      </div>
+    </div>
+  }
+</div>

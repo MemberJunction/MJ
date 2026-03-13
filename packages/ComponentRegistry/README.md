@@ -1,10 +1,37 @@
 # @memberjunction/component-registry-server
 
-MemberJunction Component Registry Server - A REST API server for serving MemberJunction interactive components.
+REST API server for serving MemberJunction interactive components. Provides a standardized API for discovering, searching, and retrieving components and their specifications.
 
 ## Overview
 
 The Component Registry Server provides a standardized REST API for discovering and retrieving MemberJunction interactive components. It implements the Component Registry API v1 specification, allowing any MemberJunction system to connect and consume components dynamically.
+
+```mermaid
+graph TD
+    A["Component Registry Server<br/>(Express)"] --> B["GET /api/v1/registry"]
+    A --> C["GET /api/v1/health"]
+    A --> D["GET /api/v1/components"]
+    A --> E["GET /api/v1/components/search"]
+    A --> F["GET /api/v1/components/:ns/:name"]
+
+    A --> G["MemberJunction Database"]
+    G --> H["MJ: Components"]
+    G --> I["MJ: Component Registries"]
+    G --> J["MJ: Component Libraries"]
+
+    K["Client SDK"] -->|HTTP| A
+    L["MJ Explorer"] -->|HTTP| A
+
+    style A fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style B fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style C fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style D fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style E fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style F fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style G fill:#7c5295,stroke:#563a6b,color:#fff
+    style K fill:#b8762f,stroke:#8a5722,color:#fff
+    style L fill:#b8762f,stroke:#8a5722,color:#fff
+```
 
 ## Features
 

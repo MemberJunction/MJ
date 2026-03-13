@@ -1,5 +1,5 @@
 /**
- * MemberJunction 3.0 Bootstrap Component
+ * MemberJunction Bootstrap Component
  *
  * Minimal placeholder component for future fully encapsulated bootstrap.
  * Currently applications should use MJInitializationService directly in their app.component.
@@ -31,7 +31,7 @@ export class MJBootstrapComponent implements OnInit {
   ) {}
 
   ngOnInit() {
-    console.log('🚀 MemberJunction 3.0 Bootstrap');
+    console.log('🚀 MemberJunction Bootstrap');
     SetProductionStatus(this.environment.production);
   }
 }

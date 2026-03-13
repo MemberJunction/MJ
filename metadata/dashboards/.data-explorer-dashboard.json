@@ -2,11 +2,11 @@
   "fields": {
     "Name": "Data Explorer",
     "Description": "Power user dashboard for exploring data across all accessible entities with card and grid views",
-    "UserID": "@lookup:Users.Name=System",
+    "UserID": "@lookup:MJ: Users.Name=System",
     "CategoryID": null,
     "Type": "Code",
     "Scope": "App",
-    "ApplicationID": "@lookup:Applications.Name=Data Explorer",
+    "ApplicationID": "@lookup:MJ: Applications.Name=Data Explorer",
     "DriverClass": "DataExplorer",
     "UIConfigDetails": "{}",
     "EnvironmentID": "@lookup:MJ: Environments.Name=Default"
@@ -18,15 +18,15 @@
           "DashboardID": "@parent:ID",
           "UserID": null,
           "Scope": "App",
-          "ApplicationID": "@lookup:Applications.Name=Data Explorer",
+          "ApplicationID": "@lookup:MJ: Applications.Name=Data Explorer",
           "DisplayOrder": 1
         },
         "primaryKey": {
           "ID": "B11B6D53-6D16-42E2-8D3F-70681657EE67"
         },
         "sync": {
-          "lastModified": "2025-12-30T23:07:38.390Z",
-          "checksum": "590666a761e8fcf3f5a71a5aa370f109c6124275d2c4df0bb2d78c5f2396dd31"
+          "lastModified": "2026-02-13T21:09:37.008Z",
+          "checksum": "6552bb2dc007003d2fc636d3ed9d087ff8bd57f41fbae9989b1fee07c2381f2f"
         }
       }
     ]
@@ -35,7 +35,7 @@
     "ID": "0FA3DA03-C0EF-4356-972C-7D76537933F0"
   },
   "sync": {
-    "lastModified": "2025-12-30T23:07:38.380Z",
-    "checksum": "5706669c29a72e0cb54922687bba422837cf3eca796857b321f46b1c04fd2624"
+    "lastModified": "2026-02-13T21:09:37.000Z",
+    "checksum": "e56191f5e65e58d7f28b3695b7f0b434b60c99e52159a0f7278b4e1392993b03"
   }
 }

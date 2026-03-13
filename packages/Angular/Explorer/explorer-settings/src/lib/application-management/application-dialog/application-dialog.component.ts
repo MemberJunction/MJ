@@ -1,18 +1,19 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ChangeDetectorRef, NgZone } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
 import { Metadata, RunView } from '@memberjunction/core';
-import { ApplicationEntity, ApplicationEntityEntity, EntityEntity } from '@memberjunction/core-entities';
+import { MJApplicationEntity, MJApplicationEntityEntity, MJEntityEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface ApplicationDialogData {
-  application?: ApplicationEntity;
+  application?: MJApplicationEntity;
   mode: 'create' | 'edit';
 }
 
 interface ApplicationEntityConfig {
-  entity: EntityEntity;
-  applicationEntity?: ApplicationEntityEntity;
+  entity: MJEntityEntity;
+  applicationEntity?: MJApplicationEntityEntity;
   sequence: number;
   defaultForNewUser: boolean;
   isNew: boolean;
@@ -21,7 +22,7 @@ interface ApplicationEntityConfig {
 
 export interface ApplicationDialogResult {
   action: 'save' | 'cancel';
-  application?: ApplicationEntity;
+  application?: MJApplicationEntity;
 }
 
 @Component({
@@ -36,6 +37,8 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
   @Output() result = new EventEmitter<ApplicationDialogResult>();
 
   private fb = inject(FormBuilder);
+  private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone);
   private metadata = new Metadata();
 
   public applicationForm: FormGroup;
@@ -44,8 +47,8 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
 
   // Entity management
   public applicationEntities: ApplicationEntityConfig[] = [];
-  public availableEntities: EntityEntity[] = [];
-  public allEntities: EntityEntity[] = [];
+  public availableEntities: MJEntityEntity[] = [];
+  public allEntities: MJEntityEntity[] = [];
 
   // Search filter for available entities
   public entitySearchTerm = '';
@@ -96,18 +99,24 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
       } else {
         this.resetForm();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error initializing dialog:', error);
-      this.error = error.message || 'Failed to load dialog data';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'Failed to load dialog data';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 
   private async loadAllEntities(): Promise<void> {
     const rv = new RunView();
-    const result = await rv.RunView<EntityEntity>({
-      EntityName: 'Entities',
+    const result = await rv.RunView<MJEntityEntity>({
+      EntityName: 'MJ: Entities',
       ResultType: 'entity_object',
       OrderBy: 'Name ASC'
     });
@@ -150,15 +159,15 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
       description: app.Description
     });
 
-    // Load existing ApplicationEntity records
+    // Load existing MJApplicationEntity records
     await this.loadApplicationEntities(app.ID);
   }
 
   private async loadApplicationEntities(applicationId: string): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ApplicationEntityEntity>({
-        EntityName: 'Application Entities',
+      const result = await rv.RunView<MJApplicationEntityEntity>({
+        EntityName: 'MJ: Application Entities',
         ExtraFilter: `ApplicationID='${applicationId}'`,
         ResultType: 'entity_object',
         OrderBy: 'Sequence ASC'
@@ -169,7 +178,7 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
         const usedEntityIds = new Set<string>();
 
         for (const appEntity of result.Results) {
-          const entity = this.allEntities.find(e => e.ID === appEntity.EntityID);
+          const entity = this.allEntities.find(e => UUIDsEqual(e.ID, appEntity.EntityID));
           if (entity) {
             this.applicationEntities.push({
               entity,
@@ -192,7 +201,7 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
     }
   }
 
-  public addEntity(entity: EntityEntity): void {
+  public addEntity(entity: MJEntityEntity): void {
     // Add entity to application
     this.applicationEntities.push({
       entity,
@@ -206,18 +215,18 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
     this.updateSequences();
 
     // Remove from available entities
-    this.availableEntities = this.availableEntities.filter(e => e.ID !== entity.ID);
+    this.availableEntities = this.availableEntities.filter(e => !UUIDsEqual(e.ID, entity.ID));
   }
 
   public removeEntity(config: ApplicationEntityConfig): void {
     // Remove from application entities
-    this.applicationEntities = this.applicationEntities.filter(ae => ae.entity.ID !== config.entity.ID);
+    this.applicationEntities = this.applicationEntities.filter(ae => !UUIDsEqual(ae.entity.ID, config.entity.ID));
     
     // Update all sequences to be consecutive
     this.updateSequences();
     
     // Add back to available entities if not already there
-    if (!this.availableEntities.find(e => e.ID === config.entity.ID)) {
+    if (!this.availableEntities.find(e => UUIDsEqual(e.ID, config.entity.ID))) {
       this.availableEntities.push(config.entity);
       this.availableEntities.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
     }
@@ -261,7 +270,7 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
   }
 
   // Filtered available entities based on search term
-  public get filteredAvailableEntities(): EntityEntity[] {
+  public get filteredAvailableEntities(): MJEntityEntity[] {
     if (!this.entitySearchTerm || !this.entitySearchTerm.trim()) {
       return this.availableEntities;
     }
@@ -306,14 +315,14 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
     this.error = null;
 
     try {
-      let application: ApplicationEntity;
+      let application: MJApplicationEntity;
 
       if (this.isEditMode && this.data?.application) {
         // Edit existing application
         application = this.data.application;
       } else {
         // Create new application
-        application = await this.metadata.GetEntityObject<ApplicationEntity>('Applications');
+        application = await this.metadata.GetEntityObject<MJApplicationEntity>('MJ: Applications');
         application.NewRecord();
       }
 
@@ -335,28 +344,34 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
 
       this.result.emit({ action: 'save', application });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error saving application:', error);
-      this.error = error.message || 'An unexpected error occurred';
+      this.ngZone.run(() => {
+        this.error = error instanceof Error ? error.message : 'An unexpected error occurred';
+        this.cdr.markForCheck();
+      });
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
 
   private async saveApplicationEntities(applicationId: string): Promise<void> {
-    // Save or update each ApplicationEntity record
+    // Save or update each MJApplicationEntity record
     for (const config of this.applicationEntities) {
       if (config.isNew || config.hasChanges) {
-        let appEntity: ApplicationEntityEntity;
+        let appEntity: MJApplicationEntityEntity;
 
         if (config.isNew) {
-          // Create new ApplicationEntity
-          appEntity = await this.metadata.GetEntityObject<ApplicationEntityEntity>('Application Entities');
+          // Create new MJApplicationEntity
+          appEntity = await this.metadata.GetEntityObject<MJApplicationEntityEntity>('MJ: Application Entities');
           appEntity.NewRecord();
           appEntity.ApplicationID = applicationId;
           appEntity.EntityID = config.entity.ID;
         } else if (config.applicationEntity) {
-          // Update existing ApplicationEntity
+          // Update existing MJApplicationEntity
           appEntity = config.applicationEntity;
         } else {
           continue;
@@ -367,7 +382,7 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
 
         const saveResult = await appEntity.Save();
         if (!saveResult) {
-          console.warn(`Failed to save ApplicationEntity for ${config.entity.Name}:`, appEntity.LatestResult?.Message);
+          console.warn(`Failed to save MJApplicationEntity for ${config.entity.Name}:`, appEntity.LatestResult?.Message);
         }
       }
     }

@@ -1,5 +1,5 @@
 {
-  "entity": "Query Categories",
+  "entity": "MJ: Query Categories",
   "filePattern": "**/.*.json",
   "defaults": {
   },
@@ -19,11 +19,11 @@
     "ignoreVirtualFields": true,
     "lookupFields": {
       "ParentID": {
-        "entity": "Query Categories",
+        "entity": "MJ: Query Categories",
         "field": "ID"
       },
       "UserID": {
-        "entity": "Users",
+        "entity": "MJ: Users",
         "field": "ID"
       }
     },

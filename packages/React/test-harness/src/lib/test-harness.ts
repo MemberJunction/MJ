@@ -7,7 +7,7 @@ export interface TestHarnessOptions extends BrowserContextOptions {
   debug?: boolean;
   screenshotOnError?: boolean;
   screenshotPath?: string;
-  componentLibraries?: any[]; // Array of ComponentLibraryEntity objects (can be serialized JSON)
+  componentLibraries?: any[]; // Array of MJComponentLibraryEntity objects (can be serialized JSON)
 }
 
 /**

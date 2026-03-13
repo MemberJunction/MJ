@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { TemplateEntity, TemplateParamEntity } from '@memberjunction/core-entities';
+import { MJTemplateEntity, MJTemplateParamEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -27,7 +27,7 @@ export interface TemplateRunResult {
     styleUrls: ['./template-param-dialog.component.css']
 })
 export class TemplateParamDialogComponent implements OnInit {
-    @Input() template: TemplateEntity | null = null;
+    @Input() template: MJTemplateEntity | null = null;
     
     public _isVisible: boolean = false;
     @Input() 
@@ -56,7 +56,7 @@ export class TemplateParamDialogComponent implements OnInit {
     public jsonPreviewExpanded = false;
     public resultsExpanded = true;
 
-    private originalTemplateParams: TemplateParamEntity[] = [];
+    private originalTemplateParams: MJTemplateParamEntity[] = [];
 
     ngOnInit() {
         if (this.template) {
@@ -70,8 +70,8 @@ export class TemplateParamDialogComponent implements OnInit {
         this.isLoading = true;
         try {
             const rv = new RunView();
-            const results = await rv.RunView<TemplateParamEntity>({
-                EntityName: 'Template Params',
+            const results = await rv.RunView<MJTemplateParamEntity>({
+                EntityName: 'MJ: Template Params',
                 ExtraFilter: `TemplateID='${this.template.ID}'`,
                 OrderBy: 'Name ASC' 
             });
@@ -249,7 +249,7 @@ export class TemplateParamDialogComponent implements OnInit {
             const md = new Metadata();
             
             for (const param of newParams) {
-                const templateParam = await md.GetEntityObject<TemplateParamEntity>('Template Params');
+                const templateParam = await md.GetEntityObject<MJTemplateParamEntity>('MJ: Template Params');
                 templateParam.TemplateID = this.template.ID;
                 templateParam.Name = param.key;
                 templateParam.Description = param.description || null;

@@ -1,8 +1,9 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ArtifactEntity, ArtifactTypeEntity, ArtifactVersionEntity, CollectionEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactTypeEntity, MJArtifactVersionEntity, MJCollectionEntity } from '@memberjunction/core-entities';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService } from '../../services/collection-permission.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Modal for creating new artifacts and adding them to collections
@@ -101,11 +102,11 @@ import { CollectionPermissionService } from '../../services/collection-permissio
       display: block;
       margin-bottom: 8px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .required {
-      color: #DC2626;
+      color: var(--mj-status-error);
     }
 
     .form-control {
@@ -124,11 +125,11 @@ import { CollectionPermissionService } from '../../services/collection-permissio
       gap: 8px;
       margin-top: 8px;
       padding: 8px 12px;
-      background: #EFF6FF;
-      border: 1px solid #BFDBFE;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
       border-radius: 6px;
       font-size: 13px;
-      color: #1e40af;
+      color: var(--mj-brand-primary);
     }
 
     .content-hint i {
@@ -141,10 +142,10 @@ import { CollectionPermissionService } from '../../services/collection-permissio
       align-items: center;
       gap: 8px;
       padding: 12px;
-      background: #FEE2E2;
-      border: 1px solid #FCA5A5;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
       border-radius: 6px;
-      color: #DC2626;
+      color: var(--mj-status-error);
       font-size: 14px;
     }
 
@@ -159,24 +160,25 @@ export class ArtifactCreateModalComponent implements OnChanges {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
-  @Output() saved = new EventEmitter<ArtifactEntity>();
+  @Output() saved = new EventEmitter<MJArtifactEntity>();
   @Output() cancelled = new EventEmitter<void>();
 
   public formData = {
     name: '',
     description: '',
     content: '',
-    selectedType: null as ArtifactTypeEntity | null
+    selectedType: null as MJArtifactTypeEntity | null
   };
 
-  public artifactTypes: ArtifactTypeEntity[] = [];
+  public artifactTypes: MJArtifactTypeEntity[] = [];
   public isLoadingTypes: boolean = false;
   public isSaving: boolean = false;
   public errorMessage: string = '';
 
   constructor(
     private toastService: ToastService,
-    private permissionService: CollectionPermissionService
+    private permissionService: CollectionPermissionService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnChanges(changes: SimpleChanges) {
@@ -196,7 +198,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
     this.isLoadingTypes = true;
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactTypeEntity>(
+      const result = await rv.RunView<MJArtifactTypeEntity>(
         {
           EntityName: 'MJ: Artifact Types',
           ExtraFilter: 'IsEnabled=1',
@@ -222,6 +224,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       this.toastService.error('Failed to load artifact types');
     } finally {
       this.isLoadingTypes = false;
+      this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
     }
   }
 
@@ -234,11 +237,11 @@ export class ArtifactCreateModalComponent implements OnChanges {
     try {
       // Validate permission to add artifacts to collection
       const md = new Metadata();
-      const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
       await collection.Load(this.collectionId);
 
       // Check if user has Edit permission on collection
-      if (collection.OwnerID && collection.OwnerID !== this.currentUser.ID) {
+      if (collection.OwnerID && !UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
         const permission = await this.permissionService.checkPermission(
           this.collectionId,
           this.currentUser.ID,
@@ -253,7 +256,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       }
 
       // Step 1: Create the artifact
-      const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
+      const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
       artifact.Name = this.formData.name.trim();
       artifact.Description = this.formData.description.trim() || null;
       artifact.TypeID = this.formData.selectedType!.ID;
@@ -268,7 +271,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       }
 
       // Step 2: Create the first version
-      const version = await md.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
+      const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
       version.ArtifactID = artifact.ID;
       version.VersionNumber = 1;
       version.Content = this.formData.content.trim();

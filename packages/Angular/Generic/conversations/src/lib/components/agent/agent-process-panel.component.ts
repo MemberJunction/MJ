@@ -1,10 +1,11 @@
 import { Component, Input, OnInit, OnDestroy } from '@angular/core';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { AIAgentRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { Subscription, interval } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { DialogService } from '../../services/dialog.service';
 import { AgentStateService, AgentStatus, AgentWithStatus } from '../../services/agent-state.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 interface AgentProcess extends AgentWithStatus {
   expanded: boolean;
@@ -337,7 +338,7 @@ export class AgentProcessPanelComponent implements OnInit, OnDestroy {
       .subscribe(agents => {
         // Preserve expanded state for existing processes
         this.activeProcesses = agents.map(agent => {
-          const existing = this.activeProcesses.find(p => p.run.ID === agent.run.ID);
+          const existing = this.activeProcesses.find(p => UUIDsEqual(p.run.ID, agent.run.ID));
           return {
             ...agent,
             expanded: existing ? existing.expanded : false
@@ -366,7 +367,7 @@ export class AgentProcessPanelComponent implements OnInit, OnDestroy {
     }
   }
 
-  getElapsedTime(run: AIAgentRunEntity): string | null {
+  getElapsedTime(run: MJAIAgentRunEntity): string | null {
     if (!run.StartedAt) return null;
 
     const start = new Date(run.StartedAt).getTime();

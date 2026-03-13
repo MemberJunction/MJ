@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { Metadata } from '@memberjunction/core';
-import { UserInfoEngine, WorkspaceEntity } from '@memberjunction/core-entities';
+import { UserInfoEngine, MJWorkspaceEntity } from '@memberjunction/core-entities';
 import {
   WorkspaceConfiguration,
   WorkspaceTab,
@@ -20,7 +20,7 @@ import { TabRequest } from './interfaces/tab-request.interface';
   providedIn: 'root'
 })
 export class WorkspaceStateManager {
-  private workspace$ = new BehaviorSubject<WorkspaceEntity | null>(null);
+  private workspace$ = new BehaviorSubject<MJWorkspaceEntity | null>(null);
   private configuration$ = new BehaviorSubject<WorkspaceConfiguration | null>(null);
   private saveRequest$ = new Subject<void>();
   private loading$ = new BehaviorSubject<boolean>(false);
@@ -138,7 +138,7 @@ export class WorkspaceStateManager {
     else {
       // Create new workspace for user
       const md = new Metadata();
-      const workspace = await md.GetEntityObject<WorkspaceEntity>('Workspaces');
+      const workspace = await md.GetEntityObject<MJWorkspaceEntity>('MJ: Workspaces');
       workspace.UserID = userId;
       workspace.Name = 'Default';
       workspace.Set('Configuration', JSON.stringify(createDefaultWorkspaceConfiguration()));

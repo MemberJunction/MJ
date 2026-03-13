@@ -28,11 +28,13 @@ import {
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityRelationshipInfo } from '@memberjunction/core';
-import { sendPostRequest } from '../util.js';
+import { request as httpRequest } from 'http';
+import { request as httpsRequest } from 'https';
+import { gzip as gzipCompress, createGunzip } from 'zlib';
 import { configInfo, baseUrl, publicUrl, graphqlPort, graphqlRootPath, apiKey as callbackAPIKey } from '../config.js';
 import { GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
-import { CopyScalarsAndArrays } from '@memberjunction/global';
+import { CopyScalarsAndArrays, UUIDsEqual } from '@memberjunction/global';
 import mssql from 'mssql';
 import { registerAccessToken, GetDataAccessToken } from '../resolvers/GetDataResolver.js';
 import { BehaviorSubject } from 'rxjs';
@@ -139,6 +141,13 @@ export interface SkipCallOptions {
      * the client should pass that payload back in the next request.
      */
     payload?: Record<string, any>;
+
+    /**
+     * Optional reference ID from the calling system. When the MJ API proxies a request
+     * to Skip via SkipProxyAgent, this contains the MJ-side Agent Run ID for cross-system
+     * correlation and debugging.
+     */
+    externalReferenceID?: string;
 }
 
 /**
@@ -172,6 +181,20 @@ export interface SkipCallResult {
 }
 
 /**
+ * Shape of a single SSE event received from the Skip API stream.
+ * Skip sends two formats:
+ * - Wrapped: `{type: 'status_update'|'streaming'|'complete', value: SkipAPIResponse}`
+ * - Flat (queue): `{responsePhase: 'queued'|'error', message: '...', error: '...'}`
+ */
+interface SkipStreamMessage {
+    type?: string;
+    value?: SkipAPIResponse;
+    responsePhase?: string;
+    message?: string;
+    error?: string;
+}
+
+/**
  * Skip TypeScript SDK
  * Provides a clean interface for calling the Skip SaaS API
  */
@@ -202,13 +225,12 @@ export class SkipSDK {
             // Build the Skip API request
             const skipRequest = await this.buildSkipRequest(options);
 
-            // Call Skip API with streaming support
-            const responses = await sendPostRequest(
+            // Call Skip API with SSE streaming support
+            const responses = await this.sendSSERequest(
                 this.config.apiUrl,
                 skipRequest,
-                true, // useCompression
                 this.buildHeaders(),
-                (streamMessage: any) => {
+                (streamMessage: SkipStreamMessage) => {
                     // Handle streaming status updates
                     // Queue messages come as flat objects: {responsePhase: 'queued'|'error', message: '...', error: '...'}
                     // Skip API messages come wrapped: {type: 'status_update', value: {responsePhase: '...', messages: [...]}}
@@ -239,6 +261,19 @@ export class SkipSDK {
             // The last response is the final one
             if (responses && responses.length > 0) {
                 const finalResponse = responses[responses.length - 1].value as SkipAPIResponse;
+
+                // Check if Skip itself reported an error (success: false in the response body)
+                if (finalResponse.success === false) {
+                    const skipError = finalResponse.error || 'Skip API returned an error response';
+                    LogError(`[SkipSDK] Skip API error: ${skipError}`);
+                    return {
+                        success: false,
+                        response: finalResponse,
+                        responsePhase: finalResponse.responsePhase,
+                        error: skipError,
+                        allResponses: responses
+                    };
+                }
 
                 return {
                     success: true,
@@ -292,7 +327,8 @@ export class SkipSDK {
             includeRequests = false,
             forceEntityRefresh = false,
             includeCallbackAuth = true,
-            payload
+            payload,
+            externalReferenceID
         } = options;
 
         // Build base request with metadata
@@ -332,7 +368,8 @@ export class SkipSDK {
             apiKeys: baseRequest.apiKeys,
             callingServerURL: baseRequest.callingServerURL,
             callingServerAPIKey: baseRequest.callingServerAPIKey,
-            callingServerAccessToken: baseRequest.callingServerAccessToken
+            callingServerAccessToken: baseRequest.callingServerAccessToken,
+            externalReferenceID
         };
 
         return request;
@@ -434,6 +471,7 @@ export class SkipSDK {
             EmbeddingVector: q.EmbeddingVector,
             EmbeddingModelID: q.EmbeddingModelID,
             EmbeddingModelName: q.EmbeddingModel,
+            TechnicalDescription: q.TechnicalDescription,
             Fields: q.Fields.map((f) => ({
                 ID: f.ID,
                 QueryID: f.QueryID,
@@ -469,7 +507,7 @@ export class SkipSDK {
             })),
             CacheEnabled: q.CacheEnabled,
             CacheMaxSize: q.CacheMaxSize,
-            CacheTTLMinutes: q.CacheMaxSize,
+            CacheTTLMinutes: q.CacheTTLMinutes,
             CacheValidationSQL: q.CacheValidationSQL
         }));
     }
@@ -478,7 +516,7 @@ export class SkipSDK {
      * Recursively build category path for a query
      */
     private buildQueryCategoryPath(md: Metadata, categoryID: string): string {
-        const cat = md.QueryCategories.find((c) => c.ID === categoryID);
+        const cat = md.QueryCategories.find((c) => UUIDsEqual(c.ID, categoryID));
         if (!cat) return '';
         if (!cat.ParentID) return cat.Name;
         const parentPath = this.buildQueryCategoryPath(md, cat.ParentID);
@@ -647,6 +685,116 @@ export class SkipSDK {
             'x-api-key': this.config.apiKey || '',
             'Content-Type': 'application/json'
         };
+    }
+
+    /**
+     * Send an SSE-aware POST request to the Skip API.
+     * Replaces sendPostRequest for SSE format: parses `data: {json}\n\n` events
+     * instead of NDJSON `{json}\n` lines. This is required because Azure Container
+     * Apps' Envoy proxy buffers NDJSON responses but streams SSE responses.
+     */
+    private async sendSSERequest(
+        url: string,
+        payload: SkipAPIRequest,
+        headers: Record<string, string>,
+        streamCallback?: (event: SkipStreamMessage) => void
+    ): Promise<SkipStreamMessage[]> {
+        // Gzip the request body
+        const compressed = await new Promise<Buffer>((resolve, reject) => {
+            gzipCompress(JSON.stringify(payload), (err, result) => {
+                if (err) reject(err);
+                else resolve(result);
+            });
+        });
+
+        return new Promise((resolve, reject) => {
+            try {
+                const parsedUrl = new URL(url);
+                const options = {
+                    hostname: parsedUrl.hostname,
+                    port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+                    path: parsedUrl.pathname,
+                    method: 'POST' as const,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Content-Encoding': 'gzip',
+                        ...headers
+                    }
+                };
+
+                const requestFn = parsedUrl.protocol === 'https:' ? httpsRequest : httpRequest;
+                const events: SkipStreamMessage[] = [];
+                let buffer = '';
+                let streamEnded = false;
+
+                const parseSSELine = (line: string): void => {
+                    if (line.trim() === '') return;           // Skip empty lines (SSE event delimiters)
+                    if (!line.startsWith('data: ')) return;   // Skip non-data SSE fields
+                    const jsonStr = line.slice(6);
+                    if (!jsonStr.trim()) return;
+
+                    try {
+                        const event = JSON.parse(jsonStr) as SkipStreamMessage;
+                        events.push(event);
+                        streamCallback?.(event);
+                    } catch (e) {
+                        LogError(`[SkipSDK] SSE parse error: ${e}`);
+                    }
+                };
+
+                const handleStreamEnd = (): void => {
+                    if (streamEnded) return;
+                    streamEnded = true;
+                    // Try to parse any remaining data in buffer
+                    if (buffer.trim()) {
+                        parseSSELine(buffer);
+                    }
+                    resolve(events);
+                };
+
+                const req = requestFn(options, (res) => {
+                    const gunzip = createGunzip();
+                    const stream = res.headers['content-encoding'] === 'gzip' ? res.pipe(gunzip) : res;
+
+                    stream.on('data', (chunk: Buffer) => {
+                        buffer += chunk.toString();
+                        let boundary: number;
+                        while ((boundary = buffer.indexOf('\n')) !== -1) {
+                            const line = buffer.substring(0, boundary);
+                            buffer = buffer.substring(boundary + 1);
+                            parseSSELine(line);
+                        }
+                    });
+
+                    stream.on('end', handleStreamEnd);
+
+                    stream.on('close', () => {
+                        if (!streamEnded) {
+                            LogError(`[SkipSDK] SSE stream closed prematurely for ${url}`);
+                            handleStreamEnd();
+                        }
+                    });
+
+                    stream.on('error', (e: Error) => {
+                        if (!streamEnded) {
+                            LogError(`[SkipSDK] SSE stream error for ${url}: ${e.message}`);
+                            reject(new Error(`SSE stream error: ${e.message}`));
+                        }
+                    });
+                });
+
+                req.on('error', (e: Error) => {
+                    LogError(`[SkipSDK] SSE request error for ${url}: ${e.message}`);
+                    reject(new Error(`HTTP request failed to ${url}: ${e.message}`));
+                });
+
+                req.write(compressed);
+                req.end();
+            } catch (e) {
+                LogError(`[SkipSDK] sendSSERequest error: ${e}`);
+                reject(e);
+            }
+        });
     }
 
     /**

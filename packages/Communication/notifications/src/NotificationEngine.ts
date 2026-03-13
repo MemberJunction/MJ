@@ -1,5 +1,6 @@
 import { BaseEngine, IMetadataProvider, Metadata, UserInfo, LogError, LogStatus, RegisterForStartup } from '@memberjunction/core';
-import { UserNotificationEntity, UserNotificationTypeEntity, UserNotificationPreferenceEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
+import { MJUserNotificationEntity, MJUserNotificationTypeEntity, MJUserNotificationPreferenceEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
@@ -51,11 +52,11 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    * @param nameOrId - The notification type name or UUID
    * @returns The notification type entity or null if not found
    */
-  private getNotificationType(nameOrId: string): UserNotificationTypeEntity | null {
+  private getNotificationType(nameOrId: string): MJUserNotificationTypeEntity | null {
     const types = UserInfoEngine.Instance.NotificationTypes;
 
     // Try by ID first
-    const byId = types.find(t => t.ID === nameOrId);
+    const byId = types.find(t => UUIDsEqual(t.ID, nameOrId));
     if (byId) return byId;
 
     // Try by name (case-insensitive)
@@ -144,8 +145,8 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    */
   private resolveDeliveryChannels(
     params: SendNotificationParams,
-    prefs: UserNotificationPreferenceEntity | null,
-    type: UserNotificationTypeEntity,
+    prefs: MJUserNotificationPreferenceEntity | null,
+    type: MJUserNotificationTypeEntity,
   ): DeliveryChannels {
     // If forceDeliveryChannels is specified, use it directly
     if (params.forceDeliveryChannels) {
@@ -185,7 +186,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
   private getUserPreferences(
     userId: string,
     typeId: string
-  ): UserNotificationPreferenceEntity | null {
+  ): MJUserNotificationPreferenceEntity | null {
     // Use cached preferences from UserInfoEngine (user-specific)
     const pref = UserInfoEngine.Instance.GetUserPreferenceForType(userId, typeId);
 
@@ -210,11 +211,11 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    */
   private async createInAppNotification(
     params: SendNotificationParams,
-    type: UserNotificationTypeEntity,
+    type: MJUserNotificationTypeEntity,
     contextUser: UserInfo
   ): Promise<string> {
     const md = new Metadata();
-    const notification = await md.GetEntityObject<UserNotificationEntity>('User Notifications', contextUser);
+    const notification = await md.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications', contextUser);
 
     notification.UserID = params.userId;
     notification.NotificationTypeID = type.ID;
@@ -245,7 +246,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    */
   private async sendEmail(
     params: SendNotificationParams,
-    type: UserNotificationTypeEntity,
+    type: MJUserNotificationTypeEntity,
     contextUser: UserInfo
   ): Promise<boolean> {
     // Access EmailTemplateID
@@ -261,13 +262,13 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     await templateEngine.Config(false, contextUser);
 
     // Find the email template from the cached Templates array
-    const templateEntity = templateEngine.Templates.find((t) => t.ID === emailTemplateId);
+    const templateEntity = templateEngine.Templates.find((t) => UUIDsEqual(t.ID, emailTemplateId));
     if (!templateEntity) {
       throw new Error(`Email template not found: ${emailTemplateId}`);
     }
 
     // Get user from cache (server-side optimization - no database query)
-    const user = UserCache.Instance.Users.find((u) => u.ID === params.userId);
+    const user = UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, params.userId));
     if (!user) {
       throw new Error('User not found for email delivery');
     }
@@ -302,7 +303,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
    */
   private async sendSMS(
     params: SendNotificationParams,
-    type: UserNotificationTypeEntity,
+    type: MJUserNotificationTypeEntity,
     contextUser: UserInfo
   ): Promise<boolean> {
     // Access SMSTemplateID
@@ -318,13 +319,13 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     await templateEngine.Config(false, contextUser);
 
     // Find the SMS template from the cached Templates array
-    const templateEntity = templateEngine.Templates.find((t) => t.ID === smsTemplateId);
+    const templateEntity = templateEngine.Templates.find((t) => UUIDsEqual(t.ID, smsTemplateId));
     if (!templateEntity) {
       throw new Error(`SMS template not found: ${smsTemplateId}`);
     }
 
     // Get user from cache (server-side optimization - no database query)
-    const user = UserCache.Instance.Users.find((u) => u.ID === params.userId);
+    const user = UserCache.Instance.Users.find((u) => UUIDsEqual(u.ID, params.userId));
     if (!user) {
       throw new Error('User not found for SMS delivery');
     }

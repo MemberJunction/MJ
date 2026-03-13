@@ -17,6 +17,13 @@ export type RunQueryParams = {
      */
     QueryName?: string
     /**
+     * Raw SQL to execute directly (alternative to QueryID/QueryName).
+     * Must be a SELECT or WITH (CTE) statement — mutations are rejected server-side
+     * via SQLExpressionValidator. When provided, QueryID and QueryName are ignored.
+     * The query runs on a read-only connection with security validation.
+     */
+    SQL?: string
+    /**
      * Optional, if provided, the query to be run will be selected to match the specified Category by hierarchical path
      * (e.g., "/MJ/AI/Agents/") or simple category name for backward compatibility
      */

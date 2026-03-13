@@ -1,0 +1,185 @@
+.search-result-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ============================================
+   CONTENT HEADER — matches Data Explorer layout
+   ============================================ */
+
+.content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+  gap: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.entity-icon {
+  font-size: 20px;
+  color: var(--mj-brand-primary);
+}
+
+.entity-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.record-count {
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+  font-weight: 500;
+}
+
+/* ============================================
+   HEADER RIGHT — action buttons, view mode toggle
+   ============================================ */
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+/* Action Button (New Record, Export, etc.) */
+.header-action-btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mj-text-secondary);
+  transition: all 0.15s ease;
+}
+.header-action-btn:hover {
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+}
+.header-action-btn i {
+  font-size: 14px;
+}
+
+/* View Mode Toggle */
+.view-mode-toggle {
+  display: flex;
+  background: var(--mj-bg-surface-sunken);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.toggle-btn {
+  width: 36px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mj-text-secondary);
+  transition: all 0.15s ease;
+}
+.toggle-btn:hover {
+  color: var(--mj-text-primary);
+}
+.toggle-btn.active {
+  background: var(--mj-bg-surface);
+  color: var(--mj-brand-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================
+   LOADING STATE
+   ============================================ */
+
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 48px 0;
+}
+
+/* ============================================
+   EMPTY STATE
+   ============================================ */
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 0;
+  color: var(--mj-text-secondary);
+}
+
+.empty-icon {
+  font-size: 48px;
+  color: var(--mj-border-strong);
+  margin-bottom: 16px;
+}
+
+.empty-state p {
+  margin: 4px 0;
+  font-size: 15px;
+}
+
+.empty-hint {
+  color: var(--mj-text-disabled);
+  font-size: 13px !important;
+}
+
+/* ============================================
+   SINGLE RESULT — auto-nav state
+   ============================================ */
+
+.single-result-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 0;
+  color: var(--mj-text-secondary);
+}
+
+.redirect-icon {
+  font-size: 32px;
+  color: var(--mj-brand-primary);
+  margin-bottom: 16px;
+}
+
+.single-result-state p {
+  font-size: 15px;
+  margin: 4px 0;
+}
+
+/* ============================================
+   VIEWER CONTAINER
+   ============================================ */
+
+.viewer-container {
+  flex: 1;
+  min-height: 0;
+}

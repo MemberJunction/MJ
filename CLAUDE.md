@@ -1,6 +1,9 @@
 # GENERAL RULE
 Don't say "You're absolutely right" each time I correct you. Mix it up, that's so boring!
 
+## Claude Code Fast Mode
+To enable fast mode (2.5x faster Opus 4.6 responses), add `"fastMode": true` to `~/.claude/settings.json`. This is the reliable way to enable it in the **VSCode IDE extension** — the `/fast` slash command only works consistently in CLI mode. The setting persists across sessions. Note: fast mode bills to extra usage at a higher per-token rate.
+
 # MemberJunction Development Guide
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
@@ -23,7 +26,11 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
   - No `unknown` as a lazy alternative
 - **Why**: MemberJunction has strong typing throughout - there's always a proper type available
 
-### 3. NO MODIFICATIONS TO MERGED PRs
+### 3. NO DESTRUCTIVE GIT OPERATIONS WITHOUT EXPLICIT APPROVAL
+- **NEVER run `git checkout -- <file>` or `git restore <file>`** to discard changes without the user explicitly approving — even in bypass/auto-approve permission mode
+- **NEVER run `git reset --hard`** without explicit approval
+- These commands destroy uncommitted work (staged and unstaged) and cannot be undone
+- If you need to undo YOUR changes to a file, use `git diff` to identify only your changes and reverse them with targeted `Edit` tool calls — this preserves the user's other in-progress work
 - **NEVER update title/description of merged PRs** without explicit approval each time
 - Always ask before modifying any historical git data
 
@@ -80,11 +87,69 @@ MemberJunction supports both standalone and NgModule-declared components. Choose
 - Consumers should import types from their original source package
 - Add comments directing users to the correct import location when helpful
 
+### 6. ALWAYS RUN AND UPDATE UNIT TESTS
+- **When modifying ANY package's source code, you MUST run that package's unit tests** before considering the work complete
+- Run tests with: `cd packages/PackageName && npm run test`
+- **If tests fail due to your changes, UPDATE the tests** to match the new behavior
+- **If tests fail for other reasons, FIX them** — never leave broken tests behind
+- **Report test results to the user**: pass count, failure count, skip count, and any issues found
+- **This is as important as compilation** — broken tests are as bad as broken builds
+- **Never assume tests still pass** after changing function signatures, renaming methods, changing return values, or modifying behavior
+- Common causes of test drift (all of which YOU must fix):
+  - Renamed functions/methods that tests still reference by old name
+  - Changed return values or formats that test assertions still expect
+  - New required parameters that test mocks don't provide
+  - Removed exports that tests still import
+
+### 7. USE BaseSingleton FOR ALL SINGLETONS
+- **NEVER use manual `static _instance` singleton patterns** — always extend `BaseSingleton<T>` from `@memberjunction/global`
+- **Why**: `BaseSingleton` uses a Global Object Store (`GetGlobalObjectStore()`) that guarantees a single instance across the entire process — even when bundlers duplicate code across multiple execution paths. A plain `static _instance` field lives on the class constructor, so if a module gets loaded twice (common with ESBuild/Vite code splitting), you silently get two "singletons" with divergent state.
+- **How to use it**:
+  ```typescript
+  import { BaseSingleton } from '@memberjunction/global';
+
+  export class MySingleton extends BaseSingleton<MySingleton> {
+      // Constructor MUST be protected (BaseSingleton enforces this)
+      protected constructor() {
+          super();
+      }
+
+      // Expose a static accessor that calls the inherited getInstance()
+      public static get Instance(): MySingleton {
+          return MySingleton.getInstance<MySingleton>();
+      }
+
+      // ... your singleton methods and properties
+  }
+
+  // Usage
+  const instance = MySingleton.Instance;
+  ```
+- **Anti-pattern to avoid**:
+  ```typescript
+  // ❌ BAD — weak singleton, breaks under code duplication
+  export class MySingleton {
+      private static _instance: MySingleton;
+      public static get Instance(): MySingleton {
+          if (!MySingleton._instance)
+              MySingleton._instance = new MySingleton();
+          return MySingleton._instance;
+      }
+  }
+  ```
+- **Known weak singletons** that need migration: ~26 classes across the codebase including `GraphQLDataProvider`, `UserCache`, `StartupManager`, `RunQuerySQLFilterManager`, `QueueManager`, `SQLExpressionValidator`, `WarningManager`, `AuthProviderFactory`, `MCPClientManager`, `AgentDataPreloader`, and Angular/React services. See GitHub issue tracking this migration.
+
 ---
 
 ## 📚 Development Guides
 
 The `/guides/` folder contains comprehensive best practices guides for specific development tasks. **Always consult these guides when working on related features:**
+
+- **[UUID Comparison Guide](guides/UUID_COMPARISON_GUIDE.md)**: Critical patterns for comparing UUIDs across SQL Server (uppercase) and PostgreSQL (lowercase):
+  - Always use `UUIDsEqual()` instead of `===` for UUID comparisons
+  - Use `NormalizeUUID()` for Set/Map key operations
+  - Angular template binding patterns
+  - Automated enforcement tests
 
 - **[Dashboard Best Practices](guides/DASHBOARD_BEST_PRACTICES.md)**: Comprehensive patterns for building MJ dashboards including:
   - Architecture and naming conventions
@@ -93,7 +158,7 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - User preferences and local caching
   - Layout patterns, permission checking, and more
 
-When building dashboards, creating new Angular applications, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
+When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
 
@@ -156,6 +221,68 @@ If `my-feature` tracks `origin/next`:
 
 **This is a non-negotiable safety requirement.**
 
+## Unit Testing
+
+MemberJunction uses **Vitest** as the standard unit testing framework across all packages. Jest has been deprecated and all packages are migrated to Vitest.
+
+### Running Tests
+- Run all tests: `npm test` (from repo root, uses Turborepo)
+- Run tests for a specific package: `cd packages/PackageName && npm run test`
+- Watch mode for a package: `cd packages/PackageName && npm run test:watch`
+- Run tests for changed packages: `npx turbo run test --filter=...[HEAD~1]`
+- Run with coverage: `npm run test:coverage`
+
+### Writing Tests
+- Test files live in `src/__tests__/` with `.test.ts` extension
+- One test file per source file (e.g., `ClassFactory.test.ts` tests `ClassFactory.ts`)
+- Use descriptive test names that read as specifications
+- Import from `vitest`: `import { describe, it, expect, vi, beforeEach } from 'vitest'`
+- Use `@memberjunction/test-utils` for shared mocking utilities (singleton reset, mock entities, mock RunView)
+- No database connections in unit tests — mock all external dependencies
+- Tests must be deterministic and fast (< 5s per file)
+
+### Adding Tests to a New Package
+Use the scaffold script:
+```bash
+node scripts/scaffold-tests.mjs packages/YourPackage
+```
+
+This creates the vitest config, test directory, starter test, and updates package.json scripts.
+
+### Test Structure
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+describe('ClassName', () => {
+  beforeEach(() => {
+    // Reset state between tests
+  });
+
+  describe('MethodName', () => {
+    it('should handle the normal case', () => { ... });
+    it('should handle edge case: empty input', () => { ... });
+    it('should throw on invalid input', () => { ... });
+  });
+});
+```
+
+### CI/CD Integration
+- **Every PR** must pass unit tests before merging (GitHub Actions gate)
+- **Every release** runs the full-stack regression suite via Docker Compose
+- Tests are cached by Turborepo — unchanged packages skip test execution
+
+## Switching Database Platforms (SQL Server ↔ PostgreSQL)
+
+When developing against both SQL Server and PostgreSQL on the same URL/port (e.g., `localhost:4000`), **you must clear your browser cache** after switching backends. The `GraphQLDataProvider` client caches entity metadata and query results in the browser. Since SQL Server returns UUIDs uppercase and PostgreSQL returns them lowercase, stale cached data from one platform will cause subtle mismatches on the other. Clear browser cache (or use an incognito window) whenever you switch the backend database platform behind the same endpoint.
+
+## Docker Environments
+
+See **[docker/CLAUDE.md](docker/CLAUDE.md)** for full details on Docker configurations.
+
+- **`docker/MJAPI/`** — Production MJAPI container, published with each release
+- **`docker/workbench/`** — Claude Code workbench with dedicated SQL Server for autonomous dev/testing
+- Use `/docker-workbench` slash command to start, stop, rebuild, or exec into the workbench
+
 ## Build Commands
 - Build all packages: `npm run build` - from repo root
 - Build specific packages: `cd packagedirectory && npm run build`
@@ -191,6 +318,7 @@ MemberJunction uses `@RegisterClass` decorators with a dynamic class factory (`M
 
 ## Database Migrations
 - See `/migrations/CLAUDE.md` for comprehensive migration guidelines
+- **Migration folder**: Always use the highest-numbered `migrations/v*/` folder (currently `migrations/v5/`). Check `ls migrations/v*/` if unsure.
 - Key points:
   - Use format `VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql`
   - Always use hardcoded UUIDs (not NEWID())
@@ -539,6 +667,17 @@ const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent 
 
 ## Performance Best Practices
 
+### Server-Side Caching (Critical Architecture)
+
+MemberJunction's multi-tier caching system is a cornerstone of server performance. **Always consult [guides/CACHING_AND_PUBSUB_GUIDE.md](guides/CACHING_AND_PUBSUB_GUIDE.md)** when working on caching, RunView optimization, or data loading patterns.
+
+Key principles:
+- **Server trusts its cache completely** (`TrustLocalCacheCompletely = true`) — BaseEntity event-driven invalidation guarantees freshness
+- **All RunView/RunViews calls check the server cache first** — even without explicit `CacheLocal`, if data is in cache it's returned with zero DB queries
+- **Auto-cache**: Small (≤250 rows), unfiltered, unsorted results are automatically cached on the server because they can be safely maintained in-place via upsert/remove
+- **Filtered/sorted caches are invalidated (not updated)** on entity changes — we can't evaluate SQL predicates in JS, so the safe approach is to blow away the cache entry and let it repopulate on next request
+- **ResultType is excluded from cache fingerprints** — cache stores plain JSON regardless; transformation to BaseEntity objects happens post-cache
+
 ### Batch Database Operations
 - Use `RunViews` (plural) instead of multiple `RunView` calls
 - Group related queries together in a single batch operation
@@ -702,6 +841,140 @@ const ids = result.Results.map(r => r.ID);
     });
   }
   ```
+
+## 🚨 CRITICAL: Design Token System — NO HARDCODED COLORS 🚨
+
+MemberJunction uses a comprehensive CSS custom property (design token) system defined in `packages/Angular/Generic/shared/src/lib/_tokens.scss`. **Every color in component CSS MUST use design tokens.** Hardcoded hex values (`#264FAF`, `#333`, `#f5f5f5`, etc.) break dark mode, prevent white-labeling, and create maintenance debt.
+
+### The Rule
+
+**NEVER write hardcoded hex/rgb colors in component CSS.** Always use the appropriate semantic token. This applies to ALL properties: `color`, `background`, `border`, `fill`, `box-shadow`, `outline`, etc.
+
+```css
+/* ❌ WRONG — hardcoded hex values */
+.my-component {
+    color: #333;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+}
+
+/* ✅ CORRECT — semantic design tokens */
+.my-component {
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+}
+```
+
+### Token Categories (Use ONLY Semantic Tokens)
+
+**NEVER use primitive tokens (`--mj-color-neutral-*`, `--mj-color-brand-*`) in component CSS.** Primitives don't adapt to dark mode. Always use semantic tokens:
+
+#### Text Colors
+| Token | Purpose |
+|---|---|
+| `--mj-text-primary` | Main body text, headings |
+| `--mj-text-secondary` | Supporting text, labels |
+| `--mj-text-muted` | De-emphasized text, captions |
+| `--mj-text-disabled` | Disabled/placeholder text |
+| `--mj-text-inverse` | Text on dark/colored backgrounds |
+| `--mj-text-link` | Clickable links |
+
+#### Background Colors
+| Token | Purpose |
+|---|---|
+| `--mj-bg-page` | Full-page background |
+| `--mj-bg-surface` | Cards, panels, modals |
+| `--mj-bg-surface-card` | Slightly tinted cards, secondary surfaces |
+| `--mj-bg-surface-sunken` | Inset areas, code backgrounds |
+| `--mj-bg-surface-elevated` | Elevated surfaces, dropdowns |
+| `--mj-bg-surface-hover` | Hover states on surfaces |
+| `--mj-bg-surface-active` | Active/pressed states |
+| `--mj-bg-overlay` | Modal/drawer backdrops |
+
+#### Border Colors
+| Token | Purpose |
+|---|---|
+| `--mj-border-default` | Standard borders |
+| `--mj-border-subtle` | Very light borders |
+| `--mj-border-strong` | Emphasized borders, scrollbar thumbs |
+| `--mj-border-focus` | Focus rings |
+
+#### Brand Colors
+| Token | Purpose |
+|---|---|
+| `--mj-brand-primary` | Primary buttons, active states, accents |
+| `--mj-brand-primary-hover` | Primary hover state |
+| `--mj-brand-primary-active` | Primary pressed state |
+
+#### Status Colors
+| Token | Purpose |
+|---|---|
+| `--mj-status-success` / `-bg` / `-text` / `-border` | Success states |
+| `--mj-status-warning` / `-bg` / `-text` / `-border` | Warning states (orange) |
+| `--mj-status-error` / `-bg` / `-text` / `-border` | Error states (red) |
+| `--mj-status-info` / `-bg` / `-text` / `-border` | Informational states |
+
+#### Logo Tokens
+| Token | Purpose |
+|---|---|
+| `--mj-logo-mark` | Logo icon (auto-switches light/dark) |
+| `--mj-logo-mark-inverse` | Logo icon for dark backgrounds |
+| `--mj-logo-wordmark` | Full logo with text |
+| `--mj-logo-color` | Loading spinner fill color |
+
+### Common Hex → Token Mappings
+
+When migrating or reviewing code, use these mappings:
+
+| Hex | Token |
+|---|---|
+| `#333`, `#334155` | `--mj-text-primary` |
+| `#555`, `#475569`, `#666` | `--mj-text-secondary` |
+| `#757575`, `#888`, `#64748b` | `--mj-text-muted` |
+| `#999`, `#94a3b8`, `#aaa` | `--mj-text-disabled` |
+| `#fff` (on colored bg) | `--mj-text-inverse` |
+| `white` (background) | `--mj-bg-surface` |
+| `#f5f5f5`, `#f8f9fa`, `#f9f9f9`, `#fafafa` | `--mj-bg-surface-card` |
+| `#f0f0f0`, `#f1f1f1`, `#f1f5f9` | `--mj-bg-surface-sunken` |
+| `#e0e0e0`, `#e2e8f0`, `#d1d5db`, `#e5e7eb` | `--mj-border-default` |
+| `#ccc`, `#cbd5e1` | `--mj-border-strong` |
+| `#ef6c00`, `#ff6600` (warning/orange) | `--mj-status-warning` |
+| `#e65100` (dark orange) | `--mj-status-warning-text` |
+| `#e53e3e`, `#dc2626` (error/red) | `--mj-status-error` |
+| `#c53030`, `#b91c1c` (dark red) | `--mj-status-error-text` |
+| `#264FAF`, `#0076b6` (MJ blue) | `--mj-brand-primary` |
+
+### Translucent Colors with `color-mix()`
+
+For translucent variants of token colors (tinted backgrounds, focus rings), use `color-mix()`:
+
+```css
+/* ✅ Tinted background from a token */
+background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+
+/* ✅ Focus ring from a token */
+box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+
+/* ✅ Subtle warning background */
+background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface));
+```
+
+### When Hardcoded Colors ARE Acceptable
+
+1. **SVG data URIs** — CSS variables cannot be used inside `url("data:image/svg+xml,...")`. Use `%23` encoded hex.
+2. **Code editor backgrounds** — Dark-on-dark code editors (e.g., `#1e1e1e` for CodeMirror) are intentionally static.
+3. **Categorical/chart colors** — Data visualization colors that must remain distinct regardless of theme.
+4. **`rgba()` alpha on white** — `rgba(255, 255, 255, 0.15)` for overlays on colored backgrounds is fine since it's relative to the surface it sits on.
+5. **CSS variable fallbacks** — `var(--mj-text-inverse, white)` fallback values are acceptable.
+
+### Before Submitting Any CSS
+
+Run this mental checklist:
+1. Does every `color:`, `background:`, `border-color:`, `fill:` use a token? If not, fix it.
+2. Did I use a **semantic** token (not a primitive like `--mj-color-neutral-300`)? Primitives don't adapt to dark mode.
+3. Will this look correct in dark mode? Semantic tokens auto-adapt; hardcoded values don't.
+4. For `white`/`#fff` — is it text on a colored background (`--mj-text-inverse`) or a surface background (`--mj-bg-surface`)?
 
 ## Icon Libraries
 - **Primary**: Font Awesome (already included) - Use for all icons throughout the application
@@ -992,7 +1265,7 @@ MemberJunction includes a powerful code generation system that automatically cre
    - Foreign key relationships and computed fields
    - Value list enums from database constraints
 
-2. **Database Objects** (`migrations/v2/CodeGen_Run_*.sql`)
+2. **Database Objects** (`migrations/v5/CodeGen_Run_*.sql`)
    - Stored procedures (spCreate, spUpdate, spDelete) 
    - Database views with proper joins and computed fields
    - Foreign key indexes for performance
@@ -1054,7 +1327,7 @@ When you add fields like `PromptRole` and `PromptPosition`:
 - **Entity Classes**: `packages/MJCoreEntities/src/generated/entity_subclasses.ts`
 - **Server APIs**: `packages/MJServer/src/generated/generated.ts` 
 - **Angular Forms**: `packages/Angular/Explorer/core-entity-forms/src/lib/generated/`
-- **Migration SQL**: `migrations/v2/CodeGen_Run_YYYY-MM-DD_HH-MM-SS.sql`
+- **Migration SQL**: `migrations/v5/CodeGen_Run_YYYY-MM-DD_HH-MM-SS.sql`
 
 ## AI Model and Vendor Configuration
 
@@ -1261,6 +1534,88 @@ Each nav item with `ResourceType: "Custom"` requires a corresponding component:
 3. Add a tree-shaking prevention function: `export function LoadYourResource() {}`
 4. Call the load function from the module's `public-api.ts`
 5. Register the component in the module's declarations and exports
+
+## Browser Testing with Playwright CLI
+
+### Overview
+MemberJunction uses `@playwright/cli` (Playwright CLI) for browser-based testing and UI interaction during development. The CLI uses an accessibility-snapshot approach that is token-efficient for AI agents.
+
+### Managing Dev Servers
+Claude Code should start and stop MJAPI and MJExplorer as background processes itself. This allows restarting them after code changes without relying on the user to manage them externally.
+
+```bash
+# Start MJAPI (port 4001, configured via GRAPHQL_PORT in .env)
+# Run as a background task from: packages/MJAPI/
+npm run start
+
+# Start MJExplorer (port 4201, configured in package.json start script)
+# Run as a background task from: packages/MJExplorer/
+npm run start
+```
+
+**Key points:**
+- MJAPI runs on port **4001** (set by `GRAPHQL_PORT=4001` in `.env`)
+- MJExplorer runs on port **4201** (set by `--port 4201` in its start script)
+- Run both as background tasks so you can monitor output and restart as needed
+- After rebuilding a server-side package, restart MJAPI to pick up changes
+- After rebuilding an Angular library, MJExplorer's Vite dev server auto-detects changes and triggers a browser reload — no restart needed
+- Always check that servers are healthy before launching the browser (wait for "listening on" / compilation success messages)
+
+### Persistent Browser Profile (Auth Caching)
+To avoid re-authenticating every time you launch a browser session, use the `--profile` flag to store session data (MSAL tokens, cookies, localStorage) persistently:
+
+```bash
+# First-time launch (requires manual login in the headed browser):
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+
+# Subsequent launches reuse cached auth automatically:
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+```
+
+**Key points:**
+- The `.playwright-cli/` directory is gitignored — profile data stays local
+- After authenticating once, MSAL tokens are cached in the profile directory
+- Sessions typically persist for 30+ days (same as the VSCode debug browser)
+- If auth expires, just log in once in the headed browser to refresh the cache
+
+### Common Commands
+```bash
+# Open browser with persistent auth
+npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201
+
+# Take a snapshot (get element refs for interaction)
+npx playwright-cli snapshot
+
+# Click an element by ref
+npx playwright-cli click <ref>
+
+# Type text
+npx playwright-cli type "some text"
+
+# Press a key
+npx playwright-cli press Enter
+
+# Run arbitrary Playwright code
+npx playwright-cli run-code "async (page) => { return await page.title(); }"
+
+# Check console logs
+npx playwright-cli console info
+
+# Close browser
+npx playwright-cli close
+```
+
+### Workflow for UI Bug Investigation
+1. Start MJAPI and MJExplorer as background processes (if not already running)
+2. Wait for both servers to be ready (MJAPI listening, MJExplorer compiled)
+3. Launch browser with persistent profile: `npx playwright-cli open --headed --profile .playwright-cli/profile http://localhost:4201`
+4. Authenticate once if needed (cached for future sessions)
+5. Use `snapshot` to inspect the page, `click`/`type` to interact
+6. Use `console info` / `console error` to check for issues
+7. Make code fixes, rebuild affected packages
+   - Server-side changes: restart MJAPI background process
+   - Angular library changes: Vite auto-reloads the browser
+8. Re-test to verify the fix
 
 ## Active Technologies
 - TypeScript 5.x, Node.js 18+ + `@memberjunction/server` (auth providers), `express`, `jsonwebtoken`, `@modelcontextprotocol/sdk` (601-mcp-oauth)

@@ -1,5 +1,5 @@
-import * as env from 'env-var';
-import * as dotenv from 'dotenv';
+import env from 'env-var';
+import dotenv from 'dotenv';
 
 // Load environment variables from .env file
 dotenv.config({ quiet: true });

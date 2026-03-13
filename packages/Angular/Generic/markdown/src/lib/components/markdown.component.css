@@ -12,7 +12,7 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   font-size: 15px;
   line-height: 1.6;
-  color: #1f2937;
+  color: var(--mj-text-primary);
   word-wrap: break-word;
 }
 
@@ -29,7 +29,7 @@
   margin-bottom: 0.5em;
   font-weight: 600;
   line-height: 1.25;
-  color: #111827;
+  color: var(--mj-text-primary);
 }
 
 .mj-markdown-container h1 { font-size: 1.75em; }
@@ -37,7 +37,7 @@
 .mj-markdown-container h3 { font-size: 1.25em; }
 .mj-markdown-container h4 { font-size: 1.1em; }
 .mj-markdown-container h5 { font-size: 1em; }
-.mj-markdown-container h6 { font-size: 0.9em; color: #6b7280; }
+.mj-markdown-container h6 { font-size: 0.9em; color: var(--mj-text-secondary); }
 
 .mj-markdown-container > h1:first-child,
 .mj-markdown-container > h2:first-child,
@@ -54,7 +54,7 @@
 }
 
 .mj-markdown-container a {
-  color: #3b82f6;
+  color: var(--mj-brand-primary);
   text-decoration: none;
 }
 
@@ -111,9 +111,9 @@
 .mj-markdown-container blockquote {
   margin: 1em 0;
   padding: 0.5em 1em;
-  border-left: 4px solid #e5e7eb;
-  background: #f9fafb;
-  color: #4b5563;
+  border-left: 4px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
 }
 
 .mj-markdown-container blockquote > p:last-child {
@@ -131,17 +131,17 @@
 /* Inline code */
 .mj-markdown-container :not(pre) > code {
   padding: 0.2em 0.4em;
-  background: #f3f4f6;
+  background: var(--mj-bg-surface-sunken);
   border-radius: 4px;
-  color: #be185d;
+  color: var(--mj-status-error);
 }
 
 /* Code blocks */
 .mj-markdown-container pre {
   margin: 1em 0;
   padding: 1em;
-  background: #1e1e1e;
-  border-radius: 8px;
+  background: var(--mj-bg-code-block, #1e1e1e);
+  border-radius: var(--mj-radius-md);
   overflow-x: auto;
   position: relative;
 }
@@ -149,7 +149,7 @@
 .mj-markdown-container pre code {
   background: transparent;
   padding: 0;
-  color: #d4d4d4;
+  color: var(--mj-text-code, #d4d4d4);
   font-size: 0.875em;
   line-height: 1.5;
 }
@@ -170,7 +170,7 @@
 .mj-markdown-container .code-language-label {
   font-size: 11px;
   font-weight: 500;
-  color: #9ca3af;
+  color: var(--mj-text-disabled);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   user-select: none;
@@ -185,8 +185,8 @@
   padding: 0;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
-  color: #9ca3af;
+  border-radius: var(--mj-radius-md);
+  color: var(--mj-text-disabled);
   cursor: pointer;
   transition: all 0.2s ease;
   opacity: 0;
@@ -198,19 +198,19 @@
 
 .mj-markdown-container .code-copy-btn:hover {
   background: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  color: var(--mj-text-inverse);
 }
 
 .mj-markdown-container .code-copy-btn.copied {
   background: rgba(34, 197, 94, 0.2);
   border-color: rgba(34, 197, 94, 0.3);
-  color: #22c55e;
+  color: var(--mj-status-success);
 }
 
 .mj-markdown-container .code-copy-btn.error {
   background: rgba(239, 68, 68, 0.2);
   border-color: rgba(239, 68, 68, 0.3);
-  color: #ef4444;
+  color: var(--mj-status-error);
 }
 
 /* ============================================
@@ -226,17 +226,17 @@
 .mj-markdown-container th,
 .mj-markdown-container td {
   padding: 0.5em 1em;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--mj-border-default);
   text-align: left;
 }
 
 .mj-markdown-container th {
-  background: #f9fafb;
+  background: var(--mj-bg-surface-sunken);
   font-weight: 600;
 }
 
 .mj-markdown-container tr:nth-child(even) {
-  background: #f9fafb;
+  background: var(--mj-bg-surface-sunken);
 }
 
 /* ============================================
@@ -245,7 +245,7 @@
 .mj-markdown-container hr {
   margin: 2em 0;
   border: none;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--mj-border-default);
 }
 
 /* ============================================
@@ -281,52 +281,52 @@
 
 /* Note */
 .mj-markdown-container .markdown-alert-note {
-  background: #eff6ff;
-  border-color: #3b82f6;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
 }
 
 .mj-markdown-container .markdown-alert-note .markdown-alert-title {
-  color: #1d4ed8;
+  color: var(--mj-brand-primary);
 }
 
 /* Tip */
 .mj-markdown-container .markdown-alert-tip {
-  background: #f0fdf4;
-  border-color: #22c55e;
+  background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+  border-color: var(--mj-status-success);
 }
 
 .mj-markdown-container .markdown-alert-tip .markdown-alert-title {
-  color: #16a34a;
+  color: var(--mj-status-success);
 }
 
 /* Important */
 .mj-markdown-container .markdown-alert-important {
-  background: #faf5ff;
-  border-color: #a855f7;
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
 }
 
 .mj-markdown-container .markdown-alert-important .markdown-alert-title {
-  color: #9333ea;
+  color: var(--mj-brand-primary);
 }
 
 /* Warning */
 .mj-markdown-container .markdown-alert-warning {
-  background: #fffbeb;
-  border-color: #f59e0b;
+  background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+  border-color: var(--mj-status-warning);
 }
 
 .mj-markdown-container .markdown-alert-warning .markdown-alert-title {
-  color: #d97706;
+  color: var(--mj-status-warning);
 }
 
 /* Caution */
 .mj-markdown-container .markdown-alert-caution {
-  background: #fef2f2;
-  border-color: #ef4444;
+  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+  border-color: var(--mj-status-error);
 }
 
 .mj-markdown-container .markdown-alert-caution .markdown-alert-title {
-  color: #dc2626;
+  color: var(--mj-status-error);
 }
 
 /* ============================================
@@ -339,7 +339,7 @@
 }
 
 .mj-markdown-container .collapsible-section:hover {
-  border-left-color: #e5e7eb;
+  border-left-color: var(--mj-border-default);
 }
 
 /* Heading wrapper - contains toggle and heading */
@@ -354,7 +354,7 @@
 }
 
 .mj-markdown-container .collapsible-heading-wrapper:hover {
-  background-color: rgba(0, 0, 0, 0.03);
+  background-color: color-mix(in srgb, var(--mj-text-primary) 3%, transparent);
 }
 
 /* The heading itself */
@@ -371,7 +371,7 @@
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: #9ca3af;
+  color: var(--mj-text-muted);
   transition: transform 0.2s ease, color 0.15s ease;
 }
 
@@ -381,7 +381,7 @@
 }
 
 .mj-markdown-container .collapsible-heading-wrapper:hover .collapsible-toggle {
-  color: #6b7280;
+  color: var(--mj-text-secondary);
 }
 
 /* Expanded state - arrow points down */
@@ -418,7 +418,7 @@
 
 /* Focus styles for accessibility */
 .mj-markdown-container .collapsible-heading-wrapper:focus-within {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 
@@ -452,14 +452,14 @@
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: #9ca3af;
+  color: var(--mj-text-muted);
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
 .mj-markdown-container .collapsible-action-btn:hover {
-  background-color: rgba(0, 0, 0, 0.08);
-  color: #374151;
+  background-color: color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
+  color: var(--mj-text-primary);
 }
 
 .mj-markdown-container .collapsible-action-btn:active {
@@ -473,14 +473,14 @@
 
 /* Expand all button - double down chevron */
 .mj-markdown-container .collapsible-action-btn.expand-all:hover {
-  color: #059669;
-  background-color: rgba(5, 150, 105, 0.1);
+  color: var(--mj-status-success);
+  background-color: color-mix(in srgb, var(--mj-status-success) 10%, transparent);
 }
 
 /* Collapse all button - double up chevron */
 .mj-markdown-container .collapsible-action-btn.collapse-all:hover {
-  color: #dc2626;
-  background-color: rgba(220, 38, 38, 0.1);
+  color: var(--mj-status-error);
+  background-color: color-mix(in srgb, var(--mj-status-error) 10%, transparent);
 }
 
 /* ============================================
@@ -489,8 +489,8 @@
 .mj-markdown-container .mermaid-diagram {
   margin: 1em 0;
   padding: 1em;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   text-align: center;
   overflow-x: auto;
@@ -502,14 +502,14 @@
 }
 
 .mj-markdown-container .mermaid-error {
-  background: #fef2f2;
-  border-color: #fecaca;
+  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
 }
 
 .mj-markdown-container .mermaid-error::before {
   content: 'Diagram rendering failed';
   display: block;
-  color: #dc2626;
+  color: var(--mj-status-error);
   font-size: 12px;
   margin-bottom: 8px;
 }
@@ -545,7 +545,7 @@
   content: '#';
   position: absolute;
   left: -1.5em;
-  color: #9ca3af;
+  color: var(--mj-text-muted);
   opacity: 0;
   transition: opacity 0.2s ease;
 }
@@ -579,7 +579,7 @@
   margin-left: -3em;
   margin-right: 1em;
   text-align: right;
-  color: #6b7280;
+  color: var(--mj-text-muted);
   user-select: none;
 }
 
@@ -587,60 +587,16 @@
    Error State
    ============================================ */
 .mj-markdown-container .markdown-error {
-  background: #fef2f2;
-  color: #dc2626;
+  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+  color: var(--mj-status-error);
   padding: 1em;
   border-radius: 8px;
-  border: 1px solid #fecaca;
+  border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
   white-space: pre-wrap;
   font-family: monospace;
 }
 
-/* ============================================
-   Dark Mode Support
-   ============================================ */
-@media (prefers-color-scheme: dark) {
-  .mj-markdown-container.dark-mode {
-    color: #e5e7eb;
-  }
-
-  .mj-markdown-container.dark-mode h1,
-  .mj-markdown-container.dark-mode h2,
-  .mj-markdown-container.dark-mode h3,
-  .mj-markdown-container.dark-mode h4,
-  .mj-markdown-container.dark-mode h5,
-  .mj-markdown-container.dark-mode h6 {
-    color: #f9fafb;
-  }
-
-  .mj-markdown-container.dark-mode blockquote {
-    background: #1f2937;
-    border-color: #374151;
-    color: #9ca3af;
-  }
-
-  .mj-markdown-container.dark-mode :not(pre) > code {
-    background: #374151;
-    color: #f472b6;
-  }
-
-  .mj-markdown-container.dark-mode table th {
-    background: #1f2937;
-  }
-
-  .mj-markdown-container.dark-mode table tr:nth-child(even) {
-    background: #1f2937;
-  }
-
-  .mj-markdown-container.dark-mode th,
-  .mj-markdown-container.dark-mode td {
-    border-color: #374151;
-  }
-
-  .mj-markdown-container.dark-mode hr {
-    border-color: #374151;
-  }
-}
+/* Dark Mode Support — handled automatically by --mj-* semantic tokens */
 
 /* ============================================
    SVG Rendered Content
@@ -648,8 +604,8 @@
 .mj-markdown-container .svg-rendered {
   margin: 1em 0;
   padding: 1em;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   text-align: center;
   overflow: auto;
@@ -660,13 +616,7 @@
   height: auto;
 }
 
-/* Dark mode for SVG rendered content */
-@media (prefers-color-scheme: dark) {
-  .mj-markdown-container.dark-mode .svg-rendered {
-    background: #1f2937;
-    border-color: #374151;
-  }
-}
+/* Dark mode for SVG rendered content — handled automatically by --mj-* semantic tokens */
 
 /* ============================================
    Print Styles

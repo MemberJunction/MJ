@@ -1,13 +1,12 @@
-import { Component, ViewContainerRef, ElementRef, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
-import { Router, ActivatedRoute } from '@angular/router';
-import { ActionEntity, AIAgentActionEntity, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentTypeEntity, AIAgentRelationshipEntity } from '@memberjunction/core-entities';
-import { AIAgentRunEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
-import { RegisterClass, MJGlobal } from '@memberjunction/global';
+import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, inject } from '@angular/core';
+import { MJActionEntity, MJAIAgentActionEntity, MJAIAgentLearningCycleEntity, MJAIAgentNoteEntity, MJAIAgentPromptEntity, MJAIAgentTypeEntity, MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
+import { RegisterClass, MJGlobal , UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { AIAgentFormComponent } from '../../generated/Entities/AIAgent/aiagent.form.component';
+import { MJAIAgentFormComponent } from '../../generated/Entities/MJAIAgent/mjaiagent.form.component';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AIAgentManagementService } from './ai-agent-management.service';
@@ -30,9 +29,9 @@ export type SubAgentFilterType = 'all' | 'child' | 'related';
  * Interface for unified sub-agent display
  */
 export interface UnifiedSubAgent {
-    agent: AIAgentEntityExtended;
+    agent: MJAIAgentEntityExtended;
     type: 'child' | 'related';
-    relationship?: AIAgentRelationshipEntity;  // Only for related sub-agents
+    relationship?: MJAIAgentRelationshipEntity;  // Only for related sub-agents
 }
 
 /**
@@ -65,16 +64,16 @@ export interface UnifiedSubAgent {
  * <mj-ai-agent-form [recordId]="agentId"></mj-ai-agent-form>
  * ```
  */
-@RegisterClass(BaseFormComponent, 'AI Agents')
+@RegisterClass(BaseFormComponent, 'MJ: AI Agents')
 @Component({
   standalone: false,
     selector: 'mj-ai-agent-form',
     templateUrl: './ai-agent-form.component.html',
     styleUrls: ['./ai-agent-form.component.css']
 })
-export class AIAgentFormComponentExtended extends AIAgentFormComponent implements OnDestroy {
+export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent implements OnDestroy {
     /** The AI Agent entity being edited */
-    public record!: AIAgentEntityExtended;
+    public record!: MJAIAgentEntityExtended;
     
     /** Subject for managing component lifecycle and cleaning up subscriptions */
     private destroy$ = new Subject<void>();
@@ -117,7 +116,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
     
     /** The agent type entity for this agent */
-    public agentType: AIAgentTypeEntity | null = null;
+    public agentType: MJAIAgentTypeEntity | null = null;
     
     /** Reference to the dynamically loaded custom section component */
     private customSectionComponent: BaseFormSectionComponent | null = null;
@@ -185,7 +184,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     // === Related Entity Data for Display ===
     /** Array of sub-agent entities for card display (DEPRECATED - use allSubAgents) */
-    public subAgents: AIAgentEntityExtended[] = [];
+    public subAgents: MJAIAgentEntityExtended[] = [];
 
     /** Unified sub-agent data (both child and related) */
     private allSubAgents: UnifiedSubAgent[] = [];
@@ -206,34 +205,34 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
     
     /** Array of agent prompt entities for card display */
-    public agentPrompts: AIPromptEntityExtended[] = [];
+    public agentPrompts: MJAIPromptEntityExtended[] = [];
     
     /** Array of agent action entities for card display */
-    public agentActions: ActionEntity[] = [];
+    public agentActions: MJActionEntity[] = [];
     
     
     /** Array of learning cycle entities for display */
-    public learningCycles: AIAgentLearningCycleEntity[] = [];
+    public learningCycles: MJAIAgentLearningCycleEntity[] = [];
     
     /** Array of agent note entities for display */
-    public agentNotes: AIAgentNoteEntity[] = [];
+    public agentNotes: MJAIAgentNoteEntity[] = [];
     
     /** Array of recent execution records for history display */
-    public recentExecutions: AIAgentRunEntityExtended[] = [];
+    public recentExecutions: MJAIAgentRunEntityExtended[] = [];
     public totalExecutionHistoryCount: number = 0;
     /** Track which execution cards are expanded */
     public expandedExecutions: { [key: string]: boolean } = {};
 
     /** Search functionality for execution history */
     public executionSearchText: string = '';
-    public filteredExecutions: AIAgentRunEntityExtended[] = [];
+    public filteredExecutions: MJAIAgentRunEntityExtended[] = [];
 
     /** Pagination state for execution history */
     public executionHistoryPageSize: number = 20;
     public executionHistoryCurrentPage: number = 1;
     public isLoadingPage: boolean = false;
     /** Cache all loaded execution records for pagination */
-    private allLoadedExecutions: AIAgentRunEntityExtended[] = [];
+    private allLoadedExecutions: MJAIAgentRunEntityExtended[] = [];
     
     // === Loading States ===
     /** Main loading state for initial data load */
@@ -298,7 +297,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             return;
         }
 
-        this.selectedContextCompressionPrompt = AIEngineBase.Instance.Prompts.find(p => p.ID === this.record.ContextCompressionPromptID);
+        this.selectedContextCompressionPrompt = AIEngineBase.Instance.Prompts.find(p => UUIDsEqual(p.ID, this.record.ContextCompressionPromptID));
         if (!this.selectedContextCompressionPrompt) {
             console.warn('Context compression prompt not found:', this.record.ContextCompressionPromptID);
         }
@@ -371,17 +370,17 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     /** Check if user can create AI Agent Actions */
     public get UserCanCreateActions(): boolean {
-        return this.checkEntityPermission('AI Agent Actions', 'Create');
+        return this.checkEntityPermission('MJ: AI Agent Actions', 'Create');
     }
 
     /** Check if user can update AI Agent Actions */
     public get UserCanUpdateActions(): boolean {
-        return this.checkEntityPermission('AI Agent Actions', 'Update');
+        return this.checkEntityPermission('MJ: AI Agent Actions', 'Update');
     }
 
     /** Check if user can delete AI Agent Actions */
     public get UserCanDeleteActions(): boolean {
-        return this.checkEntityPermission('AI Agent Actions', 'Delete');
+        return this.checkEntityPermission('MJ: AI Agent Actions', 'Delete');
     }
 
     /** Check if user can create AI Agent Prompts */
@@ -401,37 +400,37 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     /** Check if user can create AI Agents (for sub-agents) */
     public get UserCanCreateSubAgents(): boolean {
-        return this.checkEntityPermission('AI Agents', 'Create');
+        return this.checkEntityPermission('MJ: AI Agents', 'Create');
     }
 
     /** Check if user can update AI Agents (for sub-agents) */
     public get UserCanUpdateSubAgents(): boolean {
-        return this.checkEntityPermission('AI Agents', 'Update');
+        return this.checkEntityPermission('MJ: AI Agents', 'Update');
     }
 
     /** Check if user can delete AI Agents (for sub-agents) */
     public get UserCanDeleteSubAgents(): boolean {
-        return this.checkEntityPermission('AI Agents', 'Delete');
+        return this.checkEntityPermission('MJ: AI Agents', 'Delete');
     }
 
     /** Check if user can create AI Agent Notes */
     public get UserCanCreateNotes(): boolean {
-        return this.checkEntityPermission('AI Agent Notes', 'Create');
+        return this.checkEntityPermission('MJ: AI Agent Notes', 'Create');
     }
 
     /** Check if user can update AI Agent Notes */
     public get UserCanUpdateNotes(): boolean {
-        return this.checkEntityPermission('AI Agent Notes', 'Update');
+        return this.checkEntityPermission('MJ: AI Agent Notes', 'Update');
     }
 
     /** Check if user can delete AI Agent Notes */
     public get UserCanDeleteNotes(): boolean {
-        return this.checkEntityPermission('AI Agent Notes', 'Delete');
+        return this.checkEntityPermission('MJ: AI Agent Notes', 'Delete');
     }
 
     /** Check if user can view AI Agent Learning Cycles */
     public get UserCanViewLearningCycles(): boolean {
-        return this.checkEntityPermission('AI Agent Learning Cycles', 'Read');
+        return this.checkEntityPermission('MJ: AI Agent Learning Cycles', 'Read');
     }
 
     /** Check if user can view AI Agent Runs (execution history) */
@@ -441,7 +440,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
     /** Check if user can create AI Prompts (needed for creating new prompts) */
     public get UserCanCreateAIPrompts(): boolean {
-        return this.checkEntityPermission('AI Prompts', 'Create');
+        return this.checkEntityPermission('MJ: AI Prompts', 'Create');
     }
 
     /** Check if user can create both AI Prompts and AI Agent Prompts (for createNewPrompt functionality) */
@@ -519,9 +518,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     // === Original State for Cancel/Revert ===
     /** Snapshots of original data for reverting UI changes */
     private originalSnapshots: {
-        agentPrompts: AIPromptEntityExtended[];
-        agentActions: ActionEntity[];
-        subAgents: AIAgentEntityExtended[];
+        agentPrompts: MJAIPromptEntityExtended[];
+        agentActions: MJActionEntity[];
+        subAgents: MJAIAgentEntityExtended[];
         promptCount: number;
         actionCount: number;
         subAgentCount: number;
@@ -530,21 +529,13 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         executionHistoryCount: number;
     } | null = null;
 
-    constructor(
-        elementRef: ElementRef,
-        protected override sharedService: SharedService,
-        router: Router,
-        route: ActivatedRoute,
-        cdr: ChangeDetectorRef,
-        private dialogService: DialogService,
-        private viewContainerRef: ViewContainerRef,
-        private agentManagementService: AIAgentManagementService,
-        private testHarnessService: AITestHarnessDialogService,
-        private createAgentService: CreateAgentService
-    ) {
-        super(elementRef, sharedService, router, route, cdr);
-        // Note: navigationService is inherited from BaseFormComponent
-    }
+    // Dependency injection using inject() function
+    private sharedService = inject(SharedService);
+    private dialogService = inject(DialogService);
+    private viewContainerRef = inject(ViewContainerRef);
+    private agentManagementService = inject(AIAgentManagementService);
+    private testHarnessService = inject(AITestHarnessDialogService);
+    private createAgentService = inject(CreateAgentService);
     
     /**
      * After view initialization, load any custom form section if defined
@@ -622,7 +613,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             this.allSubAgents = [];
 
             // Load child sub-agents (ParentID-based)
-            const childAgents = AIEngineBase.Instance.Agents.filter(a => a.ParentID === this.record.ID);
+            const childAgents = AIEngineBase.Instance.Agents.filter(a => UUIDsEqual(a.ParentID, this.record.ID));
             for (const agent of childAgents) {
                 this.allSubAgents.push({
                     agent,
@@ -635,7 +626,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
             // Load related sub-agents (Relationship-based)
             const rv = new RunView();
-            const relationshipsResult = await rv.RunView<AIAgentRelationshipEntity>({
+            const relationshipsResult = await rv.RunView<MJAIAgentRelationshipEntity>({
                 EntityName: 'MJ: AI Agent Relationships',
                 ExtraFilter: `AgentID='${this.record.ID}' AND Status='Active'`,
                 ResultType: 'entity_object'
@@ -644,7 +635,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             if (relationshipsResult.Success && relationshipsResult.Results) {
                 for (const relationship of relationshipsResult.Results) {
                     const agent = AIEngineBase.Instance.Agents.find(
-                        a => a.ID === relationship.SubAgentID
+                        a => UUIDsEqual(a.ID, relationship.SubAgentID)
                     );
 
                     if (agent) {
@@ -666,20 +657,20 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             });
 
             this.agentPrompts = AIEngineBase.Instance.Prompts.filter(p => {
-                const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => ap.AgentID === this.record.ID);
-                return filteredAgentPrompts.some(ap => ap.PromptID === p.ID);
+                const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID));
+                return filteredAgentPrompts.some(ap => UUIDsEqual(ap.PromptID, p.ID));
             });
 
             this.agentActions = ActionEngineBase.Instance.Actions.filter(a => {
-                const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => aa.AgentID === this.record.ID);
-                return filteredAgentActions.some(aa => aa.ActionID === a.ID);
+                const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => UUIDsEqual(aa.AgentID, this.record.ID));
+                return filteredAgentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID));
             });
 
             // Execute all queries in a single batch for better performance
             const results = await rv.RunViews([
                 // Learning cycles
                 {
-                    EntityName: 'AI Agent Learning Cycles',
+                    EntityName: 'MJ: AI Agent Learning Cycles',
                     // limit fields
                     Fields: ["ID","Name","StartedAt", "EndedAt","Status","AgentID"],
                     ExtraFilter: `AgentID='${this.record.ID}'`,
@@ -687,7 +678,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 },
                 // Notes
                 {
-                    EntityName: 'AI Agent Notes',
+                    EntityName: 'MJ: AI Agent Notes',
                     // limit fields
                     Fields: ["ID","Name", "AgentID", "AgentNoteType","AgentNoteTypeID","UserID"],
                     ExtraFilter: `AgentID='${this.record.ID}'`
@@ -715,11 +706,11 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
             // Process results in the same order as queries
             if (results && results.length > 0) {
-                this.learningCycles = results[0].Results as AIAgentLearningCycleEntity[] || [];
+                this.learningCycles = results[0].Results as MJAIAgentLearningCycleEntity[] || [];
 
-                this.agentNotes = results[1].Results as AIAgentNoteEntity[] || [];
+                this.agentNotes = results[1].Results as MJAIAgentNoteEntity[] || [];
 
-                this.recentExecutions = results[2].Results as AIAgentRunEntityExtended[] || [];
+                this.recentExecutions = results[2].Results as MJAIAgentRunEntityExtended[] || [];
                 this.totalExecutionHistoryCount = results[2].TotalRowCount;
 
                 // Initialize cache with first page of results
@@ -826,7 +817,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             } else {
                 // Need to load from database
                 const rv = new RunView();
-                const result = await rv.RunView<AIAgentRunEntityExtended>({
+                const result = await rv.RunView<MJAIAgentRunEntityExtended>({
                     EntityName: 'MJ: AI Agent Runs',
                     Fields: [
                         "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
@@ -895,7 +886,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         
         try {
             const md = new Metadata();
-            this.agentType = await md.GetEntityObject<AIAgentTypeEntity>('MJ: AI Agent Types');
+            this.agentType = await md.GetEntityObject<MJAIAgentTypeEntity>('MJ: AI Agent Types');
             if (this.agentType) {
                 await this.agentType.Load(this.record.TypeID);
             }
@@ -972,7 +963,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /** Load saved preferences for header state and section expand/collapse */
     private loadUserPreferences(): void {
         try {
-            const raw = UserInfoEngine.Instance.GetSetting(AIAgentFormComponentExtended.PREFS_KEY);
+            const raw = UserInfoEngine.Instance.GetSetting(MJAIAgentFormComponentExtended.PREFS_KEY);
             if (raw) {
                 const prefs = JSON.parse(raw);
                 this.HeaderCollapsed = prefs.headerCollapsed ?? false;
@@ -992,7 +983,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             sectionStates: this.SectionStates
         };
         UserInfoEngine.Instance.SetSettingDebounced(
-            AIAgentFormComponentExtended.PREFS_KEY,
+            MJAIAgentFormComponentExtended.PREFS_KEY,
             JSON.stringify(prefs)
         );
     }
@@ -1144,10 +1135,10 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      */
     public getStatusBadgeColor(): string {
         switch (this.record?.Status) {
-            case 'Active': return '#28a745';
-            case 'Pending': return '#ffc107';
-            case 'Disabled': return '#6c757d';
-            default: return '#6c757d';
+            case 'Active': return 'var(--mj-status-success)';
+            case 'Pending': return 'var(--mj-status-warning)';
+            case 'Disabled': return 'var(--mj-text-muted)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -1215,7 +1206,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Gets the icon for a sub-agent
      * Prioritizes LogoURL, falls back to IconClass, then default robot icon
      */
-    public getSubAgentIcon(subAgent: AIAgentEntityExtended): string {
+    public getSubAgentIcon(subAgent: MJAIAgentEntityExtended): string {
         if (subAgent?.LogoURL) {
             // LogoURL is used in img tag, not here
             return '';
@@ -1227,14 +1218,14 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Gets the icon class for an action
      * Falls back to default bolt icon if no IconClass is set
      */
-    public getActionIcon(action: ActionEntity): string {
+    public getActionIcon(action: MJActionEntity): string {
         return action?.IconClass || 'fa-solid fa-bolt';
     }
 
     /**
      * Checks if a sub-agent has a logo URL
      */
-    public hasSubAgentLogoURL(subAgent: AIAgentEntityExtended): boolean {
+    public hasSubAgentLogoURL(subAgent: MJAIAgentEntityExtended): boolean {
         return !!subAgent?.LogoURL;
     }
 
@@ -1357,8 +1348,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 next: async (result) => {
                     if (result && result.selectedPrompts.length > 0) {
                         // Filter out already linked or pending prompts
-                        const newPrompts = result.selectedPrompts.filter(prompt => 
-                            !allLinkedIds.includes(prompt.ID)
+                        const newPrompts = result.selectedPrompts.filter(prompt =>
+                            !allLinkedIds.some(id => UUIDsEqual(id, prompt.ID))
                         );
                         
                         if (newPrompts.length === 0) {
@@ -1373,7 +1364,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         // Add to pending changes (defer until save)
                         const md = new Metadata();
                         for (const prompt of newPrompts) {
-                            const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
+                            const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
                             agentPrompt.NewRecord();
                             agentPrompt.AgentID = this.record.ID;
                             agentPrompt.PromptID = prompt.ID;
@@ -1389,7 +1380,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         this.hasUnsavedChanges = true;
                         
                         // Update UI to show the new prompts (cast to extended type for display)
-                        this.agentPrompts.push(...(newPrompts as AIPromptEntityExtended[]));
+                        this.agentPrompts.push(...(newPrompts as MJAIPromptEntityExtended[]));
                         
                         // Mark for check instead of forcing immediate detection
                         this.cdr.markForCheck();
@@ -1447,7 +1438,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         // Get currently linked and pending action IDs for pre-selection
         const currentActionIds = this.agentActions.map(aa => aa.ID);
         const pendingAddIds = this.PendingRecords
-            .filter(p => p.entityObject.EntityInfo.Name === 'AI Agent Actions' && p.action === 'save')
+            .filter(p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Actions' && p.action === 'save')
             .map(p => p.entityObject.Get('ActionID'));
         const allLinkedIds = [...currentActionIds, ...pendingAddIds];
         
@@ -1460,8 +1451,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             next: async (selectedActions) => {
                 if (selectedActions && selectedActions.length > 0) {
                     // Filter out already linked or pending actions
-                    const newActions = selectedActions.filter(action => 
-                        !allLinkedIds.includes(action.ID)
+                    const newActions = selectedActions.filter(action =>
+                        !allLinkedIds.some(id => UUIDsEqual(id, action.ID))
                     );
                     
                     if (newActions.length === 0) {
@@ -1476,7 +1467,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     // Add to pending changes (defer until save)
                     const md = new Metadata();
                     for (const action of newActions) {
-                        const agentAction = await md.GetEntityObject<AIAgentActionEntity>('AI Agent Actions');
+                        const agentAction = await md.GetEntityObject<MJAIAgentActionEntity>('MJ: AI Agent Actions');
                         agentAction.NewRecord();
                         agentAction.AgentID = this.record.ID;
                         agentAction.ActionID = action.ID;
@@ -1543,17 +1534,17 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         switch (status?.toLowerCase()) {
             case 'completed':
             case 'success':
-                return '#28a745';
+                return 'var(--mj-status-success)';
             case 'failed':
             case 'error':
-                return '#dc3545';
+                return 'var(--mj-status-error)';
             case 'running':
             case 'in_progress':
-                return '#17a2b8';
+                return 'var(--mj-status-info)';
             case 'pending':
-                return '#ffc107';
+                return 'var(--mj-status-warning)';
             default:
-                return '#6c757d';
+                return 'var(--mj-text-muted)';
         }
     }
 
@@ -1689,9 +1680,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Gets the priority badge color
      */
     public getPriorityBadgeColor(priority: number): string {
-        if (priority <= 1) return '#dc3545'; // High priority - red
-        if (priority <= 5) return '#ffc107'; // Medium priority - yellow
-        return '#28a745'; // Low priority - green
+        if (priority <= 1) return 'var(--mj-status-error)'; // High priority - red
+        if (priority <= 5) return 'var(--mj-status-warning)'; // Medium priority - yellow
+        return 'var(--mj-status-success)'; // Low priority - green
     }
 
     /**
@@ -1769,7 +1760,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
         try {
             const rv = new RunView();
-            const result = await rv.RunView<AIAgentRunEntityExtended>({
+            const result = await rv.RunView<MJAIAgentRunEntityExtended>({
                 EntityName: 'MJ: AI Agent Runs',
                 Fields: [
                     "ID","AgentID","ParentRunID","Status","StartedAt","CompletedAt",
@@ -1803,7 +1794,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Gets a preview of the execution result for collapsed view
      */
-    public getExecutionResultPreview(execution: AIAgentRunEntityExtended, trimLongMessages: boolean): string {
+    public getExecutionResultPreview(execution: MJAIAgentRunEntityExtended, trimLongMessages: boolean): string {
         try {
             if (!execution.Result) return 'No result';
             
@@ -1838,7 +1829,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Gets the full execution result message for expanded view
      */
-    public getExecutionResultMessage(execution: AIAgentRunEntityExtended): string {
+    public getExecutionResultMessage(execution: MJAIAgentRunEntityExtended): string {
         try {
             if (!execution.Result) return 'No result';
             
@@ -1952,7 +1943,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                             }
 
                             // Create the AI Agent Prompt link
-                            const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts');
+                            const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
                             agentPrompt.NewRecord();
                             agentPrompt.AgentID = this.record.ID;
                             agentPrompt.PromptID = result.prompt.ID;
@@ -2011,7 +2002,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Removes a prompt from the agent (deferred until save)
      */
-    public async removePrompt(prompt: AIPromptEntityExtended, event: Event) {
+    public async removePrompt(prompt: MJAIPromptEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         const confirmDialog = this.dialogService.open({
@@ -2033,7 +2024,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     const pendingAddIndex = this.PendingRecords.findIndex(
                         p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Prompts' && 
                              p.action === 'save' && 
-                             p.entityObject.Get('PromptID') === prompt.ID
+                             UUIDsEqual(p.entityObject.Get('PromptID'), prompt.ID)
                     );
 
                     if (pendingAddIndex >= 0) {
@@ -2042,7 +2033,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     } else {
                         // Find the existing AI Agent Prompt link record for deferred deletion
                         const rv = new RunView();
-                        const linkResult = await rv.RunView<AIAgentPromptEntity>({
+                        const linkResult = await rv.RunView<MJAIAgentPromptEntity>({
                             EntityName: 'MJ: AI Agent Prompts',
                             ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'`,
                             ResultType: 'entity_object'
@@ -2062,7 +2053,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     }
 
                     // Remove from UI immediately
-                    const promptIndex = this.agentPrompts.findIndex(p => p.ID === prompt.ID);
+                    const promptIndex = this.agentPrompts.findIndex(p => UUIDsEqual(p.ID, prompt.ID));
                     if (promptIndex >= 0) {
                         this.agentPrompts.splice(promptIndex, 1);
                     }
@@ -2109,7 +2100,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         try {
             // Get list of already pending sub-agent IDs to filter duplicates
             const pendingSubAgentIds = this.PendingRecords
-                .filter(p => p.entityObject.EntityInfo.Name === 'AI Agents' && 
+                .filter(p => p.entityObject.EntityInfo.Name === 'MJ: AI Agents' && 
                             p.action === 'save' && 
                             p.entityObject.Get('ParentID') === this.record.ID)
                 .map(p => p.entityObject.Get('ID'));
@@ -2126,8 +2117,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 next: async (result) => {
                     if (result && result.selectedAgents && result.selectedAgents.length > 0) {
                         // Filter out already linked or pending agents
-                        const newAgents = result.selectedAgents.filter(agent => 
-                            !allLinkedIds.includes(agent.ID)
+                        const newAgents = result.selectedAgents.filter(agent =>
+                            !allLinkedIds.some(id => UUIDsEqual(id, agent.ID))
                         );
                         
                         if (newAgents.length === 0) {
@@ -2142,7 +2133,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                         // Add to pending changes (defer until save)
                         const md = new Metadata();
                         for (const agent of newAgents) {
-                            const subAgentToUpdate = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+                            const subAgentToUpdate = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
                             await subAgentToUpdate.Load(agent.ID);
                             subAgentToUpdate.ParentID = this.record.ID;
                             // Database constraint requires ExposeAsAction = false for sub-agents
@@ -2195,7 +2186,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Removes a sub-agent from this agent (deferred until save)
      */
-    public async removeSubAgent(subAgent: AIAgentEntityExtended, event: Event) {
+    public async removeSubAgent(subAgent: MJAIAgentEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         const confirmDialog = this.dialogService.open({
@@ -2215,9 +2206,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 try {
                     // Check if this is a pending add (not yet in database)
                     const pendingAddIndex = this.PendingRecords.findIndex(
-                        p => p.entityObject.EntityInfo.Name === 'AI Agents' && 
+                        p => p.entityObject.EntityInfo.Name === 'MJ: AI Agents' && 
                              p.action === 'save' && 
-                             p.entityObject.Get('ID') === subAgent.ID &&
+                             UUIDsEqual(p.entityObject.Get('ID'), subAgent.ID) &&
                              p.entityObject.Get('ParentID') === this.record.ID
                     );
 
@@ -2227,7 +2218,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     } else {
                         // Add to pending removals (will restore to root agent)
                         const md = new Metadata();
-                        const subAgentToUpdate = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents');
+                        const subAgentToUpdate = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
                         await subAgentToUpdate.Load(subAgent.ID);
                         subAgentToUpdate.ParentID = null; // Will become a root agent
                         
@@ -2238,7 +2229,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     }
 
                     // Remove from UI immediately
-                    const subAgentIndex = this.subAgents.findIndex(sa => sa.ID === subAgent.ID);
+                    const subAgentIndex = this.subAgents.findIndex(sa => UUIDsEqual(sa.ID, subAgent.ID));
                     if (subAgentIndex >= 0) {
                         this.subAgents.splice(subAgentIndex, 1);
                     }
@@ -2278,7 +2269,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      * Gets the badge color for a sub-agent based on its type
      */
     public getSubAgentBadgeColor(item: UnifiedSubAgent): string {
-        return item.type === 'child' ? '#2196F3' : '#9C27B0';
+        return item.type === 'child' ? 'var(--mj-status-info)' : 'var(--mj-brand-primary)';
     }
 
     /**
@@ -2357,7 +2348,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                     if (success) {
                         // Remove from unified list
                         const index = this.allSubAgents.findIndex(s =>
-                            s.type === 'related' && s.relationship?.ID === item.relationship!.ID
+                            s.type === 'related' && UUIDsEqual(s.relationship?.ID, item.relationship!.ID)
                         );
                         if (index >= 0) {
                             this.allSubAgents.splice(index, 1);
@@ -2417,7 +2408,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Removes an action from the agent (deferred until save)
      */
-    public async removeAction(action: ActionEntity, event: Event) {
+    public async removeAction(action: MJActionEntity, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         const confirmDialog = this.dialogService.open({
@@ -2437,9 +2428,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 try {
                 // Check if this is a pending add (not yet in database)
                 const pendingAddIndex = this.PendingRecords.findIndex(
-                    p => p.entityObject.EntityInfo.Name === 'AI Agent Actions' && 
+                    p => p.entityObject.EntityInfo.Name === 'MJ: AI Agent Actions' && 
                          p.action === 'save' && 
-                         p.entityObject.Get('ActionID') === action.ID
+                         UUIDsEqual(p.entityObject.Get('ActionID'), action.ID)
                 );
 
                 if (pendingAddIndex >= 0) {
@@ -2448,8 +2439,8 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 } else {
                     // Find the existing AI Agent Action link record for deferred deletion
                     const rv = new RunView();
-                    const linkResult = await rv.RunView<AIAgentActionEntity>({
-                        EntityName: 'AI Agent Actions',
+                    const linkResult = await rv.RunView<MJAIAgentActionEntity>({
+                        EntityName: 'MJ: AI Agent Actions',
                         ExtraFilter: `AgentID='${this.record.ID}' AND ActionID='${action.ID}'`,
                         ResultType: 'entity_object'
                     });
@@ -2468,7 +2459,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 }
 
                 // Remove from UI immediately
-                const actionIndex = this.agentActions.findIndex(a => a.ID === action.ID);
+                const actionIndex = this.agentActions.findIndex(a => UUIDsEqual(a.ID, action.ID));
                 if (actionIndex >= 0) {
                     this.agentActions.splice(actionIndex, 1);
                 }
@@ -2500,15 +2491,15 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Opens the advanced settings dialog for a prompt
      */
-    public async openPromptAdvancedSettings(prompt: AIPromptEntityExtended, event: Event) {
+    public async openPromptAdvancedSettings(prompt: MJAIPromptEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         try {
-            // Find the corresponding AIAgentPromptEntity for this prompt
+            // Find the corresponding MJAIAgentPromptEntity for this prompt
             // Get all agent prompts for validation
 
-            const allAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => ap.AgentID === this.record.ID);
-            const agentPrompt = allAgentPrompts.find(ap => ap.PromptID === prompt.ID);
+            const allAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => UUIDsEqual(ap.AgentID, this.record.ID));
+            const agentPrompt = allAgentPrompts.find(ap => UUIDsEqual(ap.PromptID, prompt.ID));
             if (!agentPrompt) {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     'Unable to find prompt configuration for advanced settings',
@@ -2585,12 +2576,12 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     /**
      * Opens the advanced settings dialog for a sub-agent
      */
-    public async openSubAgentAdvancedSettings(subAgentEntity: AIAgentEntityExtended, event: Event) {
+    public async openSubAgentAdvancedSettings(subAgentEntity: MJAIAgentEntityExtended, event: Event) {
         event.stopPropagation(); // Prevent navigation
         
         try {
             // Get all sub-agents under the same parent for validation
-            const allSubAgents = AIEngineBase.Instance.Agents.filter(sa => sa.ParentID === subAgentEntity.ParentID);
+            const allSubAgents = AIEngineBase.Instance.Agents.filter(sa => UUIDsEqual(sa.ParentID, subAgentEntity.ParentID));
 
             this.agentManagementService.openSubAgentAdvancedSettingsDialog({
                 subAgent: subAgentEntity,
@@ -2617,7 +2608,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                                 );
 
                                 // Update the local sub-agent data to reflect changes
-                                const localSubAgent = this.subAgents.find(sa => sa.ID === subAgentEntity.ID);
+                                const localSubAgent = this.subAgents.find(sa => UUIDsEqual(sa.ID, subAgentEntity.ID));
                                 if (localSubAgent) {
                                     localSubAgent.ExecutionOrder = formData.executionOrder;
                                     localSubAgent.ExecutionMode = formData.executionMode;
@@ -2728,7 +2719,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
             
             // 1. First save Templates (they have no dependencies)
             const templateRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name === 'Templates'
+                p.entityObject.EntityInfo.Name === 'MJ: Templates'
             );
             for (const templateRecord of templateRecords) {
                 templateRecord.entityObject.TransactionGroup = transactionGroup;
@@ -2749,7 +2740,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
             // 2. Save Template Contents (depend on Templates)
             const templateContentRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name === 'Template Contents'
+                p.entityObject.EntityInfo.Name === 'MJ: Template Contents'
             );
             for (const contentRecord of templateContentRecords) {
                 contentRecord.entityObject.TransactionGroup = transactionGroup;
@@ -2770,7 +2761,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
             // 3. Save AI Prompts (depend on Templates)
             const promptRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name === 'AI Prompts'
+                p.entityObject.EntityInfo.Name === 'MJ: AI Prompts'
             );
             for (const promptRecord of promptRecords) {
                 promptRecord.entityObject.TransactionGroup = transactionGroup;
@@ -2803,14 +2794,14 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
             // 4.1. Handle deferred sub-agent creation - set ParentID on any sub-agents created before parent was saved
             const subAgentRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name === 'AI Agents' && 
+                p.entityObject.EntityInfo.Name === 'MJ: AI Agents' && 
                 p.action === 'save' && 
                 p.entityObject.Get('_tempParentId') === this.record.ID
             );
             
             for (const subAgentRecord of subAgentRecords) {
-                // Cast to AIAgentEntityExtended to access ParentID property
-                const subAgent = subAgentRecord.entityObject as AIAgentEntityExtended;
+                // Cast to MJAIAgentEntityExtended to access ParentID property
+                const subAgent = subAgentRecord.entityObject as MJAIAgentEntityExtended;
                 // Set the proper ParentID now that parent is saved
                 subAgent.ParentID = this.record.ID;
                 // Clear the temporary reference
@@ -2819,9 +2810,9 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
 
             // 5. Save all other pending records (AI Agent Actions, AI Agent Prompts, etc.)
             const otherRecords = this.PendingRecords.filter(p => 
-                p.entityObject.EntityInfo.Name !== 'Templates' &&
-                p.entityObject.EntityInfo.Name !== 'Template Contents' &&
-                p.entityObject.EntityInfo.Name !== 'AI Prompts'
+                p.entityObject.EntityInfo.Name !== 'MJ: Templates' &&
+                p.entityObject.EntityInfo.Name !== 'MJ: Template Contents' &&
+                p.entityObject.EntityInfo.Name !== 'MJ: AI Prompts'
             );
             for (const record of otherRecords) {
                 record.entityObject.TransactionGroup = transactionGroup;
@@ -2882,7 +2873,7 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
      */
     public navigateToParentAgent(): void {
         if (this.record.ParentID) {
-            this.navigateToEntity('AI Agents', this.record.ParentID);
+            this.navigateToEntity('MJ: AI Agents', this.record.ParentID);
         }
     }
 

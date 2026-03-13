@@ -4,7 +4,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { BaseFileStorageAction } from "./base-file-storage.action";
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
-import * as ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 
 /**
  * Smart file content retrieval action that automatically handles content extraction

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
 import { firstValueFrom } from 'rxjs';
 
 /**
@@ -20,13 +20,13 @@ export class UserAvatarService {
    * Syncs user avatar from an image URL (typically from auth provider profile).
    * Downloads the image, converts to Base64, and saves to the user entity.
    *
-   * @param user - The UserEntity to update with avatar data
+   * @param user - The MJUserEntity to update with avatar data
    * @param imageUrl - URL to the image (can be from Microsoft Graph, Google, etc.)
    * @param authHeaders - Optional headers for authenticated requests (e.g., { 'Authorization': 'Bearer token' })
    * @returns Promise<boolean> - true if avatar was synced and saved, false otherwise
    */
   async syncFromImageUrl(
-    user: UserEntity,
+    user: MJUserEntity,
     imageUrl: string,
     authHeaders?: Record<string, string>
   ): Promise<boolean> {
@@ -123,11 +123,11 @@ export class UserAvatarService {
    * Gets the display URL for an avatar based on user settings
    * Priority: UserImageURL > UserImageIconClass > default
    *
-   * @param user - The UserEntity
+   * @param user - The MJUserEntity
    * @param defaultUrl - Optional default URL if no avatar is set
    * @returns The URL to display, or null if using an icon
    */
-  getAvatarDisplayUrl(user: UserEntity, defaultUrl: string = 'assets/user.png'): string | null {
+  getAvatarDisplayUrl(user: MJUserEntity, defaultUrl: string = 'assets/user.png'): string | null {
     if (user.UserImageURL) {
       return user.UserImageURL;
     }
@@ -142,7 +142,7 @@ export class UserAvatarService {
   /**
    * Gets the icon class for an avatar if using icon mode
    */
-  getAvatarIconClass(user: UserEntity, defaultIcon: string = 'fa-solid fa-user'): string | null {
+  getAvatarIconClass(user: MJUserEntity, defaultIcon: string = 'fa-solid fa-user'): string | null {
     if (user.UserImageIconClass) {
       return user.UserImageIconClass;
     }

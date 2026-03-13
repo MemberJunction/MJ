@@ -5,7 +5,7 @@ import sql from 'mssql';
 import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
-import { UserEntity, UserEntityType } from '@memberjunction/core-entities';
+import { MJUserEntity, MJUserEntityType } from '@memberjunction/core-entities';
 import { AuthProviderFactory } from './AuthProviderFactory.js';
 import { initializeAuthProviders } from './initializeProviders.js';
 
@@ -47,20 +47,25 @@ const refreshUserCache = async (dataSource?: sql.ConnectionPool) => {
 };
 
 /**
- * Gets validation options for a specific issuer
- * This maintains backward compatibility with the old structure
+ * Gets validation options for a specific issuer.
+ * When multiple providers share the same issuer (e.g. two Auth0 apps on
+ * the same domain with different audiences/client IDs), all unique audiences
+ * are aggregated into an array. jwt.verify() natively accepts string | string[].
  */
-export const getValidationOptions = (issuer: string): { audience: string; jwksUri: string } | undefined => {
+export const getValidationOptions = (issuer: string): { audience: string | string[]; jwksUri: string } | undefined => {
   const factory = AuthProviderFactory.getInstance();
-  const provider = factory.getByIssuer(issuer);
-  
-  if (!provider) {
+  const providers = factory.getAllByIssuer(issuer);
+
+  if (providers.length === 0) {
     return undefined;
   }
 
+  // Collect unique audiences from all providers matching this issuer
+  const audiences = [...new Set(providers.map(p => p.audience))];
+
   return {
-    audience: provider.audience,
-    jwksUri: provider.jwksUri
+    audience: audiences.length === 1 ? audiences[0] : audiences,
+    jwksUri: providers[0].jwksUri  // Same issuer = same JWKS endpoint
   };
 };
 
@@ -68,7 +73,7 @@ export const getValidationOptions = (issuer: string): { audience: string; jwksUr
  * Backward compatible validationOptions object
  * @deprecated Use getValidationOptions() or AuthProviderRegistry instead
  */
-export const validationOptions: Record<string, { audience: string; jwksUri: string }> = new Proxy({}, {
+export const validationOptions: Record<string, { audience: string | string[]; jwksUri: string }> = new Proxy({}, {
   get: (target, prop: string) => {
     return getValidationOptions(prop);
   },
@@ -227,13 +232,13 @@ export const verifyUserRecord = async (
         // we have a domain from the request that matches one of the domains provided by the configuration, so we will create a new user
         console.warn(`User ${email} not found in cache. Attempting to create a new user...`);
         const newUserCreator: NewUserBase = MJGlobal.Instance.ClassFactory.CreateInstance<NewUserBase>(NewUserBase); // this will create the object that handles creating the new user for us
-        const newUser: UserEntity | null = await newUserCreator.createNewUser(firstName, lastName, email);
+        const newUser: MJUserEntity | null = await newUserCreator.createNewUser(firstName, lastName, email);
         if (newUser) {
           // new user worked! we already have the stuff we need for the cache, so no need to go to the DB now, just create a new UserInfo object and use the return value from the createNewUser method
           // to init it, including passing in the role list for the user.
           const md: Metadata = new Metadata();
 
-          const initData: UserEntityType & { UserRoles: { UserID: string; RoleName: string; RoleID: string }[] } = newUser.GetAll();
+          const initData: MJUserEntityType & { UserRoles: { UserID: string; RoleName: string; RoleID: string }[] } = newUser.GetAll();
 
           initData.UserRoles = configInfo.userHandling.newUserRoles.map((role) => {
             const roleInfo: RoleInfo | undefined = md.Roles.find((r) => r.Name === role);

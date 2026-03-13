@@ -1,4 +1,4 @@
-import { RecommendationEntity, RecommendationItemEntity } from '@memberjunction/core-entities';
+import { MJRecommendationEntity, MJRecommendationItemEntity } from '@memberjunction/core-entities';
 import { LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { RecommendationRequest, RecommendationResult } from './generic/types';
 
@@ -20,7 +20,7 @@ export abstract class RecommendationProviderBase {
   
   /**
    * For each entry in the request.Recommendations array, the provider's external API is called to
-   * produce zero or more {@link RecommendationItemEntity} records.
+   * produce zero or more {@link MJRecommendationItemEntity} records.
    *
    * @param request - The Recommendations to request from this provider
    */
@@ -32,7 +32,7 @@ export abstract class RecommendationProviderBase {
    * @param recommendation 
    * @param RunID 
    */
-  protected async SaveRecommendation(recommendation: RecommendationEntity, RunID: string, items: RecommendationItemEntity[]): Promise<boolean> {
+  protected async SaveRecommendation(recommendation: MJRecommendationEntity, RunID: string, items: MJRecommendationItemEntity[]): Promise<boolean> {
     recommendation.RecommendationRunID = RunID;
     const recommendationSaveResult: boolean = await recommendation.Save();
     if(!recommendationSaveResult) {

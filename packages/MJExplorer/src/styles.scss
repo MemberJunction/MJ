@@ -5,10 +5,10 @@
  * This file should only contain MJExplorer-specific customizations and overrides.
  *
  * Core styles (Golden Layout, Kendo theme, MJ components) are in the package.
- * MD3 design tokens are now in @memberjunction/ng-explorer-app styles/_md3-theme.scss
+ * MD3 design tokens are imported via @memberjunction/ng-explorer-app styles/_md3-theme.scss
  */
 
- @use "@memberjunction/ng-explorer-app/dist/styles.scss" as *;
+@use "@memberjunction/ng-explorer-app/dist/styles.scss";
 
 /* Application-specific layout adjustments */
 html,
@@ -36,17 +36,61 @@ kendo-drawer-container {
 /* Application-specific toolbar styles */
 .custom-toolbar {
     width: 100%;
-    background-color: #f6f6f6;
+    background-color: var(--mj-bg-surface-sunken);
     line-height: 10px;
     border-bottom: inset;
     border-bottom-width: 1px;
     padding: 3px 8px;
-    color: #656565;
+    color: var(--mj-text-muted);
 }
 
 .mail-box {
     margin-left: 20px;
     font-weight: bold;
     font-size: 17px;
+}
+
+/* ========================================
+   CodeMirror Dark Mode Overrides
+   CodeMirror injects scoped theme styles (e.g. .ͼ2 .cm-gutters) that can
+   override component-level CSS. These global selectors under [data-theme="dark"]
+   ensure CodeMirror elements respect the MJ dark theme.
+   ======================================== */
+[data-theme="dark"] {
+    .cm-editor {
+        background: var(--mj-bg-surface) !important;
+    }
+
+    .cm-gutters {
+        background: var(--mj-bg-surface-sunken) !important;
+        border-right-color: var(--mj-border-default) !important;
+        color: var(--mj-text-muted) !important;
+    }
+
+    .cm-activeLineGutter,
+    .cm-activeLine {
+        background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent) !important;
+    }
+
+    .cm-content {
+        color: var(--mj-text-primary) !important;
+        caret-color: var(--mj-text-primary) !important;
+    }
+
+    .cm-cursor {
+        border-left-color: var(--mj-text-primary) !important;
+    }
+
+    .cm-selectionBackground {
+        background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent) !important;
+    }
+
+    /* Syntax highlighting — brighter tones for dark backgrounds */
+    .cm-string   { color: #86efac !important; }  /* green-300: brighter green */
+    .cm-number   { color: #fde68a !important; }  /* amber-200: brighter yellow */
+    .cm-property { color: #93c5fd !important; }  /* blue-300: brighter blue */
+    .cm-keyword  { color: #fca5a5 !important; }  /* red-300: softer red */
+    .cm-atom     { color: #fde68a !important; }  /* amber-200 */
+    .cm-punctuation { color: var(--mj-text-secondary) !important; }
 }
 

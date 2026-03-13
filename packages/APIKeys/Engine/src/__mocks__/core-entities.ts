@@ -40,7 +40,7 @@ class MockBaseEntity {
 }
 
 // API Key Entity
-export class APIKeyEntity extends MockBaseEntity {
+export class MJAPIKeyEntity extends MockBaseEntity {
     get Hash(): string { return this['_data'].Hash as string || ''; }
     set Hash(value: string) { this['_data'].Hash = value; }
 
@@ -67,7 +67,7 @@ export class APIKeyEntity extends MockBaseEntity {
 }
 
 // API Application Entity
-export class APIApplicationEntity extends MockBaseEntity {
+export class MJAPIApplicationEntity extends MockBaseEntity {
     get Name(): string { return this['_data'].Name as string || ''; }
     set Name(value: string) { this['_data'].Name = value; }
 
@@ -79,7 +79,7 @@ export class APIApplicationEntity extends MockBaseEntity {
 }
 
 // API Key Application Entity (binding between key and app)
-export class APIKeyApplicationEntity extends MockBaseEntity {
+export class MJAPIKeyApplicationEntity extends MockBaseEntity {
     get APIKeyID(): string { return this['_data'].APIKeyID as string || ''; }
     set APIKeyID(value: string) { this['_data'].APIKeyID = value; }
 
@@ -88,7 +88,7 @@ export class APIKeyApplicationEntity extends MockBaseEntity {
 }
 
 // API Scope Entity
-export class APIScopeEntity extends MockBaseEntity {
+export class MJAPIScopeEntity extends MockBaseEntity {
     get Name(): string { return this['_data'].Name as string || ''; }
     set Name(value: string) { this['_data'].Name = value; }
 
@@ -112,7 +112,7 @@ export class APIScopeEntity extends MockBaseEntity {
 }
 
 // API Application Scope Entity (ceiling rules)
-export class APIApplicationScopeEntity extends MockBaseEntity {
+export class MJAPIApplicationScopeEntity extends MockBaseEntity {
     get ApplicationID(): string { return this['_data'].ApplicationID as string || ''; }
     set ApplicationID(value: string) { this['_data'].ApplicationID = value; }
 
@@ -133,7 +133,7 @@ export class APIApplicationScopeEntity extends MockBaseEntity {
 }
 
 // API Key Scope Entity (key-level scope grants)
-export class APIKeyScopeEntity extends MockBaseEntity {
+export class MJAPIKeyScopeEntity extends MockBaseEntity {
     get APIKeyID(): string { return this['_data'].APIKeyID as string || ''; }
     set APIKeyID(value: string) { this['_data'].APIKeyID = value; }
 
@@ -154,7 +154,7 @@ export class APIKeyScopeEntity extends MockBaseEntity {
 }
 
 // User Entity
-export class UserEntity extends MockBaseEntity {
+export class MJUserEntity extends MockBaseEntity {
     get Email(): string { return this['_data'].Email as string || ''; }
     set Email(value: string) { this['_data'].Email = value; }
 
@@ -166,7 +166,7 @@ export class UserEntity extends MockBaseEntity {
 }
 
 // API Key Usage Log Entity
-export class APIKeyUsageLogEntity extends MockBaseEntity {
+export class MJAPIKeyUsageLogEntity extends MockBaseEntity {
     get APIKeyID(): string { return this['_data'].APIKeyID as string || ''; }
     set APIKeyID(value: string) { this['_data'].APIKeyID = value; }
 

@@ -3,6 +3,16 @@
 # Learn more about .gitignore:
 #     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 
+# Playwright CLI/MCP snapshots, logs, and screenshots
+.playwright-cli/
+.playwright-mcp/*.log
+.playwright-mcp/*.png
+.playwright-mcp/*.jpeg
+
+# Experiment build artifacts (keep source, ignore generated output)
+experiments/**/dist/
+experiments/**/.angular/
+
 # Turbo local cache
 .turbo/
 
@@ -63,6 +73,7 @@ Thumbs.db
 .vscode/chrome
 
 *.env
+.env.*
 mj server info.txt
 member_junction_code_for_documentation.pdf
 member_junction_code_for_documentation.txt
@@ -75,8 +86,7 @@ packages/MJExplorer/src/environments/environment.development.ts
 packages/MJExplorer/src/environments/environment.staging.ts
 packages/MJExplorer/src/environments/environment.ts
 Schema Files/
-docs/
-!packages/DBAutoDoc/docs/
+/docs/
 SQL Scripts/generated/
 *.old
 SQL Scripts/internal_only/BC CDP - FULL TEXT Index Setup.sql
@@ -140,3 +150,15 @@ report.html
 packages/MJAPI/src/generated/class-registrations-manifest.ts
 packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
 .needs-manifest-rebuild
+
+# Test coverage output
+coverage/
+docker/workbench/workspace/.env.database
+docker/workbench/workspace/screenshots/
+test-run-log.txt
+docker/workbench/.env.database
+
+# Integration e2e scripts (may contain secrets)
+packages/Integration/e2e/
+packages/Integration/e2e-screenshots/
+packages/MJExplorer/src/environments/environment.development.ts.msal.bak

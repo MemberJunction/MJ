@@ -270,7 +270,7 @@ export class ResourceResolver implements Resolve<void> {
               ApplicationId: app.ID,
               Title: `${entityName}${filterSuffix}`,
               Configuration: {
-                resourceType: 'User Views',
+                resourceType: 'MJ: User Views',
                 Entity: entityName,
                 ExtraFilter: extraFilter,
                 isDynamic: true,
@@ -289,7 +289,7 @@ export class ResourceResolver implements Resolve<void> {
               ApplicationId: app.ID,
               Title: `View - ${viewId}`,
               Configuration: {
-                resourceType: 'User Views',
+                resourceType: 'MJ: User Views',
                 viewId,
                 recordId: viewId,
                 appName: appName,
@@ -533,7 +533,7 @@ export class ResourceResolver implements Resolve<void> {
         ApplicationId: SYSTEM_APP_ID,
         Title: `View - ${viewId}`,
         Configuration: {
-          resourceType: 'User Views',
+          resourceType: 'MJ: User Views',
           viewId,
           recordId: viewId
         },
@@ -555,7 +555,7 @@ export class ResourceResolver implements Resolve<void> {
         ApplicationId: SYSTEM_APP_ID,
         Title: `${entityName}${filterSuffix}`,
         Configuration: {
-          resourceType: 'User Views',
+          resourceType: 'MJ: User Views',
           Entity: entityName,
           ExtraFilter: extraFilter,
           isDynamic: true,

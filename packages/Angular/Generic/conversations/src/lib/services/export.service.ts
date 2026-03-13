@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { ConversationEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { RunView, UserInfo } from '@memberjunction/core';
 
 export type ExportFormat = 'json' | 'markdown' | 'html' | 'text';
@@ -66,18 +66,18 @@ export class ExportService {
   private async loadConversationData(
     conversationId: string,
     currentUser: UserInfo
-  ): Promise<{ conversation: ConversationEntity; details: ConversationDetailEntity[] }> {
+  ): Promise<{ conversation: MJConversationEntity; details: MJConversationDetailEntity[] }> {
     const rv = new RunView();
 
     // Load conversation and details in parallel
     const [conversationResult, detailsResult] = await rv.RunViews([
       {
-        EntityName: 'Conversations',
+        EntityName: 'MJ: Conversations',
         ExtraFilter: `ID='${conversationId}'`,
         ResultType: 'entity_object'
       },
       {
-        EntityName: 'Conversation Details',
+        EntityName: 'MJ: Conversation Details',
         ExtraFilter: `ConversationID='${conversationId}'`,
         OrderBy: 'Sequence ASC',
         ResultType: 'entity_object'
@@ -89,15 +89,15 @@ export class ExportService {
     }
 
     return {
-      conversation: conversationResult.Results[0] as ConversationEntity,
-      details: (detailsResult.Results || []) as ConversationDetailEntity[]
+      conversation: conversationResult.Results[0] as MJConversationEntity,
+      details: (detailsResult.Results || []) as MJConversationDetailEntity[]
     };
   }
 
   private exportAsJSON(
     data: {
-      conversation: ConversationEntity;
-      details: ConversationDetailEntity[];
+      conversation: MJConversationEntity;
+      details: MJConversationDetailEntity[];
     },
     options: Required<ExportOptions>
   ): string {
@@ -142,8 +142,8 @@ export class ExportService {
 
   private exportAsMarkdown(
     data: {
-      conversation: ConversationEntity;
-      details: ConversationDetailEntity[];
+      conversation: MJConversationEntity;
+      details: MJConversationDetailEntity[];
     },
     options: Required<ExportOptions>
   ): string {
@@ -177,8 +177,8 @@ export class ExportService {
 
   private exportAsHTML(
     data: {
-      conversation: ConversationEntity;
-      details: ConversationDetailEntity[];
+      conversation: MJConversationEntity;
+      details: MJConversationDetailEntity[];
     },
     options: Required<ExportOptions>
   ): string {
@@ -240,8 +240,8 @@ export class ExportService {
 
   private exportAsText(
     data: {
-      conversation: ConversationEntity;
-      details: ConversationDetailEntity[];
+      conversation: MJConversationEntity;
+      details: MJConversationDetailEntity[];
     },
     options: Required<ExportOptions>
   ): string {

@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { ResourceData, CommunicationRunEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCommunicationRunEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
@@ -79,12 +79,12 @@ import { RunView } from '@memberjunction/core';
         height: 100%;
         padding: 24px;
         overflow-y: auto;
-        background: var(--mat-sys-surface-container);
+        background: var(--mj-bg-surface);
     }
     .card {
-        background: var(--mat-sys-surface-container-lowest);
-        border: 1px solid var(--mat-sys-outline-variant);
-        border-radius: var(--mat-sys-corner-medium, 12px);
+        background: var(--mj-bg-surface-card);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 12px;
         overflow: hidden;
     }
     .card-header {
@@ -92,34 +92,34 @@ import { RunView } from '@memberjunction/core';
         justify-content: space-between;
         align-items: center;
         padding: 16px 20px 12px;
-        border-bottom: 1px solid var(--mat-sys-outline-variant);
+        border-bottom: 1px solid var(--mj-border-default);
     }
     .card-header h3 {
         font-size: 13px; font-weight: 700;
-        color: var(--mat-sys-on-surface);
+        color: var(--mj-text-primary);
         display: flex; align-items: center; gap: 8px;
         margin: 0;
     }
     .card-header h3 i {
-        color: var(--mat-sys-on-surface-variant); font-size: 12px;
+        color: var(--mj-text-muted); font-size: 12px;
     }
     .header-actions { display: flex; gap: 8px; }
 
     .tb-btn {
         display: inline-flex; align-items: center;
         gap: 6px; padding: 6px 12px;
-        border: 1px solid var(--mat-sys-outline-variant);
-        border-radius: var(--mat-sys-corner-extra-small, 4px);
-        background: var(--mat-sys-surface-container-lowest);
-        color: var(--mat-sys-on-surface-variant);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 4px;
+        background: var(--mj-bg-surface-card);
+        color: var(--mj-text-secondary);
         font-size: 12px; font-weight: 500;
         cursor: pointer; transition: all 0.15s ease;
         font-family: inherit;
     }
     .tb-btn:hover {
-        background: var(--mat-sys-surface-container-high);
-        border-color: var(--mat-sys-outline);
-        color: var(--mat-sys-on-surface);
+        background: var(--mj-bg-surface-sunken);
+        border-color: var(--mj-border-strong);
+        color: var(--mj-text-primary);
     }
     .tb-btn i { font-size: 12px; }
 
@@ -136,25 +136,34 @@ import { RunView } from '@memberjunction/core';
         padding: 20px;
     }
     .run-stat-card {
-        border-radius: var(--mat-sys-corner-medium, 12px);
+        border-radius: 12px;
         padding: 16px 20px;
         text-align: center;
     }
-    .run-stat-card.info { background: #ddf4ff; }
-    .run-stat-card.success { background: #d4f8e0; }
-    .run-stat-card.neutral { background: var(--mat-sys-surface-container-low); }
+    .run-stat-card.info {
+        background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+        border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+    }
+    .run-stat-card.success {
+        background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+        border: 1px solid color-mix(in srgb, var(--mj-status-success) 30%, transparent);
+    }
+    .run-stat-card.neutral {
+        background: var(--mj-bg-surface-sunken);
+        border: 1px solid var(--mj-border-default);
+    }
 
     .run-stat-value {
         font-size: 24px; font-weight: 800;
-        color: var(--mat-sys-on-surface);
+        color: var(--mj-text-primary);
     }
-    .run-stat-card.info .run-stat-value { color: #0969da; }
-    .run-stat-card.success .run-stat-value { color: #1b873f; }
+    .run-stat-card.info .run-stat-value { color: var(--mj-brand-primary); }
+    .run-stat-card.success .run-stat-value { color: var(--mj-status-success); }
 
     .run-stat-label {
         font-size: 11px; font-weight: 600;
         text-transform: uppercase; letter-spacing: 0.5px;
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
         margin-top: 2px;
     }
 
@@ -163,7 +172,7 @@ import { RunView } from '@memberjunction/core';
     .run-entry {
         display: flex; gap: 16px;
         padding: 16px 0;
-        border-bottom: 1px solid var(--mat-sys-surface-container);
+        border-bottom: 1px solid var(--mj-border-default);
         align-items: flex-start;
     }
     .run-entry:last-child { border-bottom: none; }
@@ -173,17 +182,17 @@ import { RunView } from '@memberjunction/core';
         border-radius: 50%;
         margin-top: 4px; flex-shrink: 0;
     }
-    .run-timeline-dot.complete { background: #1b873f; }
-    .run-timeline-dot.failed { background: #cf222e; }
+    .run-timeline-dot.complete { background: var(--mj-status-success); }
+    .run-timeline-dot.failed { background: var(--mj-status-error); }
     .run-timeline-dot.in-progress {
-        background: #0969da;
+        background: var(--mj-brand-primary);
         animation: pulse-dot 1.5s ease-in-out infinite;
     }
-    .run-timeline-dot.pending { background: #9a6700; }
+    .run-timeline-dot.pending { background: var(--mj-status-warning); }
 
     @keyframes pulse-dot {
-        0%, 100% { box-shadow: 0 0 0 0 rgba(9,105,218,0.4); }
-        50% { box-shadow: 0 0 0 6px rgba(9,105,218,0); }
+        0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-brand-primary) 40%, transparent); }
+        50% { box-shadow: 0 0 0 6px transparent; }
     }
 
     .run-entry-content { flex: 1; }
@@ -194,22 +203,38 @@ import { RunView } from '@memberjunction/core';
     }
     .run-entry-title {
         font-size: 13px; font-weight: 600;
-        color: var(--mat-sys-on-surface);
+        color: var(--mj-text-primary);
     }
     .run-status-badge {
         font-size: 10px; font-weight: 700;
         text-transform: uppercase; letter-spacing: 0.3px;
         padding: 3px 8px;
-        border-radius: var(--mat-sys-corner-extra-small, 4px);
+        border-radius: 4px;
     }
-    .run-status-badge.complete { background: #d4f8e0; color: #1b873f; }
-    .run-status-badge.failed { background: #ffdce0; color: #cf222e; }
-    .run-status-badge.pending { background: #fff0c7; color: #9a6700; }
-    .run-status-badge.in-progress { background: #ddf4ff; color: #0969da; }
+    .run-status-badge.complete {
+        background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-success);
+        border: 1px solid color-mix(in srgb, var(--mj-status-success) 30%, transparent);
+    }
+    .run-status-badge.failed {
+        background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-error);
+        border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, transparent);
+    }
+    .run-status-badge.pending {
+        background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+        color: var(--mj-status-warning);
+        border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
+    }
+    .run-status-badge.in-progress {
+        background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
+        border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+    }
 
     .run-entry-meta {
         font-size: 11px;
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
         margin-top: 4px;
         display: flex; align-items: center; gap: 12px;
     }
@@ -220,7 +245,7 @@ import { RunView } from '@memberjunction/core';
 
     .run-entry-comments {
         font-size: 12px;
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
         margin-top: 6px;
         font-style: italic;
     }
@@ -229,14 +254,14 @@ import { RunView } from '@memberjunction/core';
     .empty-state {
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
-        padding: 48px 0; color: var(--mat-sys-on-surface-variant);
+        padding: 48px 0; color: var(--mj-text-muted);
     }
     .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
     .empty-state p { margin: 0; font-size: 13px; }
   `]
 })
 export class CommunicationRunsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
-    public runs: CommunicationRunEntity[] = [];
+    public runs: MJCommunicationRunEntity[] = [];
     public isLoading = false;
     public summary = {
         active: 0,
@@ -266,24 +291,24 @@ export class CommunicationRunsResourceComponent extends BaseResourceComponent im
             const yesterdayIso = yesterday.toISOString();
 
             const [runsResult, activeResult, completedResult, failedResult] = await Promise.all([
-                rv.RunView<CommunicationRunEntity>({
-                    EntityName: 'Communication Runs',
+                rv.RunView<MJCommunicationRunEntity>({
+                    EntityName: 'MJ: Communication Runs',
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 50,
                     ResultType: 'entity_object'
                 }),
                 rv.RunView({
-                    EntityName: 'Communication Runs',
+                    EntityName: 'MJ: Communication Runs',
                     ExtraFilter: `Status = 'In-Progress'`,
                     ResultType: 'count_only'
                 }),
                 rv.RunView({
-                    EntityName: 'Communication Runs',
+                    EntityName: 'MJ: Communication Runs',
                     ExtraFilter: `EndedAt >= '${yesterdayIso}' AND Status = 'Complete'`,
                     ResultType: 'count_only'
                 }),
                 rv.RunView({
-                    EntityName: 'Communication Runs',
+                    EntityName: 'MJ: Communication Runs',
                     ExtraFilter: `EndedAt >= '${yesterdayIso}' AND Status = 'Failed'`,
                     ResultType: 'count_only'
                 })

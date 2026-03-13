@@ -1,9 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 
 import { UserInfo, RunView } from '@memberjunction/core';
-import { TaskEntity, TaskDependencyEntity, AIAgentRunEntity } from '@memberjunction/core-entities';
+import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { TaskComponent } from '@memberjunction/ng-tasks';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Full-page tasks view with task list and Gantt chart
@@ -63,14 +64,14 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .task-detail-view {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: white;
+      background: var(--mj-bg-surface);
     }
 
     .swoosh-in {
@@ -93,8 +94,8 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
       align-items: center;
       gap: 12px;
       padding: 16px 24px;
-      background: white;
-      border-bottom: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .breadcrumb-back {
@@ -103,9 +104,9 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
       gap: 8px;
       padding: 8px 12px;
       background: transparent;
-      border: 1px solid #D1D5DB;
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
-      color: #374151;
+      color: var(--mj-text-secondary);
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
@@ -113,8 +114,8 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
     }
 
     .breadcrumb-back:hover {
-      background: #F3F4F6;
-      border-color: #9CA3AF;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-text-disabled);
     }
 
     .breadcrumb-back i {
@@ -122,14 +123,14 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
     }
 
     .breadcrumb-divider {
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       font-size: 14px;
     }
 
     .breadcrumb-current {
       font-size: 14px;
       font-weight: 600;
-      color: #111827;
+      color: var(--mj-text-primary);
     }
   `]
 })
@@ -141,13 +142,13 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
   @Output() taskSelected = new EventEmitter<string | null>(); // Emits task ID when drill-down occurs, null when returning to list
 
-  public allTasks: TaskEntity[] = [];
-  public filteredTasks: TaskEntity[] = [];
-  public subTasks: TaskEntity[] = [];
-  public subTasksWithParent: TaskEntity[] = []; // Includes parent for Gantt hierarchy
-  public taskDependencies: TaskDependencyEntity[] = []; // Dependencies for Gantt links
+  public allTasks: MJTaskEntity[] = [];
+  public filteredTasks: MJTaskEntity[] = [];
+  public subTasks: MJTaskEntity[] = [];
+  public subTasksWithParent: MJTaskEntity[] = []; // Includes parent for Gantt hierarchy
+  public taskDependencies: MJTaskDependencyEntity[] = []; // Dependencies for Gantt links
   public agentRunMap = new Map<string, string>(); // Maps TaskID -> AgentRunID
-  public selectedTask: TaskEntity | null = null;
+  public selectedTask: MJTaskEntity | null = null;
   public showDetailAnimation: boolean = false;
   public isLoading: boolean = false;
   private aiEngineConfigured: boolean = false;
@@ -164,7 +165,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
 
     // Auto-drill into task if activeTaskId changes
     if (changes['activeTaskId'] && this.activeTaskId) {
-      const task = this.allTasks.find(t => t.ID === this.activeTaskId);
+      const task = this.allTasks.find(t => UUIDsEqual(t.ID, this.activeTaskId));
       if (task) {
         this.onTaskClick(task);
       }
@@ -186,7 +187,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
       console.log('📝 Tasks filter SQL:', this.baseFilter);
 
       // Load all tasks with the provided filter
-      const tasksResult = await rv.RunView<TaskEntity>(
+      const tasksResult = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',
           ExtraFilter: this.baseFilter,
@@ -231,7 +232,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     }
   }
 
-  public async onTaskClick(task: TaskEntity): Promise<void> {
+  public async onTaskClick(task: MJTaskEntity): Promise<void> {
     console.log('Task clicked:', task);
     this.selectedTask = task;
     this.showDetailAnimation = true;
@@ -243,7 +244,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     await this.loadTaskHierarchy(task);
   }
 
-  private async loadTaskHierarchy(task: TaskEntity): Promise<void> {
+  private async loadTaskHierarchy(task: MJTaskEntity): Promise<void> {
     try {
       const rv = new RunView();
 
@@ -252,7 +253,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
       const rootId = task.RootParentID || task.ID;
 
       // Load all tasks where RootParentID matches, or tasks that are the root itself
-      const hierarchyResult = await rv.RunView<TaskEntity>(
+      const hierarchyResult = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',
           ExtraFilter: `RootParentID='${rootId}' OR ID='${rootId}'`,
@@ -267,7 +268,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
         const allHierarchy = hierarchyResult.Results || [];
 
         // For list view: Filter out the clicked task itself - only show its children/descendants
-        this.subTasks = allHierarchy.filter(t => t.ID !== task.ID);
+        this.subTasks = allHierarchy.filter(t => !UUIDsEqual(t.ID, task.ID));
 
         // For Gantt view: Include the parent task so hierarchy works correctly
         this.subTasksWithParent = allHierarchy;
@@ -299,7 +300,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
       // Use subquery to find all tasks with this RootParentID
       // Note: Using __mj as the default schema - this is the standard MJ schema
       const schema = '__mj';
-      const depsResult = await rv.RunView<TaskDependencyEntity>(
+      const depsResult = await rv.RunView<MJTaskDependencyEntity>(
         {
           EntityName: 'MJ: Task Dependencies',
           ExtraFilter: `
@@ -325,7 +326,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     }
   }
 
-  private async loadAgentRuns(tasks: TaskEntity[]): Promise<void> {
+  private async loadAgentRuns(tasks: MJTaskEntity[]): Promise<void> {
     try {
       // Clear existing map
       this.agentRunMap.clear();
@@ -347,7 +348,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
       // Use a subquery to avoid passing large ID lists
       const taskIds = tasks.map(t => `'${t.ID}'`).join(',');
 
-      const agentRunsResult = await rv.RunView<AIAgentRunEntity>(
+      const agentRunsResult = await rv.RunView<MJAIAgentRunEntity>(
         {
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `
@@ -411,7 +412,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     this.taskSelected.emit(null);
   }
 
-  public onSubTaskClick(subTask: TaskEntity): void {
+  public onSubTaskClick(subTask: MJTaskEntity): void {
     console.log('Sub-task clicked:', subTask);
     // Could drill down further if needed
   }

@@ -1,5 +1,5 @@
 import { Input, Output, EventEmitter, ChangeDetectorRef, Directive } from '@angular/core';
-import { DashboardPartTypeEntity } from '@memberjunction/core-entities';
+import { MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
 import { PanelConfig, DashboardPanel } from '../models/dashboard-types';
 
 /**
@@ -32,7 +32,7 @@ export interface ConfigPanelResult {
 @Directive()
 export abstract class BaseConfigPanel {
     /** The part type being configured */
-    @Input() partType: DashboardPartTypeEntity | null = null;
+    @Input() partType: MJDashboardPartTypeEntity | null = null;
 
     /** The existing panel (for editing) or null (for creating) */
     @Input() panel: DashboardPanel | null = null;

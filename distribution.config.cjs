@@ -1,7 +1,7 @@
 /** @type {import('@memberjunction/config').MJConfig} */
 module.exports = {
   /**
-   * MemberJunction v3.0 Minimal Distribution Configuration
+   * MemberJunction v4.x Minimal Distribution Configuration
    *
    * This config leverages the minimal configuration system where most settings
    * come from package defaults:
@@ -99,7 +99,7 @@ module.exports = {
   // ---------------------------------------------------------------------------
   // New Entity Defaults Overrides
   // ---------------------------------------------------------------------------
-  // Default v3.x settings for new entities
+  // Default v4.x settings for new entities
   // newEntityDefaults: {
   //   TrackRecordChanges: true,
   //   AuditRecordAccess: false,
@@ -133,7 +133,7 @@ module.exports = {
   // ---------------------------------------------------------------------------
   // AI-Powered Advanced Generation Features
   // ---------------------------------------------------------------------------
-  // Default v3.x: Several features enabled by default
+  // Default v4.x: Several features enabled by default
   // advancedGeneration: {
   //   enableAdvancedGeneration: true,
   //   features: [
@@ -150,10 +150,10 @@ module.exports = {
   // ---------------------------------------------------------------------------
   // SQL Output (for migrations)
   // ---------------------------------------------------------------------------
-  // Default v3.x: enabled: true, folderPath: './migrations/v3/'
+  // Default v4.x: enabled: true, folderPath: './migrations/v4/'
   // SQLOutput: {
   //   enabled: true,
-  //   folderPath: './migrations/v3/',
+  //   folderPath: './migrations/v4/',
   //   appendToFile: true,
   //   convertCoreSchemaToFlywayMigrationFile: true,
   //   omitRecurringScriptsFromLog: true,

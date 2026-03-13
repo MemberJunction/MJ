@@ -3,8 +3,9 @@ import { FormGroup, FormBuilder, Validators } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { RunView, Metadata } from '@memberjunction/core';
-import { AIAgentPromptEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
+import { MJAIAgentPromptEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface AgentPromptAdvancedSettingsFormData {
   executionOrder: number;
@@ -28,8 +29,8 @@ export interface AgentPromptAdvancedSettingsFormData {
 export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
-  agentPrompt!: AIAgentPromptEntity;
-  allAgentPrompts: AIAgentPromptEntity[] = []; // For execution order validation
+  agentPrompt!: MJAIAgentPromptEntity;
+  allAgentPrompts: MJAIAgentPromptEntity[] = []; // For execution order validation
   
   // Reactive state management
   private destroy$ = new Subject<void>();
@@ -41,7 +42,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
   isSaving$ = new BehaviorSubject<boolean>(false);
   
   // Dropdown data
-  configurations$ = new BehaviorSubject<AIConfigurationEntity[]>([]);
+  configurations$ = new BehaviorSubject<MJAIConfigurationEntity[]>([]);
   
   // Available options
   contextBehaviorOptions = [
@@ -128,7 +129,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
 
     // Check for conflicts with other prompts (excluding current one)
     const conflictingPrompt = this.allAgentPrompts.find(p => 
-      p.ID !== this.agentPrompt.ID && 
+      !UUIDsEqual(p.ID, this.agentPrompt.ID) && 
       p.ExecutionOrder === order
     );
 
@@ -148,7 +149,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
       const rv = new RunView();
       
       // Load AI Configurations
-      const configurationsResult = await rv.RunView<AIConfigurationEntity>({
+      const configurationsResult = await rv.RunView<MJAIConfigurationEntity>({
         EntityName: 'MJ: AI Configurations',
         ExtraFilter: "Status = 'Active'",
         OrderBy: 'Name',

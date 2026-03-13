@@ -16,7 +16,7 @@ export const ENTITY_VERSION_LABEL_ITEMS = 'MJ: Version Label Items';
 export const ENTITY_VERSION_LABEL_RESTORES = 'MJ: Version Label Restores';
 
 /** Entity name for Record Changes */
-export const ENTITY_RECORD_CHANGES = 'Record Changes';
+export const ENTITY_RECORD_CHANGES = 'MJ: Record Changes';
 
 // ---------------------------------------------------------------------------
 // SQL safety utilities

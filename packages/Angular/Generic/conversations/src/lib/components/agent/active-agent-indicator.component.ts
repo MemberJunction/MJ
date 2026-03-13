@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
-import { AIAgentRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { AgentStateService, AgentStatus } from '../../services/agent-state.service';
 import { Subscription } from 'rxjs';
 
@@ -253,9 +253,9 @@ export class ActiveAgentIndicatorComponent implements OnInit, OnDestroy {
   @Input() maxVisibleAgents: number = 3;
 
   @Output() togglePanel = new EventEmitter<void>();
-  @Output() agentSelected = new EventEmitter<AIAgentRunEntity>();
+  @Output() agentSelected = new EventEmitter<MJAIAgentRunEntity>();
 
-  public activeAgents: Array<{ run: AIAgentRunEntity; status: AgentStatus; confidence: number | null }> = [];
+  public activeAgents: Array<{ run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }> = [];
   public isExpanded: boolean = false;
 
   private subscription?: Subscription;
@@ -275,14 +275,14 @@ export class ActiveAgentIndicatorComponent implements OnInit, OnDestroy {
     this.subscription?.unsubscribe();
   }
 
-  get displayAgents(): Array<{ run: AIAgentRunEntity; status: AgentStatus; confidence: number | null }> {
+  get displayAgents(): Array<{ run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }> {
     if (this.isExpanded) {
       return this.activeAgents;
     }
     return this.activeAgents.slice(0, this.maxVisibleAgents);
   }
 
-  getAgentTooltip(agent: { run: AIAgentRunEntity; status: AgentStatus; confidence: number | null }): string {
+  getAgentTooltip(agent: { run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }): string {
     const statusText = this.getStatusText(agent.status);
     const confidenceText = agent.confidence != null
       ? ` (Confidence: ${(agent.confidence * 100).toFixed(0)}%)`
@@ -305,7 +305,7 @@ export class ActiveAgentIndicatorComponent implements OnInit, OnDestroy {
     this.isExpanded = !this.isExpanded;
   }
 
-  onAgentClick(agent: { run: AIAgentRunEntity; status: AgentStatus; confidence: number | null }): void {
+  onAgentClick(agent: { run: MJAIAgentRunEntity; status: AgentStatus; confidence: number | null }): void {
     this.agentSelected.emit(agent.run);
   }
 

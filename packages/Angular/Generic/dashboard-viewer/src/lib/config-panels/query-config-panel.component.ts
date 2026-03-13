@@ -45,7 +45,7 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
 
     // Tree configuration for Query Categories (branches) and Queries (leaves)
     public QueryCategoryConfig: TreeBranchConfig = {
-        EntityName: 'Query Categories',
+        EntityName: 'MJ: Query Categories',
         DisplayField: 'Name',
         IDField: 'ID',
         ParentIDField: 'ParentID',
@@ -55,7 +55,7 @@ export class QueryConfigPanelComponent extends BaseConfigPanel {
     };
 
     public QueryLeafConfig: TreeLeafConfig = {
-        EntityName: 'Queries',
+        EntityName: 'MJ: Queries',
         DisplayField: 'Name',
         IDField: 'ID',
         ParentField: 'CategoryID',

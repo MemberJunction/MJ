@@ -355,7 +355,7 @@ export class MJEntityERDComponent implements OnChanges {
       this.entityDoubleClick.emit({ entity, node: event.node });
       // Also emit openRecord for convenience - container handles navigation
       this.openRecord.emit({
-        EntityName: 'Entities',
+        EntityName: 'MJ: Entities',
         RecordID: entity.ID,
         entity
       });

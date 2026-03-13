@@ -1,7 +1,9 @@
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { IMetadataProvider, IRunViewProvider, RunViewResult } from '../generic/interfaces';
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
+import { PlatformSQL, IsPlatformSQL } from '../generic/platformSQL';
+import type { CacheChangedEvent } from '../generic/localCacheManager';
 
 /**
  * Single aggregate expression to compute alongside the main view query.
@@ -62,12 +64,20 @@ export class RunViewParams {
     /**
      * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either
      * run a view without a filter (if the entity definition allows it with AllowAllRowsAPI=1) or filter with any valid SQL WHERE clause.
+     *
+     * Accepts either a plain string (backward compatible) or a PlatformSQL object for multi-platform support.
+     * When a PlatformSQL object is provided, the appropriate platform-specific SQL is resolved automatically
+     * before the query is executed.
      */
-    ExtraFilter?: string;
+    ExtraFilter?: string | PlatformSQL;
     /**
      * An optional SQL ORDER BY clause that you can use for dynamic views, as well as to OVERRIDE the stored view's sorting order.
+     *
+     * Accepts either a plain string (backward compatible) or a PlatformSQL object for multi-platform support.
+     * When a PlatformSQL object is provided, the appropriate platform-specific SQL is resolved automatically
+     * before the query is executed.
      */
-    OrderBy?: string;
+    OrderBy?: string | PlatformSQL;
     /**
      * An optional array of field names that you want returned. The RunView() function will always return ID so you don't need to ask for that. If you leave this null then
      * for a dynamic view all fields are returned, and for stored views, the fields stored in it view configuration are returned.
@@ -179,6 +189,39 @@ export class RunViewParams {
     Aggregates?: AggregateExpression[];
 
     /**
+     * Optional callback invoked when the cached result set for this exact query
+     * fingerprint is updated by another server instance (via Redis pub/sub).
+     *
+     * Use this to react to cross-server cache invalidation — for example, to reload
+     * data in an engine's in-memory array, refresh a UI grid, or trigger a re-fetch.
+     *
+     * **Requirements:**
+     * - A `RedisLocalStorageProvider` must be configured as the local storage provider
+     * - `RedisLocalStorageProvider.StartListening()` must have been called to enable pub/sub
+     * - Has no effect with `InMemoryLocalStorageProvider` (single-server, no pub/sub)
+     *
+     * **Lifecycle:** If the caller is short-lived (e.g., an Angular component), call
+     * `result.Unsubscribe()` during cleanup (e.g., `ngOnDestroy`) to avoid memory leaks.
+     * For long-lived callers like engines, the callback persists for the process lifetime.
+     *
+     * @example
+     * ```typescript
+     * const result = await rv.RunView<AIModelEntity>({
+     *     EntityName: 'AI Models',
+     *     ResultType: 'entity_object',
+     *     OnDataChanged: (event) => {
+     *         console.log(`AI Models cache updated by server ${event.SourceServerId}`);
+     *         this.reloadModels();
+     *     }
+     * });
+     *
+     * // Later, to stop listening:
+     * result.Unsubscribe?.();
+     * ```
+     */
+    OnDataChanged?: (event: CacheChangedEvent) => void;
+
+    /**
      * Compares two RunViewParams objects for equality by comparing their property values.
      * This is useful for determining if params have actually changed vs just being a new object reference.
      * Note: ViewEntity comparison uses reference equality since comparing loaded entity objects deeply is expensive.
@@ -195,8 +238,8 @@ export class RunViewParams {
         if (a.ViewID !== b.ViewID) return false;
         if (a.ViewName !== b.ViewName) return false;
         if (a.EntityName !== b.EntityName) return false;
-        if (a.ExtraFilter !== b.ExtraFilter) return false;
-        if (a.OrderBy !== b.OrderBy) return false;
+        if (!RunViewParams.platformSQLEqual(a.ExtraFilter, b.ExtraFilter)) return false;
+        if (!RunViewParams.platformSQLEqual(a.OrderBy, b.OrderBy)) return false;
         if (a.UserSearchString !== b.UserSearchString) return false;
         if (a.ExcludeUserViewRunID !== b.ExcludeUserViewRunID) return false;
         if (a.ExcludeDataFromAllPriorViewRuns !== b.ExcludeDataFromAllPriorViewRuns) return false;
@@ -248,6 +291,21 @@ export class RunViewParams {
             if (a[i].alias !== b[i].alias) return false;
         }
         return true;
+    }
+
+    /**
+     * Helper method to compare two string | PlatformSQL values for equality.
+     * Handles both plain string and PlatformSQL object comparisons.
+     */
+    private static platformSQLEqual(a: string | PlatformSQL | undefined, b: string | PlatformSQL | undefined): boolean {
+        if (a === b) return true; // Same reference, or both undefined, or same string
+        if (a == null || b == null) return false;
+        // Both are strings — already covered by === above (would have returned true)
+        if (typeof a === 'string' || typeof b === 'string') return false;
+        // Both are PlatformSQL objects
+        return a.default === b.default
+            && a.sqlserver === b.sqlserver
+            && a.postgresql === b.postgresql;
     }
 } 
 
@@ -332,7 +390,7 @@ export class RunView  {
             return params.EntityName;
         else if (params.ViewEntity) {
             const entityID = params.ViewEntity.Get('EntityID'); // using weak typing because this is MJCore and we don't want to use the sub-classes from core-entities as that would create a circular dependency
-            const entity = p.Entities.find(e => e.ID === entityID);
+            const entity = p.Entities.find(e => UUIDsEqual(e.ID, entityID));
             if (entity)
                 return entity.Name
         }
@@ -340,7 +398,7 @@ export class RunView  {
             // we don't have a view entity loaded, so load it up now
             const rv = new RunView(<IRunViewProvider><any>p);
             const result = await rv.RunView({
-                EntityName: "User Views",
+                EntityName: "MJ: User Views",
                 ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${params.ViewName}'`,
                 ResultType: 'entity_object'
             });

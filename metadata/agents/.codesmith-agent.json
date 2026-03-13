@@ -19,7 +19,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "PromptID": "@lookup:AI Prompts.Name=Codesmith Agent Prompt",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=Codesmith Agent Prompt",
             "ExecutionOrder": 0,
             "Status": "Active"
           },
@@ -27,24 +27,24 @@
             "ID": "C2854FC4-5A06-4A9A-A6A8-E0DB10175DB7"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.871Z",
-            "checksum": "eee48159a5e01a6573678e03dced15bda27c6ce8e73f6f7d37648038a3bc0070"
+            "lastModified": "2026-02-13T21:09:23.184Z",
+            "checksum": "ee6f0817772feab800e6ade74167b8dd2fa6412381db7ea2a33dbc29a2b951cd"
           }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Execute Code",
+            "ActionID": "@lookup:MJ: Actions.Name=Execute Code",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "A67BA225-1F18-4FBA-976A-67762319074E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.873Z",
-            "checksum": "0cc749ba8ac80e0804109db9bd315c0f0079001dcd341c4386f77b157eb188b0"
+            "lastModified": "2026-02-13T21:09:23.186Z",
+            "checksum": "728665075513a2b2b42c677ccfc9512cd6af3dd5a4b4818ef19b620a19bdd98f"
           }
         }
       ]

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
-import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
+import { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 import { FlowNode, FlowConnection, FlowConnectionStyle, FlowNodeTypeConfig, FlowNodePort } from '../interfaces/flow-types';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /** Picker item shape for Actions with optional icon */
 export interface ActionPickerItem { ID: string; Name: string; IconClass?: string | null; }
@@ -75,7 +76,7 @@ export class AgentFlowTransformerService {
 
   /** Convert MJ step entities to generic FlowNodes */
   StepsToNodes(
-    steps: AIAgentStepEntity[],
+    steps: MJAIAgentStepEntity[],
     actions?: ActionPickerItem[],
     agents?: AgentPickerItem[]
   ): FlowNode[] {
@@ -83,12 +84,12 @@ export class AgentFlowTransformerService {
   }
 
   /** Convert MJ path entities to generic FlowConnections */
-  PathsToConnections(paths: AIAgentStepPathEntity[]): FlowConnection[] {
+  PathsToConnections(paths: MJAIAgentStepPathEntity[]): FlowConnection[] {
     return paths.map(path => this.pathToConnection(path, paths));
   }
 
   /** Build the subtitle for a step based on its configured action/prompt/agent */
-  BuildStepSubtitle(step: AIAgentStepEntity): string {
+  BuildStepSubtitle(step: MJAIAgentStepEntity): string {
     switch (step.StepType) {
       case 'Action':
         return step.Action ? `Action: ${step.Action}` : 'No action selected';
@@ -106,7 +107,7 @@ export class AgentFlowTransformerService {
   }
 
   /** Apply FlowNode position changes back to a step entity */
-  ApplyNodePosition(step: AIAgentStepEntity, node: FlowNode): void {
+  ApplyNodePosition(step: MJAIAgentStepEntity, node: FlowNode): void {
     step.PositionX = Math.round(node.Position.X);
     step.PositionY = Math.round(node.Position.Y);
     if (node.Size) {
@@ -129,7 +130,7 @@ export class AgentFlowTransformerService {
    * Returns a short human-readable message describing what's missing,
    * or null if the step is fully configured.
    */
-  BuildConfigWarningMessage(step: AIAgentStepEntity): string | null {
+  BuildConfigWarningMessage(step: MJAIAgentStepEntity): string | null {
     switch (step.StepType) {
       case 'Action':
         return !step.ActionID ? 'No action selected' : null;
@@ -145,7 +146,7 @@ export class AgentFlowTransformerService {
     }
   }
 
-  private buildLoopWarningMessage(step: AIAgentStepEntity): string | null {
+  private buildLoopWarningMessage(step: MJAIAgentStepEntity): string | null {
     const bodyType = step.LoopBodyType;
     if (!bodyType) return 'No loop body type selected';
     switch (bodyType) {
@@ -160,7 +161,7 @@ export class AgentFlowTransformerService {
    * Returns true when a step is missing its required configuration reference
    * (e.g., an Action step with no ActionID, a Prompt step with no PromptID).
    */
-  IsStepMissingConfiguration(step: AIAgentStepEntity): boolean {
+  IsStepMissingConfiguration(step: MJAIAgentStepEntity): boolean {
     switch (step.StepType) {
       case 'Action':
         return !step.ActionID;
@@ -176,7 +177,7 @@ export class AgentFlowTransformerService {
     }
   }
 
-  private isLoopBodyMissingReference(step: AIAgentStepEntity): boolean {
+  private isLoopBodyMissingReference(step: MJAIAgentStepEntity): boolean {
     const bodyType = step.LoopBodyType;
     if (!bodyType) return true; // No body type selected at all
     switch (bodyType) {
@@ -197,19 +198,19 @@ export class AgentFlowTransformerService {
    * - Other steps: step-type icon
    */
   ResolveStepIcon(
-    step: AIAgentStepEntity,
+    step: MJAIAgentStepEntity,
     actions?: ActionPickerItem[],
     agents?: AgentPickerItem[]
   ): { Icon: string; LogoURL?: string | null } {
     const fallbackIcon = this.getIconForType(step.StepType);
 
     if (step.StepType === 'Action' && step.ActionID && actions) {
-      const action = actions.find(a => a.ID === step.ActionID);
+      const action = actions.find(a => UUIDsEqual(a.ID, step.ActionID));
       return { Icon: action?.IconClass || fallbackIcon };
     }
 
     if (step.StepType === 'Sub-Agent' && step.SubAgentID && agents) {
-      const agent = agents.find(a => a.ID === step.SubAgentID);
+      const agent = agents.find(a => UUIDsEqual(a.ID, step.SubAgentID));
       if (agent?.LogoURL) {
         return { Icon: agent.IconClass || fallbackIcon, LogoURL: agent.LogoURL };
       }
@@ -225,19 +226,19 @@ export class AgentFlowTransformerService {
   }
 
   private resolveLoopBodyIcon(
-    step: AIAgentStepEntity,
+    step: MJAIAgentStepEntity,
     actions?: ActionPickerItem[],
     agents?: AgentPickerItem[]
   ): { Icon: string; LogoURL?: string | null } {
     const fallbackIcon = this.getIconForType(step.StepType);
 
     if (step.LoopBodyType === 'Action' && step.ActionID && actions) {
-      const action = actions.find(a => a.ID === step.ActionID);
+      const action = actions.find(a => UUIDsEqual(a.ID, step.ActionID));
       if (action?.IconClass) return { Icon: fallbackIcon }; // Loop keeps its own icon; body icon handled separately
     }
 
     if (step.LoopBodyType === 'Sub-Agent' && step.SubAgentID && agents) {
-      const agent = agents.find(a => a.ID === step.SubAgentID);
+      const agent = agents.find(a => UUIDsEqual(a.ID, step.SubAgentID));
       if (agent?.LogoURL) return { Icon: fallbackIcon, LogoURL: agent.LogoURL };
     }
 
@@ -248,7 +249,7 @@ export class AgentFlowTransformerService {
 
   /** Convert a single MJ step entity to a FlowNode (public for direct use when adding nodes) */
   StepToNode(
-    step: AIAgentStepEntity,
+    step: MJAIAgentStepEntity,
     actions?: ActionPickerItem[],
     agents?: AgentPickerItem[]
   ): FlowNode {
@@ -309,12 +310,12 @@ export class AgentFlowTransformerService {
     };
   }
 
-  private pathToConnection(path: AIAgentStepPathEntity, allPaths: AIAgentStepPathEntity[]): FlowConnection {
+  private pathToConnection(path: MJAIAgentStepPathEntity, allPaths: MJAIAgentStepPathEntity[]): FlowConnection {
     const hasCondition = path.Condition != null && path.Condition.trim().length > 0;
     const isAlwaysPath = !hasCondition;
 
     // Analyze sibling paths from the same origin step
-    const siblingPaths = allPaths.filter(p => p.OriginStepID === path.OriginStepID);
+    const siblingPaths = allPaths.filter(p => UUIDsEqual(p.OriginStepID, path.OriginStepID));
     const isOnlyPath = siblingPaths.length === 1;
     const unconditionalSiblings = siblingPaths.filter(
       p => !p.Condition || p.Condition.trim().length === 0
@@ -350,7 +351,7 @@ export class AgentFlowTransformerService {
   }
 
   private buildPathVisuals(
-    path: AIAgentStepPathEntity,
+    path: MJAIAgentStepPathEntity,
     hasCondition: boolean,
     isOnlyPath: boolean,
     hasAmbiguousAlways: boolean
@@ -399,7 +400,7 @@ export class AgentFlowTransformerService {
 
   /** Populate loop-specific display data on the node's Data payload */
   private populateLoopData(
-    step: AIAgentStepEntity,
+    step: MJAIAgentStepEntity,
     data: Record<string, unknown>,
     actions?: ActionPickerItem[],
     agents?: AgentPickerItem[]
@@ -413,7 +414,7 @@ export class AgentFlowTransformerService {
 
     // Store logo URL for loop body sub-agents
     if (bodyType === 'Sub-Agent' && step.SubAgentID && agents) {
-      const agent = agents.find(a => a.ID === step.SubAgentID);
+      const agent = agents.find(a => UUIDsEqual(a.ID, step.SubAgentID));
       if (agent?.LogoURL) {
         data['LoopBodyLogoURL'] = agent.LogoURL;
       }
@@ -428,7 +429,7 @@ export class AgentFlowTransformerService {
 
   /** Resolve the best icon for a loop body, checking picker data first */
   private resolveLoopBodySpecificIcon(
-    step: AIAgentStepEntity,
+    step: MJAIAgentStepEntity,
     actions?: ActionPickerItem[],
     agents?: AgentPickerItem[]
   ): string {
@@ -436,11 +437,11 @@ export class AgentFlowTransformerService {
     const fallback = this.getBodyTypeIcon(bodyType ?? '');
 
     if (bodyType === 'Action' && step.ActionID && actions) {
-      const action = actions.find(a => a.ID === step.ActionID);
+      const action = actions.find(a => UUIDsEqual(a.ID, step.ActionID));
       return action?.IconClass || fallback;
     }
     if (bodyType === 'Sub-Agent' && step.SubAgentID && agents) {
-      const agent = agents.find(a => a.ID === step.SubAgentID);
+      const agent = agents.find(a => UUIDsEqual(a.ID, step.SubAgentID));
       return agent?.IconClass || fallback;
     }
     return fallback;
@@ -471,7 +472,7 @@ export class AgentFlowTransformerService {
     return config?.Icon ?? 'fa-circle-nodes';
   }
 
-  private buildLoopSubtitle(step: AIAgentStepEntity, prefix: string): string {
+  private buildLoopSubtitle(step: MJAIAgentStepEntity, prefix: string): string {
     const bodyType = step.LoopBodyType;
     if (!bodyType) return `${prefix} (no body type)`;
     const bodyName = this.resolveLoopBodyName(step);
@@ -479,7 +480,7 @@ export class AgentFlowTransformerService {
   }
 
   /** Resolve the display name for the loop body operation */
-  private resolveLoopBodyName(step: AIAgentStepEntity): string | null {
+  private resolveLoopBodyName(step: MJAIAgentStepEntity): string | null {
     switch (step.LoopBodyType) {
       case 'Action': return step.Action ?? null;
       case 'Prompt': return step.Prompt ?? null;
@@ -489,7 +490,7 @@ export class AgentFlowTransformerService {
   }
 
   /** Parse the Configuration JSON, returning null on failure */
-  private parseLoopConfig(step: AIAgentStepEntity): Record<string, unknown> | null {
+  private parseLoopConfig(step: MJAIAgentStepEntity): Record<string, unknown> | null {
     if (!step.Configuration) return null;
     try {
       return JSON.parse(step.Configuration) as Record<string, unknown>;
@@ -499,7 +500,7 @@ export class AgentFlowTransformerService {
   }
 
   /** Build a short iteration summary for display on loop nodes */
-  BuildLoopIterationSummary(step: AIAgentStepEntity): string {
+  BuildLoopIterationSummary(step: MJAIAgentStepEntity): string {
     const config = this.parseLoopConfig(step);
     if (step.StepType === 'ForEach') {
       const collection = config?.['collectionPath'] as string | undefined;

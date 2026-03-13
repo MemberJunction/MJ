@@ -1,13 +1,13 @@
 <div class="record-form-container">
     @if (record) {
         <form class="record-form" #form="ngForm">
-            <mj-form-toolbar [form]="this"></mj-form-toolbar>
+            <mj-form-toolbar [Form]="this"></mj-form-toolbar>
 
             <!-- Main Content Area -->
             <div class="action-main-area" style="display: flex; flex-direction: column; height: 100%; overflow-y: auto;">
                 
                 <!-- Header Section -->
-                <div class="action-header" style="flex-shrink: 0; padding: 20px; background: #f8f9fa; border-bottom: 2px solid #e9ecef;">
+                <div class="action-header" style="flex-shrink: 0; padding: 20px; background: var(--mj-bg-surface-card); border-bottom: 2px solid var(--mj-border-default);">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;">
                         
                         <!-- Left: Action Info -->
@@ -21,11 +21,13 @@
                                                   style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
                                     </kendo-textbox>
                                 } @else {
-                                    <h4 style="margin: 0; color: #495057; font-weight: 600; flex: 1;">{{ record.Name || 'Untitled Action' }}</h4>
-                                    <span class="status-badge" [style.background-color]="getStatusColor()" 
-                                          style="color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.75em; font-weight: 500;">
+                                    <h4 style="margin: 0; color: var(--mj-text-secondary); font-weight: 600; flex: 1;">{{ record.Name || 'Untitled Action' }}</h4>
+                                    <button kendoButton
+                                            [themeColor]="record.Status === 'Active' ? 'success' : record.Status === 'Pending' ? 'warning' : 'error'"
+                                            size="small"
+                                            style="pointer-events: none; cursor: default;">
                                         {{ record.Status }}
-                                    </span>
+                                    </button>
                                 }
                             </div>
                             
@@ -33,7 +35,7 @@
                             @if (EditMode) {
                                 <div style="display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
                                     <div>
-                                        <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">Status</label>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--mj-text-secondary); font-size: 0.9em;">Status</label>
                                         <kendo-dropdownlist [(ngModel)]="record.Status"
                                                            name="actionStatus"
                                                            [data]="[{text: 'Active', value: 'Active'}, {text: 'Pending', value: 'Pending'}, {text: 'Disabled', value: 'Disabled'}]"
@@ -44,8 +46,8 @@
                                         </kendo-dropdownlist>
                                     </div>
                                     <div>
-                                        <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">
-                                            Type <span style="color: #dc3545;">*</span>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--mj-text-secondary); font-size: 0.9em;">
+                                            Type <span style="color: var(--mj-status-error);">*</span>
                                         </label>
                                         <kendo-dropdownlist [(ngModel)]="record.Type"
                                                            name="actionType"
@@ -57,8 +59,8 @@
                                         </kendo-dropdownlist>
                                     </div>
                                     <div>
-                                        <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #495057; font-size: 0.9em;">
-                                            Category <span style="color: #dc3545;">*</span>
+                                        <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--mj-text-secondary); font-size: 0.9em;">
+                                            Category <span style="color: var(--mj-status-error);">*</span>
                                         </label>
                                         <kendo-dropdownlist [(ngModel)]="record.CategoryID"
                                                            name="categoryID"
@@ -78,16 +80,16 @@
                                                style="width: 100%; max-width: 600px; margin-bottom: 12px;">
                                 </kendo-textarea>
                             } @else if (record.Description) {
-                                <p style="margin: 0 0 12px 0; color: #6c757d; font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
+                                <p style="margin: 0 0 12px 0; color: var(--mj-text-muted); font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
                             }
                             
                             <!-- Quick Config Row -->
                             <div class="quick-config" style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                                 @if (category) {
                                     <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
-                                        <i class="fa-solid fa-folder" style="color: #6c757d;"></i>
-                                        <span style="color: #6c757d;">Category:</span>
-                                        <span style="color: #495057; font-weight: 500; cursor: pointer;" (click)="navigateToCategory()">
+                                        <i class="fa-solid fa-folder" style="color: var(--mj-text-muted);"></i>
+                                        <span style="color: var(--mj-text-muted);">Category:</span>
+                                        <span style="color: var(--mj-text-secondary); font-weight: 500; cursor: pointer;" (click)="navigateToCategory()">
                                             {{ category.Name }}
                                             <i class="fa-solid fa-external-link" style="font-size: 0.75em; margin-left: 4px;"></i>
                                         </span>
@@ -95,23 +97,23 @@
                                 }
                                 
                                 <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
-                                    <i class="fa-solid fa-cube" style="color: #6c757d;"></i>
-                                    <span style="color: #6c757d;">Type:</span>
-                                    <span style="color: #495057; font-weight: 500;">{{ record.Type }}</span>
+                                    <i class="fa-solid fa-cube" style="color: var(--mj-text-muted);"></i>
+                                    <span style="color: var(--mj-text-muted);">Type:</span>
+                                    <span style="color: var(--mj-text-secondary); font-weight: 500;">{{ record.Type }}</span>
                                 </div>
                                 
                                 @if (record.Type === 'Generated' && record.CodeApprovalStatus) {
                                     <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
                                         <i [class]="'fa-solid ' + getApprovalStatusIcon()" [style.color]="getApprovalStatusColor()"></i>
-                                        <span style="color: #6c757d;">Code:</span>
+                                        <span style="color: var(--mj-text-muted);">Code:</span>
                                         <span [style.color]="getApprovalStatusColor()" style="font-weight: 500;">{{ record.CodeApprovalStatus }}</span>
                                     </div>
                                 }
                                 
                                 @if (actionParams.length > 0) {
                                     <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
-                                        <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
-                                        <span style="color: #495057; font-weight: 500;">{{ actionParams.length }} Parameters</span>
+                                        <i class="fa-solid fa-sliders" style="color: var(--mj-text-muted);"></i>
+                                        <span style="color: var(--mj-text-secondary); font-weight: 500;">{{ actionParams.length }} Parameters</span>
                                     </div>
                                 }
                             </div>
@@ -151,7 +153,7 @@
                             }
                             
                             @if (!EditMode && record.Status !== 'Active' && record.ID) {
-                                <div style="font-size: 0.75em; color: #dc3545; text-align: right;">
+                                <div style="font-size: 0.75em; color: var(--mj-status-error); text-align: right;">
                                     Action must be Active to execute
                                 </div>
                             }
@@ -160,7 +162,7 @@
                 </div>
 
                 <!-- Configuration Sections with Expansion Panels -->
-                <div class="configuration-sections" style="flex: 1; background: white; border-top: 2px solid #e9ecef; padding: 16px; min-height: 0;">
+                <div class="configuration-sections" style="flex: 1; background: var(--mj-bg-surface-card); border-top: 2px solid var(--mj-border-default); padding: 16px; min-height: 0;">
                     
                     <!-- Parameters Section (FIRST) -->
                     <kendo-expansionpanel 
@@ -168,10 +170,10 @@
                         style="margin-bottom: 12px;">
                         <ng-template kendoExpansionPanelTitleDirective>
                             <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-sliders" style="color: #6c757d;"></i>
+                                <i class="fa-solid fa-sliders" style="color: var(--mj-text-muted);"></i>
                                 Parameters
                                 @if (actionParams.length > 0) {
-                                    <span style="background: #17a2b8; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                    <span style="background: var(--mj-status-info); color: var(--mj-text-inverse); padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
                                         {{ actionParams.length }}
                                     </span>
                                 }
@@ -186,10 +188,10 @@
                                 </div>
                             } @else if (actionParams.length === 0) {
                                 <div class="empty-state" style="padding: 30px; text-align: center;">
-                                    <i class="fa-solid fa-sliders" style="font-size: 2em; color: #6c757d; opacity: 0.3;"></i>
-                                    <p style="margin: 12px 0 0 0; color: #6c757d;">No parameters defined</p>
+                                    <i class="fa-solid fa-sliders" style="font-size: 2em; color: var(--mj-text-muted); opacity: 0.3;"></i>
+                                    <p style="margin: 12px 0 0 0; color: var(--mj-text-muted);">No parameters defined</p>
                                     @if (EditMode && record.IsSaved) {
-                                        <p style="margin: 8px 0 0 0; font-size: 0.85em; color: #6c757d;">Add parameters to define inputs and outputs for this action</p>
+                                        <p style="margin: 8px 0 0 0; font-size: 0.85em; color: var(--mj-text-muted);">Add parameters to define inputs and outputs for this action</p>
                                     }
                                 </div>
                             } @else {
@@ -206,8 +208,8 @@
                                     
                                     @if (getInputParams().length === 0) {
                                         <div class="empty-state" style="padding: 30px; text-align: center;">
-                                            <i class="fa-solid fa-inbox" style="font-size: 2em; color: #6c757d; opacity: 0.3;"></i>
-                                            <p style="margin: 12px 0 0 0; color: #6c757d;">No input parameters defined</p>
+                                            <i class="fa-solid fa-inbox" style="font-size: 2em; color: var(--mj-text-muted); opacity: 0.3;"></i>
+                                            <p style="margin: 12px 0 0 0; color: var(--mj-text-muted);">No input parameters defined</p>
                                         </div>
                                     } @else {
                                         <div class="params-grid">
@@ -266,8 +268,8 @@
                                     
                                     @if (getOutputParams().length === 0) {
                                         <div class="empty-state" style="padding: 20px; text-align: center;">
-                                            <i class="fa-solid fa-inbox" style="font-size: 2em; color: #6c757d; opacity: 0.3;"></i>
-                                            <p style="margin: 12px 0 0 0; color: #6c757d;">No output parameters defined</p>
+                                            <i class="fa-solid fa-inbox" style="font-size: 2em; color: var(--mj-text-muted); opacity: 0.3;"></i>
+                                            <p style="margin: 12px 0 0 0; color: var(--mj-text-muted);">No output parameters defined</p>
                                         </div>
                                     } @else {
                                         <div class="params-grid">
@@ -319,10 +321,10 @@
                             style="margin-bottom: 12px;">
                             <ng-template kendoExpansionPanelTitleDirective>
                                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                    <i class="fa-solid fa-code" style="color: #6c757d;"></i>
+                                    <i class="fa-solid fa-code" style="color: var(--mj-text-muted);"></i>
                                     Code & Generation
                                     @if (record.CodeLocked) {
-                                        <span style="background: #ffc107; color: #856404; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                        <span style="background: var(--mj-status-warning); color: var(--mj-color-warning-800); padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
                                             <i class="fa-solid fa-lock"></i> Locked
                                         </span>
                                     }
@@ -413,10 +415,10 @@
                         style="margin-bottom: 12px;">
                         <ng-template kendoExpansionPanelTitleDirective>
                             <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                <i class="fa-solid fa-flag-checkered" style="color: #6c757d;"></i>
+                                <i class="fa-solid fa-flag-checkered" style="color: var(--mj-text-muted);"></i>
                                 Result Codes
                                 @if (resultCodes.length > 0) {
-                                    <span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                    <span style="background: var(--mj-status-success); color: var(--mj-text-inverse); padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
                                         {{ resultCodes.length }}
                                     </span>
                                 }
@@ -440,10 +442,10 @@
                                 </div>
                             } @else if (resultCodes.length === 0) {
                                 <div class="empty-state" style="padding: 30px; text-align: center;">
-                                    <i class="fa-solid fa-flag-checkered" style="font-size: 2em; color: #6c757d; opacity: 0.3;"></i>
-                                    <p style="margin: 12px 0 0 0; color: #6c757d;">No result codes defined</p>
+                                    <i class="fa-solid fa-flag-checkered" style="font-size: 2em; color: var(--mj-text-muted); opacity: 0.3;"></i>
+                                    <p style="margin: 12px 0 0 0; color: var(--mj-text-muted);">No result codes defined</p>
                                     @if (EditMode && record.IsSaved) {
-                                        <p style="margin: 8px 0 0 0; font-size: 0.85em; color: #6c757d;">Add result codes to define possible outcomes</p>
+                                        <p style="margin: 8px 0 0 0; font-size: 0.85em; color: var(--mj-text-muted);">Add result codes to define possible outcomes</p>
                                     }
                                 </div>
                             } @else {
@@ -487,7 +489,7 @@
                             style="margin-bottom: 12px;">
                             <ng-template kendoExpansionPanelTitleDirective>
                                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                    <i class="fa-solid fa-chart-line" style="color: #6c757d;"></i>
+                                    <i class="fa-solid fa-chart-line" style="color: var(--mj-text-muted);"></i>
                                     Execution & Monitoring
                                 </span>
                             </ng-template>
@@ -500,30 +502,30 @@
                                     </div>
                                 } @else if (recentExecutions.length === 0) {
                                     <div class="empty-state" style="padding: 30px; text-align: center;">
-                                        <i class="fa-solid fa-chart-line" style="font-size: 2em; color: #6c757d; opacity: 0.3;"></i>
-                                        <p style="margin: 12px 0 0 0; color: #6c757d;">No executions yet</p>
+                                        <i class="fa-solid fa-chart-line" style="font-size: 2em; color: var(--mj-text-muted); opacity: 0.3;"></i>
+                                        <p style="margin: 12px 0 0 0; color: var(--mj-text-muted);">No executions yet</p>
                                     </div>
                                 } @else {
                                     <div class="execution-stats-row">
                                         <div class="stat-box">
                                             <i class="fa-solid fa-tachometer-alt"></i>
                                             <div class="stat-info">
-                                                <div class="stat-label" style="color: #212529;">Avg Duration</div>
-                                                <div class="stat-value" style="color: #212529;">{{ formatDuration(executionStats.avgDuration) }}</div>
+                                                <div class="stat-label" style="color: var(--mj-text-primary);">Avg Duration</div>
+                                                <div class="stat-value" style="color: var(--mj-text-primary);">{{ formatDuration(executionStats.avgDuration) }}</div>
                                             </div>
                                         </div>
                                         <div class="stat-box">
                                             <i class="fa-solid fa-check-circle" [style.color]="getSuccessRateColor()"></i>
                                             <div class="stat-info">
-                                                <div class="stat-label" style="color: #212529;">Success Rate</div>
+                                                <div class="stat-label" style="color: var(--mj-text-primary);">Success Rate</div>
                                                 <div class="stat-value" [style.color]="getSuccessRateColor()" style="font-weight: 600;">{{ executionStats.successRate.toFixed(0) }}%</div>
                                             </div>
                                         </div>
                                         <div class="stat-box">
                                             <i class="fa-solid fa-play-circle"></i>
                                             <div class="stat-info">
-                                                <div class="stat-label" style="color: #212529;">Total Runs</div>
-                                                <div class="stat-value" style="color: #212529;">{{ executionStats.totalRuns }}</div>
+                                                <div class="stat-label" style="color: var(--mj-text-primary);">Total Runs</div>
+                                                <div class="stat-value" style="color: var(--mj-text-primary);">{{ executionStats.totalRuns }}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -581,7 +583,7 @@
                             style="margin-bottom: 12px;">
                             <ng-template kendoExpansionPanelTitleDirective>
                                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                                    <i class="fa-solid fa-cogs" style="color: #6c757d;"></i>
+                                    <i class="fa-solid fa-cogs" style="color: var(--mj-text-muted);"></i>
                                     Related Configuration
                                 </span>
                             </ng-template>

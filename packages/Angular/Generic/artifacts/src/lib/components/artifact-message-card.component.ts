@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
-import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -55,15 +55,15 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
     }
 
     .skeleton-icon {
       width: 32px;
       height: 32px;
-      background: #E5E7EB;
+      background: var(--mj-border-default);
       border-radius: 6px;
       animation: pulse 1.5s ease-in-out infinite;
     }
@@ -71,7 +71,7 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
     .skeleton-text {
       flex: 1;
       height: 32px;
-      background: #E5E7EB;
+      background: var(--mj-border-default);
       border-radius: 4px;
       animation: pulse 1.5s ease-in-out infinite;
     }
@@ -86,10 +86,10 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: #FEE2E2;
-      border: 1px solid #FECACA;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
       border-radius: 6px;
-      color: #DC2626;
+      color: var(--mj-status-error);
       font-size: 14px;
     }
 
@@ -102,16 +102,16 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       cursor: pointer;
       transition: all 200ms ease;
     }
 
     .artifact-info-bar:hover {
-      border-color: #1e40af;
-      box-shadow: 0 2px 8px rgba(30, 64, 175, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .artifact-icon {
@@ -120,10 +120,10 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 6px;
       flex-shrink: 0;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       font-size: 16px;
     }
 
@@ -138,7 +138,7 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
     .artifact-name {
       font-size: 14px;
       font-weight: 600;
-      color: #111827;
+      color: var(--mj-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -153,7 +153,7 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
     .artifact-type-badge {
       display: inline-block;
       padding: 2px 8px;
-      color: white;
+      color: var(--mj-text-inverse);
       font-size: 10px;
       font-weight: 600;
       letter-spacing: 0.5px;
@@ -163,19 +163,19 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
 
     .artifact-version {
       font-size: 11px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       font-weight: 500;
     }
 
     .open-icon {
       flex-shrink: 0;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       font-size: 14px;
       transition: color 200ms ease;
     }
 
     .artifact-info-bar:hover .open-icon {
-      color: #1e40af;
+      color: var(--mj-brand-primary);
     }
   `]
 })
@@ -183,12 +183,12 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
   @Input() artifactId!: string;
   @Input() versionNumber?: number;
   @Input() currentUser!: UserInfo;
-  @Input() artifact?: ArtifactEntity; // Optional - if provided, skips loading
-  @Input() artifactVersion?: ArtifactVersionEntity; // Optional - if provided, skips loading
-  @Output() actionPerformed = new EventEmitter<{action: string; artifact: ArtifactEntity; version?: ArtifactVersionEntity}>();
+  @Input() artifact?: MJArtifactEntity; // Optional - if provided, skips loading
+  @Input() artifactVersion?: MJArtifactVersionEntity; // Optional - if provided, skips loading
+  @Output() actionPerformed = new EventEmitter<{action: string; artifact: MJArtifactEntity; version?: MJArtifactVersionEntity}>();
 
-  public _artifact: ArtifactEntity | null = null;
-  public _currentVersion: ArtifactVersionEntity | null = null;
+  public _artifact: MJArtifactEntity | null = null;
+  public _currentVersion: MJArtifactVersionEntity | null = null;
   public loading = true;
   public error = false;
 
@@ -209,11 +209,11 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
   }
 
   // Getters to access the internal properties
-  public get artifactEntity(): ArtifactEntity | null {
+  public get artifactEntity(): MJArtifactEntity | null {
     return this._artifact;
   }
 
-  public get currentVersion(): ArtifactVersionEntity | null {
+  public get currentVersion(): MJArtifactVersionEntity | null {
     return this._currentVersion;
   }
 
@@ -235,7 +235,7 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
 
       // Load artifact directly
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactEntity>({
+      const result = await rv.RunView<MJArtifactEntity>({
         EntityName: 'MJ: Conversation Artifacts',
         ExtraFilter: `ID='${this.artifactId}'`,
         MaxRows: 1,
@@ -267,7 +267,7 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
         ? `ArtifactID='${this._artifact.ID}' AND VersionNumber=${this.versionNumber}`
         : `ArtifactID='${this._artifact.ID}'`;
 
-      const result = await rv.RunView<ArtifactVersionEntity>({
+      const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: filter,
         OrderBy: 'VersionNumber DESC',

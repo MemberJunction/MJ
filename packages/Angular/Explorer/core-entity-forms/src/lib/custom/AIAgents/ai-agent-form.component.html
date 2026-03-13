@@ -5,7 +5,7 @@
   <div kendoWindowContainer></div>
   @if (record) {
     <form class="record-form" #form="ngForm">
-      <mj-form-toolbar [form]="this"></mj-form-toolbar>
+      <mj-form-toolbar [Form]="this"></mj-form-toolbar>
       <!-- Agent Header — expanded view -->
       @if (!HeaderCollapsed) {
         <div class="agent-header">
@@ -68,7 +68,7 @@
                   (click)="openPermissionsDialog()"
                   [title]="IsOpenToEveryone ? 'Open to everyone — click to manage permissions' : 'Restricted — click to manage permissions'">
                   <i class="fa-solid" [class.fa-lock-open]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"
-                  [style.color]="IsOpenToEveryone ? '#16a34a' : null"></i>
+                  [style.color]="IsOpenToEveryone ? 'var(--mj-status-success)' : null"></i>
                   {{ IsOpenToEveryone ? 'Open' : 'Restricted' }}
                 </button>
               }
@@ -104,7 +104,7 @@
               (click)="openPermissionsDialog()"
               [title]="IsOpenToEveryone ? 'Open to everyone' : 'Restricted'">
               <i class="fa-solid" [class.fa-lock-open]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"
-              [style.color]="IsOpenToEveryone ? '#16a34a' : null"></i>
+              [style.color]="IsOpenToEveryone ? 'var(--mj-status-success)' : null"></i>
             </button>
           }
           <button class="agent-header-mini-btn"
@@ -411,7 +411,7 @@
                     } @else {
                       <div class="entity-list">
                         @for (action of agentActions; track action.ID) {
-                          <div class="entity-item action-item" (click)="navigateToEntity('Actions', action.ID)">
+                          <div class="entity-item action-item" (click)="navigateToEntity('MJ: Actions', action.ID)">
                             <div class="item-icon">
                               <i [class]="getActionIcon(action)"></i>
                             </div>
@@ -446,7 +446,7 @@
                           </div>
                         }
                         @if (actionCount > agentActions.length) {
-                          <div class="view-more-item" (click)="navigateToEntity('AI Agent Actions', '')">
+                          <div class="view-more-item" (click)="navigateToEntity('MJ: AI Agent Actions', '')">
                             <span>View all {{ actionCount }} actions...</span>
                           </div>
                         }
@@ -529,12 +529,12 @@
                       <p>Sub-agents help build complex workflows through hierarchical orchestration.</p>
                       <div class="empty-state-info">
                         <div class="info-card">
-                          <i class="fa-solid fa-link" style="color: #2196F3;"></i>
+                          <i class="fa-solid fa-link" style="color: var(--mj-status-info);"></i>
                           <strong>Child Sub-Agents</strong>
                           <p>Share payload structure, dedicated to parent</p>
                         </div>
                         <div class="info-card">
-                          <i class="fa-solid fa-share-nodes" style="color: #9C27B0;"></i>
+                          <i class="fa-solid fa-share-nodes" style="color: var(--mj-brand-primary);"></i>
                           <strong>Related Sub-Agents</strong>
                           <p>Reusable agents with payload mapping</p>
                         </div>
@@ -547,7 +547,7 @@
                         <div class="entity-item sub-agent-item"
                           [class.child-sub-agent]="item.type === 'child'"
                           [class.related-sub-agent]="item.type === 'related'"
-                          (click)="navigateToEntity('AI Agents', item.agent.ID)">
+                          (click)="navigateToEntity('MJ: AI Agents', item.agent.ID)">
                           <!-- Type Badge -->
                           <div class="sub-agent-type-badge"
                             [style.background-color]="getSubAgentBadgeColor(item)">
@@ -694,7 +694,7 @@
                   } @else {
                     <div class="entity-list">
                       @for (prompt of agentPrompts; track prompt.ID) {
-                        <div class="entity-item prompt-item" (click)="navigateToEntity('AI Prompts', prompt.ID)">
+                        <div class="entity-item prompt-item" (click)="navigateToEntity('MJ: AI Prompts', prompt.ID)">
                           <div class="item-icon">
                             <i class="fa-solid fa-comment-dots"></i>
                           </div>
@@ -735,7 +735,7 @@
                         </div>
                       }
                       @if (promptCount > agentPrompts.length) {
-                        <div class="view-more-item" (click)="navigateToEntity('AI Prompts', '')">
+                        <div class="view-more-item" (click)="navigateToEntity('MJ: AI Prompts', '')">
                           <span>View all {{ promptCount }} prompts...</span>
                         </div>
                       }
@@ -770,7 +770,7 @@
                   } @else {
                     <div class="entity-list">
                       @for (cycle of learningCycles; track cycle.ID) {
-                        <div class="entity-item learning-item" (click)="navigateToEntity('AI Agent Learning Cycles', cycle.ID)">
+                        <div class="entity-item learning-item" (click)="navigateToEntity('MJ: AI Agent Learning Cycles', cycle.ID)">
                           <div class="item-icon">
                             <i class="fa-solid fa-brain"></i>
                           </div>
@@ -794,7 +794,7 @@
                         </div>
                       }
                       @if (learningCycleCount > learningCycles.length) {
-                        <div class="view-more-item" (click)="navigateToEntity('AI Agent Learning Cycles', '')">
+                        <div class="view-more-item" (click)="navigateToEntity('MJ: AI Agent Learning Cycles', '')">
                           <span>View all {{ learningCycleCount }} cycles...</span>
                         </div>
                       }
@@ -841,7 +841,7 @@
                   } @else {
                     <div class="entity-list">
                       @for (note of agentNotes; track note.ID) {
-                        <div class="entity-item note-item" (click)="navigateToEntity('AI Agent Notes', note.ID)">
+                        <div class="entity-item note-item" (click)="navigateToEntity('MJ: AI Agent Notes', note.ID)">
                           <div class="item-icon">
                             <i class="fa-solid fa-sticky-note"></i>
                           </div>
@@ -865,7 +865,7 @@
                         </div>
                       }
                       @if (noteCount > agentNotes.length) {
-                        <div class="view-more-item" (click)="navigateToEntity('AI Agent Notes', '')">
+                        <div class="view-more-item" (click)="navigateToEntity('MJ: AI Agent Notes', '')">
                           <span>View all {{ noteCount }} notes...</span>
                         </div>
                       }
@@ -907,7 +907,7 @@
                         Type="textbox"
                         Caption=""
                         [EditMode]="EditMode"
-                        [record]="record"
+                        [Record]="record"
                         style="width: 100%;">
                       </mj-form-field>
                       <div class="payload-field-example">
@@ -1054,7 +1054,7 @@
                           Type="dropdownlist"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record"
+                          [Record]="record"
                           style="width: 100%;">
                         </mj-form-field>
                       </div>
@@ -1066,7 +1066,7 @@
                           Type="numerictextbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record"
+                          [Record]="record"
                           style="width: 100%;">
                         </mj-form-field>
                       </div>
@@ -1114,7 +1114,7 @@
                     Caption="Max Cost ($)"
                     Description="Maximum cost per run"
                     [EditMode]="EditMode"
-                    [record]="record">
+                    [Record]="record">
                   </mj-form-field>
                   <mj-form-field
                     FieldName="MaxTokensPerRun"
@@ -1122,7 +1122,7 @@
                     Caption="Max Tokens"
                     Description="Maximum tokens per run"
                     [EditMode]="EditMode"
-                    [record]="record">
+                    [Record]="record">
                   </mj-form-field>
                   <mj-form-field
                     FieldName="MaxIterationsPerRun"
@@ -1130,7 +1130,7 @@
                     Caption="Max Iterations"
                     Description="Maximum prompt iterations"
                     [EditMode]="EditMode"
-                    [record]="record">
+                    [Record]="record">
                   </mj-form-field>
                   <mj-form-field
                     FieldName="MaxTimePerRun"
@@ -1138,7 +1138,7 @@
                     Caption="Max Time (seconds)"
                     Description="Maximum execution time"
                     [EditMode]="EditMode"
-                    [record]="record">
+                    [Record]="record">
                   </mj-form-field>
                 </div>
               </div>
@@ -1231,7 +1231,7 @@
                           Type="checkbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                       </div>
                     </div>
@@ -1251,7 +1251,7 @@
                           Type="textarea"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record"
+                          [Record]="record"
                           style="width: 100%;">
                         </mj-form-field>
                       </div>
@@ -1281,7 +1281,7 @@
                           Type="dropdownlist"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                       </div>
                     </div>
@@ -1301,7 +1301,7 @@
                           Type="numerictextbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                       </div>
                     </div>
@@ -1321,7 +1321,7 @@
                           Type="numerictextbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                         <div class="config-card-hint">
                           <i class="fa-solid fa-info-circle"></i>
@@ -1345,7 +1345,7 @@
                           Type="textbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                       </div>
                     </div>
@@ -1374,7 +1374,7 @@
                           Type="textbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                         <div class="config-card-hint">
                           <i class="fa-solid fa-info-circle"></i>
@@ -1398,7 +1398,7 @@
                           Type="textbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record">
+                          [Record]="record">
                         </mj-form-field>
                         <div class="config-card-hint">
                           <i class="fa-solid fa-info-circle"></i>
@@ -1431,7 +1431,7 @@
                           Type="checkbox"
                           Caption=""
                           [EditMode]="EditMode"
-                          [record]="record"
+                          [Record]="record"
                           (valueChange)="onContextCompressionToggle($event)">
                         </mj-form-field>
                       </div>
@@ -1453,7 +1453,7 @@
                             Type="numerictextbox"
                             Caption=""
                             [EditMode]="EditMode"
-                            [record]="record">
+                            [Record]="record">
                           </mj-form-field>
                         </div>
                       </div>
@@ -1473,7 +1473,7 @@
                             Type="numerictextbox"
                             Caption=""
                             [EditMode]="EditMode"
-                            [record]="record">
+                            [Record]="record">
                           </mj-form-field>
                         </div>
                       </div>

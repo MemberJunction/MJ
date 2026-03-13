@@ -1,12 +1,13 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
-import { ConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity } from '@memberjunction/core-entities';
 import { ConversationDataService } from '../../services/conversation-data.service';
 import { DialogService } from '../../services/dialog.service';
 import { NotificationService } from '../../services/notification.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { UUIDsEqual } from '@memberjunction/global';
 
 @Component({
   standalone: false,
@@ -65,8 +66,8 @@ import { takeUntil } from 'rxjs/operators';
             <div class="chat-list" [class.expanded]="pinnedExpanded">
               @for (conversation of pinnedConversations; track conversation.ID) {
                 <div class="conversation-item"
-                     [class.active]="conversation.ID === selectedConversationId"
-                     [class.renamed]="conversation.ID === renamedConversationId"
+                     [class.active]="IsConversationActive(conversation)"
+                     [class.renamed]="IsConversationRenamed(conversation)"
                      (click)="handleConversationClick(conversation)">
                   @if (isSelectionMode) {
                     <div class="conversation-checkbox">
@@ -94,7 +95,7 @@ import { takeUntil } from 'rxjs/operators';
                       <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
                         <i class="fas fa-ellipsis"></i>
                       </button>
-                      @if (openMenuConversationId === conversation.ID) {
+                      @if (IsMenuOpen(conversation)) {
                         <div class="context-menu" (click)="$event.stopPropagation()">
                           <button class="menu-item" (click)="togglePin(conversation, $event)">
                             <i class="fas fa-thumbtack"></i>
@@ -130,8 +131,8 @@ import { takeUntil } from 'rxjs/operators';
           <div class="chat-list" [class.expanded]="directMessagesExpanded">
             @for (conversation of unpinnedConversations; track conversation.ID) {
               <div class="conversation-item"
-                   [class.active]="conversation.ID === selectedConversationId"
-                   [class.renamed]="conversation.ID === renamedConversationId"
+                   [class.active]="IsConversationActive(conversation)"
+                   [class.renamed]="IsConversationRenamed(conversation)"
                    (click)="handleConversationClick(conversation)">
                 @if (isSelectionMode) {
                   <div class="conversation-checkbox">
@@ -159,7 +160,7 @@ import { takeUntil } from 'rxjs/operators';
                     <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
                       <i class="fas fa-ellipsis"></i>
                     </button>
-                    @if (openMenuConversationId === conversation.ID) {
+                    @if (IsMenuOpen(conversation)) {
                       <div class="context-menu" (click)="$event.stopPropagation()">
                         <button class="menu-item" (click)="togglePin(conversation, $event)">
                           <i class="fas fa-thumbtack"></i>
@@ -212,7 +213,7 @@ import { takeUntil } from 'rxjs/operators';
   `,
   styles: [`
     :host { display: block; height: 100%; }
-    .conversation-list { display: flex; flex-direction: column; height: 100%; background: #092340; }
+    .conversation-list { display: flex; flex-direction: column; height: 100%; background: var(--mj-brand-secondary); }
     .list-header { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
     .search-input {
       width: 100%;
@@ -225,13 +226,13 @@ import { takeUntil } from 'rxjs/operators';
       transition: all 0.2s;
     }
     .search-input::placeholder { color: rgba(255,255,255,0.5); }
-    .search-input:focus { outline: none; background: rgba(255,255,255,0.15); border-color: #0076B6; }
+    .search-input:focus { outline: none; background: rgba(255,255,255,0.15); border-color: var(--mj-brand-primary); }
     .btn-new-conversation {
       width: calc(100% - 16px);
       margin: 8px;
       padding: 10px;
-      background: #0076B6;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       border-radius: 6px;
       cursor: pointer;
@@ -244,7 +245,7 @@ import { takeUntil } from 'rxjs/operators';
       transition: background 0.2s;
       flex-shrink: 0;
     }
-    .btn-new-conversation:hover { background: #005A8C; }
+    .btn-new-conversation:hover { background: var(--mj-brand-primary-hover); }
     .btn-new-conversation i { font-size: 14px; }
     .list-content { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 0; }
 
@@ -256,7 +257,7 @@ import { takeUntil } from 'rxjs/operators';
       margin: 0 4px;
     }
     .pinned-section .section-title .section-icon {
-      color: #FFC107;
+      color: var(--mj-status-warning);
       font-size: 11px;
       margin-left: 2px;
     }
@@ -303,10 +304,10 @@ import { takeUntil } from 'rxjs/operators';
     }
     .conversation-item:hover { background: rgba(255,255,255,0.08); color: white; }
     .conversation-item:hover .conversation-actions { opacity: 1; }
-    .conversation-item.active { background: #0076B6; color: white; }
+    .conversation-item.active { background: var(--mj-brand-primary); color: white; }
     .conversation-icon-wrapper { position: relative; flex-shrink: 0; }
     .conversation-icon { font-size: 12px; width: 16px; text-align: center; }
-    .conversation-icon.has-tasks { color: #fb923c; }
+    .conversation-icon.has-tasks { color: var(--mj-status-warning); }
     .badge-overlay { position: absolute; top: -4px; right: -4px; }
     .conversation-info { flex: 1; min-width: 0; }
     .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -353,11 +354,11 @@ import { takeUntil } from 'rxjs/operators';
     .conversation-item:hover .conversation-actions { opacity: 1; pointer-events: auto; }
     .conversation-item.active .conversation-actions { opacity: 1; pointer-events: auto; }
     .conversation-actions > * { pointer-events: auto; }
-    .pinned-icon { color: #AAE7FD; font-size: 12px; }
+    .pinned-icon { color: var(--mj-brand-accent); font-size: 12px; }
 
     /* Task Indicator */
     .task-indicator {
-      color: #fb923c;
+      color: var(--mj-status-warning);
       font-size: 12px;
       margin-right: 8px;
       flex-shrink: 0;
@@ -374,7 +375,7 @@ import { takeUntil } from 'rxjs/operators';
       }
     }
     .conversation-item.active .task-indicator {
-      color: #fbbf24;
+      color: var(--mj-status-warning);
     }
 
     .menu-btn {
@@ -385,7 +386,7 @@ import { takeUntil } from 'rxjs/operators';
       justify-content: center;
       border-radius: 6px;
       color: rgba(255,255,255,0.7);
-      background: #092340 !important;
+      background: var(--mj-brand-secondary) !important;
       border: none;
       cursor: pointer;
       transition: all 0.2s;
@@ -395,7 +396,7 @@ import { takeUntil } from 'rxjs/operators';
       color: white;
     }
     .conversation-item.active .menu-btn {
-      background: #005A8C !important;
+      background: var(--mj-brand-primary-hover) !important;
       color: white;
     }
     .menu-btn i { font-size: 14px; }
@@ -406,7 +407,7 @@ import { takeUntil } from 'rxjs/operators';
       right: 0;
       margin-top: 4px;
       min-width: 160px;
-      background: #0A2742;
+      background: var(--mj-brand-secondary);
       border: 1px solid rgba(255,255,255,0.15);
       border-radius: 8px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -537,7 +538,7 @@ import { takeUntil } from 'rxjs/operators';
       top: calc(100% + 4px);
       right: 0;
       min-width: 200px;
-      background: #0A2742;
+      background: var(--mj-brand-secondary);
       border: 1px solid rgba(255,255,255,0.15);
       border-radius: 8px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -617,7 +618,7 @@ import { takeUntil } from 'rxjs/operators';
       width: 18px;
       height: 18px;
       cursor: pointer;
-      accent-color: #0076B6;
+      accent-color: var(--mj-brand-primary);
     }
 
     .selection-action-bar {
@@ -627,7 +628,7 @@ import { takeUntil } from 'rxjs/operators';
       justify-content: space-between;
       align-items: center;
       padding: 12px 16px;
-      background: #0A2742;
+      background: var(--mj-brand-secondary);
       border-top: 1px solid rgba(255,255,255,0.15);
       gap: 12px;
       flex-wrap: wrap;
@@ -652,7 +653,7 @@ import { takeUntil } from 'rxjs/operators';
     .link-btn {
       background: none;
       border: none;
-      color: #AAE7FD;
+      color: var(--mj-brand-accent);
       cursor: pointer;
       font-size: 13px;
       text-decoration: underline;
@@ -692,7 +693,7 @@ import { takeUntil } from 'rxjs/operators';
       align-items: center;
       gap: 6px;
       padding: 8px 16px;
-      background: #DC2626;
+      background: var(--mj-status-error);
       border: none;
       border-radius: 6px;
       color: white;
@@ -703,7 +704,7 @@ import { takeUntil } from 'rxjs/operators';
     }
 
     .btn-delete-bulk:hover:not(:disabled) {
-      background: #B91C1C;
+      background: color-mix(in srgb, var(--mj-status-error) 80%, black);
     }
 
     .btn-delete-bulk:disabled {
@@ -725,9 +726,11 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   @Input() isMobileView: boolean = false; // Whether we're on mobile (no pin options)
 
   @Output() conversationSelected = new EventEmitter<string>();
+  @Output() conversationDeleted = new EventEmitter<string>(); // Emits the deleted conversation ID
   @Output() newConversationRequested = new EventEmitter<void>();
   @Output() pinSidebarRequested = new EventEmitter<void>(); // Request to pin sidebar
   @Output() unpinSidebarRequested = new EventEmitter<void>(); // Request to unpin (collapse) sidebar
+  @Output() refreshRequested = new EventEmitter<void>(); // Emitted after list refresh so chat area can also reload
 
   public directMessagesExpanded: boolean = true;
   public pinnedExpanded: boolean = true;
@@ -749,7 +752,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     private cdr: ChangeDetectorRef
   ) {}
 
-  get filteredConversations(): ConversationEntity[] {
+  get filteredConversations(): MJConversationEntity[] {
     if (!this.searchQuery || this.searchQuery.trim() === '') {
       return this.conversationData.conversations;
     }
@@ -819,11 +822,14 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.isRefreshing = true;
     try {
       await this.conversationData.refreshConversations(this.environmentId, this.currentUser);
+      // Signal parent to also reload messages in the active conversation
+      this.refreshRequested.emit();
     } catch (error) {
       console.error('Error refreshing conversations:', error);
       await this.dialogService.alert('Error', 'Failed to refresh conversations. Please try again.');
     } finally {
       this.isRefreshing = false;
+      this.cdr.detectChanges();
       this.closeHeaderMenu();
     }
   }
@@ -848,7 +854,19 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.pinnedExpanded = !this.pinnedExpanded;
   }
 
-  selectConversation(conversation: ConversationEntity): void {
+  IsConversationActive(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(conversation.ID, this.selectedConversationId);
+  }
+
+  IsConversationRenamed(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(conversation.ID, this.renamedConversationId);
+  }
+
+  IsMenuOpen(conversation: MJConversationEntity): boolean {
+    return UUIDsEqual(this.openMenuConversationId, conversation.ID);
+  }
+
+  selectConversation(conversation: MJConversationEntity): void {
     this.conversationSelected.emit(conversation.ID);
     // Clear unread notifications when conversation is opened
     this.notificationService.markConversationAsRead(conversation.ID);
@@ -860,7 +878,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.newConversationRequested.emit();
   }
 
-  async renameConversation(conversation: ConversationEntity): Promise<void> {
+  async renameConversation(conversation: MJConversationEntity): Promise<void> {
     try {
       const result = await this.dialogService.input({
         title: 'Edit Conversation',
@@ -895,7 +913,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
   }
 
-  async deleteConversation(conversation: ConversationEntity): Promise<void> {
+  async deleteConversation(conversation: MJConversationEntity): Promise<void> {
     try {
       const confirmed = await this.dialogService.confirm({
         title: 'Delete Conversation',
@@ -905,7 +923,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
       });
 
       if (confirmed) {
-        await this.conversationData.deleteConversation(conversation.ID, this.currentUser);
+        const deletedId = conversation.ID;
+        await this.conversationData.deleteConversation(deletedId, this.currentUser);
+        this.cdr.detectChanges();
+        this.conversationDeleted.emit(deletedId);
       }
     } catch (error) {
       console.error('Error deleting conversation:', error);
@@ -922,7 +943,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.openMenuConversationId = null;
   }
 
-  async togglePin(conversation: ConversationEntity, event?: Event): Promise<void> {
+  async togglePin(conversation: MJConversationEntity, event?: Event): Promise<void> {
     if (event) event.stopPropagation();
     try {
       await this.conversationData.togglePin(conversation.ID, this.currentUser);
@@ -999,7 +1020,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
   }
 
-  handleConversationClick(conversation: ConversationEntity): void {
+  handleConversationClick(conversation: MJConversationEntity): void {
     if (this.isSelectionMode) {
       this.toggleConversationSelection(conversation.ID);
     } else {

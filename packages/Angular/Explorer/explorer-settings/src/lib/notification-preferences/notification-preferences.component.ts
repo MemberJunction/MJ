@@ -1,7 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { Metadata } from '@memberjunction/core';
-import { UserNotificationTypeEntity, UserNotificationPreferenceEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJUserNotificationTypeEntity, MJUserNotificationPreferenceEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * View model for managing notification preferences in the UI.
@@ -9,9 +10,9 @@ import { SharedService } from '@memberjunction/ng-shared';
  */
 interface NotificationPreferenceViewModel {
   /** The notification type definition (read-only) */
-  type: UserNotificationTypeEntity;
+  type: MJUserNotificationTypeEntity;
   /** User's existing preference record, or null if not yet set */
-  preference: UserNotificationPreferenceEntity | null;
+  preference: MJUserNotificationPreferenceEntity | null;
   /** Current state: In-app notifications enabled */
   inAppEnabled: boolean;
   /** Current state: Email notifications enabled */
@@ -92,7 +93,7 @@ export class NotificationPreferencesComponent implements OnInit {
 
       // Build view models from cached data
       this.viewModels = types.map((type) => {
-        const existingPref = prefs.find((p) => p.NotificationTypeID === type.ID);
+        const existingPref = prefs.find((p) => UUIDsEqual(p.NotificationTypeID, type.ID));
 
         // Get channel values: user preference > type default
         const inAppEnabled = existingPref?.InAppEnabled ?? type.DefaultInApp ?? true;
@@ -152,7 +153,7 @@ export class NotificationPreferencesComponent implements OnInit {
 
         if (!pref) {
           // Create new preference record
-          pref = await md.GetEntityObject<UserNotificationPreferenceEntity>('MJ: User Notification Preferences');
+          pref = await md.GetEntityObject<MJUserNotificationPreferenceEntity>('MJ: User Notification Preferences');
           pref.UserID = currentUser.ID;
           pref.NotificationTypeID = vm.type.ID;
           vm.preference = pref;
@@ -174,7 +175,7 @@ export class NotificationPreferencesComponent implements OnInit {
       const success = await transGroup.Submit();
 
       if (success) {
-        // Cache refresh happens automatically in UserNotificationPreferenceEntityExtended.Save()
+        // Cache refresh happens automatically in MJUserNotificationPreferenceEntityExtended.Save()
 
         // Update original values
         this.viewModels.forEach((vm) => {
@@ -219,7 +220,7 @@ export class NotificationPreferencesComponent implements OnInit {
    * @param type The notification type entity
    * @returns Font Awesome icon class (e.g., 'fa-bell'), defaults to 'fa-bell' if not specified
    */
-  getTypeIcon(type: UserNotificationTypeEntity): string {
+  getTypeIcon(type: MJUserNotificationTypeEntity): string {
     return type.Icon || 'fa-bell';
   }
 
@@ -229,7 +230,7 @@ export class NotificationPreferencesComponent implements OnInit {
    * @param type The notification type entity
    * @returns Hex color code (e.g., '#0076B6'), defaults to '#999' if not specified
    */
-  getTypeColor(type: UserNotificationTypeEntity): string {
+  getTypeColor(type: MJUserNotificationTypeEntity): string {
     return type.Color || '#999';
   }
 
@@ -239,7 +240,7 @@ export class NotificationPreferencesComponent implements OnInit {
    * @param type The notification type entity
    * @returns Number of days until auto-expire, or null if not configured
    */
-  getTypeAutoExpireDays(type: UserNotificationTypeEntity): number | null {
+  getTypeAutoExpireDays(type: MJUserNotificationTypeEntity): number | null {
     return type.AutoExpireDays || null;
   }
 
@@ -249,7 +250,7 @@ export class NotificationPreferencesComponent implements OnInit {
    * @param type The notification type entity
    * @returns True if user customization is allowed (default), false otherwise
    */
-  getAllowUserPreference(type: UserNotificationTypeEntity): boolean {
+  getAllowUserPreference(type: MJUserNotificationTypeEntity): boolean {
     return type.AllowUserPreference !== false;
   }
 }

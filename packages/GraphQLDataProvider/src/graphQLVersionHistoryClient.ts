@@ -89,7 +89,7 @@ export interface CreateVersionLabelResult {
  * const result = await vhClient.CreateLabel({
  *   Name: 'Before Refactor',
  *   Scope: 'Record',
- *   EntityName: 'AI Prompts',
+ *   EntityName: 'MJ: AI Prompts',
  *   RecordKeys: [{ Key: 'ID', Value: recordId }],
  *   IncludeDependencies: true,
  * });

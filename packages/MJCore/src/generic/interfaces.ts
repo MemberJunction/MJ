@@ -5,7 +5,7 @@ import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
-import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo } from "./queryInfo";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { RunQueryParams } from "./runQuery";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
@@ -159,13 +159,58 @@ export class PotentialDuplicateResponse {
 export interface IEntityDataProvider {
     Config(configData: ProviderConfigDataBase): Promise<boolean>
 
-    Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>  
+    Load(entity: BaseEntity, CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[], user: UserInfo) : Promise<{}>
 
-    Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>  
+    Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}>
 
     Delete(entity: BaseEntity, options: EntityDeleteOptions, user: UserInfo) : Promise<boolean>
 
     GetRecordChanges(entityName: string, CompositeKey: CompositeKey): Promise<RecordChange[]>
+
+    /**
+     * Discovers which IS-A child entity, if any, has a record with the given primary key.
+     * Used by BaseEntity.InitializeChildEntity() after loading a record to find the
+     * most-derived child type. Implementations should execute a single UNION ALL query
+     * across all child entity tables for efficiency.
+     *
+     * @param entityInfo The parent entity's EntityInfo (to find its child entity types)
+     * @param recordPKValue The primary key value to search for in child tables
+     * @param contextUser Optional context user for server-side operations
+     * @returns The child entity name if found, or null if no child record exists
+     */
+    FindISAChildEntity?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string } | null>;
+
+    /**
+     * Discovers ALL IS-A child entities that have records with the given primary key.
+     * Used for overlapping subtype parents (AllowMultipleSubtypes = true) where multiple
+     * children can coexist. Same UNION ALL query as FindISAChildEntity, but returns all matches.
+     *
+     * @param entityInfo The parent entity's EntityInfo (to find its child entity types)
+     * @param recordPKValue The primary key value to search for in child tables
+     * @param contextUser Optional context user for server-side operations
+     * @returns Array of child entity names found (empty if none)
+     */
+    FindISAChildEntities?(entityInfo: EntityInfo, recordPKValue: string, contextUser?: UserInfo): Promise<{ ChildEntityName: string }[]>;
+
+    /**
+     * Begin an independent provider-level transaction for IS-A chain orchestration.
+     * Returns a provider-specific transaction object (e.g., sql.Transaction for SQLServer).
+     * Separate from the provider's internal transaction management (TransactionGroup system).
+     * Optional — client-side providers (GraphQL) do not implement this.
+     */
+    BeginISATransaction?(): Promise<unknown>;
+
+    /**
+     * Commit an IS-A chain transaction.
+     * @param txn The transaction object returned from BeginISATransaction()
+     */
+    CommitISATransaction?(txn: unknown): Promise<void>;
+
+    /**
+     * Rollback an IS-A chain transaction.
+     * @param txn The transaction object returned from BeginISATransaction()
+     */
+    RollbackISATransaction?(txn: unknown): Promise<void>;
 }
 
 /**
@@ -202,11 +247,27 @@ export class EntitySaveOptions {
     /**
      * When set to true, the entity will skip the asynchronous ValidateAsync() method during save.
      * This is an advanced setting and should only be used when you are sure the async validation is not needed.
-     * The default behavior is to run the async validation and the default value is undefined. 
+     * The default behavior is to run the async validation and the default value is undefined.
      * Also, you can set an Entity level default in a BaseEntity subclass by overriding the DefaultSkipAsyncValidation() getter property.
      * @see BaseEntity.DefaultSkipAsyncValidation
      */
     SkipAsyncValidation?: boolean = undefined;
+
+    /**
+     * When true, this entity is being saved as part of an IS-A parent chain
+     * initiated by a child entity. Provider behavior:
+     * - GraphQLDataProvider: full ORM pipeline runs, skip network call
+     * - SQLServerDataProvider: real save using shared ProviderTransaction
+     */
+    IsParentEntitySave?: boolean = false;
+
+    /**
+     * The entity name of the child that initiated this parent save in an IS-A chain.
+     * Used by server-side providers to skip the active branch when propagating
+     * Record Change entries to sibling branches of overlapping parents.
+     * Only set when IsParentEntitySave is true.
+     */
+    ISAActiveChildEntityName?: string;
 }
 
 /**
@@ -230,6 +291,13 @@ export class EntityDeleteOptions {
      * Subclasses can also override the Delete() method to provide custom logic that will be invoked when ReplayOnly is set to true
      */
     ReplayOnly?: boolean = false;
+
+    /**
+     * When true, this entity is being deleted as part of an IS-A parent chain
+     * initiated by a child entity. The child deletes itself first (FK constraint),
+     * then cascades deletion to its parent.
+     */
+    IsParentEntityDelete?: boolean = false;
 }
 
 /**
@@ -386,6 +454,12 @@ export interface IMetadataProvider {
 
     get QueryParameters(): QueryParameterInfo[]
 
+    get QueryDependencies(): QueryDependencyInfo[]
+
+    get SQLDialects(): SQLDialectInfo[]
+
+    get QuerySQLs(): QuerySQLInfo[]
+
     get Libraries(): LibraryInfo[]
 
     get VisibleExplorerNavigationItems(): ExplorerNavigationItem[]
@@ -459,21 +533,44 @@ export interface IMetadataProvider {
 
 
     /**
-     * Returns the Name of the specific recordId for a given entityName. This is done by 
-     * looking for the IsNameField within the EntityFields collection for a given entity. 
-     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned 
-     * @param entityName 
-     * @param CompositeKey 
+     * Returns the Name of the specific recordId for a given entityName. This is done by
+     * looking for the IsNameField within the EntityFields collection for a given entity.
+     * If no IsNameField is found, but a field called "Name" exists, that value is returned. Otherwise null returned
+     * @param entityName
+     * @param CompositeKey
+     * @param contextUser - optional user context for permissions
+     * @param forceRefresh - if true, bypasses cache and fetches fresh from database
      * @returns the name of the record
      */
-    GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo): Promise<string>
+    GetEntityRecordName(entityName: string, compositeKey: CompositeKey, contextUser?: UserInfo, forceRefresh?: boolean): Promise<string>
 
     /**
      * Returns one or more record names using the same logic as GetEntityRecordName, but for multiple records at once - more efficient to use this method if you need to get multiple record names at once
-     * @param info 
+     * @param info
+     * @param contextUser - optional user context for permissions
+     * @param forceRefresh - if true, bypasses cache and fetches fresh from database
      * @returns an array of EntityRecordNameResult objects
      */
-    GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo): Promise<EntityRecordNameResult[]>
+    GetEntityRecordNames(info: EntityRecordNameInput[], contextUser?: UserInfo, forceRefresh?: boolean): Promise<EntityRecordNameResult[]>
+
+    /**
+     * Asynchronous lookup of a cached entity record name. Returns the cached name if available, or undefined if not cached.
+     * Use this for synchronous contexts (like template rendering) where you can't await GetEntityRecordName().
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param loadIfNeeded - If set to true, will load from database if not already cached
+     * @returns The cached display name, or undefined if not in cache
+     */
+    GetCachedRecordName(entityName: string, compositeKey: CompositeKey, loadIfNeeded?: boolean): Promise<string | undefined>;
+
+    /**
+     * Stores a record name in the cache for later synchronous retrieval via GetCachedRecordName().
+     * Called automatically by BaseEntity after Load(), LoadFromData(), and Save() operations.
+     * @param entityName - The name of the entity
+     * @param compositeKey - The primary key value(s) for the record
+     * @param recordName - The display name to cache
+     */
+    SetCachedRecordName(entityName: string, compositeKey: CompositeKey, recordName: string): void
 
     GetRecordFavoriteStatus(userId: string, entityName: string, CompositeKey: CompositeKey, contextUser?: UserInfo): Promise<boolean>
 
@@ -503,11 +600,16 @@ export interface IMetadataProvider {
     RemoveLocalMetadataFromStorage(): Promise<void>
 
     /**
-     * Always retrieves data from the server - this method does NOT check cache. To use cached local values if available, call GetAndCacheDatasetByName() instead
-     * @param datasetName 
-     * @param itemFilters 
+     * Retrieves a dataset by name. When `forceRefresh` is true, bypasses any in-memory or local cache
+     * and fetches directly from the database. When false (default), server-side providers may serve
+     * from LocalCacheManager if `TrustLocalCacheCompletely` is true.
+     * @param datasetName
+     * @param itemFilters
+     * @param contextUser
+     * @param providerToUse
+     * @param forceRefresh When true, bypasses all caching and fetches fresh data from the database
      */
-    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType>;
+    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider, forceRefresh?: boolean): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
@@ -651,6 +753,23 @@ export type RunViewResult<T = any> = {
      * Only present if Aggregates were requested.
      */
     AggregateExecutionTime?: number;
+
+    /**
+     * If an `OnDataChanged` callback was provided in {@link RunViewParams}, this function
+     * unregisters that callback. Call this during cleanup (e.g., Angular `ngOnDestroy`,
+     * React effect cleanup) to prevent memory leaks.
+     *
+     * For long-lived callers like engines, this is typically not needed — the callback
+     * persists for the process lifetime.
+     *
+     * @example
+     * ```typescript
+     * const result = await rv.RunView({ EntityName: 'Users', OnDataChanged: (e) => { ... } });
+     * // Later:
+     * result.Unsubscribe?.();
+     * ```
+     */
+    Unsubscribe?: () => void;
 }
 
 /**
@@ -1073,6 +1192,9 @@ export class AllMetadata {
     AllQueryPermissions: QueryPermissionInfo[] = [];
     AllQueryEntities: QueryEntityInfo[] = [];
     AllQueryParameters: QueryParameterInfo[] = [];
+    AllQueryDependencies: QueryDependencyInfo[] = [];
+    AllSQLDialects: SQLDialectInfo[] = [];
+    AllQuerySQLs: QuerySQLInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];
     AllExplorerNavigationItems: ExplorerNavigationItem[] = [];

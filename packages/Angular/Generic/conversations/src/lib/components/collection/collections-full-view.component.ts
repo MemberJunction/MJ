@@ -1,6 +1,6 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { CollectionEntity, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
@@ -8,6 +8,7 @@ import { CollectionPermissionService, CollectionPermission } from '../../service
 import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 import { Subject, takeUntil } from 'rxjs';
 import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSortOrder } from '../../models/collection-view.model';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Full-panel Collections view component
@@ -17,7 +18,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
   standalone: false,
   selector: 'mj-collections-full-view',
   template: `
-    <div class="collections-view" (keydown)="handleKeyboardShortcut($event)">
+    <div class="collections-view" (keydown)="handleKeyboardShortcut($event)" kendoDialogContainer>
       <!-- Mac Finder-style Header -->
       <div class="collections-header">
         <!-- Breadcrumb navigation -->
@@ -106,7 +107,35 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
               </button>
             }
           </div>
-    
+
+          <!-- Current collection actions (visible when inside a collection) -->
+          @if (currentCollectionId && currentCollection) {
+            <div class="toolbar-separator"></div>
+            <div class="toolbar-actions-group">
+              @if (canShareCurrent()) {
+                <button class="btn-icon"
+                  (click)="shareCurrentCollection()"
+                  [title]="'Share: ' + currentCollection.Name">
+                  <i class="fas fa-share-nodes"></i>
+                </button>
+              }
+              @if (canEditCurrent()) {
+                <button class="btn-icon"
+                  (click)="editCurrentCollection()"
+                  [title]="'Edit: ' + currentCollection.Name">
+                  <i class="fas fa-pen-to-square"></i>
+                </button>
+              }
+              @if (canDeleteCurrent()) {
+                <button class="btn-icon btn-icon-danger"
+                  (click)="deleteCurrentCollection()"
+                  [title]="'Delete: ' + currentCollection.Name">
+                  <i class="fas fa-trash"></i>
+                </button>
+              }
+            </div>
+          }
+
           <!-- New dropdown -->
           @if (canEditCurrent()) {
             <div class="dropdown-container">
@@ -182,7 +211,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
               <h3>No collections yet</h3>
               <p>Create your first collection to get started</p>
               @if (canEditCurrent()) {
-                <button class="btn-primary"
+                <button class="btn-primary empty-state-cta"
                   (click)="createCollection()"
                   >
                   <i class="fas fa-plus"></i>
@@ -207,7 +236,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
               <div
                 class="grid-item"
                 [class.selected]="item.selected"
-                [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
+                [class.active]="item.type === 'artifact' && IsArtifactActive(item)"
                 (click)="onItemClick(item, $event)"
                 (dblclick)="onItemDoubleClick(item, $event)"
                 (contextmenu)="onItemContextMenu(item, $event)">
@@ -341,7 +370,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
                   <tr
                     class="list-item"
                     [class.selected]="item.selected"
-                    [class.active]="item.type === 'artifact' && item.artifact?.ID === activeArtifactId"
+                    [class.active]="item.type === 'artifact' && IsArtifactActive(item)"
                     (click)="onItemClick(item, $event)"
                     (dblclick)="onItemDoubleClick(item, $event)"
                     (contextmenu)="onItemContextMenu(item, $event)">
@@ -393,8 +422,56 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
         }
       </div>
     </div>
-    
-    <!-- Modals (unchanged) -->
+
+    <!-- Context Menu -->
+    @if (showContextMenu && contextMenuItem) {
+      <div class="context-menu-backdrop" (click)="closeContextMenu()"></div>
+      <div class="context-menu"
+        [style.left.px]="contextMenuPosition.x"
+        [style.top.px]="contextMenuPosition.y">
+        @if (contextMenuItem.type === 'folder' && contextMenuItem.collection) {
+          <button class="context-menu-item" (click)="onContextMenuAction('open')">
+            <i class="fas fa-folder-open"></i>
+            <span>Open</span>
+          </button>
+          <div class="context-menu-divider"></div>
+          @if (canShare(contextMenuItem.collection)) {
+            <button class="context-menu-item" (click)="onContextMenuAction('share')">
+              <i class="fas fa-share-nodes"></i>
+              <span>Share</span>
+            </button>
+          }
+          @if (canEdit(contextMenuItem.collection)) {
+            <button class="context-menu-item" (click)="onContextMenuAction('edit')">
+              <i class="fas fa-pen-to-square"></i>
+              <span>Edit</span>
+            </button>
+          }
+          @if (canDelete(contextMenuItem.collection)) {
+            <div class="context-menu-divider"></div>
+            <button class="context-menu-item context-menu-danger" (click)="onContextMenuAction('delete')">
+              <i class="fas fa-trash"></i>
+              <span>Delete</span>
+            </button>
+          }
+        }
+        @if (contextMenuItem.type === 'artifact') {
+          <button class="context-menu-item" (click)="onContextMenuAction('view')">
+            <i class="fas fa-eye"></i>
+            <span>View</span>
+          </button>
+          @if (canEditCurrent()) {
+            <div class="context-menu-divider"></div>
+            <button class="context-menu-item context-menu-danger" (click)="onContextMenuAction('remove')">
+              <i class="fas fa-times-circle"></i>
+              <span>Remove from Collection</span>
+            </button>
+          }
+        }
+      </div>
+    }
+
+    <!-- Modals -->
     <mj-collection-form-modal
       [isOpen]="isFormModalOpen"
       [collection]="editingCollection"
@@ -429,7 +506,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #FAFAFA;
+      background: var(--mj-bg-surface-sunken);
       position: relative;
     }
 
@@ -438,9 +515,9 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       display: flex;
       align-items: center;
       padding: 12px 20px;
-      border-bottom: 1px solid #E5E7EB;
+      border-bottom: 1px solid var(--mj-border-default);
       gap: 16px;
-      background: white;
+      background: var(--mj-bg-surface);
     }
 
     .collections-breadcrumb {
@@ -458,12 +535,12 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .breadcrumb-item i {
-      color: #6B7280;
+      color: var(--mj-text-muted);
       font-size: 14px;
     }
 
     .breadcrumb-link {
-      color: #111827;
+      color: var(--mj-text-primary);
       font-weight: 500;
       cursor: pointer;
       text-decoration: none;
@@ -473,11 +550,11 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .breadcrumb-link:hover {
-      color: #0076D6;
+      color: var(--mj-brand-primary);
     }
 
     .breadcrumb-link.active {
-      color: #6B7280;
+      color: var(--mj-text-muted);
       cursor: default;
     }
 
@@ -489,7 +566,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .breadcrumb-separator {
-      color: #D1D5DB;
+      color: var(--mj-border-strong);
       font-size: 10px;
     }
 
@@ -505,10 +582,10 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
-      background: #007AFF;
+      background: var(--mj-brand-primary);
       border: none;
       border-radius: 6px;
-      color: white;
+      color: var(--mj-text-inverse);
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
@@ -516,7 +593,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .btn-primary:hover {
-      background: #0051D5;
+      background: var(--mj-brand-primary-hover);
     }
 
     .btn-primary i.fa-chevron-down {
@@ -527,10 +604,10 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .btn-icon {
       padding: 6px 10px;
       background: transparent;
-      border: 1px solid #D1D5DB;
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
       cursor: pointer;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       transition: all 150ms ease;
       display: flex;
       align-items: center;
@@ -538,19 +615,19 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .btn-icon:hover {
-      background: #F9FAFB;
-      color: #111827;
-      border-color: #9CA3AF;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
+      border-color: var(--mj-text-disabled);
     }
 
     .btn-icon.active {
-      background: #EFF6FF;
-      color: #007AFF;
-      border-color: #007AFF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
     }
 
     .btn-icon.active:hover {
-      background: #DBEAFE;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     /* Dropdown menus */
@@ -563,8 +640,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       top: calc(100% + 4px);
       left: 0;
       min-width: 200px;
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       padding: 4px;
@@ -585,7 +662,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       background: transparent;
       border: none;
       border-radius: 4px;
-      color: #111827;
+      color: var(--mj-text-primary);
       font-size: 13px;
       cursor: pointer;
       text-align: left;
@@ -593,7 +670,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .dropdown-item:hover:not(:disabled) {
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .dropdown-item:disabled {
@@ -602,24 +679,24 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .dropdown-item.active {
-      background: #EFF6FF;
-      color: #007AFF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .dropdown-item i {
       font-size: 14px;
       width: 16px;
       text-align: center;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .dropdown-item.active i {
-      color: #007AFF;
+      color: var(--mj-brand-primary);
     }
 
     .dropdown-divider {
       height: 1px;
-      background: #E5E7EB;
+      background: var(--mj-border-default);
       margin: 4px 0;
     }
 
@@ -634,7 +711,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .search-container i.fa-search {
       position: absolute;
       left: 10px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       font-size: 13px;
       pointer-events: none;
     }
@@ -642,7 +719,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .search-input {
       width: 100%;
       padding: 6px 32px 6px 32px;
-      border: 1px solid #D1D5DB;
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
       font-size: 13px;
       outline: none;
@@ -650,8 +727,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .search-input:focus {
-      border-color: #007AFF;
-      box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     .search-clear {
@@ -660,7 +737,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       padding: 4px;
       background: transparent;
       border: none;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       border-radius: 4px;
       display: flex;
@@ -669,8 +746,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .search-clear:hover {
-      background: #F3F4F6;
-      color: #6B7280;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
     }
 
     /* Selection toolbar */
@@ -679,8 +756,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       align-items: center;
       justify-content: space-between;
       padding: 8px 20px;
-      background: #EFF6FF;
-      border-bottom: 1px solid #BFDBFE;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
     }
 
     .selection-info {
@@ -692,7 +769,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .selection-count {
       font-size: 13px;
       font-weight: 600;
-      color: #1E40AF;
+      color: var(--mj-brand-primary);
     }
 
     .selection-actions {
@@ -705,10 +782,10 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
-      background: white;
-      border: 1px solid #D1D5DB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
-      color: #374151;
+      color: var(--mj-text-secondary);
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
@@ -716,22 +793,24 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .btn-toolbar:hover {
-      background: #F9FAFB;
-      border-color: #9CA3AF;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-text-disabled);
     }
 
     .btn-toolbar.btn-danger {
-      color: #DC2626;
-      border-color: #FCA5A5;
+      color: var(--mj-status-error);
+      border-color: color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
     }
 
     .btn-toolbar.btn-danger:hover {
-      background: #FEE2E2;
-      border-color: #DC2626;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border-color: var(--mj-status-error);
     }
 
     /* Content area */
     .collections-content {
+      display: flex;
+      flex-direction: column;
       flex: 1;
       overflow-y: auto;
       padding: 20px;
@@ -743,22 +822,23 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100%;
-      color: #9CA3AF;
+      flex: 1;
+      min-height: 0;
+      color: var(--mj-text-disabled);
       text-align: center;
-      padding: 48px 24px;
+      padding: 24px;
     }
 
-    .empty-state i {
+    .empty-state > i {
       font-size: 64px;
       margin-bottom: 24px;
       opacity: 0.3;
-      color: #D1D5DB;
+      color: var(--mj-border-strong);
     }
 
     .empty-state h3 {
       margin: 0 0 8px 0;
-      color: #374151;
+      color: var(--mj-text-secondary);
       font-size: 18px;
       font-weight: 600;
     }
@@ -766,7 +846,13 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .empty-state p {
       margin: 0 0 24px 0;
       font-size: 14px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
+    }
+
+    .empty-state .empty-state-cta {
+      padding: 10px 20px;
+      font-size: 14px;
+      border-radius: 8px;
     }
 
     .empty-state-actions {
@@ -788,7 +874,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       display: flex;
       flex-direction: column;
       padding: 12px;
-      background: white;
+      background: var(--mj-bg-surface);
       border: 2px solid transparent;
       border-radius: 8px;
       cursor: pointer;
@@ -798,23 +884,23 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .grid-item:hover {
-      background: #F9FAFB;
-      border-color: #D1D5DB;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-border-strong);
     }
 
     .grid-item.selected {
-      background: #EFF6FF;
-      border-color: #007AFF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: var(--mj-brand-primary);
     }
 
     .grid-item.active {
-      background: #FEF3C7;
-      border-color: #F59E0B;
-      box-shadow: 0 0 0 1px #F59E0B;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      border-color: var(--mj-status-warning);
+      box-shadow: 0 0 0 1px var(--mj-status-warning);
     }
 
     .grid-item.active:hover {
-      background: #FDE68A;
+      background: color-mix(in srgb, var(--mj-status-warning) 25%, var(--mj-bg-surface));
     }
 
     /* Select mode styling for grid */
@@ -823,8 +909,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .unified-grid.select-mode .grid-item:hover {
-      background: #EFF6FF;
-      border-color: #93C5FD;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
     }
 
     .item-checkbox {
@@ -842,13 +928,13 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .item-checkbox i {
       font-size: 16px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       transition: color 150ms ease;
     }
 
     .grid-item.selected .item-checkbox i,
     .item-checkbox:hover i {
-      color: #007AFF;
+      color: var(--mj-brand-primary);
     }
 
     .grid-item-content {
@@ -869,21 +955,21 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .grid-icon.folder-icon {
-      background: linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%);
+      background: var(--mj-brand-primary);
     }
 
     .grid-icon.folder-icon i {
       font-size: 36px;
-      color: white;
+      color: var(--mj-text-inverse);
     }
 
     .grid-icon.artifact-icon {
-      background: #F3F4F6;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .grid-icon.artifact-icon i {
       font-size: 32px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .shared-badge {
@@ -892,17 +978,17 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       right: -4px;
       width: 20px;
       height: 20px;
-      background: #10B981;
+      background: var(--mj-status-success);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 2px solid white;
+      border: 2px solid var(--mj-bg-surface);
     }
 
     .shared-badge i {
       font-size: 10px;
-      color: white;
+      color: var(--mj-text-inverse);
     }
 
     .grid-info {
@@ -913,7 +999,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .grid-name {
       font-size: 13px;
       font-weight: 500;
-      color: #111827;
+      color: var(--mj-text-primary);
       line-height: 1.3;
       margin-bottom: 4px;
       /* Allow wrapping to 2 lines max */
@@ -926,7 +1012,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .grid-description {
       font-size: 11px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       line-height: 1.3;
       margin-bottom: 4px;
       /* Allow wrapping to 2 lines max */
@@ -939,13 +1025,13 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .grid-meta {
       font-size: 11px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       margin-top: 4px;
     }
 
     .grid-owner {
       font-size: 11px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       margin-top: 2px;
     }
 
@@ -957,8 +1043,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .version-badge {
       display: inline-block;
       padding: 2px 6px;
-      background: #FEF3C7;
-      color: #92400E;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
       border-radius: 3px;
       font-size: 10px;
       font-weight: 600;
@@ -969,8 +1055,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .artifact-type-badge {
       display: inline-block;
       padding: 2px 6px;
-      background: #DBEAFE;
-      color: #1E40AF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
       border-radius: 3px;
       font-size: 10px;
       font-weight: 500;
@@ -979,8 +1065,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     /* List view */
     .unified-list {
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       overflow: hidden;
     }
@@ -991,8 +1077,8 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .list-table thead {
-      background: #F9FAFB;
-      border-bottom: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .list-table th {
@@ -1000,7 +1086,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
       text-align: left;
       font-size: 12px;
       font-weight: 600;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -1012,7 +1098,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .list-table th.sortable:hover {
-      color: #007AFF;
+      color: var(--mj-brand-primary);
     }
 
     .list-table th.sortable span {
@@ -1030,7 +1116,7 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .list-table tbody tr {
-      border-bottom: 1px solid #F3F4F6;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
       transition: background 150ms ease;
       cursor: pointer;
       user-select: none;
@@ -1041,26 +1127,26 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     }
 
     .list-table tbody tr:hover {
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .list-table tbody tr.selected {
-      background: #EFF6FF;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     .list-table tbody tr.active {
-      background: #FEF3C7;
-      border-left: 3px solid #F59E0B;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      border-left: 3px solid var(--mj-status-warning);
     }
 
     .list-table tbody tr.active:hover {
-      background: #FDE68A;
+      background: color-mix(in srgb, var(--mj-status-warning) 25%, var(--mj-bg-surface));
     }
 
     .list-table td {
       padding: 12px 16px;
       font-size: 13px;
-      color: #374151;
+      color: var(--mj-text-secondary);
     }
 
     .col-checkbox {
@@ -1070,14 +1156,14 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .col-checkbox i {
       font-size: 16px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       transition: color 150ms ease;
     }
 
     .col-checkbox i:hover,
     .list-table tbody tr.selected .col-checkbox i {
-      color: #007AFF;
+      color: var(--mj-brand-primary);
     }
 
     .col-name {
@@ -1092,18 +1178,18 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
 
     .list-name-cell i {
       font-size: 16px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       width: 20px;
       text-align: center;
     }
 
     .list-name-cell .fa-folder {
-      color: #3B82F6;
+      color: var(--mj-brand-primary);
     }
 
     .shared-indicator {
       font-size: 12px;
-      color: #10B981;
+      color: var(--mj-status-success);
       margin-left: auto;
     }
 
@@ -1118,6 +1204,97 @@ import { CollectionViewMode, CollectionViewItem, CollectionSortBy, CollectionSor
     .col-owner {
       width: 150px;
     }
+
+    /* Toolbar separator and action group */
+    .toolbar-separator {
+      width: 1px;
+      height: 24px;
+      background: var(--mj-border-strong);
+      margin: 0 4px;
+    }
+
+    .toolbar-actions-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-icon-danger {
+      color: var(--mj-status-error);
+      border-color: color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
+    }
+
+    .btn-icon-danger:hover {
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
+      border-color: var(--mj-status-error);
+    }
+
+    /* Context menu */
+    .context-menu-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1999;
+    }
+
+    .context-menu {
+      position: fixed;
+      min-width: 180px;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+      padding: 4px;
+      z-index: 2000;
+    }
+
+    .context-menu-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 8px 12px;
+      background: transparent;
+      border: none;
+      border-radius: 4px;
+      color: var(--mj-text-primary);
+      font-size: 13px;
+      cursor: pointer;
+      text-align: left;
+      transition: background 100ms ease;
+    }
+
+    .context-menu-item:hover {
+      background: var(--mj-bg-surface-sunken);
+    }
+
+    .context-menu-item i {
+      font-size: 14px;
+      width: 16px;
+      text-align: center;
+      color: var(--mj-text-muted);
+    }
+
+    .context-menu-danger {
+      color: var(--mj-status-error);
+    }
+
+    .context-menu-danger i {
+      color: var(--mj-status-error);
+    }
+
+    .context-menu-danger:hover {
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+    }
+
+    .context-menu-divider {
+      height: 1px;
+      background: var(--mj-border-default);
+      margin: 4px 0;
+    }
   `]
 })
 export class CollectionsFullViewComponent implements OnInit, OnDestroy {
@@ -1128,22 +1305,22 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     versionId?: string | null;
   }>();
 
-  public collections: CollectionEntity[] = [];
-  public artifactVersions: Array<{ version: ArtifactVersionEntity; artifact: ArtifactEntity }> = [];
-  public filteredCollections: CollectionEntity[] = [];
-  public filteredArtifactVersions: Array<{ version: ArtifactVersionEntity; artifact: ArtifactEntity }> = [];
+  public collections: MJCollectionEntity[] = [];
+  public artifactVersions: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> = [];
+  public filteredCollections: MJCollectionEntity[] = [];
+  public filteredArtifactVersions: Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }> = [];
   public isLoading: boolean = false;
   public breadcrumbs: Array<{ id: string; name: string }> = [];
   public currentCollectionId: string | null = null;
-  public currentCollection: CollectionEntity | null = null;
+  public currentCollection: MJCollectionEntity | null = null;
 
   public isFormModalOpen: boolean = false;
-  public editingCollection?: CollectionEntity;
+  public editingCollection?: MJCollectionEntity;
   public isArtifactModalOpen: boolean = false;
 
   public userPermissions: Map<string, CollectionPermission> = new Map();
   public isShareModalOpen: boolean = false;
-  public sharingCollection: CollectionEntity | null = null;
+  public sharingCollection: MJCollectionEntity | null = null;
 
   // New UI state for Mac Finder-style view
   public viewMode: CollectionViewMode = 'grid';
@@ -1156,6 +1333,15 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public showSortDropdown: boolean = false;
   public activeArtifactId: string | null = null; // Track which artifact is currently being viewed
   public isSelectMode: boolean = false; // Toggle for selection mode
+
+  IsArtifactActive(item: CollectionViewItem): boolean {
+    return UUIDsEqual(item.artifact?.ID, this.activeArtifactId);
+  }
+
+  // Context menu state
+  public showContextMenu: boolean = false;
+  public contextMenuPosition: { x: number; y: number } = { x: 0, y: 0 };
+  public contextMenuItem: CollectionViewItem | null = null;
 
   private destroy$ = new Subject<void>();
   private isNavigatingProgrammatically = false;
@@ -1289,7 +1475,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
       const filter = `${baseFilter} AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
 
-      const result = await rv.RunView<CollectionEntity>(
+      const result = await rv.RunView<MJCollectionEntity>(
         {
           EntityName: 'MJ: Collections',
           ExtraFilter: filter,
@@ -1360,7 +1546,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  async openCollection(collection: CollectionEntity): Promise<void> {
+  async openCollection(collection: MJCollectionEntity): Promise<void> {
     this.isNavigatingProgrammatically = true;
     try {
       this.breadcrumbs.push({ id: collection.ID, name: collection.Name });
@@ -1392,7 +1578,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
         // Load the collection entity
         const md = new Metadata();
-        this.currentCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+        this.currentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
         await this.currentCollection.Load(crumb.id);
 
         await this.loadData();
@@ -1443,7 +1629,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
       // Load the target collection
       const md = new Metadata();
-      const targetCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      const targetCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
       await targetCollection.Load(collectionId);
 
       if (!targetCollection || !targetCollection.ID) {
@@ -1457,7 +1643,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       let currentId: string | null = targetCollection.ParentID;
 
       while (currentId) {
-        const parentCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+        const parentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
         await parentCollection.Load(currentId);
 
         if (parentCollection && parentCollection.ID) {
@@ -1520,7 +1706,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.isFormModalOpen = true;
   }
 
-  async editCollection(collection: CollectionEntity): Promise<void> {
+  async editCollection(collection: MJCollectionEntity): Promise<void> {
     const canEdit = await this.validatePermission(collection, 'edit');
     if (!canEdit) return;
 
@@ -1528,7 +1714,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.isFormModalOpen = true;
   }
 
-  async deleteCollection(collection: CollectionEntity): Promise<void> {
+  async deleteCollection(collection: MJCollectionEntity): Promise<void> {
     console.log('deleteCollection called for:', collection.Name, collection.ID);
 
     // Validate user has delete permission
@@ -1561,7 +1747,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     const rv = new RunView();
 
     // Step 1: Find and delete all child collections recursively
-    const childrenResult = await rv.RunView<CollectionEntity>(
+    const childrenResult = await rv.RunView<MJCollectionEntity>(
       {
         EntityName: 'MJ: Collections',
         ExtraFilter: `ParentID='${collectionId}'`,
@@ -1599,7 +1785,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
     // Step 4: Delete the collection itself
     const md = new Metadata();
-    const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+    const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
     await collection.Load(collectionId);
     const deleted = await collection.Delete();
 
@@ -1608,7 +1794,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  async onCollectionSaved(collection: CollectionEntity): Promise<void> {
+  async onCollectionSaved(collection: MJCollectionEntity): Promise<void> {
     this.isFormModalOpen = false;
     this.editingCollection = undefined;
     await this.loadCollections();
@@ -1616,6 +1802,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     await this.loadCurrentCollectionPermission();
     // Rebuild unified list to show new collection
     this.buildUnifiedItemList();
+    this.cdr.detectChanges();
   }
 
   onFormCancelled(): void {
@@ -1634,16 +1821,17 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.isArtifactModalOpen = true;
   }
 
-  async onArtifactSaved(artifact: ArtifactEntity): Promise<void> {
+  async onArtifactSaved(artifact: MJArtifactEntity): Promise<void> {
     this.isArtifactModalOpen = false;
     await this.loadArtifacts();
+    this.cdr.detectChanges();
   }
 
   onArtifactModalCancelled(): void {
     this.isArtifactModalOpen = false;
   }
 
-  async removeArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): Promise<void> {
+  async removeArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): Promise<void> {
     if (!this.currentCollectionId) return;
 
     // Validate user has delete permission on current collection
@@ -1676,6 +1864,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
             await joinRecord.Delete();
           }
           await this.loadArtifacts();
+          this.buildUnifiedItemList();
         } else {
           await this.dialogService.alert('Error', 'Collection artifact link not found.');
         }
@@ -1686,18 +1875,18 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
   }
 
-  viewArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): void {
+  viewArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
     this.activeArtifactId = item.artifact.ID;
     this.artifactState.openArtifact(item.artifact.ID, item.version.VersionNumber);
   }
 
   // Permission validation and checking methods
   private async validatePermission(
-    collection: CollectionEntity | null,
+    collection: MJCollectionEntity | null,
     requiredPermission: 'edit' | 'delete' | 'share'
   ): Promise<boolean> {
     // Owner has all permissions (including backwards compatibility for null OwnerID)
-    if (!collection?.OwnerID || collection.OwnerID === this.currentUser.ID) {
+    if (!collection?.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) {
       return true;
     }
 
@@ -1727,27 +1916,27 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     return true;
   }
 
-  canEdit(collection: CollectionEntity): boolean {
+  canEdit(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
     return permission?.canEdit || false;
   }
 
-  canDelete(collection: CollectionEntity): boolean {
+  canDelete(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
     return permission?.canDelete || false;
   }
 
-  canShare(collection: CollectionEntity): boolean {
+  canShare(collection: MJCollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
-    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+    if (!collection.OwnerID || UUIDsEqual(collection.OwnerID, this.currentUser.ID)) return true;
 
     // Check permission record
     const permission = this.userPermissions.get(collection.ID);
@@ -1770,13 +1959,21 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     return this.canDelete(this.currentCollection);
   }
 
-  isShared(collection: CollectionEntity): boolean {
+  canShareCurrent(): boolean {
+    // At root level, no share needed
+    if (!this.currentCollectionId || !this.currentCollection) {
+      return false;
+    }
+    return this.canShare(this.currentCollection);
+  }
+
+  isShared(collection: MJCollectionEntity): boolean {
     // Collection is shared if user is not the owner and OwnerID is set
-    return collection.OwnerID != null && collection.OwnerID !== this.currentUser.ID;
+    return collection.OwnerID != null && !UUIDsEqual(collection.OwnerID, this.currentUser.ID);
   }
 
   // Sharing methods
-  async shareCollection(collection: CollectionEntity): Promise<void> {
+  async shareCollection(collection: MJCollectionEntity): Promise<void> {
     // Validate user has share permission
     const canShare = await this.validatePermission(collection, 'share');
     if (!canShare) return;
@@ -1788,6 +1985,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   async onPermissionsChanged(): Promise<void> {
     // Reload collections and permissions after sharing changes
     await this.loadCollections();
+    this.cdr.detectChanges();
   }
 
   onShareModalCancelled(): void {
@@ -1795,11 +1993,30 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.sharingCollection = null;
   }
 
+  // Header toolbar action methods
+  shareCurrentCollection(): void {
+    if (this.currentCollection) {
+      this.shareCollection(this.currentCollection);
+    }
+  }
+
+  editCurrentCollection(): void {
+    if (this.currentCollection) {
+      this.editCollection(this.currentCollection);
+    }
+  }
+
+  deleteCurrentCollection(): void {
+    if (this.currentCollection) {
+      this.deleteCollection(this.currentCollection);
+    }
+  }
+
   /**
    * Get the icon for an artifact using the centralized icon service.
    * Fallback priority: Plugin icon > Metadata icon > Hardcoded mapping > Generic icon
    */
-  public getArtifactIcon(artifact: ArtifactEntity): string {
+  public getArtifactIcon(artifact: MJArtifactEntity): string {
     return this.artifactIconService.getArtifactIcon(artifact);
   }
 
@@ -1846,6 +2063,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
     // Apply sorting
     this.unifiedItems = this.sortItems(items);
+    this.cdr.detectChanges();
   }
 
   /**
@@ -1905,8 +2123,10 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public toggleSelectMode(): void {
     this.isSelectMode = !this.isSelectMode;
     if (!this.isSelectMode) {
-      // Clear selection when exiting select mode
+      // Clear selection when exiting select mode (clearSelection calls buildUnifiedItemList which calls cdr)
       this.clearSelection();
+    } else {
+      this.cdr.detectChanges();
     }
   }
 
@@ -2006,7 +2226,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Multi-select: Delete selected items (Phase 3)
+   * Multi-select: Delete selected items
    */
   public async deleteSelected(): Promise<void> {
     if (this.selectedItems.size === 0) return;
@@ -2019,8 +2239,42 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
     if (!confirmed) return;
 
-    // TODO: Implement batch delete
-    this.clearSelection();
+    const selectedViewItems = this.unifiedItems.filter(item => this.selectedItems.has(item.id));
+    const folderItems = selectedViewItems.filter(item => item.type === 'folder' && item.collection);
+    const artifactItems = selectedViewItems.filter(item => item.type === 'artifact' && item.version);
+
+    try {
+      for (const item of folderItems) {
+        await this.deleteCollectionRecursive(item.collection!.ID);
+      }
+
+      if (artifactItems.length > 0 && this.currentCollectionId) {
+        const rv = new RunView();
+        for (const item of artifactItems) {
+          const result = await rv.RunView<MJCollectionArtifactEntity>({
+            EntityName: 'MJ: Collection Artifacts',
+            ExtraFilter: `CollectionID='${this.currentCollectionId}' AND ArtifactVersionID='${item.version!.ID}'`,
+            ResultType: 'entity_object'
+          }, this.currentUser);
+
+          if (result.Success && result.Results) {
+            for (const joinRecord of result.Results) {
+              await joinRecord.Delete();
+            }
+          }
+        }
+      }
+
+      this.clearSelection();
+      await this.loadCollections();
+      if (artifactItems.length > 0) {
+        await this.loadArtifacts();
+      }
+      this.buildUnifiedItemList();
+    } catch (error) {
+      console.error('Error deleting selected items:', error);
+      await this.dialogService.alert('Error', `An error occurred while deleting: ${error}`);
+    }
   }
 
   /**
@@ -2146,18 +2400,82 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle right-click context menu
-   * Opens browser context menu for now - can be extended with custom menu
+   * Handle right-click context menu - shows custom context menu with permission-gated actions
    */
   public onItemContextMenu(item: CollectionViewItem, event: MouseEvent): void {
-    // Select the item if not already selected
-    if (!item.selected) {
-      this.clearSelection();
-      this.toggleItemSelection(item, event);
-    }
+    event.preventDefault();
+    event.stopPropagation();
 
-    // Allow browser's default context menu for now
-    // Future enhancement: implement custom context menu with actions
-    // event.preventDefault();
+    // Close any open dropdowns
+    this.showNewDropdown = false;
+    this.showSortDropdown = false;
+
+    this.contextMenuItem = item;
+    this.contextMenuPosition = this.clampContextMenuPosition(event.clientX, event.clientY);
+    this.showContextMenu = true;
+    this.cdr.detectChanges();
+  }
+
+  /** Clamp menu position to keep it within the viewport */
+  private clampContextMenuPosition(x: number, y: number): { x: number; y: number } {
+    const menuWidth = 200;
+    const menuHeight = 200;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    return {
+      x: Math.min(x, viewportWidth - menuWidth),
+      y: Math.min(y, viewportHeight - menuHeight)
+    };
+  }
+
+  public closeContextMenu(): void {
+    this.showContextMenu = false;
+    this.contextMenuItem = null;
+    this.cdr.detectChanges();
+  }
+
+  /** Handle context menu action dispatch */
+  public onContextMenuAction(action: string): void {
+    const item = this.contextMenuItem;
+    this.closeContextMenu();
+    if (!item) return;
+
+    switch (action) {
+      case 'open':
+        this.openItem(item);
+        break;
+      case 'view':
+        this.openItem(item);
+        break;
+      case 'share':
+        if (item.collection) {
+          this.shareCollection(item.collection);
+        }
+        break;
+      case 'edit':
+        if (item.collection) {
+          this.editCollection(item.collection);
+        }
+        break;
+      case 'delete':
+        if (item.collection) {
+          this.deleteCollection(item.collection);
+        }
+        break;
+      case 'remove':
+        if (item.artifact && item.version) {
+          this.removeArtifact({ artifact: item.artifact, version: item.version });
+        }
+        break;
+    }
+  }
+
+  /** Close context menu on Escape key */
+  @HostListener('document:keydown.escape')
+  public onEscapeKey(): void {
+    if (this.showContextMenu) {
+      this.closeContextMenu();
+    }
   }
 }

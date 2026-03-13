@@ -1,11 +1,11 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, RunViewParams, UserInfo } from "@memberjunction/core";
-import { EntityCommunicationFieldEntity, EntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
-import { RegisterClass } from "@memberjunction/global";
+import { MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity } from "@memberjunction/core-entities";
+import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { Message, ProcessedMessage, CommunicationEngineBase } from '@memberjunction/communication-types';
 
-@RegisterClass(BaseEntity, 'Entity Communication Message Types')
-export class EntityCommunicationMessageTypeExtended extends EntityCommunicationMessageTypeEntity {
-    public CommunicationFields: EntityCommunicationFieldEntity[] = [];
+@RegisterClass(BaseEntity, 'MJ: Entity Communication Message Types')
+export class MJEntityCommunicationMessageTypeEntityExtended extends MJEntityCommunicationMessageTypeEntity {
+    public CommunicationFields: MJEntityCommunicationFieldEntity[] = [];
 }
 
 
@@ -43,14 +43,14 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
     }
 
     private _Metadata: {
-        EntityCommunicationMessageTypes: EntityCommunicationMessageTypeExtended[],
-        EntityCommunicationFields: EntityCommunicationFieldEntity[]
+        EntityCommunicationMessageTypes: MJEntityCommunicationMessageTypeEntityExtended[],
+        EntityCommunicationFields: MJEntityCommunicationFieldEntity[]
     } = {EntityCommunicationMessageTypes: [], EntityCommunicationFields: []};
 
-    public get EntityCommunicationMessageTypes(): EntityCommunicationMessageTypeExtended[] {
+    public get EntityCommunicationMessageTypes(): MJEntityCommunicationMessageTypeEntityExtended[] {
         return this._Metadata.EntityCommunicationMessageTypes;
     }
-    public get EntityCommunicationFields(): EntityCommunicationFieldEntity[] {
+    public get EntityCommunicationFields(): MJEntityCommunicationFieldEntity[] {
         return this._Metadata.EntityCommunicationFields;
     }
 
@@ -62,9 +62,9 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
 
         // post-process the fields to be linked to the message types they're part of 
         this._Metadata.EntityCommunicationFields = CommunicationEngineBase.Instance.Metadata.EntityCommunicationFields || [];
-        this._Metadata.EntityCommunicationMessageTypes = <EntityCommunicationMessageTypeExtended[]>CommunicationEngineBase.Instance.Metadata.EntityCommunicationMessageTypes || [];
+        this._Metadata.EntityCommunicationMessageTypes = <MJEntityCommunicationMessageTypeEntityExtended[]>CommunicationEngineBase.Instance.Metadata.EntityCommunicationMessageTypes || [];
         this.EntityCommunicationMessageTypes.forEach(m => {
-            m.CommunicationFields = this.EntityCommunicationFields.filter(f => f.EntityCommunicationMessageTypeID === m.ID);
+            m.CommunicationFields = this.EntityCommunicationFields.filter(f => UUIDsEqual(f.EntityCommunicationMessageTypeID, m.ID));
         });
     }
 
@@ -73,9 +73,9 @@ export abstract class EntityCommunicationsEngineBase extends BaseEngine<EntityCo
      * @param entityID 
      * @returns 
      */
-    public GetEntityCommunicationMessageTypes(entityID: string): EntityCommunicationMessageTypeExtended[] {
+    public GetEntityCommunicationMessageTypes(entityID: string): MJEntityCommunicationMessageTypeEntityExtended[] {
         this.TryThrowIfNotLoaded();
-        return this.EntityCommunicationMessageTypes.filter(m => m.EntityID === entityID);
+        return this.EntityCommunicationMessageTypes.filter(m => UUIDsEqual(m.EntityID, entityID));
     }
 
     /**

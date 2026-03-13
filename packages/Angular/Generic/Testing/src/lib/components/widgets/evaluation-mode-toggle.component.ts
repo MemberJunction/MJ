@@ -65,14 +65,14 @@ import { EvaluationPreferences } from '../../models/evaluation.types';
     .toggle-label {
       font-size: 12px;
       font-weight: 600;
-      color: #64748b;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
     }
 
     .toggle-options {
       display: flex;
       gap: 4px;
-      background: #f1f5f9;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 8px;
       padding: 4px;
     }
@@ -85,7 +85,7 @@ import { EvaluationPreferences } from '../../models/evaluation.types';
       border: none;
       border-radius: 6px;
       background: transparent;
-      color: #64748b;
+      color: var(--mj-text-muted);
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
@@ -93,18 +93,18 @@ import { EvaluationPreferences } from '../../models/evaluation.types';
     }
 
     .toggle-btn:hover {
-      background: #e2e8f0;
-      color: #475569;
+      background: var(--mj-border-default);
+      color: var(--mj-text-secondary);
     }
 
     .toggle-btn.active {
-      background: #3b82f6;
-      color: white;
-      box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .toggle-btn.active:hover {
-      background: #2563eb;
+      background: var(--mj-brand-primary-hover);
     }
 
     .toggle-btn i {
@@ -113,7 +113,7 @@ import { EvaluationPreferences } from '../../models/evaluation.types';
 
     .toggle-hint {
       font-size: 11px;
-      color: #f59e0b;
+      color: var(--mj-status-warning);
       display: flex;
       align-items: center;
       gap: 4px;

@@ -3,7 +3,7 @@ import { Subject } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { CompositeKey } from '@memberjunction/core';
 import { BaseResourceComponent, NavigationService, DashboardConfig } from '@memberjunction/ng-shared';
-import { ResourceData, DashboardEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJDashboardEntity } from '@memberjunction/core-entities';
 import { DataExplorerDashboardComponent } from './data-explorer-dashboard.component';
 import { DataExplorerFilter } from './models/explorer-state.interface';
 /**
@@ -68,8 +68,13 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     override set Data(value: ResourceData) {
+        const previousConfig = JSON.stringify(super.Data?.Configuration || {});
         super.Data = value;
-        if (!this._dataLoaded) {
+
+        const newConfig = JSON.stringify(value?.Configuration || {});
+
+        // Load on first set, or when the configuration has changed
+        if (!this._dataLoaded || previousConfig !== newConfig) {
             this._dataLoaded = true;
             this.loadConfiguration();
         }
@@ -133,7 +138,7 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
 
                 // Initialize with minimal config (no database dashboard)
                 const dashboardConfig: DashboardConfig = {
-                    dashboard: null as unknown as DashboardEntity,
+                    dashboard: null as unknown as MJDashboardEntity,
                     userState: {}
                 };
                 this.dataExplorer.Config = dashboardConfig;

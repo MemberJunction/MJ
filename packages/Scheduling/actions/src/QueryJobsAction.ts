@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-bas
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
 import { RunView } from '@memberjunction/core';
-import { ScheduledJobEntity } from '@memberjunction/core-entities';
+import { MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { BaseJobAction } from './BaseJobAction';
 
 /**
@@ -38,7 +38,7 @@ export class QueryScheduledJobsAction extends BaseJobAction {
      * @returns ActionResultSimple with:
      *   - Success: true if query executed successfully
      *   - ResultCode: SUCCESS or FAILED
-     *   - Params: Output parameter 'Jobs' contains array of ScheduledJobEntity records
+     *   - Params: Output parameter 'Jobs' contains array of MJScheduledJobEntity records
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
@@ -76,7 +76,7 @@ export class QueryScheduledJobsAction extends BaseJobAction {
 
             // Execute query
             const rv = new RunView();
-            const result = await rv.RunView<ScheduledJobEntity>({
+            const result = await rv.RunView<MJScheduledJobEntity>({
                 EntityName: 'MJ: Scheduled Jobs',
                 ExtraFilter: filterExpression,
                 OrderBy: '__mj_CreatedAt DESC',

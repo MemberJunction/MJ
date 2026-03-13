@@ -12,8 +12,9 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata, LogError } from '@memberjunction/core';
-import { ActionCategoryEntity } from '@memberjunction/core-entities';
+import { MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { ActionExplorerStateService } from '../../services/action-explorer-state.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 @Component({
   standalone: false,
@@ -34,9 +35,9 @@ import { ActionExplorerStateService } from '../../services/action-explorer-state
   ]
 })
 export class NewCategoryPanelComponent implements OnInit, OnDestroy {
-  @Input() Categories: ActionCategoryEntity[] = [];
+  @Input() Categories: MJActionCategoryEntity[] = [];
   @Input() PreselectedParentId: string | null = null;
-  @Output() CategoryCreated = new EventEmitter<ActionCategoryEntity>();
+  @Output() CategoryCreated = new EventEmitter<MJActionCategoryEntity>();
   @Output() Close = new EventEmitter<void>();
 
   public IsOpen = false;
@@ -130,7 +131,7 @@ export class NewCategoryPanelComponent implements OnInit, OnDestroy {
 
     try {
       const md = new Metadata();
-      const category = await md.GetEntityObject<ActionCategoryEntity>('Action Categories');
+      const category = await md.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories');
 
       category.Name = this.Name.trim();
       category.Description = this.Description.trim() || null;
@@ -173,12 +174,12 @@ export class NewCategoryPanelComponent implements OnInit, OnDestroy {
     return options;
   }
 
-  private getCategoryPath(category: ActionCategoryEntity): string {
+  private getCategoryPath(category: MJActionCategoryEntity): string {
     const path: string[] = [category.Name];
     let currentParentId = category.ParentID;
 
     while (currentParentId) {
-      const parent = this.Categories.find(c => c.ID === currentParentId);
+      const parent = this.Categories.find(c => UUIDsEqual(c.ID, currentParentId));
       if (parent) {
         path.unshift(parent.Name);
         currentParentId = parent.ParentID || null;

@@ -1,7 +1,7 @@
 .action-explorer {
   display: flex;
   height: 100%;
-  background: var(--kendo-color-app-surface);
+  background: var(--mj-bg-page);
   overflow: hidden;
   position: relative;
 }
@@ -31,7 +31,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.85);
+  background: color-mix(in srgb, var(--mj-bg-surface) 85%, transparent);
   z-index: 100;
   backdrop-filter: blur(2px);
 }
@@ -53,7 +53,7 @@
   justify-content: center;
   text-align: center;
   padding: 60px 20px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 
 .empty-state i {
@@ -66,7 +66,7 @@
   margin: 0 0 8px 0;
   font-size: 18px;
   font-weight: 600;
-  color: var(--kendo-color-on-app-surface);
+  color: var(--mj-text-primary);
 }
 
 .empty-state p {
@@ -89,8 +89,8 @@
 
 /* List View */
 .list-view {
-  background: var(--kendo-color-surface);
-  border: 1px solid var(--kendo-color-border);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -100,13 +100,13 @@
   grid-template-columns: 40px 1fr 140px 90px 70px 50px 90px 70px;
   gap: 12px;
   padding: 12px 16px;
-  background: var(--kendo-color-app-surface);
-  border-bottom: 1px solid var(--kendo-color-border);
+  background: var(--mj-bg-page);
+  border-bottom: 1px solid var(--mj-border-default);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 
 .header-icon {
@@ -115,8 +115,8 @@
 
 /* Compact View */
 .compact-view {
-  background: var(--kendo-color-surface);
-  border: 1px solid var(--kendo-color-border);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -164,10 +164,10 @@
 }
 
 .explorer-content::-webkit-scrollbar-thumb {
-  background: var(--kendo-color-border);
+  background: var(--mj-border-default);
   border-radius: 4px;
 }
 
 .explorer-content::-webkit-scrollbar-thumb:hover {
-  background: var(--kendo-color-subtle);
+  background: var(--mj-text-muted);
 }

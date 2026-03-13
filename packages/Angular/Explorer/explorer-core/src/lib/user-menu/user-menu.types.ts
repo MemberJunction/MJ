@@ -1,6 +1,7 @@
 import { ViewContainerRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
-import { UserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity } from '@memberjunction/core-entities';
+import type { ThemeDefinition } from '@memberjunction/ng-shared-generic';
 
 /**
  * Defines a single menu item in the user context menu
@@ -101,7 +102,7 @@ export interface UserMenuContext {
     user: UserInfo;
 
     /** Full user entity with all fields */
-    userEntity: UserEntity;
+    userEntity: MJUserEntity;
 
     /** Reference to shell component for advanced operations */
     shell: Record<string, unknown>;
@@ -126,6 +127,15 @@ export interface UserMenuContext {
 
     /** Function to open settings dialog */
     openSettings: () => void;
+
+    /** Current theme preference (theme ID or 'system') */
+    themePreference?: string;
+
+    /** All registered theme definitions, for building theme picker menus */
+    availableThemes?: ThemeDefinition[];
+
+    /** Currently applied theme ID (resolved, never 'system') */
+    appliedTheme?: string;
 }
 
 /**

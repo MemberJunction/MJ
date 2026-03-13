@@ -9,7 +9,8 @@ import {
     ChangeDetectionStrategy
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { DashboardEntity, DashboardCategoryEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
+import { MJDashboardEntity, MJDashboardCategoryEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 // ========================================
 // Event Types
@@ -24,7 +25,7 @@ export type DashboardBrowserViewMode = 'cards' | 'list';
  * Event emitted when a dashboard is selected for viewing
  */
 export interface DashboardOpenEvent {
-    Dashboard: DashboardEntity;
+    Dashboard: MJDashboardEntity;
     OpenInNewTab: boolean;
 }
 
@@ -32,21 +33,21 @@ export interface DashboardOpenEvent {
  * Event emitted when a dashboard is selected for editing
  */
 export interface DashboardEditEvent {
-    Dashboard: DashboardEntity;
+    Dashboard: MJDashboardEntity;
 }
 
 /**
  * Event emitted when dashboards are requested for deletion
  */
 export interface DashboardDeleteEvent {
-    Dashboards: DashboardEntity[];
+    Dashboards: MJDashboardEntity[];
 }
 
 /**
  * Event emitted when dashboards are requested to be moved to a folder
  */
 export interface DashboardMoveEvent {
-    Dashboards: DashboardEntity[];
+    Dashboards: MJDashboardEntity[];
     TargetCategoryId: string | null;
 }
 
@@ -55,7 +56,7 @@ export interface DashboardMoveEvent {
  */
 export interface CategoryChangeEvent {
     CategoryId: string | null;
-    Category: DashboardCategoryEntity | null;
+    Category: MJDashboardCategoryEntity | null;
 }
 
 /**
@@ -85,7 +86,7 @@ export interface CategoryCreateEvent {
  * Event emitted when a category should be deleted
  */
 export interface CategoryDeleteEvent {
-    Category: DashboardCategoryEntity;
+    Category: MJDashboardCategoryEntity;
     IncludeContents: boolean;
 }
 
@@ -116,28 +117,28 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     // ========================================
 
     /** All dashboards to display */
-    private _dashboards: DashboardEntity[] = [];
+    private _dashboards: MJDashboardEntity[] = [];
 
     @Input()
-    set Dashboards(value: DashboardEntity[]) {
+    set Dashboards(value: MJDashboardEntity[]) {
         this._dashboards = value || [];
         this.applyFilters();
     }
-    get Dashboards(): DashboardEntity[] {
+    get Dashboards(): MJDashboardEntity[] {
         return this._dashboards;
     }
 
     /** All categories for filtering */
-    private _categories: DashboardCategoryEntity[] = [];
+    private _categories: MJDashboardCategoryEntity[] = [];
 
     @Input()
-    set Categories(value: DashboardCategoryEntity[]) {
+    set Categories(value: MJDashboardCategoryEntity[]) {
         this._categories = value || [];
         // Update child categories when categories change (async loading)
         this.updateChildCategories();
         this.cdr.markForCheck();
     }
-    get Categories(): DashboardCategoryEntity[] {
+    get Categories(): MJDashboardCategoryEntity[] {
         return this._categories;
     }
 
@@ -261,7 +262,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     // ========================================
 
     /** Filtered dashboards based on search and category */
-    public FilteredDashboards: DashboardEntity[] = [];
+    public FilteredDashboards: MJDashboardEntity[] = [];
 
     /** Current search text */
     public SearchText = '';
@@ -279,7 +280,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     public ShowMoveDialog = false;
 
     /** Dashboards pending deletion (for confirm dialog) */
-    public DashboardsPendingDelete: DashboardEntity[] = [];
+    public DashboardsPendingDelete: MJDashboardEntity[] = [];
 
     /** Currently dragging dashboard ID */
     public DraggingId: string | null = null;
@@ -298,19 +299,19 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     public NewCategoryDescription = '';
 
     /** Child categories of the current folder */
-    public ChildCategories: DashboardCategoryEntity[] = [];
+    public ChildCategories: MJDashboardCategoryEntity[] = [];
 
     /** Filtered child categories (based on search) */
-    public FilteredChildCategories: DashboardCategoryEntity[] = [];
+    public FilteredChildCategories: MJDashboardCategoryEntity[] = [];
 
     /** Breadcrumb trail from root to current category */
-    public Breadcrumbs: DashboardCategoryEntity[] = [];
+    public Breadcrumbs: MJDashboardCategoryEntity[] = [];
 
     /** Whether the delete category dialog is visible */
     public ShowDeleteCategoryConfirm = false;
 
     /** Category pending deletion */
-    public CategoryPendingDelete: DashboardCategoryEntity | null = null;
+    public CategoryPendingDelete: MJDashboardCategoryEntity | null = null;
 
     /** Whether to include contents when deleting category */
     public DeleteCategoryIncludeContents = false;
@@ -388,7 +389,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     public OnCategoryChange(categoryId: string | null): void {
         this._selectedCategoryId = categoryId;
         const category = categoryId
-            ? this.Categories.find(c => c.ID === categoryId) || null
+            ? this.Categories.find(c => UUIDsEqual(c.ID, categoryId)) || null
             : null;
         this.CategoryChange.emit({ CategoryId: categoryId, Category: category });
         this.applyFilters();
@@ -410,7 +411,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     public NavigateToCategory(categoryId: string | null): void {
         this._selectedCategoryId = categoryId;
         const category = categoryId
-            ? this.Categories.find(c => c.ID === categoryId) || null
+            ? this.Categories.find(c => UUIDsEqual(c.ID, categoryId)) || null
             : null;
         this.CategoryChange.emit({ CategoryId: categoryId, Category: category });
         this.applyFilters();
@@ -422,7 +423,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     public NavigateUp(): void {
         if (!this._selectedCategoryId) return;
 
-        const currentCategory = this.Categories.find(c => c.ID === this._selectedCategoryId);
+        const currentCategory = this.Categories.find(c => UUIDsEqual(c.ID, this._selectedCategoryId));
         const parentId = currentCategory?.ParentID || null;
         this.NavigateToCategory(parentId);
     }
@@ -437,9 +438,9 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /**
      * Get the current category (for display)
      */
-    public get CurrentCategory(): DashboardCategoryEntity | null {
+    public get CurrentCategory(): MJDashboardCategoryEntity | null {
         if (!this._selectedCategoryId) return null;
-        return this.Categories.find(c => c.ID === this._selectedCategoryId) || null;
+        return this.Categories.find(c => UUIDsEqual(c.ID, this._selectedCategoryId)) || null;
     }
 
     // ========================================
@@ -449,7 +450,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /**
      * Handle dashboard click with multi-select support
      */
-    public OnDashboardClick(dashboard: DashboardEntity, event: MouseEvent): void {
+    public OnDashboardClick(dashboard: MJDashboardEntity, event: MouseEvent): void {
         if (!this.AllowMultiSelect) {
             // Single select mode - just open the dashboard
             this.DashboardOpen.emit({ Dashboard: dashboard, OpenInNewTab: event.ctrlKey || event.metaKey });
@@ -485,7 +486,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /**
      * Handle double-click to edit
      */
-    public OnDashboardDoubleClick(dashboard: DashboardEntity, event: MouseEvent): void {
+    public OnDashboardDoubleClick(dashboard: MJDashboardEntity, event: MouseEvent): void {
         event.preventDefault();
         event.stopPropagation();
         this.DashboardEdit.emit({ Dashboard: dashboard });
@@ -558,7 +559,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /**
      * Get selected dashboards
      */
-    public GetSelectedDashboards(): DashboardEntity[] {
+    public GetSelectedDashboards(): MJDashboardEntity[] {
         return this.Dashboards.filter(d => this.SelectedIds.has(d.ID));
     }
 
@@ -626,7 +627,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /**
      * Open edit dialog for single dashboard via context menu
      */
-    public OnEditDashboard(dashboard: DashboardEntity, event: Event): void {
+    public OnEditDashboard(dashboard: MJDashboardEntity, event: Event): void {
         event.stopPropagation();
         this.DashboardEdit.emit({ Dashboard: dashboard });
     }
@@ -634,7 +635,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /**
      * Request to delete a single dashboard
      */
-    public OnDeleteDashboard(dashboard: DashboardEntity, event: Event): void {
+    public OnDeleteDashboard(dashboard: MJDashboardEntity, event: Event): void {
         event.stopPropagation();
         this.DashboardsPendingDelete = [dashboard];
         this.ShowDeleteConfirm = true;
@@ -725,7 +726,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /**
      * Request to delete a category
      */
-    public OnDeleteCategory(category: DashboardCategoryEntity, event: Event): void {
+    public OnDeleteCategory(category: MJDashboardCategoryEntity, event: Event): void {
         event.stopPropagation();
         this.CategoryPendingDelete = category;
         this.DeleteCategoryIncludeContents = false;
@@ -759,9 +760,9 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /**
      * Get count of dashboards and sub-categories in a category
      */
-    public GetCategoryContentCount(category: DashboardCategoryEntity): { dashboards: number; categories: number } {
-        const dashboards = this.Dashboards.filter(d => d.CategoryID === category.ID).length;
-        const categories = this.Categories.filter(c => c.ParentID === category.ID).length;
+    public GetCategoryContentCount(category: MJDashboardCategoryEntity): { dashboards: number; categories: number } {
+        const dashboards = this.Dashboards.filter(d => UUIDsEqual(d.CategoryID, category.ID)).length;
+        const categories = this.Categories.filter(c => UUIDsEqual(c.ParentID, category.ID)).length;
         return { dashboards, categories };
     }
 
@@ -772,7 +773,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /**
      * Handle drag start
      */
-    public OnDragStart(dashboard: DashboardEntity, event: DragEvent): void {
+    public OnDragStart(dashboard: MJDashboardEntity, event: DragEvent): void {
         if (!this.AllowDragDrop) return;
 
         this.DraggingId = dashboard.ID;
@@ -806,7 +807,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /**
      * Create a compact drag preview element
      */
-    private createDragPreview(dashboard: DashboardEntity): HTMLElement {
+    private createDragPreview(dashboard: MJDashboardEntity): HTMLElement {
         const count = this.SelectedIds.size;
         const preview = document.createElement('div');
         preview.style.cssText = `
@@ -817,12 +818,12 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             align-items: center;
             gap: 8px;
             padding: 8px 12px;
-            background: #5c6bc0;
-            color: white;
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
             border-radius: 6px;
             font-size: 13px;
             font-weight: 500;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-text-primary) 30%, transparent);
             white-space: nowrap;
         `;
 
@@ -877,7 +878,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             try {
                 const dragData = JSON.parse(data);
                 if (dragData.type === 'dashboards' && dragData.ids?.length > 0) {
-                    const dashboards = this.Dashboards.filter(d => dragData.ids.includes(d.ID));
+                    const dashboards = this.Dashboards.filter(d => dragData.ids.some((id: string) => UUIDsEqual(id, d.ID)));
                     if (dashboards.length > 0) {
                         this.DashboardMove.emit({
                             Dashboards: dashboards,
@@ -904,7 +905,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      */
     public GetCategoryName(categoryId: string | null): string {
         if (!categoryId) return 'Uncategorized';
-        const category = this.Categories.find(c => c.ID === categoryId);
+        const category = this.Categories.find(c => UUIDsEqual(c.ID, categoryId));
         return category?.Name || 'Unknown';
     }
 
@@ -932,14 +933,14 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     /**
      * Track by function for ngFor
      */
-    public TrackByDashboard(_index: number, dashboard: DashboardEntity): string {
+    public TrackByDashboard(_index: number, dashboard: MJDashboardEntity): string {
         return dashboard.ID;
     }
 
     /**
      * Track by function for categories
      */
-    public TrackByCategory(_index: number, category: DashboardCategoryEntity): string {
+    public TrackByCategory(_index: number, category: MJDashboardCategoryEntity): string {
         return category.ID;
     }
 
@@ -952,7 +953,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      * For shared dashboards, this may differ from the actual CategoryID
      * based on the user's DashboardCategoryLink.
      */
-    public GetEffectiveCategoryId(dashboard: DashboardEntity): string | null {
+    public GetEffectiveCategoryId(dashboard: MJDashboardEntity): string | null {
         // If we have an effective category mapping, use it
         if (this._effectiveCategoryMap.has(dashboard.ID)) {
             return this._effectiveCategoryMap.get(dashboard.ID) ?? null;
@@ -1012,7 +1013,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      * Gets the list of selected dashboards that can be deleted.
      * Filters out dashboards the user doesn't have permission to delete.
      */
-    public GetDeletableSelectedDashboards(): DashboardEntity[] {
+    public GetDeletableSelectedDashboards(): MJDashboardEntity[] {
         return this.GetSelectedDashboards().filter(d => this.CanDelete(d.ID));
     }
 
@@ -1072,7 +1073,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             try {
                 const dragData = JSON.parse(data);
                 if (dragData.type === 'dashboards' && dragData.ids?.length > 0) {
-                    const dashboards = this.Dashboards.filter(d => dragData.ids.includes(d.ID));
+                    const dashboards = this.Dashboards.filter(d => dragData.ids.some((id: string) => UUIDsEqual(id, d.ID)));
                     if (dashboards.length > 0) {
                         this.DashboardMove.emit({
                             Dashboards: dashboards,
@@ -1097,7 +1098,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
      * Handle drop from breadcrumb component
      */
     public OnBreadcrumbDrop(event: { TargetCategoryId: string | null; DashboardIds: string[] }): void {
-        const dashboards = this.Dashboards.filter(d => event.DashboardIds.includes(d.ID));
+        const dashboards = this.Dashboards.filter(d => event.DashboardIds.some(id => UUIDsEqual(id, d.ID)));
         if (dashboards.length > 0) {
             this.DashboardMove.emit({
                 Dashboards: dashboards,
@@ -1151,7 +1152,7 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         // Find categories that are children of the current category
         // Handle both null and undefined ParentID for root-level categories
         if (this._selectedCategoryId) {
-            this.ChildCategories = this.Categories.filter(c => c.ParentID === this._selectedCategoryId);
+            this.ChildCategories = this.Categories.filter(c => UUIDsEqual(c.ParentID, this._selectedCategoryId));
         } else {
             // At root level - show categories with no parent (null or undefined)
             this.ChildCategories = this.Categories.filter(c => !c.ParentID);
@@ -1178,11 +1179,11 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
         if (!this._selectedCategoryId) return;
 
         // Build the path from current category to root
-        const path: DashboardCategoryEntity[] = [];
+        const path: MJDashboardCategoryEntity[] = [];
         let currentId: string | null = this._selectedCategoryId;
 
         while (currentId) {
-            const category = this.Categories.find(c => c.ID === currentId);
+            const category = this.Categories.find(c => UUIDsEqual(c.ID, currentId));
             if (category) {
                 path.unshift(category);
                 currentId = category.ParentID;
@@ -1207,8 +1208,8 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
     }
 
     private selectRange(fromId: string, toId: string): void {
-        const fromIndex = this.FilteredDashboards.findIndex(d => d.ID === fromId);
-        const toIndex = this.FilteredDashboards.findIndex(d => d.ID === toId);
+        const fromIndex = this.FilteredDashboards.findIndex(d => UUIDsEqual(d.ID, fromId));
+        const toIndex = this.FilteredDashboards.findIndex(d => UUIDsEqual(d.ID, toId));
 
         if (fromIndex === -1 || toIndex === -1) return;
 

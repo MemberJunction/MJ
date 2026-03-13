@@ -28,6 +28,7 @@ import {
     GetRowIdParams,
     themeAlpine,
     SortChangedEvent as AgSortChangedEvent,
+    type Theme,
     ColumnResizedEvent,
     ColumnMovedEvent,
     SelectionChangedEvent,
@@ -130,6 +131,27 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         return this._queryInfo;
     }
 
+    private _columnConfigs: QueryGridColumnConfig[] | null = null;
+    /**
+     * Optional pre-built column configurations for ad-hoc queries without saved metadata.
+     * When provided, overrides both QueryInfo-derived columns and auto-inferred columns.
+     * Enables entity linking without requiring a saved Query or QueryInfo object.
+     *
+     * Set this BEFORE setting Data to ensure columns are configured before the grid renders.
+     */
+    @Input()
+    set ColumnConfigs(value: QueryGridColumnConfig[] | null) {
+        this._columnConfigs = value;
+        if (value && value.length > 0) {
+            this.Columns = value;
+            this.buildColumnDefs();
+            this.cdr.markForCheck();
+        }
+    }
+    get ColumnConfigs(): QueryGridColumnConfig[] | null {
+        return this._columnConfigs;
+    }
+
     private _data: Record<string, unknown>[] = [];
     /**
      * The query result data to display in the grid.
@@ -138,8 +160,8 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     set Data(value: Record<string, unknown>[]) {
         this._data = value || [];
 
-        // If we have data but no columns from metadata, build columns from the data itself
-        if (this._data.length > 0 && this.Columns.length === 0) {
+        // If we have data but no columns from metadata or explicit configs, build from data
+        if (this._data.length > 0 && this.Columns.length === 0 && !this._columnConfigs) {
             this.Columns = buildColumnsFromData(this._data);
             this.buildColumnDefs();
         }
@@ -266,7 +288,24 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     public Columns: QueryGridColumnConfig[] = [];
     public SortState: QueryGridSortState[] = [];
     public SelectedRows: Record<string, unknown>[] = [];
-    public Theme = themeAlpine;
+    public Theme: Theme = themeAlpine.withParams({
+        backgroundColor: 'var(--mj-bg-surface)',
+        foregroundColor: 'var(--mj-text-primary)',
+        textColor: 'var(--mj-text-primary)',
+        borderColor: 'var(--mj-border-default)',
+        chromeBackgroundColor: 'var(--mj-bg-surface-card)',
+        headerBackgroundColor: 'var(--mj-bg-surface-card)',
+        headerTextColor: 'var(--mj-text-secondary)',
+        cellTextColor: 'var(--mj-text-primary)',
+        subtleTextColor: 'var(--mj-text-muted)',
+        dataBackgroundColor: 'var(--mj-bg-surface)',
+        oddRowBackgroundColor: 'var(--mj-bg-surface-card)',
+        rowHoverColor: 'var(--mj-bg-surface-hover, color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface)))',
+        selectedRowBackgroundColor: 'color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface))',
+        accentColor: 'var(--mj-brand-primary)',
+        borderRadius: 'var(--mj-radius-sm)',
+        browserColorScheme: 'inherit',
+    });
 
     private destroy$ = new Subject<void>();
     private stateChangeSubject = new Subject<QueryGridStateChangedEvent>();
@@ -282,7 +321,7 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
         suppressCellFocus: false,
         enableCellTextSelection: true,
         ensureDomOrder: true,
-        suppressRowClickSelection: false
+        suppressNoRowsOverlay: true
     };
 
     /** Default column settings - enables sorting, resizing */

@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Query Scheduled Jobs",
       "Description": "Query scheduled jobs based on filter criteria including Status, JobTypeID, IsActive flag, and creation date ranges",
-      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "DriverClass": "Query Scheduled Jobs",
       "Type": "Custom",
       "CodeApprovalStatus": "Approved",
@@ -11,7 +11,7 @@
       "IconClass": "fa-solid fa-calendar-search"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -140,7 +140,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -192,15 +192,15 @@
       "ID": "55D321D5-6BF3-4EFB-921F-E33376DFB2AF"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:27.063Z",
-      "checksum": "8981a5c904718225eadeace3e1b871eb2fdba8281ec837ed27fe7de841d1dd63"
+      "lastModified": "2026-02-13T21:09:12.250Z",
+      "checksum": "7db92c292db4752bac9afcba3dfaba670513ff25db21ddf92d04fae7acb45586"
     }
   },
   {
     "fields": {
       "Name": "Create Scheduled Job",
       "Description": "Create a new scheduled job with the specified configuration including name, job type, cron expression, and optional parameters",
-      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "DriverClass": "Create Scheduled Job",
       "Type": "Custom",
       "CodeApprovalStatus": "Approved",
@@ -208,7 +208,7 @@
       "IconClass": "fa-solid fa-calendar-plus"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -374,7 +374,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -426,15 +426,15 @@
       "ID": "B26806D3-2951-480A-984A-C304CFD353AC"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:27.064Z",
-      "checksum": "750c74e3b6adfbfc9879bcc35e947b311cae4644771a829d6774ecd0e77d4df5"
+      "lastModified": "2026-02-13T21:09:12.251Z",
+      "checksum": "187f23dfa94d3dfe85e3a33a7803588c41c500ab4e078fde77a7d8343440add7"
     }
   },
   {
     "fields": {
       "Name": "Update Scheduled Job",
       "Description": "Update an existing scheduled job. Only provided fields will be updated; omitted fields remain unchanged",
-      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "DriverClass": "Update Scheduled Job",
       "Type": "Custom",
       "CodeApprovalStatus": "Approved",
@@ -442,7 +442,7 @@
       "IconClass": "fa-solid fa-calendar-edit"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -588,7 +588,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -670,15 +670,15 @@
       "ID": "E825C4C3-91F3-4716-A9CA-796210A4D783"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:27.066Z",
-      "checksum": "e08c3a0363ff032f578479ba7fc1a4257b80e7dd288de7bf724a4d87a627d3bb"
+      "lastModified": "2026-02-13T21:09:12.252Z",
+      "checksum": "7f00df082731347541e466aba57a836a21c5aac7d9bfe91952af486ebca4df96"
     }
   },
   {
     "fields": {
       "Name": "Delete Scheduled Job",
       "Description": "Delete an existing scheduled job from the system. Will fail if the job has related records that prevent deletion",
-      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "DriverClass": "Delete Scheduled Job",
       "Type": "Custom",
       "CodeApprovalStatus": "Approved",
@@ -686,7 +686,7 @@
       "IconClass": "fa-solid fa-calendar-times"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -706,7 +706,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -788,15 +788,15 @@
       "ID": "61D57D8B-805C-4DA4-ACE1-D1254B2ABA39"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:27.068Z",
-      "checksum": "6e37c24853036b2e24ebf0e333caf76ea62c255e064f9e2e1a24830ee448c64f"
+      "lastModified": "2026-02-13T21:09:12.253Z",
+      "checksum": "d7248fa25f46b00ef1dee2bd1b39e8d2f1aef5cf4ff72ab9835b79b77ccc7670"
     }
   },
   {
     "fields": {
       "Name": "Execute Scheduled Job Now",
       "Description": "Trigger immediate execution of a scheduled job, bypassing its normal schedule. Creates a job run record for the scheduling engine to pick up",
-      "CategoryID": "@lookup:Action Categories.Name=System&ParentID=null",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=System&ParentID=null",
       "DriverClass": "Execute Scheduled Job Now",
       "Type": "Custom",
       "CodeApprovalStatus": "Approved",
@@ -804,7 +804,7 @@
       "IconClass": "fa-solid fa-play-circle"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -842,7 +842,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -909,15 +909,15 @@
       "ID": "8C985369-A876-43D3-9A56-848E7AC28CFA"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:27.069Z",
-      "checksum": "94d4dc7a84cd0b8e812e437ab320e3f506395e946f437514dac14b51e0de8aa5"
+      "lastModified": "2026-02-13T21:09:12.254Z",
+      "checksum": "0f56368c95c888e19192b55e559ee19520d343d76fa2b29edd81315c9fc34f9d"
     }
   },
   {
     "fields": {
       "Name": "Get Scheduled Job Statistics",
       "Description": "Retrieve execution statistics for scheduled jobs including total runs, success/failure counts, success rate, and average duration",
-      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "DriverClass": "Get Scheduled Job Statistics",
       "Type": "Custom",
       "CodeApprovalStatus": "Approved",
@@ -925,7 +925,7 @@
       "IconClass": "fa-solid fa-chart-bar"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -982,7 +982,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1019,8 +1019,8 @@
       "ID": "7C842E03-7CAF-425A-9934-5DABF6967BF8"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:27.071Z",
-      "checksum": "09fa3dadfc99de2567709e87ca9302bb72978907a8ed5249f4422d1417958872"
+      "lastModified": "2026-02-13T21:09:12.255Z",
+      "checksum": "7eeb0c5c11b9838dbdb8d0755de215a117f582d2745af5cf17fa37f00b735997"
     }
   }
 ]

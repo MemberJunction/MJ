@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild } from '@angular/core';
-import { ResourceData, CredentialTypeEntity, CredentialEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { ResourceData, MJCredentialTypeEntity, MJCredentialEntity } from '@memberjunction/core-entities';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -14,7 +14,7 @@ interface FieldSchemaProperty {
     required: boolean;
 }
 
-interface TypeWithStats extends CredentialTypeEntity {
+interface TypeWithStats extends MJCredentialTypeEntity {
     credentialCount: number;
     activeCount: number;
     expiringCount: number;
@@ -32,7 +32,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
     public isLoading = true;
     public types: TypeWithStats[] = [];
     public filteredTypes: TypeWithStats[] = [];
-    public credentials: CredentialEntity[] = [];
+    public credentials: MJCredentialEntity[] = [];
     public selectedType: TypeWithStats | null = null;
     public schemaProperties: FieldSchemaProperty[] = [];
 
@@ -139,8 +139,8 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
             ]);
 
             if (typeResult.Success) {
-                const baseTypes = typeResult.Results as CredentialTypeEntity[];
-                this.credentials = credResult.Success ? credResult.Results as CredentialEntity[] : [];
+                const baseTypes = typeResult.Results as MJCredentialTypeEntity[];
+                this.credentials = credResult.Success ? credResult.Results as MJCredentialEntity[] : [];
 
                 // Calculate stats for each type
                 this.types = baseTypes.map(type => this.enrichTypeWithStats(type));
@@ -176,8 +176,8 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    private enrichTypeWithStats(type: CredentialTypeEntity): TypeWithStats {
-        const typeCredentials = this.credentials.filter(c => c.CredentialTypeID === type.ID);
+    private enrichTypeWithStats(type: MJCredentialTypeEntity): TypeWithStats {
+        const typeCredentials = this.credentials.filter(c => UUIDsEqual(c.CredentialTypeID, type.ID));
         const now = new Date();
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
@@ -238,8 +238,8 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
             const success = await type.Delete();
             if (success) {
                 MJNotificationService.Instance.CreateSimpleNotification(`Credential type "${type.Name}" deleted successfully`, 'success', 3000);
-                this.types = this.types.filter(t => t.ID !== type.ID);
-                if (this.selectedType?.ID === type.ID) {
+                this.types = this.types.filter(t => !UUIDsEqual(t.ID, type.ID));
+                if (UUIDsEqual(this.selectedType?.ID, type.ID)) {
                     this.closeDetail();
                 }
                 this.applyFilters();
@@ -265,8 +265,8 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
 
     // === Panel Event Handlers ===
 
-    public onTypeSaved(type: CredentialTypeEntity): void {
-        const existingIndex = this.types.findIndex(t => t.ID === type.ID);
+    public onTypeSaved(type: MJCredentialTypeEntity): void {
+        const existingIndex = this.types.findIndex(t => UUIDsEqual(t.ID, type.ID));
         const enrichedType = this.enrichTypeWithStats(type);
 
         if (existingIndex >= 0) {
@@ -285,8 +285,8 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
     }
 
     public onTypeDeleted(typeId: string): void {
-        this.types = this.types.filter(t => t.ID !== typeId);
-        if (this.selectedType?.ID === typeId) {
+        this.types = this.types.filter(t => !UUIDsEqual(t.ID, typeId));
+        if (UUIDsEqual(this.selectedType?.ID, typeId)) {
             this.closeDetail();
         }
         this.applyFilters();
@@ -393,14 +393,14 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
 
     public getCategoryColor(category: string): string {
         const colorMap: Record<string, string> = {
-            'AI': '#8b5cf6',
-            'Communication': '#3b82f6',
-            'Storage': '#06b6d4',
-            'Database': '#f59e0b',
-            'Authentication': '#10b981',
-            'Integration': '#ec4899'
+            'AI': 'var(--mj-brand-primary)',
+            'Communication': 'var(--mj-brand-primary)',
+            'Storage': 'var(--mj-brand-primary)',
+            'Database': 'var(--mj-status-warning)',
+            'Authentication': 'var(--mj-status-success)',
+            'Integration': 'var(--mj-brand-primary)'
         };
-        return colorMap[category] || '#6366f1';
+        return colorMap[category] || 'var(--mj-brand-primary)';
     }
 
     public getTypesByCategory(): Map<string, TypeWithStats[]> {
@@ -413,6 +413,11 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
             grouped.get(category)!.push(type);
         }
         return grouped;
+    }
+
+    /** Case-insensitive UUID check whether a credential type is the currently selected type. */
+    public IsTypeSelected(type: TypeWithStats): boolean {
+        return UUIDsEqual(this.selectedType?.ID, type.ID);
     }
 
     public getTotalCredentialCount(): number {

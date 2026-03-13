@@ -39,8 +39,6 @@ import { InteractionType } from '@azure/msal-browser';
 import { AppComponent } from './app.component';
 import { GeneratedFormsModule } from './generated/generated-forms.module';
 import { environment } from '../environments/environment';
-import { NavigationItemDemoComponent } from './demo/navigation-item.component';
-import { HelloDashboardComponent } from './demo/hello-dashboard/hello-dashboard.component';
 
 /**
  * Set your default interaction type for MSALGuard here. If you have any
@@ -64,8 +62,6 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
 @NgModule({
   declarations: [
     AppComponent, 
-    NavigationItemDemoComponent,
-    HelloDashboardComponent
   ],
   imports: [
     // Angular Core Modules

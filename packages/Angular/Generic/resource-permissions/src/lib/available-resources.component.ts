@@ -1,6 +1,7 @@
 import { AfterViewInit, Component, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { EntityFieldInfo, RunView, UserInfo } from '@memberjunction/core';
-import { ResourcePermissionEngine, ResourcePermissionEntity } from '@memberjunction/core-entities';
+import { ResourcePermissionEngine, MJResourcePermissionEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { ResourceData } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { SelectionEvent } from '@progress/kendo-angular-grid';
@@ -37,7 +38,7 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
         this.SelectedResources.splice(0, this.SelectedResources.length); // empty the array
 
         this.gridRecordSelection.forEach((item) => {
-            const resourceMatch = this.resources.find((r) => r.ResourceRecordID === item);
+            const resourceMatch = this.resources.find((r) => UUIDsEqual(r.ResourceRecordID, item));
             if (resourceMatch) {
                 this.SelectedResources.push(resourceMatch);
             }
@@ -47,7 +48,7 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
         this.SelectionChanged.emit(this.SelectedResources);
     }
 
-    public resourcePermissions: ResourcePermissionEntity[] = [];
+    public resourcePermissions: MJResourcePermissionEntity[] = [];
     public resources: ResourceData[] = [];
     async ngAfterViewInit() {
         await this.Refresh();
@@ -67,12 +68,12 @@ export class AvailableResourcesComponent  extends BaseAngularComponent implement
             this.resources = [];
         }
         else {
-            const rt = ResourcePermissionEngine.Instance.ResourceTypes.find(rt => rt.ID === this.ResourceTypeID); 
+            const rt = ResourcePermissionEngine.Instance.ResourceTypes.find(rt => UUIDsEqual(rt.ID, this.ResourceTypeID));
             if (!rt || !rt.EntityID)
                 throw new Error(`Resource Type ${this.ResourceTypeID} not found`);
 
             const p = this.ProviderToUse;
-            const entity = p.Entities.find(e => e.ID === rt.EntityID);
+            const entity = p.Entities.find(e => UUIDsEqual(e.ID, rt.EntityID));
             if (!entity || !entity.NameField)
                 throw new Error(`Entity ${rt.EntityID} not found, or no Name field defined`);
             const rv = new RunView(this.RunViewToUse);

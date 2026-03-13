@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunView, UserInfo } from "@memberjunction/core";
-import { MJGlobal } from "@memberjunction/global";
+import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import {
     BaseImageGenerator,
     ImageGenerationParams,
@@ -11,7 +11,7 @@ import {
     GeneratedImage,
     GetAIAPIKey
 } from "@memberjunction/ai";
-import { AIModelEntityExtended, MediaOutput } from "@memberjunction/ai-core-plus";
+import { MJAIModelEntityExtended, MediaOutput } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 
 /**
@@ -228,7 +228,7 @@ export class GenerateImageAction extends BaseAction {
     private async prepareImageGenerator(
         contextUser: UserInfo | undefined,
         modelName?: string
-    ): Promise<{ generator: BaseImageGenerator; model: AIModelEntityExtended; apiName: string }> {
+    ): Promise<{ generator: BaseImageGenerator; model: MJAIModelEntityExtended; apiName: string }> {
         // Ensure AIEngine is loaded
         await AIEngineBase.Instance.Config(false, contextUser);
 
@@ -242,7 +242,7 @@ export class GenerateImageAction extends BaseAction {
         }
 
         // Select model - use specified or highest power
-        let model: AIModelEntityExtended;
+        let model: MJAIModelEntityExtended;
         if (modelName) {
             const foundModel = imageGeneratorModels.find(
                 m => m.Name.toLowerCase() === modelName.toLowerCase() ||
@@ -276,7 +276,7 @@ export class GenerateImageAction extends BaseAction {
 
         if (!apiKey) {
             // Try getting by vendor name as fallback
-            const vendor = AIEngineBase.Instance.Vendors.find(v => v.ID === inferenceProvider.VendorID);
+            const vendor = AIEngineBase.Instance.Vendors.find(v => UUIDsEqual(v.ID, inferenceProvider.VendorID));
             const vendorApiKey = vendor ? GetAIAPIKey(vendor.Name) : null;
             if (!vendorApiKey) {
                 throw new Error(`No API key found for ${driverClass} or vendor ${vendor?.Name || 'unknown'}`);

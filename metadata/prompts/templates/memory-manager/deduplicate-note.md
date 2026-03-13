@@ -23,18 +23,20 @@ You are evaluating whether a new note should be added to the agent memory system
 
 ## Decision Criteria
 
-Add the candidate note **only if** it provides:
+**IMPORTANT: High similarity scores indicate topical overlap, NOT necessarily duplicate information.** Two notes can be about the same subject yet convey distinct facts. Always compare the **specific values and details**, not just the general topic.
 
-1. **New Information**: Contains facts, preferences, or constraints not covered by existing notes
+Add the candidate note if it provides:
+
+1. **New or Additive Information**: Contains specific facts, preferences, values, or constraints not stated in existing notes — even if the topic overlaps. For example, "User prefers Python for scripting" adds to "User prefers TypeScript for web development"; these are two distinct language preferences in different contexts, not duplicates.
 2. **Different Scope**: Applies to a different agent/user/company combination
 3. **Refinement**: Provides more specific or actionable guidance than existing notes
 4. **Contradiction Resolution**: Clarifies or updates outdated information
 
 **Do NOT add** the candidate if:
 
-1. **Duplicate**: Same meaning as an existing note, even if worded differently
-2. **Subset**: All information is already covered by existing notes
-3. **Redundant**: Would not provide any additional value to agents
+1. **True Duplicate**: Conveys the **exact same specific information** as an existing note, just worded differently (e.g., "User prefers dark mode" vs "User likes dark theme" — same preference, same value)
+2. **Strict Subset**: Every specific detail is already covered by existing notes
+3. **Redundant**: Would not provide any additional actionable value to agents
 
 ## Output Format
 
@@ -47,4 +49,4 @@ Return your decision as JSON:
 }
 ```
 
-Be conservative - only add notes that genuinely provide new value. Quality over quantity.
+Preserve every distinct piece of information. When in doubt about whether two notes convey the same specific fact, prefer adding the candidate.

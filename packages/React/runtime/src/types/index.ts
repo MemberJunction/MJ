@@ -5,7 +5,7 @@
  */
 
 import { UserInfo } from '@memberjunction/core';
-import { ComponentLibraryEntity } from '@memberjunction/core-entities';
+import { MJComponentLibraryEntity } from '@memberjunction/core-entities';
 import { ComponentLibraryDependency, ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 
 /**
@@ -50,7 +50,7 @@ export interface CompileOptions {
   /**
    * Required, metadata for all possible libraries allowed by the system
    */
-  allLibraries: ComponentLibraryEntity[];
+  allLibraries: MJComponentLibraryEntity[];
 }
 
 

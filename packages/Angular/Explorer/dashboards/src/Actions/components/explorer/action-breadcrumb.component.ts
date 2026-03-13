@@ -7,7 +7,7 @@ import {
   SimpleChanges,
   ChangeDetectionStrategy
 } from '@angular/core';
-import { ActionCategoryEntity } from '@memberjunction/core-entities';
+import { MJActionCategoryEntity } from '@memberjunction/core-entities';
 
 interface BreadcrumbItem {
   id: string;
@@ -24,7 +24,7 @@ interface BreadcrumbItem {
 })
 export class ActionBreadcrumbComponent implements OnChanges {
   @Input() SelectedCategoryId = 'all';
-  @Input() Categories: ActionCategoryEntity[] = [];
+  @Input() Categories: MJActionCategoryEntity[] = [];
   @Output() CategorySelect = new EventEmitter<string>();
 
   public Breadcrumbs: BreadcrumbItem[] = [];
@@ -59,7 +59,7 @@ export class ActionBreadcrumbComponent implements OnChanges {
     }
 
     // Build path from root to selected category
-    const categoryMap = new Map<string, ActionCategoryEntity>();
+    const categoryMap = new Map<string, MJActionCategoryEntity>();
     this.Categories.forEach(c => categoryMap.set(c.ID, c));
 
     const path: BreadcrumbItem[] = [];

@@ -1,12 +1,12 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild } from '@angular/core';
-import { ResourceData, CredentialCategoryEntity, CredentialTypeEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { ResourceData, MJCredentialCategoryEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CredentialCategoryEditPanelComponent } from '@memberjunction/ng-credentials';
 interface CategoryNode {
-    category: CredentialCategoryEntity;
+    category: MJCredentialCategoryEntity;
     children: CategoryNode[];
     expanded: boolean;
     level: number;
@@ -23,9 +23,9 @@ interface CategoryNode {
 })
 export class CredentialsCategoriesResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     public isLoading = true;
-    public categories: CredentialCategoryEntity[] = [];
+    public categories: MJCredentialCategoryEntity[] = [];
     public categoryTree: CategoryNode[] = [];
-    public types: CredentialTypeEntity[] = [];
+    public types: MJCredentialTypeEntity[] = [];
     public selectedNode: CategoryNode | null = null;
     public searchText = '';
 
@@ -123,11 +123,11 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
             ]);
 
             if (catResult.Success) {
-                this.categories = catResult.Results as CredentialCategoryEntity[];
+                this.categories = catResult.Results as MJCredentialCategoryEntity[];
             }
 
             if (typeResult.Success) {
-                this.types = typeResult.Results as CredentialTypeEntity[];
+                this.types = typeResult.Results as MJCredentialTypeEntity[];
             }
 
             this.buildTree();
@@ -247,8 +247,8 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
             const success = await node.category.Delete();
             if (success) {
                 MJNotificationService.Instance.CreateSimpleNotification(`Category "${node.category.Name}" deleted successfully`, 'success', 3000);
-                this.categories = this.categories.filter(c => c.ID !== node.category.ID);
-                if (this.selectedNode?.category.ID === node.category.ID) {
+                this.categories = this.categories.filter(c => !UUIDsEqual(c.ID, node.category.ID));
+                if (UUIDsEqual(this.selectedNode?.category.ID, node.category.ID)) {
                     this.selectedNode = null;
                 }
                 this.buildTree();
@@ -264,8 +264,8 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
 
     // === Panel Event Handlers ===
 
-    public onCategorySaved(category: CredentialCategoryEntity): void {
-        const existingIndex = this.categories.findIndex(c => c.ID === category.ID);
+    public onCategorySaved(category: MJCredentialCategoryEntity): void {
+        const existingIndex = this.categories.findIndex(c => UUIDsEqual(c.ID, category.ID));
 
         if (existingIndex >= 0) {
             this.categories[existingIndex] = category;
@@ -278,8 +278,8 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     }
 
     public onCategoryDeleted(categoryId: string): void {
-        this.categories = this.categories.filter(c => c.ID !== categoryId);
-        if (this.selectedNode?.category.ID === categoryId) {
+        this.categories = this.categories.filter(c => !UUIDsEqual(c.ID, categoryId));
+        if (UUIDsEqual(this.selectedNode?.category.ID, categoryId)) {
             this.selectedNode = null;
         }
         this.buildTree();
@@ -289,7 +289,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     // === Selection ===
 
     public selectNode(node: CategoryNode): void {
-        this.selectedNode = this.selectedNode?.category.ID === node.category.ID ? null : node;
+        this.selectedNode = UUIDsEqual(this.selectedNode?.category.ID, node.category.ID) ? null : node;
         this.cdr.markForCheck();
     }
 
@@ -373,7 +373,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         return this.types.length;
     }
 
-    public getTypesForCategory(categoryName: string): CredentialTypeEntity[] {
+    public getTypesForCategory(categoryName: string): MJCredentialTypeEntity[] {
         return this.types.filter(t => t.Category === categoryName);
     }
 
@@ -398,8 +398,21 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
         });
     }
 
+    /** Case-insensitive UUID check whether a tree node is the currently selected node. */
+    public IsNodeSelected(node: CategoryNode): boolean {
+        return UUIDsEqual(this.selectedNode?.category?.ID, node.category.ID);
+    }
+
     public getCategoryColor(index: number): string {
-        const colors = ['#6366f1', '#8b5cf6', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#06b6d4'];
+        const colors = [
+            'var(--mj-brand-primary)',
+            'var(--mj-brand-primary)',
+            'var(--mj-brand-primary)',
+            'var(--mj-status-warning)',
+            'var(--mj-status-success)',
+            'var(--mj-brand-primary)',
+            'var(--mj-brand-primary)'
+        ];
         return colors[index % colors.length];
     }
 

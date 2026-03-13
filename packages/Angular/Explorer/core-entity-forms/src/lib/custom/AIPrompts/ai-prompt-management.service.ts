@@ -1,7 +1,7 @@
 import { Injectable, ViewContainerRef } from '@angular/core';
 import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
 import { Observable, Subject } from 'rxjs';
-import { TemplateEntity } from '@memberjunction/core-entities';
+import { MJTemplateEntity } from '@memberjunction/core-entities';
 import { 
   TemplateSelectorDialogComponent, 
   TemplateSelectorConfig, 
@@ -83,10 +83,10 @@ export class AIPromptManagementService {
     promptId?: string;
     promptName?: string;
     viewContainerRef?: ViewContainerRef;
-  }): Observable<TemplateEntity | null> {
+  }): Observable<MJTemplateEntity | null> {
     // For now, we'll return a placeholder - in a full implementation,
     // this would open a template creation dialog
-    const resultSubject = new Subject<TemplateEntity | null>();
+    const resultSubject = new Subject<MJTemplateEntity | null>();
     
     // Simulate async operation
     setTimeout(() => {

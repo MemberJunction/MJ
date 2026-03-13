@@ -1,5 +1,5 @@
 import { Component, Input, OnInit, OnChanges, SimpleChanges, ViewChild } from '@angular/core';
-import { TemplateEntity, TemplateParamEntity } from '@memberjunction/core-entities';
+import { MJTemplateEntity, MJTemplateParamEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { GridComponent, AddEvent, EditEvent, CancelEvent, SaveEvent, RemoveEvent } from '@progress/kendo-angular-grid';
@@ -12,17 +12,17 @@ import { FormGroup, FormControl, Validators } from '@angular/forms';
     styleUrls: ['./template-params-grid.component.css']
 })
 export class TemplateParamsGridComponent implements OnInit, OnChanges {
-    @Input() template: TemplateEntity | null = null;
+    @Input() template: MJTemplateEntity | null = null;
     @Input() editMode: boolean = false;
     
     @ViewChild(GridComponent) grid!: GridComponent;
     
-    public templateParams: TemplateParamEntity[] = [];
+    public templateParams: MJTemplateParamEntity[] = [];
     public isLoading = false;
     
     // Grid editing
     public editedRowIndex: number | undefined = undefined;
-    public editedParam: TemplateParamEntity | null = null;
+    public editedParam: MJTemplateParamEntity | null = null;
     public formGroup: FormGroup | undefined;
     
     // Type options for dropdown
@@ -54,8 +54,8 @@ export class TemplateParamsGridComponent implements OnInit, OnChanges {
         this.isLoading = true;
         try {
             const rv = new RunView();
-            const results = await rv.RunView<TemplateParamEntity>({
-                EntityName: 'Template Params',
+            const results = await rv.RunView<MJTemplateParamEntity>({
+                EntityName: 'MJ: Template Params',
                 ExtraFilter: `TemplateID='${this.template.ID}'`,
                 OrderBy: 'Name ASC' 
             });
@@ -191,7 +191,7 @@ export class TemplateParamsGridComponent implements OnInit, OnChanges {
     public async removeHandler(args: RemoveEvent): Promise<void> {
         if (!this.editMode) return;
         
-        const param = args.dataItem as TemplateParamEntity;
+        const param = args.dataItem as MJTemplateParamEntity;
         
         if (!confirm(`Are you sure you want to delete the parameter "${param.Name}"?`)) {
             return;
@@ -228,7 +228,7 @@ export class TemplateParamsGridComponent implements OnInit, OnChanges {
         }
     }
     
-    private createFormGroup(param: TemplateParamEntity): FormGroup {
+    private createFormGroup(param: MJTemplateParamEntity): FormGroup {
         return new FormGroup({
             name: new FormControl(param.Name, Validators.required),
             type: new FormControl(param.Type || 'Scalar', Validators.required),
@@ -250,12 +250,12 @@ export class TemplateParamsGridComponent implements OnInit, OnChanges {
         this.formGroup = undefined;
     }
     
-    private async createNewParam(): Promise<TemplateParamEntity | null> {
+    private async createNewParam(): Promise<MJTemplateParamEntity | null> {
         if (!this.template?.ID) return null;
         
         try {
             const md = new Metadata();
-            const newParam = await md.GetEntityObject<TemplateParamEntity>('Template Params');
+            const newParam = await md.GetEntityObject<MJTemplateParamEntity>('MJ: Template Params');
             newParam.TemplateID = this.template.ID;
             newParam.Type = 'Scalar';
             newParam.IsRequired = false;

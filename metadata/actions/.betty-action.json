@@ -5,7 +5,7 @@
       "Description": "Query your organization's knowledge base assistant for information about company policies, procedures, documentation, and institutional knowledge. Betty provides context-aware responses with optional reference links to supporting materials.",
       "Type": "Custom",
       "DriverClass": "BettyAction",
-      "CategoryID": "@lookup:Action Categories.Name=AI",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI",
       "Status": "Active",
       "IconClass": "fa-solid fa-book-open-reader",
       "UserPrompt": null,
@@ -14,7 +14,7 @@
       "CodeComments": null
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -92,7 +92,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -204,8 +204,8 @@
       "ID": "B43A6411-D9BB-4604-8515-38EABBD85A64"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:55.787Z",
-      "checksum": "6ed61857425afe02ba08106abfc40b7874f6f6396534814750fed070b3f84564"
+      "lastModified": "2026-02-13T21:08:42.349Z",
+      "checksum": "bbb5332cfffb791e7137defd995e8fdeba0533e54db4450227da9e8a424da3b0"
     }
   }
 ]

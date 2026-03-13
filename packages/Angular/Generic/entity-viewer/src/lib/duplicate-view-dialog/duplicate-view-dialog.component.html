@@ -1,0 +1,84 @@
+<!-- Dialog Backdrop -->
+@if (IsOpen) {
+  <div class="dialog-backdrop" (click)="OnCancel()"></div>
+}
+
+<!-- Dialog Panel -->
+<div class="dialog-panel" [class.open]="IsOpen">
+  <!-- Header -->
+  <div class="dialog-header">
+    <div class="icon-circle">
+      <i class="fa-regular fa-copy"></i>
+    </div>
+    <span class="header-title">Duplicate View</span>
+    <button class="close-btn" (click)="OnCancel()" title="Close">
+      <i class="fa-solid fa-times"></i>
+    </button>
+  </div>
+
+  <!-- Body -->
+  <div class="dialog-body">
+    <p class="intro-text">
+      Creating a copy of <strong>"{{ SourceViewName }}"</strong> with all its columns, filters, and sorting.
+    </p>
+
+    <!-- New Name Input -->
+    <div class="form-group">
+      <label for="duplicateName">New View Name</label>
+      <input
+        id="duplicateName"
+        type="text"
+        class="form-input"
+        [class.invalid]="NameTouched && !NewName.trim()"
+        [(ngModel)]="NewName"
+        (blur)="NameTouched = true"
+        (keydown.enter)="OnDuplicate()"
+      />
+      @if (NameTouched && !NewName.trim()) {
+        <span class="validation-error">Name is required</span>
+      }
+    </div>
+
+    <!-- Metadata Summary -->
+    @if (Summary) {
+      <div class="meta-summary">
+        @if (Summary.FilterCount > 0) {
+          <span class="meta-item">
+            <i class="fa-solid fa-filter"></i>
+            {{ Summary.FilterCount }} filter{{ Summary.FilterCount !== 1 ? 's' : '' }}
+          </span>
+        }
+        <span class="meta-item">
+          <i class="fa-solid fa-table-columns"></i>
+          {{ Summary.ColumnCount }} column{{ Summary.ColumnCount !== 1 ? 's' : '' }}
+        </span>
+        @if (Summary.SortCount > 0) {
+          <span class="meta-item">
+            <i class="fa-solid fa-arrow-down-short-wide"></i>
+            {{ Summary.SortCount }} sort{{ Summary.SortCount !== 1 ? 's' : '' }}
+          </span>
+        }
+        @if (Summary.AggregateCount > 0) {
+          <span class="meta-item">
+            <i class="fa-solid fa-chart-simple"></i>
+            {{ Summary.AggregateCount }} aggregate{{ Summary.AggregateCount !== 1 ? 's' : '' }}
+          </span>
+        }
+      </div>
+    }
+  </div>
+
+  <!-- Footer -->
+  <div class="dialog-footer">
+    <button
+      class="btn btn-primary"
+      (click)="OnDuplicate()"
+      [disabled]="!NewName.trim()">
+      <i class="fa-regular fa-copy"></i>
+      Duplicate
+    </button>
+    <button class="btn btn-cancel" (click)="OnCancel()">
+      Cancel
+    </button>
+  </div>
+</div>

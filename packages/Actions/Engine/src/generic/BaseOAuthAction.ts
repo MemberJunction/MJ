@@ -1,6 +1,6 @@
 import { BaseAction } from './BaseAction';
 import { ActionParam } from '@memberjunction/actions-base';
-import { CompanyIntegrationEntity, CompanyIntegrationEntityType, IntegrationEntity } from '@memberjunction/core-entities';
+import { MJCompanyIntegrationEntity, MJCompanyIntegrationEntityType, MJIntegrationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { ActionResultSimple } from '@memberjunction/actions-base';
 
@@ -11,8 +11,8 @@ import { ActionResultSimple } from '@memberjunction/actions-base';
  */
 export abstract class BaseOAuthAction extends BaseAction {
     private _metadata: Metadata = new Metadata();
-    protected _companyIntegration: CompanyIntegrationEntity | null = null;
-    protected _integration: IntegrationEntity | null = null;
+    protected _companyIntegration: MJCompanyIntegrationEntity | null = null;
+    protected _integration: MJIntegrationEntity | null = null;
 
     /**
      * OAuth-specific parameters that all OAuth actions should include
@@ -33,7 +33,7 @@ export abstract class BaseOAuthAction extends BaseAction {
     protected async initializeOAuth(companyIntegrationId: string): Promise<boolean> {
         try {
             // Load company integration
-            const ci = await this._metadata.GetEntityObject<CompanyIntegrationEntity>('Company Integrations');
+            const ci = await this._metadata.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
             if (!ci) {
                 throw new Error('Failed to create CompanyIntegration entity object');
             }
@@ -45,7 +45,7 @@ export abstract class BaseOAuthAction extends BaseAction {
             this._companyIntegration = ci;
 
             // Load integration details
-            const integration = await this._metadata.GetEntityObject<IntegrationEntity>('Integrations');
+            const integration = await this._metadata.GetEntityObject<MJIntegrationEntity>('MJ: Integrations');
             if (!integration || !await integration.Load(ci.IntegrationID)) {
                 throw new Error(`Integration not found: ${ci.IntegrationID}`);
             }
@@ -192,7 +192,7 @@ export abstract class BaseOAuthAction extends BaseAction {
     protected getCustomAttribute(attributeNumber: 1 | 2 | 3 | 4 | 5): string | null {
         if (!this._companyIntegration) return null;
         
-        const attributeKey = `CustomAttribute${attributeNumber}` as keyof CompanyIntegrationEntity;
+        const attributeKey = `CustomAttribute${attributeNumber}` as keyof MJCompanyIntegrationEntity;
         return this._companyIntegration[attributeKey] as string || null;
     }
 
@@ -207,7 +207,7 @@ export abstract class BaseOAuthAction extends BaseAction {
             throw new Error('Company integration not initialized');
         }
 
-        const attributeKey = `CustomAttribute${attributeNumber}` as keyof CompanyIntegrationEntity;
+        const attributeKey = `CustomAttribute${attributeNumber}` as keyof MJCompanyIntegrationEntity;
         (this._companyIntegration as any)[attributeKey] = value;
         await this._companyIntegration.Save();
     }

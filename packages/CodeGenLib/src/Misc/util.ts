@@ -95,12 +95,22 @@ export function logIf(shouldLog: boolean, ...args: any[]) {
 }
 
 /**
- * Sorts an array of items by Sequence property first, then by __mj_CreatedAt for consistent ordering.
- * This ensures that generated code maintains the same order across multiple runs.
- * @param items - Array of items that have Sequence and optional __mj_CreatedAt properties
+ * Sorts an array of items by Sequence, then by __mj_CreatedAt, then alphabetically by a
+ * type-appropriate name field, and finally by ID as a last-resort tiebreaker. This ensures
+ * that generated code maintains the same order across multiple CodeGen runs and different
+ * database environments, even when Sequence values are identical (e.g., all 0) and
+ * CreatedAt timestamps match (e.g., batch-inserted rows).
+ *
+ * The alphabetical tiebreaker checks, in order:
+ *   - Value (EntityFieldValueInfo)
+ *   - Name (EntityFieldInfo)
+ *   - RelatedEntityJoinField (EntityRelationshipInfo)
+ *   - ID (universal last resort — all types have this)
+ *
+ * @param items - Array of items that have Sequence and optional date/name properties
  * @returns A new sorted array
  */
-export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_CreatedAt?: Date }>(items: T[]): T[] {
+export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_CreatedAt?: Date; Value?: string; Name?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
     return [...items].sort((a, b) => {
         // Primary sort by Sequence
         if (a.Sequence !== b.Sequence) {
@@ -108,12 +118,37 @@ export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_Cr
         }
         // Secondary sort by __mj_CreatedAt for consistent ordering
         if (a.__mj_CreatedAt && b.__mj_CreatedAt) {
-            return a.__mj_CreatedAt.getTime() - b.__mj_CreatedAt.getTime();
+            const timeDiff = new Date(a.__mj_CreatedAt).getTime() - new Date(b.__mj_CreatedAt).getTime();
+            if (timeDiff !== 0) return timeDiff;
         }
         // If one has a date and the other doesn't, prioritize the one with a date
         if (a.__mj_CreatedAt && !b.__mj_CreatedAt) return -1;
         if (!a.__mj_CreatedAt && b.__mj_CreatedAt) return 1;
-        // If neither has a date, maintain original order
+
+        // Alphabetical tiebreakers — try type-appropriate name fields in order
+        // Value (EntityFieldValueInfo)
+        if (a.Value != null && b.Value != null) {
+            const cmp = a.Value.localeCompare(b.Value);
+            if (cmp !== 0) return cmp;
+        } else if (a.Value != null && b.Value == null) return -1;
+        else if (a.Value == null && b.Value != null) return 1;
+
+        // Name (EntityFieldInfo)
+        if (a.Name != null && b.Name != null) {
+            const cmp = a.Name.localeCompare(b.Name);
+            if (cmp !== 0) return cmp;
+        }
+
+        // RelatedEntityJoinField (EntityRelationshipInfo)
+        if (a.RelatedEntityJoinField != null && b.RelatedEntityJoinField != null) {
+            const cmp = a.RelatedEntityJoinField.localeCompare(b.RelatedEntityJoinField);
+            if (cmp !== 0) return cmp;
+        }
+
+        // Last resort: sort by ID for absolute determinism
+        if (a.ID != null && b.ID != null) {
+            return a.ID.localeCompare(b.ID);
+        }
         return 0;
     });
 }

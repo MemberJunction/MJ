@@ -1,5 +1,5 @@
 {
-  "entity": "Queries",
+  "entity": "MJ: Queries",
   "filePattern": "**/.*.json",
   "defaults": {
     "Status": "Pending"
@@ -20,7 +20,7 @@
     "ignoreVirtualFields": true,
     "lookupFields": {
       "CategoryID": {
-        "entity": "Query Categories",
+        "entity": "MJ: Query Categories",
         "field": "ID"
       }
     },

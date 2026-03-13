@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { RunView } from "@memberjunction/core";
-import { ListDetailEntity } from "@memberjunction/core-entities";
+import { MJListDetailEntity } from "@memberjunction/core-entities";
 
 type ListItemStatus = 'Active' | 'Complete' | 'Disabled' | 'Error' | 'Other' | 'Pending' | 'Rejected';
 
@@ -103,8 +103,8 @@ export class UpdateListItemStatusAction extends BaseAction {
       }
 
       // Find records to update
-      const detailsResult = await rv.RunView<ListDetailEntity>({
-        EntityName: 'List Details',
+      const detailsResult = await rv.RunView<MJListDetailEntity>({
+        EntityName: 'MJ: List Details',
         ExtraFilter: filter,
         ResultType: 'entity_object'
       }, params.ContextUser);

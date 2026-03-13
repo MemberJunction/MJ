@@ -2,7 +2,7 @@ import { AutotagBase } from '../../Core';
 import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
 import { RegisterClass } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ContentSourceEntity, ContentItemEntity } from '@memberjunction/core-entities';
+import { MJContentSourceEntity, MJContentItemEntity } from '@memberjunction/core-entities';
 import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { URL } from 'url';
@@ -39,8 +39,8 @@ export class AutotagWebsite extends AutotagBase {
     public async Autotag(contextUser: UserInfo): Promise<void> {
         this.contextUser = contextUser;
         this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Website', this.contextUser);
-        const contentSources: ContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
-        const contentItemsToProcess: ContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
+        const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
+        const contentItemsToProcess: MJContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
         await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
     }
 
@@ -51,8 +51,8 @@ export class AutotagWebsite extends AutotagBase {
      * @param contentSource 
      * @returns 
      */
-    public async SetContentItemsToProcess(contentSources: ContentSourceEntity[]): Promise<ContentItemEntity[]> {
-        const contentItemsToProcess: ContentItemEntity[] = []
+    public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
+        const contentItemsToProcess: MJContentItemEntity[] = []
         
         // If content source parameters were provided, set them. Otherwise, use the default values.
         for (const contentSource of contentSources) {
@@ -87,7 +87,7 @@ export class AutotagWebsite extends AutotagBase {
                 const regex: RegExp = this.URLPattern && new RegExp(this.URLPattern) || new RegExp('.*');
          
                 const allContentItemLinks: string[] = await this.getAllLinksFromContentSource(startURL, rootURL, regex);
-                const contentItems: ContentItemEntity[] = await this.SetNewAndModifiedContentItems(allContentItemLinks, contentSourceParams, this.contextUser);
+                const contentItems: MJContentItemEntity[] = await this.SetNewAndModifiedContentItems(allContentItemLinks, contentSourceParams, this.contextUser);
                 if (contentItems && contentItems.length > 0) {
                     contentItemsToProcess.push(...contentItems);
                 }
@@ -112,22 +112,22 @@ export class AutotagWebsite extends AutotagBase {
      * @param contextUser 
      * @returns 
      */
-    protected async SetNewAndModifiedContentItems(contentItemLinks: string[], contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<ContentItemEntity[]> { 
+    protected async SetNewAndModifiedContentItems(contentItemLinks: string[], contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<MJContentItemEntity[]> { 
 
-        const addedContentItems: ContentItemEntity[] = [];
+        const addedContentItems: MJContentItemEntity[] = [];
         for (const contentItemLink of contentItemLinks) {
             try {
                 const newHash = await this.engine.getChecksumFromURL(contentItemLink);
 
                 const rv = new RunView();
-                const results = await rv.RunViews<ContentItemEntity>([
+                const results = await rv.RunViews<MJContentItemEntity>([
                     {
-                        EntityName: 'Content Items',
+                        EntityName: 'MJ: Content Items',
                         ExtraFilter: `Checksum = '${newHash}'`,
                         ResultType: 'entity_object'
                     }, 
                     {
-                        EntityName: 'Content Items',
+                        EntityName: 'MJ: Content Items',
                         ExtraFilter: `ContentSourceID = '${contentSourceParams.contentSourceID}' AND URL = '${contentItemLink}'`,
                         ResultType: 'entity_object'
                     }
@@ -143,13 +143,13 @@ export class AutotagWebsite extends AutotagBase {
                 
                 else if (contentItemResultsWithURL.Success && contentItemResultsWithURL.Results.length) {
                     // This content item already exists, update the hash and last updated date
-                    const contentItemResult: ContentItemEntity = contentItemResultsWithURL.Results[0]; 
+                    const contentItemResult: MJContentItemEntity = contentItemResultsWithURL.Results[0]; 
                     const lastStoredHash: string = contentItemResult.Checksum
             
                     if (lastStoredHash !== newHash) {
                         // This content item has changed since we last access it, update the hash and last updated date
                         const md = new Metadata();
-                        const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+                        const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
                         contentItem.Load(contentItemResult.ID);
                         contentItem.Checksum = newHash
                         contentItem.Text = await this.parseWebPage(contentItemLink)
@@ -161,7 +161,7 @@ export class AutotagWebsite extends AutotagBase {
                 else {
                     // This content item does not exist, add it
                     const md = new Metadata();
-                    const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', this.contextUser);
+                    const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
                     contentItem.ContentSourceID = contentSourceParams.contentSourceID
                     contentItem.Name = this.getPathName(contentItemLink) // Will get overwritten by title later if it exists
                     contentItem.Description = await this.engine.getContentItemDescription(contentSourceParams, this.contextUser)

@@ -1,6 +1,6 @@
 import { Hook } from '@oclif/core';
-import * as dotenv from 'dotenv';
-import * as path from 'path';
+import dotenv from 'dotenv';
+import path from 'path';
 
 /**
  * Init hook runs once when the CLI starts up.

@@ -1,12 +1,12 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData, ListCategoryEntity, ListEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJListCategoryEntity, MJListEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 interface CategoryViewModel {
-  category: ListCategoryEntity;
+  category: MJListCategoryEntity;
   listCount: number;
   childCount: number;
   depth: number;
@@ -158,7 +158,7 @@ interface CategoryViewModel {
         <div class="category-node" [style.padding-left.px]="vm.depth * 20">
           <div
             class="node-content"
-            [class.selected]="selectedCategory?.ID === vm.category.ID"
+            [class.selected]="IsCategorySelected(vm.category)"
             (click)="selectCategory(vm.category)"
             (keydown.enter)="selectCategory(vm.category)"
             (keydown.space)="selectCategory(vm.category); $event.preventDefault()"
@@ -167,7 +167,7 @@ interface CategoryViewModel {
             tabindex="0"
             role="treeitem"
             [attr.aria-expanded]="hasChildren(vm.category) ? vm.isExpanded : null"
-            [attr.aria-selected]="selectedCategory?.ID === vm.category.ID"
+            [attr.aria-selected]="IsCategorySelected(vm.category)"
             [attr.aria-label]="vm.category.Name + ' - ' + vm.listCount + ' lists'">
             @if (hasChildren(vm.category)) {
               <button
@@ -287,7 +287,7 @@ interface CategoryViewModel {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #f5f7fa;
+      background: var(--mj-bg-surface);
       overflow: hidden;
     }
 
@@ -297,8 +297,8 @@ interface CategoryViewModel {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: white;
-      border-bottom: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
       flex-shrink: 0;
     }
 
@@ -310,14 +310,14 @@ interface CategoryViewModel {
 
     .header-title i {
       font-size: 24px;
-      color: #2196F3;
+      color: var(--mj-brand-primary);
     }
 
     .header-title h2 {
       margin: 0;
       font-size: 20px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .btn-create {
@@ -325,8 +325,8 @@ interface CategoryViewModel {
       align-items: center;
       gap: 8px;
       padding: 8px 16px;
-      background: #2196F3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       border-radius: 6px;
       font-size: 14px;
@@ -336,7 +336,7 @@ interface CategoryViewModel {
     }
 
     .btn-create:hover {
-      background: #1976D2;
+      background: var(--mj-brand-primary-hover);
     }
 
     /* Loading */
@@ -373,13 +373,13 @@ interface CategoryViewModel {
       width: 100px;
       height: 100px;
       border-radius: 50%;
-      background: linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     .empty-state-icon-wrapper > i {
       position: relative;
       font-size: 48px;
-      color: #2196F3;
+      color: var(--mj-brand-primary);
       z-index: 1;
     }
 
@@ -387,12 +387,12 @@ interface CategoryViewModel {
       margin: 0 0 12px;
       font-size: 22px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .empty-state p {
       margin: 0 0 8px;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-size: 15px;
       line-height: 1.5;
     }
@@ -410,12 +410,12 @@ interface CategoryViewModel {
       align-items: center;
       gap: 10px;
       font-size: 14px;
-      color: #555;
+      color: var(--mj-text-secondary);
     }
 
     .feature-item i {
       font-size: 14px !important;
-      color: #4CAF50 !important;
+      color: var(--mj-status-success) !important;
     }
 
     .btn-create-large {
@@ -423,21 +423,21 @@ interface CategoryViewModel {
       align-items: center;
       gap: 8px;
       padding: 14px 28px;
-      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       border-radius: 8px;
       font-size: 15px;
       font-weight: 500;
       cursor: pointer;
       transition: all 0.2s;
-      box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
     }
 
     .btn-create-large:hover {
-      background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+      background: var(--mj-brand-primary-hover);
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
     }
 
     /* Content Layout */
@@ -456,9 +456,9 @@ interface CategoryViewModel {
 
     .category-tree-panel,
     .category-detail-panel {
-      background: white;
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      box-shadow: var(--mj-shadow-sm);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -469,21 +469,21 @@ interface CategoryViewModel {
       justify-content: space-between;
       align-items: center;
       padding: 12px 16px;
-      border-bottom: 1px solid #e0e0e0;
-      background: #fafafa;
+      border-bottom: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .panel-header h3 {
       margin: 0;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .count-badge {
       font-size: 12px;
-      color: #999;
-      background: #f0f0f0;
+      color: var(--mj-text-muted);
+      background: var(--mj-bg-surface-sunken);
       padding: 2px 8px;
       border-radius: 10px;
     }
@@ -497,20 +497,20 @@ interface CategoryViewModel {
       background: none;
       border: none;
       padding: 6px 8px;
-      color: #666;
+      color: var(--mj-text-secondary);
       cursor: pointer;
       border-radius: 4px;
       transition: all 0.15s;
     }
 
     .icon-btn:hover {
-      background: #f0f0f0;
-      color: #333;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .icon-btn.danger:hover {
-      background: #ffebee;
-      color: #d32f2f;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     /* Tree Content */
@@ -534,33 +534,33 @@ interface CategoryViewModel {
     }
 
     .node-content:hover {
-      background: #f5f5f5;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .node-content:focus {
       outline: none;
-      background: #e8f4fd;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     }
 
     .node-content:focus-visible {
-      outline: 2px solid #2196F3;
+      outline: 2px solid var(--mj-brand-primary);
       outline-offset: -2px;
-      background: #e8f4fd;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     }
 
     .node-content.selected {
-      background: #e3f2fd;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     }
 
     .node-content.selected:focus-visible {
-      outline: 2px solid #1976D2;
+      outline: 2px solid var(--mj-brand-primary-hover);
     }
 
     .expand-btn {
       background: none;
       border: none;
       padding: 2px;
-      color: #999;
+      color: var(--mj-text-muted);
       cursor: pointer;
       width: 20px;
       display: flex;
@@ -569,7 +569,7 @@ interface CategoryViewModel {
     }
 
     .expand-btn:hover {
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     .expand-placeholder {
@@ -578,19 +578,19 @@ interface CategoryViewModel {
 
     .node-content .fa-folder,
     .node-content .fa-folder-open {
-      color: #ffc107;
+      color: var(--mj-status-warning);
     }
 
     .node-name {
       flex: 1;
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .node-count {
       font-size: 12px;
-      color: #999;
-      background: #f0f0f0;
+      color: var(--mj-text-muted);
+      background: var(--mj-bg-surface-sunken);
       padding: 1px 6px;
       border-radius: 8px;
     }
@@ -610,7 +610,7 @@ interface CategoryViewModel {
       display: block;
       font-size: 12px;
       font-weight: 500;
-      color: #999;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 4px;
@@ -618,7 +618,7 @@ interface CategoryViewModel {
 
     .field-value {
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .detail-stats {
@@ -626,7 +626,7 @@ interface CategoryViewModel {
       gap: 24px;
       margin: 24px 0;
       padding: 16px;
-      background: #f5f7fa;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
     }
 
@@ -639,19 +639,19 @@ interface CategoryViewModel {
     .stat-value {
       font-size: 24px;
       font-weight: 600;
-      color: #2196F3;
+      color: var(--mj-brand-primary);
     }
 
     .stat-label {
       font-size: 12px;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .category-lists h4 {
       margin: 0 0 12px;
       font-size: 13px;
       font-weight: 600;
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     .mini-list {
@@ -665,14 +665,14 @@ interface CategoryViewModel {
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
-      background: #f5f7fa;
+      background: var(--mj-bg-surface);
       border-radius: 4px;
       font-size: 13px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .mini-list-item i {
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     /* No Selection */
@@ -684,7 +684,7 @@ interface CategoryViewModel {
 
     .no-selection {
       text-align: center;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .no-selection i {
@@ -712,19 +712,19 @@ interface CategoryViewModel {
     .form-group label {
       font-size: 13px;
       font-weight: 500;
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     .form-input {
       padding: 8px 12px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 14px;
     }
 
     .form-input:focus {
       outline: none;
-      border-color: #2196F3;
+      border-color: var(--mj-brand-primary);
     }
 
     /* Modal Styles */
@@ -734,7 +734,7 @@ interface CategoryViewModel {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: var(--mj-bg-overlay);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -748,9 +748,9 @@ interface CategoryViewModel {
     }
 
     .modal-dialog {
-      background: white;
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--mj-shadow-lg);
       width: 450px;
       max-width: 90vw;
       max-height: 90vh;
@@ -773,38 +773,38 @@ interface CategoryViewModel {
       justify-content: space-between;
       align-items: center;
       padding: 16px 20px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .modal-header.danger {
-      background: #ffebee;
-      border-bottom-color: #ffcdd2;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border-bottom-color: color-mix(in srgb, var(--mj-status-error) 30%, transparent);
     }
 
     .modal-header.danger h3 {
-      color: #c62828;
+      color: var(--mj-status-error);
     }
 
     .modal-header h3 {
       margin: 0;
       font-size: 18px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .modal-close {
       background: none;
       border: none;
       padding: 4px 8px;
-      color: #999;
+      color: var(--mj-text-muted);
       cursor: pointer;
       border-radius: 4px;
       transition: all 0.15s;
     }
 
     .modal-close:hover:not(:disabled) {
-      background: #f0f0f0;
-      color: #333;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .modal-close:disabled {
@@ -819,7 +819,7 @@ interface CategoryViewModel {
 
     .modal-body p {
       margin: 0;
-      color: #666;
+      color: var(--mj-text-secondary);
       line-height: 1.6;
     }
 
@@ -828,24 +828,24 @@ interface CategoryViewModel {
       justify-content: flex-end;
       gap: 12px;
       padding: 16px 20px;
-      border-top: 1px solid #e0e0e0;
-      background: #fafafa;
+      border-top: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .btn-secondary {
       padding: 8px 16px;
-      background: white;
-      border: 1px solid #ddd;
+      background: var(--mj-bg-surface-card);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-size: 14px;
       cursor: pointer;
       transition: all 0.15s;
     }
 
     .btn-secondary:hover:not(:disabled) {
-      background: #f5f5f5;
-      border-color: #ccc;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-border-strong);
     }
 
     .btn-secondary:disabled {
@@ -858,10 +858,10 @@ interface CategoryViewModel {
       align-items: center;
       gap: 8px;
       padding: 8px 16px;
-      background: #2196F3;
+      background: var(--mj-brand-primary);
       border: none;
       border-radius: 6px;
-      color: white;
+      color: var(--mj-text-inverse);
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
@@ -869,7 +869,7 @@ interface CategoryViewModel {
     }
 
     .btn-primary:hover:not(:disabled) {
-      background: #1976D2;
+      background: var(--mj-brand-primary-hover);
     }
 
     .btn-primary:disabled {
@@ -879,10 +879,10 @@ interface CategoryViewModel {
 
     .btn-danger {
       padding: 8px 16px;
-      background: #d32f2f;
+      background: var(--mj-status-error);
       border: none;
       border-radius: 6px;
-      color: white;
+      color: var(--mj-text-inverse);
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
@@ -890,7 +890,7 @@ interface CategoryViewModel {
     }
 
     .btn-danger:hover {
-      background: #c62828;
+      background: var(--mj-status-error);
     }
 
     /* Responsive */
@@ -914,14 +914,14 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   private destroy$ = new Subject<void>();
 
   isLoading = true;
-  categories: ListCategoryEntity[] = [];
+  categories: MJListCategoryEntity[] = [];
   categoryViewModels: CategoryViewModel[] = [];
-  selectedCategory: ListCategoryEntity | null = null;
-  selectedCategoryLists: ListEntity[] = [];
+  selectedCategory: MJListCategoryEntity | null = null;
+  selectedCategoryLists: MJListEntity[] = [];
 
   // Dialog
   showDialog = false;
-  editingCategory: ListCategoryEntity | null = null;
+  editingCategory: MJListCategoryEntity | null = null;
   dialogName = '';
   dialogDescription = '';
   dialogParentId: string | null = null;
@@ -933,10 +933,10 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   // Delete confirmation dialog
   showDeleteConfirm = false;
   deleteConfirmMessage = '';
-  private categoryToDelete: ListCategoryEntity | null = null;
+  private categoryToDelete: MJListCategoryEntity | null = null;
 
-  private listsByCategoryId: Map<string, ListEntity[]> = new Map();
-  private categoryMap: Map<string, ListCategoryEntity> = new Map();
+  private listsByCategoryId: Map<string, MJListEntity[]> = new Map();
+  private categoryMap: Map<string, MJListCategoryEntity> = new Map();
 
   constructor(
     private cdr: ChangeDetectorRef,
@@ -965,13 +965,13 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
       const [categoriesResult, listsResult] = await rv.RunViews([
         {
-          EntityName: 'List Categories',
+          EntityName: 'MJ: List Categories',
           OrderBy: 'Name',
           ResultType: 'entity_object',
           CacheLocal: true  // Categories rarely change, cache for performance
         },
         {
-          EntityName: 'Lists',
+          EntityName: 'MJ: Lists',
           ExtraFilter: userId ? `UserID = '${userId}'` : '',
           ResultType: 'entity_object'
         }
@@ -982,8 +982,8 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
         return;
       }
 
-      this.categories = categoriesResult.Results as ListCategoryEntity[];
-      const lists = listsResult.Results as ListEntity[];
+      this.categories = categoriesResult.Results as MJListCategoryEntity[];
+      const lists = listsResult.Results as MJListEntity[];
 
       // Build category map
       this.categoryMap.clear();
@@ -1015,9 +1015,9 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   private buildCategoryViewModels() {
     this.categoryViewModels = [];
 
-    const buildVm = (category: ListCategoryEntity, depth: number): CategoryViewModel => {
+    const buildVm = (category: MJListCategoryEntity, depth: number): CategoryViewModel => {
       const lists = this.listsByCategoryId.get(category.ID) || [];
-      const children = this.categories.filter(c => c.ParentID === category.ID);
+      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, category.ID));
 
       return {
         category,
@@ -1028,9 +1028,9 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
       };
     };
 
-    const processCategory = (category: ListCategoryEntity, depth: number) => {
+    const processCategory = (category: MJListCategoryEntity, depth: number) => {
       this.categoryViewModels.push(buildVm(category, depth));
-      const children = this.categories.filter(c => c.ParentID === category.ID);
+      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, category.ID));
       for (const child of children) {
         processCategory(child, depth + 1);
       }
@@ -1045,13 +1045,13 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
   private buildAvailableParents() {
     this.availableParents = [{ ID: null, displayName: '(Top Level)' }];
 
-    const addCategory = (cat: ListCategoryEntity, prefix: string) => {
+    const addCategory = (cat: MJListCategoryEntity, prefix: string) => {
       // Exclude the editing category and its descendants
       if (this.editingCategory && this.isDescendantOf(cat, this.editingCategory)) {
         return;
       }
       this.availableParents.push({ ID: cat.ID, displayName: prefix + cat.Name });
-      const children = this.categories.filter(c => c.ParentID === cat.ID);
+      const children = this.categories.filter(c => UUIDsEqual(c.ParentID, cat.ID));
       for (const child of children) {
         addCategory(child, prefix + '\u00A0\u00A0');
       }
@@ -1059,14 +1059,14 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
     const topLevel = this.categories.filter(c => !c.ParentID);
     for (const cat of topLevel) {
-      if (this.editingCategory?.ID !== cat.ID) {
+      if (!UUIDsEqual(this.editingCategory?.ID, cat.ID)) {
         addCategory(cat, '');
       }
     }
   }
 
-  private isDescendantOf(category: ListCategoryEntity, ancestor: ListCategoryEntity): boolean {
-    if (category.ID === ancestor.ID) return true;
+  private isDescendantOf(category: MJListCategoryEntity, ancestor: MJListCategoryEntity): boolean {
+    if (UUIDsEqual(category.ID, ancestor.ID)) return true;
     if (!category.ParentID) return false;
     const parent = this.categoryMap.get(category.ParentID);
     return parent ? this.isDescendantOf(parent, ancestor) : false;
@@ -1076,12 +1076,12 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     return this.categoryViewModels.filter(vm => !vm.category.ParentID);
   }
 
-  getChildCategories(parent: ListCategoryEntity): CategoryViewModel[] {
-    return this.categoryViewModels.filter(vm => vm.category.ParentID === parent.ID);
+  getChildCategories(parent: MJListCategoryEntity): CategoryViewModel[] {
+    return this.categoryViewModels.filter(vm => UUIDsEqual(vm.category.ParentID, parent.ID));
   }
 
-  hasChildren(category: ListCategoryEntity): boolean {
-    return this.categories.some(c => c.ParentID === category.ID);
+  hasChildren(category: MJListCategoryEntity): boolean {
+    return this.categories.some(c => UUIDsEqual(c.ParentID, category.ID));
   }
 
   toggleExpand(event: Event, vm: CategoryViewModel) {
@@ -1103,12 +1103,16 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     }
   }
 
-  selectCategory(category: ListCategoryEntity) {
+  IsCategorySelected(category: MJListCategoryEntity): boolean {
+    return UUIDsEqual(this.selectedCategory?.ID, category.ID);
+  }
+
+  selectCategory(category: MJListCategoryEntity) {
     this.selectedCategory = category;
     this.selectedCategoryLists = this.listsByCategoryId.get(category.ID) || [];
   }
 
-  getParentCategoryName(category: ListCategoryEntity): string | null {
+  getParentCategoryName(category: MJListCategoryEntity): string | null {
     if (!category.ParentID) return null;
     return this.categoryMap.get(category.ParentID)?.Name || null;
   }
@@ -1120,7 +1124,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
   getSelectedCategoryChildCount(): number {
     if (!this.selectedCategory) return 0;
-    return this.categories.filter(c => c.ParentID === this.selectedCategory!.ID).length;
+    return this.categories.filter(c => UUIDsEqual(c.ParentID, this.selectedCategory!.ID)).length
   }
 
   createCategory() {
@@ -1148,7 +1152,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     this.categoryToDelete = this.selectedCategory;
     const categoryName = this.categoryToDelete.Name;
     const listsInCategory = this.listsByCategoryId.get(this.categoryToDelete.ID) || [];
-    const childCategories = this.categories.filter(c => c.ParentID === this.categoryToDelete!.ID);
+    const childCategories = this.categories.filter(c => UUIDsEqual(c.ParentID, this.categoryToDelete!.ID));
 
     let message = `Are you sure you want to delete "${categoryName}"?`;
     if (listsInCategory.length > 0) {
@@ -1214,12 +1218,12 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
 
     try {
       const md = new Metadata();
-      let category: ListCategoryEntity;
+      let category: MJListCategoryEntity;
 
       if (this.editingCategory) {
         category = this.editingCategory;
       } else {
-        category = await md.GetEntityObject<ListCategoryEntity>('List Categories');
+        category = await md.GetEntityObject<MJListCategoryEntity>('MJ: List Categories');
         category.UserID = md.CurrentUser!.ID;
       }
 

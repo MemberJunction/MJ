@@ -1,4 +1,4 @@
-import { ListEntity, ListDetailEntity, ListCategoryEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListDetailEntity, MJListCategoryEntity } from '@memberjunction/core-entities';
 
 /**
  * Configuration for the ListManagementDialog component
@@ -82,7 +82,7 @@ export interface ListManagementResult {
   /**
    * New lists that were created during this session
    */
-  newListsCreated: ListEntity[];
+  newListsCreated: MJListEntity[];
 }
 
 /**
@@ -112,7 +112,7 @@ export interface ListItemViewModel {
   /**
    * The underlying list entity
    */
-  list: ListEntity;
+  list: MJListEntity;
 
   /**
    * Total number of items in this list
@@ -152,7 +152,7 @@ export interface ListItemViewModel {
   /**
    * Category entity if categorized
    */
-  category?: ListCategoryEntity;
+  category?: MJListCategoryEntity;
 
   /**
    * Whether this list is selected for adding records
@@ -242,5 +242,5 @@ export interface RecordMembershipInfo {
   /**
    * Full list entities this record belongs to
    */
-  lists: ListEntity[];
+  lists: MJListEntity[];
 }

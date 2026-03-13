@@ -1,8 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { ActionParamEntity } from '@memberjunction/core-entities';
+import { MJActionParamEntity } from '@memberjunction/core-entities';
 
 export interface ActionParamDialogResult {
-    Param: ActionParamEntity;
+    Param: MJActionParamEntity;
     Save: boolean;
 }
 
@@ -27,19 +27,19 @@ export interface ActionParamDialogResult {
 })
 export class ActionParamDialogComponent implements OnInit {
     // Private backing fields
-    private _param!: ActionParamEntity;
+    private _param!: MJActionParamEntity;
     private _isNew = false;
     private _editMode = false;
     private _isOpen = false;
 
     @Input()
-    set Param(value: ActionParamEntity) {
+    set Param(value: MJActionParamEntity) {
         this._param = value;
         if (value) {
             this.loadParamValues();
         }
     }
-    get Param(): ActionParamEntity {
+    get Param(): MJActionParamEntity {
         return this._param;
     }
 

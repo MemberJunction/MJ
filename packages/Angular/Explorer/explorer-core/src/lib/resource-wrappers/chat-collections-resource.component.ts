@@ -3,7 +3,7 @@ import { Router, NavigationEnd } from '@angular/router';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, EnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { ArtifactStateService, ArtifactPermissionService, CollectionStateService } from '@memberjunction/ng-conversations';
 import { Subject, takeUntil, distinctUntilChanged, combineLatest, filter } from 'rxjs';
 /**
@@ -95,16 +95,16 @@ import { Subject, takeUntil, distinctUntilChanged, combineLatest, filter } from 
     }
 
     .artifact-panel-resize-handle:hover {
-      background: #0076B6;
+      background: var(--mj-brand-primary);
     }
 
     .artifact-panel-resize-handle:active {
-      background: #005a8c;
+      background: var(--mj-brand-primary-hover);
     }
 
     .artifact-panel {
-      border-left: 1px solid #e0e0e0;
-      background: white;
+      border-left: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-card);
       transition: width 0.2s ease;
     }
 
@@ -487,7 +487,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
    * Get the environment ID from configuration or use default
    */
   get environmentId(): string {
-    return this.Data?.Configuration?.environmentId || EnvironmentEntityExtended.DefaultEnvironmentID;
+    return this.Data?.Configuration?.environmentId || MJEnvironmentEntityExtended.DefaultEnvironmentID;
   }
 
   /**

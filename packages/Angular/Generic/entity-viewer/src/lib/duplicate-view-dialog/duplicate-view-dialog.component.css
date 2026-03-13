@@ -1,0 +1,213 @@
+/* Dialog Backdrop */
+.dialog-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Dialog Panel */
+.dialog-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.95);
+  width: 420px;
+  max-width: calc(100vw - 40px);
+  background: var(--mj-bg-surface);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  z-index: 2001;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.dialog-panel.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* Dialog Header */
+.dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px 0;
+}
+
+.icon-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  flex-shrink: 0;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--mj-text-muted);
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+}
+
+.close-btn:hover {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
+}
+
+/* Dialog Body */
+.dialog-body {
+  padding: 20px 24px;
+}
+
+.intro-text {
+  font-size: 14px;
+  color: var(--mj-text-muted);
+  line-height: 1.5;
+  margin: 0 0 16px 0;
+}
+
+.intro-text strong {
+  color: var(--mj-text-primary);
+}
+
+/* Form Group */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-text-muted);
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--mj-border-strong);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--mj-text-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.form-input.invalid {
+  border-color: var(--mj-status-error);
+}
+
+.validation-error {
+  font-size: 12px;
+  color: var(--mj-status-error);
+}
+
+/* Metadata Summary */
+.meta-summary {
+  display: flex;
+  gap: 16px;
+  background: var(--mj-bg-surface-card);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--mj-text-muted);
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.meta-item i {
+  color: var(--mj-brand-primary);
+  font-size: 11px;
+}
+
+/* Dialog Footer */
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--mj-border-default);
+}
+
+/* Buttons */
+.btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--mj-color-info-600);
+}
+
+.btn-primary:disabled {
+  background: color-mix(in srgb, var(--mj-brand-primary) 50%, var(--mj-bg-surface));
+  cursor: not-allowed;
+}
+
+.btn-cancel {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
+}
+
+.btn-cancel:hover {
+  background: var(--mj-bg-surface-active);
+}

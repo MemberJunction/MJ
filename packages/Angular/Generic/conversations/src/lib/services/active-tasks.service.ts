@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { RunView, UserInfo } from '@memberjunction/core';
-import { AIAgentRunEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { ConversationDataService } from './conversation-data.service';
 
 /**
@@ -216,7 +216,7 @@ export class ActiveTasksService {
       // Query for running agent runs owned by this user
       // Only restore parent agents (those with ConversationDetailID) - child agents don't have one
       // This matches normal behavior where we only track parent agents, not child agents
-      const result = await rv.RunView<AIAgentRunEntity>({
+      const result = await rv.RunView<MJAIAgentRunEntity>({
         EntityName: 'MJ: AI Agent Runs',
         Fields: ["ID", "ConversationID", "AgentID", "Agent", "ConversationDetailID"], // narrow field scope to not pull back JSON blobs - much faster
         ExtraFilter: `Status='Running' AND UserID='${currentUser.ID}' AND ConversationDetailID IS NOT NULL`,

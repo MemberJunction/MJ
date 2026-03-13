@@ -1,0 +1,153 @@
+/* Dialog Backdrop */
+.dialog-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 2000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Dialog Panel */
+.dialog-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.95);
+  width: 420px;
+  max-width: calc(100vw - 40px);
+  background: var(--mj-bg-surface);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  z-index: 2001;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.dialog-panel.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+/* Dialog Header */
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  border-radius: 16px 16px 0 0;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.header-title i {
+  color: var(--mj-brand-primary);
+  font-size: 18px;
+}
+
+.close-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--mj-text-muted);
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
+}
+
+/* Dialog Content */
+.dialog-content {
+  padding: 24px;
+}
+
+.message {
+  font-size: 15px;
+  color: var(--mj-text-primary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.detail-message {
+  font-size: 13px;
+  color: var(--mj-text-muted);
+  line-height: 1.5;
+  margin: 12px 0 0 0;
+}
+
+/* Dialog Footer */
+.dialog-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  border-radius: 0 0 16px 16px;
+}
+
+/* Buttons */
+.btn {
+  padding: 9px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-confirm.btn-primary {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+}
+
+.btn-confirm.btn-primary:hover {
+  background: var(--mj-color-info-600);
+}
+
+.btn-confirm.btn-danger {
+  background: var(--mj-status-error);
+  color: var(--mj-text-inverse);
+}
+
+.btn-confirm.btn-danger:hover {
+  background: var(--mj-status-error-text);
+}
+
+.btn-cancel {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
+}
+
+.btn-cancel:hover {
+  background: var(--mj-bg-surface-active);
+}

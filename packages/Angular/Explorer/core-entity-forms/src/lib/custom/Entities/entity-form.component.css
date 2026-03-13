@@ -9,24 +9,24 @@
     --header-height: 80px;
     --detail-panel-width: 400px;
 
-    --bg-primary: #ffffff;
-    --bg-secondary: #f8fafc;
-    --bg-tertiary: #f1f5f9;
+    --bg-primary: var(--mj-bg-surface);
+    --bg-secondary: var(--mj-bg-surface-sunken);
+    --bg-tertiary: var(--mj-bg-surface-sunken);
 
-    --text-primary: #1e293b;
-    --text-secondary: #64748b;
-    --text-muted: #94a3b8;
+    --text-primary: var(--mj-text-primary);
+    --text-secondary: var(--mj-text-secondary);
+    --text-muted: var(--mj-text-muted);
 
-    --border-color: #e2e8f0;
-    --border-light: #f1f5f9;
+    --border-color: var(--mj-border-default);
+    --border-light: var(--mj-border-default);
 
-    --accent-color: #3b82f6;
-    --accent-light: #eff6ff;
-    --accent-dark: #1d4ed8;
+    --accent-color: var(--mj-brand-primary);
+    --accent-light: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    --accent-dark: var(--mj-brand-primary);
 
-    --success-color: #10b981;
-    --warning-color: #f59e0b;
-    --danger-color: #ef4444;
+    --success-color: var(--mj-status-success);
+    --warning-color: var(--mj-status-warning);
+    --danger-color: var(--mj-status-error);
 
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
     --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
@@ -117,18 +117,18 @@
 }
 
 .status-badge.status-active {
-    background: #dcfce7;
-    color: #166534;
+    background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-success);
 }
 
 .status-badge.status-deprecated {
-    background: #fef3c7;
-    color: #92400e;
+    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-warning);
 }
 
 .status-badge.status-disabled {
-    background: #fee2e2;
-    color: #991b1b;
+    background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-error);
 }
 
 .entity-subtitle {
@@ -304,6 +304,8 @@
     flex: 1;
     overflow: auto;
     transition: margin-right var(--transition-normal);
+    display: flex;
+    flex-direction: column;
 }
 
 .main-canvas.panel-open {
@@ -492,10 +494,10 @@
 
 .list-header {
     display: grid;
-    grid-template-columns: 50px 1fr 100px 70px 100px 100px 1fr;
+    grid-template-columns: 50px 1fr 1fr 100px 70px 100px 100px 1fr;
     gap: 12px;
     padding: 12px 20px;
-    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    background: var(--bg-secondary);
     border-bottom: 2px solid var(--border-color);
     position: sticky;
     top: 0;
@@ -548,7 +550,7 @@
 
 .list-row {
     display: grid;
-    grid-template-columns: 50px 1fr 100px 70px 100px 100px 1fr;
+    grid-template-columns: 50px 1fr 1fr 100px 70px 100px 100px 1fr;
     gap: 12px;
     padding: 14px 20px;
     border-bottom: 1px solid var(--border-light);
@@ -615,6 +617,20 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    font-size: 12px;
+}
+
+.col-display-name {
+    min-width: 0;
+}
+
+.display-name-text {
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .type-tag {
@@ -650,7 +666,7 @@
 
 .required-indicator.required {
     color: var(--danger-color);
-    background: rgba(239, 68, 68, 0.1);
+    background: color-mix(in srgb, var(--mj-status-error) 10%, transparent);
 }
 
 .required-indicator.required i {
@@ -680,17 +696,17 @@
 }
 
 .flag-badge.pk {
-    background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-    color: #78350f;
+    background: var(--mj-status-warning);
+    color: var(--mj-bg-surface);
 }
 
 .flag-badge.fk {
-    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    background: var(--mj-brand-primary);
     color: white;
 }
 
 .flag-badge.encrypted {
-    background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+    background: var(--mj-brand-primary);
     color: white;
 }
 
@@ -836,8 +852,8 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    background: #dcfce7;
-    color: #166534;
+    background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-success);
     border-radius: 9999px;
     font-size: 12px;
     font-weight: 500;
@@ -848,8 +864,8 @@
 }
 
 .capability-tag.disabled {
-    background: #fee2e2;
-    color: #991b1b;
+    background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-error);
 }
 
 /* Info Grid */
@@ -915,12 +931,12 @@
     cursor: pointer;
     transition: background var(--transition-fast);
     user-select: none;
-    background: linear-gradient(to right, var(--bg-secondary), transparent);
+    background: var(--bg-secondary);
     border-left: 3px solid var(--accent-color);
 }
 
 .group-header:hover {
-    background: linear-gradient(to right, var(--bg-tertiary), var(--bg-secondary));
+    background: var(--bg-tertiary);
 }
 
 .expand-icon {
@@ -1009,6 +1025,13 @@
     color: var(--text-primary);
 }
 
+.field-db-name {
+    font-size: 11px;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
 .field-meta {
     display: flex;
     align-items: center;
@@ -1051,18 +1074,18 @@
 }
 
 .badge.pk {
-    background: #fef3c7;
-    color: #92400e;
+    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-warning);
 }
 
 .badge.fk {
-    background: #dbeafe;
-    color: #1e40af;
+    background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
 }
 
 .badge.encrypted {
-    background: #fce7f3;
-    color: #9d174d;
+    background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
 }
 
 /* ============================================================
@@ -1266,13 +1289,13 @@
 }
 
 .rel-icon.outgoing {
-    background: var(--info-light, #e3f2fd);
-    color: var(--info-color, #1976d2);
+    background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
 }
 
 .rel-icon.incoming {
-    background: var(--success-light, #e8f5e9);
-    color: var(--success-color, #388e3c);
+    background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-success);
 }
 
 .rel-entity-name {
@@ -1305,24 +1328,24 @@
 }
 
 .field-chip.outgoing {
-    background: var(--info-light, #e3f2fd);
-    color: var(--info-color, #1976d2);
-    border: 1px solid var(--info-border, #90caf9);
+    background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    border: 1px solid var(--mj-brand-primary);
 }
 
 .field-chip.outgoing:hover {
-    background: var(--info-color, #1976d2);
+    background: var(--mj-brand-primary);
     color: white;
 }
 
 .field-chip.incoming {
-    background: var(--success-light, #e8f5e9);
-    color: var(--success-color, #388e3c);
-    border: 1px solid var(--success-border, #a5d6a7);
+    background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-success);
+    border: 1px solid var(--mj-status-success);
 }
 
 .field-chip.incoming:hover {
-    background: var(--success-color, #388e3c);
+    background: var(--mj-status-success);
     color: white;
 }
 
@@ -1443,8 +1466,8 @@
 }
 
 .capability-item.enabled {
-    background: #dcfce7;
-    color: #166534;
+    background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-success);
 }
 
 .capability-item.enabled i {
@@ -1545,8 +1568,8 @@
 }
 
 .config-item.enabled {
-    background: #dcfce7;
-    color: #166534;
+    background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+    color: var(--mj-status-success);
 }
 
 .config-item .config-label {
@@ -1697,7 +1720,7 @@
     border-radius: var(--radius-sm);
     overflow: hidden;
     border: 1px solid var(--border-color);
-    background: #fafafa;
+    background: var(--mj-bg-surface-sunken);
 }
 
 .setting-value-json mj-code-editor {
@@ -1707,11 +1730,11 @@
 
 .setting-value-json ::ng-deep .cm-editor {
     font-size: 12px;
-    background: #fafafa;
+    background: var(--mj-bg-surface-sunken);
 }
 
 .setting-value-json ::ng-deep .cm-gutters {
-    background: #f0f0f0;
+    background: var(--mj-bg-surface-sunken);
     border-right: 1px solid var(--border-color);
 }
 
@@ -1845,6 +1868,14 @@
     letter-spacing: 0.5px;
     color: var(--text-muted);
     margin: 0 0 12px 0;
+}
+
+.detail-field-db-name {
+    font-size: 12px;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    margin-bottom: 4px;
 }
 
 .field-description {
@@ -1982,4 +2013,406 @@
 
 .explorer-error i {
     opacity: 1;
+}
+
+/* ============================================================
+   IS-A TYPE HIERARCHY & VIRTUAL ENTITY STYLES
+   ============================================================ */
+
+/* Badge variants for header */
+.isa-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    cursor: default;
+    white-space: nowrap;
+}
+
+.isa-badge.virtual {
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+    color: var(--mj-brand-primary);
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+}
+
+.isa-badge.child-type {
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+    color: var(--mj-brand-primary);
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.isa-badge.child-type:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 22%, transparent);
+}
+
+.isa-badge.parent-type {
+    background: color-mix(in srgb, var(--mj-status-success) 12%, transparent);
+    color: var(--mj-status-success);
+    border: 1px solid color-mix(in srgb, var(--mj-status-success) 25%, transparent);
+}
+
+.isa-badge.overlapping {
+    background: color-mix(in srgb, var(--mj-status-warning) 12%, transparent);
+    color: var(--mj-status-warning);
+    border: 1px solid color-mix(in srgb, var(--mj-status-warning) 25%, transparent);
+}
+
+/* Breadcrumb under title */
+.isa-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--mj-brand-primary);
+    font-weight: 500;
+    margin-top: 2px;
+    padding: 2px 0;
+}
+
+.isa-breadcrumb i {
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+/* IS-A Panel (overview section) */
+.isa-panel {
+    border-left: 3px solid var(--mj-brand-primary);
+}
+
+.isa-info-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.isa-info-row.virtual-info {
+    background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
+}
+
+.isa-info-row.virtual-info i {
+    color: var(--mj-brand-primary);
+    font-size: 14px;
+}
+
+.isa-info-row .code {
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 12px;
+    background: color-mix(in srgb, var(--mj-text-primary) 6%, transparent);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--mj-brand-primary);
+}
+
+/* Inheritance chain */
+.isa-chain {
+    padding: 8px 0;
+}
+
+.isa-chain-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.isa-chain-nodes {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 6px 0;
+}
+
+.isa-node {
+    display: inline-flex;
+    align-items: center;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.isa-node.current {
+    background: var(--mj-brand-primary);
+    color: white;
+}
+
+.isa-node.parent {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+    color: var(--mj-brand-primary);
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+}
+
+.isa-arrow {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.isa-inherited-fields {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-color);
+}
+
+.isa-inherited-fields i {
+    font-size: 12px;
+    color: var(--mj-brand-primary);
+}
+
+/* Child types list */
+.isa-children {
+    padding: 8px 0;
+}
+
+.isa-child-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 4px 0;
+}
+
+.isa-child-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    background: color-mix(in srgb, var(--mj-status-success) 10%, transparent);
+    color: var(--mj-status-success);
+    border: 1px solid color-mix(in srgb, var(--mj-status-success) 20%, transparent);
+}
+
+/* Clickable elements */
+.clickable {
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.clickable:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.isa-node.parent.clickable:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
+}
+
+.isa-child-chip.clickable:hover {
+    background: color-mix(in srgb, var(--mj-status-success) 20%, transparent);
+    border-color: color-mix(in srgb, var(--mj-status-success) 35%, transparent);
+}
+
+/* Field inherited badge (card and list views) */
+.badge.inherited,
+.flag-badge.inherited {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+    color: var(--mj-brand-primary);
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+    font-size: 10px;
+    font-weight: 600;
+    gap: 3px;
+}
+
+.flag-badge.inherited {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+}
+
+.flag-badge.inherited i {
+    font-size: 9px;
+}
+
+/* IS-A source section in field detail panel */
+.isa-source-section {
+    background: color-mix(in srgb, var(--mj-brand-primary) 4%, transparent);
+    border-radius: 6px;
+    padding: 12px;
+    margin: -4px -12px 8px;
+}
+
+.isa-source-section h5 {
+    color: var(--mj-brand-primary);
+}
+
+.isa-source-section h5 i {
+    margin-right: 4px;
+}
+
+/* IS-A settings panel */
+.isa-settings-panel {
+    border-left: 3px solid var(--mj-brand-primary);
+}
+
+.isa-settings-panel .link {
+    color: var(--mj-brand-primary);
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+
+.isa-settings-panel .link:hover {
+    color: var(--mj-brand-primary);
+    text-decoration: underline;
+}
+
+.isa-settings-panel .muted {
+    color: var(--text-muted);
+}
+
+/* IS-A Field Inspector */
+.isa-field-inspector {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.isa-field-inspector > .isa-chain-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.isa-inspector-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.isa-inspector-group {
+    border-radius: 6px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+}
+
+.isa-inspector-group.own {
+    background: color-mix(in srgb, var(--mj-brand-primary) 4%, transparent);
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+.isa-inspector-group.inherited {
+    background: color-mix(in srgb, var(--mj-brand-primary) 4%, transparent);
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+.isa-inspector-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.isa-inspector-entity {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.isa-inspector-count {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.isa-inspector-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.isa-inspector-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--mj-text-primary) 4%, transparent);
+    color: var(--text-primary);
+}
+
+.isa-inspector-type {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* Sibling chips */
+.isa-siblings {
+    padding: 8px 0;
+}
+
+.isa-sibling-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    background: color-mix(in srgb, var(--mj-status-warning) 10%, transparent);
+    color: var(--mj-status-warning);
+    border: 1px solid color-mix(in srgb, var(--mj-status-warning) 20%, transparent);
+}
+
+.isa-sibling-chip.clickable:hover {
+    background: color-mix(in srgb, var(--mj-status-warning) 20%, transparent);
+    border-color: color-mix(in srgb, var(--mj-status-warning) 35%, transparent);
+}
+
+/* Child count badge */
+.isa-child-count {
+    font-size: 11px;
+    background: color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: 2px;
+    font-weight: 600;
+}
+
+.isa-child-count i {
+    font-size: 10px;
+}
+
+/* ============================================================
+   DATA SECTION
+   ============================================================ */
+.data-section {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+}
+
+.data-viewer-container {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }

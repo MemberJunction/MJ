@@ -1,10 +1,12 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { Metadata, CompositeKey } from '@memberjunction/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, EnvironmentEntityExtended, ConversationEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment } from '@memberjunction/ng-conversations';
+import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService } from '@memberjunction/ng-conversations';
+import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subject, takeUntil, filter } from 'rxjs';
 /**
@@ -41,9 +43,11 @@ import { Subject, takeUntil, filter } from 'rxjs';
                 [isSidebarPinned]="isSidebarPinned"
                 [isMobileView]="isMobileView"
                 (conversationSelected)="onConversationSelected($event)"
+                (conversationDeleted)="onConversationDeleted($event)"
                 (newConversationRequested)="onNewConversationRequested()"
                 (pinSidebarRequested)="pinSidebar()"
-                (unpinSidebarRequested)="unpinSidebar()">
+                (unpinSidebarRequested)="unpinSidebar()"
+                (refreshRequested)="onRefreshRequested()">
               </mj-conversation-list>
             }
           </div>
@@ -78,7 +82,8 @@ import { Subject, takeUntil, filter } from 'rxjs';
               (pendingMessageConsumed)="onPendingMessageConsumed()"
               (pendingMessageRequested)="onPendingMessageRequested($event)"
               (artifactLinkClicked)="onArtifactLinkClicked($event)"
-              (openEntityRecord)="onOpenEntityRecord($event)">
+              (openEntityRecord)="onOpenEntityRecord($event)"
+              (navigationRequest)="onNavigationRequest($event)">
             </mj-conversation-chat-area>
           }
         </div>
@@ -111,9 +116,9 @@ import { Subject, takeUntil, filter } from 'rxjs';
 
     .conversation-sidebar {
       flex-shrink: 0;
-      border-right: 1px solid #e0e0e0;
+      border-right: 1px solid var(--mj-border-default);
       overflow-y: auto;
-      background: #f5f5f5;
+      background: var(--mj-bg-surface-sunken);
       transition: width 0.3s ease;
     }
 
@@ -140,11 +145,11 @@ import { Subject, takeUntil, filter } from 'rxjs';
     }
 
     .sidebar-resize-handle:hover {
-      background: #1e40af;
+      background: var(--mj-brand-primary);
     }
 
     .sidebar-resize-handle:active {
-      background: #1e3a8a;
+      background: var(--mj-brand-primary-hover);
     }
 
     .sidebar-resize-handle::before {
@@ -189,7 +194,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   // LOCAL SELECTION STATE - each wrapper instance manages its own selection
   public selectedConversationId: string | null = null;
-  public selectedConversation: ConversationEntity | null = null;
+  public selectedConversation: MJConversationEntity | null = null;
   public selectedThreadId: string | null = null;
   public isNewUnsavedConversation: boolean = false;
   public renamedConversationId: string | null = null;
@@ -224,7 +229,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     private mentionAutocompleteService: MentionAutocompleteService,
     private cdr: ChangeDetectorRef,
     private streamingService: ConversationStreamingService,
-    private activeTasksService: ActiveTasksService
+    private activeTasksService: ActiveTasksService,
+    private uiCommandHandler: UICommandHandlerService
   ) {
     super();
   }
@@ -294,6 +300,12 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
           this.onExternalNavigation(currentUrl);
         }
       });
+
+    // Subscribe to actionable commands (open:resource) from the UI command handler service.
+    // open:url commands are handled directly by the service; open:resource needs NavigationService.
+    this.uiCommandHandler.actionableCommandRequested
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(command => this.handleActionableCommand(command));
 
     // Enable URL updates after initialization
     this.skipUrlUpdate = false;
@@ -542,7 +554,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * Get the environment ID from configuration or use default
    */
   get environmentId(): string {
-    return this.Data?.Configuration?.environmentId || EnvironmentEntityExtended.DefaultEnvironmentID;
+    return this.Data?.Configuration?.environmentId || MJEnvironmentEntityExtended.DefaultEnvironmentID;
   }
 
   /**
@@ -567,6 +579,35 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   // ============================================
   // EVENT HANDLERS FROM CHILD COMPONENTS
   // ============================================
+
+  /**
+   * Handle refresh request from the conversation list.
+   * After the list refreshes, also reload messages in the active chat area so any
+   * new agent responses are visible without a full page reload.
+   */
+  onRefreshRequested(): void {
+    void this.chatArea?.reloadMessages();
+  }
+
+  /**
+   * Handle conversation deletion from the list.
+   * If the deleted conversation was selected, navigate to the first remaining conversation.
+   */
+  onConversationDeleted(deletedId: string): void {
+    if (this.selectedConversationId === deletedId) {
+      const remaining = this.conversationData.conversations.filter(c => !UUIDsEqual(c.ID, deletedId));
+      if (remaining.length > 0) {
+        void this.selectConversation(remaining[0].ID);
+        this.updateUrl();
+      } else {
+        this.selectedConversationId = null;
+        this.selectedConversation = null;
+        this.selectedThreadId = null;
+        this.isNewUnsavedConversation = true;
+        this.updateUrl();
+      }
+    }
+  }
 
   /**
    * Handle conversation selection from the list
@@ -743,7 +784,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
       if (!setting) {
         // Create new setting
-        setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+        setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
         setting.UserID = userId;
         setting.Setting = this.USER_SETTING_SIDEBAR_KEY;
       }
@@ -817,7 +858,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * The event now includes pending message and attachments for atomic state update.
    */
   async onConversationCreated(event: {
-    conversation: ConversationEntity;
+    conversation: MJConversationEntity;
     pendingMessage?: string;
     pendingAttachments?: PendingAttachment[];
   }): Promise<void> {
@@ -923,5 +964,75 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  /**
+   * Handle navigation request from artifact viewer plugins.
+   * Opens the target nav item (switching apps if needed) then applies query params to the URL.
+   */
+  async onNavigationRequest(event: NavigationRequest): Promise<void> {
+    const appId = event.appName ? this.resolveAppId(event.appName) : undefined;
+    await this.navigationService.OpenNavItemByName(event.navItemName, undefined, appId, {
+      queryParams: event.queryParams
+    });
+  }
+
+  /**
+   * Resolve an application name to its ID.
+   */
+  private resolveAppId(appName: string): string | undefined {
+    const md = new Metadata();
+    const apps = md.Applications;
+    const app = apps.find(a => a.Name.toLowerCase() === appName.toLowerCase());
+    return app?.ID;
+  }
+
+  /**
+   * Handle actionable commands that require app-specific navigation (open:resource).
+   * open:url commands are already handled directly by UICommandHandlerService.
+   */
+  private handleActionableCommand(command: ActionableCommand): void {
+    if (command.type === 'open:resource') {
+      const resourceCommand = command as OpenResourceCommand;
+      if (resourceCommand.resourceType === 'Record' && resourceCommand.entityName) {
+        const compositeKey = new CompositeKey([{
+          FieldName: 'ID',
+          Value: resourceCommand.resourceId
+        }]);
+        this.navigationService.OpenEntityRecord(resourceCommand.entityName, compositeKey);
+      } else if (resourceCommand.resourceType === 'Report' || resourceCommand.resourceType === 'Dashboard') {
+        // Reports and dashboards from agents are stored as conversation artifacts.
+        // Find the most recent artifact in the active conversation and open it.
+        this.openMostRecentArtifact();
+      }
+    }
+  }
+
+  /**
+   * Open the most recent artifact in the active conversation's artifact viewer.
+   * Used for open:resource commands with resourceType Report/Dashboard where
+   * the resourceId is an agent-internal ID, not a database artifact ID.
+   */
+  private openMostRecentArtifact(): void {
+    if (!this.chatArea) return;
+
+    // Find the last artifact across all messages
+    const artifactMap = this.chatArea.artifactsByDetailId;
+    let latestArtifact: { artifactId: string; versionId?: string } | null = null;
+    for (const artifacts of artifactMap.values()) {
+      if (artifacts.length > 0) {
+        const last = artifacts[artifacts.length - 1];
+        latestArtifact = {
+          artifactId: last.artifactId,
+          versionId: last.artifactVersionId
+        };
+      }
+    }
+
+    if (latestArtifact) {
+      this.chatArea.onArtifactClicked(latestArtifact);
+    } else {
+      console.warn('No artifacts found in conversation to open for Report/Dashboard command');
+    }
   }
 }

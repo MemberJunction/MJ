@@ -1,0 +1,4 @@
+# Ignore everything in this directory — it's a Docker bind mount
+# Only this .gitignore file is committed
+*
+!.gitignore

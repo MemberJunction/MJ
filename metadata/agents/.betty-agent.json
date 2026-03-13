@@ -15,11 +15,11 @@
       "ModelSelectionMode": "Agent Type"
     },
     "relatedEntities": {
-      "AI Agent Actions": [
+      "MJ: AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Betty",
+            "ActionID": "@lookup:MJ: Actions.Name=Betty",
             "Status": "Active",
             "ResultExpirationMode": "None"
           },
@@ -27,8 +27,8 @@
             "ID": "31D8A409-A68B-4A91-8B9D-40808EFFC7A8"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.829Z",
-            "checksum": "ad8327284403e0234f30f46b945af8cd3afb2c65e24ed7bd18b1ddc282a0c4b6"
+            "lastModified": "2026-02-13T21:09:23.125Z",
+            "checksum": "c3690bcf7eb870e1462230a7432b08b5b7d21a22a927fe787edf10327b2a3f33"
           }
         }
       ],
@@ -40,7 +40,7 @@
             "Description": "Forwards the full conversation history to Betty Bot for context-aware responses",
             "StepType": "Action",
             "StartingStep": true,
-            "ActionID": "@lookup:Actions.Name=Betty",
+            "ActionID": "@lookup:MJ: Actions.Name=Betty",
             "ActionInputMapping": {
               "ConversationMessages": "conversation.all"
             },
@@ -60,8 +60,8 @@
             "ID": "254A75AF-2D6C-4DC0-BA42-F0B3D03F5788"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.830Z",
-            "checksum": "ae03ee286a95d93752dbf2e37740702eef2c4f4c24a146aca99bcd3ae020e75e"
+            "lastModified": "2026-02-13T21:09:23.126Z",
+            "checksum": "8498b8e81ef015f82876578fc6079850bf1ea9eae173e149c9576ca532eb27f5"
           }
         }
       ]

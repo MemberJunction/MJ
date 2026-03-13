@@ -1,15 +1,15 @@
-import { Component, OnDestroy } from '@angular/core';
+import { Component, OnDestroy, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata } from '@memberjunction/core';
 import {
-  EntityPermissionEntity,
-  EntityEntity,
-  RoleEntity,
+  MJEntityPermissionEntity,
+  MJEntityEntity,
+  MJRoleEntity,
   ResourceData
 } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { PermissionDialogData, PermissionDialogResult } from './permission-dialog/permission-dialog.component';
 
 interface PermissionsStats {
@@ -26,9 +26,9 @@ interface FilterOptions {
 }
 
 interface EntityAccess {
-  entity: EntityEntity;
+  entity: MJEntityEntity;
   isPublic: boolean;
-  permissions: EntityPermissionEntity[];
+  permissions: MJEntityPermissionEntity[];
   rolePermissions: Map<string, PermissionLevel>;
 }
 
@@ -43,14 +43,14 @@ interface PermissionLevel {
   standalone: false,
   selector: 'mj-entity-permissions',
   templateUrl: './entity-permissions.component.html',
-  styleUrls: ['./entity-permissions.component.css']
+  styleUrls: ['../shared/styles/_admin-patterns.css', './entity-permissions.component.css']
 })
 @RegisterClass(BaseDashboard, 'EntityPermissions')
 export class EntityPermissionsComponent extends BaseDashboard implements OnDestroy {
   // State management
   public entityAccess: EntityAccess[] = [];
   public filteredEntityAccess: EntityAccess[] = [];
-  public roles: RoleEntity[] = [];
+  public roles: MJRoleEntity[] = [];
   public isLoading = false;
   public error: string | null = null;
   
@@ -81,7 +81,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   private destroy$ = new Subject<void>();
   private metadata = new Metadata();
 
-  constructor() {
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
 
@@ -125,14 +125,17 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
       console.error('Error loading permissions data:', error);
       this.error = 'Failed to load permissions data. Please try again.';
     } finally {
-      this.isLoading = false;
+      this.ngZone.run(() => {
+        this.isLoading = false;
+        this.cdr.markForCheck();
+      });
     }
   }
-  
-  private async loadEntities(): Promise<EntityEntity[]> {
+
+  private async loadEntities(): Promise<MJEntityEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<EntityEntity>({
-      EntityName: 'Entities',
+    const result = await rv.RunView<MJEntityEntity>({
+      EntityName: 'MJ: Entities',
       ResultType: 'entity_object',
       OrderBy: 'Name ASC'
     });
@@ -140,10 +143,10 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
     return result.Success ? result.Results : [];
   }
   
-  private async loadEntityPermissions(): Promise<EntityPermissionEntity[]> {
+  private async loadEntityPermissions(): Promise<MJEntityPermissionEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<EntityPermissionEntity>({
-      EntityName: 'Entity Permissions',
+    const result = await rv.RunView<MJEntityPermissionEntity>({
+      EntityName: 'MJ: Entity Permissions',
       ResultType: 'entity_object',
       OrderBy: 'EntityID, RoleID'
     });
@@ -151,10 +154,10 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
     return result.Success ? result.Results : [];
   }
   
-  private async loadRoles(): Promise<RoleEntity[]> {
+  private async loadRoles(): Promise<MJRoleEntity[]> {
     const rv = new RunView();
-    const result = await rv.RunView<RoleEntity>({
-      EntityName: 'Roles',
+    const result = await rv.RunView<MJRoleEntity>({
+      EntityName: 'MJ: Roles',
       ResultType: 'entity_object',
       OrderBy: 'Name ASC'
     });
@@ -162,9 +165,9 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
     return result.Success ? result.Results : [];
   }
   
-  private processEntityAccess(entities: EntityEntity[], permissions: EntityPermissionEntity[]): void {
+  private processEntityAccess(entities: MJEntityEntity[], permissions: MJEntityPermissionEntity[]): void {
     // Group permissions by entity
-    const permissionsByEntity = new Map<string, EntityPermissionEntity[]>();
+    const permissionsByEntity = new Map<string, MJEntityPermissionEntity[]>();
     
     for (const permission of permissions) {
       const entityId = permission.EntityID;
@@ -344,7 +347,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   }
   
   public getRoleName(roleId: string): string {
-    const role = this.roles.find(r => r.ID === roleId);
+    const role = this.roles.find(r => UUIDsEqual(r.ID, roleId));
     return role?.Name || 'Unknown Role';
   }
   

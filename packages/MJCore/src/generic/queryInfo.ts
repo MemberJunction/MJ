@@ -1,8 +1,11 @@
 import { BaseInfo } from "./baseInfo";
 import { EntityInfo } from "./entityInfo";
 import { Metadata } from "./metadata";
+import { DatabasePlatform } from "./platformSQL";
+import { PlatformVariantsJSON, ParsePlatformVariants, ResolvePlatformVariant } from "./platformVariants";
 import { UserInfo } from "./securityInfo";
 import { QueryCacheConfig } from "./QueryCacheConfig";
+import { UUIDsEqual } from "@memberjunction/global";
 import {
     IQueryInfoBase,
     IQueryFieldInfoBase,
@@ -10,6 +13,85 @@ import {
     IQueryEntityInfoBase,
     IQueryPermissionInfoBase
 } from "./queryInfoInterfaces";
+
+/**
+ * Represents a SQL dialect (e.g., T-SQL, PostgreSQL) in the MemberJunction system.
+ * Maps to the SQLDialect database table.
+ */
+export class SQLDialectInfo extends BaseInfo {
+    /** Unique identifier for this SQL dialect */
+    public ID: string = null
+    /** Display name (e.g., 'T-SQL', 'PostgreSQL') */
+    public Name: string = null
+    /** Lowercase platform key matching DatabasePlatform type (e.g., 'sqlserver', 'postgresql') */
+    public PlatformKey: string = null
+    /** Database engine name (e.g., 'SQL Server', 'PostgreSQL') */
+    public DatabaseName: string = null
+    /** SQL language variant name (e.g., 'T-SQL', 'PL/pgSQL') */
+    public LanguageName: string = null
+    /** Primary vendor or organization */
+    public VendorName: string = null
+    /** URL to documentation or vendor website */
+    public WebURL: string = null
+    /** CSS class or icon reference for UI display */
+    public Icon: string = null
+    /** Detailed description */
+    public Description: string = null
+    /** Record creation timestamp */
+    __mj_CreatedAt: Date = null
+    /** Record last update timestamp */
+    __mj_UpdatedAt: Date = null
+
+    constructor(initData: unknown = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+}
+
+/**
+ * Stores dialect-specific SQL for a query. Each record pairs a Query with a SQLDialect
+ * and provides the SQL text written in that dialect.
+ * Maps to the QuerySQL database table.
+ */
+export class QuerySQLInfo extends BaseInfo {
+    /** Unique identifier */
+    public ID: string = null
+    /** Foreign key to the parent query */
+    public QueryID: string = null
+    /** Foreign key to the SQL dialect */
+    public SQLDialectID: string = null
+    /** The SQL query text in the specified dialect */
+    public SQL: string = null
+    /** Record creation timestamp */
+    __mj_CreatedAt: Date = null
+    /** Record last update timestamp */
+    __mj_UpdatedAt: Date = null
+
+    // virtual fields from view
+    /** Query name from the related query */
+    public Query: string = null
+    /** SQL dialect name */
+    public SQLDialect: string = null
+
+    constructor(initData: unknown = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+
+    /** Gets the parent query info */
+    get QueryInfo(): QueryInfo {
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+    }
+
+    /** Gets the SQL dialect info */
+    get SQLDialectInfo(): SQLDialectInfo {
+        return Metadata.Provider.SQLDialects.find(d => UUIDsEqual(d.ID, this.SQLDialectID));
+    }
+}
 
 /**
  * Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. 
@@ -38,6 +120,11 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public SQL: string = null
     /**
+     * Technical documentation of the query logic, performance considerations,
+     * and parameter usage. Supports markdown content including mermaid diagrams.
+     */
+    public TechnicalDescription: string | null = null
+    /**
      * The original SQL before any optimization or modification, kept for reference and comparison
      */
     public OriginalSQL: string = null
@@ -48,7 +135,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
     /**
      * Current status of the query in the approval workflow
      */
-    public Status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete' = null
+    public Status: 'Pending' | 'Approved' | 'Rejected' | 'Expired' = null
     /**
      * Value indicating the quality of the query, higher values mean better quality
      */
@@ -107,6 +194,23 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * The AI Model ID used to generate the embedding vector for this query. Required for vector similarity comparisons.
      */
     EmbeddingModelID: string | null = null
+    /**
+     * Foreign key to the SQL dialect this query's SQL column is written in.
+     * Defaults to T-SQL for backward compatibility.
+     */
+    public SQLDialectID: string = null
+    /**
+     * When true, this query can be referenced by other queries using {{query:"..."}} composition syntax.
+     * Only queries with Reusable=true AND Status='Approved' can be composed into other queries.
+     */
+    public Reusable: boolean = false
+    /**
+     * JSON column containing platform-specific SQL variants for multi-database support.
+     * Stores alternative SQL for platforms other than the default (typically SQL Server).
+     * Parsed at runtime via GetPlatformSQL() and GetPlatformCacheValidationSQL().
+     * @deprecated Use the QuerySQL child table via GetPlatformSQL() instead.
+     */
+    PlatformVariants: string | null = null
 
     // virtual fields - returned by the database VIEW
     /**
@@ -198,7 +302,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Fields(): QueryFieldInfo[] {
         if (this._fields === null) {
-            this._fields = Metadata.Provider.QueryFields.filter(f => f.QueryID === this.ID);
+            this._fields = Metadata.Provider.QueryFields.filter(f => UUIDsEqual(f.QueryID, this.ID));
         }
         return this._fields;
     }
@@ -208,7 +312,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryPermissionInfo[]} Array of permission settings for the query
      */
     public get Permissions(): QueryPermissionInfo[] {
-        return Metadata.Provider.QueryPermissions.filter(p => p.QueryID === this.ID);
+        return Metadata.Provider.QueryPermissions.filter(p => UUIDsEqual(p.QueryID, this.ID));
     }
 
     private _parameters: QueryParameterInfo[] = null;
@@ -219,7 +323,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Parameters(): QueryParameterInfo[] {
         if (this._parameters === null) {
-            this._parameters = Metadata.Provider.QueryParameters.filter(p => p.QueryID === this.ID);
+            this._parameters = Metadata.Provider.QueryParameters.filter(p => UUIDsEqual(p.QueryID, this.ID));
         }
         return this._parameters;
     }
@@ -231,7 +335,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Entities(): QueryEntityInfo[] {
         if (this._entities === null) {
-            this._entities = Metadata.Provider.QueryEntities.filter(e => e.QueryID === this.ID);
+            this._entities = Metadata.Provider.QueryEntities.filter(e => UUIDsEqual(e.QueryID, this.ID));
         }
         return this._entities;
     }
@@ -258,7 +362,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryCategoryInfo} The category this query belongs to, or undefined if not categorized
      */
     get CategoryInfo(): QueryCategoryInfo {
-        return Metadata.Provider.QueryCategories.find(c => c.ID === this.CategoryID);
+        return Metadata.Provider.QueryCategories.find(c => UUIDsEqual(c.ID, this.CategoryID));
     }
 
     /**
@@ -310,22 +414,112 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
     }
 
     /**
-     * Checks if a user can run this query, considering both permissions and query status.
-     * A query can be run if:
-     * 1. The user has permission to run it (via UserHasRunPermissions)
-     * 2. The query status is 'Approved'
-     * 
+     * Checks if a user can run this query based on permissions.
+     * Non-approved queries are allowed to execute (with a server-side warning)
+     * to enable testing before formal approval.
+     *
      * @param user The user to check
-     * @returns true if the user can run the query right now
+     * @returns true if the user has permission to run the query
      */
     public UserCanRun(user: UserInfo): boolean {
-        // First check permissions
-        if (!this.UserHasRunPermissions(user)) {
-            return false;
-        }
+        return this.UserHasRunPermissions(user);
+    }
 
-        // Then check status - only approved queries can be run
+    /**
+     * Whether this query has been formally approved for production use.
+     */
+    public get IsApproved(): boolean {
         return this.Status === 'Approved';
+    }
+
+    /**
+     * Whether this query can be referenced by other queries via composition syntax.
+     * A query is composable only when both Reusable=true and Status='Approved'.
+     */
+    public get IsComposable(): boolean {
+        return this.Reusable && this.IsApproved;
+    }
+
+    private _dependencies: QueryDependencyInfo[] | null = null;
+    /**
+     * Gets the dependency records for this query — other queries it references via {{query:"..."}} syntax.
+     * @returns {QueryDependencyInfo[]} Array of dependency records where this query is the referencing query
+     */
+    public get Dependencies(): QueryDependencyInfo[] {
+        if (this._dependencies === null) {
+            this._dependencies = Metadata.Provider.QueryDependencies.filter(d => UUIDsEqual(d.QueryID, this.ID));
+        }
+        return this._dependencies;
+    }
+
+    /**
+     * Gets queries that depend on (reference) this query via {{query:"..."}} syntax.
+     * Useful for impact analysis when changing or deprecating a reusable query.
+     * @returns {QueryDependencyInfo[]} Array of dependency records where this query is the referenced query
+     */
+    public get Dependents(): QueryDependencyInfo[] {
+        return Metadata.Provider.QueryDependencies.filter(d => UUIDsEqual(d.DependsOnQueryID, this.ID));
+    }
+
+    private _parsedVariants: PlatformVariantsJSON | null | undefined = undefined;
+    /**
+     * Lazily parses and caches the PlatformVariants JSON.
+     */
+    private get ParsedVariants(): PlatformVariantsJSON | null {
+        if (this._parsedVariants === undefined) {
+            this._parsedVariants = ParsePlatformVariants(this.PlatformVariants);
+        }
+        return this._parsedVariants;
+    }
+
+    /**
+     * Resolves the SQL for a given database platform.
+     * Resolution order:
+     *   1. QuerySQL child table entry matching this query + platform's dialect
+     *   2. PlatformVariants JSON (legacy approach)
+     *   3. Base SQL property (the query's primary SQL)
+     * @param platform - The target database platform
+     * @returns The appropriate SQL string for the platform
+     */
+    public GetPlatformSQL(platform: DatabasePlatform): string {
+        // 1. Check QuerySQL child table entries (normalized approach)
+        const querySqlEntry = this.resolveQuerySQLForPlatform(platform);
+        if (querySqlEntry) return querySqlEntry;
+
+        // 2. Check PlatformVariants JSON (legacy approach)
+        const variant = ResolvePlatformVariant(this.ParsedVariants, 'SQL', platform);
+        if (variant) return variant;
+
+        // 3. Fall back to base SQL
+        return this.SQL;
+    }
+
+    /**
+     * Looks up a QuerySQL entry for this query matching the given platform.
+     * Uses the SQLDialect table to map platform keys to dialect IDs.
+     */
+    private resolveQuerySQLForPlatform(platform: DatabasePlatform): string | null {
+        const provider = Metadata.Provider;
+        if (!provider || !provider.SQLDialects || !provider.QuerySQLs) return null;
+
+        const dialect = provider.SQLDialects.find(d => d.PlatformKey === platform);
+        if (!dialect) return null;
+
+        const entry = provider.QuerySQLs.find(
+            qs => UUIDsEqual(qs.QueryID, this.ID) && UUIDsEqual(qs.SQLDialectID, dialect.ID)
+        );
+        return entry?.SQL ?? null;
+    }
+
+    /**
+     * Resolves CacheValidationSQL for a given database platform.
+     * Checks PlatformVariants first; falls back to the base CacheValidationSQL property.
+     * @param platform - The target database platform
+     * @returns The appropriate CacheValidationSQL string, or null if none configured
+     */
+    public GetPlatformCacheValidationSQL(platform: DatabasePlatform): string | null {
+        const variant = ResolvePlatformVariant(this.ParsedVariants, 'CacheValidationSQL', platform);
+        return variant ?? this.CacheValidationSQL;
     }
 }
 
@@ -392,7 +586,7 @@ export class QueryCategoryInfo extends BaseInfo {
      * @returns {QueryCategoryInfo} The parent category, or undefined if this is a top-level category
      */
     get ParentCategoryInfo(): QueryCategoryInfo {
-        return Metadata.Provider.QueryCategories.find(c => c.ID === this.ParentID);
+        return Metadata.Provider.QueryCategories.find(c => UUIDsEqual(c.ID, this.ParentID));
     }
 
     /**
@@ -400,7 +594,7 @@ export class QueryCategoryInfo extends BaseInfo {
      * @returns {QueryInfo[]} Array of queries in this category
      */
     get Queries(): QueryInfo[] {
-        return Metadata.Provider.Queries.filter(q => q.CategoryID === this.ID);
+        return Metadata.Provider.Queries.filter(q => UUIDsEqual(q.CategoryID, this.ID));
     }
 }
 
@@ -491,7 +685,7 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      * @returns {EntityInfo} The source entity metadata, or undefined if not linked to an entity
      */
     get SourceEntityInfo(): EntityInfo {
-        return Metadata.Provider.Entities.find(e => e.ID === this.SourceEntityID);
+        return Metadata.Provider.Entities.find(e => UUIDsEqual(e.ID, this.SourceEntityID));
     }
 
     /**
@@ -499,7 +693,7 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => q.ID === this.ID);
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.ID));
     }
 }
 
@@ -539,7 +733,7 @@ export class QueryPermissionInfo extends BaseInfo implements IQueryPermissionInf
      * @returns {QueryInfo} The query metadata this permission controls
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => q.ID === this.QueryID);
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
 }
 
@@ -595,21 +789,21 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => q.ID === this.QueryID);
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
-    
+
     /**
      * Gets the entity information for the entity involved in this query.
      * @returns {EntityInfo} The entity metadata
      */
     get EntityInfo(): EntityInfo {
-        return Metadata.Provider.Entities.find(e => e.ID === this.EntityID);
+        return Metadata.Provider.Entities.find(e => UUIDsEqual(e.ID, this.EntityID));
     }
 }
 
 /**
  * Stores parameter definitions for parameterized queries that use Nunjucks templates. Each parameter represents a dynamic value 
- * that can be passed when executing the query. Parameters are automatically extracted from the query template by the QueryEntityServer 
+ * that can be passed when executing the query. Parameters are automatically extracted from the query template by the MJQueryEntityServer 
  * using LLM analysis, or can be manually defined. The combination of parameter metadata and validation filters creates a 
  * self-documenting, type-safe query execution system.
  */
@@ -681,7 +875,7 @@ export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoB
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => q.ID === this.QueryID);
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
     }
     
     /**
@@ -694,6 +888,94 @@ export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoB
             return this.ValidationFilters ? JSON.parse(this.ValidationFilters) : [];
         } catch {
             return [];
+        }
+    }
+}
+
+/**
+ * Tracks which queries reference other queries via {{query:"..."}} composition syntax.
+ * Auto-populated by the query save pipeline when SQL contains composition tokens.
+ * Maps to the QueryDependency database table.
+ */
+export class QueryDependencyInfo extends BaseInfo {
+    /**
+     * Unique identifier for this dependency record
+     */
+    public ID: string = null
+    /**
+     * Foreign key to the query that contains the {{query:"..."}} reference
+     */
+    public QueryID: string = null
+    /**
+     * Foreign key to the query being referenced (the dependency)
+     */
+    public DependsOnQueryID: string = null
+    /**
+     * The full category path and query name as written in SQL (e.g., "Sales/Active Customers")
+     */
+    public ReferencePath: string = null
+    /**
+     * SQL alias used for the referenced query in a FROM/JOIN clause (e.g., "ac" in FROM {{query:...}} ac)
+     */
+    public Alias: string | null = null
+    /**
+     * JSON mapping of parameters. @-prefixed values are pass-through from parent query,
+     * otherwise static literals. E.g. {"region": "@region", "year": "2024"}
+     */
+    public ParameterMapping: string | null = null
+    /**
+     * How this dependency was detected: Auto (parsed from SQL) or Manual (user-specified)
+     */
+    public DetectionMethod: 'Auto' | 'Manual' = 'Auto'
+    /**
+     * Record creation timestamp
+     */
+    __mj_CreatedAt: Date = null
+    /**
+     * Record last update timestamp
+     */
+    __mj_UpdatedAt: Date = null
+
+    // virtual fields from view
+    /**
+     * Name of the query that contains the reference
+     */
+    public Query: string = null
+    /**
+     * Name of the referenced (depended-on) query
+     */
+    public DependsOnQuery: string = null
+
+    constructor(initData: unknown = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+
+    /**
+     * Gets the query that contains the {{query:"..."}} reference.
+     */
+    get QueryInfo(): QueryInfo {
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+    }
+
+    /**
+     * Gets the referenced (depended-on) query.
+     */
+    get DependsOnQueryInfo(): QueryInfo {
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.DependsOnQueryID));
+    }
+
+    /**
+     * Gets the parsed parameter mapping as a Record.
+     * @returns Parsed parameter mapping or empty object if none/invalid
+     */
+    get ParsedParameterMapping(): Record<string, string> {
+        try {
+            return this.ParameterMapping ? JSON.parse(this.ParameterMapping) : {};
+        } catch {
+            return {};
         }
     }
 }

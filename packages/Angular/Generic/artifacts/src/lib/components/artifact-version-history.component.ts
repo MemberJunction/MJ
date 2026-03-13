@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
 
 @Component({
@@ -110,14 +110,14 @@ import { UserInfo, RunView } from '@memberjunction/core';
   `]
 })
 export class ArtifactVersionHistoryComponent implements OnInit {
-  @Input() artifact!: ArtifactEntity;
+  @Input() artifact!: MJArtifactEntity;
   @Input() currentUser!: UserInfo;
 
   @Output() closed = new EventEmitter<void>();
   @Output() versionRestored = new EventEmitter<number>();
   @Output() versionSelected = new EventEmitter<number>();
 
-  public versions: ArtifactVersionEntity[] = [];
+  public versions: MJArtifactVersionEntity[] = [];
   public selectedVersion: number | null = null;
   public showDiff: boolean = false;
   public currentVersionContent: string = '';
@@ -130,7 +130,7 @@ export class ArtifactVersionHistoryComponent implements OnInit {
   private async loadVersions(): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactVersionEntity>({
+      const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID='${this.artifact.ID}'`,
         OrderBy: 'VersionNumber DESC',
@@ -145,12 +145,12 @@ export class ArtifactVersionHistoryComponent implements OnInit {
     }
   }
 
-  onSelectVersion(version: ArtifactVersionEntity): void {
+  onSelectVersion(version: MJArtifactVersionEntity): void {
     this.selectedVersion = version.VersionNumber;
     this.versionSelected.emit(version.VersionNumber);
   }
 
-  async onRestoreVersion(version: ArtifactVersionEntity): Promise<void> {
+  async onRestoreVersion(version: MJArtifactVersionEntity): Promise<void> {
     if (!confirm(`Restore to version ${version.VersionNumber}? This will create a new version.`)) return;
 
     try {
@@ -163,7 +163,7 @@ export class ArtifactVersionHistoryComponent implements OnInit {
     }
   }
 
-  async onCompareVersion(version: ArtifactVersionEntity): Promise<void> {
+  async onCompareVersion(version: MJArtifactVersionEntity): Promise<void> {
     if (version.VersionNumber === 1) {
       alert('Cannot compare: this is the first version');
       return;
@@ -184,7 +184,7 @@ export class ArtifactVersionHistoryComponent implements OnInit {
     }
   }
 
-  onDownloadVersion(version: ArtifactVersionEntity): void {
+  onDownloadVersion(version: MJArtifactVersionEntity): void {
     try {
       const content = version.Content || '';
       const blob = new Blob([content], { type: 'text/plain' });

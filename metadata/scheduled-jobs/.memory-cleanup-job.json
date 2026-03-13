@@ -8,7 +8,7 @@
       "Timezone": "UTC",
       "Status": "Active",
       "Configuration": {
-        "AgentID": "@lookup:AI Agents.Name=Memory Cleanup Agent",
+        "AgentID": "@lookup:MJ: AI Agents.Name=Memory Cleanup Agent",
         "InitialMessage": "Archive stale notes and examples based on retention policies"
       }
     },
@@ -16,8 +16,8 @@
       "ID": "BF5E6418-2B5D-4D2A-BBAF-6CEB20AFE585"
     },
     "sync": {
-      "lastModified": "2026-01-27T02:14:26.142Z",
-      "checksum": "b4cf20665f7c208f4a9b9d502e3f35bdd61a6d85589eec30fdabf35e77fca60c"
+      "lastModified": "2026-02-13T21:09:25.483Z",
+      "checksum": "f4a2f9b2ff5125df0ab799c6f0c681d0c94cc826851b7e9d1bce324ae6345fa0"
     }
   }
 ]

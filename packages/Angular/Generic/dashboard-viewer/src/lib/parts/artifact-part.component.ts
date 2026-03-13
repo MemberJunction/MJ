@@ -2,6 +2,7 @@ import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy, Input } from '@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
+import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 
@@ -57,7 +58,8 @@ import { Subject } from 'rxjs';
               [isMaximized]="false"
               [refreshTrigger]="refreshTrigger"
               (navigateToLink)="onNavigateToLink($event)"
-              (openEntityRecord)="onOpenEntityRecord($event)">
+              (openEntityRecord)="onOpenEntityRecord($event)"
+              (navigationRequest)="onNavigationRequest($event)">
             </mj-artifact-viewer-panel>
           }
         </div>
@@ -74,7 +76,7 @@ import { Subject } from 'rxjs';
             height: 100%;
             display: flex;
             flex-direction: column;
-            background: #fff;
+            background: var(--mj-bg-surface);
         }
 
         .loading-state,
@@ -85,7 +87,7 @@ import { Subject } from 'rxjs';
             align-items: center;
             justify-content: center;
             height: 100%;
-            color: #666;
+            color: var(--mj-text-secondary);
             text-align: center;
             padding: 24px;
         }
@@ -93,17 +95,17 @@ import { Subject } from 'rxjs';
         .error-state i,
         .empty-state i {
             font-size: 48px;
-            color: #ccc;
+            color: var(--mj-text-muted);
             margin-bottom: 16px;
         }
 
         .error-state i {
-            color: #d32f2f;
+            color: var(--mj-status-error);
         }
 
         .empty-state h4 {
             margin: 0 0 8px 0;
-            color: #333;
+            color: var(--mj-text-primary);
         }
 
         .empty-state p {
@@ -241,6 +243,18 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
                 false
             );
         }
+    }
+
+    /**
+     * Handle general navigation request events from artifact viewer plugins
+     */
+    public onNavigationRequest(event: NavigationRequest): void {
+        this.RequestOpenNavItem(
+            event.navItemName,
+            event.appName,
+            event.queryParams,
+            false
+        );
     }
 
     protected override cleanup(): void {

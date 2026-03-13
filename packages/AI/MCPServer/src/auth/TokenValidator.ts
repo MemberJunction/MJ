@@ -138,6 +138,7 @@ type VerifyUserRecordFn = (
 interface AuthProviderFactoryType {
   getInstance(): {
     getByIssuer(issuer: string): { issuer: string; audience: string } | undefined;
+    getAllByIssuer(issuer: string): Array<{ issuer: string; audience: string }>;
     hasProviders(): boolean;
     getAllProviders(): Array<{ name: string; issuer: string; audience: string }>;
   };
@@ -346,21 +347,24 @@ export async function validateBearerToken(token: string): Promise<OAuthValidatio
 
   // 3. Verify issuer matches a configured provider and get audience
   // For Azure AD, try both v1 and v2 issuer formats since the token might
-  // use a different format than what the provider is configured with
+  // use a different format than what the provider is configured with.
+  // Use getAllByIssuer to aggregate audiences when multiple apps share an issuer.
   const factory = AuthProviderFactory.getInstance();
   const issuerVariants = getAzureAdIssuerVariants(issuer);
-  let provider: { issuer: string; audience: string } | undefined;
+  let allProviders: Array<{ issuer: string; audience: string }> = [];
 
   for (const variant of issuerVariants) {
-    provider = factory.getByIssuer(variant);
-    if (provider) {
+    allProviders = factory.getAllByIssuer(variant);
+    if (allProviders.length > 0) {
       break;
     }
   }
 
-  if (!provider) {
+  if (allProviders.length === 0) {
     return createError('unknown_issuer', `Unknown token issuer: ${issuer}`);
   }
+
+  const provider = allProviders[0];
 
   // Check if we matched via a variant (Azure AD v1/v2 normalization)
   const matchedViaVariant = issuer !== provider.issuer;
@@ -369,9 +373,10 @@ export async function validateBearerToken(token: string): Promise<OAuthValidatio
   const isV1Token = isAzureAdV1Issuer(issuer);
   const v1TenantId = isV1Token ? extractAzureAdTenantId(issuer) : null;
 
-  // Use provider's audience - same as MJExplorer
-  // For Azure AD: this is WEB_CLIENT_ID from environment
-  const expectedAudience = provider.audience;
+  // Aggregate unique audiences from all providers matching this issuer.
+  // jwt.verify() natively accepts string | string[].
+  const audiences = [...new Set(allProviders.map(p => p.audience))];
+  const expectedAudience: string | string[] = audiences.length === 1 ? audiences[0] : audiences;
 
   // 4. Verify signature using JWKS and validate audience
   // For Azure AD v1 tokens: use v1 JWKS endpoint directly
@@ -429,14 +434,21 @@ export async function validateBearerToken(token: string): Promise<OAuthValidatio
 async function verifyTokenSignature(
   token: string,
   providerIssuer: string,
-  audience: string,
+  audience: string | string[],
   skipIssuerValidation: boolean = false
 ): Promise<JwtPayload> {
   return new Promise((resolve, reject) => {
     const verifyOptions: jwt.VerifyOptions = {
-      audience,
       clockTolerance: 30, // Allow 30 seconds of clock skew
     };
+
+    // jwt.verify() natively accepts string | string[] for audience.
+    // VerifyOptions uses a non-empty tuple type, so we assign conditionally.
+    if (Array.isArray(audience)) {
+      verifyOptions.audience = audience as [string, ...string[]];
+    } else {
+      verifyOptions.audience = audience;
+    }
 
     // Only validate issuer if we haven't already done variant matching
     // When matching via variant, the token's issuer differs from provider's issuer
@@ -470,14 +482,19 @@ async function verifyTokenSignature(
 async function verifyTokenSignatureWithKeys(
   token: string,
   getKey: (header: JwtHeader, cb: SigningKeyCallback) => void,
-  audience: string
+  audience: string | string[]
 ): Promise<JwtPayload> {
   return new Promise((resolve, reject) => {
     const verifyOptions: jwt.VerifyOptions = {
-      audience,
       clockTolerance: 30, // Allow 30 seconds of clock skew
       // Don't validate issuer - we've already matched it
     };
+
+    if (Array.isArray(audience)) {
+      verifyOptions.audience = audience as [string, ...string[]];
+    } else {
+      verifyOptions.audience = audience;
+    }
 
     jwt.verify(
       token,

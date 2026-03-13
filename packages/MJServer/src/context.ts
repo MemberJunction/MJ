@@ -12,10 +12,12 @@ import { DataSourceInfo, UserPayload } from './types.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
+import type { RequestHandler, Request, Response, NextFunction } from 'express';
 import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
 import { Metadata } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
@@ -27,7 +29,14 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
       return;
     }
 
-    jwt.verify(token, getSigningKeys(issuer), options, (err, jwt) => {
+    const verifyOptions: jwt.VerifyOptions = {};
+    if (Array.isArray(options.audience)) {
+      verifyOptions.audience = options.audience as [string, ...string[]];
+    } else {
+      verifyOptions.audience = options.audience;
+    }
+
+    jwt.verify(token, getSigningKeys(issuer), verifyOptions, (err, jwt) => {
       if (jwt && typeof jwt !== 'string' && !err) {
         const payload = jwt.payload ?? jwt;
 
@@ -96,7 +105,7 @@ export const getUserPayload = async (
         // Get the user from UserCache to ensure UserRoles is properly populated
         // The validationResult.User from APIKeyEngine doesn't include UserRoles
         const cachedUser = UserCache.Instance.Users.find(
-          u => u.ID === validationResult.User.ID
+          u => UUIDsEqual(u.ID, validationResult.User.ID)
         );
 
         // Use cached user if available, otherwise fall back to the validation result
@@ -198,23 +207,118 @@ export const getUserPayload = async (
   }
 };
 
+/**
+ * Extracts auth headers and builds a RequestContext from an Express request.
+ * Shared by both the unified auth middleware and the WebSocket context.
+ */
+function extractAuthInputs(req: IncomingMessage): {
+  bearerToken: string;
+  sessionId: string;
+  requestDomain: string | undefined;
+  systemApiKey: string;
+  userApiKey: string;
+  requestContext: RequestContext;
+} {
+  const sessionIdRaw = req.headers['x-session-id'];
+  const requestDomain = url.parse(req.headers.origin || '');
+  const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
+  const bearerToken = req.headers.authorization ?? '';
+  const systemApiKey = String(req.headers['x-mj-api-key']);
+  const userApiKey = String(req.headers['x-api-key']);
+  const expressReq = req as e.Request;
+
+  const requestContext: RequestContext = {
+    endpoint: expressReq.path || expressReq.url || '/api',
+    method: expressReq.method || 'POST',
+    operationName: undefined,
+    ipAddress: expressReq.ip || expressReq.socket?.remoteAddress || undefined,
+    userAgent: req.headers['user-agent'] as string | undefined,
+  };
+
+  return {
+    bearerToken,
+    sessionId,
+    requestDomain: requestDomain?.hostname ?? undefined,
+    systemApiKey,
+    userApiKey,
+    requestContext,
+  };
+}
+
+/**
+ * Creates a single Express middleware that authenticates ALL routes.
+ *
+ * On success, attaches `req.userPayload` (UserPayload) and `req['mjUser']` (UserInfo)
+ * so downstream middleware and route handlers can read the authenticated user without
+ * re-authenticating. On failure, returns 401.
+ *
+ * Register OAuth callback routes BEFORE this middleware so they remain unauthenticated.
+ */
+export function createUnifiedAuthMiddleware(
+  dataSources: DataSourceInfo[]
+): RequestHandler {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    // Skip CORS preflight requests — OPTIONS requests never carry credentials
+    // and must pass through to the downstream cors() middleware to get proper headers.
+    if (req.method === 'OPTIONS') {
+      next();
+      return;
+    }
+
+    try {
+      const { bearerToken, sessionId, requestDomain, systemApiKey, userApiKey, requestContext } =
+        extractAuthInputs(req);
+
+      const userPayload = await getUserPayload(
+        bearerToken,
+        sessionId,
+        dataSources,
+        requestDomain,
+        systemApiKey,
+        userApiKey,
+        requestContext
+      );
+
+      if (!userPayload) {
+        res.status(401).json({ error: 'Invalid token' });
+        return;
+      }
+
+      // Attach to request for downstream consumers
+      req.userPayload = userPayload;
+      // Standard Express convention and MJ REST convention
+      (req as unknown as Record<string, unknown>)['user'] = userPayload;
+      (req as unknown as Record<string, unknown>)['mjUser'] = userPayload.userRecord;
+
+      next();
+    } catch (error) {
+      if (error instanceof TokenExpiredError) {
+        res.status(401).json({
+          errors: [{
+            message: 'Token expired',
+            extensions: { code: 'JWT_EXPIRED' }
+          }]
+        });
+        return;
+      }
+      console.error('Auth error:', error);
+      res.status(401).json({ error: 'Authentication failed' });
+    }
+  };
+}
+
+/**
+ * Creates the GraphQL context from an already-authenticated request.
+ *
+ * The unified auth middleware has already resolved `req.userPayload` before this runs.
+ * This function reads the payload and creates per-request database providers.
+ */
 export const contextFunction =
   ({ setupComplete$, dataSource, dataSources }: { setupComplete$: Subject<unknown>; dataSource: sql.ConnectionPool, dataSources: DataSourceInfo[] }) =>
   async ({ req }: { req: IncomingMessage }) => {
     await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
 
-    // Extract request data first (synchronous operations)
-    const sessionIdRaw = req.headers['x-session-id'];
-    const requestDomain = url.parse(req.headers.origin || '');
-    const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
-    const bearerToken = req.headers.authorization ?? '';
-
-    // Two types of API keys:
-    // - x-mj-api-key: System API key for system-level operations (authenticates as system user)
-    // - X-API-Key: User API key (mj_sk_*) for user-authenticated operations
-    const systemApiKey = String(req.headers['x-mj-api-key']);
-    const userApiKey = String(req.headers['x-api-key']);
-
+    // Log the GraphQL operation for debugging (skip introspection noise)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const reqAny = req as any;
     const operationName: string | undefined = reqAny.body?.operationName;
@@ -222,66 +326,114 @@ export const contextFunction =
       console.log({ operationName, variables: reqAny.body?.variables || undefined });
     }
 
-    // Build request context for API key logging
-    // Note: responseTimeMs is not available at auth time, only endpoint/method/ip/ua
+    // Auth already happened in the unified auth middleware — just read the result
     const expressReq = req as e.Request;
-    const requestContext: RequestContext = {
-      endpoint: expressReq.path || expressReq.url || '/api',
-      method: expressReq.method || 'POST',
-      operationName: operationName,
-      ipAddress: expressReq.ip || expressReq.socket?.remoteAddress || undefined,
-      userAgent: req.headers['user-agent'] as string | undefined,
-    };
-
-    const userPayload = await getUserPayload(
-      bearerToken,
-      sessionId,
-      dataSources,
-      requestDomain?.hostname ? requestDomain.hostname : undefined,
-      systemApiKey,
-      userApiKey,
-      requestContext
-    );
+    const userPayload = expressReq.userPayload;
+    if (!userPayload) {
+      throw new AuthenticationError('No user payload — auth middleware may not have run');
+    }
 
     if (Metadata.Provider.Entities.length === 0 ) {
       console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!');
     }
 
-    // now create a new instance of SQLServerDataProvider for each request
-    const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
-    const p = new SQLServerDataProvider();
-    await p.Config(config);
+    // Create per-request provider instance based on database type
+    const providers = await createPerRequestProviders(dataSource, dataSources);
 
-    let rp = null;
-    try {
-      const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: false });
-      if (readOnlyDataSource) {
-        rp = new SQLServerDataProvider();
-        const rConfig = new SQLServerProviderConfigData(readOnlyDataSource, mj_core_schema, 0, undefined, undefined, false);
-        await rp.Config(rConfig);
-      }
-    }
-    catch (e) {
-      // no read only data source available, so rp will remain null, this is OK!
-    }
-
-    const providers = [{
-      provider: p,
-      type: 'Read-Write' as 'Read-Write' | 'Read-Only'
-    }];
-    if (rp) {
-      providers.push({
-        provider: rp,
-        type: 'Read-Only' as 'Read-Write' | 'Read-Only'
-      });
-    }
-
-    const contextResult = { 
-      dataSource, 
-      dataSources, 
-      userPayload: userPayload,
+    return {
+      dataSource,
+      dataSources,
+      userPayload,
       providers,
     };
-    
-    return contextResult;
   };
+
+/**
+ * Creates per-request DatabaseProviderBase instances for the GraphQL context.
+ * Handles both SQL Server and PostgreSQL paths.
+ */
+async function createPerRequestProviders(
+  dataSource: sql.ConnectionPool,
+  dataSources: DataSourceInfo[]
+): Promise<Array<{ provider: DatabaseProviderBase; type: 'Read-Write' | 'Read-Only' }>> {
+  const dbType = process.env.DB_TYPE?.toLowerCase();
+  const isPostgres = dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg';
+
+  let p: DatabaseProviderBase;
+  if (isPostgres) {
+    p = await createPostgresProvider();
+  } else {
+    const config = new SQLServerProviderConfigData(dataSource, mj_core_schema, 0, undefined, undefined, false);
+    const sqlProvider = new SQLServerDataProvider();
+    await sqlProvider.Config(config);
+    p = sqlProvider as unknown as DatabaseProviderBase;
+  }
+
+  const providers: Array<{ provider: DatabaseProviderBase; type: 'Read-Write' | 'Read-Only' }> = [
+    { provider: p, type: 'Read-Write' }
+  ];
+
+  if (!isPostgres) {
+    const rp = await tryCreateReadOnlyProvider(dataSources);
+    if (rp) {
+      providers.push({ provider: rp, type: 'Read-Only' });
+    }
+  }
+
+  return providers;
+}
+
+/**
+ * Creates a PostgreSQL per-request provider, sharing the connection pool
+ * from the primary provider to avoid pool exhaustion.
+ */
+async function createPostgresProvider(): Promise<DatabaseProviderBase> {
+  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } = await import('@memberjunction/postgresql-dataprovider');
+  const pgHost = process.env.PG_HOST || process.env.DB_HOST || 'localhost';
+  const pgPort = parseInt(process.env.PG_PORT || process.env.DB_PORT || '5432', 10);
+  const pgUser = process.env.PG_USERNAME || process.env.DB_USERNAME || 'postgres';
+  const pgPass = process.env.PG_PASSWORD || process.env.DB_PASSWORD || '';
+  const pgDatabase = process.env.PG_DATABASE || process.env.DB_DATABASE || '';
+
+  const pgProvider = new PostgreSQLDataProvider();
+  const pgConfig = new PostgreSQLProviderConfigData(
+    { Host: pgHost, Port: pgPort, Database: pgDatabase, User: pgUser, Password: pgPass },
+    mj_core_schema,
+    0,
+    undefined,
+    undefined,
+    false, // use existing metadata from global provider
+  );
+
+  // Share the connection pool from the primary provider to avoid pool exhaustion
+  const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool };
+  if (primaryProvider?.DatabaseConnection) {
+    await pgProvider.ConfigWithSharedPool(pgConfig, primaryProvider.DatabaseConnection);
+  } else {
+    await pgProvider.Config(pgConfig);
+  }
+
+  return pgProvider;
+}
+
+/**
+ * Attempts to create a read-only SQL Server provider.
+ * Returns null if no read-only data source is available.
+ */
+async function tryCreateReadOnlyProvider(
+  dataSources: DataSourceInfo[]
+): Promise<DatabaseProviderBase | null> {
+  try {
+    const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: false });
+    if (readOnlyDataSource) {
+      const roProvider = new SQLServerDataProvider();
+      const rConfig = new SQLServerProviderConfigData(readOnlyDataSource, mj_core_schema, 0, undefined, undefined, false);
+      await roProvider.Config(rConfig);
+      return roProvider as unknown as DatabaseProviderBase;
+    }
+  }
+  catch (_err) {
+    // no read only data source available, this is OK
+  }
+  return null;
+}

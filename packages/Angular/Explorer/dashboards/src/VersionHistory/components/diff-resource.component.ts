@@ -1,9 +1,9 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Subject } from 'rxjs';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RunView, Metadata, CompositeKey, EntityRecordNameInput } from '@memberjunction/core';
-import { ResourceData, UserInfoEngine, VersionLabelEntityType, VersionLabelItemEntityType } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine, MJVersionLabelEntityType, MJVersionLabelItemEntityType } from '@memberjunction/core-entities';
 
 interface VersionDiffPreferences {
     DiffMode: 'label-to-label' | 'label-to-current';
@@ -62,7 +62,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     public HasDiffResult = false;
 
     // Label selection
-    public AvailableLabels: VersionLabelEntityType[] = [];
+    public AvailableLabels: MJVersionLabelEntityType[] = [];
     public FromLabelId = '';
     public ToLabelId = '';
     public DiffMode: 'label-to-label' | 'label-to-current' = 'label-to-current';
@@ -117,7 +117,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             this.cdr.markForCheck();
 
             const rv = new RunView();
-            const result = await rv.RunView<VersionLabelEntityType>({
+            const result = await rv.RunView<MJVersionLabelEntityType>({
                 EntityName: 'MJ: Version Labels',
                 ExtraFilter: "Status = 'Active'",
                 OrderBy: '__mj_CreatedAt DESC',
@@ -202,8 +202,8 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     private async loadLabelItems(
         rv: RunView,
         labelId: string
-    ): Promise<VersionLabelItemEntityType[]> {
-        const result = await rv.RunView<VersionLabelItemEntityType>({
+    ): Promise<MJVersionLabelItemEntityType[]> {
+        const result = await rv.RunView<MJVersionLabelItemEntityType>({
             EntityName: 'MJ: Version Label Items',
             ExtraFilter: `VersionLabelID = '${labelId}'`,
             ResultType: 'simple'
@@ -212,8 +212,8 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     }
 
     private computeDiff(
-        fromItems: VersionLabelItemEntityType[],
-        toItems: VersionLabelItemEntityType[]
+        fromItems: MJVersionLabelItemEntityType[],
+        toItems: MJVersionLabelItemEntityType[]
     ): void {
         const entityMap = new Map<string, DiffItemView[]>();
 
@@ -265,7 +265,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             } else {
                 // Both exist - check if RecordChangeID differs (= Modified)
                 const toItem = toMap.get(key)!;
-                const changeType = item.RecordChangeID !== toItem.RecordChangeID
+                const changeType = !UUIDsEqual(item.RecordChangeID, toItem.RecordChangeID)
                     ? 'Modified' : 'Unchanged';
                 entityMap.get(entityName)!.push({
                     EntityName: entityName,
@@ -288,7 +288,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
 
     private async computeDiffToCurrentState(
         rv: RunView,
-        labelItems: VersionLabelItemEntityType[]
+        labelItems: MJVersionLabelItemEntityType[]
     ): Promise<void> {
         // For label-to-current, compare snapshot RecordChangeIDs against
         // the latest RecordChange for each entity/record combination.
@@ -322,9 +322,9 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     }
 
     private buildItemKeyMap(
-        items: VersionLabelItemEntityType[]
-    ): Map<string, VersionLabelItemEntityType> {
-        const map = new Map<string, VersionLabelItemEntityType>();
+        items: MJVersionLabelItemEntityType[]
+    ): Map<string, MJVersionLabelItemEntityType> {
+        const map = new Map<string, MJVersionLabelItemEntityType>();
         for (const item of items) {
             const key = `${item.EntityID ?? ''}|${item.RecordID ?? ''}`;
             map.set(key, item);
@@ -372,13 +372,13 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
 
     private resolveEntityName(entityId: string): string {
         if (!entityId) return 'Unknown';
-        const entity = this.metadata.Entities.find(e => e.ID === entityId);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entity ? entity.Name : 'Unknown';
     }
 
     private resolveEntityIcon(entityId: string): string {
         if (!entityId) return 'fa-solid fa-table';
-        const entity = this.metadata.Entities.find(e => e.ID === entityId);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entity?.Icon || 'fa-solid fa-table';
     }
 
@@ -549,7 +549,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
         if (!entityId || !recordId) return null;
 
         const result = await rv.RunView<RecordChangeRow>({
-            EntityName: 'Record Changes',
+            EntityName: 'MJ: Record Changes',
             ExtraFilter: `EntityID = '${entityId}' AND RecordID = '${recordId}'`,
             OrderBy: 'ChangedAt DESC',
             MaxRows: 1,
@@ -570,13 +570,13 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             const rv = new RunView();
             const [oldResult, newResult] = await rv.RunViews([
                 {
-                    EntityName: 'Record Changes',
+                    EntityName: 'MJ: Record Changes',
                     ExtraFilter: `ID = '${oldChangeId}'`,
                     Fields: ['FullRecordJSON'],
                     ResultType: 'simple'
                 },
                 {
-                    EntityName: 'Record Changes',
+                    EntityName: 'MJ: Record Changes',
                     ExtraFilter: `ID = '${newChangeId}'`,
                     Fields: ['FullRecordJSON'],
                     ResultType: 'simple'
@@ -658,7 +658,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
         return this.extractRawRecordId(recordId);
     }
 
-    public FormatLabelOption(label: VersionLabelEntityType): string {
+    public FormatLabelOption(label: MJVersionLabelEntityType): string {
         const dateVal = label.__mj_CreatedAt;
         const date = dateVal instanceof Date
             ? dateVal.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -685,15 +685,15 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     // =========================================================================
 
     /** From dropdown excludes the currently selected To label. */
-    public get FilteredFromLabels(): VersionLabelEntityType[] {
+    public get FilteredFromLabels(): MJVersionLabelEntityType[] {
         if (!this.ToLabelId) return this.AvailableLabels;
-        return this.AvailableLabels.filter(l => l.ID !== this.ToLabelId);
+        return this.AvailableLabels.filter(l => !UUIDsEqual(l.ID, this.ToLabelId));
     }
 
     /** To dropdown excludes the currently selected From label. */
-    public get FilteredToLabels(): VersionLabelEntityType[] {
+    public get FilteredToLabels(): MJVersionLabelEntityType[] {
         if (!this.FromLabelId) return this.AvailableLabels;
-        return this.AvailableLabels.filter(l => l.ID !== this.FromLabelId);
+        return this.AvailableLabels.filter(l => !UUIDsEqual(l.ID, this.FromLabelId));
     }
 
     /** Swap From and To label selections. */

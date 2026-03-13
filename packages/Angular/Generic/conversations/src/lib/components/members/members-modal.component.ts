@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { ConversationEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DialogService } from '../../services/dialog.service';
 
@@ -236,7 +236,7 @@ interface ConversationMember {
 })
 export class MembersModalComponent {
   @Input() isVisible = false;
-  @Input() conversation?: ConversationEntity;
+  @Input() conversation?: MJConversationEntity;
   @Input() currentUser!: UserInfo;
   @Output() cancelled = new EventEmitter<void>();
   @Output() membersChanged = new EventEmitter<void>();

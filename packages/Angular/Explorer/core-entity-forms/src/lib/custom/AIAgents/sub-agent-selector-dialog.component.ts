@@ -3,11 +3,12 @@ import { FormControl } from '@angular/forms';
 import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
 import { RunView } from '@memberjunction/core';
-import { AIAgentTypeEntity } from '@memberjunction/core-entities';
-import { AIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface SubAgentSelectorResult {
-  selectedAgents: AIAgentEntityExtended[];
+  selectedAgents: MJAIAgentEntityExtended[];
   createNew: boolean;
 }
 
@@ -19,7 +20,7 @@ export interface SubAgentSelectorConfig {
   parentAgentId: string; // To exclude from selection
 }
 
-export interface AgentDisplayItem extends AIAgentEntityExtended {
+export interface AgentDisplayItem extends MJAIAgentEntityExtended {
   selected: boolean;
   typeName?: string;
 }
@@ -45,7 +46,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
   
   // Data streams
   allAgents$ = new BehaviorSubject<AgentDisplayItem[]>([]);
-  agentTypes$ = new BehaviorSubject<AIAgentTypeEntity[]>([]);
+  agentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
   filteredAgents$ = new BehaviorSubject<AgentDisplayItem[]>([]);
   selectedAgents$ = new BehaviorSubject<Set<string>>(new Set());
   isLoading$ = new BehaviorSubject<boolean>(false);
@@ -102,7 +103,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     const results = await rv.RunViews([
       // Root agents (index 0)
       {
-        EntityName: 'AI Agents',
+        EntityName: 'MJ: AI Agents',
         ExtraFilter: `ParentID IS NULL AND ID != '${this.config.parentAgentId}' AND Status = 'Active' AND (ExposeAsAction = 0 OR ExposeAsAction IS NULL)`,
         OrderBy: 'Name',
         ResultType: 'entity_object',
@@ -156,7 +157,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
 
     // Type filter
     if (typeId !== 'all') {
-      filtered = filtered.filter(agent => agent.TypeID === typeId);
+      filtered = filtered.filter(agent => UUIDsEqual(agent.TypeID, typeId));
     }
 
     // Search filter
@@ -197,7 +198,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     const agents = this.allAgents$.value;
     
     // Find the agent and toggle its selection
-    const agentToUpdate = agents.find(a => a.ID === agent.ID);
+    const agentToUpdate = agents.find(a => UUIDsEqual(a.ID, agent.ID));
     if (agentToUpdate) {
       agentToUpdate.selected = !agentToUpdate.selected;
       
@@ -206,7 +207,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
           // Single select mode - clear other selections
           selected.clear();
           agents.forEach(a => {
-            if (a.ID !== agent.ID) {
+            if (!UUIDsEqual(a.ID, agent.ID)) {
               a.selected = false;
             }
           });
@@ -221,7 +222,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
       
       // Update filtered agents to reflect selection state
       const filtered = this.filteredAgents$.value;
-      const filteredAgent = filtered.find(a => a.ID === agent.ID);
+      const filteredAgent = filtered.find(a => UUIDsEqual(a.ID, agent.ID));
       if (filteredAgent) {
         filteredAgent.selected = agentToUpdate.selected;
         this.filteredAgents$.next(filtered);
@@ -242,10 +243,10 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
 
   getAgentStatusColor(agent: AgentDisplayItem): string {
     switch (agent.Status) {
-      case 'Active': return '#28a745';
-      case 'Disabled': return '#6c757d';
-      case 'Pending': return '#ffc107';
-      default: return '#6c757d';
+      case 'Active': return 'var(--mj-status-success)';
+      case 'Disabled': return 'var(--mj-text-muted)';
+      case 'Pending': return 'var(--mj-status-warning)';
+      default: return 'var(--mj-text-muted)';
     }
   }
 
@@ -272,8 +273,8 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     const selectedDisplayItems = allAgents
       .filter(agent => selectedIds.has(agent.ID));
     
-    // Convert AgentDisplayItem to AIAgentEntityExtended by casting (they have the same structure)
-    const selectedAgents: AIAgentEntityExtended[] = selectedDisplayItems.map(item => item as AIAgentEntityExtended);
+    // Convert AgentDisplayItem to MJAIAgentEntityExtended by casting (they have the same structure)
+    const selectedAgents: MJAIAgentEntityExtended[] = selectedDisplayItems.map(item => item as MJAIAgentEntityExtended);
     
     this.result.next({
       selectedAgents,

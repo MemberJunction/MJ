@@ -1,14 +1,14 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
-import { ResourceData, ListEntity, ListDetailEntity, UserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJListEntity, MJListDetailEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, RunView, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { ListSetOperationsService, VennData, VennIntersection, SetOperation, SetOperationResult } from '../services/list-set-operations.service';
 import { VennRegionClickEvent } from './venn-diagram/venn-diagram.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 interface ListSelection {
-  list: ListEntity;
+  list: MJListEntity;
   entityName: string;
   color: string;
 }
@@ -367,12 +367,12 @@ interface EntityOption {
               @for (list of filteredAddToListOptions; track list) {
                 <div
                   class="list-option"
-                  [class.selected]="selectedTargetListId === list.ID"
+                  [class.selected]="IsTargetListSelected(list)"
                   (click)="selectTargetList(list.ID)">
                   <div class="list-option-radio">
                     <input
                       type="radio"
-                      [checked]="selectedTargetListId === list.ID"
+                      [checked]="IsTargetListSelected(list)"
                       name="targetList" />
                   </div>
                   <div class="list-option-info">
@@ -413,13 +413,13 @@ interface EntityOption {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #f5f7fa;
+      background: var(--mj-bg-surface);
     }
 
     .operations-header {
       padding: 20px 24px;
-      background: white;
-      border-bottom: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .header-top {
@@ -440,19 +440,19 @@ interface EntityOption {
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
-      background: #f5f5f5;
-      border: 1px solid #ddd;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       font-size: 13px;
-      color: #666;
+      color: var(--mj-text-secondary);
       cursor: pointer;
       transition: all 0.2s;
     }
 
     .clear-all-btn:hover {
-      background: #ffebee;
-      border-color: #f44336;
-      color: #d32f2f;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border-color: var(--mj-status-error);
+      color: var(--mj-status-error);
     }
 
     .clear-all-btn i {
@@ -461,18 +461,18 @@ interface EntityOption {
 
     .header-title i {
       font-size: 24px;
-      color: #9C27B0;
+      color: var(--mj-brand-primary);
     }
 
     .header-title h2 {
       margin: 0;
       font-size: 20px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .header-subtitle {
-      color: #666;
+      color: var(--mj-text-secondary);
       font-size: 14px;
     }
 
@@ -488,18 +488,18 @@ interface EntityOption {
     /* Panels */
     .selection-panel,
     .results-panel {
-      background: white;
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      box-shadow: var(--mj-shadow-sm);
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
 
     .venn-panel {
-      background: white;
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      box-shadow: var(--mj-shadow-sm);
       position: relative;
       min-height: 400px;
     }
@@ -509,14 +509,14 @@ interface EntityOption {
       justify-content: space-between;
       align-items: center;
       padding: 16px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .panel-header h3 {
       margin: 0;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -524,8 +524,8 @@ interface EntityOption {
 
     .list-count {
       font-size: 12px;
-      color: #999;
-      background: #f0f0f0;
+      color: var(--mj-text-muted);
+      background: var(--mj-bg-surface-sunken);
       padding: 2px 8px;
       border-radius: 10px;
     }
@@ -533,14 +533,14 @@ interface EntityOption {
     /* Entity Filter */
     .entity-filter-section {
       padding: 12px 16px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .filter-label {
       display: block;
       font-size: 11px;
       font-weight: 600;
-      color: #666;
+      color: var(--mj-text-secondary);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 6px;
@@ -550,16 +550,16 @@ interface EntityOption {
       width: 100%;
       padding: 8px 12px;
       font-size: 13px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
-      background: white;
+      background: var(--mj-bg-surface-card);
       cursor: pointer;
       outline: none;
       transition: border-color 0.2s;
     }
 
     .entity-select:focus {
-      border-color: #9C27B0;
+      border-color: var(--mj-brand-primary);
     }
 
     .entity-note {
@@ -568,14 +568,14 @@ interface EntityOption {
       gap: 8px;
       margin: 8px 12px;
       padding: 8px 10px;
-      background: #e8f5e9;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
       border-radius: 6px;
       font-size: 12px;
-      color: #2e7d32;
+      color: var(--mj-status-success);
     }
 
     .entity-note i {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     /* Selected Lists */
@@ -590,7 +590,7 @@ interface EntityOption {
       align-items: center;
       gap: 10px;
       padding: 10px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 6px;
       margin-bottom: 8px;
     }
@@ -612,7 +612,7 @@ interface EntityOption {
     .item-name {
       font-size: 13px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -620,21 +620,21 @@ interface EntityOption {
 
     .item-entity {
       font-size: 11px;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .remove-btn {
       background: none;
       border: none;
-      color: #999;
+      color: var(--mj-text-muted);
       cursor: pointer;
       padding: 4px;
       border-radius: 4px;
     }
 
     .remove-btn:hover {
-      background: #e0e0e0;
-      color: #666;
+      background: var(--mj-border-default);
+      color: var(--mj-text-secondary);
     }
 
     /* Add list area */
@@ -647,17 +647,17 @@ interface EntityOption {
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
-      border: 1px dashed #ddd;
+      border: 1px dashed var(--mj-border-default);
       border-radius: 6px;
       transition: border-color 0.2s;
     }
 
     .add-list-search:focus-within {
-      border-color: #9C27B0;
+      border-color: var(--mj-brand-primary);
     }
 
     .add-list-search i {
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .add-list-search input {
@@ -686,10 +686,10 @@ interface EntityOption {
 
     .dropdown-content {
       position: relative;
-      background: white;
-      border: 1px solid #ddd;
+      background: var(--mj-bg-surface-card);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: var(--mj-shadow-md);
       max-height: 200px;
       overflow-y: auto;
     }
@@ -703,18 +703,18 @@ interface EntityOption {
     }
 
     .dropdown-item:hover {
-      background: #f5f5f5;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .dropdown-name {
       font-size: 13px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .dropdown-entity {
       font-size: 11px;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .lists-full {
@@ -723,8 +723,8 @@ interface EntityOption {
       gap: 8px;
       padding: 12px;
       font-size: 12px;
-      color: #999;
-      background: #f8f9fa;
+      color: var(--mj-text-muted);
+      background: var(--mj-bg-surface-sunken);
       border-radius: 6px;
     }
 
@@ -734,28 +734,28 @@ interface EntityOption {
       gap: 8px;
       margin: 12px;
       padding: 10px;
-      background: #fff8e1;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
       border-radius: 6px;
       font-size: 12px;
-      color: #856404;
+      color: var(--mj-status-warning);
     }
 
     .entity-warning i {
-      color: #ffc107;
+      color: var(--mj-status-warning);
       margin-top: 2px;
     }
 
     /* Quick Operations */
     .quick-operations {
       padding: 12px;
-      border-top: 1px solid #f0f0f0;
+      border-top: 1px solid var(--mj-border-default);
     }
 
     .quick-operations h4 {
       margin: 0 0 10px;
       font-size: 12px;
       font-weight: 600;
-      color: #666;
+      color: var(--mj-text-secondary);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -771,19 +771,19 @@ interface EntityOption {
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       font-size: 13px;
-      color: #333;
+      color: var(--mj-text-primary);
       cursor: pointer;
       transition: all 0.2s;
     }
 
     .op-btn:hover:not(:disabled) {
-      background: #e8f4fd;
-      border-color: #9C27B0;
-      color: #9C27B0;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-brand-primary);
     }
 
     .op-btn:disabled {
@@ -808,25 +808,25 @@ interface EntityOption {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, rgba(156, 39, 176, 0.1) 0%, rgba(156, 39, 176, 0.05) 100%);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
       border-radius: 50%;
       margin-bottom: 20px;
     }
 
     .empty-icon i {
       font-size: 36px;
-      color: #9C27B0;
+      color: var(--mj-brand-primary);
     }
 
     .venn-empty h3 {
       margin: 0 0 8px;
       font-size: 18px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .venn-empty p {
       margin: 0;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-size: 14px;
       max-width: 300px;
     }
@@ -837,7 +837,7 @@ interface EntityOption {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(255,255,255,0.9);
+      background: color-mix(in srgb, var(--mj-bg-surface-card) 90%, transparent);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -859,14 +859,14 @@ interface EntityOption {
       display: block;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       margin-bottom: 4px;
     }
 
     .region-count,
     .result-count {
       font-size: 13px;
-      color: #9C27B0;
+      color: var(--mj-brand-primary);
       font-weight: 500;
     }
 
@@ -882,33 +882,33 @@ interface EntityOption {
       align-items: center;
       gap: 8px;
       padding: 10px 14px;
-      background: white;
-      border: 1px solid #ddd;
+      background: var(--mj-bg-surface-card);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       font-size: 13px;
-      color: #333;
+      color: var(--mj-text-primary);
       cursor: pointer;
       transition: all 0.2s;
     }
 
     .action-btn:hover {
-      background: #f5f5f5;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .action-btn.primary {
-      background: #9C27B0;
-      border-color: #9C27B0;
-      color: white;
+      background: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .action-btn.primary:hover {
-      background: #7B1FA2;
+      background: var(--mj-brand-primary-hover);
     }
 
     .record-preview h5 {
       margin: 0 0 8px;
       font-size: 12px;
-      color: #666;
+      color: var(--mj-text-secondary);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -923,15 +923,15 @@ interface EntityOption {
       align-items: center;
       justify-content: space-between;
       padding: 10px 12px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 6px;
       margin-bottom: 6px;
       transition: all 0.15s ease;
     }
 
     .preview-card:hover {
-      background: #eef1f5;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      background: var(--mj-bg-surface-sunken);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .preview-card-content {
@@ -945,7 +945,7 @@ interface EntityOption {
     .preview-name {
       font-size: 13px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -953,7 +953,7 @@ interface EntityOption {
 
     .preview-secondary {
       font-size: 11px;
-      color: #888;
+      color: var(--mj-text-muted);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -962,7 +962,7 @@ interface EntityOption {
     .preview-open-btn {
       background: none;
       border: none;
-      color: #9C27B0;
+      color: var(--mj-brand-primary);
       cursor: pointer;
       padding: 6px 8px;
       border-radius: 4px;
@@ -973,7 +973,7 @@ interface EntityOption {
 
     .preview-open-btn:hover {
       opacity: 1;
-      background: rgba(156, 39, 176, 0.1);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     .preview-loading {
@@ -988,7 +988,7 @@ interface EntityOption {
       justify-content: center;
       height: 200px;
       text-align: center;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .results-empty i {
@@ -1010,7 +1010,7 @@ interface EntityOption {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0,0,0,0.5);
+      background: var(--mj-bg-overlay);
       z-index: 1000;
     }
 
@@ -1019,7 +1019,7 @@ interface EntityOption {
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: white;
+      background: var(--mj-bg-surface-card);
       border-radius: 12px;
       width: 420px;
       max-width: 90vw;
@@ -1031,19 +1031,19 @@ interface EntityOption {
       justify-content: space-between;
       align-items: center;
       padding: 16px 20px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .modal-header h3 {
       margin: 0;
       font-size: 16px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .modal-close {
       background: none;
       border: none;
-      color: #999;
+      color: var(--mj-text-muted);
       cursor: pointer;
       padding: 4px 8px;
     }
@@ -1061,13 +1061,13 @@ interface EntityOption {
       margin-bottom: 6px;
       font-size: 13px;
       font-weight: 500;
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     .form-input {
       width: 100%;
       padding: 10px 12px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       font-size: 14px;
       box-sizing: border-box;
@@ -1075,8 +1075,8 @@ interface EntityOption {
 
     .form-input:focus {
       outline: none;
-      border-color: #9C27B0;
-      box-shadow: 0 0 0 3px rgba(156, 39, 176, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     textarea.form-input {
@@ -1088,22 +1088,22 @@ interface EntityOption {
       align-items: center;
       gap: 8px;
       padding: 10px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 6px;
       font-size: 13px;
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     .form-info i {
-      color: #9C27B0;
+      color: var(--mj-brand-primary);
     }
 
     .modal-footer {
       display: flex;
       gap: 12px;
       padding: 16px 20px;
-      border-top: 1px solid #e0e0e0;
-      background: #fafafa;
+      border-top: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .btn-primary {
@@ -1111,8 +1111,8 @@ interface EntityOption {
       align-items: center;
       gap: 8px;
       padding: 10px 20px;
-      background: #9C27B0;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       border-radius: 6px;
       font-size: 14px;
@@ -1120,7 +1120,7 @@ interface EntityOption {
     }
 
     .btn-primary:hover:not(:disabled) {
-      background: #7B1FA2;
+      background: var(--mj-brand-primary-hover);
     }
 
     .btn-primary:disabled {
@@ -1130,16 +1130,16 @@ interface EntityOption {
 
     .btn-secondary {
       padding: 10px 20px;
-      background: white;
-      color: #666;
-      border: 1px solid #ddd;
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-secondary);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       font-size: 14px;
       cursor: pointer;
     }
 
     .btn-secondary:hover {
-      background: #f5f5f5;
+      background: var(--mj-bg-surface-sunken);
     }
 
     /* Add to List Dialog */
@@ -1157,14 +1157,14 @@ interface EntityOption {
       align-items: center;
       gap: 10px;
       padding: 10px 12px;
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       margin-bottom: 12px;
     }
 
     .list-search i {
-      color: #999;
+      color: var(--mj-text-muted);
       flex-shrink: 0;
     }
 
@@ -1182,7 +1182,7 @@ interface EntityOption {
     }
 
     .list-options {
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       max-height: 250px;
       overflow-y: auto;
@@ -1195,7 +1195,7 @@ interface EntityOption {
       padding: 12px;
       cursor: pointer;
       transition: background 0.15s;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .list-option:last-child {
@@ -1203,11 +1203,11 @@ interface EntityOption {
     }
 
     .list-option:hover {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .list-option.selected {
-      background: #f3e5f5;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     .list-option-radio {
@@ -1218,7 +1218,7 @@ interface EntityOption {
       width: 18px;
       height: 18px;
       cursor: pointer;
-      accent-color: #9C27B0;
+      accent-color: var(--mj-brand-primary);
     }
 
     .list-option-info {
@@ -1232,7 +1232,7 @@ interface EntityOption {
     .list-option-name {
       font-size: 14px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1240,7 +1240,7 @@ interface EntityOption {
 
     .list-option-entity {
       font-size: 12px;
-      color: #888;
+      color: var(--mj-text-muted);
     }
 
     .list-options-empty {
@@ -1250,7 +1250,7 @@ interface EntityOption {
       justify-content: center;
       padding: 30px 20px;
       text-align: center;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .list-options-empty i {
@@ -1292,8 +1292,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
   maxLists = 4;
   selectedLists: ListSelection[] = [];
-  availableLists: ListEntity[] = [];
-  filteredAvailableLists: ListEntity[] = [];
+  availableLists: MJListEntity[] = [];
+  filteredAvailableLists: MJListEntity[] = [];
   listSearchTerm = '';
   showListDropdown = false;
 
@@ -1320,7 +1320,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   // Add to existing list dialog
   showAddToListDialog = false;
   addToListSearchTerm = '';
-  filteredAddToListOptions: ListEntity[] = [];
+  filteredAddToListOptions: MJListEntity[] = [];
   selectedTargetListId: string | null = null;
 
   private entityIdFromSelectedLists: string | null = null;
@@ -1365,8 +1365,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     const rv = new RunView();
     const md = new Metadata();
 
-    const result = await rv.RunView<ListEntity>({
-      EntityName: 'Lists',
+    const result = await rv.RunView<MJListEntity>({
+      EntityName: 'MJ: Lists',
       ExtraFilter: `UserID = '${md.CurrentUser?.ID}'`,
       OrderBy: 'Name',
       ResultType: 'entity_object'
@@ -1429,13 +1429,13 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
     // Apply entity filter from dropdown
     if (this.selectedEntityId) {
-      filtered = filtered.filter(l => l.EntityID === this.selectedEntityId);
+      filtered = filtered.filter(l => UUIDsEqual(l.EntityID, this.selectedEntityId));
     }
 
     // If we have selected lists, restrict to same entity
     if (this.selectedLists.length > 0) {
       this.entityIdFromSelectedLists = this.selectedLists[0].list.EntityID;
-      filtered = filtered.filter(l => l.EntityID === this.entityIdFromSelectedLists);
+      filtered = filtered.filter(l => UUIDsEqual(l.EntityID, this.entityIdFromSelectedLists));
     }
 
     if (this.listSearchTerm) {
@@ -1449,7 +1449,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.filteredAvailableLists = filtered.slice(0, 10);
   }
 
-  addList(list: ListEntity) {
+  addList(list: MJListEntity) {
     const color = this.setOperationsService.getColorForIndex(this.selectedLists.length);
 
     this.selectedLists.push({
@@ -1525,7 +1525,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     try {
       const md = new Metadata();
       const entityId = this.selectedLists[0].list.EntityID;
-      const entityInfo = md.Entities.find(e => e.ID === entityId);
+      const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId));
 
       if (!entityInfo) {
         // Fallback to showing just IDs
@@ -1655,7 +1655,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const md = new Metadata();
       const entityId = this.selectedLists[0]?.list.EntityID;
       if (entityId) {
-        this.currentEntityInfo = md.Entities.find(e => e.ID === entityId) || null;
+        this.currentEntityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId)) || null;
       }
     }
 
@@ -1739,7 +1739,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const md = new Metadata();
 
       // Create the list
-      const list = await md.GetEntityObject<ListEntity>('Lists', md.CurrentUser);
+      const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
       list.Name = this.newListName;
       list.Description = this.newListDescription || null;
       list.EntityID = entityId;
@@ -1755,7 +1755,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const tg = await md.CreateTransactionGroup();
 
       for (const recordId of this.recordsToAdd) {
-        const detail = await md.GetEntityObject<ListDetailEntity>('List Details', md.CurrentUser);
+        const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
         detail.ListID = list.ID;
         detail.RecordID = recordId;
         detail.Sequence = 0;
@@ -1829,7 +1829,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     // Filter to same entity, exclude already selected lists
     const selectedIds = new Set(this.selectedLists.map(s => s.list.ID));
     let filtered = this.availableLists.filter(l =>
-      l.EntityID === entityId && !selectedIds.has(l.ID)
+      UUIDsEqual(l.EntityID, entityId) && !selectedIds.has(l.ID)
     );
 
     // Apply search filter
@@ -1846,6 +1846,10 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   /**
    * Select a target list for adding records
    */
+  IsTargetListSelected(list: MJListEntity): boolean {
+    return UUIDsEqual(this.selectedTargetListId, list.ID);
+  }
+
   selectTargetList(listId: string): void {
     this.selectedTargetListId = listId;
   }
@@ -1874,7 +1878,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const tg = await md.CreateTransactionGroup();
 
       for (const recordId of this.recordsToAdd) {
-        const detail = await md.GetEntityObject<ListDetailEntity>('List Details', md.CurrentUser);
+        const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
         detail.ListID = this.selectedTargetListId;
         detail.RecordID = recordId;
         detail.Sequence = 0;
@@ -1885,7 +1889,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const success = await tg.Submit();
 
       if (success) {
-        const targetList = this.availableLists.find(l => l.ID === this.selectedTargetListId);
+        const targetList = this.availableLists.find(l => UUIDsEqual(l.ID, this.selectedTargetListId));
         this.notificationService.CreateSimpleNotification(
           `Added ${this.recordsToAdd.length} records to "${targetList?.Name || 'list'}"`,
           'success',
@@ -1974,7 +1978,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
       if (!setting) {
         // Create new setting
-        setting = await md.GetEntityObject<UserSettingEntity>('MJ: User Settings');
+        setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
         setting.UserID = userId;
         setting.Setting = this.USER_SETTING_KEY;
       }
@@ -2015,7 +2019,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         // Restore selected lists
         if (state.listIds && state.listIds.length > 0) {
           for (const listId of state.listIds) {
-            const list = this.availableLists.find(l => l.ID === listId);
+            const list = this.availableLists.find(l => UUIDsEqual(l.ID, listId));
             if (list) {
               const color = this.setOperationsService.getColorForIndex(this.selectedLists.length);
               this.selectedLists.push({

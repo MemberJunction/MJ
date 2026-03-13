@@ -4,7 +4,7 @@
  */
 
 import { RunView, UserInfo } from '@memberjunction/core';
-import { AIPromptRunEntity, AIAgentRunEntity } from '@memberjunction/core-entities';
+import { MJAIPromptRunEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
 
 /**
  * Calculate total cost from AI Agent Run.
@@ -16,7 +16,7 @@ import { AIPromptRunEntity, AIAgentRunEntity } from '@memberjunction/core-entiti
  * @returns Total cost in dollars
  */
 export async function calculateAgentRunCost(
-    agentRun: AIAgentRunEntity,
+    agentRun: MJAIAgentRunEntity,
     contextUser: UserInfo
 ): Promise<number> {
     // Agent run already has TotalCost calculated

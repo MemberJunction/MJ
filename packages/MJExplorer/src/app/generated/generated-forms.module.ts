@@ -11,19 +11,9 @@ import { FormsModule } from '@angular/forms';
 
 // MemberJunction Imports
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
-import { FormToolbarModule } from '@memberjunction/ng-form-toolbar';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
-import { MJTabStripModule } from "@memberjunction/ng-tabstrip";
-import { ContainerDirectivesModule } from "@memberjunction/ng-container-directives";
-
-// Kendo Imports
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { LayoutModule } from '@progress/kendo-angular-layout';
-import { ComboBoxModule } from '@progress/kendo-angular-dropdowns';
-import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
 
@@ -40,12 +30,7 @@ imports: [
 })
 export class GeneratedFormsModule { }
     
-export function LoadGeneratedForms() {
-    // This function doesn't do much, but it calls each generated form's loader function
-    // which in turn calls the sections for that generated form. Ultimately, those bits of
-    // code do NOTHING - the point is to prevent the code from being eliminated during tree shaking
-    // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
-    // in production builds tree shaking will eliminate the code unless we do this
-    
-}
+// Note: LoadXXXGeneratedForms() functions have been removed. Tree-shaking prevention
+// is now handled by the pre-built class registration manifest system.
+// See packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md for details.
     

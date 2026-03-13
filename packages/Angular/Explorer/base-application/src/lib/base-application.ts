@@ -1,6 +1,6 @@
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
-import { DashboardEngine, DashboardUserPreferenceEntity } from '@memberjunction/core-entities';
+import { DashboardEngine, MJDashboardUserPreferenceEntity } from '@memberjunction/core-entities';
 import { NavItem } from './interfaces/nav-item.interface';
 import { TabRequest } from './interfaces/tab-request.interface';
 
@@ -78,7 +78,7 @@ export class BaseApplication {
    * Returns navigation items for this application.
    * Override in subclass for dynamic behavior based on permissions, context, etc.
    */
-  GetNavItems(): NavItem[] {
+  async GetNavItems(): Promise<NavItem[]> {
     if (this._defaultNavItems) {
       return this._defaultNavItems;
     }
@@ -100,7 +100,7 @@ export class BaseApplication {
    * Override in subclass for dynamic color based on context.
    */
   GetColor(): string {
-    return this.Color || '#757575';
+    return this.Color || 'var(--mj-text-muted)';
   }
 
   /**
@@ -110,7 +110,7 @@ export class BaseApplication {
    * Override in subclass for custom default tab logic.
    */
   async CreateDefaultTab(): Promise<TabRequest | null> {
-    const navItems = this.GetNavItems();
+    const navItems = await this.GetNavItems();
 
     if (navItems.length > 0) {
       const firstItem = navItems[0];
@@ -124,9 +124,13 @@ export class BaseApplication {
         tabRequest.ResourceType = firstItem.ResourceType;
         tabRequest.ResourceRecordId = firstItem.RecordID;
         // Put resourceType in Configuration so it gets stored properly
+        // Include appName and navItemName so buildResourceUrl() can construct
+        // proper /app/:appName/:navItemName URLs without fallback matching
         tabRequest.Configuration = {
           resourceType: firstItem.ResourceType,
           recordId: firstItem.RecordID,
+          appName: this.Name,
+          navItemName: firstItem.Label,
           ...(firstItem.Configuration || {})
         };
 
@@ -178,7 +182,7 @@ export class BaseApplication {
 
       // Find preferences for this app with App scope
       const appPreferences = allPreferences.filter(
-        p => p.Scope === 'App' && p.ApplicationID === this.ID
+        p => p.Scope === 'App' && UUIDsEqual(p.ApplicationID, this.ID)
       );
 
       // First, look for user-specific preferences
@@ -212,20 +216,20 @@ export class BaseApplication {
    * 2. System defaults (UserID is null) if no user preferences exist
    */
   private findBestPreference(
-    preferences: Array<DashboardUserPreferenceEntity>,
+    preferences: Array<MJDashboardUserPreferenceEntity>,
     currentUserId: string
-  ): DashboardUserPreferenceEntity | null {
+  ): MJDashboardUserPreferenceEntity | null {
     // Sort by DisplayOrder
     const sorted = [...preferences].sort((a, b) => a.DisplayOrder - b.DisplayOrder);
 
     // First, look for user-specific preference
-    const userPreference = sorted.find(p => p.UserID === currentUserId);
+    const userPreference = sorted.find(p => UUIDsEqual(p.UserID, currentUserId));
     if (userPreference) {
       return userPreference;
     }
 
     // Fall back to system default (UserID is null)
-    const systemDefault = sorted.find(p => p.UserID === null);
+    const systemDefault = sorted.find(p => p.UserID == null)
     return systemDefault || null;
   }
 

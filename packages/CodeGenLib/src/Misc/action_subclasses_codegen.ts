@@ -2,25 +2,25 @@ import { CodeNameFromString, EntityFieldValueListType, EntityInfo, Metadata, Sev
 import fs from 'fs';
 import path from 'path';
 import { makeDir } from '../Misc/util';
-import { RegisterClass } from '@memberjunction/global';
-import { ActionEntity, ActionLibraryEntity } from '@memberjunction/core-entities';
-import { ActionEntityServerEntity } from '@memberjunction/core-entities-server';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { MJActionEntity, MJActionLibraryEntity } from '@memberjunction/core-entities';
+import { MJActionEntityServer } from '@memberjunction/core-entities-server';
 import { logError, logMessage, logStatus } from './status_logging';
 import { mkdirSync } from 'fs';
 import { ActionEngineServer } from '@memberjunction/actions';
-import { ActionEntityExtended } from '@memberjunction/actions-base';
+import { MJActionEntityExtended } from '@memberjunction/actions-base';
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
  */
 export class ActionSubClassGeneratorBase {
 
-    protected getAllActionLibrariesAndUsedItems(actions: ActionEntityExtended[]) {
+    protected getAllActionLibrariesAndUsedItems(actions: MJActionEntityExtended[]) {
         // get all of the libraries from the combination of distinct libraries from all of the actions we have here
         const allActionLibraries: {Library: string, LibraryID: string, ItemsUsedArray: string[]}[] = [];
         actions.forEach(action => {
             action.Libraries.forEach(lib => {
-                if (!allActionLibraries.find(l => l.LibraryID === lib.LibraryID)) {
+                if (!allActionLibraries.find(l => UUIDsEqual(l.LibraryID, lib.LibraryID))) {
                     allActionLibraries.push({
                         Library: lib.Library,
                         LibraryID: lib.LibraryID,
@@ -30,7 +30,7 @@ export class ActionSubClassGeneratorBase {
                 else {
                     // lib already in array, make sure the ItemsUsed for this paritcular Action are merged in to the ItemsUsed array in the entry
                     // in the allActionLibraries array element
-                    const existingLib = allActionLibraries.find(l => l.LibraryID === lib.LibraryID);
+                    const existingLib = allActionLibraries.find(l => UUIDsEqual(l.LibraryID, lib.LibraryID));
                     if(existingLib && lib.ItemsUsed && lib.ItemsUsed.length > 0) {
                         const itemsUsed = lib.ItemsUsed.split(',').map(item => item.trim());
                         if(itemsUsed.length > 0) {
@@ -46,7 +46,7 @@ export class ActionSubClassGeneratorBase {
         });
         return allActionLibraries;
     }
-    public async generateActions(actions: ActionEntityExtended[], directory: string): Promise<boolean> {
+    public async generateActions(actions: MJActionEntityExtended[], directory: string): Promise<boolean> {
         try {
             const actionFilePath = path.join(directory, 'action_subclasses.ts');
 
@@ -99,7 +99,7 @@ ${allActionLibraries.map(lib => `import { ${lib.ItemsUsedArray.map(item => item)
      * @param directory 
      * @returns 
      */
-    public async generateSingleAction(action: ActionEntity, directory: string): Promise<string> {
+    public async generateSingleAction(action: MJActionEntity, directory: string): Promise<string> {
         if (action.Status !== 'Active' || action.CodeApprovalStatus !=='Approved' || action.Type !== 'Generated') {
             // either the action is not active, not approved, or is NOT a Generated action, so skip it
             return "";

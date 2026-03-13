@@ -1,10 +1,10 @@
 import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { LogError, LogStatus, CompositeKey } from '@memberjunction/core';
-import { AIConfigurationEntity, AIConfigurationParamEntity, ResourceData } from '@memberjunction/core-entities';
+import { MJAIConfigurationEntity, MJAIConfigurationParamEntity, ResourceData } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { AIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 interface SystemConfigFilter {
   searchTerm: string;
@@ -12,11 +12,11 @@ interface SystemConfigFilter {
   isDefault: string;
 }
 
-interface ConfigurationWithParams extends AIConfigurationEntity {
-  params?: AIConfigurationParamEntity[];
+interface ConfigurationWithParams extends MJAIConfigurationEntity {
+  params?: MJAIConfigurationParamEntity[];
   isExpanded?: boolean;
-  compressionPrompt?: AIPromptEntityExtended | null;
-  summarizationPrompt?: AIPromptEntityExtended | null;
+  compressionPrompt?: MJAIPromptEntityExtended | null;
+  summarizationPrompt?: MJAIPromptEntityExtended | null;
 }
 /**
  * AI Configuration Resource - displays AI system configuration management
@@ -38,8 +38,8 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
 
   public configurations: ConfigurationWithParams[] = [];
   public filteredConfigurations: ConfigurationWithParams[] = [];
-  public allParams: AIConfigurationParamEntity[] = [];
-  public allPrompts: AIPromptEntityExtended[] = [];
+  public allParams: MJAIConfigurationParamEntity[] = [];
+  public allPrompts: MJAIPromptEntityExtended[] = [];
 
   public currentFilters: SystemConfigFilter = {
     searchTerm: '',
@@ -88,15 +88,15 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
       // Create extended configurations with associated data
       this.configurations = configs.map(config => {
         const extended = config as ConfigurationWithParams;
-        extended.params = params.filter(p => p.ConfigurationID === config.ID);
+        extended.params = params.filter(p => UUIDsEqual(p.ConfigurationID, config.ID));
         extended.isExpanded = false;
 
         // Find linked prompts
         if (config.DefaultPromptForContextCompressionID) {
-          extended.compressionPrompt = prompts.find(p => p.ID === config.DefaultPromptForContextCompressionID) || null;
+          extended.compressionPrompt = prompts.find(p => UUIDsEqual(p.ID, config.DefaultPromptForContextCompressionID)) || null;
         }
         if (config.DefaultPromptForContextSummarizationID) {
-          extended.summarizationPrompt = prompts.find(p => p.ID === config.DefaultPromptForContextSummarizationID) || null;
+          extended.summarizationPrompt = prompts.find(p => UUIDsEqual(p.ID, config.DefaultPromptForContextSummarizationID)) || null;
         }
 
         return extended;
@@ -249,10 +249,10 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
 
   public onOpenPrompt(promptId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: promptId }]);
-    this.navigationService.OpenEntityRecord('AI Prompts', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Prompts', compositeKey);
   }
 
-  public onOpenParam(param: AIConfigurationParamEntity): void {
+  public onOpenParam(param: MJAIConfigurationParamEntity): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: param.ID }]);
     this.navigationService.OpenEntityRecord('MJ: AI Configuration Params', compositeKey);
   }
@@ -321,7 +321,7 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
     }
   }
 
-  public formatParamValue(param: AIConfigurationParamEntity): string {
+  public formatParamValue(param: MJAIConfigurationParamEntity): string {
     if (!param.Value) return '(not set)';
 
     switch (param.Type) {

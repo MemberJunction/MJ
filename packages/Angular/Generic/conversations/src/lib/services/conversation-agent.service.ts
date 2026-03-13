@@ -3,21 +3,22 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
-import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity, ConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
-import { AIAgentEntityExtended, AIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJConversationDetailEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
 import { MentionParserService } from './mention-parser.service';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Context for artifact lookups - provides pre-loaded data from conversation
  * to avoid redundant database queries
  */
 export interface ArtifactLookupContext {
-  agentRunsByDetailId: Map<string, AIAgentRunEntityExtended>;
+  agentRunsByDetailId: Map<string, MJAIAgentRunEntityExtended>;
   artifactsByDetailId: Map<string, LazyArtifactInfo[]>;
 }
 
@@ -40,7 +41,7 @@ export interface IntentCheckResult {
 })
 export class ConversationAgentService {
   private _aiClient: GraphQLAIClient | null = null;
-  private _conversationManagerAgent: AIAgentEntityExtended | null = null;
+  private _conversationManagerAgent: MJAIAgentEntityExtended | null = null;
   private _sessionIds: Map<string, string> = new Map(); // conversationId -> sessionId
   private _isProcessing$ = new BehaviorSubject<boolean>(false);
 
@@ -72,7 +73,7 @@ export class ConversationAgentService {
   /**
    * Get or load the Sage Agent (formerly Conversation Manager Agent)
    */
-  public async getConversationManagerAgent(): Promise<AIAgentEntityExtended | null> {
+  public async getConversationManagerAgent(): Promise<MJAIAgentEntityExtended | null> {
     if (this._conversationManagerAgent) {
       return this._conversationManagerAgent;
     }
@@ -84,7 +85,7 @@ export class ConversationAgentService {
       // Find the Sage Agent
       const agents = AIEngineBase.Instance.Agents;
       this._conversationManagerAgent = agents.find(
-        (agent: AIAgentEntityExtended) => agent.Name === 'Sage'
+        (agent: MJAIAgentEntityExtended) => agent.Name === 'Sage'
       ) || null;
 
       if (!this._conversationManagerAgent) {
@@ -119,8 +120,8 @@ export class ConversationAgentService {
    */
   async processMessage(
     conversationId: string,
-    message: ConversationDetailEntity,
-    conversationHistory: ConversationDetailEntity[],
+    message: MJConversationDetailEntity,
+    conversationHistory: MJConversationDetailEntity[],
     conversationDetailId: string,
     onProgress?: AgentExecutionProgressCallback
   ): Promise<ExecuteAgentResult | null> {
@@ -154,7 +155,7 @@ export class ConversationAgentService {
 
       // Filter agents by status and hierarchy first
       const candidateAgents = AIEngineBase.Instance.Agents.filter(
-        a => a.ID !== agent.ID &&
+        a => !UUIDsEqual(a.ID, agent.ID) &&
              !a.ParentID &&
              a.Status === 'Active' &&
              a.InvocationMode !== 'Sub-Agent' // ensure that the agent is intended to run as top-level
@@ -218,7 +219,7 @@ export class ConversationAgentService {
    */
   public findConfigurationPresetFromHistory(
     agentId: string,
-    conversationHistory: ConversationDetailEntity[]
+    conversationHistory: MJConversationDetailEntity[]
   ): string | undefined {
     // Search backwards through history for User messages that @mention this agent with a configId
     const userMentionWithConfig = conversationHistory
@@ -260,7 +261,7 @@ export class ConversationAgentService {
    * compatibility with other callers that may need client-side message building.
    */
   private async buildAgentMessages(
-    history: ConversationDetailEntity[]
+    history: MJConversationDetailEntity[]
   ): Promise<ChatMessage[]> {
     const messages: ChatMessage[] = [];
 
@@ -351,7 +352,7 @@ export class ConversationAgentService {
     artifactsByDetailId: Map<string, string[]>
   ): Promise<boolean> {
     try {
-      const junctionResult = await rv.RunView<ConversationDetailArtifactEntity>({
+      const junctionResult = await rv.RunView<MJConversationDetailArtifactEntity>({
         EntityName: 'MJ: Conversation Detail Artifacts',
         ExtraFilter: `ConversationDetailID IN ('${messageIds.join("','")}') AND Direction='Output'`,
         ResultType: 'entity_object'
@@ -365,7 +366,7 @@ export class ConversationAgentService {
         }
 
         // Batch load all artifact versions
-        const versionResult = await rv.RunView<ArtifactVersionEntity>({
+        const versionResult = await rv.RunView<MJArtifactVersionEntity>({
           EntityName: 'MJ: Artifact Versions',
           ExtraFilter: `ID IN ('${Array.from(versionIds).join("','")}')`,
           ResultType: 'entity_object'
@@ -404,7 +405,7 @@ export class ConversationAgentService {
       const filter = `ConversationDetailID IN ('${messageIds.join("','")}')`;
       console.log('[AgentService] loadAttachmentsForMessages - filter:', filter);
 
-      const attachmentResult = await rv.RunView<ConversationDetailAttachmentEntity>({
+      const attachmentResult = await rv.RunView<MJConversationDetailAttachmentEntity>({
         EntityName: 'MJ: Conversation Detail Attachments',
         ExtraFilter: filter,
         OrderBy: 'DisplayOrder ASC, __mj_CreatedAt ASC',
@@ -443,9 +444,9 @@ export class ConversationAgentService {
   }
 
   /**
-   * Convert a ConversationDetailAttachmentEntity to AttachmentData format
+   * Convert a MJConversationDetailAttachmentEntity to AttachmentData format
    */
-  private convertToAttachmentData(att: ConversationDetailAttachmentEntity): AttachmentData | null {
+  private convertToAttachmentData(att: MJConversationDetailAttachmentEntity): AttachmentData | null {
     // Get the content - either inline data or file URL
     let content: string | null = null;
 
@@ -519,8 +520,8 @@ export class ConversationAgentService {
   async invokeSubAgent(
     agentName: string,
     conversationId: string,
-    message: ConversationDetailEntity,
-    conversationHistory: ConversationDetailEntity[],
+    message: MJConversationDetailEntity,
+    conversationHistory: MJConversationDetailEntity[],
     reasoning: string,
     conversationDetailId: string,
     payload?: any,
@@ -559,7 +560,7 @@ export class ConversationAgentService {
         const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(agent.ID, false);
         // check by preset ID or AIConfigurationID - since sometimes we have the actual
         // configuration ID. Since both UUID no collisions should ever be possible.
-        const preset = presets.find(p => p.ID === agentConfigurationPresetId || p.AIConfigurationID === agentConfigurationPresetId);
+        const preset = presets.find(p => UUIDsEqual(p.ID, agentConfigurationPresetId) || UUIDsEqual(p.AIConfigurationID, agentConfigurationPresetId));
 
         if (preset) {
           aiConfigurationId = preset.AIConfigurationID || undefined;
@@ -569,15 +570,13 @@ export class ConversationAgentService {
         }
       }
 
-      // Build conversation messages for the sub-agent
-      // Note: conversationHistory already includes the current message
-      const conversationMessages = await this.buildAgentMessages(conversationHistory);
-
-      // Prepare parameters with optional payload and progress callback
-      const params: ExecuteAgentParams = {
-        agent: agent,
-        conversationMessages: conversationMessages,
+      // Use fire-and-forget mutation to avoid Azure proxy timeouts (~230s).
+      // Server loads conversation history from DB, avoiding large client→server payload.
+      // Client receives completion via WebSocket PubSub event.
+      const result = await this._aiClient.RunAIAgentFromConversationDetail({
         conversationDetailId: conversationDetailId,
+        agentId: agent.ID,
+        maxHistoryMessages: 20,
         data: {
           conversationId: conversationId,
           latestMessageId: message.ID,
@@ -585,11 +584,20 @@ export class ConversationAgentService {
         },
         ...(payload ? { payload } : {}),
         ...(aiConfigurationId ? { configurationId: aiConfigurationId } : {}),
-        onProgress: onProgress
-      };
-
-      // Run the sub-agent with optional source artifact info for versioning (GraphQL layer only)
-      const result = await this._aiClient.RunAIAgent(params, sourceArtifactId, sourceArtifactVersionId);
+        createArtifacts: true,
+        createNotification: true,
+        sourceArtifactId: sourceArtifactId,
+        sourceArtifactVersionId: sourceArtifactVersionId,
+        // Adapt progress callback: GraphQL uses currentStep, AgentExecutionProgressCallback uses step
+        onProgress: onProgress ? (progress) => {
+          onProgress({
+            step: progress.currentStep as 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization',
+            percentage: progress.percentage,
+            message: progress.message,
+            metadata: progress.metadata
+          });
+        } : undefined
+      });
 
       return result;
     } catch (error) {
@@ -613,7 +621,7 @@ export class ConversationAgentService {
   async checkAgentContinuityIntent(
     agentId: string,
     latestMessage: string,
-    conversationHistory: ConversationDetailEntity[],
+    conversationHistory: MJConversationDetailEntity[],
     context: ArtifactLookupContext
   ): Promise<IntentCheckResult> {
     if (!this._aiClient) {
@@ -631,7 +639,7 @@ export class ConversationAgentService {
       }
 
       // Get agent details
-      const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentId);
+      const agent = AIEngineBase.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
       if (!agent) {
         console.warn('⚠️ Previous agent not found, defaulting to UNSURE');
         return { decision: 'UNSURE', reasoning: 'Previous agent not found' };
@@ -747,10 +755,10 @@ ${compactHistory}${artifactContext}
    * @returns Filtered list of agents the user can run
    */
   private async filterAgentsByPermissions(
-    agents: AIAgentEntityExtended[],
+    agents: MJAIAgentEntityExtended[],
     user: any
-  ): Promise<AIAgentEntityExtended[]> {
-    const permittedAgents: AIAgentEntityExtended[] = [];
+  ): Promise<MJAIAgentEntityExtended[]> {
+    const permittedAgents: MJAIAgentEntityExtended[] = [];
 
     for (const agent of agents) {
       try {
@@ -780,7 +788,7 @@ ${compactHistory}${artifactContext}
    */
   private findAllAgentArtifacts(
     agentId: string,
-    conversationDetails: ConversationDetailEntity[],
+    conversationDetails: MJConversationDetailEntity[],
     context: ArtifactLookupContext
   ): Array<{
     artifactId: string;
@@ -820,7 +828,7 @@ ${compactHistory}${artifactContext}
 
       // O(1) lookup for agent run from pre-loaded data
       const agentRun = context.agentRunsByDetailId.get(detail.ID);
-      if (!agentRun || agentRun.AgentID !== agentId || agentRun.Status !== 'Completed') {
+      if (!agentRun || !UUIDsEqual(agentRun.AgentID, agentId) || agentRun.Status !== 'Completed') {
         continue;
       }
 

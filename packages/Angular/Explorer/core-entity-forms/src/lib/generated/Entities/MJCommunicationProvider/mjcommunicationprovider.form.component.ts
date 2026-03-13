@@ -1,0 +1,29 @@
+import { Component } from '@angular/core';
+import { MJCommunicationProviderEntity } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { JoinGridComponent } from "@memberjunction/ng-join-grid"
+import {  } from "@memberjunction/ng-entity-viewer"
+
+@RegisterClass(BaseFormComponent, 'MJ: Communication Providers') // Tell MemberJunction about this class
+@Component({
+    standalone: false,
+    selector: 'gen-mjcommunicationprovider-form',
+    templateUrl: './mjcommunicationprovider.form.component.html'
+})
+export class MJCommunicationProviderFormComponent extends BaseFormComponent {
+    public record!: MJCommunicationProviderEntity;
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'providerDetails', sectionName: 'Provider Details', isExpanded: true },
+            { sectionKey: 'operationalSettings', sectionName: 'Operational Settings', isExpanded: true },
+            { sectionKey: 'advancedCapabilities', sectionName: 'Advanced Capabilities', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJCommunicationProviderMessageTypes', sectionName: 'Message Types', isExpanded: false },
+            { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false }
+        ]);
+    }
+}
+

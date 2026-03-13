@@ -1,4 +1,4 @@
-import { ActionFilterEntity } from "@memberjunction/core-entities";
+import { MJActionFilterEntity } from "@memberjunction/core-entities";
 import { RunActionParams } from "@memberjunction/actions-base";
 
 /**
@@ -11,7 +11,7 @@ export abstract class BaseActionFilter {
     /**
      * Runs the filter logic for the given filter and params and returns true if the filter condition is met, false otherwise.
      */
-    public async Run(params: RunActionParams, filter: ActionFilterEntity): Promise<boolean> {
+    public async Run(params: RunActionParams, filter: MJActionFilterEntity): Promise<boolean> {
         // run the filter logic which is implemented in the sub-class. The reason we have a wrapper for the InternalRun function
         // is so that we can implement anything else, over time, that we want to do across all sub-classes via this base class method.
         return this.InternalRun(params, filter); 
@@ -21,5 +21,5 @@ export abstract class BaseActionFilter {
      * This method is implemented by the auto-generated sub-class for this filter. In the auto-generated sub-classes for each Action Filter,
      * the CodeGen tool will implement this method and insert into it the logic for the filter.
      */
-    protected abstract InternalRun(params: RunActionParams, filter: ActionFilterEntity): Promise<boolean>;
+    protected abstract InternalRun(params: RunActionParams, filter: MJActionFilterEntity): Promise<boolean>;
 }

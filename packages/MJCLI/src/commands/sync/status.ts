@@ -1,15 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
 import chalk from 'chalk';
-import {
-  StatusService,
-  loadMJConfig,
-  initializeProvider,
-  getSyncEngine,
-  getSystemUser,
-  resetSyncEngine,
-  configManager
-} from '@memberjunction/metadata-sync';
 
 export default class Status extends Command {
   static description = 'Show status of local files vs database';
@@ -34,6 +25,11 @@ export default class Status extends Command {
   };
   
   async run(): Promise<void> {
+    const {
+      StatusService, loadMJConfig, initializeProvider,
+      getSyncEngine, getSystemUser, resetSyncEngine, configManager,
+    } = await import('@memberjunction/metadata-sync');
+
     const { flags } = await this.parse(Status);
     const spinner = ora();
     

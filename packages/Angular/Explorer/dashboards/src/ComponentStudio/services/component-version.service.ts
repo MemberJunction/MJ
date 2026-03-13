@@ -1,9 +1,9 @@
 import { Injectable } from '@angular/core';
 import { RunView, Metadata } from '@memberjunction/core';
 import {
-  ConversationEntity,
-  ConversationArtifactEntity,
-  ConversationArtifactVersionEntity
+  MJConversationEntity,
+  MJConversationArtifactEntity,
+  MJConversationArtifactVersionEntity
 } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ComponentStudioStateService } from './component-studio-state.service';
@@ -234,7 +234,7 @@ export class ComponentVersionService {
         return null;
       }
 
-      const artifact = await this.metadata.GetEntityObject<ConversationArtifactEntity>('MJ: Conversation Artifacts');
+      const artifact = await this.metadata.GetEntityObject<MJConversationArtifactEntity>('MJ: Conversation Artifacts');
       artifact.Name = spec.name || 'Untitled Component';
       artifact.Description = spec.description || null;
       artifact.ConversationID = conversationId;
@@ -298,7 +298,7 @@ export class ComponentVersionService {
     // Look for an existing Component Studio conversation for this user
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string }>({
-      EntityName: 'Conversations',
+      EntityName: 'MJ: Conversations',
       ExtraFilter: `UserID='${currentUser.ID}' AND Name='Component Studio'`,
       Fields: ['ID'],
       MaxRows: 1,
@@ -311,7 +311,7 @@ export class ComponentVersionService {
     }
 
     // Create a new conversation for Component Studio
-    const conversation = await this.metadata.GetEntityObject<ConversationEntity>('Conversations');
+    const conversation = await this.metadata.GetEntityObject<MJConversationEntity>('MJ: Conversations');
     conversation.UserID = currentUser.ID;
     conversation.Name = 'Component Studio';
     conversation.Type = 'Skip';
@@ -361,7 +361,7 @@ export class ComponentVersionService {
     comment: string
   ): Promise<boolean> {
     try {
-      const version = await this.metadata.GetEntityObject<ConversationArtifactVersionEntity>(
+      const version = await this.metadata.GetEntityObject<MJConversationArtifactVersionEntity>(
         'MJ: Conversation Artifact Versions'
       );
       version.ConversationArtifactID = artifactId;
@@ -379,9 +379,9 @@ export class ComponentVersionService {
   /**
    * Loads a single ConversationArtifactVersion entity by ID.
    */
-  private async loadVersionEntity(versionId: string): Promise<ConversationArtifactVersionEntity | null> {
+  private async loadVersionEntity(versionId: string): Promise<MJConversationArtifactVersionEntity | null> {
     try {
-      const entity = await this.metadata.GetEntityObject<ConversationArtifactVersionEntity>(
+      const entity = await this.metadata.GetEntityObject<MJConversationArtifactVersionEntity>(
         'MJ: Conversation Artifact Versions'
       );
       const loaded = await entity.Load(versionId);
@@ -395,9 +395,9 @@ export class ComponentVersionService {
   /**
    * Finds the latest version entity for the given artifact.
    */
-  private async findLatestVersionEntity(artifactId: string): Promise<ConversationArtifactVersionEntity | null> {
+  private async findLatestVersionEntity(artifactId: string): Promise<MJConversationArtifactVersionEntity | null> {
     const rv = new RunView();
-    const result = await rv.RunView<ConversationArtifactVersionEntity>({
+    const result = await rv.RunView<MJConversationArtifactVersionEntity>({
       EntityName: 'MJ: Conversation Artifact Versions',
       ExtraFilter: `ConversationArtifactID='${artifactId}'`,
       OrderBy: 'Version DESC',
@@ -414,7 +414,7 @@ export class ComponentVersionService {
   /**
    * Parses the Content field of a version entity back into a ComponentSpec.
    */
-  private parseVersionContent(versionEntity: ConversationArtifactVersionEntity): ComponentSpec | null {
+  private parseVersionContent(versionEntity: MJConversationArtifactVersionEntity): ComponentSpec | null {
     try {
       const content = versionEntity.Content;
       if (!content) {
@@ -436,7 +436,7 @@ export class ComponentVersionService {
    */
   private async fetchVersionHistory(artifactId: string): Promise<VersionHistoryEntry[]> {
     const rv = new RunView();
-    const result = await rv.RunView<ConversationArtifactVersionEntity>({
+    const result = await rv.RunView<MJConversationArtifactVersionEntity>({
       EntityName: 'MJ: Conversation Artifact Versions',
       ExtraFilter: `ConversationArtifactID='${artifactId}'`,
       OrderBy: 'Version DESC',
@@ -452,9 +452,9 @@ export class ComponentVersionService {
   }
 
   /**
-   * Maps a ConversationArtifactVersionEntity to a VersionHistoryEntry.
+   * Maps a MJConversationArtifactVersionEntity to a VersionHistoryEntry.
    */
-  private mapVersionToHistoryEntry(version: ConversationArtifactVersionEntity): VersionHistoryEntry {
+  private mapVersionToHistoryEntry(version: MJConversationArtifactVersionEntity): VersionHistoryEntry {
     return {
       ID: version.ID,
       VersionNumber: version.Version,

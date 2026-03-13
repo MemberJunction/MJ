@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import * as nunjucks from "nunjucks";
+import nunjucks from "nunjucks";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**

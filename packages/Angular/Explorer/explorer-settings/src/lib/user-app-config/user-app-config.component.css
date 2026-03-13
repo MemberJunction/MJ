@@ -351,6 +351,43 @@
   flex-shrink: 0;
 }
 
+.app-actions .mj-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--mj-radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.app-actions .mj-btn-ghost {
+  background: transparent;
+  color: var(--mj-text-secondary);
+}
+
+.app-actions .mj-btn-ghost:hover:not(:disabled) {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.app-actions .mj-btn-ghost:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.app-actions .mj-btn-sm {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  font-size: 0.8rem;
+}
+
+.app-actions .mj-btn-danger:hover:not(:disabled) {
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error);
+}
+
 /* Available app items */
 .available-app-item {
   display: flex;
@@ -395,36 +432,176 @@
   gap: 0.5rem;
 }
 
-/* Responsive adjustments */
+/* ==============================================
+   Mobile: single list with toggles
+   ============================================== */
+
+/* Hidden by default on desktop */
+.mobile-view {
+  display: none;
+}
+
 @media (max-width: 600px) {
-  .config-content {
-    padding: 1rem;
+  /* Swap layouts */
+  .desktop-only {
+    display: none !important;
   }
 
-  .panels-container {
-    gap: 1rem;
+  .config-description {
+    display: none;
   }
 
-  .app-item-content,
-  .available-app-item {
-    padding: 0.625rem 0.75rem;
-  }
-
-  .app-icon {
-    width: 2.25rem;
-    height: 2.25rem;
-    font-size: 1rem;
-  }
-
-  .dialog-footer {
+  .mobile-view {
+    display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .mobile-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+  }
+
+  /* Section labels */
+  .mobile-section-label {
+    padding: 0.5rem 0.625rem 0.25rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--mj-text-secondary);
+  }
+
+  /* App rows */
+  .mobile-app-row {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.625rem;
+    border-radius: var(--mj-radius-md);
+    transition: background-color 0.15s ease;
+  }
+
+  .mobile-app-row.inactive {
+    opacity: 0.7;
+  }
+
+  .mobile-app-row .app-icon {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+  }
+
+  .mobile-app-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--mj-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Drag handle */
+  .mobile-drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    flex-shrink: 0;
+    color: var(--mj-text-muted);
+    font-size: 0.875rem;
+    touch-action: none;
+    cursor: grab;
+    padding: 0.5rem 0;
+  }
+
+  .mobile-drag-handle:active {
+    cursor: grabbing;
+    color: var(--mj-text-primary);
+  }
+
+  /* Dragging row */
+  .mobile-app-row.touch-dragging {
+    background: var(--mj-bg-surface-hover);
+    box-shadow: var(--mj-shadow-lg);
+    border-radius: var(--mj-radius-md);
+    position: relative;
+    z-index: 100;
+    opacity: 0.95;
+  }
+
+  /* Ghost placeholder for the original position */
+  .mobile-app-row.touch-ghost {
+    opacity: 0.3;
+  }
+
+  /* Drop indicator line */
+  .mobile-drop-indicator {
+    height: 2px;
+    background: var(--mj-brand-primary);
+    border-radius: 1px;
+    margin: 0 0.625rem;
+  }
+
+  /* Toggle button */
+  .mobile-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    padding: 0.25rem;
+    cursor: pointer;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+    transition: color 0.15s ease;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .mobile-toggle.on {
+    color: var(--mj-brand-primary);
+  }
+
+  .mobile-toggle.off {
+    color: var(--mj-text-muted);
+  }
+
+  /* Header compact */
+  .modal-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .modal-title {
+    font-size: 1.125rem;
+  }
+
+  /* Content compact */
+  .config-content {
+    padding: 0;
+  }
+
+  /* Footer compact */
+  .dialog-footer {
+    padding: 0.75rem;
+    gap: 0.5rem;
   }
 
   .footer-left,
   .footer-right {
-    width: 100%;
-    justify-content: center;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .dialog-footer .mj-btn {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.8125rem;
+    min-height: 38px;
   }
 }
 

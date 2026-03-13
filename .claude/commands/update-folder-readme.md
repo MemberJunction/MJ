@@ -1,29 +1,39 @@
 ---
-folderPath: Path to the folder containing packages (e.g., packages/AI or packages/Actions)
+folderPath: Path to the folder containing packages -- examples: packages/AI or packages/Actions
 ---
 
 # Update Folder-Level README
 
-You are creating or updating a folder-level README that serves as an overview and navigation hub for a collection of related packages.
+You are creating or updating a folder-level README that serves as a **branch node** in the documentation tree. Branch nodes sit between the root and the leaf-node package READMEs, providing navigation, architecture context, and an **auto-generated table of contents** for all child packages and subdirectories.
 
 **Folder Path**: {{folderPath}}
 
 > Note: If `{{folderPath}}` appears literally above, the argument wasn't passed. Check the ARGUMENTS line below and use that path instead.
 
-## Purpose
+## Three-Tier Documentation Model
 
-Folder-level READMEs provide:
-1. **Overview**: What this family of packages does together
-2. **Navigation**: Quick access to all sub-packages
-3. **Architecture**: How packages relate to each other
-4. **Getting Started**: Entry points for new developers
+MemberJunction docs follow a three-tier tree:
 
-## Quality Standards
+```
+Root (repo README)
+├── Branch nodes (directory READMEs — packages/AI/, packages/Actions/, etc.)
+│   └── Leaf nodes (package READMEs — packages/AI/Core/, packages/Actions/Engine/, etc.)
+```
 
-Reference these excellent folder READMEs:
+**This command handles branch nodes.** The primary job of a branch-node README is:
+1. **Auto-generated TOC** of every child package and subdirectory (the #1 requirement)
+2. **Architecture overview** of how the children relate (mermaid diagram)
+3. **Getting started** guidance for the framework/area
+4. **Cross-links** to related branch nodes and the root
+
+## Gold Standard
+
+Reference these folder READMEs:
 - `packages/AI/README.md` - AI framework overview
 - `packages/Actions/README.md` - Actions framework overview
 - `packages/Communication/README.md` - Communication framework overview
+
+Also study the hub-and-spoke model in `packages/MJCore/` where the README points to deep-dive `docs/` guides. Folder-level READMEs should similarly point to individual package READMEs and any docs/ folders within those packages.
 
 ## Process
 
@@ -35,18 +45,25 @@ Reference these excellent folder READMEs:
    Glob: {{folderPath}}/*/*/package.json  (for nested like Providers/*)
    ```
 
-2. **Read Existing Folder README** (if exists):
+2. **Find All Child Directories** (potential sub-branch nodes):
+   ```
+   Glob: {{folderPath}}/*/
+   ```
+   A child directory is a sub-branch if it contains 2+ packages or has its own subdirectories with packages. These get their own row in the TOC.
+
+3. **Read Existing Folder README** (if exists):
    ```
    Read {{folderPath}}/README.md
    ```
 
-3. **Read Each Sub-Package**:
+4. **Read Each Sub-Package**:
    For each package found:
    - Read its package.json (name, description)
    - Read its README.md (extract key purpose)
    - Note its dependencies on other packages in this folder
+   - Check for docs/ folder with deep-dive guides
 
-4. **Check for CLAUDE.md**:
+5. **Check for CLAUDE.md**:
    ```
    Read {{folderPath}}/CLAUDE.md
    ```
@@ -66,7 +83,7 @@ AI Framework Packages:
 │   Purpose: Main orchestration engine
 │   Dependencies: [ai-core, core]
 │
-├── Providers/
+├── Providers/  (sub-branch — 6 packages)
 │   ├── OpenAI (@memberjunction/ai-openai)
 │   ├── Anthropic (@memberjunction/ai-anthropic)
 │   └── ...
@@ -89,47 +106,38 @@ AI Framework Packages:
 - How packages work together
 - When to use this framework}
 
-## Package Structure
+## Architecture
 
-{Visual representation of packages and their relationships}
+{**Use a mermaid diagram** to show how packages relate to each other.
+Choose the diagram type that best fits the architecture.}
 
-\`\`\`
-{folderName}/
-├── Core/                  # {brief description}
-├── Engine/                # {brief description}
-├── Providers/             # {brief description}
-│   ├── OpenAI/
-│   ├── Anthropic/
-│   └── ...
-└── {other packages}
+\`\`\`mermaid
+flowchart TD
+    subgraph Core["Core Layer"]
+        C[ai-core<br/>Base Abstractions]
+    end
+    subgraph Engine["Orchestration"]
+        E[ai-engine<br/>Model Selection & Routing]
+    end
+    subgraph Providers["Provider Layer"]
+        P1[OpenAI]
+        P2[Anthropic]
+        P3[Google]
+    end
+    E --> C
+    P1 --> C
+    P2 --> C
+    P3 --> C
+    Consumer[Your Application] --> E
+    style Core fill:#2d6a9f,stroke:#1a4971,color:#fff
+    style Engine fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style Providers fill:#b8762f,stroke:#8a5722,color:#fff
 \`\`\`
 
 ## Packages
 
-| Package | Description | Key Exports |
-|---------|-------------|-------------|
-| [@memberjunction/pkg1](./Pkg1/README.md) | {description} | `Class1`, `Class2` |
-| [@memberjunction/pkg2](./Pkg2/README.md) | {description} | `Class3` |
-
-## Architecture
-
-{Diagram or description of how packages relate}
-
-\`\`\`
-┌─────────────┐
-│  Consumer   │
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐     ┌─────────────┐
-│   Engine    │────▶│    Core     │
-└──────┬──────┘     └─────────────┘
-       │
-       ▼
-┌─────────────┐
-│  Providers  │
-└─────────────┘
-\`\`\`
+{Auto-generated TOC — see Phase 4 below for exact format.
+This is the MOST IMPORTANT section of a branch-node README.}
 
 ## Getting Started
 
@@ -148,21 +156,23 @@ npm install @memberjunction/{provider-package}
 \`\`\`typescript
 import { ... } from '@memberjunction/{main-package}';
 
-// Basic usage example
+// Basic usage example — real MJ patterns, no pseudocode
 \`\`\`
 
 ## Key Concepts
 
 ### {Concept 1}
-{Explanation}
+{Explanation with code example or mermaid diagram if helpful}
 
 ### {Concept 2}
 {Explanation}
 
-## Common Use Cases
+## Deep-Dive Guides
 
-1. **{Use Case 1}**: {Brief description and which packages to use}
-2. **{Use Case 2}**: {Brief description and which packages to use}
+{If any sub-packages have docs/ folders with topic guides, surface them here:}
+
+- [{Topic from Package A}](./PackageA/docs/topic-guide.md) - Description
+- [{Topic from Package B}](./PackageB/docs/another-guide.md) - Description
 
 ## Development
 
@@ -179,56 +189,129 @@ See [{folderName} Development Guide](./CLAUDE.md) for development guidelines.
 See the [MemberJunction Contributing Guide](../../CONTRIBUTING.md).
 ```
 
-### Phase 4: Package Table Generation
+### Phase 4: Auto-Generated Table of Contents (CRITICAL)
 
-Create a comprehensive package table:
+The **Packages** section is the primary value of a branch-node README. It must be auto-generated from the actual folder contents.
+
+#### Format: Grouped by Function
+
+Group packages logically (core, engine, providers, extensions, etc.) rather than alphabetically. Each group gets a sub-heading and a table:
 
 ```markdown
 ## Packages
 
-### Core Packages
+### Core
 
-| Package | Description | Dependencies |
-|---------|-------------|--------------|
-| [@memberjunction/ai-core](./Core/README.md) | Base AI abstractions | core, global |
-| [@memberjunction/ai-engine](./Engine/README.md) | Orchestration engine | ai-core |
+| Package | npm | Description |
+|---------|-----|-------------|
+| [Core](./Core/README.md) | `@memberjunction/ai-core` | Base AI abstractions and provider interfaces |
+| [CorePlus](./CorePlus/README.md) | `@memberjunction/ai-core-plus` | Extended AI utilities and prompt params |
 
-### Provider Packages
+### Engine & Orchestration
 
-| Package | Description | Supported Models |
-|---------|-------------|------------------|
-| [@memberjunction/ai-openai](./Providers/OpenAI/README.md) | OpenAI integration | GPT-4, GPT-3.5 |
-| [@memberjunction/ai-anthropic](./Providers/Anthropic/README.md) | Anthropic integration | Claude 3, Claude 2 |
+| Package | npm | Description |
+|---------|-----|-------------|
+| [Engine](./Engine/README.md) | `@memberjunction/aiengine` | Model selection, routing, and orchestration |
+| [Prompts](./Prompts/README.md) | `@memberjunction/ai-prompts` | AI prompt execution framework |
+| [Agents](./Agents/README.md) | `@memberjunction/ai-agents` | AI agent framework |
+
+### Providers
+
+| Package | npm | Description |
+|---------|-----|-------------|
+| [OpenAI](./Providers/OpenAI/README.md) | `@memberjunction/ai-openai` | OpenAI GPT integration |
+| [Anthropic](./Providers/Anthropic/README.md) | `@memberjunction/ai-anthropic` | Anthropic Claude integration |
+| [Mistral](./Providers/Mistral/README.md) | `@memberjunction/ai-mistral` | Mistral AI integration |
 ```
 
-### Phase 5: Cross-Linking
+#### Format: Subdirectories — FULL EXPANSION REQUIRED
+
+If the folder contains child directories that are themselves branch nodes (have 2+ packages), **you MUST list every package inside those sub-directories inline**. Do NOT just show a count like "19 packages" — expand the full contents so readers can navigate directly to any package from this level.
+
+Each sub-directory becomes a section heading (linked to its own README) with its own table listing ALL children:
+
+```markdown
+### [Providers](./Providers/README.md)
+
+| Package | npm | Description |
+|---------|-----|-------------|
+| [OpenAI](./Providers/OpenAI/README.md) | `@memberjunction/ai-openai` | OpenAI GPT integration |
+| [Anthropic](./Providers/Anthropic/README.md) | `@memberjunction/ai-anthropic` | Anthropic Claude integration |
+| [Mistral](./Providers/Mistral/README.md) | `@memberjunction/ai-mistral` | Mistral AI integration |
+
+### [Vectors](./Vectors/README.md)
+
+| Package | npm | Description |
+|---------|-----|-------------|
+| [Core](./Vectors/Core/README.md) | `@memberjunction/ai-vectors` | Core vector operations |
+```
+
+This ensures **100% coverage at every level** — a reader at any branch node can see and link to ALL packages below them, regardless of nesting depth.
+
+#### Rules for the TOC
+
+1. **Every package at ALL levels below MUST appear** — no exceptions. The TOC is exhaustive across the full sub-tree.
+2. **Link to each package's README** — use `./PackageName/README.md` relative paths
+3. **Sub-directory packages use relative paths from THIS branch** — e.g., `./Providers/OpenAI/README.md` not `./OpenAI/README.md`
+4. **Show the npm package name** — helps consumers find the right install target
+5. **Pull descriptions from package.json** `description` field, trim to one line
+6. **Group logically** — by function/layer, not alphabetically. Use your judgment based on the architecture.
+7. **Flag missing READMEs** — if a child package lacks a README, still list it but note "(no README)" so it's visible
+8. **Sub-directory section headings link to sub-directory README** — the heading itself is a hyperlink for drill-down
+
+### Phase 5: Mermaid Diagrams
+
+**Every folder-level README must include at least one mermaid diagram** showing the package architecture. Use mermaid instead of ASCII art for all diagrams.
+
+Recommended diagram types for folder READMEs:
+
+| Purpose | Diagram Type |
+|---------|-------------|
+| Package dependency graph | `flowchart TD` |
+| Data flow through framework | `flowchart LR` |
+| Request lifecycle | `sequenceDiagram` |
+| Class hierarchy (providers) | `classDiagram` |
+
+**Style the diagram** with colors to group related packages:
+Use medium-brightness fills with explicit white text so diagrams are readable in both dark and light mode. Avoid light pastels (wash out in dark mode) and very dark fills (disappear in light mode).
+
+- Core/base packages: blue (`fill:#2d6a9f,stroke:#1a4971,color:#fff`)
+- Engine/orchestration: green (`fill:#2d8659,stroke:#1a5c3a,color:#fff`)
+- Provider/plugin layer: orange (`fill:#b8762f,stroke:#8a5722,color:#fff`)
+- Consumer/application: gray (`fill:#64748b,stroke:#475569,color:#fff`)
+
+### Phase 6: Cross-Linking
 
 1. **Link to All Sub-Package READMEs**:
    - Use relative paths: `./PackageName/README.md`
    - For nested: `./Providers/OpenAI/README.md`
 
-2. **Link to Related Folders**:
+2. **Link to docs/ Guides in Sub-Packages**:
+   - If a sub-package has docs/ with topic guides, surface those in the folder README
+   - Example: `See the [Virtual Entities Guide](./MJCore/docs/virtual-entities.md)`
+
+3. **Link to Related Folders**:
    - Use relative paths: `../Actions/README.md`
    - Link to parent: `../README.md` (if exists at packages/ level)
 
-3. **Link to Root Documentation**:
+4. **Link to Root Documentation**:
    - `../../CLAUDE.md` for development guide
    - `../../CONTRIBUTING.md` for contribution guide
 
-### Phase 6: Handle Special Folder Structures
+### Phase 7: Handle Special Folder Structures
 
 #### Nested Package Directories
 
 For folders like `packages/AI/Providers/`:
 ```
 Providers/
-├── README.md (optional - provider overview)
+├── README.md (sub-branch with its own TOC)
 ├── OpenAI/
 ├── Anthropic/
 └── ...
 ```
 
-Create sub-folder README if >5 packages in subfolder.
+Create sub-folder README if the subfolder contains 2+ packages.
 
 #### Mixed Content Folders
 
@@ -236,21 +319,55 @@ For folders with both packages and non-package directories:
 - Only document actual packages (have package.json)
 - Note utility directories if relevant
 
+#### Root-Level Handling
+
+When the target is the repo root or `packages/` directory:
+- Use MemberJunction branding in the H1
+- Group child directories by functional area
+- **Include FULL HIERARCHY TOC** with every package at every level, organized by directory structure
+- Include a top-level architecture diagram showing how the major areas relate
+- The TOC should allow direct navigation to ANY package in the repo from the root level
+
+Example root-level TOC structure:
+
+```markdown
+## Full Package Hierarchy
+
+### [AI](./packages/AI/README.md)
+| Package | npm | Description |
+|---------|-----|-------------|
+| [Core](./packages/AI/Core/README.md) | `@memberjunction/ai` | Base AI abstractions |
+| [Engine](./packages/AI/Engine/README.md) | `@memberjunction/aiengine` | AI orchestration |
+
+#### [AI / Providers](./packages/AI/Providers/README.md)
+| Package | npm | Description |
+|---------|-----|-------------|
+| [OpenAI](./packages/AI/Providers/OpenAI/README.md) | `@memberjunction/ai-openai` | OpenAI integration |
+| [Anthropic](./packages/AI/Providers/Anthropic/README.md) | `@memberjunction/ai-anthropic` | Anthropic integration |
+
+### Standalone Packages
+| Package | npm | Description |
+|---------|-----|-------------|
+| [MJGlobal](./packages/MJGlobal/README.md) | `@memberjunction/global` | Global class factory |
+```
+
 ## Writing Guidelines
 
 1. **Focus on "Why"**: Explain why packages are organized this way
-2. **Show Relationships**: Make dependencies and data flow clear
+2. **Show Relationships**: Make dependencies and data flow clear with mermaid diagrams
 3. **Provide Entry Points**: Help developers know where to start
 4. **Keep Current**: Only document what exists
-5. **Use ASCII Diagrams**: For architecture visualization
-6. **Link Generously**: Every package should link to its README
+5. **Use Mermaid, Not ASCII**: All architecture diagrams should use mermaid for consistency
+6. **Link Generously**: Every package should link to its README; surface docs/ guides from sub-packages
 7. **No "NEW" Annotations**: Don't use "New" or similar tags for various features/abilities in readme docs as those quickly get out of date. If you see them in packages you're updating, remove New/similar tag.
+8. **TOC is Exhaustive**: Every child package must appear in the Packages section. No orphans.
 
 ## Output
 
 1. Write the folder README.md
-2. Optionally create sub-folder READMEs for large nested directories
+2. Optionally create sub-folder READMEs for large nested directories (2+ packages)
 3. Report:
    - Packages documented
    - Links created
+   - Deep-dive guides surfaced from sub-packages
    - Any packages missing READMEs (flag for follow-up)

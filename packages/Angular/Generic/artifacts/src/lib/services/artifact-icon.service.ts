@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
-import { ConversationArtifactEntity, ArtifactEntity } from '@memberjunction/core-entities';
+import { MJConversationArtifactEntity, MJArtifactEntity } from '@memberjunction/core-entities';
 
 /**
  * Service for determining which icon to display for artifacts.
@@ -15,11 +15,11 @@ import { ConversationArtifactEntity, ArtifactEntity } from '@memberjunction/core
 export class ArtifactIconService {
     /**
      * Gets the appropriate Font Awesome icon class for an artifact.
-     * @param artifact The artifact to get an icon for (ConversationArtifactEntity or ArtifactEntity)
+     * @param artifact The artifact to get an icon for (MJConversationArtifactEntity or MJArtifactEntity)
      * @param pluginIcon Optional icon provided by a viewer plugin (highest priority)
      * @returns Font Awesome icon class (e.g., 'fa-file-code', 'fa-chart-line')
      */
-    public getArtifactIcon(artifact: ConversationArtifactEntity | ArtifactEntity, pluginIcon?: string): string {
+    public getArtifactIcon(artifact: MJConversationArtifactEntity | MJArtifactEntity, pluginIcon?: string): string {
         if (!artifact) {
             return 'fa-file';
         }
@@ -42,9 +42,9 @@ export class ArtifactIconService {
     /**
      * Attempts to retrieve icon from artifact type metadata.
      */
-    private getMetadataIcon(artifact: ConversationArtifactEntity | ArtifactEntity): string | null {
+    private getMetadataIcon(artifact: MJConversationArtifactEntity | MJArtifactEntity): string | null {
         try {
-            // ConversationArtifactEntity has ArtifactType field, ArtifactEntity has Type field
+            // MJConversationArtifactEntity has ArtifactType field, MJArtifactEntity has Type field
             const typeName = 'ArtifactType' in artifact ? artifact.ArtifactType : artifact.Type;
             const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(typeName);
             if (artifactType?.Icon) {
@@ -60,9 +60,9 @@ export class ArtifactIconService {
      * Legacy hardcoded icon mapping based on artifact type and name.
      * This provides backward compatibility for artifacts without metadata icons.
      */
-    private getHardcodedIcon(artifact: ConversationArtifactEntity | ArtifactEntity): string {
+    private getHardcodedIcon(artifact: MJConversationArtifactEntity | MJArtifactEntity): string {
         const name = artifact.Name?.toLowerCase() || '';
-        // ConversationArtifactEntity has ArtifactType field, ArtifactEntity has Type field
+        // MJConversationArtifactEntity has ArtifactType field, MJArtifactEntity has Type field
         const typeName = 'ArtifactType' in artifact ? artifact.ArtifactType : artifact.Type;
         const type = typeName?.toLowerCase() || '';
 

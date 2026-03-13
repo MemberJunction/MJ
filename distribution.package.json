@@ -28,13 +28,13 @@
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
   },
-  "packageManager": "npm@10.5.0",
+  "packageManager": "npm@11.7.0",
   "devDependencies": {
     "turbo": "^2.7.3",
-    "typescript": "5.4.5"
+    "typescript": "5.9.3"
   },
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=24.0.0",
     "npm": ">=10.0.0"
   }
 }

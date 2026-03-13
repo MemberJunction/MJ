@@ -16,7 +16,7 @@
     "externalizeFields": [],
     "lookupFields": {
       "SystemPromptID": {
-        "entity": "AI Prompts",
+        "entity": "MJ: AI Prompts",
         "field": "Name"
       }
     },

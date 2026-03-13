@@ -1,7 +1,7 @@
 import { Component, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, UserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
-import { RegisterClass, MJGlobal, MJEventType } from '@memberjunction/global';
+import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities';
+import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
 import { RecordOpenedEvent, ViewGridState, EntityViewerComponent } from '@memberjunction/ng-entity-viewer';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
@@ -73,10 +73,10 @@ import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
             align-items: center;
             gap: 6px;
             padding: 8px 16px;
-            border: 1px solid #d4d4d4;
+            border: 1px solid var(--mj-border-default);
             border-radius: 6px;
-            background: white;
-            color: #333;
+            background: var(--mj-bg-surface-card);
+            color: var(--mj-text-primary);
             font-size: 0.875rem;
             font-weight: 500;
             cursor: pointer;
@@ -84,8 +84,8 @@ import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
             white-space: nowrap;
         }
         .action-button:hover:not(:disabled) {
-            background: #f5f5f5;
-            border-color: #b4b4b4;
+            background: var(--mj-bg-surface-sunken);
+            border-color: var(--mj-border-default);
         }
         .action-button:disabled {
             opacity: 0.5;
@@ -95,17 +95,17 @@ import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
             font-size: 0.875rem;
         }
         .create-button {
-            background: #1976d2;
+            background: var(--mj-brand-primary);
             color: white;
-            border-color: #1976d2;
+            border-color: var(--mj-brand-primary);
         }
         .create-button:hover:not(:disabled) {
-            background: #1565c0;
-            border-color: #1565c0;
+            background: var(--mj-brand-primary-hover);
+            border-color: var(--mj-brand-primary-hover);
         }
         .export-button:hover:not(:disabled) {
-            color: #1976d2;
-            border-color: #1976d2;
+            color: var(--mj-brand-primary);
+            border-color: var(--mj-brand-primary);
         }
         .view-loading-state,
         .view-error-state {
@@ -143,7 +143,7 @@ export class UserViewResource extends BaseResourceComponent {
     public isLoading: boolean = false;
     public errorMessage: string | null = null;
     public entityInfo: EntityInfo | null = null;
-    public viewEntity: UserViewEntityExtended | null = null;
+    public viewEntity: MJUserViewEntityExtended | null = null;
     public gridState: ViewGridState | null = null;
 
     // Export state
@@ -163,9 +163,21 @@ export class UserViewResource extends BaseResourceComponent {
     }
 
     override set Data(value: ResourceData) {
+        const previousRecordId = super.Data?.ResourceRecordID;
+        const previousEntity = super.Data?.Configuration?.Entity;
         super.Data = value;
-        if (!this.dataLoaded) {
+
+        const newRecordId = value?.ResourceRecordID;
+        const newEntity = value?.Configuration?.Entity;
+
+        // Load on first set, or when the view/entity has changed
+        if (!this.dataLoaded || newRecordId !== previousRecordId || newEntity !== previousEntity) {
             this.dataLoaded = true;
+            // Reset state before loading new view
+            this.entityInfo = null;
+            this.viewEntity = null;
+            this.gridState = null;
+            this.errorMessage = null;
             this.loadView();
         }
     }
@@ -231,7 +243,7 @@ export class UserViewResource extends BaseResourceComponent {
             throw new Error(`View with ID ${viewId} not found`);
         }
 
-        this.viewEntity = view as UserViewEntityExtended;
+        this.viewEntity = view as MJUserViewEntityExtended;
 
         // Check permissions
         if (!this.viewEntity.UserCanView) {
@@ -239,7 +251,7 @@ export class UserViewResource extends BaseResourceComponent {
         }
 
         // Load the entity info
-        const entity = this.metadata.Entities.find(e => e.ID === this.viewEntity!.EntityID);
+        const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, this.viewEntity!.EntityID));
 
         if (!entity) {
             throw new Error(`Entity for view not found`);
@@ -300,7 +312,7 @@ export class UserViewResource extends BaseResourceComponent {
     override async GetResourceDisplayName(data: ResourceData): Promise<string> {
         if (data.ResourceRecordID) {
             const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.ResourceRecordID }]);
-            const name = await this.metadata.GetEntityRecordName('User Views', compositeKey);
+            const name = await this.metadata.GetEntityRecordName('MJ: User Views', compositeKey);
             return name ? name : `View: ${data.ResourceRecordID}`;
         }
         else if (data.Configuration?.Entity) {

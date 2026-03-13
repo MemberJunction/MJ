@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
 import { Metadata } from '@memberjunction/core';
-import { QueryEntity } from '@memberjunction/core-entities';
+import { MJQueryEntity } from '@memberjunction/core-entities';
 import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction/ng-query-viewer';
 
 /**
@@ -69,7 +69,7 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
             height: 100%;
             display: flex;
             flex-direction: column;
-            background: #fff;
+            background: var(--mj-bg-surface);
         }
 
         .loading-state,
@@ -80,7 +80,7 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
             align-items: center;
             justify-content: center;
             height: 100%;
-            color: #666;
+            color: var(--mj-text-secondary);
             text-align: center;
             padding: 24px;
         }
@@ -88,17 +88,17 @@ import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction
         .error-state i,
         .empty-state i {
             font-size: 48px;
-            color: #ccc;
+            color: var(--mj-text-muted);
             margin-bottom: 16px;
         }
 
         .error-state i {
-            color: #d32f2f;
+            color: var(--mj-status-error);
         }
 
         .empty-state h4 {
             margin: 0 0 8px 0;
-            color: #333;
+            color: var(--mj-text-primary);
         }
 
         .empty-state p {
@@ -126,7 +126,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
     public queryId: string | null = null;
     public showToolbar = true;
 
-    private queryEntity: QueryEntity | null = null;
+    private queryEntity: MJQueryEntity | null = null;
     private autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
 
     constructor(cdr: ChangeDetectorRef) {
@@ -158,7 +158,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
 
             if (queryId) {
                 // Load query by ID to verify it exists
-                this.queryEntity = await md.GetEntityObject<QueryEntity>('Queries');
+                this.queryEntity = await md.GetEntityObject<MJQueryEntity>('MJ: Queries');
                 const loaded = await this.queryEntity.Load(queryId);
 
                 if (!loaded) {

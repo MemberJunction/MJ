@@ -5,12 +5,12 @@
       "Description": "List files and directories in a storage provider path. Active providers: Azure Blob Storage, Google Drive, Dropbox, Box.com, SharePoint Storage. Inactive: AWS S3 Storage, Google Cloud Storage.",
       "DriverClass": "File Storage: List Objects",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-list"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -140,7 +140,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -207,8 +207,8 @@
       "ID": "AE9554D7-C3F6-400B-865D-D1E81CC2058E"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:16.592Z",
-      "checksum": "163712d1bbe1f5771525f2aa81fdb7d7eab9e2eb5d33275b3dcdb8098a515656"
+      "lastModified": "2026-02-13T21:09:03.728Z",
+      "checksum": "794691faf99ae4e6d78999ad24e468f99fc337150d2269f7184d2eaf1eda4bdc"
     }
   },
   {
@@ -217,12 +217,12 @@
       "Description": "Retrieve metadata about a file object in a storage provider. Returns size, content type, last modified date, and other properties.",
       "DriverClass": "File Storage: Get Object Metadata",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-info-circle"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -440,7 +440,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -522,8 +522,8 @@
       "ID": "32C9BA41-A275-46FF-AD71-52451770D8DF"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:16.593Z",
-      "checksum": "9c537ba64d3f6fb1f3623996bae02add5139cdd9e7327034b55984f2d97072a8"
+      "lastModified": "2026-02-13T21:09:03.729Z",
+      "checksum": "1b637afee7d7a744ea96cc3ce318b46088a56105f6f32fca264af13be5c0dd62"
     }
   },
   {
@@ -532,12 +532,12 @@
       "Description": "Download file content from a storage provider. Returns the file content as base64-encoded data.",
       "DriverClass": "File Storage: Get Object",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-download"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -629,7 +629,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -711,8 +711,8 @@
       "ID": "5634B886-F737-4B44-8F10-1185A6F96EB6"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:16.594Z",
-      "checksum": "58e8a30558056f9ffef007a4396b3a6974c50f3afd32d165fa61c89d9198aad7"
+      "lastModified": "2026-02-13T21:09:03.730Z",
+      "checksum": "13ca1500d5abb055763eda5134e0b271b2947168d825c53194afee07e6eb298f"
     }
   },
   {
@@ -721,12 +721,12 @@
       "Description": "Generate a pre-authenticated download URL for a file. The URL can be used to download the file without additional authentication.",
       "DriverClass": "File Storage: Get Download URL",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-link"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -782,7 +782,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -864,8 +864,8 @@
       "ID": "11637339-5F0A-4C41-940F-553EE65F264C"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:16.595Z",
-      "checksum": "caa63aad9043e595a1848e95817fd78d4bfee12a41ed6d97b630fdd79a863bdc"
+      "lastModified": "2026-02-13T21:09:03.731Z",
+      "checksum": "2bc81b7ebef9f374fc29286843feb5df484b4f71ff4d111de1741a3f7cb1d086"
     }
   },
   {
@@ -874,12 +874,12 @@
       "Description": "Generate a pre-authenticated upload URL for a file. The URL can be used to upload a file without additional authentication.",
       "DriverClass": "File Storage: Get Upload URL",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-upload"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -953,7 +953,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1035,8 +1035,8 @@
       "ID": "F232CA70-C655-4455-B920-3E488ED224F3"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:16.596Z",
-      "checksum": "3b8f52cf1698732493cf0826a7b00cb4308608d2987b1521a3108dc498b2e0fa"
+      "lastModified": "2026-02-13T21:09:03.732Z",
+      "checksum": "1f51788c37adfb6635bd15fe676f5b4991f2496ac378451933b2c7a9184edfcb"
     }
   },
   {
@@ -1045,12 +1045,12 @@
       "Description": "Check if a file object exists in a storage provider.",
       "DriverClass": "File Storage: Check Object Exists",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-file-circle-question"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1106,7 +1106,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1188,8 +1188,8 @@
       "ID": "AF60D984-E15D-4B38-9219-9D080F330346"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:16.597Z",
-      "checksum": "1ad8b03292cb240674377af87cfca8275d36e2de5906b84ca4084aefe10336a7"
+      "lastModified": "2026-02-13T21:09:03.733Z",
+      "checksum": "0c56dd4de6b874bc0a3726db0e4d8380e13ff4dcbe6728367d48aafe2db02776"
     }
   },
   {
@@ -1198,12 +1198,12 @@
       "Description": "Check if a directory exists in a storage provider.",
       "DriverClass": "File Storage: Check Directory Exists",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-folder-circle-question"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1259,7 +1259,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1341,8 +1341,8 @@
       "ID": "651876F1-68A5-4D16-840A-B607C2503452"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:16.598Z",
-      "checksum": "0e891af1e2179e51fc9f4165c6bda328e037c9ab47cb846582d73c10a6e3c774"
+      "lastModified": "2026-02-13T21:09:03.734Z",
+      "checksum": "c3d2f627fbe857da4f63f9799683f04357271297968be2f09cf4a90ab320c532"
     }
   },
   {
@@ -1351,12 +1351,12 @@
       "Description": "Copy a file object within a storage provider from one location to another.",
       "DriverClass": "File Storage: Copy Object",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-copy"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1430,7 +1430,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1527,8 +1527,8 @@
       "ID": "C7A56108-A83F-4885-80A4-FC2F3D9A78A1"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:16.599Z",
-      "checksum": "aecbdbce3555918cef669060a6984c343cd7416c40f9231274dde09d1f3d3a4f"
+      "lastModified": "2026-02-13T21:09:03.736Z",
+      "checksum": "f2665a7021059a8d9d3f843faa383212aef1dcf4c12f8318e13157333d52c634"
     }
   },
   {
@@ -1537,12 +1537,12 @@
       "Description": "Move or rename a file object within a storage provider.",
       "DriverClass": "File Storage: Move Object",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-arrows-turn-right"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1616,7 +1616,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1713,8 +1713,8 @@
       "ID": "F41B61FE-2935-4DFC-A014-1007137310C8"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:16.601Z",
-      "checksum": "2124e94cbfbc68dec6b29ba98df138a200a69cb1ca3df89e14846a8d0abf74b9"
+      "lastModified": "2026-02-13T21:09:03.737Z",
+      "checksum": "fa5544e646aad7df8283aac72e1552043a6a995a3715300e6a115cc4144d57a9"
     }
   },
   {
@@ -1723,12 +1723,12 @@
       "Description": "Delete a file object from a storage provider.",
       "DriverClass": "File Storage: Delete Object",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-trash"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1784,7 +1784,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1866,8 +1866,8 @@
       "ID": "A27F079D-7E3A-442C-A971-DE242F3B6B02"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:16.602Z",
-      "checksum": "7268cec5465ad8ca3f71a2f3de01665e1048646f2bf30f5351db7c7c2ca493f3"
+      "lastModified": "2026-02-13T21:09:03.738Z",
+      "checksum": "81e863d5147def4576de02873105b5ad8ba9bbdac30af72de62d090affdbd4cc"
     }
   },
   {
@@ -1876,12 +1876,12 @@
       "Description": "Create a directory in a storage provider.",
       "DriverClass": "File Storage: Create Directory",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-folder-plus"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -1937,7 +1937,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2019,8 +2019,8 @@
       "ID": "7CF5A461-0115-4686-80E7-745AED222ED0"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:16.641Z",
-      "checksum": "11b59f1a108b0f136a3a4190a57eeadb3f9d8c0f0b86e25f4001fa3b880db03b"
+      "lastModified": "2026-02-13T21:09:03.776Z",
+      "checksum": "39695815a83a0755ee33b438e1e303c33ade5fcf576de1bab1e9c9182197a6d3"
     }
   },
   {
@@ -2029,12 +2029,12 @@
       "Description": "Delete a directory from a storage provider. Optionally delete recursively.",
       "DriverClass": "File Storage: Delete Directory",
       "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=File Storage",
       "Status": "Active",
       "IconClass": "fa-solid fa-folder-minus"
     },
     "relatedEntities": {
-      "Action Params": [
+      "MJ: Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2109,7 +2109,7 @@
           }
         }
       ],
-      "Action Result Codes": [
+      "MJ: Action Result Codes": [
         {
           "fields": {
             "ActionID": "@parent:ID",
@@ -2191,8 +2191,8 @@
       "ID": "7A21C9D9-4718-4E09-BAD1-6F4C5252D840"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:16.643Z",
-      "checksum": "c76dfc84c372d98131620277d4c3cfbb1fb36cccf3a6e113c85b237b81b2e7cc"
+      "lastModified": "2026-02-13T21:09:03.777Z",
+      "checksum": "611ce8c9b0c7359505f1acb98670a4f160720e6b9367b18b77074ca9fb2631c1"
     }
   }
 ]

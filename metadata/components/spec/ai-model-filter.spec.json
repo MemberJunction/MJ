@@ -9,7 +9,7 @@
     "description": "Receives filter options derived from AI model entities",
     "entities": [
       {
-        "name": "AI Model Types",
+        "name": "MJ: AI Model Types",
         "description": "Model type options for filtering",
         "displayFields": [
           "ID",
@@ -25,7 +25,7 @@
         "usageContext": "Populates model type dropdown filter"
       },
       {
-        "name": "AI Vendors",
+        "name": "MJ: AI Vendors",
         "description": "Vendor options for filtering",
         "displayFields": [
           "ID",

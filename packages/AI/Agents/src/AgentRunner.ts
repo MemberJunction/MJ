@@ -11,11 +11,11 @@
  */
 
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
-import { ConversationEntity, ConversationDetailEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentRunMediaEntity, ConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
 
 /**
  * AgentRunner provides a thin wrapper for executing AI agents.
@@ -64,7 +64,7 @@ export class AgentRunner {
             await AIEngine.Instance.Config(false, params.contextUser);
             
             // Find the agent type to get the DriverClass
-            const agentType = AIEngine.Instance.AgentTypes.find(at => at.ID === params.agent.TypeID);
+            const agentType = AIEngine.Instance.AgentTypes.find(at => UUIDsEqual(at.ID, params.agent.TypeID));
             if (!agentType) {
                 throw new Error(`Agent type not found for ID: ${params.agent.TypeID}`);
             }
@@ -172,7 +172,7 @@ export class AgentRunner {
             let conversationId: string;
             let userMessageDetailId: string;
             let agentResponseDetailId: string | undefined;
-            let agentResponseDetail: ConversationDetailEntity | undefined;
+            let agentResponseDetail: MJConversationDetailEntity | undefined;
 
             // If conversationDetailId is provided, use it (UI-created agent response detail)
             if (options.conversationDetailId) {
@@ -180,8 +180,8 @@ export class AgentRunner {
 
                 // Load the conversation detail to get the conversation ID AND keep reference for final status update
                 // This ensures backend can update Status/Message even if frontend disconnects (browser refresh)
-                agentResponseDetail = await md.GetEntityObject<ConversationDetailEntity>(
-                    'Conversation Details',
+                agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+                    'MJ: Conversation Details',
                     contextUser
                 );
                 if (await agentResponseDetail.Load(agentResponseDetailId)) {
@@ -203,8 +203,8 @@ export class AgentRunner {
 
                 if (!conversationId) {
                     LogStatus('Creating new conversation');
-                    const conversation = await md.GetEntityObject<ConversationEntity>(
-                        'Conversations',
+                    const conversation = await md.GetEntityObject<MJConversationEntity>(
+                        'MJ: Conversations',
                         contextUser
                     );
 
@@ -249,8 +249,8 @@ export class AgentRunner {
 
                 // Step 2: Create conversation detail for user message
                 LogStatus('Creating conversation detail for user message');
-                const userMessageDetail = await md.GetEntityObject<ConversationDetailEntity>(
-                    'Conversation Details',
+                const userMessageDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+                    'MJ: Conversation Details',
                     contextUser
                 );
 
@@ -274,8 +274,8 @@ export class AgentRunner {
 
                 // Step 3: Create conversation detail for agent response (like UI does)
                 LogStatus('Creating conversation detail for agent response');
-                agentResponseDetail = await md.GetEntityObject<ConversationDetailEntity>(
-                    'Conversation Details',
+                agentResponseDetail = await md.GetEntityObject<MJConversationDetailEntity>(
+                    'MJ: Conversation Details',
                     contextUser
                 );
 
@@ -357,7 +357,9 @@ export class AgentRunner {
                 await agentResponseDetail.Load(agentResponseDetailId);
 
                 agentResponseDetail.Message = agentResult.agentRun?.Message ||
-                                             (agentResult.success ? '✅ Completed' : '❌ Failed');
+                                             (agentResult.success
+                                                 ? '✅ Completed'
+                                                 : agentResult.agentRun?.ErrorMessage || '❌ Failed');
                 agentResponseDetail.Status = agentResult.success ? 'Complete' : 'Error';
 
                 // Set response form and command fields
@@ -447,7 +449,7 @@ export class AgentRunner {
     public async GetMaxVersionForArtifact(artifactId: string, contextUser: UserInfo): Promise<number> {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ArtifactVersionEntity>({
+            const result = await rv.RunView<MJArtifactVersionEntity>({
                 EntityName: 'MJ: Artifact Versions',
                 ExtraFilter: `ArtifactID='${artifactId}'`,
                 OrderBy: 'VersionNumber DESC',
@@ -489,7 +491,7 @@ export class AgentRunner {
     ): Promise<{ artifactId: string; versionNumber: number } | null> {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<ConversationDetailArtifactEntity>({
+            const result = await rv.RunView<MJConversationDetailArtifactEntity>({
                 EntityName: 'MJ: Conversation Detail Artifacts',
                 ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Direction='Output'`,
                 OrderBy: '__mj_CreatedAt DESC',
@@ -503,7 +505,7 @@ export class AgentRunner {
 
             const junction = result.Results[0];
             const md = new Metadata();
-            const version = await md.GetEntityObject<ArtifactVersionEntity>(
+            const version = await md.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
                 contextUser
             );
@@ -573,7 +575,7 @@ export class AgentRunner {
 
         // Check agent's ArtifactCreationMode
         await AIEngine.Instance.Config(false, contextUser);
-        const agent = AIEngine.Instance.Agents.find(a => a.ID === agentRun.AgentID);
+        const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentRun.AgentID));
         const creationMode = agent?.ArtifactCreationMode;
 
         if (creationMode === 'Never') {
@@ -610,7 +612,7 @@ export class AgentRunner {
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
                 } else {
                     // Create new artifact header
-                    const artifact = await md.GetEntityObject<ArtifactEntity>(
+                    const artifact = await md.GetEntityObject<MJArtifactEntity>(
                         'MJ: Artifacts',
                         contextUser
                     );
@@ -647,7 +649,7 @@ export class AgentRunner {
             }
 
             // Create artifact version with content
-            const version = await md.GetEntityObject<ArtifactVersionEntity>(
+            const version = await md.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
                 contextUser
             );
@@ -672,7 +674,7 @@ export class AgentRunner {
                 if (extractedName && extractedName.toLowerCase() !== 'null') {
                     extractedName = extractedName.replace(/^["']|["']$/g, '');
 
-                    const artifact = await md.GetEntityObject<ArtifactEntity>(
+                    const artifact = await md.GetEntityObject<MJArtifactEntity>(
                         'MJ: Artifacts',
                         contextUser
                     );
@@ -687,7 +689,7 @@ export class AgentRunner {
             }
 
             // Create junction record linking artifact to conversation detail
-            const junction = await md.GetEntityObject<ConversationDetailArtifactEntity>(
+            const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
                 'MJ: Conversation Detail Artifacts',
                 contextUser
             );
@@ -830,7 +832,7 @@ export class AgentRunner {
                 const mediaOutput = mediaToSave[i];
 
                 try {
-                    const mediaEntity = await md.GetEntityObject<AIAgentRunMediaEntity>(
+                    const mediaEntity = await md.GetEntityObject<MJAIAgentRunMediaEntity>(
                         'MJ: AI Agent Run Medias',
                         contextUser
                     );
@@ -954,7 +956,7 @@ export class AgentRunner {
                 }
 
                 try {
-                    const attachment = await md.GetEntityObject<ConversationDetailAttachmentEntity>(
+                    const attachment = await md.GetEntityObject<MJConversationDetailAttachmentEntity>(
                         'MJ: Conversation Detail Attachments',
                         contextUser
                     );

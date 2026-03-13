@@ -1,12 +1,12 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { ResourceData, AuditLogEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJAuditLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 // The Credential Access AuditLogType ID from metadata
 const CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID = 'E8D4D100-E785-42D3-997F-ECFF3B0BCFC0';
 
-interface AuditLogWithDetails extends AuditLogEntity {
+interface AuditLogWithDetails extends MJAuditLogEntity {
     parsedDetails?: ParsedDetails;
 }
 
@@ -85,7 +85,7 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
             const dateFilter = `AuditLogTypeID = '${CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID}' AND __mj_CreatedAt >= '${startDate.toISOString()}'`;
 
             const result = await rv.RunView<AuditLogWithDetails>({
-                EntityName: 'Audit Logs',
+                EntityName: 'MJ: Audit Logs',
                 ExtraFilter: dateFilter,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 500,
@@ -114,7 +114,7 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    private parseDetails(log: AuditLogEntity): ParsedDetails {
+    private parseDetails(log: MJAuditLogEntity): ParsedDetails {
         try {
             if (log.Details) {
                 return JSON.parse(log.Details);
@@ -308,13 +308,13 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
 
     public getOperationColor(operation: string): string {
         switch (operation.toLowerCase()) {
-            case 'access': return '#6366f1';
-            case 'create': return '#10b981';
-            case 'update': return '#f59e0b';
-            case 'delete': return '#ef4444';
-            case 'rotate': return '#8b5cf6';
-            case 'validate': return '#06b6d4';
-            default: return '#6b7280';
+            case 'access': return 'var(--mj-brand-primary)';
+            case 'create': return 'var(--mj-status-success)';
+            case 'update': return 'var(--mj-status-warning)';
+            case 'delete': return 'var(--mj-status-error)';
+            case 'rotate': return 'var(--mj-brand-primary)';
+            case 'validate': return 'var(--mj-brand-primary)';
+            default: return 'var(--mj-text-secondary)';
         }
     }
 

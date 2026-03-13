@@ -1,7 +1,7 @@
 <!-- Query Browser Resource -->
-<div class="query-browser-container">
+<div class="query-browser-container" [class.resizing]="IsResizing">
   <!-- Left Panel: Query Tree -->
-  <div class="query-tree-panel">
+  <div class="query-tree-panel" [style.width.px]="PanelWidth">
     <!-- Header -->
     <div class="tree-header">
       <div class="header-title">
@@ -10,6 +10,11 @@
         <span class="query-count">({{ getTotalQueryCount() }})</span>
       </div>
       <div class="header-actions">
+        @if (CanCreateQuery) {
+          <button class="icon-btn" (click)="OpenCreateDrawer()" title="New Query">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+        }
         <button class="icon-btn" (click)="expandAll()" title="Expand all">
           <i class="fa-solid fa-folder-open"></i>
         </button>
@@ -37,6 +42,23 @@
           </button>
         }
       </div>
+    </div>
+
+    <!-- Status Filters -->
+    <div class="status-filter-bar">
+      @for (status of AllStatuses; track status) {
+        @if (getStatusCount(status) > 0) {
+          <button class="status-filter-chip"
+            [class.active]="StatusFilters[status]"
+            [style.--chip-color]="getStatusColor(status)"
+            (click)="toggleStatusFilter(status)"
+            [title]="(StatusFilters[status] ? 'Hide' : 'Show') + ' ' + status + ' queries'">
+            <i class="fa-solid" [class]="getStatusIcon(status)"></i>
+            <span>{{ status }}</span>
+            <span class="chip-count">{{ getStatusCount(status) }}</span>
+          </button>
+        }
+      }
     </div>
 
     <!-- Tree Content -->
@@ -75,6 +97,13 @@
     </div>
   </div>
 
+  <!-- Resize Handle -->
+  <div class="resize-handle"
+    [class.active]="IsResizing"
+    (mousedown)="onResizeStart($event)">
+    <div class="resize-handle-grip"></div>
+  </div>
+
   <!-- Right Panel: Query Viewer -->
   <div class="query-viewer-panel">
     <!-- No query selected -->
@@ -83,18 +112,51 @@
         <i class="fa-solid fa-hand-pointer no-selection-icon"></i>
         <p class="no-selection-message">Select a query from the list</p>
         <p class="no-selection-hint">Click on a query to view and run it</p>
+        @if (CanCreateQuery) {
+          <button class="no-selection-create-btn" (click)="OpenCreateDrawer()">
+            <i class="fa-solid fa-plus"></i> New Query
+          </button>
+        }
       </div>
     }
 
     <!-- Query Viewer -->
     @if (selectedQuery) {
+      <!-- Query Header with Status -->
+      <div class="query-viewer-header">
+        <div class="query-viewer-title">
+          <i class="fa-solid fa-file-code"></i>
+          <span>{{ selectedQuery.Name }}</span>
+        </div>
+        <div class="query-viewer-header-actions">
+          @if (selectedQuery.Status !== 'Approved') {
+            <span class="query-viewer-status-pill"
+              [style.background]="getStatusColor(selectedQuery.Status)">
+              <i class="fa-solid" [class]="getStatusIcon(selectedQuery.Status)"></i>
+              {{ selectedQuery.Status }}
+            </span>
+          } @else {
+            <span class="query-viewer-status-pill approved"
+              [style.background]="getStatusColor('Approved')">
+              <i class="fa-solid fa-check-circle"></i>
+              Approved
+            </span>
+          }
+          @if (CanEditQuery) {
+            <button class="icon-btn" (click)="OpenEditDrawer(selectedQuery)" title="Edit Query">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+          }
+        </div>
+      </div>
       <mj-query-viewer
         [QueryId]="selectedQuery.ID"
         [AutoRun]="true"
         [SelectionMode]="'multiple'"
         (EntityLinkClick)="onEntityLinkClick($event)"
         (RowDoubleClick)="onRowDoubleClick($event)"
-        (OpenQueryRecord)="onOpenQueryRecord($event)">
+        (OpenQueryRecord)="onOpenQueryRecord($event)"
+        (CompositionTokenClick)="onCompositionTokenClick($event)">
       </mj-query-viewer>
     }
   </div>
@@ -120,11 +182,14 @@
         <div class="category-queries">
           @for (query of node.queries; track trackByQuery($index, query)) {
             <div class="query-item"
-              [class.selected]="selectedQuery?.ID === query.ID"
+              [class.selected]="IsQuerySelected(query)"
               [class.hidden]="!isQueryVisible(query)"
               (click)="selectQuery(query, $event)">
+              <span class="status-dot"
+                [style.background]="getStatusColor(query.Status)"
+                [title]="query.Status"></span>
               <i class="fa-solid fa-file-code query-icon"></i>
-              <div class="query-info">
+              <div class="query-info" [title]="query.Description || query.Name">
                 <span class="query-name">{{ query.Name }}</span>
                 @if (query.Description) {
                   <span class="query-description">{{ query.Description }}</span>
@@ -132,6 +197,18 @@
               </div>
               @if (query.UsesTemplate) {
                 <i class="fa-solid fa-sliders param-icon" title="Has parameters"></i>
+              }
+              @if (query.Status !== 'Approved') {
+                <span class="query-status-badge"
+                  [style.background]="getStatusColor(query.Status)"
+                  [title]="query.Status">
+                  {{ query.Status }}
+                </span>
+              }
+              @if (CanEditQuery) {
+                <button class="query-details-btn" (click)="OpenEditDrawer(query, $event)" title="Edit query">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
               }
             </div>
           }
@@ -146,3 +223,138 @@
     </div>
   }
 </ng-template>
+
+<!-- Query Drawer Backdrop -->
+@if (ShowQueryDrawer) {
+  <div class="query-drawer-backdrop" (click)="OnDrawerBackdropClick()"></div>
+}
+
+<!-- Query Drawer Panel -->
+@if (ShowQueryDrawer) {
+  <div class="query-drawer">
+
+    <!-- Drawer Header -->
+    <div class="query-drawer-header">
+      <div class="query-drawer-title">
+        <i class="fa-solid" [class.fa-plus]="DrawerMode === 'create'" [class.fa-pen-to-square]="DrawerMode === 'edit'"></i>
+        <div>
+          <div class="query-drawer-title-main">{{ DrawerMode === 'create' ? 'New Query' : 'Edit Query' }}</div>
+          @if (DrawerMode === 'edit' && DrawerName) {
+            <div class="query-drawer-title-sub">{{ DrawerName }}</div>
+          }
+        </div>
+      </div>
+      <button class="query-drawer-close" (click)="CloseDrawer()" title="Close">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Drawer Body -->
+    <div class="query-drawer-body">
+
+      <!-- Name -->
+      <div class="drawer-field" [class.drawer-field-error]="DrawerNameError">
+        <label class="drawer-label">Name <span class="drawer-required">*</span></label>
+        <input class="drawer-input"
+          type="text"
+          [(ngModel)]="DrawerName"
+          (ngModelChange)="DrawerNameError = false"
+          placeholder="Enter query name"
+          [disabled]="IsSavingDrawer">
+        @if (DrawerNameError) {
+          <span class="drawer-field-hint">Name is required</span>
+        }
+      </div>
+
+      <!-- Category + Status (side by side) -->
+      <div class="drawer-row">
+        <div class="drawer-field drawer-field-flex">
+          <label class="drawer-label">Category</label>
+          <select class="drawer-select"
+            [(ngModel)]="DrawerCategoryID"
+            [disabled]="IsSavingDrawer">
+            <option value="">(none)</option>
+            @for (cat of categories; track cat.ID) {
+              <option [value]="cat.ID">{{ cat.Name }}</option>
+            }
+          </select>
+        </div>
+        <div class="drawer-field drawer-field-flex">
+          <label class="drawer-label">Status</label>
+          <select class="drawer-select"
+            [(ngModel)]="DrawerStatus"
+            [disabled]="IsSavingDrawer">
+            @for (s of DrawerStatuses; track s) {
+              <option [value]="s">{{ s }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div class="drawer-field">
+        <label class="drawer-label">Description</label>
+        <textarea class="drawer-textarea"
+          rows="3"
+          [(ngModel)]="DrawerDescription"
+          placeholder="Optional description"
+          [disabled]="IsSavingDrawer"></textarea>
+      </div>
+
+      <!-- SQL -->
+      <div class="drawer-field drawer-field-sql">
+        <label class="drawer-label">SQL</label>
+        <mj-code-editor #drawerSqlEditor
+          [language]="'sql'"
+          [indentWithTab]="true"
+          [readonly]="IsSavingDrawer"
+          (change)="OnDrawerSQLChange($event)"
+          class="drawer-sql-editor">
+        </mj-code-editor>
+      </div>
+
+      <!-- Open Full Record link (edit mode only) -->
+      @if (DrawerMode === 'edit' && DrawerQueryId) {
+        <div class="drawer-full-record">
+          <i class="fa-solid fa-circle-info"></i>
+          To manage Parameters, Fields, and Permissions —
+          <button class="drawer-link-btn" (click)="OpenFullRecord()">
+            Open full record <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </button>
+        </div>
+      }
+
+    </div>
+
+    <!-- Drawer Footer -->
+    <div class="query-drawer-footer">
+
+      <!-- Error message -->
+      @if (DrawerSaveError) {
+        <div class="drawer-error">
+          <i class="fa-solid fa-triangle-exclamation"></i> {{ DrawerSaveError }}
+        </div>
+      }
+
+      <!-- Action buttons -->
+      <div class="drawer-footer-actions">
+        <button class="drawer-btn drawer-btn-primary"
+          (click)="SaveDrawer()"
+          [disabled]="IsSavingDrawer || !DrawerName.trim()">
+          @if (IsSavingDrawer) {
+            <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+          } @else {
+            <i class="fa-solid fa-floppy-disk"></i> Save
+          }
+        </button>
+        <button class="drawer-btn drawer-btn-secondary"
+          (click)="CloseDrawer()"
+          [disabled]="IsSavingDrawer">
+          Cancel
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+}

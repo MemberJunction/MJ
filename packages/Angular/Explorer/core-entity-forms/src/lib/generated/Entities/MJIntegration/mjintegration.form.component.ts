@@ -1,0 +1,30 @@
+import { Component } from '@angular/core';
+import { MJIntegrationEntity } from '@memberjunction/core-entities';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
+
+@RegisterClass(BaseFormComponent, 'MJ: Integrations') // Tell MemberJunction about this class
+@Component({
+    standalone: false,
+    selector: 'gen-mjintegration-form',
+    templateUrl: './mjintegration.form.component.html'
+})
+export class MJIntegrationFormComponent extends BaseFormComponent {
+    public record!: MJIntegrationEntity;
+
+    override async ngOnInit() {
+        await super.ngOnInit();
+        this.initSections([
+            { sectionKey: 'integrationOverview', sectionName: 'Integration Overview', isExpanded: true },
+            { sectionKey: 'technicalSettings', sectionName: 'Technical Settings', isExpanded: true },
+            { sectionKey: 'authenticationSecurity', sectionName: 'Authentication & Security', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJIntegrationURLFormats', sectionName: 'URL Formats', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false },
+            { sectionKey: 'mJRecordChanges', sectionName: 'Record Changes', isExpanded: false },
+            { sectionKey: 'mJIntegrationObjects', sectionName: 'Integration Objects', isExpanded: false }
+        ]);
+    }
+}
+

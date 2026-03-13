@@ -1,5 +1,417 @@
 # @memberjunction/ng-artifacts
 
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+- Updated dependencies [457afcf]
+  - @memberjunction/ng-query-viewer@5.11.0
+  - @memberjunction/core@5.11.0
+  - @memberjunction/ng-notifications@5.11.0
+  - @memberjunction/ng-react@5.11.0
+  - @memberjunction/ng-base-types@5.11.0
+  - @memberjunction/ng-code-editor@5.11.0
+  - @memberjunction/ng-shared-generic@5.11.0
+  - @memberjunction/ng-trees@5.11.0
+  - @memberjunction/interactive-component-types@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/ng-export-service@5.11.0
+  - @memberjunction/ng-markdown@5.11.0
+  - @memberjunction/global@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.10.1
+- @memberjunction/ng-code-editor@5.10.1
+- @memberjunction/ng-export-service@5.10.1
+- @memberjunction/ng-markdown@5.10.1
+- @memberjunction/ng-notifications@5.10.1
+- @memberjunction/ng-query-viewer@5.10.1
+- @memberjunction/ng-react@5.10.1
+- @memberjunction/ng-shared-generic@5.10.1
+- @memberjunction/ng-trees@5.10.1
+- @memberjunction/interactive-component-types@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [3df5e4b]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/ng-query-viewer@5.10.0
+  - @memberjunction/ng-base-types@5.10.0
+  - @memberjunction/ng-code-editor@5.10.0
+  - @memberjunction/ng-notifications@5.10.0
+  - @memberjunction/ng-react@5.10.0
+  - @memberjunction/ng-shared-generic@5.10.0
+  - @memberjunction/ng-trees@5.10.0
+  - @memberjunction/interactive-component-types@5.10.0
+  - @memberjunction/ng-export-service@5.10.0
+  - @memberjunction/ng-markdown@5.10.0
+  - @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ng-base-types@5.9.0
+  - @memberjunction/ng-code-editor@5.9.0
+  - @memberjunction/ng-notifications@5.9.0
+  - @memberjunction/ng-query-viewer@5.9.0
+  - @memberjunction/ng-react@5.9.0
+  - @memberjunction/ng-shared-generic@5.9.0
+  - @memberjunction/ng-trees@5.9.0
+  - @memberjunction/interactive-component-types@5.9.0
+  - @memberjunction/ng-export-service@5.9.0
+  - @memberjunction/ng-markdown@5.9.0
+
+## 5.8.0
+
+### Patch Changes
+
+- Updated dependencies [0753249]
+  - @memberjunction/core@5.8.0
+  - @memberjunction/ng-notifications@5.8.0
+  - @memberjunction/ng-react@5.8.0
+  - @memberjunction/ng-base-types@5.8.0
+  - @memberjunction/ng-code-editor@5.8.0
+  - @memberjunction/ng-query-viewer@5.8.0
+  - @memberjunction/ng-shared-generic@5.8.0
+  - @memberjunction/ng-trees@5.8.0
+  - @memberjunction/interactive-component-types@5.8.0
+  - @memberjunction/core-entities@5.8.0
+  - @memberjunction/ng-export-service@5.8.0
+  - @memberjunction/ng-markdown@5.8.0
+  - @memberjunction/global@5.8.0
+
+## 5.7.0
+
+### Patch Changes
+
+- f52e156: Fix agent infinite retry loop and OOM crash when API credentials are missing by adding NoCredentials error classification, max consecutive failure safety net, and descriptive error propagation to the UI. Fix artifact collection removal UI update, artifact pane width reset on conversation switch, and component spec caching to survive render errors.
+- Updated dependencies [642c4df]
+  - @memberjunction/core@5.7.0
+  - @memberjunction/core-entities@5.7.0
+  - @memberjunction/ng-base-types@5.7.0
+  - @memberjunction/ng-code-editor@5.7.0
+  - @memberjunction/ng-notifications@5.7.0
+  - @memberjunction/ng-query-viewer@5.7.0
+  - @memberjunction/ng-react@5.7.0
+  - @memberjunction/ng-shared-generic@5.7.0
+  - @memberjunction/ng-trees@5.7.0
+  - @memberjunction/interactive-component-types@5.7.0
+  - @memberjunction/ng-export-service@5.7.0
+  - @memberjunction/ng-markdown@5.7.0
+  - @memberjunction/global@5.7.0
+
+## 5.6.0
+
+### Patch Changes
+
+- Updated dependencies [4547d05]
+- Updated dependencies [76eaabc]
+  - @memberjunction/core@5.6.0
+  - @memberjunction/ng-base-types@5.6.0
+  - @memberjunction/ng-code-editor@5.6.0
+  - @memberjunction/ng-notifications@5.6.0
+  - @memberjunction/ng-query-viewer@5.6.0
+  - @memberjunction/ng-react@5.6.0
+  - @memberjunction/ng-shared-generic@5.6.0
+  - @memberjunction/ng-trees@5.6.0
+  - @memberjunction/interactive-component-types@5.6.0
+  - @memberjunction/core-entities@5.6.0
+  - @memberjunction/ng-export-service@5.6.0
+  - @memberjunction/ng-markdown@5.6.0
+  - @memberjunction/global@5.6.0
+
+## 5.5.0
+
+### Patch Changes
+
+- df2457c: no migration, just small code changes
+- Updated dependencies [2b1d842]
+- Updated dependencies [a1648c5]
+- Updated dependencies [ee9f788]
+- Updated dependencies [df2457c]
+  - @memberjunction/core@5.5.0
+  - @memberjunction/ng-react@5.5.0
+  - @memberjunction/core-entities@5.5.0
+  - @memberjunction/global@5.5.0
+  - @memberjunction/ng-base-types@5.5.0
+  - @memberjunction/ng-code-editor@5.5.0
+  - @memberjunction/ng-export-service@5.5.0
+  - @memberjunction/ng-markdown@5.5.0
+  - @memberjunction/ng-notifications@5.5.0
+  - @memberjunction/ng-query-viewer@5.5.0
+  - @memberjunction/ng-shared-generic@5.5.0
+  - @memberjunction/ng-trees@5.5.0
+  - @memberjunction/interactive-component-types@5.5.0
+
+## 5.4.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.4.1
+- @memberjunction/ng-code-editor@5.4.1
+- @memberjunction/ng-export-service@5.4.1
+- @memberjunction/ng-markdown@5.4.1
+- @memberjunction/ng-notifications@5.4.1
+- @memberjunction/ng-query-viewer@5.4.1
+- @memberjunction/ng-react@5.4.1
+- @memberjunction/ng-shared-generic@5.4.1
+- @memberjunction/ng-trees@5.4.1
+- @memberjunction/interactive-component-types@5.4.1
+- @memberjunction/core@5.4.1
+- @memberjunction/core-entities@5.4.1
+- @memberjunction/global@5.4.1
+
+## 5.4.0
+
+### Patch Changes
+
+- Updated dependencies [c9a760c]
+  - @memberjunction/core-entities@5.4.0
+  - @memberjunction/ng-notifications@5.4.0
+  - @memberjunction/ng-react@5.4.0
+  - @memberjunction/ng-base-types@5.4.0
+  - @memberjunction/ng-code-editor@5.4.0
+  - @memberjunction/ng-query-viewer@5.4.0
+  - @memberjunction/ng-shared-generic@5.4.0
+  - @memberjunction/ng-trees@5.4.0
+  - @memberjunction/ng-export-service@5.4.0
+  - @memberjunction/ng-markdown@5.4.0
+  - @memberjunction/interactive-component-types@5.4.0
+  - @memberjunction/core@5.4.0
+  - @memberjunction/global@5.4.0
+
+## 5.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.3.1
+- @memberjunction/ng-code-editor@5.3.1
+- @memberjunction/ng-export-service@5.3.1
+- @memberjunction/ng-markdown@5.3.1
+- @memberjunction/ng-notifications@5.3.1
+- @memberjunction/ng-query-viewer@5.3.1
+- @memberjunction/ng-react@5.3.1
+- @memberjunction/ng-shared-generic@5.3.1
+- @memberjunction/ng-trees@5.3.1
+- @memberjunction/interactive-component-types@5.3.1
+- @memberjunction/core@5.3.1
+- @memberjunction/core-entities@5.3.1
+- @memberjunction/global@5.3.1
+
+## 5.3.0
+
+### Patch Changes
+
+- 7af1846: no migration
+- Updated dependencies [1692c53]
+  - @memberjunction/core-entities@5.3.0
+  - @memberjunction/ng-notifications@5.3.0
+  - @memberjunction/ng-react@5.3.0
+  - @memberjunction/ng-base-types@5.3.0
+  - @memberjunction/ng-code-editor@5.3.0
+  - @memberjunction/ng-query-viewer@5.3.0
+  - @memberjunction/ng-shared-generic@5.3.0
+  - @memberjunction/ng-trees@5.3.0
+  - @memberjunction/ng-export-service@5.3.0
+  - @memberjunction/ng-markdown@5.3.0
+  - @memberjunction/interactive-component-types@5.3.0
+  - @memberjunction/core@5.3.0
+  - @memberjunction/global@5.3.0
+
+## 5.2.0
+
+### Patch Changes
+
+- 4618227: Fix Angular 21/zone.js 0.15 change detection regressions, improve conversation caching performance, and resolve blank tabs in artifacts and entity viewer
+- Updated dependencies [5e5fab6]
+- Updated dependencies [06d889c]
+- Updated dependencies [3542cb6]
+- Updated dependencies [4618227]
+  - @memberjunction/core-entities@5.2.0
+  - @memberjunction/core@5.2.0
+  - @memberjunction/ng-query-viewer@5.2.0
+  - @memberjunction/ng-react@5.2.0
+  - @memberjunction/ng-base-types@5.2.0
+  - @memberjunction/ng-code-editor@5.2.0
+  - @memberjunction/ng-notifications@5.2.0
+  - @memberjunction/ng-shared-generic@5.2.0
+  - @memberjunction/ng-trees@5.2.0
+  - @memberjunction/interactive-component-types@5.2.0
+  - @memberjunction/ng-export-service@5.2.0
+  - @memberjunction/ng-markdown@5.2.0
+  - @memberjunction/global@5.2.0
+
+## 5.1.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+  - @memberjunction/global@5.1.0
+  - @memberjunction/ng-base-types@5.1.0
+  - @memberjunction/ng-code-editor@5.1.0
+  - @memberjunction/ng-notifications@5.1.0
+  - @memberjunction/ng-react@5.1.0
+  - @memberjunction/core@5.1.0
+  - @memberjunction/core-entities@5.1.0
+  - @memberjunction/interactive-component-types@5.1.0
+  - @memberjunction/ng-shared-generic@5.1.0
+  - @memberjunction/ng-markdown@5.1.0
+
+## 5.0.0
+
+### Major Changes
+
+- 4aa1b54: breaking changes due to class name updates/approach
+
+### Patch Changes
+
+- Updated dependencies [737b56b]
+- Updated dependencies [a3e7cb6]
+- Updated dependencies [4aa1b54]
+  - @memberjunction/interactive-component-types@5.0.0
+  - @memberjunction/core@5.0.0
+  - @memberjunction/core-entities@5.0.0
+  - @memberjunction/ng-base-types@5.0.0
+  - @memberjunction/ng-code-editor@5.0.0
+  - @memberjunction/ng-markdown@5.0.0
+  - @memberjunction/ng-notifications@5.0.0
+  - @memberjunction/ng-react@5.0.0
+  - @memberjunction/ng-shared-generic@5.0.0
+  - @memberjunction/global@5.0.0
+
+## 4.4.0
+
+### Patch Changes
+
+- Updated dependencies [61079e9]
+- Updated dependencies [bef7f69]
+  - @memberjunction/core@4.4.0
+  - @memberjunction/ng-base-types@4.4.0
+  - @memberjunction/ng-code-editor@4.4.0
+  - @memberjunction/ng-notifications@4.4.0
+  - @memberjunction/ng-react@4.4.0
+  - @memberjunction/ng-shared-generic@4.4.0
+  - @memberjunction/interactive-component-types@4.4.0
+  - @memberjunction/core-entities@4.4.0
+  - @memberjunction/ng-markdown@4.4.0
+  - @memberjunction/global@4.4.0
+
+## 4.3.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@4.3.1
+- @memberjunction/ng-code-editor@4.3.1
+- @memberjunction/ng-markdown@4.3.1
+- @memberjunction/ng-notifications@4.3.1
+- @memberjunction/ng-react@4.3.1
+- @memberjunction/ng-shared-generic@4.3.1
+- @memberjunction/interactive-component-types@4.3.1
+- @memberjunction/core@4.3.1
+- @memberjunction/core-entities@4.3.1
+- @memberjunction/global@4.3.1
+
+## 4.3.0
+
+### Patch Changes
+
+- Updated dependencies [564e1af]
+  - @memberjunction/core@4.3.0
+  - @memberjunction/core-entities@4.3.0
+  - @memberjunction/ng-notifications@4.3.0
+  - @memberjunction/ng-react@4.3.0
+  - @memberjunction/ng-base-types@4.3.0
+  - @memberjunction/ng-code-editor@4.3.0
+  - @memberjunction/ng-shared-generic@4.3.0
+  - @memberjunction/interactive-component-types@4.3.0
+  - @memberjunction/ng-markdown@4.3.0
+  - @memberjunction/global@4.3.0
+
+## 4.2.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@4.2.0
+- @memberjunction/ng-code-editor@4.2.0
+- @memberjunction/ng-markdown@4.2.0
+- @memberjunction/ng-notifications@4.2.0
+- @memberjunction/ng-react@4.2.0
+- @memberjunction/ng-shared-generic@4.2.0
+- @memberjunction/interactive-component-types@4.2.0
+- @memberjunction/core@4.2.0
+- @memberjunction/core-entities@4.2.0
+- @memberjunction/global@4.2.0
+
+## 4.1.0
+
+### Patch Changes
+
+- Updated dependencies [77839a9]
+- Updated dependencies [2ea241f]
+- Updated dependencies [5af036f]
+  - @memberjunction/core@4.1.0
+  - @memberjunction/core-entities@4.1.0
+  - @memberjunction/ng-base-types@4.1.0
+  - @memberjunction/ng-code-editor@4.1.0
+  - @memberjunction/ng-notifications@4.1.0
+  - @memberjunction/ng-react@4.1.0
+  - @memberjunction/ng-shared-generic@4.1.0
+  - @memberjunction/interactive-component-types@4.1.0
+  - @memberjunction/ng-markdown@4.1.0
+  - @memberjunction/global@4.1.0
+
+## 4.0.0
+
+### Major Changes
+
+- 8366d44: we goin' to 4.0!
+- fe73344: Angular 21/Node 24/ESM everywhere, and more
+- 5f6306c: 4.0
+
+### Minor Changes
+
+- e06f81c: changed SO much!
+
+### Patch Changes
+
+- Updated dependencies [8366d44]
+- Updated dependencies [f159146]
+- Updated dependencies [718b0ee]
+- Updated dependencies [5c7f6ab]
+- Updated dependencies [fe73344]
+- Updated dependencies [5f6306c]
+- Updated dependencies [e06f81c]
+  - @memberjunction/ng-base-types@4.0.0
+  - @memberjunction/ng-code-editor@4.0.0
+  - @memberjunction/ng-markdown@4.0.0
+  - @memberjunction/ng-notifications@4.0.0
+  - @memberjunction/ng-react@4.0.0
+  - @memberjunction/ng-shared-generic@4.0.0
+  - @memberjunction/interactive-component-types@4.0.0
+  - @memberjunction/core@4.0.0
+  - @memberjunction/core-entities@4.0.0
+  - @memberjunction/global@4.0.0
+
 ## 3.4.0
 
 ### Patch Changes

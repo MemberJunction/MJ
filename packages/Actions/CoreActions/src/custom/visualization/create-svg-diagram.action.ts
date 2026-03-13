@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass } from '@memberjunction/global';
-import * as dagre from '@dagrejs/dagre';
+import dagre from '@dagrejs/dagre';
 import * as d3Hierarchy from 'd3-hierarchy';
 import { JSDOM } from 'jsdom';
 import {

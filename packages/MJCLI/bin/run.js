@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import 'dotenv/config';
 
-// Import pre-built MJ class registrations manifest (covers all @memberjunction/* packages)
-import '@memberjunction/server-bootstrap-lite/mj-class-registrations';
+// Bootstrap loading is handled conditionally in the prerun hook.
+// Only non-light commands load @memberjunction/server-bootstrap-lite.
+// See src/light-commands.ts for the list of light commands.
 
 import { execute } from '@oclif/core';
 

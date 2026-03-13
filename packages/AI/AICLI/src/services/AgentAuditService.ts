@@ -1,7 +1,7 @@
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import {
-  AIAgentRunEntity,
-  AIAgentRunStepEntity
+  MJAIAgentRunEntity,
+  MJAIAgentRunStepEntity
 } from '@memberjunction/core-entities';
 import { initializeMJProvider } from '../lib/mj-provider';
 import { AuditAnalyzer } from '../lib/audit-analyzer';
@@ -153,7 +153,7 @@ export class AgentAuditService {
   /**
    * List recent agent runs with filtering
    */
-  async listRecentRuns(options: ListRunsOptions): Promise<AIAgentRunEntity[]> {
+  async listRecentRuns(options: ListRunsOptions): Promise<MJAIAgentRunEntity[]> {
     await this.ensureInitialized();
 
     const endDate = new Date();
@@ -176,7 +176,7 @@ export class AgentAuditService {
     }
 
     const rv = new RunView();
-    const result = await rv.RunView<AIAgentRunEntity>({
+    const result = await rv.RunView<MJAIAgentRunEntity>({
       EntityName: 'MJ: AI Agent Runs',
       ExtraFilter: filter,
       OrderBy: 'StartedAt DESC',
@@ -199,7 +199,7 @@ export class AgentAuditService {
 
     // Load run entity
     const md = new Metadata();
-    const runEntity = await md.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
+    const runEntity = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
     const loaded = await runEntity.Load(runId);
 
     if (!loaded) {
@@ -208,7 +208,7 @@ export class AgentAuditService {
 
     // Load all steps for this run
     const rv = new RunView();
-    const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
+    const stepsResult = await rv.RunView<MJAIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID = '${runId}'`,
       OrderBy: 'StepNumber',
@@ -277,7 +277,7 @@ export class AgentAuditService {
 
     // Load all steps to find the right one by sequence
     const rv = new RunView();
-    const result = await rv.RunView<AIAgentRunStepEntity>({
+    const result = await rv.RunView<MJAIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID = '${runId}'`,
       OrderBy: 'StepNumber',
@@ -429,7 +429,7 @@ export class AgentAuditService {
   /**
    * Format run list for display
    */
-  formatRunList(runs: AIAgentRunEntity[], format: AuditOutputFormat): string {
+  formatRunList(runs: MJAIAgentRunEntity[], format: AuditOutputFormat): string {
     return this.formatter.formatRunList(runs, format);
   }
 

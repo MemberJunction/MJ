@@ -6,14 +6,15 @@ import {
     ChangeDetectionStrategy,
     ChangeDetectorRef
 } from '@angular/core';
-import { DashboardCategoryEntity, DashboardEntity } from '@memberjunction/core-entities';
+import { MJDashboardCategoryEntity, MJDashboardEntity } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Event emitted when a breadcrumb item is clicked for navigation
  */
 export interface BreadcrumbNavigateEvent {
     CategoryId: string | null;
-    Category: DashboardCategoryEntity | null;
+    Category: MJDashboardCategoryEntity | null;
 }
 
 /**
@@ -42,15 +43,15 @@ export class DashboardBreadcrumbComponent {
     // ========================================
 
     /** All categories for building breadcrumb path */
-    private _categories: DashboardCategoryEntity[] = [];
+    private _categories: MJDashboardCategoryEntity[] = [];
 
     @Input()
-    set Categories(value: DashboardCategoryEntity[]) {
+    set Categories(value: MJDashboardCategoryEntity[]) {
         this._categories = value || [];
         // Rebuild breadcrumbs when categories change (they may load after CurrentCategoryId is set)
         this.updateBreadcrumbs();
     }
-    get Categories(): DashboardCategoryEntity[] {
+    get Categories(): MJDashboardCategoryEntity[] {
         return this._categories;
     }
 
@@ -69,7 +70,7 @@ export class DashboardBreadcrumbComponent {
     }
 
     /** Current dashboard (when viewing a specific dashboard) */
-    @Input() CurrentDashboard: DashboardEntity | null = null;
+    @Input() CurrentDashboard: MJDashboardEntity | null = null;
 
     /** Icon class for the root breadcrumb item */
     @Input() RootIcon = 'fa-solid fa-gauge-high';
@@ -104,7 +105,7 @@ export class DashboardBreadcrumbComponent {
     // ========================================
 
     /** Breadcrumb trail from root to current category */
-    public Breadcrumbs: DashboardCategoryEntity[] = [];
+    public Breadcrumbs: MJDashboardCategoryEntity[] = [];
 
     /** Category ID being hovered during drag */
     public DragOverCategoryId: string | null | undefined = undefined;
@@ -124,7 +125,7 @@ export class DashboardBreadcrumbComponent {
      */
     public OnNavigate(categoryId: string | null): void {
         const category = categoryId
-            ? this.Categories.find(c => c.ID === categoryId) || null
+            ? this.Categories.find(c => UUIDsEqual(c.ID, categoryId)) || null
             : null;
         this.Navigate.emit({ CategoryId: categoryId, Category: category });
     }
@@ -139,9 +140,9 @@ export class DashboardBreadcrumbComponent {
     /**
      * Get the current category
      */
-    public get CurrentCategory(): DashboardCategoryEntity | null {
+    public get CurrentCategory(): MJDashboardCategoryEntity | null {
         if (!this._currentCategoryId) return null;
-        return this.Categories.find(c => c.ID === this._currentCategoryId) || null;
+        return this.Categories.find(c => UUIDsEqual(c.ID, this._currentCategoryId)) || null;
     }
 
     // ========================================
@@ -188,7 +189,7 @@ export class DashboardBreadcrumbComponent {
     // Track By
     // ========================================
 
-    public TrackByCategory(_index: number, category: DashboardCategoryEntity): string {
+    public TrackByCategory(_index: number, category: MJDashboardCategoryEntity): string {
         return category.ID;
     }
 
@@ -205,11 +206,11 @@ export class DashboardBreadcrumbComponent {
         }
 
         // Build the path from current category to root
-        const path: DashboardCategoryEntity[] = [];
+        const path: MJDashboardCategoryEntity[] = [];
         let currentId: string | null = this._currentCategoryId;
 
         while (currentId) {
-            const category = this.Categories.find(c => c.ID === currentId);
+            const category = this.Categories.find(c => UUIDsEqual(c.ID, currentId));
             if (category) {
                 path.unshift(category);
                 currentId = category.ParentID;

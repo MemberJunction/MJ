@@ -1,14 +1,14 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { AIVendorEntity, AIModelTypeEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { MJAIVendorEntity, MJAIModelTypeEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
+import { BaseEntity, BaseEntityEvent, Metadata, CompositeKey } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { RegisterClass } from '@memberjunction/global';
-import { AIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { RegisterClass, UUIDsEqual, MJGlobal, MJEventType } from '@memberjunction/global';
+import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 
-interface ModelDisplayData extends AIModelEntityExtended {
+interface ModelDisplayData extends MJAIModelEntityExtended {
   VendorName?: string;
   VendorID?: string; // Add this since we're using it for filtering
   ModelTypeName?: string;
@@ -55,11 +55,11 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   public showFilters = true;
   public expandedModelId: string | null = null;
 
-  // Data - Keep as AIModelEntityExtended to preserve getters
-  public models: AIModelEntityExtended[] = [];
-  public filteredModels: AIModelEntityExtended[] = [];
-  public vendors: AIVendorEntity[] = [];
-  public modelTypes: AIModelTypeEntity[] = [];
+  // Data - Keep as MJAIModelEntityExtended to preserve getters
+  public models: MJAIModelEntityExtended[] = [];
+  public filteredModels: MJAIModelEntityExtended[] = [];
+  public vendors: MJAIVendorEntity[] = [];
+  public modelTypes: MJAIModelTypeEntity[] = [];
 
   // Filtering
   public searchTerm = '';
@@ -135,6 +135,9 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     if (this.Data?.Configuration) {
       this.applyInitialState(this.Data.Configuration);
     }
+
+    // Subscribe to remote cache invalidation events for real-time updates
+    this.subscribeToCacheInvalidation();
   }
 
   ngOnDestroy(): void {
@@ -143,6 +146,49 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     if (this.loadingMessageInterval) {
       clearInterval(this.loadingMessageInterval);
     }
+  }
+
+  private subscribeToCacheInvalidation(): void {
+    MJGlobal.Instance.GetEventListener(true)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(event => {
+        if (event.event !== MJEventType.ComponentEvent || event.eventCode !== BaseEntity.BaseEventCode) return;
+        const beEvent = event.args as BaseEntityEvent;
+        if (beEvent.type !== 'remote-invalidate') return;
+        const entityName = beEvent.entityName?.toLowerCase().trim();
+        if (entityName === 'mj: ai models' || entityName === 'mj: ai model types') {
+          console.log(`[AI Models Dashboard] Remote invalidation for "${beEvent.entityName}" — refreshing`);
+          // Small delay to let BaseEngine finish its LoadSingleConfig network call
+          setTimeout(() => this.refreshDataFromEngine(), 500);
+        }
+      });
+  }
+
+  private refreshDataFromEngine(): void {
+    const models = AIEngineBase.Instance.Models;
+    this.vendors = AIEngineBase.Instance.Vendors;
+    this.modelTypes = AIEngineBase.Instance.ModelTypes;
+
+    const vendorMap = new Map(this.vendors.map(v => [v.ID, v.Name]));
+    const typeMap = new Map(this.modelTypes.map(t => [t.ID, t.Name]));
+
+    this.models = models.map((model) => {
+      let vendorId: string | undefined;
+      if (model.Vendor) {
+        const vendor = this.vendors.find(v => v.Name === model.Vendor);
+        vendorId = vendor?.ID;
+      }
+      const modelWithDisplay = model as ModelDisplayData;
+      modelWithDisplay.VendorID = vendorId;
+      modelWithDisplay.VendorName = model.Vendor || 'No Vendor';
+      modelWithDisplay.ModelTypeName = model.AIModelTypeID ? typeMap.get(model.AIModelTypeID) || 'Unknown' : 'No Type';
+      return model;
+    });
+
+    this.filteredModels = [...this.models];
+    this.sortModels();
+    this.applyFilters();
+    this.cdr.detectChanges();
   }
 
   private setupSearchListener(): void {
@@ -382,12 +428,12 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
       }
 
       // Vendor filter
-      if (this.selectedVendor !== 'all' && model.VendorID !== this.selectedVendor) {
+      if (this.selectedVendor !== 'all' && !UUIDsEqual(model.VendorID, this.selectedVendor)) {
         return false;
       }
 
       // Type filter
-      if (this.selectedType !== 'all' && model.AIModelTypeID !== this.selectedType) {
+      if (this.selectedType !== 'all' && !UUIDsEqual(model.AIModelTypeID, this.selectedType)) {
         return false;
       }
 
@@ -509,13 +555,13 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
   public openModel(modelId: string): void {
     const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: modelId }]);
-    this.navigationService.OpenEntityRecord('AI Models', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Models', compositeKey);
   }
 
   /**
    * Show the detail panel for a model
    */
-  public showModelDetails(model: AIModelEntityExtended, event?: Event): void {
+  public showModelDetails(model: MJAIModelEntityExtended, event?: Event): void {
     if (event) {
       event.stopPropagation();
     }
@@ -548,7 +594,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   public async createNewModel(): Promise<void> {
     try {
       const md = new Metadata();
-      const newModel = await md.GetEntityObject<AIModelEntityExtended>('AI Models');
+      const newModel = await md.GetEntityObject<MJAIModelEntityExtended>('MJ: AI Models');
       
       if (newModel) {
         newModel.Name = 'New AI Model';
@@ -556,7 +602,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
         
         if (await newModel.Save()) {
           const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: newModel.ID }]);
-          this.navigationService.OpenEntityRecord('AI Models', compositeKey);
+          this.navigationService.OpenEntityRecord('MJ: AI Models', compositeKey);
 
           // Reload the data
           await this.loadInitialData();
