@@ -62,6 +62,11 @@ const packagesSchema = z.object({
 const dbSchemaSchema = z.object({
     name: z.string().regex(schemaNameRegex, 'Schema name must be lowercase alphanumeric + underscores, 3-128 chars. May start with up to two underscores.'),
     createIfNotExists: z.boolean().optional().default(true),
+    /** npm package that exports the generated entity subclasses for this schema.
+     *  Used by CodeGen to resolve per-schema imports. If omitted, the install
+     *  engine auto-detects it from packages.shared (first library-role package
+     *  whose name contains "entities"). */
+    entityPackage: z.string().min(1).optional(),
 });
 
 // ── Migrations ────────────────────────────────────────────
