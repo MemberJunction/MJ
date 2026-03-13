@@ -2048,6 +2048,45 @@ export const MJAIAgentRelationshipSchema = z.object({
 export type MJAIAgentRelationshipEntityType = z.infer<typeof MJAIAgentRelationshipSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Request Types
+ */
+export const MJAIAgentRequestTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key for the AIAgentRequestType record.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique display name for the request type (e.g., Approval, Information, Choice).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Explains when and how this request type should be used by agents.`),
+    Icon: z.string().nullable().describe(`
+        * * Field Name: Icon
+        * * Display Name: Icon
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class for UI rendering of this request type.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJAIAgentRequestTypeEntityType = z.infer<typeof MJAIAgentRequestTypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Requests
  */
 export const MJAIAgentRequestSchema = z.object({
@@ -2074,7 +2113,7 @@ export const MJAIAgentRequestSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Optional, a user that the AI specifically is directing the request to, if null intended for general system owner.`),
-    Status: z.union([z.literal('Approved'), z.literal('Canceled'), z.literal('Rejected'), z.literal('Requested')]).describe(`
+    Status: z.union([z.literal('Approved'), z.literal('Canceled'), z.literal('Expired'), z.literal('Rejected'), z.literal('Requested'), z.literal('Responded')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -2082,22 +2121,24 @@ export const MJAIAgentRequestSchema = z.object({
     * * Possible Values 
     *   * Approved
     *   * Canceled
+    *   * Expired
     *   * Rejected
     *   * Requested
+    *   * Responded
         * * Description: Current status of the request (Requested, Approved, Rejected, Canceled).`),
     Request: z.string().describe(`
         * * Field Name: Request
-        * * Display Name: Request
+        * * Display Name: Request Details
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Details of what the AI Agent is requesting.`),
     Response: z.string().nullable().describe(`
         * * Field Name: Response
-        * * Display Name: Response
+        * * Display Name: Response Text
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Response provided by the human to the agent request.`),
     ResponseByUserID: z.string().nullable().describe(`
         * * Field Name: ResponseByUserID
-        * * Display Name: Response By User
+        * * Display Name: Responded By
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Populated when a user responds indicating which user responded to the request.`),
@@ -2108,7 +2149,7 @@ export const MJAIAgentRequestSchema = z.object({
         * * Description: Timestamp when the response was provided by the human.`),
     Comments: z.string().nullable().describe(`
         * * Field Name: Comments
-        * * Display Name: Comments
+        * * Display Name: Internal Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Additional comments about the request. Not shared with the agent, purely record keeping.`),
     __mj_CreatedAt: z.date().describe(`
@@ -2121,18 +2162,79 @@ export const MJAIAgentRequestSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    RequestTypeID: z.string().nullable().describe(`
+        * * Field Name: RequestTypeID
+        * * Display Name: Request Type
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Request Types (vwAIAgentRequestTypes.ID)
+        * * Description: Foreign key to AIAgentRequestType. Categorizes the purpose of this request (Approval, Information, Choice, Review, Custom).`),
+    ResponseSchema: z.string().nullable().describe(`
+        * * Field Name: ResponseSchema
+        * * Display Name: Response Form Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON-serialized AgentResponseForm defining the structured input form the agent presents to the human. Uses the same form types as ConversationDetail.ResponseForm.`),
+    ResponseData: z.string().nullable().describe(`
+        * * Field Name: ResponseData
+        * * Display Name: Response Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON structured response data provided by the human, conforming to the ResponseSchema definition.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 50
+        * * Description: Urgency level of the request as an integer from 1 (lowest) to 100 (highest). Default is 50. Suggested ranges: 1-25 Low, 26-50 Normal, 51-75 High, 76-100 Critical. Used for notification routing and dashboard sorting.`),
+    ExpiresAt: z.date().nullable().describe(`
+        * * Field Name: ExpiresAt
+        * * Display Name: Expires At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional deadline for the human to respond. After this time the request may be marked Expired by a background process.`),
+    OriginatingAgentRunID: z.string().nullable().describe(`
+        * * Field Name: OriginatingAgentRunID
+        * * Display Name: Originating Agent Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: Foreign key to AIAgentRun. The agent run that created this request. Used to trace request origin in run chains.`),
+    OriginatingAgentRunStepID: z.string().nullable().describe(`
+        * * Field Name: OriginatingAgentRunStepID
+        * * Display Name: Originating Run Step
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+        * * Description: Foreign key to AIAgentRunStep. The specific execution step that triggered this request.`),
+    ResumingAgentRunID: z.string().nullable().describe(`
+        * * Field Name: ResumingAgentRunID
+        * * Display Name: Resuming Agent Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: Foreign key to AIAgentRun. The new agent run spawned after the human responds. NULL until a response triggers a resuming run.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
-        * * Display Name: Agent
+        * * Display Name: Agent Name
         * * SQL Data Type: nvarchar(255)`),
     RequestForUser: z.string().nullable().describe(`
         * * Field Name: RequestForUser
-        * * Display Name: Request For User
+        * * Display Name: Request For User Name
         * * SQL Data Type: nvarchar(100)`),
     ResponseByUser: z.string().nullable().describe(`
         * * Field Name: ResponseByUser
-        * * Display Name: Response By User
+        * * Display Name: Responded By Name
         * * SQL Data Type: nvarchar(100)`),
+    RequestType: z.string().nullable().describe(`
+        * * Field Name: RequestType
+        * * Display Name: Request Type Name
+        * * SQL Data Type: nvarchar(100)`),
+    OriginatingAgentRun: z.string().nullable().describe(`
+        * * Field Name: OriginatingAgentRun
+        * * Display Name: Originating Run Name
+        * * SQL Data Type: nvarchar(255)`),
+    OriginatingAgentRunStep: z.string().nullable().describe(`
+        * * Field Name: OriginatingAgentRunStep
+        * * Display Name: Originating Step Name
+        * * SQL Data Type: nvarchar(255)`),
+    ResumingAgentRun: z.string().nullable().describe(`
+        * * Field Name: ResumingAgentRun
+        * * Display Name: Resuming Run Name
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJAIAgentRequestEntityType = z.infer<typeof MJAIAgentRequestSchema>;
@@ -2433,13 +2535,14 @@ export const MJAIAgentRunSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Reference to the parent agent run if this is a sub-agent execution. NULL for root-level agent runs. Enables hierarchical execution tracking.`),
-    Status: z.union([z.literal('Cancelled'), z.literal('Completed'), z.literal('Failed'), z.literal('Paused'), z.literal('Running')]).describe(`
+    Status: z.union([z.literal('AwaitingFeedback'), z.literal('Cancelled'), z.literal('Completed'), z.literal('Failed'), z.literal('Paused'), z.literal('Running')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(50)
         * * Default Value: Running
     * * Value List Type: List
     * * Possible Values 
+    *   * AwaitingFeedback
     *   * Cancelled
     *   * Completed
     *   * Failed
@@ -28392,6 +28495,111 @@ export class MJAIAgentRelationshipEntity extends BaseEntity<MJAIAgentRelationshi
 
 
 /**
+ * MJ: AI Agent Request Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentRequestType
+ * * Base View: vwAIAgentRequestTypes
+ * * @description Lookup table categorizing the types of requests an agent can make to a human (e.g., Approval, Information, Choice, Review, Custom).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Request Types')
+export class MJAIAgentRequestTypeEntity extends BaseEntity<MJAIAgentRequestTypeEntityType> {
+    /**
+    * Loads the MJ: AI Agent Request Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Request Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentRequestTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key for the AIAgentRequestType record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique display name for the request type (e.g., Approval, Information, Choice).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Explains when and how this request type should be used by agents.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class for UI rendering of this request type.
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: AI Agent Requests - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentRequest
@@ -28419,6 +28627,39 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Requests entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Priority: Priority must be between 1 and 100 to ensure requests are correctly ranked and processed within the allowed range.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePriorityRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Priority must be between 1 and 100 to ensure requests are correctly ranked and processed within the allowed range.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityRange(result: ValidationResult) {
+    	// Check if Priority is within the allowed range of 1 to 100
+    	if (this.Priority != null && (this.Priority < 1 || this.Priority > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Priority",
+    			"Priority must be between 1 and 100.",
+    			this.Priority,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -28484,20 +28725,22 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     * * Possible Values 
     *   * Approved
     *   * Canceled
+    *   * Expired
     *   * Rejected
     *   * Requested
+    *   * Responded
     * * Description: Current status of the request (Requested, Approved, Rejected, Canceled).
     */
-    get Status(): 'Approved' | 'Canceled' | 'Rejected' | 'Requested' {
+    get Status(): 'Approved' | 'Canceled' | 'Expired' | 'Rejected' | 'Requested' | 'Responded' {
         return this.Get('Status');
     }
-    set Status(value: 'Approved' | 'Canceled' | 'Rejected' | 'Requested') {
+    set Status(value: 'Approved' | 'Canceled' | 'Expired' | 'Rejected' | 'Requested' | 'Responded') {
         this.Set('Status', value);
     }
 
     /**
     * * Field Name: Request
-    * * Display Name: Request
+    * * Display Name: Request Details
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Details of what the AI Agent is requesting.
     */
@@ -28510,7 +28753,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: Response
-    * * Display Name: Response
+    * * Display Name: Response Text
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Response provided by the human to the agent request.
     */
@@ -28523,7 +28766,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: ResponseByUserID
-    * * Display Name: Response By User
+    * * Display Name: Responded By
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Populated when a user responds indicating which user responded to the request.
@@ -28550,7 +28793,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: Comments
-    * * Display Name: Comments
+    * * Display Name: Internal Comments
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Additional comments about the request. Not shared with the agent, purely record keeping.
     */
@@ -28582,8 +28825,117 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     }
 
     /**
+    * * Field Name: RequestTypeID
+    * * Display Name: Request Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Request Types (vwAIAgentRequestTypes.ID)
+    * * Description: Foreign key to AIAgentRequestType. Categorizes the purpose of this request (Approval, Information, Choice, Review, Custom).
+    */
+    get RequestTypeID(): string | null {
+        return this.Get('RequestTypeID');
+    }
+    set RequestTypeID(value: string | null) {
+        this.Set('RequestTypeID', value);
+    }
+
+    /**
+    * * Field Name: ResponseSchema
+    * * Display Name: Response Form Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON-serialized AgentResponseForm defining the structured input form the agent presents to the human. Uses the same form types as ConversationDetail.ResponseForm.
+    */
+    get ResponseSchema(): string | null {
+        return this.Get('ResponseSchema');
+    }
+    set ResponseSchema(value: string | null) {
+        this.Set('ResponseSchema', value);
+    }
+
+    /**
+    * * Field Name: ResponseData
+    * * Display Name: Response Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON structured response data provided by the human, conforming to the ResponseSchema definition.
+    */
+    get ResponseData(): string | null {
+        return this.Get('ResponseData');
+    }
+    set ResponseData(value: string | null) {
+        this.Set('ResponseData', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 50
+    * * Description: Urgency level of the request as an integer from 1 (lowest) to 100 (highest). Default is 50. Suggested ranges: 1-25 Low, 26-50 Normal, 51-75 High, 76-100 Critical. Used for notification routing and dashboard sorting.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: ExpiresAt
+    * * Display Name: Expires At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional deadline for the human to respond. After this time the request may be marked Expired by a background process.
+    */
+    get ExpiresAt(): Date | null {
+        return this.Get('ExpiresAt');
+    }
+    set ExpiresAt(value: Date | null) {
+        this.Set('ExpiresAt', value);
+    }
+
+    /**
+    * * Field Name: OriginatingAgentRunID
+    * * Display Name: Originating Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Foreign key to AIAgentRun. The agent run that created this request. Used to trace request origin in run chains.
+    */
+    get OriginatingAgentRunID(): string | null {
+        return this.Get('OriginatingAgentRunID');
+    }
+    set OriginatingAgentRunID(value: string | null) {
+        this.Set('OriginatingAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: OriginatingAgentRunStepID
+    * * Display Name: Originating Run Step
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+    * * Description: Foreign key to AIAgentRunStep. The specific execution step that triggered this request.
+    */
+    get OriginatingAgentRunStepID(): string | null {
+        return this.Get('OriginatingAgentRunStepID');
+    }
+    set OriginatingAgentRunStepID(value: string | null) {
+        this.Set('OriginatingAgentRunStepID', value);
+    }
+
+    /**
+    * * Field Name: ResumingAgentRunID
+    * * Display Name: Resuming Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Foreign key to AIAgentRun. The new agent run spawned after the human responds. NULL until a response triggers a resuming run.
+    */
+    get ResumingAgentRunID(): string | null {
+        return this.Get('ResumingAgentRunID');
+    }
+    set ResumingAgentRunID(value: string | null) {
+        this.Set('ResumingAgentRunID', value);
+    }
+
+    /**
     * * Field Name: Agent
-    * * Display Name: Agent
+    * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
@@ -28592,7 +28944,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: RequestForUser
-    * * Display Name: Request For User
+    * * Display Name: Request For User Name
     * * SQL Data Type: nvarchar(100)
     */
     get RequestForUser(): string | null {
@@ -28601,11 +28953,47 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: ResponseByUser
-    * * Display Name: Response By User
+    * * Display Name: Responded By Name
     * * SQL Data Type: nvarchar(100)
     */
     get ResponseByUser(): string | null {
         return this.Get('ResponseByUser');
+    }
+
+    /**
+    * * Field Name: RequestType
+    * * Display Name: Request Type Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get RequestType(): string | null {
+        return this.Get('RequestType');
+    }
+
+    /**
+    * * Field Name: OriginatingAgentRun
+    * * Display Name: Originating Run Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get OriginatingAgentRun(): string | null {
+        return this.Get('OriginatingAgentRun');
+    }
+
+    /**
+    * * Field Name: OriginatingAgentRunStep
+    * * Display Name: Originating Step Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get OriginatingAgentRunStep(): string | null {
+        return this.Get('OriginatingAgentRunStep');
+    }
+
+    /**
+    * * Field Name: ResumingAgentRun
+    * * Display Name: Resuming Run Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ResumingAgentRun(): string | null {
+        return this.Get('ResumingAgentRun');
     }
 }
 
@@ -29531,6 +29919,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     * * Default Value: Running
     * * Value List Type: List
     * * Possible Values 
+    *   * AwaitingFeedback
     *   * Cancelled
     *   * Completed
     *   * Failed
@@ -29538,10 +29927,10 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     *   * Running
     * * Description: Current status of the agent run. Running -> Completed/Failed/Cancelled
     */
-    get Status(): 'Cancelled' | 'Completed' | 'Failed' | 'Paused' | 'Running' {
+    get Status(): 'AwaitingFeedback' | 'Cancelled' | 'Completed' | 'Failed' | 'Paused' | 'Running' {
         return this.Get('Status');
     }
-    set Status(value: 'Cancelled' | 'Completed' | 'Failed' | 'Paused' | 'Running') {
+    set Status(value: 'AwaitingFeedback' | 'Cancelled' | 'Completed' | 'Failed' | 'Paused' | 'Running') {
         this.Set('Status', value);
     }
 
