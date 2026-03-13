@@ -59,7 +59,7 @@
           "fields": {
             "AgentID": "@parent:ID",
             "Name": "AVAILABLE_QUERIES",
-            "Description": "Catalog of approved saved queries available for execution via Run Saved Query action. Check here before writing ad-hoc SQL — saved queries are pre-validated and optimized.",
+            "Description": "Catalog of approved stored queries available for execution via Run Stored Query action. Check here before writing ad-hoc SQL — stored queries are pre-validated and optimized.",
             "SourceType": "RunView",
             "EntityName": "MJ: Queries",
             "ExtraFilter": "Status = 'Approved'",
@@ -100,7 +100,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Execute Research Query",
+            "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query",
             "Status": "Active"
           },
           "primaryKey": {
@@ -114,7 +114,7 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Run Saved Query",
+            "ActionID": "@lookup:MJ: Actions.Name=Run Stored Query",
             "Status": "Active"
           },
           "primaryKey": {

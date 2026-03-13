@@ -292,7 +292,7 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Execute Research Query",
+                  "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query",
                   "Status": "Active"
                 },
                 "primaryKey": {
@@ -306,7 +306,7 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:MJ: Actions.Name=Run Saved Query",
+                  "ActionID": "@lookup:MJ: Actions.Name=Run Stored Query",
                   "Status": "Active"
                 },
                 "primaryKey": {

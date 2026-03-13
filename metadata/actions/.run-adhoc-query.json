@@ -1,9 +1,9 @@
 [
   {
     "fields": {
-      "Name": "Execute Research Query",
-      "Description": "Executes a read-only SQL SELECT query for research purposes with security validation. Ensures SELECT-only operations, prevents dangerous SQL operations, enforces timeouts, and logs all queries for audit trail. SQL syntax validation is performed by SQL Server during execution.",
-      "DriverClass": "Execute Research Query",
+      "Name": "Run Ad-hoc Query",
+      "Description": "Executes a read-only SQL SELECT query for ad-hoc purposes with security validation. Ensures SELECT-only operations, prevents dangerous SQL operations, enforces timeouts, and logs all queries for audit trail. SQL syntax validation is performed by SQL Server during execution.",
+      "DriverClass": "Run Ad-hoc Query",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-code",

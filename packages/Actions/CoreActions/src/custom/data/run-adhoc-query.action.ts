@@ -32,7 +32,7 @@ import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
  * ```typescript
  * // Simple SELECT query
  * await runAction({
- *   ActionName: 'Execute Research Query',
+ *   ActionName: 'Run Ad-hoc Query',
  *   Params: [{
  *     Name: 'Query',
  *     Value: 'SELECT TOP 100 * FROM Customers WHERE Country = ''USA'''
@@ -41,7 +41,7 @@ import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
  *
  * // Query with timeout
  * await runAction({
- *   ActionName: 'Execute Research Query',
+ *   ActionName: 'Run Ad-hoc Query',
  *   Params: [{
  *     Name: 'Query',
  *     Value: 'SELECT COUNT(*) FROM Orders GROUP BY CustomerID'
@@ -52,8 +52,8 @@ import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Execute Research Query")
-export class ExecuteResearchQueryAction extends BaseAction {
+@RegisterClass(BaseAction, "Run Ad-hoc Query")
+export class RunAdhocQueryAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const startTime = Date.now();
@@ -103,7 +103,7 @@ export class ExecuteResearchQueryAction extends BaseAction {
 
                 const results = await Promise.race([
                     dataProvider.ExecuteSQL(limitedQuery, null, {
-                        description: 'Execute Research Query',
+                        description: 'Run Ad-hoc Query',
                         ignoreLogging: false,
                         isMutation: false
                     }, params.ContextUser),

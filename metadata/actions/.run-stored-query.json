@@ -1,9 +1,9 @@
 [
   {
     "fields": {
-      "Name": "Run Saved Query",
-      "Description": "Executes a saved query by ID or name, with optional parameters. Uses the full query pipeline including composition resolution, Nunjucks templating, caching, and audit logging. Preferred over ad-hoc SQL when a matching saved query exists.",
-      "DriverClass": "Run Saved Query",
+      "Name": "Run Stored Query",
+      "Description": "Executes a stored query by ID or name, with optional parameters. Uses the full query pipeline including composition resolution, Nunjucks templating, caching, and audit logging. Preferred over ad-hoc SQL when a matching stored query exists.",
+      "DriverClass": "Run Stored Query",
       "Type": "Custom",
       "Status": "Active",
       "IconClass": "fa-solid fa-play",
@@ -18,7 +18,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "ID of the saved query to execute. Either QueryID or QueryName is required.",
+            "Description": "ID of the stored query to execute. Either QueryID or QueryName is required.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -36,7 +36,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the saved query to execute. Either QueryID or QueryName is required.",
+            "Description": "Name of the stored query to execute. Either QueryID or QueryName is required.",
             "IsRequired": false
           },
           "primaryKey": {
@@ -54,7 +54,7 @@
             "Type": "Input",
             "ValueType": "Other",
             "IsArray": false,
-            "Description": "JSON object of parameter key-value pairs to pass to the query. Keys must match query parameter names defined in the saved query.",
+            "Description": "JSON object of parameter key-value pairs to pass to the query. Keys must match query parameter names defined in the stored query.",
             "IsRequired": false
           },
           "primaryKey": {

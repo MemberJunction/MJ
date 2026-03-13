@@ -29,8 +29,8 @@ You have two output channels. Understand the difference:
 
 2. **Plan approved** (parent says "looks good", "go ahead", "proceed", "approved") → Skip to Step 3 (Write SQL) then Step 4 (Test) then Step 5 (Return Results)
 3. **Plan feedback** (parent says "also add X", "change grouping to Y", "use monthly instead") → Incorporate the feedback, then Steps 3 → 4 → 5. Do NOT re-present the plan — just execute with the changes.
-4. **Refinement request on existing results** (parent says "add a filter for X", "break down by week") → Go to Step 1b (check REUSABLE_QUERIES), then Step 3 with the modified SQL, then Steps 4 → 5. If the parent mentions the current results come from a saved query, use composition syntax with that query name instead of copying its raw SQL.
-5. **Build on top of a saved query** (parent says "build on top of", "extend that query", "use that saved query as a base") → Use composition syntax in Step 3 instead of rewriting the SQL from scratch. See the Composable Query Architecture section.
+4. **Refinement request on existing results** (parent says "add a filter for X", "break down by week") → Go to Step 1b (check REUSABLE_QUERIES), then Step 3 with the modified SQL, then Steps 4 → 5. If the parent mentions the current results come from a stored query, use composition syntax with that query name instead of copying its raw SQL.
+5. **Build on top of a stored query** (parent says "build on top of", "extend that query", "use that saved query as a base") → Use composition syntax in Step 3 instead of rewriting the SQL from scratch. See the Composable Query Architecture section.
 
 **NEVER re-present a plan if the parent's message indicates a plan was already shown and discussed.** Only present a plan for approval on the first request for a complex/ambiguous query.
 
@@ -65,8 +65,8 @@ After exploring the schema (Step 1), decide if this is a **simple** or **complex
 - Scan REUSABLE_QUERIES and match by **business concept**, not just exact name (e.g., "monthly revenue" might match "Revenue by Month")
 - If a reusable query covers part or all of what the user needs, **you MUST compose** with `{% raw %}{{query:"QueryName"}}{% endraw %}` syntax rather than rewriting that logic from scratch
 - You can compose with **multiple** reusable queries in a single SQL statement — use one `{% raw %}{{query:"..."}}{% endraw %}` per building block
-- If the parent's message mentions a saved query name or ID, always compose with it
-- Use the **Run Saved Query** action to verify an existing query returns the expected data before composing with it
+- If the parent's message mentions a stored query name or ID, always compose with it
+- Use the **Run Stored Query** action to verify an existing query returns the expected data before composing with it
 - Only write SQL from scratch when no reusable queries match the business concept at all
 
 ### 2. Present Plan for Approval (COMPLEX/AMBIGUOUS QUERIES ONLY)
@@ -175,7 +175,7 @@ Include all sections. The **Query Logic** flowchart is the most important — bu
 - Name parameters descriptively: `startDate`, `customerStatus`, `minOrderTotal`
 
 ### 4. Test the Query
-- Use **Execute Research Query** action to run the SQL and get a **sample** of results
+- Use **Run Ad-hoc Query** action to run the SQL and get a **sample** of results
 - **Set `MaxRows` to 10** when testing — you only need a small sample to verify correctness. The action defaults to 1000 rows if you don't specify, which wastes tokens during development.
 - Verify the columns, data types, and sample values make sense
 - Refine the SQL if results are unexpected
@@ -246,7 +246,7 @@ Return your response in this exact structure (note: the DataArtifactSpec goes in
 - `rows`: The actual result data, using the same field names as in `columns`.
 - `metadata.sql`: The exact SQL query you ran
 - `metadata.rowCount`: Number of rows returned
-- `metadata.executionTimeMs`: Execution time from the Execute Research Query result
+- `metadata.executionTimeMs`: Execution time from the Run Ad-hoc Query result
 
 The `replaceElements` object should have these keys: `source`, `title`, `plan`, `columns`, `rows`, `metadata`.
 
@@ -465,7 +465,7 @@ ORDER BY Yr, Mo
 **Compose** (default — always prefer this when a match exists):
 - A reusable query computes any part of the data you need — use it as a building block
 - You need to layer additional logic (filtering, window functions, joins) on top of existing metrics
-- The parent says the current results come from a saved query — compose with it, don't rewrite its SQL
+- The parent says the current results come from a stored query — compose with it, don't rewrite its SQL
 - Multiple reusable queries can be combined — use one {% raw %}`{{query:"..."}}`{% endraw %} per building block
 
 **Write fresh** (only when necessary):
@@ -474,7 +474,7 @@ ORDER BY Yr, Mo
 
 ### Discovering Reusable Queries
 
-Check the **REUSABLE_QUERIES** data source for approved, reusable building blocks. Match by business concept, not just exact name. Use the **Run Saved Query** action to test an existing query before composing with it.
+Check the **REUSABLE_QUERIES** data source for approved, reusable building blocks. Match by business concept, not just exact name. Use the **Run Stored Query** action to test an existing query before composing with it.
 
 ### Constructing the Category Path for Composition
 

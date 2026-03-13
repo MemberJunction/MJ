@@ -4,18 +4,18 @@ import { BaseAction } from "@memberjunction/actions";
 import { RunQuery, RunQueryParams, RunQueryResult } from "@memberjunction/core";
 
 /**
- * Action that executes a saved query by ID or name using the full query pipeline.
+ * Action that executes a stored query by ID or name using the full query pipeline.
  * This includes composition resolution ({{query:"..."}} macros), Nunjucks parameter
  * templating, caching, and audit logging — the agent gets all of that for free.
  *
- * Preferred over Execute Research Query when a matching saved query exists because:
+ * Preferred over Run Ad-hoc Query when a matching saved query exists because:
  * - Saved queries are pre-validated and optimized
  * - Composition enables reuse of business logic across queries
  * - Caching and audit logging are automatic
  * - No risk of schema errors from writing ad-hoc SQL
  */
-@RegisterClass(BaseAction, "Run Saved Query")
-export class RunSavedQueryAction extends BaseAction {
+@RegisterClass(BaseAction, "Run Stored Query")
+export class RunStoredQueryAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
@@ -30,7 +30,7 @@ export class RunSavedQueryAction extends BaseAction {
                 return {
                     Success: false,
                     ResultCode: "MISSING_IDENTIFIER",
-                    Message: "Either QueryID or QueryName is required to run a saved query."
+                    Message: "Either QueryID or QueryName is required to run a stored query."
                 } as ActionResultSimple;
             }
 
@@ -96,7 +96,7 @@ export class RunSavedQueryAction extends BaseAction {
             return {
                 Success: false,
                 ResultCode: "QUERY_EXECUTION_FAILED",
-                Message: `Run Saved Query failed: ${errorMessage}`
+                Message: `Run Stored Query failed: ${errorMessage}`
             } as ActionResultSimple;
         }
     }
@@ -198,7 +198,7 @@ export class RunSavedQueryAction extends BaseAction {
         queryResult: RunQueryResult
     ): string {
         const lines: string[] = [];
-        lines.push('# Saved Query Results');
+        lines.push('# Stored Query Results');
         lines.push(`\n**Rows Returned:** ${results.length.toLocaleString()}`);
         if (queryResult.TotalRowCount != null && queryResult.TotalRowCount > results.length) {
             lines.push(`**Total Available:** ${queryResult.TotalRowCount.toLocaleString()}`);

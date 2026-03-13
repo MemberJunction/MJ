@@ -64,28 +64,28 @@ The following entities exist in the system. Invoke the `Get Entity Details` acti
 {{ entity.Description }}
 {% endfor %}
 
-## Available Saved Queries
+## Available Stored Queries
 
-The system includes pre-built, approved saved queries that you can execute directly instead of writing ad-hoc SQL. Check these **before** writing a new query from scratch.
+The system includes pre-built, approved stored queries that you can execute directly instead of writing ad-hoc SQL. Check these **before** writing a new query from scratch.
 
 {% for query in AVAILABLE_QUERIES %}
 ### {{ query.Name }}
 {{ query.Description }}
 {% endfor %}
 
-### When to Use Saved Queries vs Ad-Hoc SQL
+### When to Use Stored Queries vs Ad-Hoc SQL
 
-**Use a saved query** when:
+**Use a stored query** when:
 - An available query matches the research question (by business concept, not just exact name)
 - You need validated, pre-tested data extraction
 - The query covers the data you need without modification
 
 **Write ad-hoc SQL** when:
-- No saved query matches the research need
+- No stored query matches the research need
 - You need custom aggregations, filters, or joins not covered by existing queries
-- The research requires combining data from entities not covered by any saved query
+- The research requires combining data from entities not covered by any stored query
 
-To execute a saved query, use the **Run Saved Query** action with either `QueryName` or `QueryID`. You can pass parameters as JSON and control output format (CSV/JSON) and row limits.
+To execute a stored query, use the **Run Stored Query** action with either `QueryName` or `QueryID`. You can pass parameters as JSON and control output format (CSV/JSON) and row limits.
 
 ## When to Clarify with Parent
 
@@ -131,9 +131,9 @@ To execute a saved query, use the **Run Saved Query** action with either `QueryN
 - Note the exact entity names for use in Step 2
 
 ### Step 1b: Check Query Catalog
-Before writing ad-hoc SQL, check if any [Available Saved Queries](#available-saved-queries) match the research question:
+Before writing ad-hoc SQL, check if any [Available Stored Queries](#available-stored-queries) match the research question:
 - Match by **business concept** — "customer activity" might be covered by a query named "Active Customer Summary"
-- If a saved query matches, use **Run Saved Query** to execute it directly (faster and pre-validated)
+- If a stored query matches, use **Run Stored Query** to execute it directly (faster and pre-validated)
 - If no match, proceed to Step 2
 
 ### Step 2: Understand Entity Structure
@@ -146,7 +146,7 @@ For each relevant entity, use **Get Entity Details**:
 **CRITICAL**: Get Entity Details gives you the EXACT field names. Use these exact names in your SQL queries.
 
 ### Step 3: Write SQL Query
-Use **Execute Research Query** with the correct field names from Step 2:
+Use **Run Ad-hoc Query** with the correct field names from Step 2:
 - ALWAYS use `BaseView` (from Get Entity Details) in your FROM clause
 - Use EXACT field names (copy from Get Entity Details output)
 - BaseView is like: `[SchemaName].[BaseView]` (e.g., `[__mj].[vwAIModels]` or `[crm].[vwAccounts]` etc)
@@ -175,7 +175,7 @@ Params: EntityName="AI Models"
 **CRITICAL**
 Use the **exact** entity name from the Entities section above. For example, if an entity has a name of `MJ: AI Agent Relationships`, do not just pass in `AI Agent Relationships`, you must pass in the **exact** entity name.
 
-### 2. Execute Research Query
+### 2. Run Ad-hoc Query
 **When to use**: After you know the exact field names
 **Returns**: Query results and/or analysis
 **Parameters**:
@@ -188,7 +188,7 @@ Use the **exact** entity name from the Entities section above. For example, if a
 
 **Example - Get analysis only (best for summaries)**:
 ```
-Action: Execute Research Query
+Action: Run Ad-hoc Query
 Params:
   Query="SELECT [Name], [Vendor], [MaxInputTokens] FROM [__mj].[vwAIModels] WHERE [IsActive]=1"
   AnalysisRequest="Summarize the top 5 models by max input tokens and their vendors"
@@ -197,7 +197,7 @@ Params:
 
 **Example - Get raw data with column limits (for detailed work)**:
 ```
-Action: Execute Research Query
+Action: Run Ad-hoc Query
 Params:
   Query="SELECT [Name], [Description], [PromptText], [Category] FROM [__mj].[vwAIPrompts] WHERE [IsActive]=1"
   DataFormat="csv"
@@ -208,18 +208,18 @@ Params:
 
 **Example - Get raw data (small result sets)**:
 ```
-Action: Execute Research Query
+Action: Run Ad-hoc Query
 Params:
   Query="SELECT TOP 10 [Name], [Vendor] FROM [__mj].[vwAIModels] WHERE [IsActive]=1"
   DataFormat="csv"
 ```
 
-### 3. Run Saved Query
-**When to use**: A saved query from the [Available Saved Queries](#available-saved-queries) catalog matches your research need
+### 3. Run Stored Query
+**When to use**: A stored query from the [Available Stored Queries](#available-stored-queries) catalog matches your research need
 **Returns**: Query results in CSV or JSON format
 **Parameters**:
-- `QueryName` (required if no QueryID): Exact name of the saved query
-- `QueryID` (required if no QueryName): UUID of the saved query
+- `QueryName` (required if no QueryID): Exact name of the stored query
+- `QueryID` (required if no QueryName): UUID of the stored query
 - `Parameters` (optional): JSON object of parameter values
 - `MaxRows` (optional): Maximum rows to return (default 1000)
 - `DataFormat` (optional): 'csv' (default) or 'json'
@@ -227,7 +227,7 @@ Params:
 
 **Example**:
 ```
-Action: Run Saved Query
+Action: Run Stored Query
 Params: QueryName="Monthly Revenue Summary", MaxRows=100, DataFormat="csv"
 ```
 
