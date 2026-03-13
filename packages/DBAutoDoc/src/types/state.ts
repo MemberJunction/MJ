@@ -126,6 +126,8 @@ export interface ColumnDefinition {
   statistics?: ColumnStatistics;
   description?: string;
   descriptionIterations: DescriptionIteration[];
+  userDescription?: string;
+  userApproved?: boolean;
 }
 
 export interface ForeignKeyReference {
@@ -192,8 +194,10 @@ export interface DescriptionIteration {
   generatedAt: string;
   modelUsed: string;
   confidence?: number;
-  triggeredBy?: 'initial' | 'backpropagation' | 'refinement' | 'dependency_sanity_check' | 'schema_sanity_check' | 'cross_schema_sanity_check';
+  triggeredBy?: 'initial' | 'backpropagation' | 'refinement' | 'dependency_sanity_check' | 'schema_sanity_check' | 'cross_schema_sanity_check' | 'ground_truth' | 'existing_db_description';
   changedFrom?: string;
+  /** If true, this description came from user-provided ground truth config */
+  isGroundTruth?: boolean;
 }
 
 export interface AnalysisRun {

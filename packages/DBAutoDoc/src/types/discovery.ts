@@ -160,6 +160,14 @@ export interface RelationshipDiscoveryPhase {
     foreignKeys: FKCandidate[];
   };
 
+  /** Resume tracking — which tables have been processed in each sub-phase */
+  progress?: {
+    pkTablesAnalyzed?: string[];   // "schema.table" keys that completed PK detection
+    fkTablesAnalyzed?: string[];   // "schema.table" keys that completed FK detection
+    llmValidated?: boolean;        // Whether LLM validation pass completed
+    sanityChecked?: boolean;       // Whether LLM sanity check completed
+  };
+
   schemaEnhancements: {
     pkeysAdded: number;
     fkeysAdded: number;

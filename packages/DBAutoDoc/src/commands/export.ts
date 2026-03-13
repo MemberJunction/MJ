@@ -15,6 +15,7 @@ import { ReportGenerator } from '../generators/ReportGenerator.js';
 import { HTMLGenerator } from '../generators/HTMLGenerator.js';
 import { CSVGenerator } from '../generators/CSVGenerator.js';
 import { MermaidGenerator } from '../generators/MermaidGenerator.js';
+import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
 import { DatabaseConnection } from '../database/Database.js';
 
 export default class Export extends Command {
@@ -39,6 +40,9 @@ export default class Export extends Command {
     csv: Flags.boolean({ description: 'Generate CSV exports (tables and columns)' }),
     mermaid: Flags.boolean({ description: 'Generate Mermaid ERD diagram files' }),
     report: Flags.boolean({ description: 'Generate analysis report' }),
+    'schema-info': Flags.boolean({ description: 'Generate additionalSchemaInfo.json for CodeGen soft FK/PK support' }),
+    'schema-info-discovered-only': Flags.boolean({ description: 'Only include AI-discovered keys in schema info (exclude hard DB constraints)', default: false }),
+    'schema-info-confirmed-only': Flags.boolean({ description: 'Only include confirmed candidates in schema info', default: false }),
     apply: Flags.boolean({ description: 'Apply SQL to database', default: false }),
     'approved-only': Flags.boolean({ description: 'Only export approved items', default: false }),
     'confidence-threshold': Flags.string({ description: 'Minimum confidence threshold', default: '0' })
@@ -84,7 +88,7 @@ export default class Export extends Command {
       await fs.mkdir(outputDir, { recursive: true });
 
       // Default to SQL + Markdown if no specific format flags provided
-      const anyFormatSpecified = flags.sql || flags.markdown || flags.html || flags.csv || flags.mermaid || flags.report;
+      const anyFormatSpecified = flags.sql || flags.markdown || flags.html || flags.csv || flags.mermaid || flags.report || flags['schema-info'];
       const generateSQL = flags.sql || !anyFormatSpecified;
       const generateMarkdown = flags.markdown || !anyFormatSpecified;
       const generateHTML = flags.html;
@@ -200,6 +204,22 @@ export default class Export extends Command {
         const reportPath = path.join(outputDir, 'analysis-report.md');
         await fs.writeFile(reportPath, report, 'utf-8');
         spinner.succeed(`Analysis report saved to ${reportPath}`);
+      }
+
+      // Generate Additional Schema Info (for CodeGen soft FK/PK)
+      if (flags['schema-info']) {
+        spinner.start('Generating additional schema info for CodeGen');
+        const schemaInfoGen = new AdditionalSchemaInfoGenerator();
+        const schemaInfo = schemaInfoGen.generate(state, {
+          approvedOnly: flags['approved-only'],
+          confidenceThreshold: parseFloat(flags['confidence-threshold']),
+          discoveredOnly: flags['schema-info-discovered-only'],
+          confirmedOnly: flags['schema-info-confirmed-only']
+        });
+
+        const schemaInfoPath = path.join(outputDir, 'additionalSchemaInfo.json');
+        await fs.writeFile(schemaInfoPath, schemaInfo, 'utf-8');
+        spinner.succeed(`Additional schema info saved to ${schemaInfoPath}`);
       }
 
       this.log(chalk.green('\n✓ Export complete!'));

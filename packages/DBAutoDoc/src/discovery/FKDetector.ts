@@ -27,6 +27,7 @@ export class FKDetector {
   ): Promise<FKCandidate[]> {
     const candidates: FKCandidate[] = [];
 
+    const tableStartTime = Date.now();
     console.log(`[FKDetector] Analyzing table ${sourceSchema}.${sourceTable.name} with ${sourceTable.columns.length} columns`);
     console.log(`[FKDetector] Available PKs: ${discoveredPKs.length}`);
 
@@ -82,7 +83,8 @@ export class FKDetector {
       }
     }
 
-    console.log(`[FKDetector] Table ${sourceSchema}.${sourceTable.name}: Found ${candidates.length} FK candidates`);
+    const elapsed = ((Date.now() - tableStartTime) / 1000).toFixed(1);
+    console.log(`[FKDetector] Table ${sourceSchema}.${sourceTable.name}: Found ${candidates.length} FK candidates (${elapsed}s)`);
 
     // Sort by confidence descending
     return candidates.sort((a, b) => b.confidence - a.confidence);

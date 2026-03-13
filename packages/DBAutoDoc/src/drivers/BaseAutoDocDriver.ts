@@ -306,6 +306,7 @@ export abstract class BaseAutoDocDriver {
     filter: AutoDocTableFilter,
     tableColumnName: string
   ): string {
+    if (!filter) return '';
     const conditions: string[] = [];
 
     if (filter.exclude && filter.exclude.length > 0) {

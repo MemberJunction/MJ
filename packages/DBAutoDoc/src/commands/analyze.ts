@@ -50,7 +50,7 @@ export default class Analyze extends Command {
           if (data) {
             spinner.succeed(`${message}: ${JSON.stringify(data)}`);
           } else {
-            spinner.text = message;
+            spinner.succeed(message);
           }
         }
       });

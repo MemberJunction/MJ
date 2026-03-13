@@ -10,6 +10,52 @@ export interface DBAutoDocConfig {
   output: OutputConfig;
   schemas: SchemaFilterConfig;
   tables: TableFilterConfig;
+  seedContext?: SeedContextConfig;
+  groundTruth?: GroundTruthConfig;
+}
+
+/**
+ * Seed context providing high-level business information about the database.
+ * This is injected into prompts to guide analysis but does NOT override AI output.
+ */
+export interface SeedContextConfig {
+  overallPurpose?: string;
+  businessDomains?: string[];
+  customInstructions?: string;
+  industryContext?: string;
+}
+
+/**
+ * Ground truth configuration — authoritative documentation provided by the user.
+ * Ground truth descriptions ALWAYS take priority over AI-generated descriptions.
+ * Tables/columns with ground truth are never overwritten by the analysis engine.
+ */
+export interface GroundTruthConfig {
+  /** Database-level ground truth description */
+  databaseDescription?: string;
+  /** Schema-level ground truth */
+  schemas?: Record<string, SchemaGroundTruth>;
+  /** Table-level ground truth, keyed by "schema.table" */
+  tables?: Record<string, TableGroundTruth>;
+}
+
+export interface SchemaGroundTruth {
+  description?: string;
+  businessDomain?: string;
+  notes?: string;
+}
+
+export interface TableGroundTruth {
+  description?: string;
+  notes?: string;
+  businessDomain?: string;
+  /** Column-level ground truth, keyed by column name */
+  columns?: Record<string, ColumnGroundTruth>;
+}
+
+export interface ColumnGroundTruth {
+  description?: string;
+  notes?: string;
 }
 
 export interface DatabaseConfig {

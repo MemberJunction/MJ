@@ -4,7 +4,7 @@
  */
 
 import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
-import { TableNode, BackpropagationTrigger, TableAnalysisContext } from '../types/analysis.js';
+import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext } from '../types/analysis.js';
 import {
   TableAnalysisPromptResult,
   SchemaSanityCheckPromptResult,
@@ -14,7 +14,7 @@ import {
   SchemaLevelSanityCheckResult,
   CrossSchemaSanityCheckResult
 } from '../types/prompts.js';
-import { DBAutoDocConfig } from '../types/config.js';
+import { DBAutoDocConfig, TableGroundTruth, ColumnGroundTruth } from '../types/config.js';
 import { PromptEngine } from '../prompts/PromptEngine.js';
 import { StateManager } from '../state/StateManager.js';
 import { IterationTracker } from '../state/IterationTracker.js';
@@ -29,17 +29,22 @@ export class AnalysisEngine {
   private startTime: number = 0;
   private currentRun?: AnalysisRun;
 
+  private onProgress: (message: string, data?: Record<string, unknown>) => void;
+
   constructor(
     private config: DBAutoDocConfig,
     private promptEngine: PromptEngine,
     private stateManager: StateManager,
-    private iterationTracker: IterationTracker
+    private iterationTracker: IterationTracker,
+    onProgress?: (message: string, data?: Record<string, unknown>) => void
   ) {
+    this.onProgress = onProgress || (() => {});
     this.backpropagationEngine = new BackpropagationEngine(
       promptEngine,
       stateManager,
       iterationTracker,
-      config.analysis.backpropagation.maxDepth
+      config.analysis.backpropagation.maxDepth,
+      config
     );
 
     this.convergenceDetector = new ConvergenceDetector(
@@ -80,8 +85,15 @@ export class AnalysisEngine {
     tables: TableNode[]
   ): Promise<BackpropagationTrigger[]> {
     const triggers: BackpropagationTrigger[] = [];
+    const total = tables.length;
 
-    for (const tableNode of tables) {
+    for (let i = 0; i < tables.length; i++) {
+      const tableNode = tables[i];
+
+      if (i % 5 === 0 || i === total - 1) {
+        this.onProgress(`Level ${level}: analyzing table ${i + 1}/${total} (${tableNode.schema}.${tableNode.table})`);
+      }
+
       const result = await this.analyzeTable(state, run, tableNode, level);
 
       // Check if guardrail was exceeded during this table's analysis
@@ -92,6 +104,10 @@ export class AnalysisEngine {
       if (result.triggers) {
         triggers.push(...result.triggers);
       }
+
+      // Save state after every table — each LLM call takes 15-30s so disk IO is negligible
+      this.stateManager.updateSummary(state);
+      await this.stateManager.save(state);
     }
 
     run.levelsProcessed = Math.max(run.levelsProcessed, level + 1);
@@ -113,8 +129,21 @@ export class AnalysisEngine {
       return {};
     }
 
+    // Skip user-approved tables — they should not be re-analyzed
+    if (table.userApproved) {
+      this.iterationTracker.addLogEntry(run, {
+        level,
+        schema: tableNode.schema,
+        table: tableNode.table,
+        action: 'analyze',
+        result: 'unchanged',
+        message: 'Skipped: user-approved description'
+      });
+      return {};
+    }
+
     try {
-      // Build analysis context
+      // Build analysis context (includes ground truth if available)
       const context = this.buildTableContext(state, tableNode);
 
       // Execute analysis prompt
@@ -180,10 +209,10 @@ export class AnalysisEngine {
         previousDescription ? 'refinement' : 'initial'
       );
 
-      // Update column descriptions
+      // Update column descriptions (skip user-approved columns)
       for (const colDesc of result.result.columnDescriptions || []) {
         const column = table.columns.find(c => c.name === colDesc.columnName);
-        if (column) {
+        if (column && !column.userApproved) {
           this.stateManager.updateColumnDescription(
             column,
             colDesc.description,
@@ -286,6 +315,9 @@ export class AnalysisEngine {
       }
     }
 
+    // Build ground truth context if available
+    const groundTruthContext = this.buildGroundTruthContext(tableNode.schema, tableNode.table);
+
     return {
       schema: tableNode.schema,
       table: tableNode.table,
@@ -307,9 +339,44 @@ export class AnalysisEngine {
       sampleData: [], // Could add sample rows here if needed
       parentDescriptions: parentDescriptions as any,
       userNotes: table.userNotes,
-      seedContext: state.seedContext,
-      allTables
+      seedContext: state.seedContext ?? this.config.seedContext,
+      allTables,
+      groundTruth: groundTruthContext
     };
+  }
+
+  /**
+   * Build ground truth context for a table from config
+   */
+  private buildGroundTruthContext(schemaName: string, tableName: string): TableGroundTruthContext | undefined {
+    const gt = this.config.groundTruth;
+    if (!gt) return undefined;
+
+    const tableKey = `${schemaName}.${tableName}`;
+    const tableGT = gt.tables?.[tableKey];
+    const schemaGT = gt.schemas?.[schemaName];
+
+    // If no ground truth for this table or schema, return undefined
+    if (!tableGT && !schemaGT) return undefined;
+
+    const context: TableGroundTruthContext = {};
+
+    if (tableGT?.description) context.tableDescription = tableGT.description;
+    if (tableGT?.notes) context.tableNotes = tableGT.notes;
+    if (tableGT?.businessDomain) context.businessDomain = tableGT.businessDomain;
+    if (schemaGT?.businessDomain && !context.businessDomain) context.businessDomain = schemaGT.businessDomain;
+
+    // Build column ground truth maps
+    if (tableGT?.columns) {
+      context.columnDescriptions = {};
+      context.columnNotes = {};
+      for (const [colName, colGT] of Object.entries(tableGT.columns)) {
+        if (colGT.description) context.columnDescriptions[colName] = colGT.description;
+        if (colGT.notes) context.columnNotes[colName] = colGT.notes;
+      }
+    }
+
+    return context;
   }
 
   /**

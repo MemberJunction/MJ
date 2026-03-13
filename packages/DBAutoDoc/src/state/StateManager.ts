@@ -176,7 +176,7 @@ export class StateManager {
     reasoning: string,
     confidence: number,
     modelUsed: string,
-    triggeredBy: 'initial' | 'backpropagation' | 'refinement' | 'dependency_sanity_check' | 'schema_sanity_check' | 'cross_schema_sanity_check'
+    triggeredBy: 'initial' | 'backpropagation' | 'refinement' | 'dependency_sanity_check' | 'schema_sanity_check' | 'cross_schema_sanity_check' | 'ground_truth' | 'existing_db_description'
   ): void {
     const iteration: DescriptionIteration = {
       description,

@@ -9,7 +9,7 @@ import { FKDetector } from './FKDetector.js';
 import { LLMDiscoveryValidator } from './LLMDiscoveryValidator.js';
 import { LLMSanityChecker } from './LLMSanityChecker.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
-import { SchemaDefinition, DatabaseDocumentation } from '../types/state.js';
+import { SchemaDefinition, TableDefinition, DatabaseDocumentation } from '../types/state.js';
 import {
   RelationshipDiscoveryPhase,
   RelationshipDiscoveryIteration,
@@ -25,6 +25,7 @@ export interface DiscoveryEngineOptions {
   aiConfig: AIConfig;
   schemas: SchemaDefinition[];
   onProgress?: (message: string, data?: any) => void;
+  onCheckpoint?: (phase: RelationshipDiscoveryPhase) => Promise<void>;
 }
 
 export interface DiscoveryResult {
@@ -40,6 +41,7 @@ export class DiscoveryEngine {
   private aiConfig: AIConfig;
   private schemas: SchemaDefinition[];
   private onProgress: (message: string, data?: any) => void;
+  private onCheckpoint: (phase: RelationshipDiscoveryPhase) => Promise<void>;
   private statsCache: ColumnStatsCache;
   private pkDetector: PKDetector;
   private fkDetector: FKDetector;
@@ -52,6 +54,7 @@ export class DiscoveryEngine {
     this.aiConfig = options.aiConfig;
     this.schemas = options.schemas;
     this.onProgress = options.onProgress || (() => {});
+    this.onCheckpoint = options.onCheckpoint || (async () => {});
 
     // Create stats cache and detectors
     this.statsCache = new ColumnStatsCache();
@@ -149,17 +152,28 @@ export class DiscoveryEngine {
    */
   public async discover(
     maxTokens: number,
-    triggerAnalysis: DiscoveryTriggerAnalysis
+    triggerAnalysis: DiscoveryTriggerAnalysis,
+    existingPhase?: RelationshipDiscoveryPhase
   ): Promise<DiscoveryResult> {
-    const phase: RelationshipDiscoveryPhase = this.initializePhase(maxTokens, triggerAnalysis);
+    // Resume from existing phase if provided, otherwise start fresh
+    const phase: RelationshipDiscoveryPhase = existingPhase || this.initializePhase(maxTokens, triggerAnalysis);
 
-    this.onProgress('Starting relationship discovery', {
-      maxTokens,
-      trigger: triggerAnalysis.reason
-    });
+    if (existingPhase) {
+      this.onProgress('Resuming relationship discovery', {
+        maxTokens,
+        existingPKs: phase.discovered.primaryKeys.length,
+        existingFKs: phase.discovered.foreignKeys.length,
+        priorTokensUsed: phase.tokenBudget.used
+      });
+    } else {
+      this.onProgress('Starting relationship discovery', {
+        maxTokens,
+        trigger: triggerAnalysis.reason
+      });
+    }
 
-    let iteration = 1;
-    let tokensUsed = 0;
+    let iteration = existingPhase ? (existingPhase.iterations.length + 1) : 1;
+    let tokensUsed = existingPhase ? existingPhase.tokenBudget.used : 0;
     let guardrailsReached = false;
     let guardrailReason: string | undefined;
 
@@ -254,6 +268,12 @@ export class DiscoveryEngine {
         primaryKeys: [],
         foreignKeys: []
       },
+      progress: {
+        pkTablesAnalyzed: [],
+        fkTablesAnalyzed: [],
+        llmValidated: false,
+        sanityChecked: false
+      },
       schemaEnhancements: {
         pkeysAdded: 0,
         fkeysAdded: 0,
@@ -323,6 +343,10 @@ export class DiscoveryEngine {
     let newPKs = await this.detectPrimaryKeys(iteration, phase);
     iterationResult.discoveries.newPKs = newPKs;
 
+    // Checkpoint after PK detection — save PK results before slow FK phase
+    this.mergeDiscoveries(phase, iterationResult);
+    await this.onCheckpoint(phase);
+
     this.onProgress(`Detected ${newPKs.length} PK candidates`, {
       iteration,
       candidates: newPKs.map(pk => `${pk.schemaName}.${pk.tableName}.${pk.columnNames.join('+')}`).slice(0, 5)
@@ -332,6 +356,11 @@ export class DiscoveryEngine {
     iterationResult.phase = 'fk_detection';
     const allPKs = [...phase.discovered.primaryKeys, ...newPKs];
     let newFKs = await this.detectForeignKeys(iteration, phase, allPKs);
+
+    // Checkpoint after FK detection — save before LLM phases
+    iterationResult.discoveries.newFKs = newFKs;
+    this.mergeDiscoveries(phase, iterationResult);
+    await this.onCheckpoint(phase);
 
     this.onProgress(`Detected ${newFKs.length} FK candidates (pre-sanity)`, {
       iteration,
@@ -472,34 +501,71 @@ export class DiscoveryEngine {
     phase: RelationshipDiscoveryPhase
   ): Promise<PKCandidate[]> {
     const allPKs: PKCandidate[] = [];
-    const tablesAnalyzed = new Set<string>();
+    // Initialize progress tracking if not present (resume support)
+    if (!phase.progress) {
+      phase.progress = { pkTablesAnalyzed: [], fkTablesAnalyzed: [], llmValidated: false, sanityChecked: false };
+    }
+    const alreadyAnalyzed = new Set<string>(phase.progress.pkTablesAnalyzed || []);
 
+    // Build list of tables that need PK detection (skip already-analyzed on resume)
+    const tablesToAnalyze: Array<{ schema: string; table: TableDefinition }> = [];
     for (const schema of this.schemas) {
       for (const table of schema.tables) {
         const tableKey = `${schema.name}.${table.name}`;
-
-        // Skip if already has PK or already analyzed
         const hasExistingPK = table.columns.some(col => col.isPrimaryKey);
         const hasDiscoveredPK = phase.discovered.primaryKeys.some(
           pk => pk.schemaName === schema.name && pk.tableName === table.name
         );
-
-        if (hasExistingPK || hasDiscoveredPK || tablesAnalyzed.has(tableKey)) {
-          continue;
+        if (!hasExistingPK && !hasDiscoveredPK && !alreadyAnalyzed.has(tableKey)) {
+          tablesToAnalyze.push({ schema: schema.name, table });
         }
-
-        // Detect PK candidates for this table
-        const candidates = await this.pkDetector.detectPKCandidates(
-          schema.name,
-          table,
-          iteration
-        );
-
-        allPKs.push(...candidates);
-        tablesAnalyzed.add(tableKey);
       }
     }
 
+    const total = tablesToAnalyze.length;
+    if (alreadyAnalyzed.size > 0) {
+      this.onProgress(`PK detection: ${total} tables remaining (${alreadyAnalyzed.size} already done from prior run)`);
+    } else {
+      this.onProgress(`PK detection: ${total} tables to analyze`);
+    }
+
+    for (let i = 0; i < tablesToAnalyze.length; i++) {
+      const { schema, table } = tablesToAnalyze[i];
+      const tableKey = `${schema}.${table.name}`;
+
+      if (i % 10 === 0 || i === total - 1) {
+        this.onProgress(`PK detection: ${i + 1}/${total} tables (${tableKey})`);
+      }
+
+      const candidates = await this.pkDetector.detectPKCandidates(
+        schema,
+        table,
+        iteration
+      );
+
+      // Merge into phase immediately so checkpoints include in-progress discoveries
+      for (const pk of candidates) {
+        const exists = phase.discovered.primaryKeys.some(existing =>
+          existing.schemaName === pk.schemaName &&
+          existing.tableName === pk.tableName &&
+          existing.columnNames.join(',') === pk.columnNames.join(',')
+        );
+        if (!exists) {
+          phase.discovered.primaryKeys.push(pk);
+        }
+      }
+      allPKs.push(...candidates);
+
+      // Track this table as analyzed for resume
+      phase.progress!.pkTablesAnalyzed!.push(tableKey);
+
+      // Save after every 10 tables during PK detection
+      if ((i + 1) % 10 === 0 || i === total - 1) {
+        await this.onCheckpoint(phase);
+      }
+    }
+
+    this.onProgress(`PK detection complete: ${allPKs.length} candidates from ${total} tables`);
     return allPKs;
   }
 
@@ -513,33 +579,82 @@ export class DiscoveryEngine {
   ): Promise<FKCandidate[]> {
     const allFKs: FKCandidate[] = [];
 
+    // Initialize progress tracking if not present (resume support)
+    if (!phase.progress) {
+      phase.progress = { pkTablesAnalyzed: [], fkTablesAnalyzed: [], llmValidated: false, sanityChecked: false };
+    }
+    const alreadyAnalyzed = new Set<string>(phase.progress.fkTablesAnalyzed || []);
+
+    // Build flat list, skipping already-analyzed tables on resume
+    const allTables: Array<{ schema: string; table: TableDefinition }> = [];
     for (const schema of this.schemas) {
       for (const table of schema.tables) {
-        // Detect FK candidates for this table
-        const candidates = await this.fkDetector.detectFKCandidates(
-          this.schemas,
-          schema.name,
-          table,
-          discoveredPKs,
-          iteration
-        );
-
-        // Filter out duplicates (already discovered FKs)
-        const newCandidates = candidates.filter(newFK =>
-          !phase.discovered.foreignKeys.some(existingFK =>
-            existingFK.schemaName === newFK.schemaName &&
-            existingFK.sourceTable === newFK.sourceTable &&
-            existingFK.sourceColumn === newFK.sourceColumn &&
-            existingFK.targetSchema === newFK.targetSchema &&
-            existingFK.targetTable === newFK.targetTable &&
-            existingFK.targetColumn === newFK.targetColumn
-          )
-        );
-
-        allFKs.push(...newCandidates);
+        const tableKey = `${schema.name}.${table.name}`;
+        if (!alreadyAnalyzed.has(tableKey)) {
+          allTables.push({ schema: schema.name, table });
+        }
       }
     }
 
+    const total = allTables.length;
+    if (alreadyAnalyzed.size > 0) {
+      this.onProgress(`FK detection: ${total} tables remaining (${alreadyAnalyzed.size} already done from prior run)`);
+    } else {
+      this.onProgress(`FK detection: ${total} tables to analyze against ${discoveredPKs.length} PK candidates`);
+    }
+
+    for (let i = 0; i < allTables.length; i++) {
+      const { schema, table } = allTables[i];
+      const tableKey = `${schema}.${table.name}`;
+
+      if (i % 5 === 0 || i === total - 1) {
+        this.onProgress(`FK detection: ${i + 1}/${total} tables (${schema}.${table.name}), ${allFKs.length} candidates so far`);
+      }
+
+      const candidates = await this.fkDetector.detectFKCandidates(
+        this.schemas,
+        schema,
+        table,
+        discoveredPKs,
+        iteration
+      );
+
+      // Filter out duplicates (already discovered FKs)
+      const newCandidates = candidates.filter(newFK =>
+        !phase.discovered.foreignKeys.some(existingFK =>
+          existingFK.schemaName === newFK.schemaName &&
+          existingFK.sourceTable === newFK.sourceTable &&
+          existingFK.sourceColumn === newFK.sourceColumn &&
+          existingFK.targetSchema === newFK.targetSchema &&
+          existingFK.targetTable === newFK.targetTable &&
+          existingFK.targetColumn === newFK.targetColumn
+        )
+      );
+
+      // Merge into phase immediately so checkpoints include in-progress discoveries
+      for (const fk of newCandidates) {
+        const exists = phase.discovered.foreignKeys.some(existing =>
+          existing.schemaName === fk.schemaName &&
+          existing.sourceTable === fk.sourceTable &&
+          existing.sourceColumn === fk.sourceColumn &&
+          existing.targetSchema === fk.targetSchema &&
+          existing.targetTable === fk.targetTable &&
+          existing.targetColumn === fk.targetColumn
+        );
+        if (!exists) {
+          phase.discovered.foreignKeys.push(fk);
+        }
+      }
+      allFKs.push(...newCandidates);
+
+      // Track this table as analyzed for resume
+      phase.progress!.fkTablesAnalyzed!.push(tableKey);
+
+      // Save after every table during FK detection (each table can take 20-30s)
+      await this.onCheckpoint(phase);
+    }
+
+    this.onProgress(`FK detection complete: ${allFKs.length} candidates from ${total} tables`);
     return allFKs;
   }
 

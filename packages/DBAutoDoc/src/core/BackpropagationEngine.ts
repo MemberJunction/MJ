@@ -3,19 +3,25 @@
  */
 
 import { DatabaseDocumentation, TableDefinition, AnalysisRun } from '../types/state.js';
-import { BackpropagationTrigger } from '../types/analysis.js';
+import { BackpropagationTrigger, TableGroundTruthContext } from '../types/analysis.js';
 import { BackpropagationPromptResult } from '../types/prompts.js';
+import { DBAutoDocConfig } from '../types/config.js';
 import { PromptEngine } from '../prompts/PromptEngine.js';
 import { StateManager } from '../state/StateManager.js';
 import { IterationTracker } from '../state/IterationTracker.js';
 
 export class BackpropagationEngine {
+  private config?: DBAutoDocConfig;
+
   constructor(
     private promptEngine: PromptEngine,
     private stateManager: StateManager,
     private iterationTracker: IterationTracker,
-    private maxDepth: number
-  ) {}
+    private maxDepth: number,
+    config?: DBAutoDocConfig
+  ) {
+    this.config = config;
+  }
 
   /**
    * Execute backpropagation for a set of triggers
@@ -43,6 +49,19 @@ export class BackpropagationEngine {
         continue;
       }
 
+      // Skip user-approved tables — they should not be revised
+      if (table.userApproved) {
+        this.iterationTracker.addLogEntry(run, {
+          level: table.dependencyLevel || 0,
+          schema: schemaName,
+          table: tableName,
+          action: 'backpropagate',
+          result: 'unchanged',
+          message: 'Skipped: user-approved description'
+        });
+        continue;
+      }
+
       // Skip if no current description
       if (!table.description) {
         continue;
@@ -54,6 +73,9 @@ export class BackpropagationEngine {
       // Combine insights from all triggers for this table
       const insights = tableTriggers.map(t => t.insight).join('\n\n');
 
+      // Build ground truth context if available
+      const groundTruth = this.buildGroundTruthForTable(schemaName, tableName);
+
       // Execute backpropagation prompt
       const result = await this.promptEngine.executePrompt<BackpropagationPromptResult>(
         'backpropagation',
@@ -63,7 +85,8 @@ export class BackpropagationEngine {
           currentDescription: table.description,
           currentReasoning: latestIteration?.reasoning || '',
           currentConfidence: latestIteration?.confidence || 0,
-          insights
+          insights,
+          groundTruth
         },
         {
           responseFormat: 'JSON'
@@ -149,6 +172,23 @@ export class BackpropagationEngine {
     }
 
     return triggers;
+  }
+
+  /**
+   * Build ground truth context for a table
+   */
+  private buildGroundTruthForTable(schemaName: string, tableName: string): TableGroundTruthContext | undefined {
+    const gt = this.config?.groundTruth;
+    if (!gt) return undefined;
+
+    const tableKey = `${schemaName}.${tableName}`;
+    const tableGT = gt.tables?.[tableKey];
+    if (!tableGT) return undefined;
+
+    const context: TableGroundTruthContext = {};
+    if (tableGT.description) context.tableDescription = tableGT.description;
+    if (tableGT.notes) context.tableNotes = tableGT.notes;
+    return context;
   }
 
   /**

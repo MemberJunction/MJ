@@ -179,7 +179,10 @@ export class PromptEngine {
       };
 
       // 3. Execute with AI/Core (follows RunView pattern - doesn't throw)
+      console.log(`[PromptEngine] Calling LLM (model: ${params.model}, prompt length: ${renderedPrompt.length} chars)`);
+      const llmStartTime = Date.now();
       const chatResult: ChatResult = await this.llm.ChatCompletion(params);
+      console.log(`[PromptEngine] LLM responded in ${((Date.now() - llmStartTime) / 1000).toFixed(1)}s (success: ${chatResult.success})`);
 
       // 4. Check success (IMPORTANT: like RunView, check .success property)
       if (!chatResult.success) {
