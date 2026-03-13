@@ -1514,6 +1514,45 @@ When metadata records contain JSON blobs (schemas, templates, etc.):
 2. Name files descriptively with appropriate extension (e.g., `api-key.schema.json`)
 3. Use the `@file:relative/path.json` syntax in the main metadata file
 
+### Seeding New Lookup/Reference Tables
+When a migration creates a new lookup or reference table (e.g., `AIAgentRequestType`, `ResourceType`), **never seed it with SQL INSERT statements in the migration**. Instead, use the metadata file system:
+
+1. Create a new directory under `/metadata/` named for the entity (e.g., `agent-request-types/`)
+2. Create `.mj-sync.json` with the entity configuration:
+   ```json
+   {
+     "entity": "MJ: AI Agent Request Types",
+     "filePattern": "**/.*.json",
+     "defaults": {},
+     "pull": {
+       "createNewFileIfNotFound": true,
+       "newFileName": ".agent-request-types.json",
+       "appendRecordsToExistingFile": true,
+       "updateExistingRecords": true,
+       "preserveFields": [],
+       "excludeFields": [],
+       "mergeStrategy": "merge",
+       "backupBeforeUpdate": true,
+       "backupDirectory": ".backups",
+       "filter": "",
+       "externalizeFields": [],
+       "ignoreNullFields": true,
+       "ignoreVirtualFields": true,
+       "lookupFields": {},
+       "relatedEntities": {}
+     }
+   }
+   ```
+3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — these are auto-populated by mj-sync on first push.
+4. Push with: `npx mj sync push --dir=metadata --include="agent-request-types"`
+
+**Why metadata files over SQL INSERTs:**
+- Version-controlled, declarative, and human-readable
+- `@lookup:` references resolve entity names to IDs automatically
+- `mj sync push` handles upsert semantics — safe to re-run
+- Consistent with how all other MJ reference data is managed
+- See `/metadata/resource-types/` for a clean example of a seeded lookup table
+
 ### Application Metadata
 When creating new applications with custom dashboards:
 1. Create `.{app-name}-application.json` in `/metadata/applications/`

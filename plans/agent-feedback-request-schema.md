@@ -122,20 +122,28 @@ The AI dashboard in the Explorer should eventually support:
 ### Step 1: Database Migration
 
 Create migration file in `migrations/v5/` with:
-1. `CREATE TABLE AIAgentRequestType` with seed data
+1. `CREATE TABLE AIAgentRequestType` (**no seed data in migration** — seed data is managed via metadata files)
 2. `ALTER TABLE AIAgentRequest` to add new columns and foreign keys
 3. Expand `Status` CHECK constraint on `AIAgentRequest`
 4. Expand `Status` CHECK constraint on `AIAgentRun` to include `AwaitingFeedback`
 5. All columns are nullable or have defaults so existing data is unaffected
 
-### Step 2: Run CodeGen
+### Step 2: Seed Data via Metadata Files
+
+Create `/metadata/agent-request-types/` directory with:
+- `.mj-sync.json` — sync configuration for the `MJ: AI Agent Request Types` entity
+- `.agent-request-types.json` — seed records (Approval, Information, Choice, Review, Custom)
+
+Seed data is pushed to the database using `npx mj sync push --dir=metadata --include="agent-request-types"`. This follows the standard MJ pattern for seeding lookup/reference tables — declarative JSON in version control, not SQL INSERT statements. See the `metadata/resource-types/` folder for a comparable example.
+
+### Step 3: Run CodeGen
 
 After migration is applied, run CodeGen to regenerate:
 - Entity subclasses in `MJCoreEntities`
 - Server-side generated code
 - Angular form components
 
-### Step 3: Verify Generated Output
+### Step 4: Verify Generated Output
 
 - Confirm `MJAIAgentRequestEntity` has new fields with proper types
 - Confirm `MJAIAgentRequestTypeEntity` is generated
@@ -158,3 +166,4 @@ After migration is applied, run CodeGen to regenerate:
 - The `ResponseSchema` field reuses the existing `AgentResponseForm` type from `ai-core-plus` — no new type system needed
 - `AIAgentRequestType` is intentionally simple for now (no DriverClass, no DefaultResponseSchema). We'll add extensibility as we learn from real usage patterns
 - CodeGen will handle timestamp columns, FK indexes, stored procedures, and Angular forms automatically — none of these should be in the migration
+- Seed data for `AIAgentRequestType` lives in `/metadata/agent-request-types/` and is pushed via `mj sync push`, not SQL INSERT statements

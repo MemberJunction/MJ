@@ -1,0 +1,37 @@
+[
+  {
+    "fields": {
+      "Name": "Approval",
+      "Description": "Agent needs explicit approval to proceed with an action. User responds with Approved or Rejected.",
+      "Icon": "fa-solid fa-check-circle"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Information",
+      "Description": "Agent needs additional information or data from the user before it can continue processing.",
+      "Icon": "fa-solid fa-info-circle"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Choice",
+      "Description": "Agent needs the user to select from a set of options. Options are defined in the request's ResponseSchema.",
+      "Icon": "fa-solid fa-list-check"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Review",
+      "Description": "Agent wants the user to review its output before proceeding. User can approve, request changes, or reject.",
+      "Icon": "fa-solid fa-eye"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Custom",
+      "Description": "Agent-defined request type with a custom response schema. Used when none of the standard types apply.",
+      "Icon": "fa-solid fa-cog"
+    }
+  }
+]
