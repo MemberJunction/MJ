@@ -26,6 +26,19 @@ To enable fast mode (2.5x faster Opus 4.6 responses), add `"fastMode": true` to 
   - No `unknown` as a lazy alternative
 - **Why**: MemberJunction has strong typing throughout - there's always a proper type available
 
+### 2b. NO WEAK TYPING — NEVER USE BaseEntity `.Get()` / `.Set()` AS A SUBSTITUTE FOR GENERATED TYPES
+- **NEVER use `record.Get('FieldName')` or `record.Set('FieldName', value)`** to access entity fields that should have strongly-typed properties
+- **NEVER write code that depends on fields not yet in generated types** — if a migration hasn't run and CodeGen hasn't generated the types, **wait for CodeGen** before writing code that references those fields
+- `.Get()` and `.Set()` are dynamic, stringly-typed accessors with zero compile-time safety — they bypass the entire point of MJ's generated entity classes
+- The correct workflow when adding new database columns:
+  1. Write the migration
+  2. Run the migration + CodeGen to generate types
+  3. **Then** write TypeScript code using the strongly-typed properties
+- If you find yourself reaching for `.Get()` or `.Set()`, STOP — it means either:
+  - The types exist and you should use the typed property instead
+  - The types don't exist yet because CodeGen hasn't run — wait for it before writing dependent code
+- **Why**: `.Get()`/`.Set()` fail silently on typos, have no IntelliSense, no refactoring support, and no compile-time checking. They are the `any` of the entity world.
+
 ### 3. NO DESTRUCTIVE GIT OPERATIONS WITHOUT EXPLICIT APPROVAL
 - **NEVER run `git checkout -- <file>` or `git restore <file>`** to discard changes without the user explicitly approving — even in bypass/auto-approve permission mode
 - **NEVER run `git reset --hard`** without explicit approval

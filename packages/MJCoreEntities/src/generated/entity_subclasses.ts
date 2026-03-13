@@ -960,6 +960,70 @@ export const MJAIAgentArtifactTypeSchema = z.object({
 export type MJAIAgentArtifactTypeEntityType = z.infer<typeof MJAIAgentArtifactTypeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Categories
+ */
+export const MJAIAgentCategorySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key for the AIAgentCategory record.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Unique display name for the category (e.g., Research, Customer Support, Data Processing).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description explaining the purpose and scope of this category.`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Categories (vwAIAgentCategories.ID)
+        * * Description: Self-referencing foreign key to the parent category, forming a tree hierarchy. NULL for root categories.`),
+    AssignmentStrategy: z.string().nullable().describe(`
+        * * Field Name: AssignmentStrategy
+        * * Display Name: Assignment Strategy
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON-serialized AgentRequestAssignmentStrategy defining who receives feedback requests for agents in this category. Inherited by child categories that do not define their own strategy.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+        * * Description: Whether this category is Active, Disabled, or Pending.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent Name
+        * * SQL Data Type: nvarchar(200)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent
+        * * SQL Data Type: uniqueidentifier`),
+});
+
+export type MJAIAgentCategoryEntityType = z.infer<typeof MJAIAgentCategorySchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Configurations
  */
 export const MJAIAgentConfigurationSchema = z.object({
@@ -2082,6 +2146,27 @@ export const MJAIAgentRequestTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    DefaultAssignmentStrategy: z.string().nullable().describe(`
+        * * Field Name: DefaultAssignmentStrategy
+        * * Display Name: Default Assignment Strategy
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON-serialized AgentRequestAssignmentStrategy defining the default assignment strategy for requests of this type. Used as the lowest-priority fallback in the resolution chain.`),
+    DefaultPriority: z.number().nullable().describe(`
+        * * Field Name: DefaultPriority
+        * * Display Name: Default Priority
+        * * SQL Data Type: int
+        * * Description: Default priority (1-100) for requests of this type when no explicit priority is provided. NULL means use the system default of 50.`),
+    DefaultExpirationMinutes: z.number().nullable().describe(`
+        * * Field Name: DefaultExpirationMinutes
+        * * Display Name: Default Expiration (Minutes)
+        * * SQL Data Type: int
+        * * Description: Default expiration time in minutes for requests of this type. NULL means requests do not expire by default.`),
+    RequiresResponse: z.boolean().describe(`
+        * * Field Name: RequiresResponse
+        * * Display Name: Requires Response
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether requests of this type require a structured response from the human before the agent can resume. When 0, the agent may proceed with just an acknowledgment.`),
 });
 
 export type MJAIAgentRequestTypeEntityType = z.infer<typeof MJAIAgentRequestTypeSchema>;
@@ -3136,12 +3221,17 @@ export const MJAIAgentTypeSchema = z.object({
         * * Description: Determines whether the custom form section (specified by UIFormSectionClass) should be expanded by default when the AI Agent form loads. True means the section starts expanded, False means it starts collapsed. Only applies when UIFormSectionClass is specified. Defaults to 1 (expanded).`),
     PromptParamsSchema: z.string().nullable().describe(`
         * * Field Name: PromptParamsSchema
-        * * Display Name: Prompt Params Schema
+        * * Display Name: Prompt Parameters Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON Schema defining the available prompt parameters for this agent type. Includes property definitions with types, defaults, and descriptions. Used by agents of this type to customize which prompt sections are included in the system prompt. The schema follows JSON Schema draft-07 format.`),
+    AssignmentStrategy: z.string().nullable().describe(`
+        * * Field Name: AssignmentStrategy
+        * * Display Name: Assignment Strategy
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON-serialized AgentRequestAssignmentStrategy defining the default assignment strategy for all agents of this type. Overridden by per-invocation or category-level strategies in the resolution chain.`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
-        * * Display Name: System Prompt
+        * * Display Name: System Prompt Text
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -3218,17 +3308,17 @@ export const MJAIAgentSchema = z.object({
         * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
-        * * Display Name: Context Compression Message Threshold
+        * * Display Name: Compression Message Threshold
         * * SQL Data Type: int
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Context Compression Prompt ID
+        * * Display Name: Context Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageRetentionCount
-        * * Display Name: Context Compression Message Retention Count
+        * * Display Name: Compression Message Retention Count
         * * SQL Data Type: int
         * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
     TypeID: z.string().nullable().describe(`
@@ -3392,7 +3482,7 @@ if this limit is exceeded.`),
         * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner User ID
+        * * Display Name: Owner
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -3500,7 +3590,7 @@ if this limit is exceeded.`),
         * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
     AttachmentStorageProviderID: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProviderID
-        * * Display Name: Attachment Storage Provider ID
+        * * Display Name: Attachment Storage Provider
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
         * * Description: File storage provider for large attachments. Overrides the default from AIConfiguration. NULL uses system default.`),
@@ -3511,7 +3601,7 @@ if this limit is exceeded.`),
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Storage Threshold Bytes
+        * * Display Name: Inline Storage Threshold (Bytes)
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
@@ -3521,18 +3611,18 @@ if this limit is exceeded.`),
         * * Description: JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.`),
     ScopeConfig: z.string().nullable().describe(`
         * * Field Name: ScopeConfig
-        * * Display Name: Scope Config
+        * * Display Name: Scope Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}`),
     NoteRetentionDays: z.number().nullable().describe(`
         * * Field Name: NoteRetentionDays
-        * * Display Name: Note Retention Days
+        * * Display Name: Note Retention (Days)
         * * SQL Data Type: int
         * * Default Value: 90
         * * Description: Number of days to retain notes before archiving due to inactivity. Default 90. NULL means use system default.`),
     ExampleRetentionDays: z.number().nullable().describe(`
         * * Field Name: ExampleRetentionDays
-        * * Display Name: Example Retention Days
+        * * Display Name: Example Retention (Days)
         * * SQL Data Type: int
         * * Default Value: 180
         * * Description: Number of days to retain examples before archiving due to inactivity. Default 180. NULL means use system default.`),
@@ -3547,33 +3637,43 @@ if this limit is exceeded.`),
         * * Display Name: Reranker Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for optional reranking of retrieved memory items. Schema: { enabled: boolean, rerankerModelId: string, retrievalMultiplier: number (default 3), minRelevanceThreshold: number (default 0.5), rerankPromptId?: string, contextFields?: string[], fallbackOnError: boolean (default true) }. When null or disabled, vector search results are used directly without reranking.`),
+    CategoryID: z.string().nullable().describe(`
+        * * Field Name: CategoryID
+        * * Display Name: Category
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Categories (vwAIAgentCategories.ID)
+        * * Description: Foreign key to AIAgentCategory. Assigns this agent to an organizational category for grouping, filtering, and inherited assignment strategy resolution.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Context Compression Prompt
+        * * Display Name: Context Compression Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Type Name
         * * SQL Data Type: nvarchar(100)`),
     DefaultArtifactType: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactType
-        * * Display Name: Default Artifact Type
+        * * Display Name: Default Artifact Type Name
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().describe(`
         * * Field Name: OwnerUser
-        * * Display Name: Owner User
+        * * Display Name: Owner Name
         * * SQL Data Type: nvarchar(100)`),
     AttachmentStorageProvider: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProvider
-        * * Display Name: Attachment Storage Provider
+        * * Display Name: Attachment Storage Provider Name
         * * SQL Data Type: nvarchar(50)`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category Name
+        * * SQL Data Type: nvarchar(200)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -25728,6 +25828,162 @@ export class MJAIAgentArtifactTypeEntity extends BaseEntity<MJAIAgentArtifactTyp
 
 
 /**
+ * MJ: AI Agent Categories - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentCategory
+ * * Base View: vwAIAgentCategories
+ * * @description Hierarchical organizational grouping for AI agents. Categories form a tree via the ParentID self-referencing foreign key and can carry inherited assignment strategies.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Categories')
+export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityType> {
+    /**
+    * Loads the MJ: AI Agent Categories record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Categories record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentCategoryEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key for the AIAgentCategory record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Unique display name for the category (e.g., Research, Customer Support, Data Processing).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description explaining the purpose and scope of this category.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Categories (vwAIAgentCategories.ID)
+    * * Description: Self-referencing foreign key to the parent category, forming a tree hierarchy. NULL for root categories.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: AssignmentStrategy
+    * * Display Name: Assignment Strategy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON-serialized AgentRequestAssignmentStrategy defining who receives feedback requests for agents in this category. Inherited by child categories that do not define their own strategy.
+    */
+    get AssignmentStrategy(): string | null {
+        return this.Get('AssignmentStrategy');
+    }
+    set AssignmentStrategy(value: string | null) {
+        this.Set('AssignmentStrategy', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
+    * * Description: Whether this category is Active, Disabled, or Pending.
+    */
+    get Status(): 'Active' | 'Disabled' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+}
+
+
+/**
  * MJ: AI Agent Configurations - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentConfiguration
@@ -28596,6 +28852,59 @@ export class MJAIAgentRequestTypeEntity extends BaseEntity<MJAIAgentRequestTypeE
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: DefaultAssignmentStrategy
+    * * Display Name: Default Assignment Strategy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON-serialized AgentRequestAssignmentStrategy defining the default assignment strategy for requests of this type. Used as the lowest-priority fallback in the resolution chain.
+    */
+    get DefaultAssignmentStrategy(): string | null {
+        return this.Get('DefaultAssignmentStrategy');
+    }
+    set DefaultAssignmentStrategy(value: string | null) {
+        this.Set('DefaultAssignmentStrategy', value);
+    }
+
+    /**
+    * * Field Name: DefaultPriority
+    * * Display Name: Default Priority
+    * * SQL Data Type: int
+    * * Description: Default priority (1-100) for requests of this type when no explicit priority is provided. NULL means use the system default of 50.
+    */
+    get DefaultPriority(): number | null {
+        return this.Get('DefaultPriority');
+    }
+    set DefaultPriority(value: number | null) {
+        this.Set('DefaultPriority', value);
+    }
+
+    /**
+    * * Field Name: DefaultExpirationMinutes
+    * * Display Name: Default Expiration (Minutes)
+    * * SQL Data Type: int
+    * * Description: Default expiration time in minutes for requests of this type. NULL means requests do not expire by default.
+    */
+    get DefaultExpirationMinutes(): number | null {
+        return this.Get('DefaultExpirationMinutes');
+    }
+    set DefaultExpirationMinutes(value: number | null) {
+        this.Set('DefaultExpirationMinutes', value);
+    }
+
+    /**
+    * * Field Name: RequiresResponse
+    * * Display Name: Requires Response
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether requests of this type require a structured response from the human before the agent can resume. When 0, the agent may proceed with just an acknowledgment.
+    */
+    get RequiresResponse(): boolean {
+        return this.Get('RequiresResponse');
+    }
+    set RequiresResponse(value: boolean) {
+        this.Set('RequiresResponse', value);
+    }
 }
 
 
@@ -31453,7 +31762,7 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
 
     /**
     * * Field Name: PromptParamsSchema
-    * * Display Name: Prompt Params Schema
+    * * Display Name: Prompt Parameters Schema
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON Schema defining the available prompt parameters for this agent type. Includes property definitions with types, defaults, and descriptions. Used by agents of this type to customize which prompt sections are included in the system prompt. The schema follows JSON Schema draft-07 format.
     */
@@ -31465,8 +31774,21 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
 
     /**
+    * * Field Name: AssignmentStrategy
+    * * Display Name: Assignment Strategy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON-serialized AgentRequestAssignmentStrategy defining the default assignment strategy for all agents of this type. Overridden by per-invocation or category-level strategies in the resolution chain.
+    */
+    get AssignmentStrategy(): string | null {
+        return this.Get('AssignmentStrategy');
+    }
+    set AssignmentStrategy(value: string | null) {
+        this.Set('AssignmentStrategy', value);
+    }
+
+    /**
     * * Field Name: SystemPrompt
-    * * Display Name: System Prompt
+    * * Display Name: System Prompt Text
     * * SQL Data Type: nvarchar(255)
     */
     get SystemPrompt(): string | null {
@@ -31811,7 +32133,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageThreshold
-    * * Display Name: Context Compression Message Threshold
+    * * Display Name: Compression Message Threshold
     * * SQL Data Type: int
     * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
     */
@@ -31824,7 +32146,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Context Compression Prompt ID
+    * * Display Name: Context Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     */
@@ -31837,7 +32159,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageRetentionCount
-    * * Display Name: Context Compression Message Retention Count
+    * * Display Name: Compression Message Retention Count
     * * SQL Data Type: int
     * * Description: Number of recent messages to keep uncompressed when context compression is applied.
     */
@@ -32201,7 +32523,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner User ID
+    * * Display Name: Owner
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -32421,7 +32743,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentStorageProviderID
-    * * Display Name: Attachment Storage Provider ID
+    * * Display Name: Attachment Storage Provider
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
     * * Description: File storage provider for large attachments. Overrides the default from AIConfiguration. NULL uses system default.
@@ -32448,7 +32770,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Storage Threshold Bytes
+    * * Display Name: Inline Storage Threshold (Bytes)
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -32474,7 +32796,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ScopeConfig
-    * * Display Name: Scope Config
+    * * Display Name: Scope Configuration
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}
     */
@@ -32487,7 +32809,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: NoteRetentionDays
-    * * Display Name: Note Retention Days
+    * * Display Name: Note Retention (Days)
     * * SQL Data Type: int
     * * Default Value: 90
     * * Description: Number of days to retain notes before archiving due to inactivity. Default 90. NULL means use system default.
@@ -32501,7 +32823,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ExampleRetentionDays
-    * * Display Name: Example Retention Days
+    * * Display Name: Example Retention (Days)
     * * SQL Data Type: int
     * * Default Value: 180
     * * Description: Number of days to retain examples before archiving due to inactivity. Default 180. NULL means use system default.
@@ -32541,8 +32863,22 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: CategoryID
+    * * Display Name: Category
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Categories (vwAIAgentCategories.ID)
+    * * Description: Foreign key to AIAgentCategory. Assigns this agent to an organizational category for grouping, filtering, and inherited assignment strategy resolution.
+    */
+    get CategoryID(): string | null {
+        return this.Get('CategoryID');
+    }
+    set CategoryID(value: string | null) {
+        this.Set('CategoryID', value);
+    }
+
+    /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -32551,7 +32887,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Context Compression Prompt
+    * * Display Name: Context Compression Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -32560,7 +32896,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string | null {
@@ -32569,7 +32905,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultArtifactType
-    * * Display Name: Default Artifact Type
+    * * Display Name: Default Artifact Type Name
     * * SQL Data Type: nvarchar(100)
     */
     get DefaultArtifactType(): string | null {
@@ -32578,7 +32914,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUser
-    * * Display Name: Owner User
+    * * Display Name: Owner Name
     * * SQL Data Type: nvarchar(100)
     */
     get OwnerUser(): string {
@@ -32587,7 +32923,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentStorageProvider
-    * * Display Name: Attachment Storage Provider
+    * * Display Name: Attachment Storage Provider Name
     * * SQL Data Type: nvarchar(50)
     */
     get AttachmentStorageProvider(): string | null {
@@ -32595,8 +32931,17 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: Category
+    * * Display Name: Category Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+
+    /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {

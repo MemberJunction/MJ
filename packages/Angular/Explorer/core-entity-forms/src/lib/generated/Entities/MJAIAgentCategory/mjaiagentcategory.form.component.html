@@ -8,11 +8,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Basic Definition Section -->
+    <!-- Category Definition Section -->
     <mj-collapsible-panel
-        SectionKey="basicDefinition"
-        SectionName="Basic Definition"
-        Icon="fa fa-tag"
+        SectionKey="categoryDefinition"
+        SectionName="Category Definition"
+        Icon="fa fa-tags"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -31,20 +31,36 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AssignmentStrategy"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Prompt Configuration Section -->
+    <!-- Hierarchy Section -->
     <mj-collapsible-panel
-        SectionKey="promptConfiguration"
-        SectionName="Prompt Configuration"
-        Icon="fa fa-comment-dots"
+        SectionKey="hierarchy"
+        SectionName="Hierarchy"
+        Icon="fa fa-folder-tree"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="SystemPromptID"
+            FieldName="ParentID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -53,74 +69,8 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="AgentPromptPlaceholder"
+            FieldName="RootParentID"
             Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="PromptParamsSchema"
-            Type="code"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Behavior & UI Settings Section -->
-    <mj-collapsible-panel
-        SectionKey="behaviorUISettings"
-        SectionName="Behavior & UI Settings"
-        Icon="fa fa-sliders-h"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="IsActive"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="DriverClass"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="UIFormSectionKey"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="UIFormKey"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="UIFormSectionExpandedByDefault"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="AssignmentStrategy"
-            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -157,6 +107,31 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
+    <!-- AI Agent Categories Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentCategories"
+        SectionName="AI Agent Categories"
+        Icon="fa fa-sitemap"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentCategories')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Categories','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Categories')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentCategories')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentCategories', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Agents Section -->
     <mj-collapsible-panel
         SectionKey="mJAIAgents"
@@ -170,7 +145,7 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','TypeID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','CategoryID')"
                 [NewRecordValues]="NewRecordValues('MJ: AI Agents')"
                 [AllowLoad]="IsSectionExpanded('mJAIAgents')"
                 [ShowToolbar]="false"

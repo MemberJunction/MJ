@@ -17,6 +17,7 @@ export class MJAIAgentRequestTypeFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'requestTypeConfiguration', sectionName: 'Request Type Configuration', isExpanded: true },
+            { sectionKey: 'defaultRequestSettings', sectionName: 'Default Request Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentRequests', sectionName: 'AI Agent Requests', isExpanded: false }
         ]);
