@@ -1,18 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { QueryCompositionEngine } from '../generic/queryCompositionEngine';
-import { QueryPagingEngine } from '../generic/queryPagingEngine';
-import { QueryCache } from '../generic/QueryCache';
-import { QueryCacheConfig } from '../generic/QueryCacheConfig';
-import { QueryInfo } from '../generic/queryInfo';
-import { Metadata } from '../generic/metadata';
-import { UserInfo } from '../generic/securityInfo';
-import { DatabasePlatform } from '../generic/platformSQL';
+import {
+    QueryCompositionEngine,
+    QueryPagingEngine,
+    QueryCache,
+    QueryCacheConfig,
+    QueryInfo,
+    Metadata,
+    UserInfo,
+    DatabasePlatform
+} from '@memberjunction/core';
 
 // Mock logging
-vi.mock('../generic/logging', () => ({
-    LogStatus: vi.fn(),
-    LogError: vi.fn()
-}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        LogStatus: vi.fn(),
+        LogError: vi.fn()
+    };
+});
 
 // ---- Helpers ----
 
