@@ -291,7 +291,9 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Parse the ResponseSchema JSON and set up form fields
+     * Parse the ResponseSchema JSON and set up form fields.
+     * Supports the AgentResponseForm format (questions array with nested type objects)
+     * as well as a simple Fields array format.
      */
     private initializeForm(): void {
         this.FormFields = [];
@@ -301,13 +303,20 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
 
         try {
             const schema = JSON.parse(this.Request.ResponseSchema);
-            if (schema?.Fields && Array.isArray(schema.Fields)) {
-                this.FormFields = schema.Fields.map((f: Record<string, unknown>) => this.parseFormField(f));
-                // Set default values
-                for (const field of this.FormFields) {
-                    if (field.DefaultValue != null) {
-                        this.FormValues[field.Name] = field.DefaultValue;
-                    }
+
+            // AgentResponseForm format: { title, description, questions: [...] }
+            if (schema?.questions && Array.isArray(schema.questions)) {
+                this.FormFields = schema.questions.map((q: Record<string, unknown>) => this.parseAgentResponseFormQuestion(q));
+            }
+            // Simple Fields array format: { Fields: [...] }
+            else if (schema?.Fields && Array.isArray(schema.Fields)) {
+                this.FormFields = schema.Fields.map((f: Record<string, unknown>) => this.parseSimpleFormField(f));
+            }
+
+            // Set default values
+            for (const field of this.FormFields) {
+                if (field.DefaultValue != null) {
+                    this.FormValues[field.Name] = field.DefaultValue;
                 }
             }
         } catch {
@@ -315,7 +324,74 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
         }
     }
 
-    private parseFormField(raw: Record<string, unknown>): ResponseFormField {
+    /**
+     * Parse an AgentResponseForm question into a ResponseFormField.
+     * AgentResponseForm questions have: { id, label, type: { type, options?, min?, max? }, required, helpText }
+     */
+    private parseAgentResponseFormQuestion(q: Record<string, unknown>): ResponseFormField {
+        const typeObj = q['type'] as Record<string, unknown> | string | undefined;
+        let fieldType = 'text';
+        let options: string[] | undefined;
+        let minValue: number | undefined;
+        let maxValue: number | undefined;
+
+        if (typeof typeObj === 'string') {
+            fieldType = this.mapAgentFormType(typeObj);
+        } else if (typeObj && typeof typeObj === 'object') {
+            fieldType = this.mapAgentFormType((typeObj['type'] as string) ?? 'text');
+            if (Array.isArray(typeObj['options'])) {
+                options = (typeObj['options'] as Array<Record<string, unknown>>).map(
+                    o => typeof o === 'string' ? o : (o['label'] as string) ?? (o['value'] as string) ?? ''
+                );
+            }
+            if (typeObj['min'] != null) minValue = typeObj['min'] as number;
+            if (typeObj['max'] != null) maxValue = typeObj['max'] as number;
+        }
+
+        return {
+            Name: (q['id'] as string) ?? '',
+            Label: (q['label'] as string) ?? (q['id'] as string) ?? '',
+            Type: fieldType,
+            Required: (q['required'] as boolean) ?? false,
+            Options: options,
+            MinValue: minValue,
+            MaxValue: maxValue,
+            DefaultValue: q['defaultValue'] as string | number | boolean | undefined,
+            Placeholder: (q['helpText'] as string) ?? (q['placeholder'] as string) ?? undefined
+        };
+    }
+
+    /**
+     * Map AgentResponseForm type strings to the simple field types used by the template.
+     */
+    private mapAgentFormType(agentType: string): string {
+        switch (agentType) {
+            case 'textarea':
+            case 'text':
+                return agentType;
+            case 'number':
+                return 'number';
+            case 'checkbox':
+            case 'boolean':
+                return 'checkbox';
+            case 'dropdown':
+            case 'select':
+                return 'dropdown';
+            case 'radio':
+            case 'buttongroup':
+                return 'dropdown'; // render as dropdown in panel context
+            case 'daterange':
+            case 'date':
+                return 'text'; // render as text input (date picker not yet available)
+            default:
+                return 'text';
+        }
+    }
+
+    /**
+     * Parse a simple { Name, Label, Type, ... } field definition.
+     */
+    private parseSimpleFormField(raw: Record<string, unknown>): ResponseFormField {
         return {
             Name: (raw['Name'] as string) ?? '',
             Label: (raw['Label'] as string) ?? (raw['Name'] as string) ?? '',

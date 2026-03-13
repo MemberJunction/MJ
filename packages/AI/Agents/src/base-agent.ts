@@ -5352,6 +5352,13 @@ The context is now within limits. Please retry your request with the recovered c
             
             // Return based on next step
             if (updatedNextStep.step === 'Chat') {
+                // For root agents, create a persistent AIAgentRequest so the request is
+                // tracked in the dashboard and can be responded to outside a conversation.
+                // This is done here because Chat decisions from executePromptStep terminate
+                // immediately and never reach executeChatStep in the main loop.
+                if (this._depth === 0) {
+                    await this.createFeedbackRequest(params, stepEntity, updatedNextStep);
+                }
                 return { ...updatedNextStep, terminate: true };
             }
             else if (updatedNextStep.step === 'Success' || updatedNextStep.step === 'Failed') {
