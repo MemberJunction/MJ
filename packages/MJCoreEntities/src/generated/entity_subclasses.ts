@@ -2213,17 +2213,17 @@ export const MJAIAgentRequestSchema = z.object({
         * * Description: Current status of the request (Requested, Approved, Rejected, Canceled).`),
     Request: z.string().describe(`
         * * Field Name: Request
-        * * Display Name: Request Details
+        * * Display Name: Request
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Details of what the AI Agent is requesting.`),
     Response: z.string().nullable().describe(`
         * * Field Name: Response
-        * * Display Name: Response Text
+        * * Display Name: Response
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Response provided by the human to the agent request.`),
     ResponseByUserID: z.string().nullable().describe(`
         * * Field Name: ResponseByUserID
-        * * Display Name: Responded By
+        * * Display Name: Response By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: Populated when a user responds indicating which user responded to the request.`),
@@ -2234,7 +2234,7 @@ export const MJAIAgentRequestSchema = z.object({
         * * Description: Timestamp when the response was provided by the human.`),
     Comments: z.string().nullable().describe(`
         * * Field Name: Comments
-        * * Display Name: Internal Comments
+        * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Additional comments about the request. Not shared with the agent, purely record keeping.`),
     __mj_CreatedAt: z.date().describe(`
@@ -2255,7 +2255,7 @@ export const MJAIAgentRequestSchema = z.object({
         * * Description: Foreign key to AIAgentRequestType. Categorizes the purpose of this request (Approval, Information, Choice, Review, Custom).`),
     ResponseSchema: z.string().nullable().describe(`
         * * Field Name: ResponseSchema
-        * * Display Name: Response Form Schema
+        * * Display Name: Response Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON-serialized AgentResponseForm defining the structured input form the agent presents to the human. Uses the same form types as ConversationDetail.ResponseForm.`),
     ResponseData: z.string().nullable().describe(`
@@ -2282,7 +2282,7 @@ export const MJAIAgentRequestSchema = z.object({
         * * Description: Foreign key to AIAgentRun. The agent run that created this request. Used to trace request origin in run chains.`),
     OriginatingAgentRunStepID: z.string().nullable().describe(`
         * * Field Name: OriginatingAgentRunStepID
-        * * Display Name: Originating Run Step
+        * * Display Name: Originating Agent Run Step
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
         * * Description: Foreign key to AIAgentRunStep. The specific execution step that triggered this request.`),
@@ -2292,6 +2292,16 @@ export const MJAIAgentRequestSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Foreign key to AIAgentRun. The new agent run spawned after the human responds. NULL until a response triggers a resuming run.`),
+    ResponseSource: z.union([z.literal('API'), z.literal('Conversation'), z.literal('Dashboard')]).nullable().describe(`
+        * * Field Name: ResponseSource
+        * * Display Name: Response Source
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * API
+    *   * Conversation
+    *   * Dashboard
+        * * Description: Identifies where the response originated: Conversation (handled by chat resolver), Dashboard (slide-in panel), or API (external integration). Used by the server-side entity subclass to determine whether agent resumption is needed.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent Name
@@ -2302,7 +2312,7 @@ export const MJAIAgentRequestSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     ResponseByUser: z.string().nullable().describe(`
         * * Field Name: ResponseByUser
-        * * Display Name: Responded By Name
+        * * Display Name: Response By User Name
         * * SQL Data Type: nvarchar(100)`),
     RequestType: z.string().nullable().describe(`
         * * Field Name: RequestType
@@ -2310,15 +2320,15 @@ export const MJAIAgentRequestSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     OriginatingAgentRun: z.string().nullable().describe(`
         * * Field Name: OriginatingAgentRun
-        * * Display Name: Originating Run Name
+        * * Display Name: Originating Agent Run Name
         * * SQL Data Type: nvarchar(255)`),
     OriginatingAgentRunStep: z.string().nullable().describe(`
         * * Field Name: OriginatingAgentRunStep
-        * * Display Name: Originating Step Name
+        * * Display Name: Originating Agent Run Step Name
         * * SQL Data Type: nvarchar(255)`),
     ResumingAgentRun: z.string().nullable().describe(`
         * * Field Name: ResumingAgentRun
-        * * Display Name: Resuming Run Name
+        * * Display Name: Resuming Agent Run Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -29049,7 +29059,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: Request
-    * * Display Name: Request Details
+    * * Display Name: Request
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Details of what the AI Agent is requesting.
     */
@@ -29062,7 +29072,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: Response
-    * * Display Name: Response Text
+    * * Display Name: Response
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Response provided by the human to the agent request.
     */
@@ -29075,7 +29085,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: ResponseByUserID
-    * * Display Name: Responded By
+    * * Display Name: Response By User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: Populated when a user responds indicating which user responded to the request.
@@ -29102,7 +29112,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: Comments
-    * * Display Name: Internal Comments
+    * * Display Name: Comments
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Additional comments about the request. Not shared with the agent, purely record keeping.
     */
@@ -29149,7 +29159,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: ResponseSchema
-    * * Display Name: Response Form Schema
+    * * Display Name: Response Schema
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON-serialized AgentResponseForm defining the structured input form the agent presents to the human. Uses the same form types as ConversationDetail.ResponseForm.
     */
@@ -29216,7 +29226,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: OriginatingAgentRunStepID
-    * * Display Name: Originating Run Step
+    * * Display Name: Originating Agent Run Step
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
     * * Description: Foreign key to AIAgentRunStep. The specific execution step that triggered this request.
@@ -29243,6 +29253,24 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
     }
 
     /**
+    * * Field Name: ResponseSource
+    * * Display Name: Response Source
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * API
+    *   * Conversation
+    *   * Dashboard
+    * * Description: Identifies where the response originated: Conversation (handled by chat resolver), Dashboard (slide-in panel), or API (external integration). Used by the server-side entity subclass to determine whether agent resumption is needed.
+    */
+    get ResponseSource(): 'API' | 'Conversation' | 'Dashboard' | null {
+        return this.Get('ResponseSource');
+    }
+    set ResponseSource(value: 'API' | 'Conversation' | 'Dashboard' | null) {
+        this.Set('ResponseSource', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent Name
     * * SQL Data Type: nvarchar(255)
@@ -29262,7 +29290,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: ResponseByUser
-    * * Display Name: Responded By Name
+    * * Display Name: Response By User Name
     * * SQL Data Type: nvarchar(100)
     */
     get ResponseByUser(): string | null {
@@ -29280,7 +29308,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: OriginatingAgentRun
-    * * Display Name: Originating Run Name
+    * * Display Name: Originating Agent Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get OriginatingAgentRun(): string | null {
@@ -29289,7 +29317,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: OriginatingAgentRunStep
-    * * Display Name: Originating Step Name
+    * * Display Name: Originating Agent Run Step Name
     * * SQL Data Type: nvarchar(255)
     */
     get OriginatingAgentRunStep(): string | null {
@@ -29298,7 +29326,7 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
 
     /**
     * * Field Name: ResumingAgentRun
-    * * Display Name: Resuming Run Name
+    * * Display Name: Resuming Agent Run Name
     * * SQL Data Type: nvarchar(255)
     */
     get ResumingAgentRun(): string | null {

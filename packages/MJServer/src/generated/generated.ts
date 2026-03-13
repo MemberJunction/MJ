@@ -6063,6 +6063,10 @@ export class MJAIAgentRequest_ {
     @MaxLength(36)
     ResumingAgentRunID?: string;
         
+    @Field({nullable: true, description: `Identifies where the response originated: Conversation (handled by chat resolver), Dashboard (slide-in panel), or API (external integration). Used by the server-side entity subclass to determine whether agent resumption is needed.`}) 
+    @MaxLength(20)
+    ResponseSource?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -6151,6 +6155,9 @@ export class CreateMJAIAgentRequestInput {
 
     @Field({ nullable: true })
     ResumingAgentRunID: string | null;
+
+    @Field({ nullable: true })
+    ResponseSource: string | null;
 }
     
 
@@ -6212,6 +6219,9 @@ export class UpdateMJAIAgentRequestInput {
 
     @Field({ nullable: true })
     ResumingAgentRunID?: string | null;
+
+    @Field({ nullable: true })
+    ResponseSource?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
