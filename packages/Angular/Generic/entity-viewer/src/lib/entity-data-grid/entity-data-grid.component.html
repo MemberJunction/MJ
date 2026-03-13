@@ -386,15 +386,15 @@
 
   </div>
 
-  <!-- Shared Data Pager (opt-in via ShowPager input) -->
+  <!-- Pagination (opt-in via ShowPager input) -->
   @if (ShowPager) {
-    <mj-data-pager
+    <mj-pagination
       [TotalRowCount]="totalRowCount"
       [PageNumber]="PagerPageNumber"
       [PageSize]="PageSize"
       [IsLoading]="loading"
       (PageChange)="PageChange.emit($event)">
-    </mj-data-pager>
+    </mj-pagination>
   }
 
   <!-- Aggregate Summary Row (outside mj-grid-content so it's always visible) -->

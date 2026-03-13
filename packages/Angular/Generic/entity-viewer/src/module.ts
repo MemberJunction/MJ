@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AgGridModule } from 'ag-grid-angular';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { DataPagerComponent } from '@memberjunction/ng-data-pager';
+import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { TimelineModule } from '@memberjunction/ng-timeline';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
 
@@ -63,7 +63,7 @@ import { SharedViewWarningDialogComponent } from './lib/shared-view-warning-dial
     FormsModule,
     AgGridModule,
     SharedGenericModule,
-    DataPagerComponent,
+    PaginationComponent,
     TimelineModule,
     ExportServiceModule
   ],

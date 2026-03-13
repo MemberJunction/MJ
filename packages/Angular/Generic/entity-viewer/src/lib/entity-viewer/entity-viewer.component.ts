@@ -5,7 +5,7 @@ import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams,
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
-import { PageChangeEvent } from '@memberjunction/ng-data-pager';
+import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { TimelineGroup, TimeSegmentGrouping, TimelineSortOrder, AfterEventClickArgs } from '@memberjunction/ng-timeline';
 import {
   EntityViewMode,
@@ -1163,7 +1163,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle page change from DataPagerComponent
+   * Handle page change from PaginationComponent
    */
   public onPageChange(event: PageChangeEvent): void {
     this.pagination.currentPage = event.PageNumber - 1; // Convert 1-based to 0-based

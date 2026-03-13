@@ -14,7 +14,7 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunQuery, RunQueryParams, Metadata, QueryInfo, QueryFieldInfo } from '@memberjunction/core';
-import { PageChangeEvent } from '@memberjunction/ng-data-pager';
+import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { RunQueryResult } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import {

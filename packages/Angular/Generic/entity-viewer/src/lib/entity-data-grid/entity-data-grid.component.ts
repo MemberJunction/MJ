@@ -15,7 +15,7 @@ import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { PageChangeEvent } from '@memberjunction/ng-data-pager';
+import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { buildPkString, computeFieldsList } from '../utils/record.util';
 import { MJUserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle, ViewGridAggregatesConfig, ViewGridAggregate } from '@memberjunction/core-entities';
 import {
@@ -270,7 +270,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Whether to show the shared DataPagerComponent below the grid.
+   * Whether to show the shared PaginationComponent below the grid.
    * When true, displays page-based navigation (first/prev/next/last) using the
    * TotalRowCount from server responses. The pager auto-hides when there's only one page.
    */
@@ -293,7 +293,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Emits when the user navigates to a different page via the shared DataPagerComponent.
+   * Emits when the user navigates to a different page via the shared PaginationComponent.
    * Parent components should handle this by re-fetching data with updated StartRow/MaxRows.
    */
   @Output() PageChange = new EventEmitter<PageChangeEvent>();

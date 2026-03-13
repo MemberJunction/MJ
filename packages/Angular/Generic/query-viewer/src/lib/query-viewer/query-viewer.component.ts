@@ -13,7 +13,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RunQuery, RunQueryParams, RunQueryResult, Metadata, QueryInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { PageChangeEvent } from '@memberjunction/ng-data-pager';
+import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';

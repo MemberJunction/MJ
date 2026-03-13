@@ -14,30 +14,30 @@ export interface PageChangeEvent {
 }
 
 /**
- * DataPagerComponent — reusable page-based navigation for server-side paged data.
+ * PaginationComponent — reusable page-based navigation for server-side paged data.
  *
  * Displays "Showing X-Y of Z" summary with first/prev/next/last navigation.
  * Designed for use with RunQuery's StartRow/MaxRows server-side paging.
  *
  * @example
  * ```html
- * <mj-data-pager
+ * <mj-pagination
  *   [TotalRowCount]="result.TotalRowCount"
  *   [PageNumber]="currentPage"
  *   [PageSize]="pageSize"
  *   [IsLoading]="isLoading"
  *   (PageChange)="onPageChange($event)">
- * </mj-data-pager>
+ * </mj-pagination>
  * ```
  */
 @Component({
     standalone: true,
-    selector: 'mj-data-pager',
+    selector: 'mj-pagination',
     imports: [CommonModule],
-    templateUrl: './data-pager.component.html',
-    styleUrls: ['./data-pager.component.css']
+    templateUrl: './pagination.component.html',
+    styleUrls: ['./pagination.component.css']
 })
-export class DataPagerComponent {
+export class PaginationComponent {
     /** Total number of rows across all pages */
     @Input() TotalRowCount: number = 0;
 

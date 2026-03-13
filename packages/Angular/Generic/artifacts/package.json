@@ -40,7 +40,7 @@
     "@memberjunction/ng-code-editor": "5.11.0",
     "@memberjunction/ng-notifications": "5.11.0",
     "@memberjunction/ng-react": "5.11.0",
-    "@memberjunction/ng-data-pager": "5.11.0",
+    "@memberjunction/ng-pagination": "5.11.0",
     "@memberjunction/ng-shared-generic": "5.11.0",
     "@memberjunction/ng-query-viewer": "5.11.0",
     "@memberjunction/ng-trees": "5.11.0",

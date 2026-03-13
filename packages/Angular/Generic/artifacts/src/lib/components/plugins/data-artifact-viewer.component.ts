@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { QueryEngine, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
-import { PageChangeEvent } from '@memberjunction/ng-data-pager';
+import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, NavigationRequest } from '../base-artifact-viewer.component';
 import { SaveQueryResult } from './save-query-dialog.component';
 
