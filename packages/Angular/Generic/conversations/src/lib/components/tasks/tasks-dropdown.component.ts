@@ -135,10 +135,8 @@ import { takeUntil } from 'rxjs/operators';
 
     .active-tasks-btn {
       background: transparent;
-      color: #6B7280;
       padding: 8px 12px;
       border-radius: 6px;
-      background: transparent;
       border: none;
       color: rgba(255,255,255,0.7);
       cursor: pointer;
@@ -150,18 +148,18 @@ import { takeUntil } from 'rxjs/operators';
     }
 
     .active-tasks-btn:hover {
-      background: #F9FAFB;
-      color: #111827;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .active-tasks-btn.active {
-      background: #F9FAFB;
-      color: #111827;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .task-count-badge {
-      background: #EF4444;
-      color: white;
+      background: var(--mj-status-error);
+      color: var(--mj-text-inverse);
       padding: 2px 5px;
       border-radius: 10px;
       font-size: 11px;
@@ -169,17 +167,17 @@ import { takeUntil } from 'rxjs/operators';
       min-width: 18px;
       text-align: center;
       line-height: 1;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .active-tasks-dropdown {
       position: absolute;
       top: calc(100% + 8px);
       right: 0;
-      background: white;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      box-shadow: var(--mj-shadow-lg);
       z-index: 1000;
       min-width: 420px;
       max-width: 500px;
@@ -187,7 +185,7 @@ import { takeUntil } from 'rxjs/operators';
 
     .dropdown-header {
       padding: 12px 16px;
-      border-bottom: 1px solid #E5E7EB;
+      border-bottom: 1px solid var(--mj-border-default);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -198,17 +196,17 @@ import { takeUntil } from 'rxjs/operators';
       align-items: center;
       gap: 8px;
       font-weight: 600;
-      color: #111827;
+      color: var(--mj-text-primary);
     }
 
     .header-left i {
-      color: var(--accent, #1e40af);
+      color: var(--mj-brand-primary);
     }
 
     .close-btn {
       background: none;
       border: none;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       cursor: pointer;
       font-size: 18px;
       padding: 0;
@@ -221,8 +219,8 @@ import { takeUntil } from 'rxjs/operators';
     }
 
     .close-btn:hover {
-      background: #F3F4F6;
-      color: #111827;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .dropdown-content {
@@ -232,7 +230,7 @@ import { takeUntil } from 'rxjs/operators';
 
     .section {
       padding: 12px;
-      border-bottom: 1px solid #F3F4F6;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .section:last-child {
@@ -245,7 +243,7 @@ import { takeUntil } from 'rxjs/operators';
       gap: 8px;
       font-size: 12px;
       font-weight: 600;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 12px;
@@ -261,8 +259,8 @@ import { takeUntil } from 'rxjs/operators';
       gap: 12px;
       padding: 10px 12px;
       border-radius: 6px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       margin-bottom: 8px;
       transition: all 0.2s ease;
     }
@@ -272,8 +270,8 @@ import { takeUntil } from 'rxjs/operators';
     }
 
     .active-task-item.clickable:hover {
-      background: #EEF2FF;
-      border-color: #C7D2FE;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
       transform: translateX(2px);
     }
 
@@ -288,7 +286,7 @@ import { takeUntil } from 'rxjs/operators';
     }
 
     .task-status-indicator.active {
-      background: #3B82F6;
+      background: var(--mj-brand-primary);
       animation: pulse 2s ease-in-out infinite;
     }
 
@@ -308,14 +306,14 @@ import { takeUntil } from 'rxjs/operators';
     .task-title {
       font-size: 14px;
       font-weight: 600;
-      color: #111827;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 6px;
     }
 
     .task-title i {
-      color: #3B82F6;
+      color: var(--mj-brand-primary);
       font-size: 12px;
     }
 
@@ -328,7 +326,7 @@ import { takeUntil } from 'rxjs/operators';
 
     .go-btn {
       margin-left: auto;
-      color: #3B82F6;
+      color: var(--mj-brand-primary);
       font-size: 10px;
       opacity: 0.7;
     }
@@ -339,7 +337,7 @@ import { takeUntil } from 'rxjs/operators';
 
     .task-conversation {
       font-size: 11px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       display: flex;
       align-items: center;
       gap: 4px;
@@ -351,7 +349,7 @@ import { takeUntil } from 'rxjs/operators';
 
     .task-status-text {
       font-size: 12px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -359,21 +357,21 @@ import { takeUntil } from 'rxjs/operators';
 
     .task-elapsed {
       font-size: 11px;
-      color: #3B82F6;
+      color: var(--mj-brand-primary);
       font-weight: 600;
     }
 
     .no-tasks {
       padding: 40px 16px;
       text-align: center;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
     }
 
     .no-tasks i {
       font-size: 32px;
       margin-bottom: 8px;
       opacity: 0.5;
-      color: #10B981;
+      color: var(--mj-status-success);
     }
 
     .no-tasks p {

@@ -366,7 +366,7 @@ interface FilteredStats {
       padding: 24px;
       height: 100%;
       overflow-y: auto;
-      background: #f8fafc;
+      background: var(--mj-bg-surface-card);
       position: relative;
     }
 
@@ -386,14 +386,14 @@ interface FilteredStats {
 
     .header-title i {
       font-size: 22px;
-      color: #6366f1;
+      color: var(--mj-brand-primary);
     }
 
     .header-title h2 {
       margin: 0;
       font-size: 22px;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--mj-text-primary);
     }
 
     .header-actions {
@@ -421,24 +421,24 @@ interface FilteredStats {
     }
 
     .btn-primary {
-      background: #3b82f6;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .btn-primary:hover:not(:disabled) {
-      background: #2563eb;
+      background: var(--mj-brand-primary-hover);
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+      box-shadow: var(--mj-shadow-md);
     }
 
     .btn-secondary {
-      background: white;
-      color: #475569;
-      border: 1px solid #e2e8f0;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-secondary);
+      border: 1px solid var(--mj-border-default);
     }
 
     .btn-secondary:hover:not(:disabled) {
-      background: #f1f5f9;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .spinning {
@@ -458,9 +458,9 @@ interface FilteredStats {
       gap: 16px;
       margin-bottom: 20px;
       padding: 14px 20px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .filter-left {
@@ -479,49 +479,49 @@ interface FilteredStats {
       align-items: center;
       gap: 6px;
       padding: 7px 14px;
-      background: #f1f5f9;
+      background: var(--mj-bg-surface-sunken);
       border: 2px solid transparent;
       border-radius: 20px;
       font-size: 12px;
       font-weight: 600;
-      color: #64748b;
+      color: var(--mj-text-muted);
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .chip:hover {
-      background: #e2e8f0;
+      background: var(--mj-border-default);
     }
 
     .chip.active {
-      background: #6366f1;
-      color: white;
-      border-color: #6366f1;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
+      border-color: var(--mj-brand-primary);
     }
 
     .chip.active[data-status="running"] {
-      background: #3b82f6;
-      border-color: #3b82f6;
+      background: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
     }
 
     .chip.active[data-status="passed"] {
-      background: #22c55e;
-      border-color: #22c55e;
+      background: var(--mj-status-success);
+      border-color: var(--mj-status-success);
     }
 
     .chip.active[data-status="failed"] {
-      background: #ef4444;
-      border-color: #ef4444;
+      background: var(--mj-status-error);
+      border-color: var(--mj-status-error);
     }
 
     .chip.active[data-status="error"] {
-      background: #f59e0b;
-      border-color: #f59e0b;
+      background: var(--mj-status-warning);
+      border-color: var(--mj-status-warning);
     }
 
     .result-count {
       font-size: 12px;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
       font-weight: 500;
       white-space: nowrap;
     }
@@ -534,18 +534,18 @@ interface FilteredStats {
 
     .time-select {
       padding: 8px 12px;
-      border: 2px solid #e2e8f0;
+      border: 2px solid var(--mj-border-default);
       border-radius: 8px;
       font-size: 13px;
       font-weight: 500;
-      color: #475569;
-      background: white;
+      color: var(--mj-text-secondary);
+      background: var(--mj-bg-surface);
       cursor: pointer;
     }
 
     .time-select:focus {
       outline: none;
-      border-color: #6366f1;
+      border-color: var(--mj-brand-primary);
     }
 
     .search-box {
@@ -553,20 +553,20 @@ interface FilteredStats {
       align-items: center;
       gap: 8px;
       padding: 8px 14px;
-      background: #f8fafc;
-      border: 2px solid #e2e8f0;
+      background: var(--mj-bg-surface-card);
+      border: 2px solid var(--mj-border-default);
       border-radius: 8px;
       min-width: 220px;
       transition: border-color 0.2s ease;
     }
 
     .search-box:focus-within {
-      border-color: #6366f1;
-      background: white;
+      border-color: var(--mj-brand-primary);
+      background: var(--mj-bg-surface);
     }
 
     .search-box i {
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
       font-size: 13px;
     }
 
@@ -576,25 +576,25 @@ interface FilteredStats {
       background: transparent;
       outline: none;
       font-size: 13px;
-      color: #334155;
+      color: var(--mj-text-secondary);
     }
 
     .search-box input::placeholder {
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
     }
 
     .clear-search {
       border: none;
       background: transparent;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       padding: 2px 4px;
       border-radius: 4px;
     }
 
     .clear-search:hover {
-      color: #64748b;
-      background: #e2e8f0;
+      color: var(--mj-text-muted);
+      background: var(--mj-border-default);
     }
 
     /* Stats Row */
@@ -610,9 +610,9 @@ interface FilteredStats {
       align-items: center;
       gap: 14px;
       padding: 16px 20px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .stat-icon {
@@ -625,10 +625,10 @@ interface FilteredStats {
       font-size: 16px;
     }
 
-    .stat-icon.total { background: rgba(99, 102, 241, 0.1); color: #6366f1; }
-    .stat-icon.pass { background: rgba(34, 197, 94, 0.1); color: #22c55e; }
-    .stat-icon.duration { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
-    .stat-icon.cost { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+    .stat-icon.total { background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+    .stat-icon.pass { background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface)); color: var(--mj-status-success); }
+    .stat-icon.duration { background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+    .stat-icon.cost { background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface)); color: var(--mj-status-warning); }
 
     .stat-body {
       flex: 1;
@@ -637,14 +637,14 @@ interface FilteredStats {
     .stat-value {
       font-size: 22px;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       line-height: 1.1;
     }
 
     .stat-label {
       font-size: 11px;
       font-weight: 600;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-top: 2px;
@@ -652,9 +652,9 @@ interface FilteredStats {
 
     /* Runs Table */
     .runs-table-wrapper {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      box-shadow: var(--mj-shadow-sm);
       overflow: hidden;
     }
 
@@ -663,11 +663,11 @@ interface FilteredStats {
       grid-template-columns: 2fr 140px 120px 100px 100px 120px 90px;
       gap: 12px;
       padding: 14px 24px;
-      background: #f8fafc;
-      border-bottom: 1px solid #e2e8f0;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
       font-size: 11px;
       font-weight: 700;
-      color: #64748b;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -677,7 +677,7 @@ interface FilteredStats {
       grid-template-columns: 2fr 140px 120px 100px 100px 120px 90px;
       gap: 12px;
       padding: 14px 24px;
-      border-bottom: 1px solid #f1f5f9;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
       cursor: pointer;
       transition: background 0.15s ease;
       align-items: center;
@@ -688,16 +688,16 @@ interface FilteredStats {
     }
 
     .table-row:hover {
-      background: #f8fafc;
+      background: var(--mj-bg-surface-card);
     }
 
     .table-row.is-selected {
-      background: rgba(99, 102, 241, 0.06);
-      border-left: 3px solid #6366f1;
+      background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+      border-left: 3px solid var(--mj-brand-primary);
     }
 
     .table-row.is-running {
-      background: rgba(59, 130, 246, 0.04);
+      background: color-mix(in srgb, var(--mj-brand-primary) 4%, var(--mj-bg-surface));
     }
 
     .table-row.is-running .test-name-link::after {
@@ -705,7 +705,7 @@ interface FilteredStats {
       display: inline-block;
       width: 8px;
       height: 8px;
-      background: #3b82f6;
+      background: var(--mj-brand-primary);
       border-radius: 50%;
       margin-left: 8px;
       animation: pulse-dot 1.5s infinite;
@@ -720,13 +720,13 @@ interface FilteredStats {
       display: flex;
       align-items: center;
       font-size: 13px;
-      color: #334155;
+      color: var(--mj-text-secondary);
       overflow: hidden;
     }
 
     .test-name-link {
       font-weight: 600;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       cursor: pointer;
       text-decoration: none;
       white-space: nowrap;
@@ -735,7 +735,7 @@ interface FilteredStats {
     }
 
     .test-name-link:hover {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
       text-decoration: underline;
     }
 
@@ -750,9 +750,9 @@ interface FilteredStats {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      color: #64748b;
+      background: var(--mj-bg-surface-card);
+      border: 1px solid var(--mj-border-default);
+      color: var(--mj-text-muted);
       cursor: pointer;
       border-radius: 8px;
       font-size: 13px;
@@ -760,11 +760,11 @@ interface FilteredStats {
     }
 
     .icon-btn:hover {
-      background: #6366f1;
-      border-color: #6366f1;
-      color: white;
+      background: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+      box-shadow: var(--mj-shadow-md);
     }
 
     /* Table states */
@@ -782,19 +782,19 @@ interface FilteredStats {
 
     .table-empty i {
       font-size: 48px;
-      color: #cbd5e1;
+      color: var(--mj-border-strong);
       margin-bottom: 16px;
     }
 
     .table-empty p {
       font-size: 16px;
-      color: #64748b;
+      color: var(--mj-text-muted);
       margin: 0 0 8px 0;
     }
 
     .empty-hint {
       font-size: 13px;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
     }
 
     /* Detail Panel Overlay */
@@ -804,7 +804,7 @@ interface FilteredStats {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.2);
+      background: var(--mj-bg-overlay);
       z-index: 999;
     }
 
@@ -816,8 +816,8 @@ interface FilteredStats {
       bottom: 0;
       width: 520px;
       max-width: 90vw;
-      background: white;
-      box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+      background: var(--mj-bg-surface);
+      box-shadow: var(--mj-shadow-lg);
       z-index: 1000;
       display: flex;
       flex-direction: column;
@@ -834,8 +834,8 @@ interface FilteredStats {
       justify-content: space-between;
       align-items: flex-start;
       padding: 20px 24px;
-      border-bottom: 1px solid #e2e8f0;
-      background: #f8fafc;
+      border-bottom: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-card);
     }
 
     .detail-title-section {
@@ -850,7 +850,7 @@ interface FilteredStats {
       margin: 0;
       font-size: 18px;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -863,9 +863,9 @@ interface FilteredStats {
       align-items: center;
       justify-content: center;
       background: transparent;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
-      color: #64748b;
+      color: var(--mj-text-muted);
       cursor: pointer;
       font-size: 14px;
       flex-shrink: 0;
@@ -874,8 +874,8 @@ interface FilteredStats {
     }
 
     .close-btn:hover {
-      background: #f1f5f9;
-      color: #1e293b;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .detail-panel-body {
@@ -893,16 +893,16 @@ interface FilteredStats {
 
     .detail-metric {
       padding: 12px;
-      background: #f8fafc;
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
-      border-left: 3px solid #6366f1;
+      border-left: 3px solid var(--mj-brand-primary);
     }
 
     .dm-label {
       display: block;
       font-size: 10px;
       font-weight: 700;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       margin-bottom: 6px;
@@ -911,7 +911,7 @@ interface FilteredStats {
     .dm-value {
       font-size: 14px;
       font-weight: 600;
-      color: #1e293b;
+      color: var(--mj-text-primary);
     }
 
     .detail-section {
@@ -921,7 +921,7 @@ interface FilteredStats {
     .detail-section h4 {
       font-size: 13px;
       font-weight: 700;
-      color: #475569;
+      color: var(--mj-text-secondary);
       margin: 0 0 12px 0;
       display: flex;
       align-items: center;
@@ -929,7 +929,7 @@ interface FilteredStats {
     }
 
     .detail-section h4 i {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
       font-size: 14px;
     }
 
@@ -940,18 +940,18 @@ interface FilteredStats {
       gap: 8px 16px;
       align-items: center;
       padding: 14px;
-      background: #f0fdf4;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
       border-radius: 8px;
       font-size: 13px;
     }
 
     .feedback-label {
       font-weight: 600;
-      color: #64748b;
+      color: var(--mj-text-muted);
     }
 
     .feedback-value {
-      color: #1e293b;
+      color: var(--mj-text-primary);
       font-weight: 500;
     }
 
@@ -959,9 +959,9 @@ interface FilteredStats {
       width: 100%;
       margin-top: 8px;
       padding-top: 8px;
-      border-top: 1px solid #dcfce7;
+      border-top: 1px solid color-mix(in srgb, var(--mj-status-success) 25%, var(--mj-bg-surface));
       font-size: 13px;
-      color: #475569;
+      color: var(--mj-text-secondary);
       font-style: italic;
     }
 
@@ -975,7 +975,7 @@ interface FilteredStats {
       display: block;
       font-size: 12px;
       font-weight: 600;
-      color: #64748b;
+      color: var(--mj-text-muted);
       margin-bottom: 6px;
     }
 
@@ -990,25 +990,25 @@ interface FilteredStats {
       display: flex;
       align-items: center;
       justify-content: center;
-      border: 2px solid #e2e8f0;
-      background: white;
+      border: 2px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
       border-radius: 8px;
       font-size: 12px;
       font-weight: 600;
-      color: #64748b;
+      color: var(--mj-text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
     }
 
     .rating-btn:hover {
-      border-color: #6366f1;
-      color: #6366f1;
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-brand-primary);
     }
 
     .rating-btn.selected {
-      background: #6366f1;
-      border-color: #6366f1;
-      color: white;
+      background: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .toggle-group {
@@ -1021,41 +1021,41 @@ interface FilteredStats {
       align-items: center;
       gap: 6px;
       padding: 8px 16px;
-      border: 2px solid #e2e8f0;
-      background: white;
+      border: 2px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
       border-radius: 8px;
       font-size: 12px;
       font-weight: 600;
-      color: #64748b;
+      color: var(--mj-text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
     }
 
     .toggle-btn.active {
-      border-color: #6366f1;
-      background: rgba(99, 102, 241, 0.08);
-      color: #6366f1;
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .comments-row textarea {
       width: 100%;
       padding: 10px 12px;
-      border: 2px solid #e2e8f0;
+      border: 2px solid var(--mj-border-default);
       border-radius: 8px;
       font-size: 13px;
       font-family: inherit;
-      color: #334155;
+      color: var(--mj-text-secondary);
       resize: vertical;
       box-sizing: border-box;
     }
 
     .comments-row textarea:focus {
       outline: none;
-      border-color: #6366f1;
+      border-color: var(--mj-brand-primary);
     }
 
     .comments-row textarea::placeholder {
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
     }
 
     .submit-feedback-btn {

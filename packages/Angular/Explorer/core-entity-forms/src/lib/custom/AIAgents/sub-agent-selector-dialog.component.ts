@@ -243,10 +243,10 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
 
   getAgentStatusColor(agent: AgentDisplayItem): string {
     switch (agent.Status) {
-      case 'Active': return '#28a745';
-      case 'Disabled': return '#6c757d';
-      case 'Pending': return '#ffc107';
-      default: return '#6c757d';
+      case 'Active': return 'var(--mj-status-success)';
+      case 'Disabled': return 'var(--mj-text-muted)';
+      case 'Pending': return 'var(--mj-status-warning)';
+      default: return 'var(--mj-text-muted)';
     }
   }
 

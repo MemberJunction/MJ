@@ -2,15 +2,15 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-card);
 }
 .model-prompt-priority-matrix .matrix-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 1rem;
-  background: white;
-  border-bottom: 1px solid #dee2e6;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
   flex-shrink: 0;
   gap: 1rem;
   flex-wrap: wrap;
@@ -22,14 +22,14 @@
 }
 .model-prompt-priority-matrix .matrix-toolbar .toolbar-section .toolbar-title {
   margin: 0;
-  color: #495057;
+  color: var(--mj-text-secondary);
   display: flex;
   align-items: center;
   gap: 0.5rem;
   font-weight: 600;
 }
 .model-prompt-priority-matrix .matrix-toolbar .toolbar-section .toolbar-title i {
-  color: #0d6efd;
+  color: var(--mj-brand-primary);
 }
 .model-prompt-priority-matrix .matrix-toolbar .toolbar-section .matrix-stats {
   display: flex;
@@ -40,7 +40,7 @@
   align-items: center;
   gap: 0.25rem;
   font-size: 0.875rem;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 .model-prompt-priority-matrix .matrix-toolbar .toolbar-section .matrix-stats .stat-item i {
   font-size: 1rem;
@@ -56,8 +56,8 @@
 }
 .model-prompt-priority-matrix .bulk-edit-panel {
   padding: 1rem;
-  background: #fff3cd;
-  border-bottom: 1px solid #ffeaa7;
+  background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -86,7 +86,7 @@
 }
 .model-prompt-priority-matrix .bulk-edit-panel .bulk-edit-info {
   font-size: 0.875rem;
-  color: #856404;
+  color: var(--mj-color-warning-700);
 }
 .model-prompt-priority-matrix .loading-container {
   flex: 1;
@@ -99,7 +99,7 @@
 }
 .model-prompt-priority-matrix .loading-container .loading-content .loading-message {
   margin-top: 1rem;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 .model-prompt-priority-matrix .matrix-container {
   flex: 1;
@@ -113,14 +113,14 @@
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table {
   border-collapse: separate;
   border-spacing: 2px;
-  background: white;
+  background: var(--mj-bg-surface);
   border-radius: 0.5rem;
   overflow: hidden;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .prompt-header,
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .model-header {
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   padding: 0.75rem;
   font-weight: 600;
   text-align: center;
@@ -142,7 +142,7 @@
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .prompt-header .header-content .header-stats,
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .model-header .header-content .header-stats {
   font-size: 0.75rem;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .prompt-header {
   min-width: 200px;
@@ -153,69 +153,69 @@
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell {
   width: 80px;
   height: 60px;
-  border: 2px solid #e9ecef;
+  border: 2px solid var(--mj-border-default);
   text-align: center;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell:hover {
-  border-color: #007bff;
+  border-color: var(--mj-brand-primary);
   transform: scale(1.05);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.selected {
-  border-color: #007bff;
-  background: rgba(0, 123, 255, 0.1);
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.editing {
-  border-color: #28a745;
-  background: rgba(40, 167, 69, 0.1);
+  border-color: var(--mj-status-success);
+  background: color-mix(in srgb, var(--mj-status-success) 10%, transparent);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.no-association {
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-card);
   border-style: dashed;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.no-association .empty-cell-indicator {
-  color: #6c757d;
+  color: var(--mj-text-muted);
   font-size: 1.5rem;
   opacity: 0.5;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.cannot-assign {
-  background: #f5f5f5;
+  background: var(--mj-bg-surface-card);
   cursor: not-allowed;
   opacity: 0.5;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.cannot-assign .blocked-cell-indicator {
-  color: #dc3545;
+  color: var(--mj-status-error);
   font-size: 1.25rem;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association {
-  background: white;
+  background: var(--mj-bg-surface);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.priority-1 {
-  border-color: #28a745;
+  border-color: var(--mj-status-success);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.priority-2 {
-  border-color: #20c997;
+  border-color: var(--mj-color-success-500);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.priority-3 {
-  border-color: #ffc107;
+  border-color: var(--mj-status-warning);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.priority-4 {
-  border-color: #fd7e14;
+  border-color: var(--mj-status-warning);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.priority-5 {
-  border-color: #dc3545;
+  border-color: var(--mj-status-error);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.inactive {
   opacity: 0.6;
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-card);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.new {
-  box-shadow: 0 0 0 2px #28a745;
+  box-shadow: 0 0 0 2px var(--mj-status-success);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell.has-association.modified {
-  box-shadow: 0 0 0 2px #ffc107;
+  box-shadow: 0 0 0 2px var(--mj-status-warning);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content {
   display: flex;
@@ -226,8 +226,8 @@
   gap: 0.25rem;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge {
-  background: #007bff;
-  color: white;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
   border-radius: 50%;
   width: 24px;
   height: 24px;
@@ -238,26 +238,26 @@
   font-weight: 600;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-1 {
-  background: #28a745;
+  background: var(--mj-status-success);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-2 {
-  background: #20c997;
+  background: var(--mj-color-success-500);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-3 {
-  background: #ffc107;
-  color: #212529;
+  background: var(--mj-status-warning);
+  color: black;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-4 {
-  background: #fd7e14;
+  background: var(--mj-status-warning);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .priority-badge.priority-5 {
-  background: #dc3545;
+  background: var(--mj-status-error);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .status-indicator {
   font-size: 0.75rem;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .status-indicator.inactive {
-  color: #dc3545;
+  color: var(--mj-status-error);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .change-indicator {
   position: absolute;
@@ -272,12 +272,12 @@
   justify-content: center;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .change-indicator.new {
-  background: #28a745;
-  color: white;
+  background: var(--mj-status-success);
+  color: var(--mj-text-inverse);
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .change-indicator.modified {
-  background: #ffc107;
-  color: #212529;
+  background: var(--mj-status-warning);
+  color: black;
 }
 .model-prompt-priority-matrix .matrix-container .matrix-scroll .matrix-table .matrix-cell .cell-content .performance-overlay {
   position: absolute;
@@ -285,7 +285,7 @@
   left: 2px;
   right: 2px;
   background: rgba(0, 0, 0, 0.8);
-  color: white;
+  color: var(--mj-text-inverse);
   border-radius: 0.25rem;
   padding: 0.125rem;
   font-size: 0.625rem;
@@ -297,8 +297,8 @@
 }
 .model-prompt-priority-matrix .list-container .list-header {
   margin-bottom: 1.5rem;
-  background: white;
-  border: 1px solid #dee2e6;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
   border-radius: 0.5rem;
   padding: 1rem;
 }
@@ -319,7 +319,7 @@
 .model-prompt-priority-matrix .list-container .list-header .list-controls .filter-controls .form-label {
   margin: 0;
   font-size: 0.875rem;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   white-space: nowrap;
 }
 .model-prompt-priority-matrix .list-container .list-header .list-controls .sort-controls .form-select,
@@ -331,8 +331,8 @@
   margin: 0;
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item {
-  background: white;
-  border: 1px solid #dee2e6;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
   border-radius: 0.5rem;
   padding: 1rem;
   margin-bottom: 1rem;
@@ -344,14 +344,14 @@
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item.inactive {
   opacity: 0.7;
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-card);
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item.new {
-  border-color: #28a745;
+  border-color: var(--mj-status-success);
   border-left-width: 4px;
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item.modified {
-  border-color: #ffc107;
+  border-color: var(--mj-status-warning);
   border-left-width: 4px;
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-header {
@@ -367,11 +367,11 @@
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-header .association-names .prompt-name,
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-header .association-names .model-name {
-  color: #495057;
+  color: var(--mj-text-secondary);
   font-weight: 500;
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-header .association-names i {
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-header .association-actions {
   display: flex;
@@ -394,31 +394,31 @@
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .detail-label {
   font-size: 0.875rem;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge {
-  background: #007bff;
-  color: white;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
   padding: 0.25rem 0.5rem;
   border-radius: 0.25rem;
   font-size: 0.75rem;
   font-weight: 600;
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-1 {
-  background: #28a745;
+  background: var(--mj-status-success);
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-2 {
-  background: #20c997;
+  background: var(--mj-color-success-500);
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-3 {
-  background: #ffc107;
-  color: #212529;
+  background: var(--mj-status-warning);
+  color: black;
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-4 {
-  background: #fd7e14;
+  background: var(--mj-status-warning);
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .priority-badge.priority-5 {
-  background: #dc3545;
+  background: var(--mj-status-error);
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .status-badge {
   padding: 0.25rem 0.5rem;
@@ -427,12 +427,12 @@
   font-weight: 500;
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .status-badge.badge-success {
-  background: #d4edda;
-  color: #155724;
+  background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+  color: var(--mj-color-success-700);
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .status-badge.badge-secondary {
-  background: #e2e3e5;
-  color: #383d41;
+  background: var(--mj-border-default);
+  color: var(--mj-text-secondary);
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .change-badge {
   padding: 0.25rem 0.5rem;
@@ -444,17 +444,17 @@
   gap: 0.25rem;
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .change-badge.new {
-  background: #d4edda;
-  color: #155724;
+  background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+  color: var(--mj-color-success-700);
 }
 .model-prompt-priority-matrix .list-container .associations-list .association-item .association-details .detail-item .change-badge.modified {
-  background: #fff3cd;
-  color: #856404;
+  background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+  color: var(--mj-color-warning-700);
 }
 .model-prompt-priority-matrix .list-container .associations-list .no-associations-message {
   text-align: center;
   padding: 3rem 1rem;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 .model-prompt-priority-matrix .list-container .associations-list .no-associations-message i {
   font-size: 3rem;
