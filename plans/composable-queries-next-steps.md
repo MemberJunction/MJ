@@ -31,9 +31,9 @@ This plan tracks remaining work for the Composable Queries feature set. It super
 | Sub-Phase | Status | Notes |
 |-----------|--------|-------|
 | **A — Composable Query Engine** | **COMPLETE** | Schema, engine, dependency sync, UI, metadata dataset fix — all 21 tasks done |
-| **E — Agent Query Awareness** | **NOT STARTED** | Teach Query Builder + Database Research agents about composable queries, existing query catalog, and RunQuery |
-| **B — Server-Side Paging** | **NOT STARTED** | CTE-wrapped `OFFSET/FETCH` paging for all query execution |
-| **C — Query Caching with TTL** | **PARTIALLY DONE** | QueryCache infrastructure exists; needs PG integration, dependency-graph invalidation, page-aware keys |
+| **E — Agent Query Awareness** | **COMPLETE** | All prompts, data sources, actions wired. CategoryPath resolved via Category field + QUERY_CATEGORIES hierarchy |
+| **B — Server-Side Paging** | **COMPLETE** | Core engine, API, GraphQL, PageNumber/PageSize, DataPagerComponent, query-data-grid wired. Entity-data-grid migration deferred (different UX pattern) |
+| **C — Query Caching with TTL** | **COMPLETE** | Page-aware keys, ad-hoc hash keys, dependency-graph invalidation, TotalRowCount caching, cache config UI — all in GenericDatabaseProvider base class |
 | **D — PostgreSQL Variants** | **WIRED UP** | `GetPlatformSQL()` wired through composition chain; PG provider has `PlatformKey` override; needs integration testing |
 
 ### Future Phase (Design Only)

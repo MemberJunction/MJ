@@ -78,7 +78,7 @@
             "EntityName": "MJ: Queries",
             "ExtraFilter": "Status = 'Approved' OR Status = 'Pending'",
             "OrderBy": "Name ASC",
-            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"CategoryID\", \"Status\", \"Reusable\", \"SQL\"]",
+            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"CategoryID\", \"Category\", \"Status\", \"Reusable\", \"SQL\"]",
             "ResultType": "simple",
             "DestinationType": "Data",
             "DestinationPath": null,
@@ -91,8 +91,8 @@
             "ID": "87D8E91D-A10C-43A8-91D2-694819E422C3"
           },
           "sync": {
-            "lastModified": "2026-03-12T17:31:34.098Z",
-            "checksum": "4e83b122eef5f1e4584f80c33a99151058d44a6f54a5213a624ef882f1b3bd76"
+            "lastModified": "2026-03-12T22:45:35.471Z",
+            "checksum": "13e66a795758ec0d69cb90bce11000337b50729f60dbb8b048f178143639eae8"
           }
         },
         {
@@ -256,7 +256,7 @@
                   "EntityName": "MJ: Queries",
                   "ExtraFilter": "Reusable = 1 AND Status = 'Approved'",
                   "OrderBy": "Name ASC",
-                  "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"CategoryID\", \"SQL\", \"Reusable\"]",
+                  "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"CategoryID\", \"Category\", \"SQL\", \"Reusable\"]",
                   "ResultType": "simple",
                   "DestinationType": "Data",
                   "DestinationPath": null,
@@ -269,8 +269,8 @@
                   "ID": "51E37233-0205-4AA8-A03E-954FEBEF6D85"
                 },
                 "sync": {
-                  "lastModified": "2026-03-12T17:31:34.197Z",
-                  "checksum": "620440ac4302504605e9542d429898365fda5be4b0db636383316dc2d5a7f467"
+                  "lastModified": "2026-03-12T22:45:35.542Z",
+                  "checksum": "068b9ab4dcfbbba967da37dacf90bdb70f23b289a751d621ab4367596d84a030"
                 }
               }
             ],

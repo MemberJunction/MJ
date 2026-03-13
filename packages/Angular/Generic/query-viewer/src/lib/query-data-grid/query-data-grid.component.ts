@@ -14,6 +14,7 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunQuery, RunQueryParams, Metadata, QueryInfo, QueryFieldInfo } from '@memberjunction/core';
+import { PageChangeEvent } from '@memberjunction/ng-shared-generic';
 import { RunQueryResult } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import {
@@ -278,6 +279,21 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
      * Fired when refresh is requested
      */
     @Output() RefreshRequest = new EventEmitter<void>();
+
+    /**
+     * Total row count for server-side paging (from RunQueryResult.TotalRowCount).
+     * When > 0 and TotalPages > 1, the data pager is displayed below the grid.
+     */
+    @Input() TotalRowCount: number = 0;
+
+    /** Current page number (1-based) for server-side paging */
+    @Input() PageNumber: number = 1;
+
+    /** Page size for server-side paging */
+    @Input() PageSize: number = 100;
+
+    /** Fired when the user navigates to a different page */
+    @Output() PageChange = new EventEmitter<PageChangeEvent>();
 
     // ========================================
     // Internal State

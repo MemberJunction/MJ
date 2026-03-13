@@ -1,0 +1,56 @@
+.data-pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: var(--mj-text-secondary, #666);
+    border-top: 1px solid var(--mj-border-color, #e0e0e0);
+    background: var(--mj-surface, #fafafa);
+}
+
+.pager-summary {
+    white-space: nowrap;
+}
+
+.pager-controls {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.pager-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--mj-border-color, #d0d0d0);
+    border-radius: 4px;
+    background: var(--mj-surface, #fff);
+    color: var(--mj-text-primary, #333);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.pager-btn:hover:not(:disabled) {
+    background: var(--mj-hover-bg, #e8e8e8);
+    border-color: var(--mj-border-hover, #999);
+}
+
+.pager-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.pager-page-info {
+    padding: 0 8px;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.pager-loading {
+    margin-left: 6px;
+    color: var(--mj-accent, #0078d4);
+}

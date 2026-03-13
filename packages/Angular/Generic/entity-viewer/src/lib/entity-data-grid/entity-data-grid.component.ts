@@ -15,6 +15,7 @@ import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { PageChangeEvent } from '@memberjunction/ng-shared-generic';
 import { buildPkString, computeFieldsList } from '../utils/record.util';
 import { MJUserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle, ViewGridAggregatesConfig, ViewGridAggregate } from '@memberjunction/core-entities';
 import {
@@ -267,6 +268,25 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   get MaxBlocksInCache(): number {
     return this._maxBlocksInCache;
   }
+
+  /**
+   * Whether to show the shared DataPagerComponent below the grid.
+   * When true, displays page-based navigation (first/prev/next/last) using the
+   * TotalRowCount from server responses. The pager auto-hides when there's only one page.
+   */
+  @Input() ShowPager: boolean = false;
+
+  /**
+   * Current page number for the shared pager (1-based).
+   * Updated automatically from server responses when paging is active.
+   */
+  public PagerPageNumber: number = 1;
+
+  /**
+   * Emits when the user navigates to a different page via the shared DataPagerComponent.
+   * Parent components should handle this by re-fetching data with updated StartRow/MaxRows.
+   */
+  @Output() PageChange = new EventEmitter<PageChangeEvent>();
 
   // ========================================
   // External Data Input

@@ -160,7 +160,7 @@ When the Strategist returns results (in `payloadChangeRequest`), the **artifact 
 - Adding a date range filter if there isn't one
 - Breaking down by time period (day/week/month) for trend analysis
 - Adding a status or category filter to narrow results
-- Sorting differently or adding a TOP N limit
+- Sorting differently or adjusting the result scope
 - Joining additional related data
 - Saving the query for reuse
 

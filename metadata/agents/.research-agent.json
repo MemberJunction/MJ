@@ -64,7 +64,7 @@
             "EntityName": "MJ: Queries",
             "ExtraFilter": "Status = 'Approved'",
             "OrderBy": "Name ASC",
-            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"CategoryID\"]",
+            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Description\", \"CategoryID\", \"Category\"]",
             "ResultType": "simple",
             "DestinationType": "Data",
             "DestinationPath": null,
@@ -77,8 +77,8 @@
             "ID": "3E1E5505-B357-4D01-A604-8821050F3147"
           },
           "sync": {
-            "lastModified": "2026-03-12T17:31:34.469Z",
-            "checksum": "bc2b4a9c8162e1f5ddd62dce16d9c0a9ff60ed4bad98c34e55b2187b2d731eaa"
+            "lastModified": "2026-03-12T22:45:35.682Z",
+            "checksum": "32802c8a0cff86f66b8803975f08506476f8918208eecada7c91a4c9dc049bdf"
           }
         }
       ],

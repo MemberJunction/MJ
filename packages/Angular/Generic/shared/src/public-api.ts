@@ -11,3 +11,4 @@ export * from './lib/theme.service';
 
 // Components
 export * from './lib/loading/loading.component';
+export * from './lib/data-pager/data-pager.component';

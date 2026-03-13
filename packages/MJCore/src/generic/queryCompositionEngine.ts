@@ -282,8 +282,8 @@ export class QueryCompositionEngine {
                 dependencyGraph.set('__current__', parentDeps);
             }
 
-            // Generate CTE name
-            const cteName = this.generateCTEName(referencedQuery, resolvedParams);
+            // Generate CTE name (platform-aware: brackets for SQL Server, double quotes for PG)
+            const cteName = this.generateCTEName(referencedQuery, resolvedParams, platform);
 
             const cteEntry: CTEEntry = {
                 DeduplicationKey: dedupeKey,
@@ -514,7 +514,7 @@ export class QueryCompositionEngine {
     /**
      * Generates a SQL-safe CTE name from the query name + short hash for uniqueness.
      */
-    private generateCTEName(query: QueryInfo, params: Record<string, string>): string {
+    private generateCTEName(query: QueryInfo, params: Record<string, string>, platform: DatabasePlatform): string {
         // Sanitize query name: remove non-alphanumeric chars, replace spaces with underscores
         const sanitized = query.Name
             .replace(/[^a-zA-Z0-9_ ]/g, '')
@@ -525,7 +525,8 @@ export class QueryCompositionEngine {
         const hashInput = query.ID + JSON.stringify(params);
         const hash = this.simpleHash(hashInput);
 
-        return `[__cte_${sanitized}_${hash}]`;
+        const identifier = `__cte_${sanitized}_${hash}`;
+        return platform === 'postgresql' ? `"${identifier}"` : `[${identifier}]`;
     }
 
     /**

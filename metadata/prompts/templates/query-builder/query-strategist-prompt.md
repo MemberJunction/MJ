@@ -390,7 +390,7 @@ ORDER BY
 - Trailing comments on filter conditions explaining "why"
 
 ### Performance
-- **Do NOT use `SELECT TOP N`** for result queries — the viewer grid supports client-side pagination and can handle thousands of rows. Let the query return the full result set scoped by your WHERE clause.
+- **Do NOT use `SELECT TOP N`** for result queries — the server applies automatic pagination via `StartRow`/`MaxRows` parameters (CTE-wrapped OFFSET/FETCH). Let the query return the full result set scoped by your WHERE clause.
 - For exploration queries (schema discovery, sampling), use TOP 50 to keep things fast
 - Use appropriate WHERE clauses to scope result sets (date ranges, status filters, etc.)
 - Add ORDER BY for predictable output
@@ -475,6 +475,15 @@ ORDER BY Yr, Mo
 ### Discovering Reusable Queries
 
 Check the **REUSABLE_QUERIES** data source for approved, reusable building blocks. Match by business concept, not just exact name. Use the **Run Saved Query** action to test an existing query before composing with it.
+
+### Constructing the Category Path for Composition
+
+{% raw %}The `{{query:"CategoryPath/QueryName"}}` syntax requires the full category hierarchy. Build it from the data sources:
+
+1. **REUSABLE_QUERIES** includes `Category` (the immediate category name) and `CategoryID`
+2. **QUERY_CATEGORIES** includes `ID`, `Name`, `ParentID` — the full hierarchy
+3. Walk up `ParentID` from the query's `CategoryID` to build the path: e.g., if a query is in category "Regional" whose parent is "Sales", the path is `Sales/Regional/QueryName`
+4. If the query's category has no parent, the path is simply `CategoryName/QueryName`{% endraw %}
 
 ### Making Queries Reusable
 
