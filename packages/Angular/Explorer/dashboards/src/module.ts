@@ -20,6 +20,7 @@ import { AgentEditorComponent } from './AI/components/agents/agent-editor.compon
 import { ExecutionMonitoringComponent } from './AI/components/execution-monitoring.component';
 import { SystemConfigurationComponent } from './AI/components/system/system-configuration.component';
 import { SystemConfigFilterPanelComponent } from './AI/components/system/system-config-filter-panel.component';
+import { AgentRequestsResourceComponent } from './AI/components/requests/agent-requests-resource.component';
 import { ActionsOverviewComponent } from './Actions/components/actions-overview.component';
 import { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
 import { ScheduledActionsComponent } from './Actions/components/scheduled-actions.component';
@@ -82,7 +83,6 @@ import { SchedulingDashboardComponent } from './Scheduling/scheduling-dashboard.
 import { SchedulingOverviewComponent } from './Scheduling/components/scheduling-overview.component';
 import { SchedulingJobsComponent } from './Scheduling/components/scheduling-jobs.component';
 import { SchedulingActivityComponent } from './Scheduling/components/scheduling-activity.component';
-import { JobSlideoutComponent } from './Scheduling/components/job-slideout.component';
 import { SchedulingOverviewResourceComponent } from './Scheduling/components/scheduling-overview-resource.component';
 import { SchedulingJobsResourceComponent } from './Scheduling/components/scheduling-jobs-resource.component';
 import { SchedulingActivityResourceComponent } from './Scheduling/components/scheduling-activity-resource.component';
@@ -136,6 +136,8 @@ import { CredentialsAuditResourceComponent } from './Credentials/components/cred
 import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
 // Credentials Module from generic package (panels and dialogs)
 import { CredentialsModule } from '@memberjunction/ng-credentials';
+// Agent Requests Module from generic package (panels and dialogs)
+import { AgentRequestsModule } from '@memberjunction/ng-agent-requests';
 // System Diagnostics Components
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
 // Lists Dashboard Components
@@ -178,6 +180,9 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
 import { VersionsModule } from '@memberjunction/ng-versions';
 // Integration Dashboard Module
 import { IntegrationModule } from './Integration/integration.module';
+// Scheduling Module from generic package (reusable panels and dialogs)
+import { SchedulingModule } from '@memberjunction/ng-scheduling';
+import { NgTreesModule } from '@memberjunction/ng-trees';
 
 
 
@@ -194,6 +199,7 @@ import { IntegrationModule } from './Integration/integration.module';
     ExecutionMonitoringComponent,
     SystemConfigurationComponent,
     SystemConfigFilterPanelComponent,
+    AgentRequestsResourceComponent,
     ActionsOverviewComponent,
     ActionsExecutionMonitoringComponent,
     ScheduledActionsComponent,
@@ -239,7 +245,6 @@ import { IntegrationModule } from './Integration/integration.module';
     SchedulingOverviewComponent,
     SchedulingJobsComponent,
     SchedulingActivityComponent,
-    JobSlideoutComponent,
     SchedulingOverviewResourceComponent,
     SchedulingJobsResourceComponent,
     SchedulingActivityResourceComponent,
@@ -348,12 +353,15 @@ import { IntegrationModule } from './Integration/integration.module';
     DashboardViewerModule,
     MCPModule,
     CredentialsModule,
+    AgentRequestsModule,
     SharedPipesModule,
     ActionsModule,
     AgentsModule,
     MarkdownModule,
     VersionsModule,
-    IntegrationModule
+    IntegrationModule,
+    SchedulingModule,
+    NgTreesModule
   ],
   providers: [
     AIInstrumentationService,
@@ -373,6 +381,7 @@ import { IntegrationModule } from './Integration/integration.module';
     AgentConfigurationComponent,
     ModelManagementComponent,
     SystemConfigurationComponent,
+    AgentRequestsResourceComponent,
     // Export Actions components (now BaseResourceComponent-based)
     ActionsOverviewComponent,
     ActionsExecutionMonitoringComponent,
@@ -422,6 +431,7 @@ import { IntegrationModule } from './Integration/integration.module';
     GroupByPipe,
     SharedPipesModule,
     CredentialsModule,
+    AgentRequestsModule,
     // System Diagnostics Components
     SystemDiagnosticsComponent,
     // Lists Dashboard Components

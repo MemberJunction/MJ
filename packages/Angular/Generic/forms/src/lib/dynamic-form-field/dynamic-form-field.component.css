@@ -79,7 +79,7 @@
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--mj-status-success) 30%, transparent) transparent;
+  scrollbar-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent) transparent;
 }
 
 .question-buttongroup::-webkit-scrollbar {
@@ -91,12 +91,12 @@
 }
 
 .question-buttongroup::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--mj-status-success) 30%, transparent);
+  background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
   border-radius: 3px;
 }
 
 .question-buttongroup::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--mj-status-success) 50%, transparent);
+  background: color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
 }
 
 .buttongroup-option {
@@ -164,7 +164,7 @@
   text-align: center;
   font-size: 16px;
   font-weight: 600;
-  color: var(--mj-status-success);
+  color: var(--mj-brand-primary);
   padding: 4px 0;
 }
 

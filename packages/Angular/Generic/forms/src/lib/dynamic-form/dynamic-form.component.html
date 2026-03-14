@@ -1,0 +1,102 @@
+@if (IsVisible) {
+  <div class="dynamic-form">
+    <!-- Simple Choice Mode (single question, no title, buttongroup/radio) -->
+    @if (IsSimpleChoice) {
+      <div class="simple-choice-buttons">
+        @for (option of GetOptions(FormDefinition.questions[0]); track TrackByValue($index, option)) {
+          <button
+            kendoButton
+            [themeColor]="IsSimpleChoiceSelected(option.value) ? 'primary' : 'base'"
+            [disabled]="Disabled"
+            (click)="OnSimpleChoiceClick(option.value)"
+            class="choice-button"
+            [class.selected]="IsSimpleChoiceSelected(option.value)"
+            >
+            <span>
+              @if (IsSimpleChoiceSelected(option.value)) {
+                <i class="fa-solid fa-check" aria-hidden="true"></i>
+              } @else if (HasIcon(option)) {
+                <i class="fa {{ option.icon }}" aria-hidden="true"></i>
+              }
+              {{ option.label }}
+            </span>
+          </button>
+        }
+      </div>
+    }
+    <!-- Full Form Mode (complex forms) -->
+    @if (!IsSimpleChoice) {
+      <form [formGroup]="FormGroup" (ngSubmit)="OnSubmit()" class="response-form">
+        <!-- Form Title -->
+        @if (FormDefinition.title) {
+          <h3 class="form-title">{{ FormDefinition.title }}</h3>
+        }
+        <!-- Form Description -->
+        @if (FormDefinition.description) {
+          <p class="form-description">{{ FormDefinition.description }}</p>
+        }
+        <!-- Questions (excludes footer choice question) -->
+        @if (MainQuestions.length > 0) {
+          <div class="form-questions">
+            @for (question of MainQuestions; track TrackByQuestionId($index, question)) {
+              <mj-dynamic-form-field
+                [Question]="question"
+                [Control]="GetControl(question.id)"
+                [formControlName]="question.id"
+              ></mj-dynamic-form-field>
+            }
+          </div>
+        }
+        <!-- Footer Actions -->
+        <div class="form-actions">
+          <!-- Footer Choice Buttons (replaces Submit when present) -->
+          @if (FooterChoiceQuestion) {
+            @for (option of GetOptions(FooterChoiceQuestion); track TrackByValue($index, option)) {
+              <button
+                kendoButton
+                type="button"
+                [themeColor]="IsFooterChoiceSelected(option.value) ? 'primary' : 'base'"
+                [disabled]="Disabled"
+                (click)="OnFooterChoiceClick(option.value)"
+                class="footer-choice-button"
+                [class.selected]="IsFooterChoiceSelected(option.value)"
+                >
+                <span>
+                  @if (IsFooterChoiceSelected(option.value)) {
+                    <i class="fa-solid fa-check" aria-hidden="true"></i>
+                  } @else if (HasIcon(option)) {
+                    <i class="fa {{ option.icon }}" aria-hidden="true"></i>
+                  }
+                  {{ option.label }}
+                </span>
+              </button>
+            }
+          }
+          <!-- Standard Submit Button (when no footer choice) -->
+          @if (ShowSubmitButton) {
+            <button
+              kendoButton
+              type="submit"
+              [themeColor]="'primary'"
+              [disabled]="Disabled || IsSubmitting || FormGroup.invalid"
+              class="submit-button"
+              >
+              @if (!IsSubmitting) {
+                <span>
+                  <i class="fa fa-check" aria-hidden="true"></i>
+                  {{ SubmitLabel }}
+                </span>
+              }
+              @if (IsSubmitting) {
+                <span>
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  Submitting...
+                </span>
+              }
+            </button>
+          }
+        </div>
+      </form>
+    }
+  </div>
+}

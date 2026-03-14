@@ -1,0 +1,25 @@
+@if (HasData) {
+  <!-- Single field: inline pill -->
+  @if (IsSingleField) {
+    <span class="form-response-pill single-field">
+      <i class="fa fa-check" aria-hidden="true"></i>
+      {{ Fields[0].displayValue }}
+    </span>
+  } @else {
+    <!-- Multiple fields: card layout -->
+    <div class="form-response-pill multi-field">
+      <div class="pill-header">
+        <i class="fa fa-check-square" aria-hidden="true"></i>
+        {{ ResolvedTitle }}
+      </div>
+      <div class="pill-fields">
+        @for (field of Fields; track TrackByKey($index, field)) {
+          <div class="pill-field">
+            <div class="field-question">{{ field.label }}</div>
+            <div class="field-answer">{{ field.displayValue }}</div>
+          </div>
+        }
+      </div>
+    </div>
+  }
+}
