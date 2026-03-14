@@ -234,12 +234,15 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         ctx: FetchContext
     ): Promise<FetchBatchResult> {
         const fullPath = this.BuildFullURL(baseURL, obj.APIPath);
-        const result = await this.FetchWithPagination(auth, fullPath, obj, ctx.BatchSize);
+        // Fetch ALL pages in one shot. The inner FetchPaginatedLoop handles cursor-based
+        // pagination correctly, but the outer IntegrationEngine loop has no way to pass
+        // cursor state between FetchChanges calls. So we must exhaust pagination here.
+        const result = await this.FetchWithPagination(auth, fullPath, obj, Number.MAX_SAFE_INTEGER);
         const pkFieldName = this.FindPrimaryKeyFieldName(fields);
 
         return {
             Records: result.Records.map(r => this.ToExternalRecord(r, ctx.ObjectName, pkFieldName)),
-            HasMore: result.HasMore,
+            HasMore: false, // All pages consumed internally — nothing left for the outer loop
         };
     }
 

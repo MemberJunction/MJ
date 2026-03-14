@@ -84,9 +84,10 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
     // ─── Abstract method implementations ─────────────────────────────
 
     protected async Authenticate(
-        companyIntegration: MJCompanyIntegrationEntity
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser?: UserInfo
     ): Promise<RESTAuthContext> {
-        const config = await this.ParseConfig(companyIntegration);
+        const config = await this.ParseConfig(companyIntegration, contextUser);
         const token = await this.GetToken(config);
         const auth: RasaAuthContext = { Token: token, Config: config };
         return auth;
@@ -249,10 +250,10 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
 
     public async TestConnection(
         companyIntegration: MJCompanyIntegrationEntity,
-        _contextUser: UserInfo
+        contextUser: UserInfo
     ): Promise<ConnectionTestResult> {
         try {
-            const config = await this.ParseConfig(companyIntegration);
+            const config = await this.ParseConfig(companyIntegration, contextUser);
             const token = await this.GetToken(config);
 
             // Verify token works by listing communities
@@ -374,11 +375,12 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
      * Tries CredentialID first (MJ: Credentials entity), then Configuration JSON.
      */
     private async ParseConfig(
-        companyIntegration: MJCompanyIntegrationEntity
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser?: UserInfo
     ): Promise<RasaConnectionConfig> {
         // Try CredentialID first
         if (companyIntegration.CredentialID) {
-            return this.ParseConfigFromCredential(companyIntegration.CredentialID);
+            return this.ParseConfigFromCredential(companyIntegration.CredentialID, contextUser);
         }
 
         // Fallback to Configuration JSON
@@ -392,9 +394,9 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
     /**
      * Loads credentials from the MJ: Credentials entity.
      */
-    private async ParseConfigFromCredential(credentialID: string): Promise<RasaConnectionConfig> {
+    private async ParseConfigFromCredential(credentialID: string, contextUser?: UserInfo): Promise<RasaConnectionConfig> {
         const md = new Metadata();
-        const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials');
+        const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         await credEntity.Load(credentialID);
 
         const valuesJSON = credEntity.Values;

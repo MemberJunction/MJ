@@ -292,8 +292,22 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let hasMore = true;
         let currentWatermark = initialWatermark;
         let recordsInMap = 0;
+        let batchCount = 0;
+        let previousBatchFingerprint: string | undefined;
+        const MAX_BATCHES_PER_MAP = 5000;
 
         while (hasMore) {
+            batchCount++;
+
+            // Safety: prevent infinite loops if connector keeps returning HasMore=true
+            if (batchCount > MAX_BATCHES_PER_MAP) {
+                console.error(
+                    `[IntegrationEngine] Safety limit reached: ${MAX_BATCHES_PER_MAP} batches for ` +
+                    `"${entityMap.ExternalObjectName}" (${recordsInMap} records). Stopping to prevent infinite loop.`
+                );
+                break;
+            }
+
             const ctx: FetchContext = {
                 CompanyIntegration: config.companyIntegration,
                 ObjectName: entityMap.ExternalObjectName,
@@ -304,13 +318,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
             const batch = await config.connector.FetchChanges(ctx);
 
-            // A7: Batch size enforcement — truncate if connector returns more than MaxBatchSize
-            let batchRecords = batch.Records;
-            if (batchRecords.length > this.MaxBatchSize) {
-                console.warn(
-                    `[IntegrationEngine] Connector returned ${batchRecords.length} records, exceeding MaxBatchSize of ${this.MaxBatchSize}. Truncating.`
-                );
-                batchRecords = batchRecords.slice(0, this.MaxBatchSize);
+            const batchRecords = batch.Records;
+
+            // Detect duplicate batches: if same records returned consecutively, pagination is stuck
+            if (batchRecords.length > 0) {
+                const fingerprint = batchRecords.map(r => r.ExternalID).join(',');
+                if (fingerprint === previousBatchFingerprint) {
+                    console.warn(
+                        `[IntegrationEngine] Duplicate batch detected for "${entityMap.ExternalObjectName}" ` +
+                        `(batch #${batchCount}, ${recordsInMap} records so far). Pagination appears stuck. Stopping.`
+                    );
+                    break;
+                }
+                previousBatchFingerprint = fingerprint;
             }
 
             const mapped = this.fieldMappingEngine.Apply(
@@ -332,7 +352,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (batch.NewWatermarkValue) {
                 currentWatermark = batch.NewWatermarkValue;
             }
-            hasMore = batch.HasMore;
+            hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
 
         if (currentWatermark) {

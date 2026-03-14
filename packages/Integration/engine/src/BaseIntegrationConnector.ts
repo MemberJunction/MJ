@@ -264,7 +264,13 @@ export abstract class BaseIntegrationConnector {
                     ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                 })),
                 PrimaryKeyFields: fields.filter(f => f.IsUniqueKey).map(f => f.Name),
-                Relationships: [],
+                Relationships: fields
+                    .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
+                    .map(f => ({
+                        FieldName: f.Name,
+                        TargetObject: f.ForeignKeyTarget!,
+                        TargetField: 'ID',
+                    })),
             });
         }
 
