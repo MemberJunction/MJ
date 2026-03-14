@@ -1,5 +1,28 @@
 # @memberjunction/ng-record-changes
 
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/ng-notifications@5.11.0
+  - @memberjunction/ng-versions@5.11.0
+  - @memberjunction/ng-shared-generic@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/global@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ng-notifications@5.10.1
+- @memberjunction/ng-shared-generic@5.10.1
+- @memberjunction/ng-versions@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes

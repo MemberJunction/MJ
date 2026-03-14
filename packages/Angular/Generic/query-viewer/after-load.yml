@@ -1,0 +1,271 @@
+- generic [ref=e14]:
+  - banner [ref=e15]:
+    - generic "MemberJunction" [ref=e16]
+    - text: 
+    - button "Home" [ref=e18] [cursor=pointer]:
+      - generic [ref=e19]: 
+    - generic [ref=e22] [cursor=pointer]:
+      - generic [ref=e23]: 
+      - generic [ref=e24]: 
+    - navigation [ref=e26]:
+      - generic [ref=e27] [cursor=pointer]:
+        - generic [ref=e28]: 
+        - generic [ref=e29]: Dashboards
+      - generic [ref=e30] [cursor=pointer]:
+        - generic [ref=e31]: 
+        - generic [ref=e32]: Data
+      - generic [ref=e33] [cursor=pointer]:
+        - generic [ref=e34]: 
+        - generic [ref=e35]: Queries
+    - generic [ref=e36]:
+      - button "Search" [ref=e37] [cursor=pointer]:
+        - generic [ref=e38]: 
+      - button "Notifications" [ref=e39] [cursor=pointer]:
+        - generic [ref=e40]: 
+      - button "Chat" [ref=e42] [cursor=pointer]:
+        - generic [ref=e43]: 
+      - button "User avatar" [ref=e45] [cursor=pointer]:
+        - img "User avatar" [ref=e46]
+  - generic:
+    - generic:
+      - combobox:
+        - generic:
+          - generic: "MJ: Companies"
+        - button "Select":
+          - generic:
+            - generic:
+              - img
+      - textbox "Search..."
+      - button "Search":
+        - generic: 
+  - text:      
+  - generic [ref=e52]:
+    - generic [ref=e54]:
+      - generic "Dashboards" [ref=e55] [cursor=pointer]:
+        - generic [ref=e56]: Dashboards
+        - generic [ref=e57]: 
+      - generic "Data" [ref=e58] [cursor=pointer]:
+        - generic [ref=e59]: Data
+    - generic [ref=e66]:
+      - generic [ref=e103]:
+        - generic [ref=e105]:
+          - button "Dashboards" [ref=e106] [cursor=pointer]:
+            - generic [ref=e107]: 
+            - generic [ref=e108]: Dashboards
+          - generic [ref=e109]: 
+          - button "Test" [ref=e110] [cursor=pointer]:
+            - generic [ref=e111]: 
+            - generic [ref=e112]: Test
+          - generic [ref=e113]: 
+          - generic [ref=e114]:
+            - generic [ref=e115]: 
+            - generic [ref=e116]: New Dashboard
+        - generic [ref=e117]:
+          - button "Open in its own tab" [ref=e118] [cursor=pointer]:
+            - generic [ref=e119]: 
+          - button "Share Dashboard" [ref=e120] [cursor=pointer]:
+            - generic [ref=e121]: 
+          - button "Edit Dashboard" [ref=e122] [cursor=pointer]:
+            - generic [ref=e123]: 
+      - generic [ref=e129]:
+        - generic "Entities with Field Counts" [ref=e132]:
+          - generic [ref=e133]: 
+          - generic [ref=e134]: Entities with Field Counts
+        - generic [ref=e145]:
+          - generic [ref=e146]:
+            - generic [ref=e147]:
+              - heading "Entities with Field Counts" [level=3] [ref=e148]
+              - generic [ref=e149]:
+                - generic [ref=e150]: 
+                - text: Admin
+            - generic [ref=e151]:
+              - button "Info" [ref=e152] [cursor=pointer]:
+                - generic [ref=e153]: 
+                - text: Info
+              - generic [ref=e154]:
+                - generic [ref=e155]: 
+                - text: 46ms
+          - generic [ref=e158]:
+            - generic [ref=e159]:
+              - generic [ref=e160]:
+                - generic [ref=e161]:
+                  - generic [ref=e162]: 
+                  - text: 335 rows
+                - generic [ref=e163]:
+                  - generic [ref=e164]: 
+                  - text: 1 selected
+                  - button "Clear selection" [ref=e165] [cursor=pointer]:
+                    - generic [ref=e166]: 
+              - generic [ref=e167]:
+                - button "Refresh data" [ref=e168] [cursor=pointer]:
+                  - generic [ref=e169]: 
+                - button "Export" [ref=e170] [cursor=pointer]:
+                  - generic [ref=e171]: 
+                  - generic [ref=e172]: Export
+            - generic [ref=e174]:
+              - generic [ref=e175]: Press SPACE to deselect this row
+              - grid [ref=e176]:
+                - rowgroup [ref=e177]:
+                  - row "ID Name FieldCount" [ref=e178]:
+                    - columnheader [ref=e179]
+                    - columnheader "ID" [ref=e180]:
+                      - generic [ref=e182] [cursor=pointer]: ID
+                    - columnheader "Name" [ref=e183]:
+                      - generic [ref=e185] [cursor=pointer]: Name
+                    - columnheader "FieldCount" [ref=e186]:
+                      - generic [ref=e188] [cursor=pointer]: FieldCount
+                - rowgroup [ref=e189]:
+                  - row "Press Space to toggle row selection (unchecked) 00AB1A54-8B2D-48B0-A237-E56C94F3807E Accrediting Bodies 14" [ref=e190]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e191]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e192] [cursor=pointer]
+                    - gridcell "00AB1A54-8B2D-48B0-A237-E56C94F3807E" [ref=e193]
+                    - gridcell "Accrediting Bodies" [ref=e194]
+                    - gridcell "14" [ref=e195]
+                  - row "Press Space to toggle row selection (unchecked) E6A86119-464A-49EE-8453-3DA92B01466F Advocacy Actions 16" [ref=e196]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e197]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e198] [cursor=pointer]
+                    - gridcell "E6A86119-464A-49EE-8453-3DA92B01466F" [ref=e199]
+                    - gridcell "Advocacy Actions" [ref=e200]
+                    - gridcell "16" [ref=e201]
+                  - row "Press Space to toggle row selection (unchecked) 40330360-828E-4386-B929-0F3BAB120F15 Board Members 10" [ref=e202]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e203]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e204] [cursor=pointer]
+                    - gridcell "40330360-828E-4386-B929-0F3BAB120F15" [ref=e205]
+                    - gridcell "Board Members" [ref=e206]
+                    - gridcell "10" [ref=e207]
+                  - row "Press Space to toggle row selection (unchecked) 364B0EDC-8648-4D5F-94FB-C783F3698195 Board Positions 9" [ref=e208]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e209]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e210] [cursor=pointer]
+                    - gridcell "364B0EDC-8648-4D5F-94FB-C783F3698195" [ref=e211]
+                    - gridcell "Board Positions" [ref=e212]
+                    - gridcell "9" [ref=e213]
+                  - row "Press Space to toggle row selection (checked) 2B004A37-CE9D-40FA-8BC1-F1DD94074588 Campaign Members 13" [selected] [ref=e214]:
+                    - gridcell "Press Space to toggle row selection (checked)" [ref=e215]:
+                      - checkbox "Press Space to toggle row selection (checked)" [checked] [active] [ref=e216] [cursor=pointer]
+                    - gridcell "2B004A37-CE9D-40FA-8BC1-F1DD94074588" [ref=e217]
+                    - gridcell "Campaign Members" [ref=e218]
+                    - gridcell "13" [ref=e219]
+                  - row "Press Space to toggle row selection (unchecked) C1937109-7AC6-499A-B22C-ED7804F1A70B Campaigns 13" [ref=e220]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e221]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e222] [cursor=pointer]
+                    - gridcell "C1937109-7AC6-499A-B22C-ED7804F1A70B" [ref=e223]
+                    - gridcell "Campaigns" [ref=e224]
+                    - gridcell "13" [ref=e225]
+                  - row "Press Space to toggle row selection (unchecked) F739B878-CF69-4724-8F3B-2A8084C75998 Certificates 9" [ref=e226]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e227]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e228] [cursor=pointer]
+                    - gridcell "F739B878-CF69-4724-8F3B-2A8084C75998" [ref=e229]
+                    - gridcell "Certificates" [ref=e230]
+                    - gridcell "9" [ref=e231]
+                  - row "Press Space to toggle row selection (unchecked) 83AC64C9-BC90-4753-8F94-F41AD74B4F30 Certification Renewals 14" [ref=e232]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e233]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e234] [cursor=pointer]
+                    - gridcell "83AC64C9-BC90-4753-8F94-F41AD74B4F30" [ref=e235]
+                    - gridcell "Certification Renewals" [ref=e236]
+                    - gridcell "14" [ref=e237]
+                  - row "Press Space to toggle row selection (unchecked) 12B0FBC1-5A18-42E7-A27F-400B9F5E964B Certification Requirements 10" [ref=e238]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e239]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e240] [cursor=pointer]
+                    - gridcell "12B0FBC1-5A18-42E7-A27F-400B9F5E964B" [ref=e241]
+                    - gridcell "Certification Requirements" [ref=e242]
+                    - gridcell "10" [ref=e243]
+                  - row "Press Space to toggle row selection (unchecked) D819ADC0-D711-46F5-BC5A-65EB861C5733 Certification Types 19" [ref=e244]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e245]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e246] [cursor=pointer]
+                    - gridcell "D819ADC0-D711-46F5-BC5A-65EB861C5733" [ref=e247]
+                    - gridcell "Certification Types" [ref=e248]
+                    - gridcell "19" [ref=e249]
+                  - row "Press Space to toggle row selection (unchecked) F94FAAF8-0864-49A5-B5ED-E5D77F23E169 Certifications 19" [ref=e250]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e251]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e252] [cursor=pointer]
+                    - gridcell "F94FAAF8-0864-49A5-B5ED-E5D77F23E169" [ref=e253]
+                    - gridcell "Certifications" [ref=e254]
+                    - gridcell "19" [ref=e255]
+                  - row "Press Space to toggle row selection (unchecked) 27EBFD4A-A801-4ECB-BF68-8597282F15F7 Chapter Memberships 10" [ref=e256]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e257]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e258] [cursor=pointer]
+                    - gridcell "27EBFD4A-A801-4ECB-BF68-8597282F15F7" [ref=e259]
+                    - gridcell "Chapter Memberships" [ref=e260]
+                    - gridcell "10" [ref=e261]
+                  - row "Press Space to toggle row selection (unchecked) 0301B423-FCF7-4AC8-823F-468FC93C2BBA Chapter Officers 11" [ref=e262]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e263]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e264] [cursor=pointer]
+                    - gridcell "0301B423-FCF7-4AC8-823F-468FC93C2BBA" [ref=e265]
+                    - gridcell "Chapter Officers" [ref=e266]
+                    - gridcell "11" [ref=e267]
+                  - row "Press Space to toggle row selection (unchecked) E7A6DBA4-CB7D-4FFD-8DE8-144250594E48 Chapters 16" [ref=e268]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e269]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e270] [cursor=pointer]
+                    - gridcell "E7A6DBA4-CB7D-4FFD-8DE8-144250594E48" [ref=e271]
+                    - gridcell "Chapters" [ref=e272]
+                    - gridcell "16" [ref=e273]
+                  - row "Press Space to toggle row selection (unchecked) F2F32177-AA42-4DDA-883F-55C520616A0D Committee Memberships 12" [ref=e274]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e275]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e276] [cursor=pointer]
+                    - gridcell "F2F32177-AA42-4DDA-883F-55C520616A0D" [ref=e277]
+                    - gridcell "Committee Memberships" [ref=e278]
+                    - gridcell "12" [ref=e279]
+                  - row "Press Space to toggle row selection (unchecked) 210C6960-E132-4183-954E-E3FE660622E1 Committees 13" [ref=e280]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e281]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e282] [cursor=pointer]
+                    - gridcell "210C6960-E132-4183-954E-E3FE660622E1" [ref=e283]
+                    - gridcell "Committees" [ref=e284]
+                    - gridcell "13" [ref=e285]
+                  - row "Press Space to toggle row selection (unchecked) 6651AAE3-6793-411D-B568-7B853C42C2DA Competition Entries 19" [ref=e286]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e287]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e288] [cursor=pointer]
+                    - gridcell "6651AAE3-6793-411D-B568-7B853C42C2DA" [ref=e289]
+                    - gridcell "Competition Entries" [ref=e290]
+                    - gridcell "19" [ref=e291]
+                  - row "Press Space to toggle row selection (unchecked) 8CDB833C-6189-4FF7-B67D-BF870E7243E6 Competition Judges 21" [ref=e292]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e293]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e294] [cursor=pointer]
+                    - gridcell "8CDB833C-6189-4FF7-B67D-BF870E7243E6" [ref=e295]
+                    - gridcell "Competition Judges" [ref=e296]
+                    - gridcell "21" [ref=e297]
+                  - row "Press Space to toggle row selection (unchecked) 428B9B0E-5D2C-4C7D-A3D5-04B9B8710FA0 Competitions 20" [ref=e298]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e299]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e300] [cursor=pointer]
+                    - gridcell "428B9B0E-5D2C-4C7D-A3D5-04B9B8710FA0" [ref=e301]
+                    - gridcell "Competitions" [ref=e302]
+                    - gridcell "20" [ref=e303]
+                  - row "Press Space to toggle row selection (unchecked) 9C267C6E-6999-4EE4-A3F1-C38530C61773 Continuing Educations 18" [ref=e304]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e305]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e306] [cursor=pointer]
+                    - gridcell "9C267C6E-6999-4EE4-A3F1-C38530C61773" [ref=e307]
+                    - gridcell "Continuing Educations" [ref=e308]
+                    - gridcell "18" [ref=e309]
+                  - row "Press Space to toggle row selection (unchecked) EC422061-6B74-4452-8848-968AD8013D45 Courses 19" [ref=e310]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e311]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e312] [cursor=pointer]
+                    - gridcell "EC422061-6B74-4452-8848-968AD8013D45" [ref=e313]
+                    - gridcell "Courses" [ref=e314]
+                    - gridcell "19" [ref=e315]
+                  - row "Press Space to toggle row selection (unchecked) F4F3D72E-20A1-4A6C-89A4-0A0DF4E98570 Email Clicks 10" [ref=e316]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e317]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e318] [cursor=pointer]
+                    - gridcell "F4F3D72E-20A1-4A6C-89A4-0A0DF4E98570" [ref=e319]
+                    - gridcell "Email Clicks" [ref=e320]
+                    - gridcell "10" [ref=e321]
+                  - row "Press Space to toggle row selection (unchecked) 23E7C0CD-C34C-4E7F-A61B-B1BC3A1C6532 Email Sends 23" [ref=e322]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e323]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e324] [cursor=pointer]
+                    - gridcell "23E7C0CD-C34C-4E7F-A61B-B1BC3A1C6532" [ref=e325]
+                    - gridcell "Email Sends" [ref=e326]
+                    - gridcell "23" [ref=e327]
+                  - row "Press Space to toggle row selection (unchecked) 6CB7DE10-08F9-444A-A4BA-D20E71D91006 Email Templates 14" [ref=e328]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e329]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e330] [cursor=pointer]
+                    - gridcell "6CB7DE10-08F9-444A-A4BA-D20E71D91006" [ref=e331]
+                    - gridcell "Email Templates" [ref=e332]
+                    - gridcell "14" [ref=e333]
+                  - row "Press Space to toggle row selection (unchecked) EE3A3CAD-69F1-4A2B-B554-9C1A7113D68D Enrollments 18" [ref=e334]:
+                    - gridcell "Press Space to toggle row selection (unchecked)" [ref=e335]:
+                      - checkbox "Press Space to toggle row selection (unchecked)" [ref=e336] [cursor=pointer]
+                    - gridcell "EE3A3CAD-69F1-4A2B-B554-9C1A7113D68D" [ref=e337]
+                    - gridcell "Enrollments" [ref=e338]
+                    - gridcell "18" [ref=e339]
+                - rowgroup
+                - rowgroup
+                - rowgroup
+      - generic "Remove Part"

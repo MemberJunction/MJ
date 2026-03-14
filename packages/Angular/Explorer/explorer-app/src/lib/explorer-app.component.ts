@@ -120,8 +120,19 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
             if (token) {
               await this.handleLogin(token, userInfo);
             } else {
-              console.error('User info available but no token found');
-              // Auth state is managed by the provider itself via observables
+              // Token expired or missing — attempt a full refresh which will
+              // redirect to the identity provider if interaction is required.
+              console.warn('User info available but no token found, attempting refresh...');
+              try {
+                const refreshedToken = await this.authBase.refreshToken();
+                await this.handleLogin(refreshedToken.idToken, userInfo);
+              } catch (e) {
+                console.error('Token refresh failed, redirecting to login:', e);
+                // refreshToken() normally redirects (and never returns) when
+                // interaction is required.  If we reach here, force login as
+                // a last-resort safety net.
+                this.authBase.login().subscribe();
+              }
             }
           }
         },

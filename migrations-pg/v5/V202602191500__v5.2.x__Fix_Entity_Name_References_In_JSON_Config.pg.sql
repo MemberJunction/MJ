@@ -23,28 +23,16 @@ WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
-CREATE TABLE #EntityNameMapping (
+CREATE TEMP TABLE "EntityNameMapping" (
  "OldName" VARCHAR(255) NOT NULL,
  "NewName" VARCHAR(255) NOT NULL
 );
 
 
--- ===================== Helper Functions (fn*) =====================
-
-
--- ===================== Views =====================
-
-
--- ===================== Stored Procedures (sp*) =====================
-
-
--- ===================== Triggers =====================
-
-
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
 -- Insert all entity name mappings (old name -> new name with "MJ: " prefix)
-INSERT INTO #"EntityNameMapping" ("OldName", "NewName") VALUES
+INSERT INTO "EntityNameMapping" ("OldName", "NewName") VALUES
 ('Action Authorizations', 'MJ: Action Authorizations'),
 ('Action Categories', 'MJ: Action Categories'),
 ('Action Context Types', 'MJ: Action Context Types'),
@@ -208,19 +196,105 @@ INSERT INTO #"EntityNameMapping" ("OldName", "NewName") VALUES
 ('Workspaces', 'MJ: Workspaces');
 
 
--- ===================== FK & CHECK Constraints =====================
+-- PG equivalent of T-SQL cursor + dynamic SQL procedure (#UpdateEntityRefsInColumn).
+-- Loops through entity name mappings and replaces old names with new names
+-- in JSON configuration columns across multiple tables.
+DO $$
+DECLARE
+    tbl_rec RECORD;
+    map_rec RECORD;
+    v_update_count INTEGER;
+    v_total INTEGER;
+BEGIN
+    FOR tbl_rec IN
+        SELECT * FROM (VALUES
+        ('__mj', 'Workspace', 'Configuration'),
+        ('__mj', 'WorkspaceItem', 'Configuration'),
+        ('__mj', 'UserNotification', 'ResourceConfiguration'),
+        ('__mj', 'Dashboard', 'UIConfigDetails'),
+        ('__mj', 'DashboardUserState', 'UserState'),
+        ('__mj', 'Report', 'Configuration'),
+        ('__mj', 'ReportVersion', 'Configuration'),
+        ('__mj', 'ReportUserState', 'ReportState'),
+        ('__mj', 'DataContextItem', 'SQL'),
+        ('__mj', 'DataContextItem', 'DataJSON'),
+        ('__mj', 'ConversationArtifactVersion', 'Configuration'),
+        ('__mj', 'ArtifactVersion', 'Configuration'),
+        ('__mj', 'Application', 'DefaultNavItems'),
+        ('__mj', 'UserView', 'FilterState'),
+        ('__mj', 'UserView', 'DisplayState'),
+        ('__mj', 'UserView', 'GridState'),
+        ('__mj', 'UserView', 'CardState'),
+        ('__mj', 'UserView', 'SortState'),
+        ('__mj', 'EntityRelationship', 'DisplayComponentConfiguration')
+        ) AS t(schema_name, table_name, column_name)
+    LOOP
+        -- Check if column exists
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = tbl_rec.schema_name
+              AND table_name = tbl_rec.table_name
+              AND column_name = tbl_rec.column_name
+        ) THEN
+            RAISE NOTICE '  SKIPPED: %.%.% does not exist', tbl_rec.schema_name, tbl_rec.table_name, tbl_rec.column_name;
+            CONTINUE;
+        END IF;
+
+        v_total := 0;
+        FOR map_rec IN SELECT "OldName", "NewName" FROM "EntityNameMapping" LOOP
+
+            -- Pattern 1: "Entity":"OldName"
+            EXECUTE format(
+                'UPDATE %I.%I SET %I = REPLACE(%I, $1, $2) WHERE %I LIKE $3',
+                tbl_rec.schema_name, tbl_rec.table_name,
+                tbl_rec.column_name, tbl_rec.column_name, tbl_rec.column_name
+            ) USING
+                '"Entity":"' || map_rec."OldName" || '"',
+                '"Entity":"' || map_rec."NewName" || '"',
+                '%"Entity":"' || map_rec."OldName" || '"%';
+            GET DIAGNOSTICS v_update_count = ROW_COUNT;
+            v_total := v_total + v_update_count;
+
+            -- Pattern 2: "EntityName":"OldName"
+            EXECUTE format(
+                'UPDATE %I.%I SET %I = REPLACE(%I, $1, $2) WHERE %I LIKE $3',
+                tbl_rec.schema_name, tbl_rec.table_name,
+                tbl_rec.column_name, tbl_rec.column_name, tbl_rec.column_name
+            ) USING
+                '"EntityName":"' || map_rec."OldName" || '"',
+                '"EntityName":"' || map_rec."NewName" || '"',
+                '%"EntityName":"' || map_rec."OldName" || '"%';
+            GET DIAGNOSTICS v_update_count = ROW_COUNT;
+            v_total := v_total + v_update_count;
+
+            -- Pattern 3: "entity":"OldName"
+            EXECUTE format(
+                'UPDATE %I.%I SET %I = REPLACE(%I, $1, $2) WHERE %I LIKE $3',
+                tbl_rec.schema_name, tbl_rec.table_name,
+                tbl_rec.column_name, tbl_rec.column_name, tbl_rec.column_name
+            ) USING
+                '"entity":"' || map_rec."OldName" || '"',
+                '"entity":"' || map_rec."NewName" || '"',
+                '%"entity":"' || map_rec."OldName" || '"%';
+            GET DIAGNOSTICS v_update_count = ROW_COUNT;
+            v_total := v_total + v_update_count;
+
+            -- Pattern 4: "entityName":"OldName"
+            EXECUTE format(
+                'UPDATE %I.%I SET %I = REPLACE(%I, $1, $2) WHERE %I LIKE $3',
+                tbl_rec.schema_name, tbl_rec.table_name,
+                tbl_rec.column_name, tbl_rec.column_name, tbl_rec.column_name
+            ) USING
+                '"entityName":"' || map_rec."OldName" || '"',
+                '"entityName":"' || map_rec."NewName" || '"',
+                '%"entityName":"' || map_rec."OldName" || '"%';
+            GET DIAGNOSTICS v_update_count = ROW_COUNT;
+            v_total := v_total + v_update_count;
+        END LOOP;
+
+        RAISE NOTICE '  %.%.%: Updated % rows', tbl_rec.schema_name, tbl_rec.table_name, tbl_rec.column_name, v_total;
+    END LOOP;
+END $$;
 
 
--- ===================== Grants =====================
-
-
--- ===================== Comments =====================
-
-
--- ===================== Other =====================
-
--- TODO: Review this batch
-DROP TABLE #EntityNameMapping;
-
--- TODO: Review this batch
-DROP PROCEDURE #UpdateEntityRefsInColumn;
+DROP TABLE IF EXISTS "EntityNameMapping";

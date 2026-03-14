@@ -95,6 +95,12 @@ export interface InstallConfig {
   /** Mistral API key for AI features. Leave blank to skip. */
   MistralKey?: string;
 
+  /**
+   * Base64-encoded 32-byte encryption key used for MJ field-level encryption.
+   * If omitted, the installer will generate one automatically.
+   */
+  BaseEncryptionKey?: string;
+
   // ── New user creation (optional) ──────────────────────────────────────
 
   /**
@@ -163,6 +169,7 @@ const ENV_VAR_MAP: ReadonlyArray<{
   { EnvVar: 'MJ_INSTALL_OPENAI_KEY',        Field: 'OpenAIKey',        Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_ANTHROPIC_KEY',     Field: 'AnthropicKey',     Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_MISTRAL_KEY',       Field: 'MistralKey',       Parse: (v) => v },
+  { EnvVar: 'MJ_INSTALL_BASE_ENCRYPTION_KEY', Field: 'BaseEncryptionKey', Parse: (v) => v },
 ];
 
 /**
@@ -273,7 +280,7 @@ export async function loadConfigFile(filePath: string): Promise<PartialInstallCo
     'DatabaseHost', 'DatabasePort', 'DatabaseName', 'DatabaseTrustCert',
     'CodeGenUser', 'CodeGenPassword', 'APIUser', 'APIPassword',
     'APIPort', 'ExplorerPort', 'AuthProvider', 'AuthProviderValues',
-    'OpenAIKey', 'AnthropicKey', 'MistralKey', 'CreateNewUser',
+    'OpenAIKey', 'AnthropicKey', 'MistralKey', 'BaseEncryptionKey', 'CreateNewUser',
   ]);
 
   for (const key of Object.keys(known)) {

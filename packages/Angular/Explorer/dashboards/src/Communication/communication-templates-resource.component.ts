@@ -113,7 +113,7 @@ interface TemplateCardData {
         height: 100%;
         padding: 24px;
         overflow-y: auto;
-        background: var(--mat-sys-surface-container);
+        background: var(--mj-bg-surface);
     }
 
     /* HEADER */
@@ -127,12 +127,12 @@ interface TemplateCardData {
         margin: 0;
         font-size: 18px;
         font-weight: 800;
-        color: var(--mat-sys-on-surface);
+        color: var(--mj-text-primary);
     }
     .templates-header p {
         margin: 4px 0 0;
         font-size: 13px;
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
     }
     .header-actions {
         display: flex;
@@ -144,39 +144,39 @@ interface TemplateCardData {
         align-items: center;
         gap: 8px;
         padding: 6px 12px;
-        border: 1px solid var(--mat-sys-outline-variant);
-        border-radius: var(--mat-sys-corner-small, 8px);
-        background: var(--mat-sys-surface-container-lowest);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        background: var(--mj-bg-surface-card);
         transition: border-color 0.15s, box-shadow 0.15s;
         min-width: 220px;
     }
     .search-input-wrapper:focus-within {
-        border-color: var(--mat-sys-primary);
-        box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 15%, transparent);
+        border-color: var(--mj-brand-primary);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
     }
-    .search-input-wrapper i { color: var(--mat-sys-on-surface-variant); font-size: 12px; }
+    .search-input-wrapper i { color: var(--mj-text-muted); font-size: 12px; }
     .search-input-wrapper input {
         flex: 1; border: none; outline: none;
         background: transparent; font-size: 12px;
-        font-family: inherit; color: var(--mat-sys-on-surface);
+        font-family: inherit; color: var(--mj-text-primary);
     }
-    .search-input-wrapper input::placeholder { color: var(--mat-sys-on-surface-variant); }
+    .search-input-wrapper input::placeholder { color: var(--mj-text-muted); }
 
     .tb-btn {
         display: inline-flex; align-items: center;
         gap: 6px; padding: 8px 16px;
-        border: 1px solid var(--mat-sys-outline-variant);
-        border-radius: var(--mat-sys-corner-extra-small, 4px);
-        background: var(--mat-sys-surface-container-lowest);
-        color: var(--mat-sys-on-surface-variant);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 4px;
+        background: var(--mj-bg-surface-card);
+        color: var(--mj-text-muted);
         font-size: 12px; font-weight: 600;
         cursor: pointer; transition: all 0.15s ease;
         font-family: inherit;
     }
     .tb-btn.primary {
-        background: var(--mat-sys-primary);
-        color: var(--mat-sys-on-primary, #fff);
-        border-color: var(--mat-sys-primary);
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
+        border-color: var(--mj-brand-primary);
     }
     .tb-btn.primary:hover { filter: brightness(1.1); }
 
@@ -197,21 +197,21 @@ interface TemplateCardData {
     .filter-chip {
         display: inline-flex; align-items: center;
         gap: 4px; padding: 5px 14px;
-        border: 1px solid var(--mat-sys-outline-variant);
+        border: 1px solid var(--mj-border-default);
         border-radius: 16px;
-        background: var(--mat-sys-surface-container-lowest);
+        background: var(--mj-bg-surface-card);
         font-size: 12px; font-weight: 500;
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
         cursor: pointer; transition: all 0.15s;
     }
     .filter-chip:hover {
-        border-color: var(--mat-sys-outline);
-        background: var(--mat-sys-surface-container);
+        border-color: var(--mj-border-strong);
+        background: var(--mj-bg-surface);
     }
     .filter-chip.active {
-        border-color: var(--mat-sys-primary);
-        background: var(--mat-sys-primary-container);
-        color: var(--mat-sys-on-primary-container);
+        border-color: var(--mj-brand-primary);
+        background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
     }
 
     /* GRID */
@@ -222,16 +222,16 @@ interface TemplateCardData {
     }
 
     .template-card {
-        background: var(--mat-sys-surface-container-lowest);
-        border: 1px solid var(--mat-sys-outline-variant);
-        border-radius: var(--mat-sys-corner-medium, 12px);
+        background: var(--mj-bg-surface-card);
+        border: 1px solid var(--mj-border-default);
+        border-radius: 12px;
         padding: 20px;
         cursor: pointer;
         transition: all 0.15s ease;
     }
     .template-card:hover {
-        box-shadow: 0 2px 6px 2px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
-        border-color: var(--mat-sys-outline);
+        box-shadow: 0 2px 8px var(--mj-shadow-md);
+        border-color: var(--mj-border-strong);
     }
 
     .template-card-header {
@@ -242,27 +242,27 @@ interface TemplateCardData {
     }
     .template-icon {
         width: 40px; height: 40px;
-        border-radius: var(--mat-sys-corner-small, 8px);
-        background: var(--mat-sys-primary-container);
-        color: var(--mat-sys-on-primary-container);
+        border-radius: 8px;
+        background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+        color: var(--mj-brand-primary);
         display: flex; align-items: center; justify-content: center;
         font-size: 16px; flex-shrink: 0;
     }
     .template-title-area { flex: 1; min-width: 0; }
     .template-name {
         font-size: 14px; font-weight: 700;
-        color: var(--mat-sys-on-surface);
+        color: var(--mj-text-primary);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .template-category {
         font-size: 11px;
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
         margin-top: 2px;
     }
 
     .template-description {
         font-size: 12px;
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
         line-height: 1.5;
         margin-bottom: 12px;
         display: -webkit-box;
@@ -285,15 +285,15 @@ interface TemplateCardData {
         display: inline-flex; align-items: center;
         gap: 4px; padding: 3px 8px;
         border-radius: 10px; font-size: 10px; font-weight: 500;
-        background: var(--mat-sys-surface-container);
-        color: var(--mat-sys-on-surface-variant);
+        background: var(--mj-bg-surface);
+        color: var(--mj-text-muted);
     }
     .content-type-chip.empty {
         font-style: italic;
     }
     .template-updated {
         font-size: 10px;
-        color: var(--mat-sys-on-surface-variant);
+        color: var(--mj-text-muted);
         white-space: nowrap;
     }
 
@@ -302,7 +302,7 @@ interface TemplateCardData {
         grid-column: 1 / -1;
         display: flex; flex-direction: column;
         align-items: center; justify-content: center;
-        padding: 64px 0; color: var(--mat-sys-on-surface-variant);
+        padding: 64px 0; color: var(--mj-text-muted);
     }
     .empty-state i { font-size: 2rem; margin-bottom: 12px; opacity: 0.5; }
     .empty-state p { margin: 0; font-size: 13px; }

@@ -408,7 +408,7 @@ interface CategoryNode {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #f5f7fa;
+      background: var(--mj-bg-surface);
       overflow: hidden;
     }
 
@@ -418,8 +418,8 @@ interface CategoryNode {
       justify-content: space-between;
       align-items: center;
       padding: 16px 24px;
-      background: white;
-      border-bottom: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
       flex-shrink: 0;
     }
 
@@ -431,14 +431,14 @@ interface CategoryNode {
 
     .header-title i {
       font-size: 24px;
-      color: #2196F3;
+      color: var(--mj-brand-primary);
     }
 
     .header-title h2 {
       margin: 0;
       font-size: 20px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .header-actions {
@@ -456,12 +456,12 @@ interface CategoryNode {
     .search-box i.fa-search {
       position: absolute;
       left: 12px;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .search-box input {
       padding: 8px 36px 8px 36px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 20px;
       font-size: 14px;
       width: 250px;
@@ -470,8 +470,8 @@ interface CategoryNode {
 
     .search-box input:focus {
       outline: none;
-      border-color: #2196F3;
-      box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     .clear-search {
@@ -479,13 +479,13 @@ interface CategoryNode {
       right: 8px;
       background: none;
       border: none;
-      color: #999;
+      color: var(--mj-text-muted);
       cursor: pointer;
       padding: 4px;
     }
 
     .clear-search:hover {
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     .btn-create {
@@ -493,8 +493,8 @@ interface CategoryNode {
       align-items: center;
       gap: 8px;
       padding: 8px 16px;
-      background: #2196F3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       border-radius: 6px;
       font-size: 14px;
@@ -504,7 +504,7 @@ interface CategoryNode {
     }
 
     .btn-create:hover {
-      background: #1976D2;
+      background: var(--mj-brand-primary-hover);
     }
 
     /* Loading */
@@ -541,31 +541,31 @@ interface CategoryNode {
       width: 120px;
       height: 120px;
       border-radius: 50%;
-      background: linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(33, 150, 243, 0.05) 100%);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     .empty-state-icon-wrapper > i {
       position: relative;
       font-size: 56px;
-      color: #2196F3;
+      color: var(--mj-brand-primary);
       z-index: 1;
     }
 
     .empty-state-icon-wrapper.search > i {
       font-size: 48px;
-      color: #9e9e9e;
+      color: var(--mj-text-disabled);
     }
 
     .empty-state h3 {
       margin: 0 0 12px;
       font-size: 22px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .empty-state p {
       margin: 0 0 8px;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-size: 15px;
       line-height: 1.5;
     }
@@ -575,7 +575,7 @@ interface CategoryNode {
     }
 
     .empty-hint {
-      color: #999 !important;
+      color: var(--mj-text-muted) !important;
       font-size: 13px !important;
     }
 
@@ -592,12 +592,12 @@ interface CategoryNode {
       align-items: center;
       gap: 10px;
       font-size: 14px;
-      color: #555;
+      color: var(--mj-text-secondary);
     }
 
     .feature-item i {
       font-size: 14px !important;
-      color: #4CAF50 !important;
+      color: var(--mj-status-success) !important;
     }
 
     .search-empty .empty-state-icon-wrapper {
@@ -609,34 +609,34 @@ interface CategoryNode {
       align-items: center;
       gap: 8px;
       padding: 14px 28px;
-      background: linear-gradient(135deg, #2196F3 0%, #1976D2 100%);
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       border-radius: 8px;
       font-size: 15px;
       font-weight: 500;
       cursor: pointer;
       transition: all 0.2s;
-      box-shadow: 0 2px 8px rgba(33, 150, 243, 0.3);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
     }
 
     .btn-create-large:hover {
-      background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+      background: var(--mj-brand-primary-hover);
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4);
+      box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
     }
 
     .btn-clear {
       padding: 10px 20px;
-      background: #f0f0f0;
+      background: var(--mj-bg-surface-sunken);
       border: none;
       border-radius: 6px;
-      color: #666;
+      color: var(--mj-text-secondary);
       cursor: pointer;
     }
 
     .btn-clear:hover {
-      background: #e0e0e0;
+      background: var(--mj-border-default);
     }
 
     /* Content */
@@ -655,27 +655,27 @@ interface CategoryNode {
 
     .view-toggle {
       padding: 8px;
-      background: white;
-      border: 1px solid #ddd;
+      background: var(--mj-bg-surface-card);
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
-      color: #666;
+      color: var(--mj-text-secondary);
       cursor: pointer;
       transition: all 0.2s;
     }
 
     .view-toggle:hover {
-      background: #f5f5f5;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .view-toggle.active {
-      background: #2196F3;
-      border-color: #2196F3;
-      color: white;
+      background: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .list-count {
       margin-left: auto;
-      color: #999;
+      color: var(--mj-text-muted);
       font-size: 14px;
     }
 
@@ -687,9 +687,9 @@ interface CategoryNode {
     }
 
     .list-card {
-      background: white;
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+      box-shadow: var(--mj-shadow-sm);
       overflow: hidden;
       cursor: pointer;
       transition: transform 0.2s, box-shadow 0.2s, outline 0.1s;
@@ -698,11 +698,11 @@ interface CategoryNode {
 
     .list-card:hover {
       transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      box-shadow: var(--mj-shadow-md);
     }
 
     .list-card:focus {
-      outline: 2px solid #2196F3;
+      outline: 2px solid var(--mj-brand-primary);
       outline-offset: 2px;
     }
 
@@ -711,7 +711,7 @@ interface CategoryNode {
     }
 
     .list-card:focus-visible {
-      outline: 2px solid #2196F3;
+      outline: 2px solid var(--mj-brand-primary);
       outline-offset: 2px;
     }
 
@@ -729,7 +729,7 @@ interface CategoryNode {
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: var(--mj-text-inverse);
       font-size: 18px;
     }
 
@@ -737,14 +737,14 @@ interface CategoryNode {
       background: none;
       border: none;
       padding: 4px 8px;
-      color: #999;
+      color: var(--mj-text-muted);
       cursor: pointer;
       border-radius: 4px;
     }
 
     .menu-btn:hover {
-      background: #f5f5f5;
-      color: #666;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-secondary);
     }
 
     .card-body {
@@ -755,13 +755,13 @@ interface CategoryNode {
       margin: 0 0 4px;
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .card-description {
       margin: 0 0 12px;
       font-size: 13px;
-      color: #666;
+      color: var(--mj-text-secondary);
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
@@ -778,7 +778,7 @@ interface CategoryNode {
       align-items: center;
       gap: 6px;
       font-size: 12px;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .card-footer {
@@ -786,8 +786,8 @@ interface CategoryNode {
       justify-content: space-between;
       align-items: center;
       padding: 12px 16px;
-      border-top: 1px solid #f0f0f0;
-      background: #fafafa;
+      border-top: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .category-tag {
@@ -795,15 +795,15 @@ interface CategoryNode {
       align-items: center;
       gap: 4px;
       font-size: 12px;
-      color: #666;
-      background: #e8f4fd;
+      color: var(--mj-text-secondary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
       padding: 2px 8px;
       border-radius: 4px;
     }
 
     .date-info {
       font-size: 12px;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     /* Category Tree */
@@ -814,7 +814,7 @@ interface CategoryNode {
     }
 
     .category-section {
-      background: white;
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
       overflow: hidden;
     }
@@ -829,40 +829,40 @@ interface CategoryNode {
     }
 
     .category-header:hover {
-      background: #f5f5f5;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .category-header i:first-child {
       width: 16px;
       text-align: center;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .category-header .fa-folder,
     .category-header .fa-folder-open {
-      color: #ffc107;
+      color: var(--mj-status-warning);
     }
 
     .category-header.uncategorized .fa-inbox {
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .category-name {
       flex: 1;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .category-count {
       font-size: 12px;
-      color: #999;
-      background: #f0f0f0;
+      color: var(--mj-text-muted);
+      background: var(--mj-bg-surface-sunken);
       padding: 2px 8px;
       border-radius: 10px;
     }
 
     .category-lists {
-      border-top: 1px solid #f0f0f0;
+      border-top: 1px solid var(--mj-border-default);
     }
 
     .list-row {
@@ -876,16 +876,16 @@ interface CategoryNode {
     }
 
     .list-row:hover {
-      background: #f5f5f5;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .list-row:focus {
-      background: #e3f2fd;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     }
 
     .list-row:focus-visible {
-      background: #e3f2fd;
-      box-shadow: inset 3px 0 0 #2196F3;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      box-shadow: inset 3px 0 0 var(--mj-brand-primary);
     }
 
     .list-icon {
@@ -895,7 +895,7 @@ interface CategoryNode {
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: var(--mj-text-inverse);
       font-size: 14px;
       flex-shrink: 0;
     }
@@ -908,7 +908,7 @@ interface CategoryNode {
     .list-name {
       display: block;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -916,7 +916,7 @@ interface CategoryNode {
 
     .list-meta {
       font-size: 12px;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .list-actions {
@@ -928,7 +928,7 @@ interface CategoryNode {
       background: none;
       border: none;
       padding: 4px 8px;
-      color: #999;
+      color: var(--mj-text-muted);
       cursor: pointer;
       border-radius: 4px;
       opacity: 0;
@@ -940,8 +940,8 @@ interface CategoryNode {
     }
 
     .action-btn:hover {
-      background: #e0e0e0;
-      color: #666;
+      background: var(--mj-border-default);
+      color: var(--mj-text-secondary);
     }
 
     /* Context Menu (native) */
@@ -956,9 +956,9 @@ interface CategoryNode {
 
     .context-menu {
       position: fixed;
-      background: white;
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+      box-shadow: var(--mj-shadow-md);
       min-width: 160px;
       padding: 4px 0;
       z-index: 1000;
@@ -974,26 +974,26 @@ interface CategoryNode {
       border: none;
       text-align: left;
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
       cursor: pointer;
       transition: background 0.15s;
     }
 
     .menu-item:hover {
-      background: #f5f5f5;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .menu-item.danger {
-      color: #d32f2f;
+      color: var(--mj-status-error);
     }
 
     .menu-item.danger:hover {
-      background: #ffebee;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
     }
 
     .menu-divider {
       height: 1px;
-      background: #e0e0e0;
+      background: var(--mj-border-default);
       margin: 4px 0;
     }
 
@@ -1004,7 +1004,7 @@ interface CategoryNode {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: var(--mj-bg-overlay);
       z-index: 1000;
     }
 
@@ -1013,9 +1013,9 @@ interface CategoryNode {
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: white;
+      background: var(--mj-bg-surface-card);
       border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--mj-shadow-lg);
       width: 500px;
       max-width: 90vw;
       max-height: 90vh;
@@ -1032,28 +1032,28 @@ interface CategoryNode {
       justify-content: space-between;
       align-items: center;
       padding: 16px 20px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .modal-header h3 {
       margin: 0;
       font-size: 18px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .modal-close {
       background: none;
       border: none;
       padding: 4px 8px;
-      color: #999;
+      color: var(--mj-text-muted);
       cursor: pointer;
       border-radius: 4px;
     }
 
     .modal-close:hover {
-      background: #f0f0f0;
-      color: #666;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-secondary);
     }
 
     .modal-body {
@@ -1064,11 +1064,11 @@ interface CategoryNode {
 
     .modal-body p {
       margin: 0 0 8px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .warning-text {
-      color: #d32f2f !important;
+      color: var(--mj-status-error) !important;
       font-size: 13px;
     }
 
@@ -1077,8 +1077,8 @@ interface CategoryNode {
       justify-content: flex-end;
       gap: 12px;
       padding: 16px 20px;
-      border-top: 1px solid #e0e0e0;
-      background: #fafafa;
+      border-top: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .btn-primary {
@@ -1086,8 +1086,8 @@ interface CategoryNode {
       align-items: center;
       gap: 8px;
       padding: 10px 20px;
-      background: #2196F3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       border-radius: 6px;
       font-size: 14px;
@@ -1097,7 +1097,7 @@ interface CategoryNode {
     }
 
     .btn-primary:hover:not(:disabled) {
-      background: #1976D2;
+      background: var(--mj-brand-primary-hover);
     }
 
     .btn-primary:disabled {
@@ -1107,9 +1107,9 @@ interface CategoryNode {
 
     .btn-secondary {
       padding: 10px 20px;
-      background: white;
-      color: #666;
-      border: 1px solid #ddd;
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-secondary);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       font-size: 14px;
       cursor: pointer;
@@ -1117,7 +1117,7 @@ interface CategoryNode {
     }
 
     .btn-secondary:hover:not(:disabled) {
-      background: #f5f5f5;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .btn-danger {
@@ -1125,8 +1125,8 @@ interface CategoryNode {
       align-items: center;
       gap: 8px;
       padding: 10px 20px;
-      background: #d32f2f;
-      color: white;
+      background: var(--mj-status-error);
+      color: var(--mj-text-inverse);
       border: none;
       border-radius: 6px;
       font-size: 14px;
@@ -1136,7 +1136,7 @@ interface CategoryNode {
     }
 
     .btn-danger:hover:not(:disabled) {
-      background: #c62828;
+      background: color-mix(in srgb, var(--mj-status-error) 85%, black);
     }
 
     /* Form Styles */
@@ -1153,13 +1153,13 @@ interface CategoryNode {
       margin-bottom: 6px;
       font-size: 13px;
       font-weight: 500;
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     .form-input {
       width: 100%;
       padding: 10px 12px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       font-size: 14px;
       transition: border-color 0.2s, box-shadow 0.2s;
@@ -1168,13 +1168,13 @@ interface CategoryNode {
 
     .form-input:focus {
       outline: none;
-      border-color: #2196F3;
-      box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     .form-input:disabled {
-      background: #f5f5f5;
-      color: #999;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
     }
 
     textarea.form-input {
@@ -1208,10 +1208,10 @@ interface CategoryNode {
     .entity-dropdown-content {
       max-height: 200px;
       overflow-y: auto;
-      background: white;
-      border: 1px solid #ddd;
+      background: var(--mj-bg-surface-card);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--mj-shadow-md);
     }
 
     .entity-dropdown-content.open-above {
@@ -1224,11 +1224,11 @@ interface CategoryNode {
       cursor: pointer;
       transition: background 0.15s;
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .dropdown-item:hover {
-      background: #e3f2fd;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     }
 
     .dropdown-item:first-child {
@@ -1241,7 +1241,7 @@ interface CategoryNode {
 
     .dropdown-empty {
       padding: 10px 12px;
-      color: #999;
+      color: var(--mj-text-muted);
       font-style: italic;
     }
 

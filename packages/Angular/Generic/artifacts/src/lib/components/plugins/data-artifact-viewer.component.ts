@@ -245,8 +245,12 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * Converts the grid's recordId string into a CompositeKey for the artifact viewer pipeline.
    */
   public OnEntityLinkClick(event: QueryEntityLinkClickEvent): void {
+    const md = new Metadata();
+    const entity = md.Entities.find(e => e.Name === event.entityName);
+    const pkFieldName = entity?.FirstPrimaryKey?.Name ?? 'ID';
+
     const compositeKey = new CompositeKey([
-      new KeyValuePair('ID', event.recordId)
+      new KeyValuePair(pkFieldName, event.recordId)
     ]);
     this.openEntityRecord.emit({
       entityName: event.entityName,

@@ -200,6 +200,11 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public SQLDialectID: string = null
     /**
+     * When true, this query can be referenced by other queries using {{query:"..."}} composition syntax.
+     * Only queries with Reusable=true AND Status='Approved' can be composed into other queries.
+     */
+    public Reusable: boolean = false
+    /**
      * JSON column containing platform-specific SQL variants for multi-database support.
      * Stores alternative SQL for platforms other than the default (typically SQL Server).
      * Parsed at runtime via GetPlatformSQL() and GetPlatformCacheValidationSQL().
@@ -425,6 +430,35 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get IsApproved(): boolean {
         return this.Status === 'Approved';
+    }
+
+    /**
+     * Whether this query can be referenced by other queries via composition syntax.
+     * A query is composable only when both Reusable=true and Status='Approved'.
+     */
+    public get IsComposable(): boolean {
+        return this.Reusable && this.IsApproved;
+    }
+
+    private _dependencies: QueryDependencyInfo[] | null = null;
+    /**
+     * Gets the dependency records for this query — other queries it references via {{query:"..."}} syntax.
+     * @returns {QueryDependencyInfo[]} Array of dependency records where this query is the referencing query
+     */
+    public get Dependencies(): QueryDependencyInfo[] {
+        if (this._dependencies === null) {
+            this._dependencies = Metadata.Provider.QueryDependencies.filter(d => UUIDsEqual(d.QueryID, this.ID));
+        }
+        return this._dependencies;
+    }
+
+    /**
+     * Gets queries that depend on (reference) this query via {{query:"..."}} syntax.
+     * Useful for impact analysis when changing or deprecating a reusable query.
+     * @returns {QueryDependencyInfo[]} Array of dependency records where this query is the referenced query
+     */
+    public get Dependents(): QueryDependencyInfo[] {
+        return Metadata.Provider.QueryDependencies.filter(d => UUIDsEqual(d.DependsOnQueryID, this.ID));
     }
 
     private _parsedVariants: PlatformVariantsJSON | null | undefined = undefined;
@@ -854,6 +888,94 @@ export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoB
             return this.ValidationFilters ? JSON.parse(this.ValidationFilters) : [];
         } catch {
             return [];
+        }
+    }
+}
+
+/**
+ * Tracks which queries reference other queries via {{query:"..."}} composition syntax.
+ * Auto-populated by the query save pipeline when SQL contains composition tokens.
+ * Maps to the QueryDependency database table.
+ */
+export class QueryDependencyInfo extends BaseInfo {
+    /**
+     * Unique identifier for this dependency record
+     */
+    public ID: string = null
+    /**
+     * Foreign key to the query that contains the {{query:"..."}} reference
+     */
+    public QueryID: string = null
+    /**
+     * Foreign key to the query being referenced (the dependency)
+     */
+    public DependsOnQueryID: string = null
+    /**
+     * The full category path and query name as written in SQL (e.g., "Sales/Active Customers")
+     */
+    public ReferencePath: string = null
+    /**
+     * SQL alias used for the referenced query in a FROM/JOIN clause (e.g., "ac" in FROM {{query:...}} ac)
+     */
+    public Alias: string | null = null
+    /**
+     * JSON mapping of parameters. @-prefixed values are pass-through from parent query,
+     * otherwise static literals. E.g. {"region": "@region", "year": "2024"}
+     */
+    public ParameterMapping: string | null = null
+    /**
+     * How this dependency was detected: Auto (parsed from SQL) or Manual (user-specified)
+     */
+    public DetectionMethod: 'Auto' | 'Manual' = 'Auto'
+    /**
+     * Record creation timestamp
+     */
+    __mj_CreatedAt: Date = null
+    /**
+     * Record last update timestamp
+     */
+    __mj_UpdatedAt: Date = null
+
+    // virtual fields from view
+    /**
+     * Name of the query that contains the reference
+     */
+    public Query: string = null
+    /**
+     * Name of the referenced (depended-on) query
+     */
+    public DependsOnQuery: string = null
+
+    constructor(initData: unknown = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+
+    /**
+     * Gets the query that contains the {{query:"..."}} reference.
+     */
+    get QueryInfo(): QueryInfo {
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+    }
+
+    /**
+     * Gets the referenced (depended-on) query.
+     */
+    get DependsOnQueryInfo(): QueryInfo {
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.DependsOnQueryID));
+    }
+
+    /**
+     * Gets the parsed parameter mapping as a Record.
+     * @returns Parsed parameter mapping or empty object if none/invalid
+     */
+    get ParsedParameterMapping(): Record<string, string> {
+        try {
+            return this.ParameterMapping ? JSON.parse(this.ParameterMapping) : {};
+        } catch {
+            return {};
         }
     }
 }

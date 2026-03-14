@@ -203,10 +203,10 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
 
   getPromptStatusColor(prompt: MJAIPromptEntityExtended): string {
     switch (prompt.Status) {
-      case 'Active': return '#28a745';
-      case 'Pending': return '#ffc107';
-      case 'Disabled': return '#6c757d';
-      default: return '#6c757d';
+      case 'Active': return 'var(--mj-status-success)';
+      case 'Pending': return 'var(--mj-status-warning)';
+      case 'Disabled': return 'var(--mj-text-muted)';
+      default: return 'var(--mj-text-muted)';
     }
   }
 

@@ -1,5 +1,11 @@
 # Plan: Server-Side Pagination for Ad-Hoc Queries
 
+> **STATUS: SUPERSEDED**
+>
+> This plan has been absorbed into Sub-Phase B of the consolidated plan:
+> [`plans/nested-queries-paging-caching-plan.md`](../nested-queries-paging-caching-plan.md)
+> (which will itself move to `plans/complete/` when finished).
+
 ## Context
 
 The Query Builder agent currently includes `TOP 100` in generated SQL to limit result sets. This is a blunt cap — users can't page through the full dataset. We need proper server-side pagination that wraps the agent's SQL into a CTE and applies `OFFSET/FETCH` paging, similar to how `RunView` handles pagination.

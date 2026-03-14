@@ -157,7 +157,10 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
     if (summary.SourceType?.IconClass) {
       return summary.SourceType.IconClass;
     }
-    return this.resolveIconByName(summary.Integration.Integration ?? summary.Integration.Name);
+    return ResolveIntegrationIcon(
+      summary.Integration.Integration ?? summary.Integration.Name,
+      summary.Icon
+    );
   }
 
   GetStatusDotClass(color: StatusColorType): string {
@@ -271,9 +274,6 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
     return counts;
   }
 
-  private resolveIconByName(name: string): string {
-    return ResolveIntegrationIcon(name);
-  }
 
   private showNotification(type: 'success' | 'error', message: string): void {
     this.clearNotificationTimer();

@@ -3,15 +3,15 @@
   flex-direction: column;
   height: 100%; /* Fill parent container - works in any context (tabs, embedded, etc.) */
   min-height: 0; /* Allow flex shrinking in nested flex containers */
-  background-color: #F4F4F4;
+  background-color: var(--mj-bg-surface-sunken);
   position: relative;
 }
 
 .workspace-navigation {
   flex-shrink: 0;
   height: 48px;
-  background-color: #092340;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: var(--mj-text-primary);
+  border-bottom: 1px solid color-mix(in srgb, var(--mj-text-inverse) 10%, transparent);
 }
 
 .workspace-content {
@@ -24,8 +24,8 @@
 
 .workspace-sidebar {
   flex-shrink: 0;
-  background-color: #092340;
-  border-right: 1px solid #D9D9D9;
+  background-color: var(--mj-text-primary);
+  border-right: 1px solid var(--mj-border-default);
   overflow-y: auto;
   transition: width 0.3s ease;
 }
@@ -53,18 +53,18 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #092340;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--mj-text-primary);
+  border: 1px solid color-mix(in srgb, var(--mj-text-inverse) 20%, transparent);
   border-radius: 8px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-text-primary) 15%, transparent);
   transition: all 0.2s ease;
 }
 
 .sidebar-floating-toggle:hover {
-  background: #0a2d4d;
-  border-color: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  background: var(--mj-text-primary);
+  border-color: color-mix(in srgb, var(--mj-text-inverse) 30%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-text-primary) 20%, transparent);
   transform: scale(1.05);
 }
 
@@ -73,13 +73,13 @@
 }
 
 .sidebar-floating-toggle i {
-  color: rgba(255, 255, 255, 0.85);
+  color: color-mix(in srgb, var(--mj-text-inverse) 85%, transparent);
   font-size: 16px;
   transition: color 0.15s ease;
 }
 
 .sidebar-floating-toggle:hover i {
-  color: white;
+  color: var(--mj-text-inverse);
 }
 
 .sidebar-resize-handle {
@@ -92,11 +92,11 @@
 }
 
 .sidebar-resize-handle:hover {
-  background: #1e40af;
+  background: var(--mj-brand-primary-hover);
 }
 
 .sidebar-resize-handle:active {
-  background: #1e3a8a;
+  background: var(--mj-brand-primary-hover);
 }
 
 .sidebar-resize-handle::before {
@@ -113,7 +113,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  background-color: #FFF;
+  background-color: var(--mj-bg-surface-card);
   overflow: hidden;
   min-height: 0;
 }
@@ -126,7 +126,7 @@
 
 .workspace-artifact-panel {
   flex-shrink: 0;
-  background-color: #FFF;
+  background-color: var(--mj-bg-surface-card);
   overflow: hidden;
   min-width: 300px;
   max-width: 70%;
@@ -154,11 +154,11 @@
 }
 
 .artifact-panel-resize-handle:hover {
-  background-color: #1e40af;
+  background-color: var(--mj-brand-primary-hover);
 }
 
 .artifact-panel-resize-handle:active {
-  background-color: #1e3a8a;
+  background-color: var(--mj-brand-primary-hover);
 }
 
 /* Maximized artifact panel */
@@ -193,7 +193,7 @@
     top: 60px;
     bottom: 0;
     z-index: 100;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 2px 0 8px color-mix(in srgb, var(--mj-text-primary) 10%, transparent);
   }
 
   .workspace-artifact-panel {
@@ -202,7 +202,7 @@
     top: 60px;
     bottom: 0;
     z-index: 100;
-    box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+    box-shadow: -2px 0 8px color-mix(in srgb, var(--mj-text-primary) 10%, transparent);
   }
 }
 
@@ -272,7 +272,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--mj-bg-overlay);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.3s ease;
@@ -304,17 +304,17 @@
   justify-content: center;
   flex: 1;
   width: 100%;
-  background: #FFF;
+  background: var(--mj-bg-surface-card);
   gap: 1rem;
 }
 
 .loading-spinner {
   font-size: 3rem;
-  color: #0078d4;
+  color: var(--mj-brand-primary);
 }
 
 .workspace-loading p {
   font-size: 1rem;
-  color: #666;
+  color: var(--mj-text-secondary);
   margin: 0;
 }

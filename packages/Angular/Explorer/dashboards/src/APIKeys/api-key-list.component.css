@@ -149,7 +149,7 @@
 }
 
 .filter-tab:hover {
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
     background: var(--mj-bg-surface-sunken);
 }
 
@@ -213,7 +213,7 @@
 }
 
 .sortable:hover {
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
 }
 
 .sortable i {
@@ -297,7 +297,7 @@
 /* Owner Column */
 .owner-name {
     font-size: 14px;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
 }
 
 /* Status Column */
@@ -425,7 +425,7 @@
 /* Used Column */
 .used-value {
     font-size: 13px;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
 }
 
 .used-value.never {
@@ -458,7 +458,7 @@
 
 .empty-state span {
     font-size: 16px;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
 }
 
 .create-empty-btn {
@@ -514,7 +514,7 @@
     border-radius: 6px;
     font-size: 14px;
     font-weight: 500;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
 }

@@ -1,7 +1,7 @@
 <div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
   @if (record) {
     <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-      <mj-form-toolbar [Form]="this"></mj-form-toolbar>
+      <mj-form-toolbar [Form]="this" [Config]="ToolbarConfig"></mj-form-toolbar>
 
       <!-- Header Section -->
       <div class="query-header">
@@ -55,7 +55,7 @@
                   class="meta-dropdown">
                 </kendo-dropdownlist>
               } @else {
-                <span class="meta-value">{{ getCategoryPath() || 'Uncategorized' }}</span>
+                <span class="meta-value">{{ categoryPathDisplay || 'Uncategorized' }}</span>
               }
             </div>
 
@@ -147,6 +147,7 @@
             <!-- Code Editor -->
             <mj-code-editor #sqlEditor
               (change)="onSQLChange($event)"
+              (CompositionTokenClick)="onCompositionTokenClick($event)"
               [language]="'sql'"
               class="sql-editor">
             </mj-code-editor>
@@ -236,7 +237,7 @@
             <ng-template kendoExpansionPanelTitleDirective>
               <span class="panel-title">
                 <i class="fa-solid fa-sliders panel-icon"></i>
-                Query Parameters
+                Parameters
                 @if (queryParameters.length > 0) {
                   <span class="panel-badge count">{{ queryParameters.length }}</span>
                 }
@@ -327,7 +328,7 @@
             <ng-template kendoExpansionPanelTitleDirective>
               <span class="panel-title">
                 <i class="fa-solid fa-table panel-icon"></i>
-                Query Fields
+                Fields
                 @if (queryFields.length > 0) {
                   <span class="panel-badge count">{{ queryFields.length }}</span>
                 }
@@ -402,6 +403,60 @@
           </kendo-expansionpanel>
         }
 
+        <!-- Dependent Queries Panel -->
+        @if (record.IsSaved && DependentQueries.length > 0) {
+          <kendo-expansionpanel
+            [(expanded)]="dependentsPanelExpanded"
+            class="query-panel">
+            <ng-template kendoExpansionPanelTitleDirective>
+              <span class="panel-title">
+                <i class="fa-solid fa-arrow-left panel-icon dependents-icon"></i>
+                Dependent Queries
+                <span class="panel-badge count">{{ DependentQueries.length }}</span>
+              </span>
+            </ng-template>
+
+            <div class="panel-body">
+              <div class="dependents-description">
+                These queries reference this query via <code>{{"{{query:\"...\"}}"}} </code> composition syntax.
+              </div>
+              <div class="card-grid">
+                @for (dep of DependentQueries; track dep.ID) {
+                  <div class="item-card dependent-card" (click)="onDependentQueryClick(dep)">
+                    <div class="item-card-header">
+                      <div class="item-name">
+                        <i class="fa-solid fa-arrow-left item-name-icon dependent-query-icon"></i>
+                        {{ dep.Query }}
+                      </div>
+                    </div>
+                    <div class="item-card-body">
+                      @if (dep.ReferencePath) {
+                        <div class="item-meta">
+                          <span class="meta-tag">
+                            <i class="fa-solid fa-link"></i> {{ dep.ReferencePath }}
+                          </span>
+                        </div>
+                      }
+                      @if (dep.Alias) {
+                        <div class="item-meta">
+                          <span class="meta-tag">
+                            <strong>Alias:</strong> <code class="meta-code">{{ dep.Alias }}</code>
+                          </span>
+                        </div>
+                      }
+                    </div>
+                    <div class="item-card-footer">
+                      <span class="open-link">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open
+                      </span>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          </kendo-expansionpanel>
+        }
+
         <!-- Query Entities Panel -->
         @if (record.IsSaved) {
           <kendo-expansionpanel
@@ -410,7 +465,7 @@
             <ng-template kendoExpansionPanelTitleDirective>
               <span class="panel-title">
                 <i class="fa-solid fa-database panel-icon"></i>
-                Query Entities
+                Entities
                 @if (queryEntities.length > 0) {
                   <span class="panel-badge count">{{ queryEntities.length }}</span>
                 }
@@ -499,7 +554,7 @@
           <ng-template kendoExpansionPanelTitleDirective>
             <span class="panel-title">
               <i class="fa-solid fa-info-circle panel-icon"></i>
-              Query Details
+              Details
             </span>
           </ng-template>
 
@@ -560,7 +615,7 @@
             <ng-template kendoExpansionPanelTitleDirective>
               <span class="panel-title">
                 <i class="fa-solid fa-shield-alt panel-icon"></i>
-                Query Permissions
+                Permissions
               </span>
             </ng-template>
 
@@ -607,6 +662,7 @@
             </div>
           </kendo-expansionpanel>
         }
+
       </div>
     </form>
 
