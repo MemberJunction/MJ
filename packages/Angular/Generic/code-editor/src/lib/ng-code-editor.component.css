@@ -13,21 +13,21 @@
   right: 0;
   bottom: 0;
   z-index: 9999;
-  background: white;
+  background: var(--mj-bg-surface);
 }
 
 .mj-code-editor-toolbar {
   display: flex;
   align-items: center;
   padding: 6px 8px;
-  background: #f8f9fa;
-  border: 1px solid #dee2e6;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
   border-bottom: none;
   gap: 4px;
   flex-shrink: 0;
 }
 .mj-code-editor-toolbar.toolbar-bottom {
-  border-bottom: 1px solid #dee2e6;
+  border-bottom: 1px solid var(--mj-border-default);
   border-top: none;
   order: 2;
 }
@@ -45,46 +45,46 @@
   padding: 6px 10px;
   min-width: 32px;
   height: 32px;
-  background: #ffffff;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm);
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 14px;
-  color: #495057;
+  transition: all var(--mj-transition-base);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
 }
 .toolbar-button i {
-  font-size: 14px;
+  font-size: var(--mj-text-sm);
   line-height: 1;
 }
 .toolbar-button .button-label {
   margin-left: 6px;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-medium);
 }
 .toolbar-button:hover:not(:disabled) {
-  background: #e9ecef;
-  border-color: #adb5bd;
-  color: #212529;
+  background: var(--mj-bg-surface-hover);
+  border-color: var(--mj-border-strong);
+  color: var(--mj-text-primary);
 }
 .toolbar-button:active:not(:disabled) {
-  background: #dee2e6;
+  background: var(--mj-bg-surface-active);
   transform: translateY(1px);
 }
 .toolbar-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-sunken);
 }
 .toolbar-button:focus-visible {
-  outline: 2px solid #0066cc;
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 
 .toolbar-separator {
   width: 1px;
   height: 20px;
-  background: #ced4da;
+  background: var(--mj-border-default);
   margin: 0 6px;
   opacity: 0.5;
 }
@@ -93,8 +93,8 @@
   flex: 1;
   overflow: auto;
   position: relative;
-  border: 1px solid #dee2e6;
-  background: #ffffff;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
 }
 .mj-code-editor-content.has-toolbar-top {
   border-top: none;
@@ -102,18 +102,13 @@
 .mj-code-editor-content.has-toolbar-bottom {
   border-bottom: none;
 }
-.mj-code-editor-content :host ::ng-deep .cm-editor {
+/* CodeMirror editor surface, gutters, cursor, selection, and syntax highlighting
+   are all themed programmatically via EditorView.theme() + HighlightStyle.define()
+   in the component TypeScript. This uses MJ design tokens (CSS custom properties)
+   so the editor adapts automatically to dark mode. See _buildMjTheme() and
+   _buildMjHighlightStyle() in ng-code-editor.component.ts. */
+.mj-code-editor-content .cm-editor {
   height: 100%;
-}
-.mj-code-editor-content :host ::ng-deep .cm-editor.cm-focused {
-  outline: none;
-}
-.mj-code-editor-content :host ::ng-deep .cm-scroller {
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
-  font-size: 14px;
-}
-.mj-code-editor-content :host ::ng-deep .cm-content {
-  min-height: 100%;
 }
 
 @media (max-width: 576px) {
@@ -123,7 +118,7 @@
     height: 28px;
   }
   .toolbar-button i {
-    font-size: 12px;
+    font-size: var(--mj-text-xs);
   }
   .toolbar-button .button-label {
     display: none;
@@ -131,31 +126,5 @@
   .mj-code-editor-toolbar {
     padding: 4px;
     gap: 2px;
-  }
-}
-@media (prefers-color-scheme: dark) {
-  .mj-code-editor-wrapper.dark-mode .mj-code-editor-toolbar {
-    background: #343a40;
-    border-color: #495057;
-  }
-  .mj-code-editor-wrapper.dark-mode .toolbar-button {
-    background: #495057;
-    border-color: #6c757d;
-    color: #f8f9fa;
-  }
-  .mj-code-editor-wrapper.dark-mode .toolbar-button:hover:not(:disabled) {
-    background: #6c757d;
-    border-color: #868e96;
-    color: #ffffff;
-  }
-  .mj-code-editor-wrapper.dark-mode .toolbar-button:active:not(:disabled) {
-    background: #343a40;
-  }
-  .mj-code-editor-wrapper.dark-mode .toolbar-separator {
-    background: #6c757d;
-  }
-  .mj-code-editor-wrapper.dark-mode .mj-code-editor-content {
-    background: #212529;
-    border-color: #495057;
   }
 }

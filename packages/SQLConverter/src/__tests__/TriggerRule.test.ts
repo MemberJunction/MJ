@@ -143,10 +143,10 @@ END`;
   });
 
   describe('failed parse fallback', () => {
-    it('should produce a TODO comment if the trigger cannot be parsed', () => {
+    it('should produce a SKIPPED comment if the trigger cannot be parsed', () => {
       const sql = 'CREATE TRIGGER something_completely_different';
       const result = convert(sql);
-      expect(result).toContain('TODO: Trigger conversion failed');
+      expect(result).toContain('SKIPPED: trigger (auto-conversion not supported)');
     });
   });
 });

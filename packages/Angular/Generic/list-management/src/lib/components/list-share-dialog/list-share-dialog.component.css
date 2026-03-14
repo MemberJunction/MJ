@@ -15,13 +15,13 @@
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--mj-text-primary, #333);
+  color: var(--mj-text-primary);
 }
 
 .section-divider {
   margin: 16px 0;
   border: none;
-  border-top: 1px solid var(--mj-border-color, #e0e0e0);
+  border-top: 1px solid var(--mj-border-default);
 }
 
 /* Add share section */
@@ -49,7 +49,7 @@
 }
 
 .search-icon {
-  color: var(--mj-text-secondary, #666);
+  color: var(--mj-text-secondary);
   margin-left: 8px;
 }
 
@@ -58,10 +58,10 @@
   top: 100%;
   left: 0;
   right: 0;
-  background: white;
-  border: 1px solid var(--mj-border-color, #e0e0e0);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--mj-shadow-md);
   max-height: 200px;
   overflow-y: auto;
   z-index: 1000;
@@ -77,11 +77,11 @@
 }
 
 .search-result-item:hover {
-  background-color: var(--mj-hover-bg, #f5f5f5);
+  background-color: var(--mj-bg-surface-sunken);
 }
 
 .search-result-item i {
-  color: var(--mj-text-secondary, #666);
+  color: var(--mj-text-secondary);
   width: 20px;
   text-align: center;
 }
@@ -94,12 +94,12 @@
 
 .recipient-name {
   font-weight: 500;
-  color: var(--mj-text-primary, #333);
+  color: var(--mj-text-primary);
 }
 
 .recipient-email {
   font-size: 12px;
-  color: var(--mj-text-secondary, #666);
+  color: var(--mj-text-secondary);
 }
 
 /* Selected recipient */
@@ -109,7 +109,7 @@
   gap: 12px;
   margin-top: 12px;
   padding: 12px;
-  background: var(--mj-bg-secondary, #f8f9fa);
+  background: var(--mj-bg-surface-sunken);
   border-radius: 6px;
 }
 
@@ -118,14 +118,14 @@
   align-items: center;
   gap: 8px;
   padding: 6px 12px;
-  background: white;
-  border: 1px solid var(--mj-border-color, #e0e0e0);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 20px;
   flex: 1;
 }
 
 .recipient-chip i {
-  color: var(--mj-primary-color, #0078d4);
+  color: var(--mj-brand-primary);
 }
 
 .recipient-chip span {
@@ -151,7 +151,7 @@
 
 .permission-desc {
   font-size: 11px;
-  color: var(--mj-text-secondary, #666);
+  color: var(--mj-text-secondary);
 }
 
 /* Current shares section */
@@ -170,13 +170,13 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px;
-  background: var(--mj-bg-secondary, #f8f9fa);
+  background: var(--mj-bg-surface-sunken);
   border-radius: 6px;
   transition: background-color 0.15s;
 }
 
 .share-item:hover {
-  background: var(--mj-hover-bg, #f0f0f0);
+  background: var(--mj-bg-surface-sunken);
 }
 
 .share-info {
@@ -192,8 +192,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--mj-primary-color-light, #e6f2ff);
-  color: var(--mj-primary-color, #0078d4);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
   border-radius: 50%;
 }
 
@@ -205,18 +205,18 @@
 
 .share-name {
   font-weight: 500;
-  color: var(--mj-text-primary, #333);
+  color: var(--mj-text-primary);
 }
 
 .share-email {
   font-size: 12px;
-  color: var(--mj-text-secondary, #666);
+  color: var(--mj-text-secondary);
 }
 
 .share-type-label {
   font-size: 11px;
-  color: var(--mj-text-secondary, #666);
-  background: var(--mj-border-color, #e0e0e0);
+  color: var(--mj-text-secondary);
+  background: var(--mj-border-default);
   padding: 2px 6px;
   border-radius: 3px;
   display: inline-block;
@@ -235,8 +235,8 @@
 
 .permission-badge {
   padding: 4px 10px;
-  background: var(--mj-primary-color-light, #e6f2ff);
-  color: var(--mj-primary-color, #0078d4);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
@@ -254,13 +254,13 @@
 
 .empty-icon {
   font-size: 48px;
-  color: var(--mj-border-color, #e0e0e0);
+  color: var(--mj-border-default);
   margin-bottom: 16px;
 }
 
 .empty-state p {
   margin: 0;
-  color: var(--mj-text-secondary, #666);
+  color: var(--mj-text-secondary);
 }
 
 .empty-hint {
@@ -274,15 +274,15 @@
   align-items: center;
   gap: 8px;
   padding: 12px;
-  background: var(--mj-warning-bg, #fff8e1);
+  background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
   border-radius: 6px;
   margin-top: 16px;
-  color: var(--mj-warning-color, #856404);
+  color: var(--mj-status-warning);
   font-size: 13px;
 }
 
 .readonly-notice i {
-  color: var(--mj-warning-color, #ffc107);
+  color: var(--mj-status-warning);
 }
 
 /* Dialog actions - buttons on left */

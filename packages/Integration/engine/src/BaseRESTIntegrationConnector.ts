@@ -85,7 +85,8 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * passed to BuildHeaders and MakeHTTPRequest for every request.
      */
     protected abstract Authenticate(
-        companyIntegration: MJCompanyIntegrationEntity
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser?: UserInfo
     ): Promise<RESTAuthContext>;
 
     /**
@@ -209,7 +210,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
         const obj = this.GetCachedObject(ctx.CompanyIntegration.IntegrationID, ctx.ObjectName);
         const fields = this.GetCachedFields(obj.ID);
-        const auth = await this.Authenticate(ctx.CompanyIntegration);
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
         const baseURL = this.GetBaseURL(ctx.CompanyIntegration);
 
         const templateVars = this.DetectTemplateVars(obj.APIPath);

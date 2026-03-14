@@ -63,6 +63,21 @@
             "lastModified": "2026-02-13T20:48:47.368Z",
             "checksum": "51e11c64188d53b523f7f3c7d8685ef215875a0117e00a7b40818a425c9cc82a"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 25
+          },
+          "primaryKey": {
+            "ID": "63F1DC37-D9B4-4C7E-BAAB-8B8978D4658F"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T21:00:23.023Z",
+            "checksum": "afe6e28eba228132e11532a0326d1156577c35039ad1fc50748213613e5a19d5"
+          }
         }
       ]
     },

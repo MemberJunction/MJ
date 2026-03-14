@@ -1,5 +1,23 @@
 # @memberjunction/sql-converter
 
+## 5.11.0
+
+### Minor Changes
+
+- a4c3c81: migration/metadata
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.11.0
+- @memberjunction/sqlglot-ts@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.10.1
+- @memberjunction/sqlglot-ts@5.10.1
+
 ## 5.10.0
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # Query Builder Agent & Composable Queries — Implementation Plan
 
+> **STATUS: PARTIALLY COMPLETE — SUPERSEDED**
+>
+> Phases 2 (Data Artifact Type) and 3 (Query Builder Agent) are **complete**.
+> Phase 1 (Composable Query Engine) and Phase 4 (View-Query Bridge) have been absorbed into the
+> consolidated plan: [`plans/nested-queries-paging-caching-plan.md`](../nested-queries-paging-caching-plan.md)
+> (which will itself move to `plans/complete/` when finished).
+
 ## Table of Contents
 
 1. [Executive Summary](#1-executive-summary)

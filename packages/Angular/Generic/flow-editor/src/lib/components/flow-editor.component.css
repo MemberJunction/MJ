@@ -8,9 +8,9 @@
   width: 100%;
   height: 100%;
   min-height: 400px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
   overflow: hidden;
   outline: none;
   position: relative;
@@ -45,7 +45,7 @@
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--mj-bg-surface);
 }
 
 .mj-flow-editor-canvas f-flow {
@@ -83,10 +83,10 @@
   right: 12px;
   width: 160px;
   height: 120px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  box-shadow: var(--mj-shadow-sm);
   overflow: hidden;
   z-index: 15;
 }
@@ -148,20 +148,20 @@
 
 .mj-flow-editor-empty-icon {
   font-size: 48px;
-  color: #cbd5e1;
+  color: var(--mj-border-strong);
   margin-bottom: 16px;
 }
 
 .mj-flow-editor-empty-title {
-  font-size: 15px;
+  font-size: var(--mj-text-base);
   font-weight: 500;
-  color: #64748b;
+  color: var(--mj-text-muted);
   margin: 0 0 8px;
 }
 
 .mj-flow-editor-empty-subtitle {
-  font-size: 13px;
-  color: #94a3b8;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-disabled);
   margin: 0;
 }
 
@@ -172,14 +172,14 @@
   align-items: flex-start;
   gap: 5px;
   background: #fffef5;
-  border: 1.5px solid #cbd5e1;
+  border: 1.5px solid var(--mj-border-strong);
   border-radius: 5px;
   padding: 4px 10px;
   font-size: 11px;
   font-weight: 500;
-  color: #334155;
+  color: var(--mj-text-secondary);
   white-space: nowrap;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--mj-shadow-sm);
   pointer-events: none;
   line-height: 1.4;
   text-align: center;
@@ -262,20 +262,20 @@ f-line-alignment {
   left: 12px;
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(6px);
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
   padding: 10px 14px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--mj-shadow-sm);
   z-index: 15;
   font-size: 11px;
-  color: #475569;
+  color: var(--mj-text-secondary);
   max-width: 200px;
 }
 
 .mj-flow-editor-legend-title {
   font-size: 11px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--mj-text-primary);
   margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -292,7 +292,7 @@ f-line-alignment {
 .mj-flow-editor-legend-heading {
   font-size: 10px;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--mj-text-disabled);
   text-transform: uppercase;
   letter-spacing: 0.3px;
   margin-bottom: 4px;
@@ -304,7 +304,7 @@ f-line-alignment {
   gap: 6px;
   padding: 2px 0;
   font-size: 11px;
-  color: #475569;
+  color: var(--mj-text-secondary);
 }
 
 .mj-flow-editor-legend-svg,
@@ -316,7 +316,7 @@ f-line-alignment {
   display: inline-block;
   width: 10px;
   height: 10px;
-  border-radius: 2px;
+  border-radius: var(--mj-radius-sm);
   flex-shrink: 0;
 }
 
@@ -325,7 +325,7 @@ f-line-alignment {
   width: 14px;
   height: 10px;
   border: 2px solid;
-  border-radius: 3px;
+  border-radius: var(--mj-radius-sm);
   flex-shrink: 0;
 }
 
@@ -334,10 +334,10 @@ f-line-alignment {
 .mj-flow-context-menu {
   position: fixed;
   min-width: 180px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.06);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  box-shadow: var(--mj-shadow-lg);
   padding: 4px;
   z-index: 9999;
   animation: mj-ctx-fade-in 0.1s ease-out;
@@ -356,9 +356,9 @@ f-line-alignment {
   padding: 8px 12px;
   border: none;
   background: none;
-  font-size: 13px;
+  font-size: var(--mj-text-sm);
   font-weight: 450;
-  color: #334155;
+  color: var(--mj-text-secondary);
   cursor: pointer;
   border-radius: 5px;
   text-align: left;
@@ -366,31 +366,31 @@ f-line-alignment {
 }
 
 .mj-flow-context-menu-item:hover {
-  background-color: #f1f5f9;
+  background-color: var(--mj-bg-surface-sunken);
 }
 
 .mj-flow-context-menu-item i {
   width: 16px;
   text-align: center;
-  font-size: 12px;
-  color: #64748b;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
 }
 
 .mj-flow-context-menu-item--danger {
-  color: #dc2626;
+  color: var(--mj-status-error);
 }
 
 .mj-flow-context-menu-item--danger:hover {
-  background-color: #fef2f2;
+  background-color: var(--mj-status-error-subtle);
 }
 
 .mj-flow-context-menu-item--danger i {
-  color: #dc2626;
+  color: var(--mj-status-error);
 }
 
 .mj-flow-context-menu-divider {
   height: 1px;
-  background: #e2e8f0;
+  background: var(--mj-border-default);
   margin: 4px 8px;
 }
 
@@ -401,12 +401,12 @@ f-line-alignment {
 .mj-agent-editor-view-btn:focus-visible,
 .mj-agent-props-close:focus-visible,
 .mj-agent-props-delete-btn:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 
 .mj-flow-palette-item:focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 1px;
-  border-radius: 6px;
+  border-radius: var(--mj-radius-md);
 }

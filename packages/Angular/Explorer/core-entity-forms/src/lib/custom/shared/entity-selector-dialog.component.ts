@@ -103,7 +103,7 @@ export interface EntitySelectorConfig {
 
         .dialog-header {
             padding: 16px;
-            border-bottom: 1px solid #e0e6ed;
+            border-bottom: 1px solid var(--mj-border-default);
         }
 
         .dialog-header h3 {
@@ -124,7 +124,7 @@ export interface EntitySelectorConfig {
 
         .dialog-actions {
             padding: 16px;
-            border-top: 1px solid #e0e6ed;
+            border-top: 1px solid var(--mj-border-default);
             display: flex;
             gap: 8px;
             justify-content: flex-end;
@@ -146,22 +146,22 @@ export interface EntitySelectorConfig {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            color: #6c757d;
+            color: var(--mj-text-muted);
             gap: 12px;
         }
 
         .loading-state i,
         .empty-state i {
             font-size: 48px;
-            color: #dee2e6;
+            color: var(--mj-border-default);
         }
 
         .entity-list-container {
             flex: 1;
             overflow-y: auto;
-            border: 1px solid #e0e6ed;
+            border: 1px solid var(--mj-border-default);
             border-radius: 8px;
-            background: #f8f9fa;
+            background: var(--mj-bg-surface-sunken);
         }
 
         .entity-list {
@@ -174,27 +174,27 @@ export interface EntitySelectorConfig {
             gap: 12px;
             padding: 12px;
             margin-bottom: 8px;
-            background: white;
-            border: 1px solid #e0e6ed;
+            background: var(--mj-bg-surface-card);
+            border: 1px solid var(--mj-border-default);
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.2s ease;
         }
 
         .entity-item:hover {
-            border-color: #2196f3;
+            border-color: var(--mj-brand-primary);
             box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
 
         .entity-item.selected {
-            background: #e3f2fd;
-            border-color: #2196f3;
+            background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+            border-color: var(--mj-brand-primary);
         }
 
         .item-icon {
             width: 36px;
             height: 36px;
-            background: #f0f4f8;
+            background: var(--mj-bg-surface-sunken);
             border-radius: 8px;
             display: flex;
             align-items: center;
@@ -203,7 +203,7 @@ export interface EntitySelectorConfig {
         }
 
         .item-icon i {
-            color: #2196f3;
+            color: var(--mj-brand-primary);
             font-size: 16px;
         }
 
@@ -214,13 +214,13 @@ export interface EntitySelectorConfig {
 
         .item-title {
             font-weight: 600;
-            color: #2c3e50;
+            color: var(--mj-text-primary);
             margin-bottom: 4px;
         }
 
         .item-description {
             font-size: 13px;
-            color: #6c757d;
+            color: var(--mj-text-muted);
             line-height: 1.4;
             display: -webkit-box;
             -webkit-line-clamp: 2;
@@ -236,8 +236,8 @@ export interface EntitySelectorConfig {
             font-size: 11px;
             padding: 2px 8px;
             border-radius: 12px;
-            background: #e9ecef;
-            color: #495057;
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-secondary);
             font-weight: 500;
         }
 

@@ -6,18 +6,18 @@
   display: block;
   font-weight: 500;
   margin-bottom: 6px;
-  color: #333;
+  color: var(--mj-text-primary);
   font-size: 14px;
 }
 
 .required-indicator {
-  color: #d9534f;
+  color: var(--mj-status-error);
   margin-left: 2px;
 }
 
 .help-text {
   font-size: 12px;
-  color: #666;
+  color: var(--mj-text-secondary);
   margin-bottom: 8px;
   font-style: italic;
 }
@@ -32,11 +32,11 @@
 
 .question-dropdown {
   padding: 8px 12px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--mj-border-default);
   border-radius: 4px;
   font-size: 14px;
   font-family: inherit;
-  background-color: white;
+  background-color: var(--mj-bg-surface);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 8px center;
@@ -47,20 +47,21 @@
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
+  color: var(--mj-text-primary);
 }
 
 .question-dropdown:hover {
-  border-color: #9ca3af;
+  border-color: var(--mj-border-strong);
 }
 
 .question-dropdown:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .question-dropdown:disabled {
-  background-color: #f3f4f6;
+  background-color: var(--mj-bg-surface-sunken);
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -78,7 +79,7 @@
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  scrollbar-color: rgba(16, 185, 129, 0.3) transparent;
+  scrollbar-color: color-mix(in srgb, var(--mj-status-success) 30%, transparent) transparent;
 }
 
 .question-buttongroup::-webkit-scrollbar {
@@ -90,12 +91,12 @@
 }
 
 .question-buttongroup::-webkit-scrollbar-thumb {
-  background: rgba(16, 185, 129, 0.3);
+  background: color-mix(in srgb, var(--mj-status-success) 30%, transparent);
   border-radius: 3px;
 }
 
 .question-buttongroup::-webkit-scrollbar-thumb:hover {
-  background: rgba(16, 185, 129, 0.5);
+  background: color-mix(in srgb, var(--mj-status-success) 50%, transparent);
 }
 
 .buttongroup-option {
@@ -135,11 +136,11 @@
 
 .radio-label i,
 .checkbox-label i {
-  color: #666;
+  color: var(--mj-text-secondary);
 }
 
 .validation-error {
-  color: #d9534f;
+  color: var(--mj-status-error);
   font-size: 12px;
   margin-top: 4px;
 }
@@ -163,7 +164,7 @@
   text-align: center;
   font-size: 16px;
   font-weight: 600;
-  color: #10b981;
+  color: var(--mj-status-success);
   padding: 4px 0;
 }
 
@@ -183,7 +184,7 @@
 
 .daterange-separator {
   font-weight: 500;
-  color: #666;
+  color: var(--mj-text-secondary);
   white-space: nowrap;
 }
 

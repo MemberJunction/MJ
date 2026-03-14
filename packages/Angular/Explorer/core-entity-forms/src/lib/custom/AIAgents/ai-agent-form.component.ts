@@ -1135,10 +1135,10 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      */
     public getStatusBadgeColor(): string {
         switch (this.record?.Status) {
-            case 'Active': return '#28a745';
-            case 'Pending': return '#ffc107';
-            case 'Disabled': return '#6c757d';
-            default: return '#6c757d';
+            case 'Active': return 'var(--mj-status-success)';
+            case 'Pending': return 'var(--mj-status-warning)';
+            case 'Disabled': return 'var(--mj-text-muted)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -1534,17 +1534,17 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         switch (status?.toLowerCase()) {
             case 'completed':
             case 'success':
-                return '#28a745';
+                return 'var(--mj-status-success)';
             case 'failed':
             case 'error':
-                return '#dc3545';
+                return 'var(--mj-status-error)';
             case 'running':
             case 'in_progress':
-                return '#17a2b8';
+                return 'var(--mj-status-info)';
             case 'pending':
-                return '#ffc107';
+                return 'var(--mj-status-warning)';
             default:
-                return '#6c757d';
+                return 'var(--mj-text-muted)';
         }
     }
 
@@ -1680,9 +1680,9 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Gets the priority badge color
      */
     public getPriorityBadgeColor(priority: number): string {
-        if (priority <= 1) return '#dc3545'; // High priority - red
-        if (priority <= 5) return '#ffc107'; // Medium priority - yellow
-        return '#28a745'; // Low priority - green
+        if (priority <= 1) return 'var(--mj-status-error)'; // High priority - red
+        if (priority <= 5) return 'var(--mj-status-warning)'; // Medium priority - yellow
+        return 'var(--mj-status-success)'; // Low priority - green
     }
 
     /**
@@ -2269,7 +2269,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Gets the badge color for a sub-agent based on its type
      */
     public getSubAgentBadgeColor(item: UnifiedSubAgent): string {
-        return item.type === 'child' ? '#2196F3' : '#9C27B0';
+        return item.type === 'child' ? 'var(--mj-status-info)' : 'var(--mj-brand-primary)';
     }
 
     /**

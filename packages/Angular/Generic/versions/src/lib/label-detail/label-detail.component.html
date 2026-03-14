@@ -45,7 +45,7 @@
   <!-- ============================================================ -->
   <div class="summary-kpis">
     <div class="summary-kpi">
-      <div class="kpi-mini-icon" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+      <div class="kpi-mini-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); color: var(--mj-brand-primary);">
         <i class="fa-solid fa-camera"></i>
       </div>
       <div class="kpi-mini-content">
@@ -54,7 +54,7 @@
       </div>
     </div>
     <div class="summary-kpi">
-      <div class="kpi-mini-icon" style="background: rgba(59, 130, 246, 0.1); color: #3b82f6;">
+      <div class="kpi-mini-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); color: var(--mj-brand-primary);">
         <i class="fa-solid fa-table"></i>
       </div>
       <div class="kpi-mini-content">
@@ -172,7 +172,7 @@
                 <div class="detail-field">
                   <span class="field-label">Entity</span>
                   <span class="field-value">
-                    <i [class]="OverviewEntityIcon" style="margin-right: 6px; color: #3b82f6;"></i>{{Label.Entity ?? resolveEntityName(Label.EntityID)}}
+                    <i [class]="OverviewEntityIcon" style="margin-right: 6px; color: var(--mj-brand-primary);"></i>{{Label.Entity ?? resolveEntityName(Label.EntityID)}}
                   </span>
                 </div>
               }
@@ -599,7 +599,7 @@
                 <div class="history-list">
                   @for (related of RelatedLabels; track related) {
                     <div class="history-item">
-                      <div class="history-item-icon" style="background: rgba(99, 102, 241, 0.1); color: #6366f1;">
+                      <div class="history-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); color: var(--mj-brand-primary);">
                         <i class="fa-solid fa-tag"></i>
                       </div>
                       <div class="history-item-content">

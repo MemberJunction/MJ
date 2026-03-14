@@ -84,7 +84,7 @@ export class APIKeyEditPanelComponent implements OnChanges {
     // Default UI config for categories without explicit configuration
     private readonly defaultUIConfig = {
         icon: 'fa-solid fa-ellipsis',
-        color: '#6b7280'
+        color: 'var(--mj-text-muted)'
     };
 
     async ngOnChanges(changes: SimpleChanges): Promise<void> {

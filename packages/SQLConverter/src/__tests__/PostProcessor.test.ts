@@ -486,7 +486,104 @@ describe('postProcess', () => {
   });
 
   // ============================================================
-  // 26. Combined scenario
+  // 26. CTE statement fixes
+  // ============================================================
+  describe('CTE statement fixes', () => {
+    it('should remove leading semicolon from ;WITH (T-SQL idiom)', () => {
+      const input = ';WITH CTE AS (SELECT 1)\nSELECT * FROM CTE;';
+      const result = postProcess(input);
+      expect(result).not.toMatch(/;\s*WITH\b/i);
+      expect(result).toMatch(/\bWITH CTE/);
+    });
+
+    it('should reconnect CTE definition separated from DML by a semicolon', () => {
+      const input = 'WITH CTE AS (\n  SELECT id FROM t\n);\nDELETE FROM t2 WHERE id IN (SELECT id FROM CTE);';
+      const result = postProcess(input);
+      // The semicolon between ) and DELETE should be removed
+      expect(result).not.toMatch(/\)\s*;\s*\nDELETE/);
+      expect(result).toMatch(/\)\s*\nDELETE/);
+    });
+
+    it('should reconnect CTE with SELECT DML', () => {
+      const input = 'WITH CTE AS (\n  SELECT id FROM t\n);\nSELECT * FROM CTE;';
+      const result = postProcess(input);
+      expect(result).not.toMatch(/\)\s*;\s*\nSELECT/);
+      expect(result).toMatch(/\)\s*\nSELECT/);
+    });
+
+    it('should reconnect CTE with INSERT DML', () => {
+      const input = 'WITH CTE AS (\n  SELECT id FROM t\n);\nINSERT INTO t2 SELECT * FROM CTE;';
+      const result = postProcess(input);
+      expect(result).not.toMatch(/\)\s*;\s*\nINSERT/);
+      expect(result).toMatch(/\)\s*\nINSERT/);
+    });
+
+    it('should reconnect CTE with UPDATE DML', () => {
+      const input = 'WITH CTE AS (\n  SELECT id FROM t\n);\nUPDATE t2 SET col = 1 FROM CTE WHERE t2.id = CTE.id;';
+      const result = postProcess(input);
+      expect(result).not.toMatch(/\)\s*;\s*\nUPDATE/);
+      expect(result).toMatch(/\)\s*\nUPDATE/);
+    });
+
+    it('should NOT remove semicolons between unrelated DELETE statements', () => {
+      // This is the critical bug scenario: inside a function body,
+      // DELETE FROM t WHERE id IN (SELECT ...);
+      // DELETE FROM t2 WHERE ...;
+      // The CTE fix must NOT match across unrelated statements.
+      const input = [
+        'CREATE OR REPLACE FUNCTION __mj."spDeleteEntity"()',
+        'RETURNS void AS',
+        '$$',
+        'BEGIN',
+        'DELETE FROM __mj."EntityFieldValue" WHERE EntityFieldID IN (SELECT ID FROM __mj."EntityField" WHERE EntityID = p_EntityID);',
+        'DELETE FROM __mj."EntitySetting" WHERE EntityID = p_EntityID;',
+        'END;',
+        '$$ LANGUAGE plpgsql;',
+      ].join('\n');
+      const result = postProcess(input);
+      // Both DELETE statements should retain their semicolons
+      expect(result).toContain('p_EntityID);');
+      expect(result).toContain('DELETE FROM __mj."EntitySetting"');
+      // The two DELETEs should be separate statements
+      expect(result).toMatch(/p_EntityID\);\s*\nDELETE/);
+    });
+
+    it('should NOT remove semicolons between DELETE with subquery and next DELETE when WITH exists elsewhere', () => {
+      // Simulates the actual bug: a WITH RECURSIVE CTE earlier in the file,
+      // and later a function with DELETE...IN(SELECT...);\nDELETE
+      const input = [
+        'WITH RECURSIVE CTE_RootParent AS (',
+        '  SELECT ID FROM __mj."EntityField"',
+        '  UNION ALL',
+        '  SELECT e.ID FROM __mj."EntityField" e JOIN CTE_RootParent p ON e.ParentID = p.ID',
+        ')',
+        'SELECT * FROM CTE_RootParent;',
+        '',
+        'CREATE OR REPLACE FUNCTION __mj."spDeleteEntity"()',
+        'RETURNS void AS',
+        '$$',
+        'BEGIN',
+        'DELETE FROM __mj."EntityFieldValue" WHERE EntityFieldID IN (SELECT ID FROM __mj."EntityField" WHERE EntityID = p_EntityID);',
+        'DELETE FROM __mj."EntitySetting" WHERE EntityID = p_EntityID;',
+        'END;',
+        '$$ LANGUAGE plpgsql;',
+      ].join('\n');
+      const result = postProcess(input);
+      // The DELETE inside the function body should still have its semicolon
+      expect(result).toMatch(/p_EntityID\);\s*\nDELETE/);
+    });
+
+    it('should handle multiple CTEs (WITH a AS (...), b AS (...))', () => {
+      const input = 'WITH a AS (\n  SELECT 1\n), b AS (\n  SELECT 2\n);\nSELECT * FROM a, b;';
+      const result = postProcess(input);
+      // Semicolon between CTEs and SELECT should be removed
+      expect(result).not.toMatch(/\)\s*;\s*\nSELECT/);
+      expect(result).toMatch(/\)\s*\nSELECT/);
+    });
+  });
+
+  // ============================================================
+  // 27. Combined scenario
   // ============================================================
   describe('combined transforms', () => {
     it('should apply multiple transforms in a single pass', () => {

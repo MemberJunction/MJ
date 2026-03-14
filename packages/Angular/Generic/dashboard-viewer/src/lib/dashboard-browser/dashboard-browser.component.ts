@@ -818,12 +818,12 @@ export class DashboardBrowserComponent implements OnInit, OnDestroy {
             align-items: center;
             gap: 8px;
             padding: 8px 12px;
-            background: #5c6bc0;
-            color: white;
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
             border-radius: 6px;
             font-size: 13px;
             font-weight: 500;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-text-primary) 30%, transparent);
             white-space: nowrap;
         `;
 

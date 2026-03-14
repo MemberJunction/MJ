@@ -3,13 +3,13 @@
 }
 
 .template-preview {
-    border: 1px solid #ccc;
+    border: 1px solid var(--mj-border-strong);
     margin-top: 10px;
 }
 
 .subject-line {
     font-weight: bolder;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid var(--mj-border-strong);
     padding: 5px;
 }
 
@@ -24,13 +24,13 @@ ul {
 
 li {
     padding: 10px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--mj-border-strong);
     margin: 5px 0;
     cursor: pointer;
 }
 
 li:hover {
-    background-color: #f0f0f0;
+    background-color: var(--mj-bg-surface-sunken);
 }
 
 .vcr-controls {
@@ -44,20 +44,20 @@ li:hover {
     border: none;
     cursor: pointer;
     font-size: 20px;
-    color: #007bff;
+    color: var(--mj-brand-primary);
 }
 
 .vcr-controls button:hover {
-    color: #0056b3;
+    color: var(--mj-brand-primary-hover);
 }
 
 .vcr-controls button:disabled {
-    color: #ccc;
+    color: var(--mj-border-strong);
     cursor: not-allowed;
 }
 
 .vcr-controls button:disabled span {
-    color: #ccc;
+    color: var(--mj-border-strong);
 }
 
 .index-indicator {

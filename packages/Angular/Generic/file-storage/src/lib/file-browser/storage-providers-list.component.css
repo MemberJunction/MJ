@@ -15,14 +15,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid #e5e5e5;
-  background-color: #fafafa;
+  border-bottom: 1px solid var(--mj-border-default);
+  background-color: var(--mj-bg-surface-card);
 }
 
 .header-title {
   font-size: 13px;
   font-weight: 600;
-  color: #1d1d1f;
+  color: var(--mj-text-primary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -32,8 +32,8 @@
   height: 28px;
   border: none;
   border-radius: 50%;
-  background-color: #007aff;
-  color: white;
+  background-color: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -43,12 +43,12 @@
 }
 
 .add-provider-btn:hover:not(:disabled) {
-  background-color: #0056b3;
+  background-color: var(--mj-brand-primary-hover);
   transform: scale(1.05);
 }
 
 .add-provider-btn:disabled {
-  background-color: #ccc;
+  background-color: var(--mj-border-strong);
   cursor: not-allowed;
 }
 
@@ -62,7 +62,7 @@
   justify-content: center;
   padding: 24px;
   text-align: center;
-  color: #86868b;
+  color: var(--mj-text-muted);
   flex: 1;
 }
 
@@ -74,11 +74,11 @@
 }
 
 .error-icon {
-  color: #f44336;
+  color: var(--mj-status-error);
 }
 
 .empty-icon {
-  color: #007aff;
+  color: var(--mj-brand-primary);
 }
 
 .error-message,
@@ -86,12 +86,12 @@
   font-size: 14px;
   font-weight: 500;
   margin: 0 0 4px 0;
-  color: #1d1d1f;
+  color: var(--mj-text-primary);
 }
 
 .empty-hint {
   font-size: 12px;
-  color: #86868b;
+  color: var(--mj-text-muted);
   margin: 4px 0 0 0;
   max-width: 180px;
   line-height: 1.4;
@@ -111,17 +111,17 @@
   padding: 12px 16px;
   cursor: pointer;
   transition: all 0.2s ease;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--mj-bg-surface-sunken);
   position: relative;
 }
 
 .provider-item:hover {
-  background-color: #f5f5f7;
+  background-color: var(--mj-bg-surface-card);
 }
 
 .provider-item.selected {
-  background-color: #e8f4fd;
-  border-left: 3px solid #007aff;
+  background-color: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+  border-left: 3px solid var(--mj-brand-primary);
 }
 
 .provider-item.selected::before {
@@ -131,7 +131,7 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background-color: #007aff;
+  background-color: var(--mj-brand-primary);
 }
 
 /* Provider Icon */
@@ -143,12 +143,12 @@
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  color: #424242;
+  color: var(--mj-text-secondary);
   margin-right: 12px;
 }
 
 .provider-item.selected .provider-icon {
-  color: #007aff;
+  color: var(--mj-brand-primary);
 }
 
 /* Provider Info */
@@ -163,14 +163,14 @@
 .provider-name {
   font-size: 13px;
   font-weight: 500;
-  color: #1d1d1f;
+  color: var(--mj-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .provider-item.selected .provider-name {
-  color: #007aff;
+  color: var(--mj-brand-primary);
   font-weight: 600;
 }
 
@@ -179,14 +179,14 @@
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  color: #86868b;
+  color: var(--mj-text-muted);
 }
 
 /* Default Badge */
 .default-badge {
   display: inline-flex;
   align-items: center;
-  color: #f5a623;
+  color: var(--mj-status-warning);
 }
 
 .default-badge i {
@@ -198,10 +198,10 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 6px;
-  background-color: #f0f0f0;
+  background-color: var(--mj-bg-surface-sunken);
   border-radius: 10px;
   font-size: 10px;
-  color: #666;
+  color: var(--mj-text-secondary);
   max-width: 100px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -209,8 +209,8 @@
 }
 
 .provider-item.selected .provider-type-badge {
-  background-color: rgba(0, 122, 255, 0.15);
-  color: #007aff;
+  background-color: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+  color: var(--mj-brand-primary);
 }
 
 /* Search Badge */
@@ -218,15 +218,15 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 6px;
-  background-color: #f0f0f0;
+  background-color: var(--mj-bg-surface-sunken);
   border-radius: 10px;
   font-size: 10px;
-  color: #666;
+  color: var(--mj-text-secondary);
 }
 
 .provider-item.selected .search-badge {
-  background-color: rgba(0, 122, 255, 0.15);
-  color: #007aff;
+  background-color: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+  color: var(--mj-brand-primary);
 }
 
 .search-badge i {
@@ -238,15 +238,15 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 6px;
-  background-color: #e8f5e9;
+  background-color: color-mix(in srgb, var(--mj-status-success) 8%, var(--mj-bg-surface));
   border-radius: 10px;
   font-size: 10px;
-  color: #34c759;
+  color: var(--mj-status-success);
 }
 
 .provider-item.selected .credential-badge {
-  background-color: rgba(52, 199, 89, 0.15);
-  color: #34c759;
+  background-color: color-mix(in srgb, var(--mj-status-success) 15%, transparent);
+  color: var(--mj-status-success);
 }
 
 .credential-badge i {
@@ -257,7 +257,7 @@
 .unconfigured-badge {
   display: inline-flex;
   align-items: center;
-  color: #ff9500;
+  color: var(--mj-status-warning);
 }
 
 .unconfigured-badge i {
@@ -269,10 +269,10 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 6px;
-  background-color: #e8f5e9;
+  background-color: color-mix(in srgb, var(--mj-status-success) 8%, var(--mj-bg-surface));
   border-radius: 10px;
   font-size: 10px;
-  color: #34c759;
+  color: var(--mj-status-success);
 }
 
 .oauth-connected-badge i {
@@ -283,10 +283,10 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 6px;
-  background-color: #fff3e0;
+  background-color: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface));
   border-radius: 10px;
   font-size: 10px;
-  color: #ff9500;
+  color: var(--mj-status-warning);
 }
 
 .oauth-disconnected-badge i {
@@ -316,12 +316,12 @@
 }
 
 .connect-btn {
-  background-color: #e8f5e9;
-  color: #34c759;
+  background-color: color-mix(in srgb, var(--mj-status-success) 8%, var(--mj-bg-surface));
+  color: var(--mj-status-success);
 }
 
 .connect-btn:hover:not(:disabled) {
-  background-color: #c8e6c9;
+  background-color: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
   transform: scale(1.05);
 }
 
@@ -332,12 +332,12 @@
 
 .disconnect-btn {
   background-color: transparent;
-  color: #86868b;
+  color: var(--mj-text-muted);
 }
 
 .disconnect-btn:hover {
-  background-color: #ffebee;
-  color: #f44336;
+  background-color: color-mix(in srgb, var(--mj-status-error) 8%, var(--mj-bg-surface));
+  color: var(--mj-status-error);
 }
 
 /* Remove Provider Button */
@@ -347,7 +347,7 @@
   border: none;
   border-radius: 50%;
   background-color: transparent;
-  color: #999;
+  color: var(--mj-text-disabled);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -363,8 +363,8 @@
 }
 
 .remove-provider-btn:hover:not(:disabled) {
-  background-color: #ffebee;
-  color: #f44336;
+  background-color: color-mix(in srgb, var(--mj-status-error) 8%, var(--mj-bg-surface));
+  color: var(--mj-status-error);
 }
 
 .remove-provider-btn:disabled {
@@ -382,12 +382,12 @@
 }
 
 .providers-container::-webkit-scrollbar-thumb {
-  background: #c7c7cc;
+  background: var(--mj-border-strong);
   border-radius: 3px;
 }
 
 .providers-container::-webkit-scrollbar-thumb:hover {
-  background: #a0a0a5;
+  background: var(--mj-text-disabled);
 }
 
 /* ===========================
@@ -416,26 +416,26 @@
 
 .dialog-empty-icon {
   font-size: 40px;
-  color: #34c759;
+  color: var(--mj-status-success);
   margin-bottom: 12px;
 }
 
 .dialog-empty-message {
   font-size: 16px;
   font-weight: 500;
-  color: #1d1d1f;
+  color: var(--mj-text-primary);
   margin: 0 0 4px 0;
 }
 
 .dialog-empty-hint {
   font-size: 13px;
-  color: #86868b;
+  color: var(--mj-text-muted);
   margin: 0;
 }
 
 .dialog-instruction {
   font-size: 13px;
-  color: #666;
+  color: var(--mj-text-secondary);
   margin: 0 0 12px 0;
   padding: 0 4px;
 }
@@ -453,18 +453,18 @@
   cursor: pointer;
   transition: all 0.2s ease;
   margin-bottom: 8px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--mj-border-default);
 }
 
 .available-provider-item:hover:not(.disabled) {
-  background-color: #f5f5f7;
-  border-color: #007aff;
+  background-color: var(--mj-bg-surface-card);
+  border-color: var(--mj-brand-primary);
 }
 
 .available-provider-item.disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  background-color: #f9f9f9;
+  background-color: var(--mj-bg-surface-card);
 }
 
 .available-provider-item .provider-icon {
@@ -478,19 +478,19 @@
 .available-provider-item .provider-name {
   font-size: 14px;
   font-weight: 500;
-  color: #1d1d1f;
+  color: var(--mj-text-primary);
 }
 
 .available-provider-item .provider-description {
   font-size: 12px;
-  color: #86868b;
+  color: var(--mj-text-muted);
   margin-top: 2px;
   line-height: 1.3;
 }
 
 .available-provider-item .provider-warning {
   font-size: 11px;
-  color: #ff9500;
+  color: var(--mj-status-warning);
   margin-top: 4px;
   display: flex;
   align-items: center;
@@ -504,7 +504,7 @@
 /* OAuth hint in add provider dialog */
 .available-provider-item .oauth-hint {
   font-size: 11px;
-  color: #007aff;
+  color: var(--mj-brand-primary);
   margin-top: 4px;
   display: flex;
   align-items: center;
@@ -516,12 +516,12 @@
 }
 
 .available-provider-item.oauth-provider {
-  border-color: #007aff;
+  border-color: var(--mj-brand-primary);
   border-style: dashed;
 }
 
 .available-provider-item.oauth-provider:hover:not(.disabled) {
-  background-color: #e8f4fd;
+  background-color: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
   border-style: solid;
 }
 
@@ -531,7 +531,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #007aff;
+  color: var(--mj-brand-primary);
   font-size: 14px;
 }
 

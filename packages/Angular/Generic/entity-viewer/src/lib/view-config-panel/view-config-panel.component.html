@@ -74,7 +74,7 @@
         <span class="tab-badge">{{ enabledAggregatesCount }}</span>
       }
     </button>
-    @if (viewEntity) {
+    @if (viewEntity || DefaultSaveAsNew) {
       <button
         class="tab-btn"
         [class.active]="activeTab === 'settings'"
@@ -951,7 +951,21 @@
           {{ isSaving ? 'Saving...' : 'Save' }}
         </button>
       }
-      @if (!viewEntity) {
+      @if (!viewEntity && DefaultSaveAsNew) {
+        <!-- Creating a new view (from quick save dialog) -->
+        <button
+          class="footer-btn save-btn primary"
+          (click)="onSaveAsNew()"
+          [disabled]="isSaving || !IsValidForSaveAsNew">
+          @if (isSaving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          } @else {
+            <i class="fa-solid fa-plus"></i>
+          }
+          {{ isSaving ? 'Saving...' : 'Create View' }}
+        </button>
+      }
+      @if (!viewEntity && !DefaultSaveAsNew) {
         <!-- Default/Dynamic view - Save to user settings -->
         <button
           class="footer-btn save-btn primary"

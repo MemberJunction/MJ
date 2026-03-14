@@ -469,7 +469,10 @@ const configInfoSchema = z.object({
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
-  entityPackageName: z.string().default('mj_generatedentities'),
+  entityPackageName: z.union([
+    z.string(),
+    z.record(z.string(), z.string())
+  ]).default('mj_generatedentities'),
 
   verboseOutput: z.boolean().optional().default(false),
 });
@@ -676,6 +679,12 @@ export function initializeConfig(cwd: string): ConfigInfo {
     throw new Error('No configuration found');
   }
 
+  // Update the module-level configInfo so that helpers like
+  // resolveEntityPackageName() and getExternalEntitySchemas() see the
+  // config from the correct working directory, not the stale one from
+  // initial module load.
+  Object.assign(configInfo, config);
+
   return config;
 }
 
@@ -778,6 +787,43 @@ export function autoIndexForeignKeys(): boolean {
   const setting = getSetting(keyName);
   if (setting) return <boolean>setting.value;
   else return false;
+}
+
+/**
+ * Resolves the entity package name for a given database schema.
+ *
+ * When `entityPackageName` is a plain string (legacy/default), all non-core schemas
+ * use that single package. When it is a `Record<string, string>`, each schema is
+ * mapped to its own package (used by OpenApp projects with multiple installed apps).
+ *
+ * @param schemaName The database schema name of the entity
+ * @param config     Optional config override; falls back to the module-level configInfo
+ * @returns The npm package name to use for importing entities from this schema
+ */
+export function resolveEntityPackageName(schemaName: string, config?: ConfigInfo): string {
+  const cfg = config ?? configInfo;
+  const epn = cfg.entityPackageName;
+  if (typeof epn === 'string') {
+    return epn || 'mj_generatedentities';
+  }
+  // Case-insensitive lookup: DB schema names may differ in casing from config keys
+  const lowerSchema = schemaName.toLowerCase();
+  const match = Object.keys(epn).find(k => k.toLowerCase() === lowerSchema);
+  return match ? epn[match] : 'mj_generatedentities';
+}
+
+/**
+ * Returns all schema names that have an explicit external entity package mapping.
+ * These schemas should be skipped during local entity subclass generation because
+ * their entities are provided by an installed OpenApp npm package.
+ */
+export function getExternalEntitySchemas(config?: ConfigInfo): string[] {
+  const cfg = config ?? configInfo;
+  const epn = cfg.entityPackageName;
+  if (typeof epn === 'string') {
+    return [];
+  }
+  return Object.keys(epn);
 }
 
 /**

@@ -217,9 +217,9 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
     getResultCodeColor(): string {
         const code = this.record.ResultCode?.toLowerCase();
         if (code === 'success' || code === 'ok' || code === 'completed' || code === '200') {
-            return '#28a745';
+            return 'var(--mj-status-success)';
         }
-        return '#dc3545';
+        return 'var(--mj-status-error)';
     }
 
     getResultCodeIcon(): string {

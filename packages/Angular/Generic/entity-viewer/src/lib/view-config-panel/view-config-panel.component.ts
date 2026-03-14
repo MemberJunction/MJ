@@ -149,9 +149,25 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
   @Input() externalFilterState: CompositeFilterDescriptor | null = null;
 
   /**
-   * When true, auto-focus on Settings tab when panel opens (BUG-011: forward saveAsNew intent)
+   * When true, the panel is in "create new view" mode — shows the Settings tab
+   * and a "Create View" button even without a viewEntity.
    */
   @Input() DefaultSaveAsNew: boolean = false;
+
+  /**
+   * Pre-populated view name from the quick save dialog (used when DefaultSaveAsNew is true)
+   */
+  @Input() PendingNewViewName: string = '';
+
+  /**
+   * Pre-populated description from the quick save dialog (used when DefaultSaveAsNew is true)
+   */
+  @Input() PendingNewViewDescription: string = '';
+
+  /**
+   * Pre-populated sharing preference from the quick save dialog (used when DefaultSaveAsNew is true)
+   */
+  @Input() PendingNewViewIsShared: boolean = false;
 
   /**
    * Emitted when user wants to duplicate the current view (F-005)
@@ -490,10 +506,10 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
         this.smartFilterEnabled = true;
       }
     } else {
-      // Default view - use entity defaults
-      this.viewName = '';
-      this.viewDescription = '';
-      this.isShared = false;
+      // Default view or pending new view — use pending values if creating a new view
+      this.viewName = this.DefaultSaveAsNew ? this.PendingNewViewName : '';
+      this.viewDescription = this.DefaultSaveAsNew ? this.PendingNewViewDescription : '';
+      this.isShared = this.DefaultSaveAsNew ? this.PendingNewViewIsShared : false;
       if (!this.currentGridState?.sortSettings?.length) {
         this.sortField = null;
         this.sortDirection = 'asc';
