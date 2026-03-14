@@ -632,7 +632,7 @@ export class AnalysisOrchestrator {
     const effortLevel = this.config.ai.effortLevel || 75;
     const maxTokens = this.config.ai.maxTokens || 16000;
 
-    const generator = new SampleQueryGenerator(config, promptEngine, driver, model, stateManager, effortLevel, maxTokens);
+    const generator = new SampleQueryGenerator(config, promptEngine, driver, model, stateManager, effortLevel, maxTokens, this.config.ai.pricing);
 
     try {
       const result = await generator.generateQueries(state.schemas);

@@ -361,6 +361,8 @@ export class StateManager {
     // Aggregate from all analysis runs
     let totalPromptsRun = 0;
     let totalTokens = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
     let estimatedCost = 0;
 
     for (const run of state.phases.descriptionGeneration) {
@@ -371,6 +373,8 @@ export class StateManager {
 
       // Sum tokens and cost
       totalTokens += run.totalTokensUsed;
+      totalInputTokens += run.totalInputTokens || 0;
+      totalOutputTokens += run.totalOutputTokens || 0;
       estimatedCost += run.estimatedCost;
     }
 
@@ -378,8 +382,8 @@ export class StateManager {
     state.summary = {
       ...state.summary,
       totalPromptsRun,
-      totalInputTokens: 0,  // TODO: Will need to track separately when available
-      totalOutputTokens: 0, // TODO: Will need to track separately when available
+      totalInputTokens,
+      totalOutputTokens,
       totalTokens,
       totalSchemas: state.schemas.length,
       totalTables,

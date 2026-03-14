@@ -186,7 +186,7 @@ export class AnalysisEngine {
       }
 
       // Track tokens
-      this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens);
+      this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens, this.config.ai.pricing);
 
       // Use semantic comparison to check if description materially changed
       const previousDescription = table.description;
@@ -448,7 +448,7 @@ export class AnalysisEngine {
     }
 
     // Track tokens for comparison
-    this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost);
+    this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens, this.config.ai.pricing);
 
     return result.result;
   }
@@ -509,7 +509,7 @@ export class AnalysisEngine {
         run.sanityCheckCount++;
 
         // Track tokens
-        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens);
+        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens, this.config.ai.pricing);
 
         // Log issues
         if (result.result.hasMaterialIssues) {
@@ -604,7 +604,7 @@ export class AnalysisEngine {
         run.sanityCheckCount++;
 
         // Track tokens
-        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens);
+        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens, this.config.ai.pricing);
 
         // Log issues
         if (result.result.hasMaterialIssues) {
@@ -690,7 +690,7 @@ export class AnalysisEngine {
         run.sanityCheckCount++;
 
         // Track tokens
-        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens);
+        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens, this.config.ai.pricing);
 
         // Log issues
         if (result.result.hasMaterialIssues) {
@@ -820,28 +820,30 @@ export class AnalysisEngine {
         }
       };
 
-      // Check if this column was incorrectly marked as a PK - reject it unless it's a surrogate key
-      const falsePK = discoveryPhase.discovered.primaryKeys.find(pk =>
+      // Check if this column is already a detected PK
+      const existingPK = discoveryPhase.discovered.primaryKeys.find(pk =>
         pk.schemaName === schemaName &&
         pk.tableName === tableName &&
         pk.columnNames.includes(columnName)
       );
 
-      if (falsePK) {
-        const columnLower = columnName.toLowerCase();
-        const tableLower = tableName.toLowerCase();
-        const isSurrogateKey =
-          columnLower === `${tableLower}_id` ||
-          columnLower === tableLower + 'id' ||
-          columnLower === 'id';
+      if (existingPK && existingPK.status === 'confirmed') {
+        // A confirmed PK should not also be an FK without strong statistical evidence.
+        // PK-as-FK (is-a / 1:1 relationships) is extremely rare in production databases.
+        // LLM hallucination of PK→FK relationships is common, especially for "ID" columns.
+        // Skip this FK suggestion entirely — the PK designation takes priority.
+        console.log(`[AnalysisEngine] Rejecting LLM FK suggestion for confirmed PK: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn}`);
+        continue;
+      }
 
-        if (!isSurrogateKey) {
-          falsePK.status = 'rejected';
-          feedback.affectedCandidates.push(`PK:${schemaName}.${tableName}.${columnName}`);
-          const column = this.findColumnInState(state, schemaName, tableName, columnName);
-          if (column) column.isPrimaryKey = false;
-          console.log(`[AnalysisEngine] FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}, rejecting as PK`);
-        }
+      if (existingPK && existingPK.status !== 'confirmed') {
+        // PK exists but isn't confirmed — LLM suggesting it's an FK is evidence
+        // that the PK detection was wrong. Reject the PK.
+        existingPK.status = 'rejected';
+        feedback.affectedCandidates.push(`PK:${schemaName}.${tableName}.${columnName}`);
+        const column = this.findColumnInState(state, schemaName, tableName, columnName);
+        if (column) column.isPrimaryKey = false;
+        console.log(`[AnalysisEngine] FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}, rejecting unconfirmed PK`);
       }
 
       // Check if we already have this FK - boost confidence

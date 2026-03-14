@@ -99,7 +99,7 @@ export class BackpropagationEngine {
       }
 
       totalTokensUsed += result.tokensUsed;
-      this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens);
+      this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens, this.config?.ai?.pricing);
 
       // Check if revision is needed
       if (result.result.needsRevision) {

@@ -84,6 +84,16 @@ export interface AIConfig {
   maxTokens?: number;
   requestsPerMinute?: number;
   effortLevel?: number; // Optional effort level 1-100 (1=lowest, 100=highest). Not all models support this.
+  pricing?: TokenPricingConfig;
+}
+
+/**
+ * Token pricing configuration for cost estimation.
+ * Costs are specified in dollars per 1 million tokens.
+ */
+export interface TokenPricingConfig {
+  inputCostPer1MTokens: number;   // Cost per 1M input tokens (e.g., 0.50 for Gemini 3 Flash)
+  outputCostPer1MTokens: number;  // Cost per 1M output tokens (e.g., 3.00 for Gemini 3 Flash)
 }
 
 export interface AnalysisConfig {
