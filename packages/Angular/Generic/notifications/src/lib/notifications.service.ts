@@ -79,12 +79,10 @@ export class MJNotificationService {
             })
 
             const type = statusObj.type?.trim().toLowerCase();
-            console.log(`[MJNotificationService] PushStatusUpdate received: type="${type}", keys=${Object.keys(statusObj).join(',')}`);
             if (type === 'notification' || type === 'usernotifications') {
               // Server sends type:'notification', legacy used 'usernotifications' — support both
               const action = statusObj.action?.trim().toLowerCase()
                           || statusObj.details?.action?.trim().toLowerCase();
-              console.log(`[MJNotificationService] Notification push: action="${action}", title="${statusObj.title}"`);
               if (action === 'create') {
                 this.CreateSimpleNotification(statusObj.title || 'New Notification Available', "success", 3000);
                 MJNotificationService.RefreshUserNotifications();
@@ -198,12 +196,7 @@ export class MJNotificationService {
   public static async RefreshUserNotifications() {
     try {
       const engine = UserInfoEngine.Instance;
-      const beforeCount = engine.UserNotifications.length;
-      console.log(`[MJNotificationService] RefreshUserNotifications: starting, beforeCount=${beforeCount}`);
       await engine.RefreshItem('_UserNotifications');
-      const afterCount = engine.UserNotifications.length;
-      const unreadCount = engine.UnreadNotifications.length;
-      console.log(`[MJNotificationService] RefreshUserNotifications: done, afterCount=${afterCount}, unread=${unreadCount}`);
       MJNotificationService._userNotifications = engine.UserNotifications;
       MJNotificationService._notifications$.next(engine.UserNotifications);
       MJNotificationService._unreadCount$.next(MJNotificationService.UnreadUserNotificationCount);
