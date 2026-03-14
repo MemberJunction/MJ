@@ -144,21 +144,25 @@ export class DynamicFormComponent implements OnInit {
 
     /** Handle simple choice button click (single-question forms) */
     public OnSimpleChoiceClick(value: string | number | boolean): void {
-        if (!this.Disabled && !this.IsSubmitting) {
+        if (!this.Disabled) {
             const question = this.FormDefinition.questions[0];
-            this.IsSubmitting = true;
+            // Update the FormControl so external readers (e.g. collectFormData) can access the value
+            this.FormGroup.get(question.id)?.setValue(value);
             this.FormSubmitted.emit({ [question.id]: value });
-
-            setTimeout(() => {
-                this.IsSubmitting = false;
-                this.cdr.detectChanges();
-            }, 1000);
         }
     }
 
-    /** Handle footer choice button click (validates main fields first) */
+    /** Whether a given option value is the currently selected simple choice */
+    public IsSimpleChoiceSelected(value: string | number | boolean): boolean {
+        if (!this.IsSimpleChoice) return false;
+        const question = this.FormDefinition.questions[0];
+        const control = this.FormGroup.get(question.id);
+        return control?.value === value;
+    }
+
+    /** Handle footer choice button click — selects the option and emits the form data */
     public OnFooterChoiceClick(value: string | number | boolean): void {
-        if (!this.Disabled && !this.IsSubmitting && this.FooterChoiceQuestion) {
+        if (!this.Disabled && this.FooterChoiceQuestion) {
             const mainControlKeys = this.MainQuestions.map(q => q.id);
             let hasInvalidFields = false;
 
@@ -172,17 +176,18 @@ export class DynamicFormComponent implements OnInit {
 
             if (hasInvalidFields) return;
 
-            this.IsSubmitting = true;
+            // Update the FormControl so external readers (e.g. collectFormData) can access the value
+            this.FormGroup.get(this.FooterChoiceQuestion.id)?.setValue(value);
             const formData = { ...this.FormGroup.value };
-            formData[this.FooterChoiceQuestion.id] = value;
             this.FormSubmitted.emit(formData);
-
-            Promise.resolve().then(() => {
-                this.FormGroup.reset();
-                this.IsSubmitting = false;
-                this.cdr.detectChanges();
-            });
         }
+    }
+
+    /** Whether a given option value is the currently selected footer choice */
+    public IsFooterChoiceSelected(value: string | number | boolean): boolean {
+        if (!this.FooterChoiceQuestion) return false;
+        const control = this.FormGroup.get(this.FooterChoiceQuestion.id);
+        return control?.value === value;
     }
 
     /** Handle full form submission */
@@ -198,11 +203,12 @@ export class DynamicFormComponent implements OnInit {
             this.IsSubmitting = true;
             this.FormSubmitted.emit(this.FormGroup.value);
 
-            Promise.resolve().then(() => {
-                this.FormGroup.reset();
+            // Reset submitting state after a short delay — the parent container
+            // is responsible for hiding the form or handling the response
+            setTimeout(() => {
                 this.IsSubmitting = false;
                 this.cdr.detectChanges();
-            });
+            }, 1000);
         }
     }
 

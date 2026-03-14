@@ -95,23 +95,19 @@
 
                 <!-- Show existing response for already-handled requests -->
                 @if (!IsActionable && (Request.Response || Request.ResponseData)) {
-                    @if (ResponseDataEntries.length > 0) {
+                    @if (Request.ResponseData) {
                         <div class="section">
-                            <h4 class="section-title">Form Response</h4>
-                            <div class="response-data-grid">
-                                @for (entry of ResponseDataEntries; track entry.key) {
-                                    <div class="response-data-item">
-                                        <span class="response-data-label">{{ entry.label }}</span>
-                                        <span class="response-data-value">{{ entry.value }}</span>
-                                    </div>
-                                }
-                            </div>
+                            <mj-dynamic-form-response
+                                [FormDefinition]="ResponseFormDefinition"
+                                [ResponseData]="Request.ResponseData"
+                                DisplayMode="card">
+                            </mj-dynamic-form-response>
                         </div>
                     }
                     @if (Request.Response) {
                         <div class="section">
                             <h4 class="section-title">
-                                @if (ResponseDataEntries.length > 0) {
+                                @if (Request.ResponseData) {
                                     Additional Comments
                                 } @else {
                                     Response

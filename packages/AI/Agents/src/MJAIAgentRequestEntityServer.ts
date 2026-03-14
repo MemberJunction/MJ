@@ -13,10 +13,10 @@
  * `syncFeedbackRequestFromConversation()` and never reach this code path.
  */
 
-import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
+import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAIAgentRequestEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AgentRunner } from './AgentRunner';
 
@@ -127,23 +127,25 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
     }
 
     /**
-     * Build a human-readable message from the structured ResponseData and
-     * free-text Response fields. This becomes the user message in the
-     * conversation when the agent resumes.
+     * Build a conversation message from the structured ResponseData and
+     * free-text Response fields. Uses the @{_mode:"form",...} token format
+     * so the conversation UI renders the response as a styled card/pill.
+     *
+     * The token is also understood by ConversationUtility.FormToAgentContext()
+     * which converts it to structured JSON for the agent's consumption.
      */
     private composeUserMessage(): string {
         const parts: string[] = [];
 
-        // Include structured form data if present
+        // Include structured form data as @{...} token if present
         if (this.ResponseData) {
             try {
                 const data = JSON.parse(this.ResponseData) as Record<string, unknown>;
                 const entries = Object.entries(data);
                 if (entries.length > 0) {
-                    const formattedEntries = entries
-                        .map(([key, value]) => `${key}: ${String(value ?? '')}`)
-                        .join('\n');
-                    parts.push(formattedEntries);
+                    const fields = this.buildFormResponseFields(data);
+                    const title = this.resolveFormTitle();
+                    parts.push(ConversationUtility.CreateFormResponse('formSubmit', fields, title));
                 }
             } catch {
                 // If ResponseData isn't valid JSON, include it raw
@@ -170,5 +172,64 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         }
 
         return parts.join('\n\n');
+    }
+
+    /**
+     * Build the fields array for CreateFormResponse, resolving labels from
+     * the ResponseSchema when available.
+     */
+    private buildFormResponseFields(
+        data: Record<string, unknown>
+    ): Array<{ name: string; value: unknown; label?: string; type?: string; displayValue?: string }> {
+        const schema = this.parseResponseSchema();
+
+        return Object.entries(data)
+            .filter(([, value]) => value != null && value !== '')
+            .map(([key, value]) => {
+                const question = schema?.questions.find(q => q.id === key);
+                const questionType = question
+                    ? (typeof question.type === 'string' ? question.type : question.type.type)
+                    : undefined;
+
+                // Resolve display value for choice types
+                let displayValue: string | undefined;
+                if (question && questionType && ['buttongroup', 'radio', 'dropdown', 'checkbox'].includes(questionType)) {
+                    displayValue = this.resolveChoiceLabel(question, value);
+                }
+
+                return {
+                    name: key,
+                    value,
+                    label: question?.label || key,
+                    type: questionType,
+                    displayValue
+                };
+            });
+    }
+
+    /** Parse the ResponseSchema JSON into an AgentResponseForm, or null if unavailable */
+    private parseResponseSchema(): AgentResponseForm | null {
+        if (!this.ResponseSchema) return null;
+        try {
+            return JSON.parse(this.ResponseSchema) as AgentResponseForm;
+        } catch {
+            return null;
+        }
+    }
+
+    /** Resolve the form title from the schema */
+    private resolveFormTitle(): string | undefined {
+        return this.parseResponseSchema()?.title;
+    }
+
+    /** Look up the display label for a choice value from the question's options */
+    private resolveChoiceLabel(
+        question: AgentResponseForm['questions'][number],
+        value: unknown
+    ): string | undefined {
+        if (typeof question.type !== 'object' || !('options' in question.type)) return undefined;
+        const options = question.type.options;
+        const match = options.find(o => String(o.value) === String(value));
+        return match?.label;
     }
 }

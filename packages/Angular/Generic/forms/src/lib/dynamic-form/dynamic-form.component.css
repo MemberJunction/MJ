@@ -18,8 +18,13 @@
   font-size: 14px;
 }
 
-.choice-button i {
+.choice-button i,
+.choice-button i.fa-solid {
   margin-right: 6px;
+}
+
+.choice-button.selected {
+  box-shadow: 0 0 0 2px var(--mj-brand-primary);
 }
 
 /* Full Form Mode */
@@ -92,9 +97,14 @@
   padding: 10px 16px;
 }
 
-.footer-choice-button i.fa {
+.footer-choice-button i.fa,
+.footer-choice-button i.fa-solid {
   margin-right: 6px;
   flex-shrink: 0;
+}
+
+.footer-choice-button.selected {
+  box-shadow: 0 0 0 2px var(--mj-brand-primary);
 }
 
 .submit-button i.fa {

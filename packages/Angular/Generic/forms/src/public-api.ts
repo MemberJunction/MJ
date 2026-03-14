@@ -51,3 +51,5 @@ export * from './lib/forms.module';
 // Components
 export * from './lib/dynamic-form/dynamic-form.component';
 export * from './lib/dynamic-form-field/dynamic-form-field.component';
+export * from './lib/dynamic-form-response/dynamic-form-response.component';
+export * from './lib/dynamic-form-response/form-response-utils';

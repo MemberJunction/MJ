@@ -233,37 +233,6 @@
     border-radius: 6px;
 }
 
-/* Response Data (read-only structured response) */
-.response-data-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    background: var(--mj-bg-surface-sunken);
-    padding: 12px;
-    border-radius: 6px;
-}
-
-.response-data-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-}
-
-.response-data-label {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--mj-text-secondary);
-    flex-shrink: 0;
-}
-
-.response-data-value {
-    font-size: 13px;
-    color: var(--mj-text-primary);
-    text-align: right;
-    word-break: break-word;
-}
-
 /* Metadata */
 .metadata-section {
     background: var(--mj-bg-surface-card);

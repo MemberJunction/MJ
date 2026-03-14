@@ -6,14 +6,20 @@
         @for (option of GetOptions(FormDefinition.questions[0]); track TrackByValue($index, option)) {
           <button
             kendoButton
-            [disabled]="Disabled || IsSubmitting"
+            [themeColor]="IsSimpleChoiceSelected(option.value) ? 'primary' : 'base'"
+            [disabled]="Disabled"
             (click)="OnSimpleChoiceClick(option.value)"
             class="choice-button"
+            [class.selected]="IsSimpleChoiceSelected(option.value)"
             >
-            @if (HasIcon(option)) {
-              <i class="fa {{ option.icon }}" aria-hidden="true"></i>
-            }
-            {{ option.label }}
+            <span>
+              @if (IsSimpleChoiceSelected(option.value)) {
+                <i class="fa-solid fa-check" aria-hidden="true"></i>
+              } @else if (HasIcon(option)) {
+                <i class="fa {{ option.icon }}" aria-hidden="true"></i>
+              }
+              {{ option.label }}
+            </span>
           </button>
         }
       </div>
@@ -49,24 +55,20 @@
               <button
                 kendoButton
                 type="button"
-                [themeColor]="'primary'"
-                [disabled]="Disabled || IsSubmitting"
+                [themeColor]="IsFooterChoiceSelected(option.value) ? 'primary' : 'base'"
+                [disabled]="Disabled"
                 (click)="OnFooterChoiceClick(option.value)"
                 class="footer-choice-button"
+                [class.selected]="IsFooterChoiceSelected(option.value)"
                 >
-                @if (!IsSubmitting) {
-                  <span>
-                    @if (HasIcon(option)) {
-                      <i class="fa {{ option.icon }}" aria-hidden="true"></i>
-                    }
-                    {{ option.label }}
-                  </span>
-                }
-                @if (IsSubmitting) {
-                  <span>
-                    <i class="fa-solid fa-spinner fa-spin"></i>
-                  </span>
-                }
+                <span>
+                  @if (IsFooterChoiceSelected(option.value)) {
+                    <i class="fa-solid fa-check" aria-hidden="true"></i>
+                  } @else if (HasIcon(option)) {
+                    <i class="fa {{ option.icon }}" aria-hidden="true"></i>
+                  }
+                  {{ option.label }}
+                </span>
               </button>
             }
           }

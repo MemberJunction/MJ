@@ -53,11 +53,13 @@ import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 // Components
 import { DynamicFormComponent } from './dynamic-form/dynamic-form.component';
 import { DynamicFormFieldComponent } from './dynamic-form-field/dynamic-form-field.component';
+import { DynamicFormResponseComponent } from './dynamic-form-response/dynamic-form-response.component';
 
 @NgModule({
     declarations: [
         DynamicFormComponent,
-        DynamicFormFieldComponent
+        DynamicFormFieldComponent,
+        DynamicFormResponseComponent
     ],
     imports: [
         CommonModule,
@@ -69,7 +71,8 @@ import { DynamicFormFieldComponent } from './dynamic-form-field/dynamic-form-fie
     ],
     exports: [
         DynamicFormComponent,
-        DynamicFormFieldComponent
+        DynamicFormFieldComponent,
+        DynamicFormResponseComponent
     ]
 })
 export class DynamicFormsModule { }

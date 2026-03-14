@@ -150,28 +150,6 @@ export class AgentRequestPanelComponent implements OnInit, OnDestroy {
         return new Date(this.Request.ExpiresAt) < new Date();
     }
 
-    /** Parsed ResponseData entries for read-only display */
-    public get ResponseDataEntries(): Array<{ key: string; label: string; value: string }> {
-        if (!this.Request?.ResponseData) return [];
-        try {
-            const data = JSON.parse(this.Request.ResponseData) as Record<string, unknown>;
-            return Object.entries(data).map(([key, value]) => ({
-                key,
-                label: this.getQuestionLabel(key),
-                value: String(value ?? '')
-            }));
-        } catch {
-            return [];
-        }
-    }
-
-    /** Look up a question's label from the ResponseSchema by its ID */
-    private getQuestionLabel(questionId: string): string {
-        if (!this.ResponseFormDefinition?.questions) return questionId;
-        const question = this.ResponseFormDefinition.questions.find(q => q.id === questionId);
-        return question?.label || questionId;
-    }
-
     /**
      * Opens the panel with a specific request
      */
