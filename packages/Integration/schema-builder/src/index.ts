@@ -20,8 +20,7 @@ export type {
     AccessControlResult,
 } from './interfaces.js';
 
-// Re-export RSU types for consumers of RunSchemaPipeline()
-export type { RSUPipelineInput, RSUPipelineResult, RSUPipelineStep } from '@memberjunction/schema-engine';
+// NOTE: For RSU types (RSUPipelineInput, RSUPipelineResult, RSUPipelineStep), import directly from '@memberjunction/schema-engine'
 
 // Classes
 export { TypeMapper } from './TypeMapper.js';

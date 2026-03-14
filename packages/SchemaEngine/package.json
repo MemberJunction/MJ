@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/schema-engine",
   "type": "module",
-  "version": "5.10.1",
+  "version": "5.11.0",
   "description": "MemberJunction Schema Engine - generic, platform-aware DDL generation for any MJ consumer (integrations, UDTs, agents, developers)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,7 +14,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/global": "5.10.1"
+    "@memberjunction/global": "5.11.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

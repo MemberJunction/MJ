@@ -1,0 +1,81 @@
+<div class="rsu-panel">
+  <div class="rsu-panel-header">
+    <h3 class="rsu-panel-title">
+      <i class="fa-solid fa-database"></i>
+      Runtime Schema Update
+    </h3>
+    <button class="rsu-refresh-btn" type="button" (click)="Refresh()" [disabled]="IsLoading" title="Refresh status">
+      <i [class]="IsLoading ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-rotate-right'"></i>
+    </button>
+  </div>
+
+  @if (LoadError) {
+    <div class="rsu-error">
+      <i class="fa-solid fa-triangle-exclamation"></i> {{ LoadError }}
+    </div>
+  }
+
+  @if (IsLoading && !Status) {
+    <div class="rsu-loading">
+      <i class="fa-solid fa-spinner fa-spin"></i> Loading status…
+    </div>
+  }
+
+  @if (Status) {
+    <!-- Status badges row -->
+    <div class="rsu-badges">
+      <span class="rsu-badge" [class.rsu-badge-enabled]="Status.Enabled" [class.rsu-badge-disabled]="!Status.Enabled">
+        <i [class]="Status.Enabled ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"></i>
+        RSU {{ Status.Enabled ? 'Enabled' : 'Disabled' }}
+      </span>
+
+      @if (Status.Running) {
+        <span class="rsu-badge rsu-badge-running">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          Pipeline Running
+        </span>
+      }
+
+      @if (Status.OutOfSync) {
+        <span class="rsu-badge rsu-badge-warning">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          Out of Sync
+        </span>
+      }
+    </div>
+
+    <!-- Out-of-sync detail -->
+    @if (Status.OutOfSync) {
+      <div class="rsu-out-of-sync-detail">
+        <i class="fa-solid fa-circle-info"></i>
+        The database schema was updated but MJAPI or the CI/CD pipeline has not yet deployed the changes.
+        @if (Status.OutOfSyncSince) {
+          Out of sync for <strong>{{ OutOfSyncDuration }}</strong> (since {{ FormatDate(Status.OutOfSyncSince) }}).
+        }
+      </div>
+    }
+
+    <!-- Last run -->
+    <div class="rsu-details">
+      <div class="rsu-detail-row">
+        <span class="rsu-detail-label">Last pipeline run</span>
+        <span class="rsu-detail-value">{{ FormatDate(Status.LastRunAt) }}</span>
+      </div>
+      @if (Status.LastRunResult) {
+        <div class="rsu-detail-row">
+          <span class="rsu-detail-label">Last result</span>
+          <span class="rsu-detail-value" [class.rsu-result-success]="Status.LastRunResult === 'success'" [class.rsu-result-failed]="Status.LastRunResult === 'failed'">
+            {{ Status.LastRunResult }}
+          </span>
+        </div>
+      }
+    </div>
+
+    @if (!Status.Enabled) {
+      <div class="rsu-disabled-notice">
+        <i class="fa-solid fa-circle-info"></i>
+        Runtime Schema Update is disabled. Set <code>ALLOW_RUNTIME_SCHEMA_UPDATE=1</code> in the MJAPI environment to enable it.
+      </div>
+    }
+  }
+</div>

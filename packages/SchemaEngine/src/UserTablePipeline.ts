@@ -311,8 +311,8 @@ export class UserTablePipeline {
         const tableDef = this.ConvertToTableDefinition(def, tableName, entityName, platform);
 
         // Step 4: Generate migration SQL via SchemaEngine
-        const mjVersion = process.env.MJ_VERSION ?? '5.10.1';
-        const migration = this.Engine.GenerateMigration(tableDef, platform, mjVersion, 'migrations/v2', 'UDT');
+        const mjVersion = process.env.MJ_VERSION ?? '5.11.0';
+        const migration = this.Engine.GenerateMigration(tableDef, platform, mjVersion, process.env.RSU_MIGRATIONS_PATH ?? 'migrations/v5', 'UDT');
 
         // Step 5: Build RSU pipeline input
         const rsuInput: RSUPipelineInput = {
@@ -377,8 +377,8 @@ export class UserTablePipeline {
         }
 
         const tableDef = this.ConvertToTableDefinition(def, tableName, entityName, platform);
-        const mjVersion = process.env.MJ_VERSION ?? '5.10.1';
-        const migration = this.Engine.GenerateMigration(tableDef, platform, mjVersion, 'migrations/v2', 'UDT');
+        const mjVersion = process.env.MJ_VERSION ?? '5.11.0';
+        const migration = this.Engine.GenerateMigration(tableDef, platform, mjVersion, process.env.RSU_MIGRATIONS_PATH ?? 'migrations/v5', 'UDT');
 
         return {
             Valid: true,

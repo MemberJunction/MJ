@@ -1,0 +1,172 @@
+.rsu-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 20px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    color: var(--mj-text-primary);
+    min-width: 320px;
+}
+
+.rsu-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.rsu-panel-title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.rsu-refresh-btn {
+    background: transparent;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    padding: 5px 9px;
+    font-size: 0.875rem;
+    transition: background 0.15s;
+}
+
+.rsu-refresh-btn:hover:not(:disabled) {
+    background: var(--mj-bg-surface-hover);
+}
+
+.rsu-refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.rsu-loading {
+    font-size: 0.875rem;
+    color: var(--mj-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.rsu-error {
+    background: var(--mj-status-error-bg);
+    border: 1px solid var(--mj-status-error-border);
+    color: var(--mj-status-error-text);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 0.875rem;
+}
+
+/* Badges */
+.rsu-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.rsu-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 20px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    padding: 4px 12px;
+    border: 1px solid transparent;
+}
+
+.rsu-badge-enabled {
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success-text);
+    border-color: var(--mj-status-success-border);
+}
+
+.rsu-badge-disabled {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    border-color: var(--mj-border-default);
+}
+
+.rsu-badge-running {
+    background: var(--mj-status-info-bg);
+    color: var(--mj-status-info-text);
+    border-color: var(--mj-status-info-border);
+}
+
+.rsu-badge-warning {
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+    border-color: var(--mj-status-warning-border);
+}
+
+/* Out-of-sync detail */
+.rsu-out-of-sync-detail {
+    background: var(--mj-status-warning-bg);
+    border: 1px solid var(--mj-status-warning-border);
+    color: var(--mj-status-warning-text);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 0.8125rem;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+/* Details rows */
+.rsu-details {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.rsu-detail-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.875rem;
+}
+
+.rsu-detail-label {
+    color: var(--mj-text-secondary);
+    min-width: 130px;
+    font-weight: 500;
+}
+
+.rsu-detail-value {
+    color: var(--mj-text-primary);
+}
+
+.rsu-result-success {
+    color: var(--mj-status-success-text);
+}
+
+.rsu-result-failed {
+    color: var(--mj-status-error-text);
+}
+
+/* Disabled notice */
+.rsu-disabled-notice {
+    background: var(--mj-bg-surface-sunken);
+    border: 1px solid var(--mj-border-subtle);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 0.8125rem;
+    color: var(--mj-text-secondary);
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.rsu-disabled-notice code {
+    background: var(--mj-bg-surface-card);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: monospace;
+    color: var(--mj-text-primary);
+}

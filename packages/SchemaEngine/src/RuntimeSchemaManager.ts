@@ -217,7 +217,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      * 7. Restart MJAPI via PM2
      * 8. Mark as out-of-sync
      *
-     * Git commit/push is Phase 2 — currently not implemented.
+     * Git commit/push runs automatically unless SkipGitCommit is set to true.
      */
     public async RunPipeline(input: RSUPipelineInput): Promise<RSUPipelineResult> {
         const steps: RSUPipelineStep[] = [];
@@ -391,12 +391,12 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      * Write the migration file to the configured migrations directory.
      * Returns the file path of the written migration.
      *
-     * Note: In Phase 1 this writes to the local filesystem at RSU_MIGRATIONS_PATH
-     * (which defaults to 'migrations/v2'). Full git-based file management is Phase 2.
+     * Writes the migration file to the configured migrations directory (RSU_MIGRATIONS_PATH,
+     * defaults to 'migrations/v5'). The git commit step then picks up the file.
      */
     private async writeMigrationFile(input: RSUPipelineInput): Promise<string> {
         const { writeFileSync, mkdirSync } = await import('node:fs');
-        const migrationsPath = process.env.RSU_MIGRATIONS_PATH || 'migrations/v2';
+        const migrationsPath = process.env.RSU_MIGRATIONS_PATH || 'migrations/v5';
         const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
         const tableSlug = input.AffectedTables
             .slice(0, 3)
@@ -436,7 +436,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         // Use sqlcmd to execute the migration (available in Docker workbench)
         const server = process.env.DB_HOST || 'localhost';
         const database = process.env.DB_DATABASE || '';
-        const user = process.env.DB_USER || 'sa';
+        const user = process.env.DB_USERNAME || 'sa';
         const password = process.env.DB_PASSWORD || '';
 
         if (!database) {
@@ -875,7 +875,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             const { execAsync } = await this.getExecAsync();
             const server = process.env.DB_HOST || 'localhost';
             const database = process.env.DB_DATABASE || '';
-            const user = process.env.DB_USER || 'sa';
+            const user = process.env.DB_USERNAME || 'sa';
             const password = process.env.DB_PASSWORD || '';
             const sqlcmdPath = process.env.RSU_SQLCMD_PATH || 'sqlcmd';
             const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
@@ -940,7 +940,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             const { execAsync } = await this.getExecAsync();
             const server = process.env.DB_HOST || 'localhost';
             const database = process.env.DB_DATABASE || '';
-            const user = process.env.DB_USER || 'sa';
+            const user = process.env.DB_USERNAME || 'sa';
             const password = process.env.DB_PASSWORD || '';
             const sqlcmdPath = process.env.RSU_SQLCMD_PATH || 'sqlcmd';
             const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
@@ -973,7 +973,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             const { execAsync } = await this.getExecAsync();
             const server = process.env.DB_HOST || 'localhost';
             const database = process.env.DB_DATABASE || '';
-            const user = process.env.DB_USER || 'sa';
+            const user = process.env.DB_USERNAME || 'sa';
             const password = process.env.DB_PASSWORD || '';
             const sqlcmdPath = process.env.RSU_SQLCMD_PATH || 'sqlcmd';
             const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';

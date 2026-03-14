@@ -5,6 +5,11 @@
  *
  * Run from repo root:
  *   node packages/Integration/connectors/generate-wicket-schema.mjs
+ *
+ * RSU mode (execute pipeline at runtime instead of writing files):
+ *   node packages/Integration/connectors/generate-wicket-schema.mjs --rsu
+ *   node packages/Integration/connectors/generate-wicket-schema.mjs --rsu --skip-git
+ *   node packages/Integration/connectors/generate-wicket-schema.mjs --rsu --skip-restart
  */
 import { SchemaBuilder } from '@memberjunction/integration-schema-builder';
 import * as fs from 'fs';
@@ -465,6 +470,13 @@ function buildTargetConfigs() {
     return configs;
 }
 
+// ─── Parse CLI Flags ─────────────────────────────────────────────────
+
+const args = process.argv.slice(2);
+const rsuMode = args.includes('--rsu');
+const skipGit = args.includes('--skip-git');
+const skipRestart = args.includes('--skip-restart');
+
 // ─── Run SchemaBuilder ───────────────────────────────────────────────
 
 const repoRoot = path.resolve(import.meta.dirname, '../../..');
@@ -483,38 +495,74 @@ const input = {
 };
 
 const builder = new SchemaBuilder();
-const output = builder.BuildSchema(input);
 
-// ─── Report ──────────────────────────────────────────────────────────
+if (rsuMode) {
+    // ─── RSU Mode: execute full pipeline at runtime ───────────────────
+    console.log('RSU mode: executing Runtime Schema Update pipeline...');
+    const { SchemaOutput, PipelineResult } = await builder.RunSchemaPipeline(input, {
+        SkipGitCommit: skipGit,
+        SkipRestart: skipRestart,
+    });
 
-if (output.Errors.length > 0) {
-    console.error('ERRORS:');
-    output.Errors.forEach(e => console.error(`  ✗ ${e}`));
-    process.exit(1);
-}
-
-if (output.Warnings.length > 0) {
-    console.warn('WARNINGS:');
-    output.Warnings.forEach(w => console.warn(`  ⚠ ${w}`));
-}
-
-// ─── Write files ─────────────────────────────────────────────────────
-
-const allFiles = [
-    ...output.MigrationFiles,
-    ...(output.AdditionalSchemaInfoUpdate ? [output.AdditionalSchemaInfoUpdate] : []),
-    ...output.MetadataFiles,
-];
-
-for (const file of allFiles) {
-    const fullPath = path.join(repoRoot, file.FilePath);
-    const dir = path.dirname(fullPath);
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
+    if (SchemaOutput.Errors.length > 0) {
+        console.error('Schema generation ERRORS:');
+        SchemaOutput.Errors.forEach(e => console.error(`  ✗ ${e}`));
+        process.exit(1);
     }
-    fs.writeFileSync(fullPath, file.Content, 'utf-8');
-    console.log(`✓ ${file.FilePath}`);
-    console.log(`  ${file.Description}`);
-}
+    if (SchemaOutput.Warnings.length > 0) {
+        console.warn('Warnings:');
+        SchemaOutput.Warnings.forEach(w => console.warn(`  ⚠ ${w}`));
+    }
 
-console.log(`\nDone! Generated ${allFiles.length} file(s).`);
+    console.log(`\nPipeline ${PipelineResult.Success ? '✓ succeeded' : '✗ failed'}`);
+    for (const step of PipelineResult.Steps) {
+        const icon = step.Status === 'success' ? '✓' : step.Status === 'skipped' ? '⊘' : '✗';
+        console.log(`  ${icon} ${step.Name} (${step.DurationMs}ms) — ${step.Message}`);
+    }
+
+    if (!PipelineResult.Success) {
+        console.error(`\nFailed at step: ${PipelineResult.ErrorStep}`);
+        console.error(`Error: ${PipelineResult.ErrorMessage}`);
+        process.exit(1);
+    }
+
+    if (PipelineResult.BranchName) {
+        console.log(`\nGit branch: ${PipelineResult.BranchName}`);
+    }
+    console.log('\nDone! Schema update executed via RSU pipeline.');
+} else {
+    // ─── Default Mode: generate files and write to disk ──────────────
+    const output = builder.BuildSchema(input);
+
+    if (output.Errors.length > 0) {
+        console.error('ERRORS:');
+        output.Errors.forEach(e => console.error(`  ✗ ${e}`));
+        process.exit(1);
+    }
+
+    if (output.Warnings.length > 0) {
+        console.warn('WARNINGS:');
+        output.Warnings.forEach(w => console.warn(`  ⚠ ${w}`));
+    }
+
+    // ─── Write files ─────────────────────────────────────────────────
+
+    const allFiles = [
+        ...output.MigrationFiles,
+        ...(output.AdditionalSchemaInfoUpdate ? [output.AdditionalSchemaInfoUpdate] : []),
+        ...output.MetadataFiles,
+    ];
+
+    for (const file of allFiles) {
+        const fullPath = path.join(repoRoot, file.FilePath);
+        const dir = path.dirname(fullPath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(fullPath, file.Content, 'utf-8');
+        console.log(`✓ ${file.FilePath}`);
+        console.log(`  ${file.Description}`);
+    }
+
+    console.log(`\nDone! Generated ${allFiles.length} file(s).`);
+}
