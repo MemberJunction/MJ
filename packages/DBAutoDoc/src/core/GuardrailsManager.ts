@@ -57,6 +57,8 @@ export class GuardrailsManager {
         startedAt: new Date(startTime).toISOString(),
         completedAt: new Date().toISOString(),
         tokensUsed: this.getPhaseTokens(run, phase),
+        inputTokens: 0,
+        outputTokens: 0,
         estimatedCost: this.getPhaseCost(run, phase)
       };
 
@@ -94,6 +96,8 @@ export class GuardrailsManager {
         startedAt: new Date(this.iterationStartTime).toISOString(),
         completedAt: new Date().toISOString(),
         tokensUsed: run.totalTokensUsed || 0,
+        inputTokens: run.totalInputTokens || 0,
+        outputTokens: run.totalOutputTokens || 0,
         estimatedCost: run.estimatedCost || 0,
         duration: Date.now() - this.iterationStartTime
       };

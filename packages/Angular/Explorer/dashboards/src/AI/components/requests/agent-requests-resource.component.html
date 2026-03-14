@@ -1,0 +1,132 @@
+<div class="agent-requests-container">
+    <!-- Header -->
+    <div class="requests-header">
+        <div class="header-left">
+            <h2 class="page-title">
+                <i class="fa-solid fa-inbox"></i> Agent Requests
+                @if (PendingCount > 0) {
+                    <span class="pending-badge">{{ PendingCount }}</span>
+                }
+            </h2>
+        </div>
+        <div class="header-right">
+            <div class="search-box">
+                <i class="fa-solid fa-search search-icon"></i>
+                <input
+                    type="text"
+                    class="search-input"
+                    placeholder="Search requests..."
+                    [ngModel]="Filters.SearchTerm"
+                    (ngModelChange)="OnSearchChange($event)">
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+        <div class="filter-group">
+            <select class="filter-select" [(ngModel)]="Filters.Status" (ngModelChange)="OnFilterChange()">
+                <option value="">All Statuses</option>
+                @for (status of StatusOptions; track status) {
+                    <option [value]="status">{{ status }}</option>
+                }
+            </select>
+
+            <select class="filter-select" [(ngModel)]="Filters.RequestType" (ngModelChange)="OnFilterChange()">
+                <option value="">All Types</option>
+                @for (type of RequestTypes; track type.ID) {
+                    <option [value]="type.ID">{{ type.Name }}</option>
+                }
+            </select>
+
+            <select class="filter-select" [(ngModel)]="Filters.Priority" (ngModelChange)="OnFilterChange()">
+                <option value="">All Priorities</option>
+                @for (opt of PriorityOptions; track opt.Value) {
+                    <option [value]="opt.Value">{{ opt.Label }}</option>
+                }
+            </select>
+        </div>
+
+        @if (Filters.Status || Filters.RequestType || Filters.Priority || Filters.SearchTerm) {
+            <button class="clear-filters-btn" (click)="ClearFilters()">
+                <i class="fa-solid fa-times"></i> Clear Filters
+            </button>
+        }
+    </div>
+
+    <!-- Content -->
+    @if (IsLoading) {
+        <div class="loading-container">
+            <mj-loading text="Loading agent requests..."></mj-loading>
+        </div>
+    } @else if (FilteredRequests.length === 0) {
+        <div class="empty-state">
+            <i class="fa-solid fa-inbox empty-icon"></i>
+            @if (Requests.length === 0) {
+                <p class="empty-text">No agent requests yet</p>
+                <p class="empty-subtext">When agents need human input, their requests will appear here.</p>
+            } @else {
+                <p class="empty-text">No requests match your filters</p>
+                <button class="clear-filters-btn" (click)="ClearFilters()">Clear Filters</button>
+            }
+        </div>
+    } @else {
+        <div class="requests-list">
+            @for (request of FilteredRequests; track request.ID) {
+                <div
+                    class="request-card"
+                    [class.actionable]="request.Status === 'Requested'"
+                    [class.expired]="IsExpired(request)"
+                    (click)="OnRequestClick(request)">
+                    <div class="card-left">
+                        <i class="{{ GetRequestTypeIcon(request.RequestTypeID) }} type-icon"></i>
+                    </div>
+                    <div class="card-content">
+                        <div class="card-top-row">
+                            <span class="request-type-name">{{ GetRequestTypeName(request.RequestTypeID) }}</span>
+                            <span class="priority-badge {{ GetPriorityClass(request.Priority) }}">
+                                {{ GetPriorityLabel(request.Priority) }}
+                            </span>
+                            <span class="status-badge status-{{ request.Status.toLowerCase() }}">
+                                {{ request.Status }}
+                            </span>
+                            @if (IsExpired(request) && request.Status === 'Requested') {
+                                <span class="expired-tag">Expired</span>
+                            }
+                        </div>
+                        <p class="request-text">{{ request.Request }}</p>
+                        <div class="card-meta">
+                            @if (request.Agent) {
+                                <span class="meta-item">
+                                    <i class="fa-solid fa-robot"></i> {{ request.Agent }}
+                                </span>
+                            }
+                            @if (request.__mj_CreatedAt) {
+                                <span class="meta-item">
+                                    <i class="fa-regular fa-clock"></i> {{ request.__mj_CreatedAt | date:'short' }}
+                                </span>
+                            }
+                            @if (request.ExpiresAt) {
+                                <span class="meta-item" [class.expired]="IsExpired(request)">
+                                    <i class="fa-solid fa-hourglass-end"></i> Expires {{ request.ExpiresAt | date:'short' }}
+                                </span>
+                            }
+                        </div>
+                    </div>
+                    <div class="card-right">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Agent Request Detail Panel -->
+@if (ShowRequestPanel && SelectedRequest) {
+    <mj-agent-request-dialog
+        [Visible]="ShowRequestPanel"
+        [Request]="SelectedRequest"
+        (Close)="OnPanelClose($event)">
+    </mj-agent-request-dialog>
+}

@@ -20,6 +20,7 @@ import { AgentEditorComponent } from './AI/components/agents/agent-editor.compon
 import { ExecutionMonitoringComponent } from './AI/components/execution-monitoring.component';
 import { SystemConfigurationComponent } from './AI/components/system/system-configuration.component';
 import { SystemConfigFilterPanelComponent } from './AI/components/system/system-config-filter-panel.component';
+import { AgentRequestsResourceComponent } from './AI/components/requests/agent-requests-resource.component';
 import { ActionsOverviewComponent } from './Actions/components/actions-overview.component';
 import { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
 import { ScheduledActionsComponent } from './Actions/components/scheduled-actions.component';
@@ -135,6 +136,8 @@ import { CredentialsAuditResourceComponent } from './Credentials/components/cred
 import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
 // Credentials Module from generic package (panels and dialogs)
 import { CredentialsModule } from '@memberjunction/ng-credentials';
+// Agent Requests Module from generic package (panels and dialogs)
+import { AgentRequestsModule } from '@memberjunction/ng-agent-requests';
 // System Diagnostics Components
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
 // Lists Dashboard Components
@@ -179,6 +182,7 @@ import { VersionsModule } from '@memberjunction/ng-versions';
 import { IntegrationModule } from './Integration/integration.module';
 // Scheduling Module from generic package (reusable panels and dialogs)
 import { SchedulingModule } from '@memberjunction/ng-scheduling';
+import { NgTreesModule } from '@memberjunction/ng-trees';
 
 
 
@@ -195,6 +199,7 @@ import { SchedulingModule } from '@memberjunction/ng-scheduling';
     ExecutionMonitoringComponent,
     SystemConfigurationComponent,
     SystemConfigFilterPanelComponent,
+    AgentRequestsResourceComponent,
     ActionsOverviewComponent,
     ActionsExecutionMonitoringComponent,
     ScheduledActionsComponent,
@@ -348,6 +353,7 @@ import { SchedulingModule } from '@memberjunction/ng-scheduling';
     DashboardViewerModule,
     MCPModule,
     CredentialsModule,
+    AgentRequestsModule,
     SharedPipesModule,
     ActionsModule,
     AgentsModule,
@@ -355,6 +361,7 @@ import { SchedulingModule } from '@memberjunction/ng-scheduling';
     VersionsModule,
     IntegrationModule,
     SchedulingModule
+    NgTreesModule
   ],
   providers: [
     AIInstrumentationService,
@@ -374,6 +381,7 @@ import { SchedulingModule } from '@memberjunction/ng-scheduling';
     AgentConfigurationComponent,
     ModelManagementComponent,
     SystemConfigurationComponent,
+    AgentRequestsResourceComponent,
     // Export Actions components (now BaseResourceComponent-based)
     ActionsOverviewComponent,
     ActionsExecutionMonitoringComponent,
@@ -423,6 +431,7 @@ import { SchedulingModule } from '@memberjunction/ng-scheduling';
     GroupByPipe,
     SharedPipesModule,
     CredentialsModule,
+    AgentRequestsModule,
     // System Diagnostics Components
     SystemDiagnosticsComponent,
     // Lists Dashboard Components

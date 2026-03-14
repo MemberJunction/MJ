@@ -431,6 +431,7 @@ mj-tab-container ::ng-deep .lm_stack {
   align-items: center;
   justify-content: center;
   height: 100vh;
+  padding-bottom: 15vh;
   background: var(--mj-bg-page);
 }
 
@@ -439,14 +440,14 @@ mj-tab-container ::ng-deep .lm_stack {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--mj-space-2);
-  margin-top: var(--mj-space-8);
-  padding: var(--mj-space-6);
-  background: var(--mj-bg-surface-card);
-  border: 1px solid var(--mj-border-subtle);
+  gap: var(--mj-space-3);
+  margin-top: var(--mj-space-10);
+  padding: var(--mj-space-8);
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-lg);
-  box-shadow: var(--mj-shadow-sm);
-  max-width: 360px;
+  box-shadow: var(--mj-shadow-md);
+  max-width: 420px;
   animation: resetPanelFadeIn 0.4s ease-out;
 }
 
@@ -455,20 +456,20 @@ mj-tab-container ::ng-deep .lm_stack {
   align-items: center;
   gap: var(--mj-space-2);
   margin: 0;
-  font-size: var(--mj-text-sm);
+  font-size: var(--mj-text-base);
   font-weight: var(--mj-font-semibold);
-  color: var(--mj-text-secondary);
+  color: var(--mj-text-primary);
 }
 
 .loading-reset-message i {
-  font-size: var(--mj-text-base);
+  font-size: var(--mj-text-lg);
   color: var(--mj-status-warning);
 }
 
 .loading-reset-hint {
   margin: 0;
-  font-size: var(--mj-text-xs);
-  color: var(--mj-text-muted);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
   text-align: center;
   line-height: var(--mj-leading-relaxed);
 }
@@ -477,34 +478,34 @@ mj-tab-container ::ng-deep .lm_stack {
   display: inline-flex;
   align-items: center;
   gap: var(--mj-space-2);
-  margin-top: var(--mj-space-2);
-  padding: var(--mj-space-2) var(--mj-space-4);
-  font-size: var(--mj-text-sm);
+  margin-top: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-6);
+  font-size: var(--mj-text-base);
   font-weight: var(--mj-font-medium);
   font-family: var(--mj-font-family);
-  color: var(--mj-brand-primary);
-  background: var(--mj-brand-primary-light);
-  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-inverse);
+  background: var(--mj-brand-primary);
+  border: 1px solid var(--mj-brand-primary);
   border-radius: var(--mj-radius-md);
   cursor: pointer;
   transition: var(--mj-transition-colors);
 }
 
 .loading-reset-btn:hover {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-  border-color: var(--mj-brand-primary);
+  background: var(--mj-brand-primary-hover);
+  color: var(--mj-text-inverse);
+  border-color: var(--mj-brand-primary-hover);
   box-shadow: var(--mj-shadow-md);
 }
 
 .loading-reset-btn:active {
   background: var(--mj-brand-primary-active);
-  color: var(--mj-brand-on-primary);
+  color: var(--mj-text-inverse);
   transform: scale(0.98);
 }
 
 .loading-reset-btn i {
-  font-size: var(--mj-text-xs);
+  font-size: var(--mj-text-sm);
 }
 
 @keyframes resetPanelFadeIn {

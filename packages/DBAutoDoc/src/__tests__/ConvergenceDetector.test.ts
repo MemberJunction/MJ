@@ -28,6 +28,8 @@ function createMockRun(overrides: Partial<AnalysisRun> = {}): AnalysisRun {
     vendor: 'test',
     temperature: 0.1,
     totalTokensUsed: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
     estimatedCost: 0,
     warnings: [],
     errors: [],
