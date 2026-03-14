@@ -82,6 +82,7 @@ export class AgentRequestsResourceComponent extends BaseResourceComponent implem
         this.setupSearchDebounce();
         await this.loadUserSettings();
         await this.loadData();
+        this.autoOpenRequestFromQueryParams();
         this.NotifyLoadComplete();
     }
 
@@ -177,6 +178,21 @@ export class AgentRequestsResourceComponent extends BaseResourceComponent implem
     }
 
     // ---- Private Methods ----
+
+    /**
+     * If a requestId was passed via configuration (e.g. from a notification click),
+     * auto-open that request in the detail panel.
+     */
+    private autoOpenRequestFromQueryParams(): void {
+        const requestId = this.Data?.Configuration?.requestId
+                       || this.Data?.Configuration?.queryParams?.requestId;
+        if (!requestId) return;
+
+        const match = this.Requests.find(r => UUIDsEqual(r.ID, requestId));
+        if (match) {
+            this.OnRequestClick(match);
+        }
+    }
 
     private async loadData(): Promise<void> {
         this.IsLoading = true;

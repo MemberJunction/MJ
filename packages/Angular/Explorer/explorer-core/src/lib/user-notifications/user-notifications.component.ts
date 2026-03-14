@@ -1,10 +1,11 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
-import { SharedService } from '@memberjunction/ng-shared';
+import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { MJConversationDetailEntity, MJConversationEntity, MJUserNotificationEntity, MJUserNotificationTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
 import { Router } from '@angular/router';
 import { SafeJSONParse , UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ApplicationManager } from '@memberjunction/ng-base-application';
 
 /**
  * Radio button filter options for notification read status
@@ -28,6 +29,14 @@ interface ConversationResourceConfig {
   artifactId?: string;
   versionNumber?: string;
   taskId?: string;
+}
+
+/**
+ * Configuration for agent-request-type resource navigation
+ */
+interface AgentRequestResourceConfig {
+  type: 'agent-request';
+  requestId: string;
 }
 
 /**
@@ -55,7 +64,12 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
   public selectedTypeFilter: string | null = null;
   public loadingTypes: boolean = true;
 
-  constructor (public sharedService: SharedService, private router: Router) {}
+  constructor (
+    public sharedService: SharedService,
+    private router: Router,
+    private navigationService: NavigationService,
+    private appManager: ApplicationManager
+  ) {}
 
   async ngOnInit() {
     this.loadNotificationTypes();
@@ -110,6 +124,14 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
   }
 
   public isNotificationClickable(notification: MJUserNotificationEntity): boolean {
+    // Check for agent-request type (navigated via NavigationService, not URL)
+    if (notification.ResourceConfiguration && notification.ResourceConfiguration.trim().length > 0) {
+      const config = SafeJSONParse<AgentRequestResourceConfig>(notification.ResourceConfiguration);
+      if (config && config.type?.trim().toLowerCase() === 'agent-request' && config.requestId) {
+        return true;
+      }
+    }
+
     const info = this.notificationUrl(notification);
     return (info !== null && info.urlParts && info.urlParts.length > 0);
   }
@@ -327,6 +349,11 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       // also mark this as read when we click it
       this.markAsRead(notification, true, null);
 
+      // Check for agent-request navigation first (uses NavigationService, not router)
+      if (this.navigateToAgentRequest(notification)) {
+        return;
+      }
+
       const info = this.notificationUrl(notification);
       if (info.queryString && info.queryString.trim().length > 0) {
         const fullUrl = `${info.urlParts.join('/')}${info.queryString ? '?' + info.queryString : ''}`;
@@ -336,6 +363,33 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
         this.router.navigate(info.urlParts);
       }
     }
+  }
+
+  /**
+   * Handle navigation to an agent request via NavigationService.
+   * Returns true if the notification was an agent-request type and navigation was attempted.
+   */
+  private navigateToAgentRequest(notification: MJUserNotificationEntity): boolean {
+    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
+      return false;
+    }
+
+    const config = SafeJSONParse<AgentRequestResourceConfig>(notification.ResourceConfiguration);
+    if (!config || config.type?.trim().toLowerCase() !== 'agent-request' || !config.requestId) {
+      return false;
+    }
+
+    const aiApp = this.appManager.GetAppByName('AI');
+    if (!aiApp) {
+      return false;
+    }
+
+    this.navigationService.OpenNavItemByName(
+      'Agent Requests',
+      { requestId: config.requestId },
+      aiApp.ID
+    );
+    return true;
   }
 
   public getNotificationType(typeId: string | null): MJUserNotificationTypeEntity | null {
