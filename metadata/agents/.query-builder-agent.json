@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Query Builder",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
       "Description": "Business-friendly orchestrator agent that helps users explore their data and build saved queries. Delegates technical SQL work to the Query Strategist sub-agent. Presents results visually with diagrams and formatted tables, hiding SQL complexity unless the user asks for it.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -176,6 +177,7 @@
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Query Strategist",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
             "Description": "Technical sub-agent that handles schema exploration, SQL generation, query testing, and structured result formatting. Translates business requirements from the Query Builder orchestrator into optimized SQL queries.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
@@ -280,8 +282,8 @@
             "ID": "17E1C958-909C-41B2-8B52-138AED224108"
           },
           "sync": {
-            "lastModified": "2026-02-22T03:36:08.968Z",
-            "checksum": "ea937e6e3ae485d3324d6f42f3d0cc81b96b2ad4bacfd03da3c1bce9cf6a3000"
+            "lastModified": "2026-03-13T19:10:49.643Z",
+            "checksum": "338df9b05af90d1da40d03f32a497e5dd0811e8c9820b5e3f9377434d59dfbbc"
           }
         }
       ]
@@ -290,8 +292,8 @@
       "ID": "204FF1D6-A807-4278-B71A-9D692F19E808"
     },
     "sync": {
-      "lastModified": "2026-02-22T03:51:32.910Z",
-      "checksum": "5cb4b3a6971ab2964ecf404136e6625942811e4fefb4b1499afa9a97bc5464fa"
+      "lastModified": "2026-03-13T19:10:49.505Z",
+      "checksum": "54a16ab1a87fddd94d3a52907af62e977d52fff81dd8f384f809e726c0021e66"
     }
   }
 ]

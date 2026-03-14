@@ -597,6 +597,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Agent Requests (Originating Agent Run) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentRequestsOriginatingAgentRunID"
+        SectionName="AI Agent Requests (Originating Agent Run)"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRequestsOriginatingAgentRunID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Requests','OriginatingAgentRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Requests')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRequestsOriginatingAgentRunID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRequestsOriginatingAgentRunID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Requests (Resuming Agent Run) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentRequestsResumingAgentRunID"
+        SectionName="AI Agent Requests (Resuming Agent Run)"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentRequestsResumingAgentRunID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Requests','ResumingAgentRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Requests')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentRequestsResumingAgentRunID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentRequestsResumingAgentRunID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Prompt Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRuns"

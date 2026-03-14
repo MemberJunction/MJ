@@ -201,10 +201,11 @@ import {
     PlanningDesignerAgent,
 } from '@memberjunction/ai-agent-manager';
 
-// @memberjunction/ai-agents (4 classes)
+// @memberjunction/ai-agents (5 classes)
 import {
     FlowAgentType,
     LoopAgentType,
+    MJAIAgentRequestEntityServer,
     MemoryManagerAgent,
     QueryBuilderAgent,
 } from '@memberjunction/ai-agents';
@@ -466,11 +467,12 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (296 classes)
+// @memberjunction/core-entities (298 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
+    MJAIAgentCategoryEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
@@ -484,6 +486,7 @@ import {
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
+    MJAIAgentRequestTypeEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
@@ -999,6 +1002,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     PlanningDesignerAgent,
     FlowAgentType,
     LoopAgentType,
+    MJAIAgentRequestEntityServer,
     MemoryManagerAgent,
     QueryBuilderAgent,
     AnthropicLLM,
@@ -1149,6 +1153,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
+    MJAIAgentCategoryEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
@@ -1162,6 +1167,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
+    MJAIAgentRequestTypeEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
@@ -1483,7 +1489,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 634;
+export const CLASS_REGISTRATIONS_COUNT = 637;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

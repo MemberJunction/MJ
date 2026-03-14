@@ -1131,3 +1131,145 @@ kendo-splitter {
   border-radius: 2px;
   font-weight: inherit;
 }
+
+/* ============================================
+   Tree View - Mac Finder Style
+   ============================================ */
+
+.agents-tree {
+  padding: 8px 16px;
+}
+
+.tree-category-group {
+  margin-bottom: 2px;
+}
+
+.tree-category-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease;
+}
+
+.tree-category-header:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.tree-chevron {
+  font-size: 10px;
+  color: var(--mj-text-muted);
+  width: 12px;
+  text-align: center;
+  transition: transform 0.15s ease;
+}
+
+.tree-folder-icon {
+  font-size: 14px;
+  color: var(--mj-brand-primary);
+}
+
+.tree-category-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+  flex: 1;
+}
+
+.tree-category-count {
+  font-size: 12px;
+  color: var(--mj-text-muted);
+  background: var(--mj-bg-surface-sunken);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
+/* Agent rows within tree */
+.tree-agent-list {
+  padding-left: 24px;
+}
+
+.tree-agent-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.tree-agent-row:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.tree-agent-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tree-agent-icon i {
+  font-size: 12px;
+  color: var(--mj-text-inverse);
+}
+
+.tree-agent-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.tree-agent-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tree-agent-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mj-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-agent-type {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+
+.tree-agent-status {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.tree-agent-status.status-active {
+  color: var(--mj-status-success-text);
+  background: var(--mj-status-success-bg);
+}
+
+.tree-agent-status.status-disabled,
+.tree-agent-status.status-inactive {
+  color: var(--mj-text-muted);
+  background: var(--mj-bg-surface-sunken);
+}
+
+.tree-agent-status.status-pending {
+  color: var(--mj-status-warning-text);
+  background: var(--mj-status-warning-bg);
+}

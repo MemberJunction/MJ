@@ -1061,7 +1061,7 @@ export class ResolverBase {
       if (await entityObject.Save()) {
         // save worked, fire the AfterCreate event and then return all the data
         await this.AfterCreate(provider, input); // fire event
-        this.PublishCacheInvalidation(entityObject, 'save', userPayload);
+        // Cache invalidation is now handled globally by the MJGlobal listener in index.ts
         const contextUser = this.GetUserFromPayload(userPayload);
         // MapFieldNamesToCodeNames now handles encryption filtering as well
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), contextUser);
@@ -1145,7 +1145,7 @@ export class ResolverBase {
       if (await entityObject.Save()) {
         // save worked, fire afterevent and return all the data
         await this.AfterUpdate(provider, input); // fire event
-        this.PublishCacheInvalidation(entityObject, 'save', userPayload);
+        // Cache invalidation is now handled globally by the MJGlobal listener in index.ts
 
         // MapFieldNamesToCodeNames now handles encryption filtering as well
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), userInfo);
@@ -1372,7 +1372,7 @@ export class ResolverBase {
       
       if (await entityObject.Delete(options)) {
         await this.AfterDelete(provider, key); // fire event
-        this.PublishCacheInvalidation(entityObject, 'delete', userPayload);
+        // Cache invalidation is now handled globally by the MJGlobal listener in index.ts
         return returnValue;
       } else {
         throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {

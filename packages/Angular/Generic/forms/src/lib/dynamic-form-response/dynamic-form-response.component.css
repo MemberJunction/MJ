@@ -1,0 +1,137 @@
+/* ==================== Form Response Display ==================== */
+
+.form-response-pill {
+  transition: all 0.2s ease;
+}
+
+/* Single field - inline pill */
+.form-response-pill.single-field {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--mj-status-success);
+  color: var(--mj-text-inverse);
+  border: 2px solid color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--mj-shadow-md);
+  cursor: default;
+  white-space: nowrap;
+}
+
+.form-response-pill.single-field i {
+  font-size: 11px;
+  opacity: 0.95;
+}
+
+/* Multi-field - card layout */
+.form-response-pill.multi-field {
+  display: inline-block;
+  max-width: min(800px, 100%);
+  width: auto;
+  min-width: 400px;
+  margin: 8px 0;
+  vertical-align: top;
+}
+
+.form-response-pill .pill-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--mj-status-success);
+  color: var(--mj-text-inverse);
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: 12px 12px 0 0;
+  border: 2px solid color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+  border-bottom: none;
+  box-shadow: var(--mj-shadow-md);
+}
+
+.form-response-pill .pill-header i {
+  font-size: 12px;
+  opacity: 0.95;
+}
+
+.form-response-pill .pill-fields {
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--mj-status-success) 8%, transparent);
+  border: 2px solid color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+}
+
+.form-response-pill .pill-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  font-size: 13px;
+}
+
+.form-response-pill .pill-field:not(:last-child) {
+  border-bottom: 1px solid color-mix(in srgb, var(--mj-status-success) 20%, transparent);
+  padding-bottom: 12px;
+  margin-bottom: 0;
+}
+
+.form-response-pill .field-question {
+  font-weight: 600;
+  color: var(--mj-status-success);
+  font-size: 12px;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  opacity: 0.9;
+}
+
+.form-response-pill .field-answer {
+  color: var(--mj-text-primary);
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 8px 0 8px 12px;
+  background: transparent;
+  border-left: 3px solid color-mix(in srgb, var(--mj-status-success) 40%, transparent);
+  font-style: italic;
+}
+
+/* Hover effects */
+.form-response-pill.single-field:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--mj-shadow-lg);
+}
+
+.form-response-pill.multi-field:hover {
+  transform: translateY(-1px);
+}
+
+.form-response-pill.multi-field:hover .pill-header {
+  box-shadow: var(--mj-shadow-lg);
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .form-response-pill.multi-field {
+    min-width: 300px;
+  }
+}
+
+@media (max-width: 400px) {
+  .form-response-pill.multi-field {
+    min-width: 100%;
+  }
+
+  .form-response-pill .field-question {
+    font-size: 11px;
+  }
+
+  .form-response-pill .field-answer {
+    font-size: 14px;
+    padding: 6px 0 6px 10px;
+  }
+}

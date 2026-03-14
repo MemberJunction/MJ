@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "User Onboarding Flow Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
       "Description": "Automated flow agent for onboarding new users into MemberJunction. Handles permission verification, user creation, role assignment, and welcome email delivery through a deterministic workflow.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
       "Status": "Active",
@@ -640,8 +641,8 @@
       "ID": "3CF3AE08-1B17-4D07-B235-885EED030CB8"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:35.740Z",
-      "checksum": "41160a9901a71e1b5f12f4ecf42609cdd90c0140e50a3afbc904861244cd9c52"
+      "lastModified": "2026-03-13T19:10:51.026Z",
+      "checksum": "4b74e5ec740ef4732386e3d1185539da3d7835d3e87a30d8810d7986fe8a90cd"
     }
   }
 ]
