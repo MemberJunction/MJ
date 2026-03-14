@@ -17,11 +17,45 @@ import {
     TargetTableConfig,
     TargetColumnConfig
 } from "@memberjunction/integration-schema-builder";
+import type { RSUPipelineStep } from "@memberjunction/schema-engine";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
-import * as fs from 'fs/promises';
-import * as path from 'path';
+
+// ─── RSU Pipeline Output Types ──────────────────────────────────────────────
+
+@ObjectType()
+class RSUStepOutput {
+    @Field() Name: string;
+    @Field() Status: string;
+    @Field() DurationMs: number;
+    @Field() Message: string;
+}
+
+@ObjectType()
+class ApplySchemaOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [RSUStepOutput], { nullable: true }) Steps?: RSUStepOutput[];
+    @Field({ nullable: true }) MigrationFilePath?: string;
+    @Field({ nullable: true }) EntitiesProcessed?: number;
+    @Field({ nullable: true }) GitCommitSuccess?: boolean;
+    @Field({ nullable: true }) APIRestarted?: boolean;
+    @Field(() => [String], { nullable: true }) Warnings?: string[];
+}
+
+// ─── Connector Capabilities Output Type ─────────────────────────────────────
+
+@ObjectType()
+class ConnectorCapabilitiesOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field({ nullable: true }) SupportsGet?: boolean;
+    @Field({ nullable: true }) SupportsCreate?: boolean;
+    @Field({ nullable: true }) SupportsUpdate?: boolean;
+    @Field({ nullable: true }) SupportsDelete?: boolean;
+    @Field({ nullable: true }) SupportsSearch?: boolean;
+}
 
 // --- Output Types ---
 
@@ -404,10 +438,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 SourceSchema: filteredSchema,
                 TargetConfigs: targetConfigs,
                 Platform: platform as 'sqlserver' | 'postgresql',
-                MJVersion: '5.7.0',
+                MJVersion: process.env.MJ_VERSION ?? '5.11.0',
                 SourceType: companyIntegration.Integration,
                 AdditionalSchemaInfoPath: 'additionalSchemaInfo.json',
-                MigrationsDir: 'migrations/v2',
+                MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/v5',
                 MetadataDir: 'metadata',
                 ExistingTables: [],
                 EntitySettingsForTargets: {}
@@ -817,45 +851,76 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     // ── SCHEMA EXECUTION ────────────────────────────────────────────────
 
     /**
-     * Writes schema files (migration SQL + metadata JSON) to disk.
-     * Step 1 of the schema pipeline.
+     * Generates schema artifacts from connector introspection and runs the full
+     * RSU pipeline: write migration file → execute SQL → run CodeGen →
+     * compile TypeScript → restart MJAPI → git commit (if enabled).
+     *
+     * Replaces the old two-step IntegrationSchemaPreview + IntegrationWriteSchemaFiles
+     * pattern. Use IntegrationSchemaPreview to preview generated SQL without applying.
      */
     @RequireSystemUser()
-    @Mutation(() => WriteSchemaFilesOutput)
-    async IntegrationWriteSchemaFiles(
-        @Arg("files", () => [SchemaFileInput]) files: SchemaFileInput[],
-        @Arg("basePath", { nullable: true }) basePath: string,
+    @Mutation(() => ApplySchemaOutput)
+    async IntegrationApplySchema(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("objects", () => [SchemaPreviewObjectInput]) objects: SchemaPreviewObjectInput[],
+        @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
+        @Arg("skipGitCommit", { defaultValue: false }) skipGitCommit: boolean,
+        @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
         @Ctx() ctx: AppContext
-    ): Promise<WriteSchemaFilesOutput> {
+    ): Promise<ApplySchemaOutput> {
         try {
-            this.getAuthenticatedUser(ctx); // auth check
-            const base = basePath || process.cwd();
-            const written: string[] = [];
-            const errors: string[] = [];
+            const user = this.getAuthenticatedUser(ctx);
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
 
-            for (const file of files) {
-                const resolved = path.resolve(base, file.FilePath);
-                if (!resolved.startsWith(path.resolve(base))) {
-                    errors.push(`${file.FilePath}: path traversal blocked`);
-                    continue;
-                }
-                try {
-                    await fs.mkdir(path.dirname(resolved), { recursive: true });
-                    await fs.writeFile(resolved, file.Content, 'utf-8');
-                    written.push(file.FilePath);
-                } catch (writeErr) {
-                    errors.push(`${file.FilePath}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`);
-                }
-            }
+            const introspect = connector.IntrospectSchema.bind(connector) as
+                (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
+            const sourceSchema = await introspect(companyIntegration, user);
+
+            const requestedNames = new Set(objects.map(o => o.SourceObjectName));
+            const filteredSchema: SourceSchemaInfo = {
+                Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
+            };
+
+            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, platform as 'sqlserver' | 'postgresql');
+
+            const input: SchemaBuilderInput = {
+                SourceSchema: filteredSchema,
+                TargetConfigs: targetConfigs,
+                Platform: platform as 'sqlserver' | 'postgresql',
+                MJVersion: process.env.MJ_VERSION ?? '5.11.0',
+                SourceType: companyIntegration.Integration,
+                AdditionalSchemaInfoPath: 'additionalSchemaInfo.json',
+                MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/v5',
+                MetadataDir: 'metadata',
+                ExistingTables: [],
+                EntitySettingsForTargets: {}
+            };
+
+            const builder = new SchemaBuilder();
+            const { SchemaOutput, PipelineResult } = await builder.RunSchemaPipeline(input, {
+                SkipGitCommit: skipGitCommit,
+                SkipRestart: skipRestart,
+            });
 
             return {
-                Success: errors.length === 0,
-                Message: `Wrote ${written.length}/${files.length} files`,
-                WrittenFiles: written,
-                Errors: errors.length > 0 ? errors : undefined
+                Success: PipelineResult.Success,
+                Message: PipelineResult.Success
+                    ? `Schema applied — ${PipelineResult.EntitiesProcessed ?? 0} entities processed`
+                    : `Pipeline failed at '${PipelineResult.ErrorStep}': ${PipelineResult.ErrorMessage}`,
+                Steps: PipelineResult.Steps.map((s: RSUPipelineStep) => ({
+                    Name: s.Name,
+                    Status: s.Status,
+                    DurationMs: s.DurationMs,
+                    Message: s.Message,
+                })),
+                MigrationFilePath: PipelineResult.MigrationFilePath,
+                EntitiesProcessed: PipelineResult.EntitiesProcessed,
+                GitCommitSuccess: PipelineResult.GitCommitSuccess,
+                APIRestarted: PipelineResult.APIRestarted,
+                Warnings: SchemaOutput.Warnings.length > 0 ? SchemaOutput.Warnings : undefined,
             };
         } catch (e) {
-            LogError(`IntegrationWriteSchemaFiles error: ${e}`);
+            LogError(`IntegrationApplySchema error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
     }
@@ -1295,6 +1360,38 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    // ── CONNECTOR CAPABILITIES ──────────────────────────────────────────
+
+    /**
+     * Returns the CRUD capability flags for the connector bound to a CompanyIntegration.
+     * Use this to determine which operations (Create/Update/Delete/Search) are supported
+     * before attempting point-action calls.
+     */
+    @RequireSystemUser()
+    @Query(() => ConnectorCapabilitiesOutput)
+    async IntegrationGetConnectorCapabilities(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<ConnectorCapabilitiesOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const { connector } = await this.resolveConnector(companyIntegrationID, user);
+
+            return {
+                Success: true,
+                Message: 'OK',
+                SupportsGet: connector.SupportsGet,
+                SupportsCreate: connector.SupportsCreate,
+                SupportsUpdate: connector.SupportsUpdate,
+                SupportsDelete: connector.SupportsDelete,
+                SupportsSearch: connector.SupportsSearch,
+            };
+        } catch (e) {
+            LogError(`IntegrationGetConnectorCapabilities error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
     // ── WEBHOOK HELPER ──────────────────────────────────────────────────
 
     private async sendWebhook(url: string, payload: Record<string, unknown>): Promise<void> {
@@ -1370,20 +1467,6 @@ class CreateEntityMapsOutput {
     @Field() Success: boolean;
     @Field() Message: string;
     @Field(() => [EntityMapCreatedOutput], { nullable: true }) Created?: EntityMapCreatedOutput[];
-}
-
-@InputType()
-class SchemaFileInput {
-    @Field() FilePath: string;
-    @Field() Content: string;
-}
-
-@ObjectType()
-class WriteSchemaFilesOutput {
-    @Field() Success: boolean;
-    @Field() Message: string;
-    @Field(() => [String], { nullable: true }) WrittenFiles?: string[];
-    @Field(() => [String], { nullable: true }) Errors?: string[];
 }
 
 @ObjectType()
