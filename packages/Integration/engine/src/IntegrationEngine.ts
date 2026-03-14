@@ -338,8 +338,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let recordsInMap = 0;
         let currentPage: number | undefined;
         let currentOffset: number | undefined;
+        let batchCount = 0;
+        let previousBatchFingerprint: string | undefined;
+        const MAX_BATCHES_PER_MAP = 5000;
 
         while (hasMore) {
+            batchCount++;
+            if (batchCount > MAX_BATCHES_PER_MAP) {
+                console.error(
+                    `[IntegrationEngine] Safety limit reached: ${MAX_BATCHES_PER_MAP} batches for ` +
+                    `${entityMap.ExternalObjectName}. Stopping to prevent infinite loop.`
+                );
+                break;
+            }
             const ctx: FetchContext = {
                 CompanyIntegration: config.companyIntegration,
                 ObjectName: entityMap.ExternalObjectName,
@@ -351,6 +362,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             };
 
             const batch = await config.connector.FetchChanges(ctx);
+
+            if (batch.Records.length > 0) {
+                const fingerprint = batch.Records.map(r => r.ExternalID).join(',');
+                if (fingerprint === previousBatchFingerprint) {
+                    console.warn(
+                        `[IntegrationEngine] Duplicate batch detected for ${entityMap.ExternalObjectName} — ` +
+                        `connector returned same records twice. Stopping to prevent infinite loop.`
+                    );
+                    break;
+                }
+                previousBatchFingerprint = fingerprint;
+            }
 
             const mapped = this.fieldMappingEngine.Apply(
                 batch.Records, fieldMaps, entityMap.Entity
@@ -391,7 +414,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             currentPage = batch.NextPage;
             currentOffset = batch.NextOffset;
-            hasMore = batch.HasMore;
+            hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
 
         if (currentWatermark) {

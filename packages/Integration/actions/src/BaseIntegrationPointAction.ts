@@ -2,7 +2,14 @@ import { LogError, RunView } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
 import { BaseAction } from '@memberjunction/actions';
 import { ActionResultSimple, RunActionParams, ActionParam } from '@memberjunction/actions-base';
-import { BaseIntegrationConnector, ConnectorFactory } from '@memberjunction/integration-engine';
+import {
+    BaseIntegrationConnector,
+    ConnectorFactory,
+    type CreateRecordContext,
+    type UpdateRecordContext,
+    type DeleteRecordContext,
+    type SearchContext,
+} from '@memberjunction/integration-engine';
 
 /**
  * Supported write-back verbs for point operations on external connector objects.
@@ -79,13 +86,19 @@ export abstract class BaseIntegrationPointAction extends BaseAction {
         companyIntegration: MJCompanyIntegrationEntity,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
-        if (!connector.CreateRecord) return this.verbNotSupported('Create');
+        if (!connector.SupportsCreate) return this.verbNotSupported('Create');
         const data = this.parseJsonParam(params, 'Data');
         if (!data) return this.missingParam('Data');
 
-        const result = await connector.CreateRecord(objectType, data, companyIntegration, params.ContextUser);
+        const ctx: CreateRecordContext = {
+            ObjectName: objectType,
+            Attributes: data,
+            CompanyIntegration: companyIntegration,
+            ContextUser: params.ContextUser,
+        };
+        const result = await connector.CreateRecord(ctx);
         this.setOutputParam(params, 'Result', JSON.stringify(result));
-        return { Success: true, ResultCode: 'SUCCESS', Message: 'Record created', Params: params.Params };
+        return { Success: result.Success, ResultCode: result.Success ? 'SUCCESS' : 'FAILED', Message: result.ErrorMessage ?? 'Record created', Params: params.Params };
     }
 
     private async runUpdate(
@@ -94,15 +107,22 @@ export abstract class BaseIntegrationPointAction extends BaseAction {
         companyIntegration: MJCompanyIntegrationEntity,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
-        if (!connector.UpdateRecord) return this.verbNotSupported('Update');
+        if (!connector.SupportsUpdate) return this.verbNotSupported('Update');
         const externalId = this.getStringParam(params, 'ExternalID');
         if (!externalId) return this.missingParam('ExternalID');
         const data = this.parseJsonParam(params, 'Data');
         if (!data) return this.missingParam('Data');
 
-        const result = await connector.UpdateRecord(objectType, externalId, data, companyIntegration, params.ContextUser);
+        const ctx: UpdateRecordContext = {
+            ObjectName: objectType,
+            ExternalID: externalId,
+            Attributes: data,
+            CompanyIntegration: companyIntegration,
+            ContextUser: params.ContextUser,
+        };
+        const result = await connector.UpdateRecord(ctx);
         this.setOutputParam(params, 'Result', JSON.stringify(result));
-        return { Success: true, ResultCode: 'SUCCESS', Message: 'Record updated', Params: params.Params };
+        return { Success: result.Success, ResultCode: result.Success ? 'SUCCESS' : 'FAILED', Message: result.ErrorMessage ?? 'Record updated', Params: params.Params };
     }
 
     private async runDelete(
@@ -111,16 +131,22 @@ export abstract class BaseIntegrationPointAction extends BaseAction {
         companyIntegration: MJCompanyIntegrationEntity,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
-        if (!connector.DeleteRecord) return this.verbNotSupported('Delete');
+        if (!connector.SupportsDelete) return this.verbNotSupported('Delete');
         const externalId = this.getStringParam(params, 'ExternalID');
         if (!externalId) return this.missingParam('ExternalID');
 
-        const deleted = await connector.DeleteRecord(objectType, externalId, companyIntegration, params.ContextUser);
-        this.setOutputParam(params, 'Result', String(deleted));
+        const ctx: DeleteRecordContext = {
+            ObjectName: objectType,
+            ExternalID: externalId,
+            CompanyIntegration: companyIntegration,
+            ContextUser: params.ContextUser,
+        };
+        const result = await connector.DeleteRecord(ctx);
+        this.setOutputParam(params, 'Result', String(result.Success));
         return {
-            Success: true,
-            ResultCode: 'SUCCESS',
-            Message: `Record ${deleted ? 'deleted' : 'not found'}`,
+            Success: result.Success,
+            ResultCode: result.Success ? 'SUCCESS' : 'FAILED',
+            Message: result.ErrorMessage ?? (result.Success ? 'Record deleted' : 'Delete failed'),
             Params: params.Params
         };
     }
@@ -131,15 +157,25 @@ export abstract class BaseIntegrationPointAction extends BaseAction {
         companyIntegration: MJCompanyIntegrationEntity,
         params: RunActionParams
     ): Promise<ActionResultSimple> {
-        if (!connector.SearchRecords) return this.verbNotSupported('Search');
-        const filter = this.parseJsonParam(params, 'Filter') ?? {};
+        if (!connector.SupportsSearch) return this.verbNotSupported('Search');
+        const rawFilter = this.parseJsonParam(params, 'Filter') ?? {};
+        // Convert all filter values to strings for SearchContext.Filters
+        const filters: Record<string, string> = Object.fromEntries(
+            Object.entries(rawFilter).map(([k, v]) => [k, String(v)])
+        );
 
-        const results = await connector.SearchRecords(objectType, filter, companyIntegration, params.ContextUser);
-        this.setOutputParam(params, 'Result', JSON.stringify(results));
+        const ctx: SearchContext = {
+            ObjectName: objectType,
+            Filters: filters,
+            CompanyIntegration: companyIntegration,
+            ContextUser: params.ContextUser,
+        };
+        const result = await connector.SearchRecords(ctx);
+        this.setOutputParam(params, 'Result', JSON.stringify(result.Records));
         return {
             Success: true,
             ResultCode: 'SUCCESS',
-            Message: `Found ${results.length} record(s)`,
+            Message: `Found ${result.Records.length} record(s)`,
             Params: params.Params
         };
     }
