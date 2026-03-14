@@ -349,8 +349,11 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       // also mark this as read when we click it
       this.markAsRead(notification, true, null);
 
-      // Check for agent-request navigation first (uses NavigationService, not router)
+      // Check for special navigation types that use NavigationService (not router)
       if (this.navigateToAgentRequest(notification)) {
+        return;
+      }
+      if (this.navigateToConversation(notification)) {
         return;
       }
 
@@ -388,6 +391,40 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       'Agent Requests',
       { requestId: config.requestId },
       aiApp.ID
+    );
+    return true;
+  }
+
+  /**
+   * Handle navigation to a conversation via NavigationService.
+   * Returns true if the notification was a conversation type and navigation was attempted.
+   */
+  private navigateToConversation(notification: MJUserNotificationEntity): boolean {
+    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
+      return false;
+    }
+
+    const config = SafeJSONParse<ConversationResourceConfig>(notification.ResourceConfiguration);
+    if (!config || config.type?.trim().toLowerCase() !== 'conversation') {
+      return false;
+    }
+
+    const chatApp = this.appManager.GetAppByName('Chat');
+    if (!chatApp) {
+      return false;
+    }
+
+    const navConfig: Record<string, string> = {};
+    if (config.conversationId) navConfig['conversationId'] = config.conversationId;
+    if (config.messageId) navConfig['messageId'] = config.messageId;
+    if (config.artifactId) navConfig['artifactId'] = config.artifactId;
+    if (config.versionNumber) navConfig['versionNumber'] = config.versionNumber;
+    if (config.taskId) navConfig['taskId'] = config.taskId;
+
+    this.navigationService.OpenNavItemByName(
+      'Conversations',
+      navConfig,
+      chatApp.ID
     );
     return true;
   }

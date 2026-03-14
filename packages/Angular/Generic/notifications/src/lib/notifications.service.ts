@@ -50,6 +50,17 @@ export class MJNotificationService {
           if (MJNotificationService._loaded === false) 
             MJNotificationService.RefreshUserNotifications();
 
+          // Subscribe to UserInfoEngine's DataChange$ so that when CACHE_INVALIDATION
+          // updates the _UserNotifications array, we immediately sync our BehaviorSubjects.
+          // This is the primary mechanism for real-time notification updates — it fires
+          // whenever BaseEngine processes a remote-invalidate event for User Notifications.
+          UserInfoEngine.Instance.DataChange$.subscribe(event => {
+            if (event.config.PropertyName === '_UserNotifications') {
+              MJNotificationService._userNotifications = UserInfoEngine.Instance.UserNotifications;
+              MJNotificationService.UpdateNotificationObservables();
+            }
+          });
+
           // got the login, now subscribe to push status updates here so we can then raise them as events in MJ Global locally
           this.PushStatusUpdates().subscribe( (message: string) => {
             // Handle undefined/null messages gracefully
@@ -67,17 +78,21 @@ export class MJNotificationService {
               component: this
             })
 
-            if (statusObj.type?.trim().toLowerCase() === 'usernotifications') {
-              if (statusObj.details && statusObj.details.action?.trim().toLowerCase() === 'create') { 
-                // we have changes to user notifications, so refresh them
-                this.CreateSimpleNotification('New Notification Available', "success", 2000)
+            const type = statusObj.type?.trim().toLowerCase();
+            console.log(`[MJNotificationService] PushStatusUpdate received: type="${type}", keys=${Object.keys(statusObj).join(',')}`);
+            if (type === 'notification' || type === 'usernotifications') {
+              // Server sends type:'notification', legacy used 'usernotifications' — support both
+              const action = statusObj.action?.trim().toLowerCase()
+                          || statusObj.details?.action?.trim().toLowerCase();
+              console.log(`[MJNotificationService] Notification push: action="${action}", title="${statusObj.title}"`);
+              if (action === 'create') {
+                this.CreateSimpleNotification(statusObj.title || 'New Notification Available', "success", 3000);
                 MJNotificationService.RefreshUserNotifications();
               }
             }
             else {
               // otherwise just post it as a simple notification, except Skip messages, we will let Skip handle those
-              const type = statusObj.type?.trim().toLowerCase();
-              if (type !== 'askskip' && type !== 'entityobjectstatusmessage' && typeof statusObj.message === 'string') { 
+              if (type !== 'askskip' && type !== 'entityobjectstatusmessage' && typeof statusObj.message === 'string') {
                 this.CreateSimpleNotification(statusObj.message, "success", 2500);
               }
             }
@@ -171,15 +186,25 @@ export class MJNotificationService {
   }
 
   /**
-   * Refresh the User Notifications from the database. This is called automatically when the service is first loaded after login occurs.
-   * Uses UserInfoEngine for centralized data access with local caching.
+   * Refresh user notifications and re-emit to observables.
+   *
+   * Uses RefreshItem() to guarantee fresh data from the server.  The global
+   * CACHE_INVALIDATION listener keeps the engine cache updated for background
+   * changes, but when this method is called in response to a PushStatusUpdates
+   * message, the cache invalidation event may not have arrived yet (separate
+   * WebSocket message, potential race).  RefreshItem() eliminates that race by
+   * doing a targeted RunView for just notifications.
    */
   public static async RefreshUserNotifications() {
     try {
-      // Use UserInfoEngine for centralized, cached access
       const engine = UserInfoEngine.Instance;
+      const beforeCount = engine.UserNotifications.length;
+      console.log(`[MJNotificationService] RefreshUserNotifications: starting, beforeCount=${beforeCount}`);
+      await engine.RefreshItem('_UserNotifications');
+      const afterCount = engine.UserNotifications.length;
+      const unreadCount = engine.UnreadNotifications.length;
+      console.log(`[MJNotificationService] RefreshUserNotifications: done, afterCount=${afterCount}, unread=${unreadCount}`);
       MJNotificationService._userNotifications = engine.UserNotifications;
-      // Emit to observables
       MJNotificationService._notifications$.next(engine.UserNotifications);
       MJNotificationService._unreadCount$.next(MJNotificationService.UnreadUserNotificationCount);
       MJNotificationService._loaded = true;
