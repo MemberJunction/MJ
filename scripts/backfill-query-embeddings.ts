@@ -119,7 +119,7 @@ async function main(): Promise<void> {
         }
         console.log(`\nDry run complete. ${queries.length} queries would be re-embedded.`);
         await pool.close();
-        return;
+        process.exit(0);
     }
 
     // Generate embeddings and write directly via SQL
@@ -167,6 +167,7 @@ async function main(): Promise<void> {
 
     console.log(`\nDone: ${successCount} succeeded, ${errorCount} failed, ${skipCount} skipped out of ${queries.length}`);
     await pool.close();
+    process.exit(0);
 }
 
 main().catch((err) => {

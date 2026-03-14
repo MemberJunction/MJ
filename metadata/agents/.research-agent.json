@@ -69,7 +69,7 @@
             "DestinationType": "Data",
             "DestinationPath": null,
             "ExecutionOrder": 2,
-            "Status": "Inactive",
+            "Status": "Disabled",
             "CachePolicy": "PerAgent",
             "CacheTimeoutSeconds": 3600
           },

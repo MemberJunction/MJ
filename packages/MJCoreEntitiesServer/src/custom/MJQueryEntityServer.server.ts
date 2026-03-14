@@ -82,18 +82,45 @@ export class MJQueryEntityServer extends MJQueryEntity {
     protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
         return EmbedTextLocalHelper(this, textToEmbed);
     }
-    
+
+    /**
+     * Generates an embedding from composite text (Name + UserQuestion + Description) for richer semantic search.
+     * Stores the vector in EmbeddingVector and the model reference in EmbeddingModelID.
+     */
+    protected async GenerateCompositeEmbedding(): Promise<void> {
+        const parts = [
+            this.Name || '',
+            this.UserQuestion || '',
+            this.Description || ''
+        ].filter(p => p.trim().length > 0);
+
+        if (parts.length === 0) {
+            this.EmbeddingVector = null;
+            this.EmbeddingModelID = null;
+            return;
+        }
+
+        const compositeText = parts.join(' | ');
+        const result = await this.EmbedTextLocal(compositeText);
+        if (result && result.vector && result.vector.length > 0) {
+            this.EmbeddingVector = JSON.stringify(result.vector);
+            this.EmbeddingModelID = result.modelID;
+        }
+    }
+
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         try {
             // Check if this is a new record or if SQL/Description has changed
             const sqlField = this.GetFieldByName('SQL');
+            const nameField = this.GetFieldByName('Name');
             const descriptionField = this.GetFieldByName('Description');
+            const userQuestionField = this.GetFieldByName('UserQuestion');
             const shouldExtractData = !this.IsSaved || sqlField.Dirty;
-            const shouldGenerateEmbedding = !this.IsSaved || descriptionField.Dirty;
+            const shouldGenerateEmbedding = !this.IsSaved || nameField.Dirty || descriptionField.Dirty || userQuestionField.Dirty;
 
-            // Generate embedding for Description if needed, before saving
+            // Generate embedding from composite text (Name + UserQuestion + Description) for better semantic search
             if (shouldGenerateEmbedding) {
-                await this.GenerateEmbeddingByFieldName("Description", "EmbeddingVector", "EmbeddingModelID");
+                await this.GenerateCompositeEmbedding();
             } else if (!this.Description || this.Description.trim().length === 0) {
                 // Clear embedding if description is empty
                 this.EmbeddingVector = null;
