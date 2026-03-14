@@ -360,7 +360,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     MarkdownModule,
     VersionsModule,
     IntegrationModule,
-    SchedulingModule
+    SchedulingModule,
     NgTreesModule
   ],
   providers: [
