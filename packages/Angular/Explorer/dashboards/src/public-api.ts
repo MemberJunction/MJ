@@ -119,5 +119,18 @@ export * from './VersionHistory';
 // Integration Dashboard
 export * from './Integration';
 
-// Module
+// Module (backward-compatible wrapper)
 export * from './module';
+
+// Feature modules for lazy loading
+export * from './core-dashboards.module';
+export * from './ai-dashboards.module';
+export * from './actions-dashboards.module';
+export * from './testing-dashboards.module';
+export * from './scheduling-dashboards.module';
+export * from './communication-dashboards.module';
+export * from './credentials-dashboards.module';
+export * from './data-explorer-dashboards.module';
+export * from './lists-dashboards.module';
+export * from './component-studio-dashboards.module';
+export * from './shared/shared-dashboard-widgets.module';
