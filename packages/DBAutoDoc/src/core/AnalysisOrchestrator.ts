@@ -661,6 +661,8 @@ export class AnalysisOrchestrator {
           status: 'failed',
           queriesGenerated: 0,
           tokensUsed: 0,
+          inputTokens: 0,
+          outputTokens: 0,
           estimatedCost: 0,
           errorMessage: (error as Error).message
         };

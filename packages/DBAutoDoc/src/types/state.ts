@@ -74,6 +74,8 @@ export interface QueryGenerationPhase {
   status: 'running' | 'completed' | 'failed';
   queriesGenerated: number;
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
   estimatedCost: number;
   errorMessage?: string;
 }
@@ -217,6 +219,8 @@ export interface AnalysisRun {
   topP?: number;
   topK?: number;
   totalTokensUsed: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
   estimatedCost: number;
   warnings: string[];
   errors: string[];
@@ -244,6 +248,8 @@ export interface PhaseMetric {
   startedAt: string;
   completedAt?: string;
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
   estimatedCost: number;
   warned?: boolean;      // Did this phase trigger a token warning?
   exceeded?: boolean;    // Did this phase exceed its hard limit?
@@ -257,6 +263,8 @@ export interface IterationMetrics {
   startedAt: string;
   completedAt?: string;
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
   estimatedCost: number;
   duration: number; // milliseconds
   warned?: boolean;  // Did this iteration trigger a warning?

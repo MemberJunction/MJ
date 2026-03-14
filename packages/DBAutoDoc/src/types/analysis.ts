@@ -37,6 +37,8 @@ export interface AnalysisMetrics {
   tablesAnalyzed: number;
   columnsAnalyzed: number;
   totalTokensUsed: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
   totalCost: number;
   averageConfidence: number;
   lowConfidenceCount: number;

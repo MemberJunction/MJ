@@ -186,7 +186,7 @@ export class AnalysisEngine {
       }
 
       // Track tokens
-      this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost);
+      this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens);
 
       // Use semantic comparison to check if description materially changed
       const previousDescription = table.description;
@@ -509,7 +509,7 @@ export class AnalysisEngine {
         run.sanityCheckCount++;
 
         // Track tokens
-        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost);
+        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens);
 
         // Log issues
         if (result.result.hasMaterialIssues) {
@@ -604,7 +604,7 @@ export class AnalysisEngine {
         run.sanityCheckCount++;
 
         // Track tokens
-        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost);
+        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens);
 
         // Log issues
         if (result.result.hasMaterialIssues) {
@@ -690,7 +690,7 @@ export class AnalysisEngine {
         run.sanityCheckCount++;
 
         // Track tokens
-        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost);
+        this.iterationTracker.addTokenUsage(run, result.tokensUsed, result.cost, result.inputTokens, result.outputTokens);
 
         // Log issues
         if (result.result.hasMaterialIssues) {

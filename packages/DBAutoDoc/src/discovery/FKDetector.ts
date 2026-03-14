@@ -409,30 +409,38 @@ export class FKDetector {
 
   /**
    * Calculate FK confidence score (0-100)
+   *
+   * Value overlap is the strongest signal — if source values exist in the target,
+   * that's strong evidence of a FK relationship regardless of naming conventions.
+   * When target is not a detected PK, the PK bonus weight is redistributed to
+   * value overlap so databases without declared PKs aren't penalized.
    */
   private calculateFKConfidence(evidence: FKEvidence, targetIsPK: boolean): number {
     let score = 0;
 
-    // Value overlap is critical (40% weight)
-    score += evidence.valueOverlap * 40;
+    // Value overlap is the dominant signal
+    // Base weight: 60%, boosted to 75% when target is not a known PK
+    const valueOverlapWeight = targetIsPK ? 60 : 75;
+    score += evidence.valueOverlap * valueOverlapWeight;
 
-    // Naming match (20% weight)
-    score += evidence.namingMatch * 20;
+    // Naming match (10% weight) — helpful but not critical,
+    // many real-world DBs have non-standard naming
+    score += evidence.namingMatch * 10;
 
-    // Cardinality check (15% weight)
+    // Cardinality check (10% weight)
     // We want many:one ratio (ratio > 1 is good)
     const cardinalityScore = Math.min(evidence.cardinalityRatio, 2) / 2; // Cap at 2:1
-    score += cardinalityScore * 15;
+    score += cardinalityScore * 10;
 
-    // Target is PK bonus (15% weight)
+    // Target is PK bonus (15% weight) — only when target is actually a detected PK
     if (targetIsPK) {
       score += 15;
     }
 
-    // Null handling (10% weight)
+    // Null handling (5% weight)
     // Some nulls are OK (optional FK), but too many is suspicious
-    const nullScore = evidence.nullPercentage < 0.3 ? 10 :
-                     evidence.nullPercentage < 0.7 ? 5 : 0;
+    const nullScore = evidence.nullPercentage < 0.3 ? 5 :
+                     evidence.nullPercentage < 0.7 ? 2.5 : 0;
     score += nullScore;
 
     // Penalties

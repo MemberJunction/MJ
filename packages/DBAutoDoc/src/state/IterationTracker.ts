@@ -140,8 +140,10 @@ export class IterationTracker {
   /**
    * Add tokens to run total
    */
-  public addTokenUsage(run: AnalysisRun, tokensUsed: number, cost?: number): void {
+  public addTokenUsage(run: AnalysisRun, tokensUsed: number, cost?: number, inputTokens?: number, outputTokens?: number): void {
     run.totalTokensUsed += tokensUsed;
+    run.totalInputTokens = (run.totalInputTokens || 0) + (inputTokens || 0);
+    run.totalOutputTokens = (run.totalOutputTokens || 0) + (outputTokens || 0);
     if (cost) {
       run.estimatedCost += cost;
     }

@@ -63,7 +63,7 @@ export default class Analyze extends Command {
         spinner.succeed('Analysis complete!');
         this.log(chalk.green('\n✓ Analysis complete!'));
         this.log(`  Iterations: ${result.run.iterationsPerformed}`);
-        this.log(`  Tokens used: ${result.run.totalTokensUsed?.toLocaleString() || 0}`);
+        this.log(`  Tokens used: ${result.run.totalTokensUsed?.toLocaleString() || 0} (input: ${(result.run.totalInputTokens || 0).toLocaleString()}, output: ${(result.run.totalOutputTokens || 0).toLocaleString()})`);
         this.log(`  Estimated cost: $${result.run.estimatedCost?.toFixed(2) || '0.00'}`);
         this.log(`  Output folder: ${result.outputFolder}`);
         this.log(`  Files:`);

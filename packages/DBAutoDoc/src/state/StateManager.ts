@@ -156,6 +156,8 @@ export class StateManager {
       topP,
       topK,
       totalTokensUsed: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
       estimatedCost: 0,
       warnings: [],
       errors: [],

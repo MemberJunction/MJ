@@ -24,6 +24,8 @@ export interface SanityCheckResult {
   }>;
   suggestions: string[];
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export class LLMSanityChecker {
@@ -74,7 +76,9 @@ export class LLMSanityChecker {
         invalidPKs: [],
         invalidFKs: [],
         suggestions: [],
-        tokensUsed: 0
+        tokensUsed: 0,
+        inputTokens: 0,
+        outputTokens: 0
       };
     }
 
@@ -95,7 +99,9 @@ export class LLMSanityChecker {
         invalidPKs: result.invalidPKs,
         invalidFKs: result.invalidFKs,
         suggestions: result.suggestions || [],
-        tokensUsed: usage?.totalTokens || 0
+        tokensUsed: usage?.totalTokens || 0,
+        inputTokens: usage?.promptTokens || 0,
+        outputTokens: usage?.completionTokens || 0
       };
     } catch (parseError) {
       console.error(`[LLMSanityChecker] Failed to parse LLM response: ${(parseError as Error).message}`);
@@ -104,7 +110,9 @@ export class LLMSanityChecker {
         invalidPKs: [],
         invalidFKs: [],
         suggestions: [],
-        tokensUsed: usage?.totalTokens || 0
+        tokensUsed: usage?.totalTokens || 0,
+        inputTokens: usage?.promptTokens || 0,
+        outputTokens: usage?.completionTokens || 0
       };
     }
   }

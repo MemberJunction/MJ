@@ -26,7 +26,7 @@ export class MarkdownGenerator {
       lines.push('');
       lines.push(`- **Status**: ${lastRun.status}`);
       lines.push(`- **Iterations**: ${lastRun.iterationsPerformed}`);
-      lines.push(`- **Tokens Used**: ${lastRun.totalTokensUsed.toLocaleString()}`);
+      lines.push(`- **Tokens Used**: ${lastRun.totalTokensUsed.toLocaleString()} (input: ${(lastRun.totalInputTokens || 0).toLocaleString()}, output: ${(lastRun.totalOutputTokens || 0).toLocaleString()})`);
       lines.push(`- **Estimated Cost**: $${lastRun.estimatedCost.toFixed(2)}`);
       lines.push(`- **AI Model**: ${lastRun.modelUsed}`);
       lines.push(`- **AI Vendor**: ${lastRun.vendor}`);

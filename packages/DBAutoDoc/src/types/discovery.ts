@@ -98,6 +98,8 @@ export interface RelationshipDiscoveryIteration {
   startedAt: string;
   completedAt: string;
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
   discoveries: {
     newPKs: PKCandidate[];
     newFKs: FKCandidate[];
@@ -310,4 +312,6 @@ export interface LLMValidationResult {
     details: string;
   }>;
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
 }

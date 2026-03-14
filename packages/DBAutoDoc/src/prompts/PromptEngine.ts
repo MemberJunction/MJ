@@ -206,6 +206,8 @@ export class PromptEngine {
             success: false,
             errorMessage: `Failed to parse JSON response\n\nRaw content:\n${content}`,
             tokensUsed: usage?.totalTokens || 0,
+            inputTokens: usage?.promptTokens || 0,
+            outputTokens: usage?.completionTokens || 0,
             promptInput: renderedPrompt,
             promptOutput: content
           };
@@ -219,6 +221,8 @@ export class PromptEngine {
         success: true,
         result: parsedResult,
         tokensUsed: usage?.totalTokens || 0,
+        inputTokens: usage?.promptTokens || 0,
+        outputTokens: usage?.completionTokens || 0,
         cost: usage?.cost,
         promptInput: renderedPrompt,
         promptOutput: content
@@ -283,7 +287,9 @@ export class PromptEngine {
           return {
             success: false,
             errorMessage: chatResult.errorMessage,
-            tokensUsed: 0
+            tokensUsed: 0,
+            inputTokens: 0,
+            outputTokens: 0
           };
         }
 
@@ -296,13 +302,17 @@ export class PromptEngine {
           return {
             success: false,
             errorMessage: `JSON parse error`,
-            tokensUsed: usage?.totalTokens || 0
+            tokensUsed: usage?.totalTokens || 0,
+            inputTokens: usage?.promptTokens || 0,
+            outputTokens: usage?.completionTokens || 0
           };
         }
         return {
           success: true,
           result: parsed,
           tokensUsed: usage?.totalTokens || 0,
+          inputTokens: usage?.promptTokens || 0,
+          outputTokens: usage?.completionTokens || 0,
           cost: usage?.cost
         };
       });

@@ -328,6 +328,8 @@ export class DiscoveryEngine {
       startedAt,
       completedAt: '',
       tokensUsed: 0,
+      inputTokens: 0,
+      outputTokens: 0,
       discoveries: {
         newPKs: [],
         newFKs: [],
@@ -380,6 +382,8 @@ export class DiscoveryEngine {
 
       const sanityResult = await this.sanityChecker.reviewCandidates(newPKs, newFKs);
       iterationResult.tokensUsed += sanityResult.tokensUsed;
+      iterationResult.inputTokens += sanityResult.inputTokens || 0;
+      iterationResult.outputTokens += sanityResult.outputTokens || 0;
 
       // Remove invalid PKs
       if (sanityResult.invalidPKs.length > 0) {
@@ -731,6 +735,8 @@ export class DiscoveryEngine {
         );
 
         tokensUsed += result.tokensUsed;
+        iteration.inputTokens += result.inputTokens || 0;
+        iteration.outputTokens += result.outputTokens || 0;
 
         if (!result.validated) {
           this.onProgress(`LLM validation failed for ${tableKey}: ${result.reasoning}`);
