@@ -1088,7 +1088,7 @@ export class DiscoveryEngine {
       }
     }
 
-    // Apply high-confidence FKs
+    // Apply high-confidence FKs and build table-level dependency graph
     for (const fk of phase.discovered.foreignKeys) {
       if (fk.confidence >= this.config.confidence.foreignKeyMinimum * 100) {
         const schema = state.schemas.find(s => s.name === fk.schemaName);
@@ -1107,10 +1107,76 @@ export class DiscoveryEngine {
             referencedColumn: fk.targetColumn
           };
         }
+
+        // Wire up table-level dependsOn/dependents for topological sorting
+        this.addTableDependency(
+          state, fk.schemaName, fk.sourceTable,
+          fk.targetSchema, fk.targetTable,
+          fk.sourceColumn, fk.targetColumn
+        );
       }
     }
 
     // Store discovery phase in state (new phases structure)
     state.phases.keyDetection = phase;
+  }
+
+  /**
+   * Add a table-level dependency edge (dependsOn/dependents) for FK relationships.
+   * Required before topological sorting so the topo sort can build correct levels.
+   */
+  private addTableDependency(
+    state: DatabaseDocumentation,
+    sourceSchemaName: string,
+    sourceTableName: string,
+    targetSchemaName: string,
+    targetTableName: string,
+    sourceColumnName: string,
+    targetColumnName: string
+  ): void {
+    // Don't create self-dependencies
+    if (sourceSchemaName === targetSchemaName && sourceTableName === targetTableName) return;
+
+    // Add to source table's dependsOn
+    const sourceSchema = state.schemas.find(s => s.name === sourceSchemaName);
+    if (sourceSchema) {
+      const sourceTable = sourceSchema.tables.find(t => t.name === sourceTableName);
+      if (sourceTable) {
+        const alreadyExists = sourceTable.dependsOn.some(
+          dep => dep.schema === targetSchemaName &&
+                 dep.table === targetTableName &&
+                 dep.column === sourceColumnName
+        );
+        if (!alreadyExists) {
+          sourceTable.dependsOn.push({
+            schema: targetSchemaName,
+            table: targetTableName,
+            column: sourceColumnName,
+            referencedColumn: targetColumnName
+          });
+        }
+      }
+    }
+
+    // Add to target table's dependents
+    const targetSchema = state.schemas.find(s => s.name === targetSchemaName);
+    if (targetSchema) {
+      const targetTable = targetSchema.tables.find(t => t.name === targetTableName);
+      if (targetTable) {
+        const alreadyExists = targetTable.dependents.some(
+          dep => dep.schema === sourceSchemaName &&
+                 dep.table === sourceTableName &&
+                 dep.column === sourceColumnName
+        );
+        if (!alreadyExists) {
+          targetTable.dependents.push({
+            schema: sourceSchemaName,
+            table: sourceTableName,
+            column: sourceColumnName,
+            referencedColumn: targetColumnName
+          });
+        }
+      }
+    }
   }
 }

@@ -285,19 +285,29 @@ export class StateManager {
 
     for (const schema of state.schemas) {
       for (const table of schema.tables) {
-        if (table.descriptionIterations.length > 0) {
-          const latest = table.descriptionIterations[table.descriptionIterations.length - 1];
-          const confidence = latest.confidence ?? 0;
+        // Tables with no description iterations are undescribed — treat as zero confidence
+        if (table.descriptionIterations.length === 0) {
+          lowConfidence.push({
+            schema: schema.name,
+            table: table.name,
+            confidence: 0,
+            description: '',
+            reasoning: 'Table has not been analyzed yet'
+          });
+          continue;
+        }
 
-          if (confidence < threshold) {
-            lowConfidence.push({
-              schema: schema.name,
-              table: table.name,
-              confidence,
-              description: latest.description,
-              reasoning: latest.reasoning
-            });
-          }
+        const latest = table.descriptionIterations[table.descriptionIterations.length - 1];
+        const confidence = latest.confidence ?? 0;
+
+        if (confidence < threshold) {
+          lowConfidence.push({
+            schema: schema.name,
+            table: table.name,
+            confidence,
+            description: latest.description,
+            reasoning: latest.reasoning
+          });
         }
       }
     }

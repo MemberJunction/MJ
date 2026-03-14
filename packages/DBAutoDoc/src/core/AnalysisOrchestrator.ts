@@ -300,7 +300,8 @@ export class AnalysisOrchestrator {
       // Main iteration loop
       const maxIterations = this.maxIterationsOverride ?? this.config.analysis.convergence.maxIterations;
       let converged = false;
-      while (!converged && run.iterationsPerformed < maxIterations) {
+      let guardrailExceeded = false;
+      while (!converged && !guardrailExceeded && run.iterationsPerformed < maxIterations) {
         iterationTracker.incrementIteration(state, run);
         this.onProgress('Starting iteration', { iteration: run.iterationsPerformed });
 
@@ -308,7 +309,13 @@ export class AnalysisOrchestrator {
         for (let levelNum = 0; levelNum < levels.length; levelNum++) {
           this.onProgress('Processing level', { level: levelNum, tables: levels[levelNum].length });
 
-          const triggers = await analysisEngine.processLevel(state, run, levelNum, levels[levelNum]);
+          const levelResult = await analysisEngine.processLevel(state, run, levelNum, levels[levelNum]);
+
+          if (levelResult.guardrailExceeded) {
+            guardrailExceeded = true;
+            this.onProgress('Guardrail exceeded — stopping iteration loop');
+            break;
+          }
 
           // Dependency-level sanity check
           if (this.config.analysis.sanityChecks.dependencyLevel && levels[levelNum].length > 0) {
@@ -316,14 +323,16 @@ export class AnalysisOrchestrator {
           }
 
           // Backpropagation
-          if (triggers.length > 0 && this.config.analysis.backpropagation.enabled) {
-            await analysisEngine.executeBackpropagation(state, run, triggers);
+          if (levelResult.triggers.length > 0 && this.config.analysis.backpropagation.enabled) {
+            await analysisEngine.executeBackpropagation(state, run, levelResult.triggers);
           }
 
           // Save state after each level
           stateManager.updateSummary(state);
           await stateManager.save(state);
         }
+
+        if (guardrailExceeded) break;
 
         // Check convergence
         converged = analysisEngine.checkConvergence(state, run);
@@ -347,7 +356,10 @@ export class AnalysisOrchestrator {
 
       // Complete run
       if (!converged) {
-        iterationTracker.completeRun(run, false, 'Max iterations reached');
+        const reason = guardrailExceeded
+          ? 'Guardrail limit exceeded (duration/tokens/cost)'
+          : 'Max iterations reached';
+        iterationTracker.completeRun(run, false, reason);
       }
 
       // Sample Query Generation (if enabled)

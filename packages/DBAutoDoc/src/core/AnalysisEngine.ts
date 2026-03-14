@@ -83,7 +83,7 @@ export class AnalysisEngine {
     run: AnalysisRun,
     level: number,
     tables: TableNode[]
-  ): Promise<BackpropagationTrigger[]> {
+  ): Promise<{ triggers: BackpropagationTrigger[]; guardrailExceeded: boolean }> {
     const triggers: BackpropagationTrigger[] = [];
     const total = tables.length;
 
@@ -98,7 +98,7 @@ export class AnalysisEngine {
 
       // Check if guardrail was exceeded during this table's analysis
       if (result.guardrailExceeded) {
-        break; // Stop processing this level
+        return { triggers, guardrailExceeded: true };
       }
 
       if (result.triggers) {
@@ -112,7 +112,7 @@ export class AnalysisEngine {
 
     run.levelsProcessed = Math.max(run.levelsProcessed, level + 1);
 
-    return triggers;
+    return { triggers, guardrailExceeded: false };
   }
 
   /**
