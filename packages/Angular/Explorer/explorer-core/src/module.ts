@@ -37,7 +37,7 @@ import { ListDetailGridModule } from '@memberjunction/ng-list-detail-grid';
 
 // Local Components
 import { ConversationsModule } from '@memberjunction/ng-conversations';
-import { DashboardsModule } from '@memberjunction/ng-dashboards';
+import { CoreDashboardsModule } from '@memberjunction/ng-dashboards';
 import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
@@ -126,7 +126,7 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     DropDownsModule,
     MemberJunctionSharedModule,
     ConversationsModule,
-    DashboardsModule,
+    CoreDashboardsModule,
     DashboardViewerModule,
     ExplorerSettingsModule,
     FileStorageModule,

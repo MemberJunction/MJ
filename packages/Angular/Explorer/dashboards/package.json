@@ -4,6 +4,60 @@
   "description": "MemberJunction Dashboards",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/public-api.d.ts",
+      "default": "./dist/public-api.js"
+    },
+    "./core-dashboards.module": {
+      "types": "./dist/core-dashboards.module.d.ts",
+      "default": "./dist/core-dashboards.module.js"
+    },
+    "./ai-dashboards.module": {
+      "types": "./dist/ai-dashboards.module.d.ts",
+      "default": "./dist/ai-dashboards.module.js"
+    },
+    "./actions-dashboards.module": {
+      "types": "./dist/actions-dashboards.module.d.ts",
+      "default": "./dist/actions-dashboards.module.js"
+    },
+    "./testing-dashboards.module": {
+      "types": "./dist/testing-dashboards.module.d.ts",
+      "default": "./dist/testing-dashboards.module.js"
+    },
+    "./scheduling-dashboards.module": {
+      "types": "./dist/scheduling-dashboards.module.d.ts",
+      "default": "./dist/scheduling-dashboards.module.js"
+    },
+    "./communication-dashboards.module": {
+      "types": "./dist/communication-dashboards.module.d.ts",
+      "default": "./dist/communication-dashboards.module.js"
+    },
+    "./credentials-dashboards.module": {
+      "types": "./dist/credentials-dashboards.module.d.ts",
+      "default": "./dist/credentials-dashboards.module.js"
+    },
+    "./data-explorer-dashboards.module": {
+      "types": "./dist/data-explorer-dashboards.module.d.ts",
+      "default": "./dist/data-explorer-dashboards.module.js"
+    },
+    "./lists-dashboards.module": {
+      "types": "./dist/lists-dashboards.module.d.ts",
+      "default": "./dist/lists-dashboards.module.js"
+    },
+    "./component-studio-dashboards.module": {
+      "types": "./dist/component-studio-dashboards.module.d.ts",
+      "default": "./dist/component-studio-dashboards.module.js"
+    },
+    "./integration.module": {
+      "types": "./dist/Integration/integration.module.d.ts",
+      "default": "./dist/Integration/integration.module.js"
+    },
+    "./mcp.module": {
+      "types": "./dist/MCP/mcp.module.d.ts",
+      "default": "./dist/MCP/mcp.module.js"
+    }
+  },
   "files": [
     "/dist"
   ],
