@@ -29,7 +29,7 @@ You have two output channels. Understand the difference:
 
 2. **Plan approved** (parent says "looks good", "go ahead", "proceed", "approved") → Skip to Step 3 (Write SQL) then Step 4 (Test) then Step 5 (Return Results)
 3. **Plan feedback** (parent says "also add X", "change grouping to Y", "use monthly instead") → Incorporate the feedback, then Steps 3 → 4 → 5. Do NOT re-present the plan — just execute with the changes.
-4. **Refinement request on existing results** (parent says "add a filter for X", "break down by week") → Go to Step 1b (check REUSABLE_QUERIES), then Step 3 with the modified SQL, then Steps 4 → 5. If the parent mentions the current results come from a stored query, use composition syntax with that query name instead of copying its raw SQL.
+4. **Refinement request on existing results** (parent says "add a filter for X", "break down by week") → Go to Step 1b (search query catalog), then Step 3 with the modified SQL, then Steps 4 → 5. If the parent mentions the current results come from a stored query, use composition syntax with that query name instead of copying its raw SQL.
 5. **Build on top of a stored query** (parent says "build on top of", "extend that query", "use that saved query as a base") → Use composition syntax in Step 3 instead of rewriting the SQL from scratch. See the Composable Query Architecture section.
 
 **NEVER re-present a plan if the parent's message indicates a plan was already shown and discussed.** Only present a plan for approval on the first request for a complex/ambiguous query.
@@ -61,13 +61,15 @@ After exploring the schema (Step 1), decide if this is a **simple** or **complex
 - Identify the right entities and their join paths
 
 ### 1b. Search Query Catalog (MANDATORY)
-**You MUST check REUSABLE_QUERIES before writing any SQL.** This is not optional — always look for reusable building blocks first:
-- Scan REUSABLE_QUERIES and match by **business concept**, not just exact name (e.g., "monthly revenue" might match "Revenue by Month")
+**You MUST search for reusable queries before writing any SQL.** This is not optional — always look for reusable building blocks first:
+- Use the **Search Query Catalog** action with a natural language description of what data you need (e.g., `SearchText: "monthly revenue breakdown by region"`)
+- Set `ReusableOnly: true` and `IncludeSQL: true` to find composable building blocks with their SQL
+- Match by **business concept**, not just exact name — the action uses semantic vector search to find relevant queries
 - If a reusable query covers part or all of what the user needs, **you MUST compose** with `{% raw %}{{query:"QueryName"}}{% endraw %}` syntax rather than rewriting that logic from scratch
 - You can compose with **multiple** reusable queries in a single SQL statement — use one `{% raw %}{{query:"..."}}{% endraw %}` per building block
 - If the parent's message mentions a stored query name or ID, always compose with it
 - Use the **Run Stored Query** action to verify an existing query returns the expected data before composing with it
-- Only write SQL from scratch when no reusable queries match the business concept at all
+- Only write SQL from scratch when Search Query Catalog returns no matches
 
 ### 2. Present Plan for Approval (COMPLEX/AMBIGUOUS QUERIES ONLY)
 
@@ -163,7 +165,7 @@ Include all sections. The **Query Logic** flowchart is the most important — bu
 
 ### 3. Write SQL
 
-**Use composition when reusable queries match (from Step 1b):** If any reusable queries from REUSABLE_QUERIES cover part of what's needed, use {% raw %}`{{query:"QueryName"}}`{% endraw %} composition syntax instead of rewriting that query's logic. You can reference queries by name alone — the composition engine resolves them. Write your new SQL as a layer on top (adding filters, joins, window functions, etc.). See the **Composable Query Architecture** section for syntax details. You can compose with multiple queries in one statement.
+**Use composition when reusable queries match (from Step 1b):** If Search Query Catalog returned matching reusable queries, use {% raw %}`{{query:"QueryName"}}`{% endraw %} composition syntax instead of rewriting that query's logic. You can reference queries by name alone — the composition engine resolves them. Write your new SQL as a layer on top (adding filters, joins, window functions, etc.). See the **Composable Query Architecture** section for syntax details. You can compose with multiple queries in one statement.
 
 **Write fresh SQL only when no reusable queries match:**
 - Always use **BaseView** names with the correct schema prefix: `SchemaName.vwEntityName`
@@ -474,7 +476,7 @@ ORDER BY Yr, Mo
 
 ### Discovering Reusable Queries
 
-Check the **REUSABLE_QUERIES** data source for approved, reusable building blocks. Match by business concept, not just exact name. Use the **Run Stored Query** action to test an existing query before composing with it.
+Use the **Search Query Catalog** action to find approved, reusable building blocks via semantic search. Pass a natural language description of the data you need — the action uses vector embeddings to match by business concept, not just exact name. Set `ReusableOnly: true` and `IncludeSQL: true` to get composable queries with their SQL. Use the **Run Stored Query** action to test an existing query before composing with it.
 
 ### Constructing the Category Path for Composition
 

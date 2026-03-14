@@ -1,0 +1,144 @@
+[
+  {
+    "fields": {
+      "Name": "Search Query Catalog",
+      "Description": "Searches the saved query catalog using vector-based semantic search. Takes a natural language description of what data is needed and returns ranked matching queries with similarity scores. Use this to find existing queries before writing ad-hoc SQL.",
+      "DriverClass": "Search Query Catalog",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-magnifying-glass",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchText",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Natural language description of what data you need. Match by business concept, not exact query names. For example: 'monthly revenue by region' or 'active customers with recent orders'.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TopK",
+            "DefaultValue": "10",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of matching queries to return. Default: 10.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinSimilarity",
+            "DefaultValue": "0.3",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum similarity score (0-1) for results. Lower values return more results. Default: 0.3.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ReusableOnly",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "If true, only return queries marked as Reusable (for composition via {{query:\"...\"}} syntax). Default: false.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ApprovedOnly",
+            "DefaultValue": "true",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "If true, only return queries with Status='Approved'. Default: true.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeSQL",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "If true, include the SQL text of each matching query in results. Useful for composition planning. Default: false.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of matching queries with QueryID, Name, Description, Category, Similarity score, Status, Reusable flag, and optionally SQL.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResultCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of matching queries found.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Found one or more matching queries in the catalog."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_MATCHES",
+            "IsSuccess": true,
+            "Description": "Search completed but no queries matched the criteria. Proceed with ad-hoc SQL."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "SearchText parameter is required but was not provided."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EMBEDDING_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to generate embedding for the search text or load query embeddings."
+          }
+        }
+      ]
+    }
+  }
+]

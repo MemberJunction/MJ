@@ -64,24 +64,27 @@ The following entities exist in the system. Invoke the `Get Entity Details` acti
 {{ entity.Description }}
 {% endfor %}
 
-## Available Stored Queries
+## Stored Query Catalog
 
-The system includes pre-built, approved stored queries that you can execute directly instead of writing ad-hoc SQL. Check these **before** writing a new query from scratch.
+The system includes pre-built, approved stored queries that you can execute directly instead of writing ad-hoc SQL. Use the **Search Query Catalog** action to find relevant queries before writing ad-hoc SQL.
 
-{% for query in AVAILABLE_QUERIES %}
-### {{ query.Name }}
-{{ query.Description }}
-{% endfor %}
+### How to Search
+Use the **Search Query Catalog** action with a natural language description of what data you need:
+- `SearchText`: Describe the data need (e.g., "customer activity by region", "monthly revenue trends")
+- `ApprovedOnly`: true (default) — only returns validated queries
+- `IncludeSQL`: true — includes the SQL text for review
+
+The action uses **semantic vector search** to match by business concept, not just exact name — "customer activity" will find a query named "Active Customer Summary".
 
 ### When to Use Stored Queries vs Ad-Hoc SQL
 
 **Use a stored query** when:
-- An available query matches the research question (by business concept, not just exact name)
+- Search Query Catalog returns a match for the research question
 - You need validated, pre-tested data extraction
 - The query covers the data you need without modification
 
 **Write ad-hoc SQL** when:
-- No stored query matches the research need
+- Search Query Catalog returns no matches
 - You need custom aggregations, filters, or joins not covered by existing queries
 - The research requires combining data from entities not covered by any stored query
 
@@ -130,9 +133,10 @@ To execute a stored query, use the **Run Stored Query** action with either `Quer
 - Identify which entities likely contain the data you need
 - Note the exact entity names for use in Step 2
 
-### Step 1b: Check Query Catalog
-Before writing ad-hoc SQL, check if any [Available Stored Queries](#available-stored-queries) match the research question:
-- Match by **business concept** — "customer activity" might be covered by a query named "Active Customer Summary"
+### Step 1b: Search Query Catalog
+Before writing ad-hoc SQL, use the **Search Query Catalog** action to find matching stored queries:
+- Pass a natural language description of the data you need as `SearchText`
+- The action uses semantic vector search to match by **business concept** — "customer activity" will find a query named "Active Customer Summary"
 - If a stored query matches, use **Run Stored Query** to execute it directly (faster and pre-validated)
 - If no match, proceed to Step 2
 
@@ -215,7 +219,7 @@ Params:
 ```
 
 ### 3. Run Stored Query
-**When to use**: A stored query from the [Available Stored Queries](#available-stored-queries) catalog matches your research need
+**When to use**: Search Query Catalog found a matching stored query for your research need
 **Returns**: Query results in CSV or JSON format
 **Parameters**:
 - `QueryName` (required if no QueryID): Exact name of the stored query

@@ -149,6 +149,13 @@
             "lastModified": "2026-02-19T02:31:20.651Z",
             "checksum": "ba214e4880b2c5272046116869798e9c65b9d2e3c16d9576af8d264ebfe09095"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Search Query Catalog",
+            "Status": "Active"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
@@ -261,7 +268,7 @@
                   "DestinationType": "Data",
                   "DestinationPath": null,
                   "ExecutionOrder": 2,
-                  "Status": "Active",
+                  "Status": "Inactive",
                   "CachePolicy": "PerAgent",
                   "CacheTimeoutSeconds": 3600
                 },
@@ -315,6 +322,13 @@
                 "sync": {
                   "lastModified": "2026-03-12T17:31:34.254Z",
                   "checksum": "bdbab426010f42174d113eb012dada96b843d5128bf73ea51238c922bf8ee008"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Search Query Catalog",
+                  "Status": "Active"
                 }
               }
             ]

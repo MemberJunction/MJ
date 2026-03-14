@@ -69,7 +69,7 @@
             "DestinationType": "Data",
             "DestinationPath": null,
             "ExecutionOrder": 2,
-            "Status": "Active",
+            "Status": "Inactive",
             "CachePolicy": "PerAgent",
             "CacheTimeoutSeconds": 3600
           },
@@ -123,6 +123,13 @@
           "sync": {
             "lastModified": "2026-03-12T17:31:34.498Z",
             "checksum": "bdbab426010f42174d113eb012dada96b843d5128bf73ea51238c922bf8ee008"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Search Query Catalog",
+            "Status": "Active"
           }
         }
       ],
