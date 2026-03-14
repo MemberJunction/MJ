@@ -804,7 +804,17 @@ export class AnalysisEngine {
     console.log(`[AnalysisEngine] Processing ${foreignKeys.length} structured FK insights from LLM for ${schemaName}.${tableName}`);
 
     for (const fk of foreignKeys) {
-      const { columnName, referencesSchema, referencesTable, referencesColumn, confidence } = fk;
+      const { columnName, referencesColumn, confidence } = fk;
+      // LLM often returns referencesTable as "SCHEMA.TABLE" format — strip the schema prefix
+      let referencesSchema = fk.referencesSchema;
+      let referencesTable = fk.referencesTable;
+      if (referencesTable.includes('.')) {
+        const parts = referencesTable.split('.');
+        // If the schema part matches referencesSchema, just take the table name
+        // Otherwise use the schema from the qualified name
+        referencesSchema = parts[0];
+        referencesTable = parts[parts.length - 1];
+      }
 
       // Create feedback for this FK
       const feedback: import('../types/discovery.js').AnalysisToDiscoveryFeedback = {

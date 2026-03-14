@@ -16,7 +16,7 @@ import { HTMLGenerator } from '../generators/HTMLGenerator.js';
 import { CSVGenerator } from '../generators/CSVGenerator.js';
 import { MermaidGenerator } from '../generators/MermaidGenerator.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
-import { DatabaseConnection } from '../database/Database.js';
+// DatabaseConnection is lazy-imported only when --apply is used (requires DB credentials)
 
 export default class Export extends Command {
   static description = 'Export documentation in multiple formats (SQL, Markdown, HTML, CSV, Mermaid)';
@@ -117,6 +117,7 @@ export default class Export extends Command {
             this.warn('--apply requires a config file. Skipping database application.');
           } else {
             spinner.start('Applying SQL to database');
+            const { DatabaseConnection } = await import('../database/Database.js');
             const dbConfig = {
               provider: (config.database.provider as 'sqlserver' | 'mysql' | 'postgresql' | 'oracle') || 'sqlserver',
               host: config.database.server,

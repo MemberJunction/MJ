@@ -272,11 +272,17 @@ export class MarkdownGenerator {
     lines.push('');
 
     // Add relationships
+    const relationships = new Set<string>();
     for (const table of schema.tables) {
       if (table.dependsOn && table.dependsOn.length > 0) {
         for (const dep of table.dependsOn) {
-          // Format: ParentTable ||--o{ ChildTable : "relationship"
-          lines.push(`    ${dep.table} ||--o{ ${table.name} : "has"`);
+          // Strip schema prefix if present (LLM sometimes returns "SCHEMA.TABLE" format)
+          const depTable = dep.table.includes('.') ? dep.table.split('.').pop()! : dep.table;
+          const key = `${depTable}||--o{${table.name}`;
+          if (!relationships.has(key)) {
+            relationships.add(key);
+            lines.push(`    ${depTable} ||--o{ ${table.name} : "has"`);
+          }
         }
       }
     }
