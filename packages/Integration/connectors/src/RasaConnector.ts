@@ -55,6 +55,9 @@ const MIN_REQUEST_INTERVAL_MS = 200;
 /** Default page size for Rasa.io API calls */
 const DEFAULT_PAGE_SIZE = 50;
 
+/** Maximum records to fetch per object per sync run */
+const MAX_RECORDS_PER_SYNC = 6000;
+
 // ─── Connector Implementation ────────────────────────────────────────
 
 /**
@@ -80,6 +83,12 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
 
     /** Timestamp of the last API request, used for throttling */
     private lastRequestTime = 0;
+
+    /** Running count of records fetched for the current object in this sync run */
+    private _runningFetchTotal = 0;
+
+    /** Last fetched URL path, used for per-page logging */
+    private _lastFetchedPath = '';
 
     // ─── Abstract method implementations ─────────────────────────────
 
@@ -178,9 +187,19 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
     ): Record<string, unknown>[] {
         const body = rawBody as Record<string, unknown>;
 
-        // Rasa.io envelope: { code, metadata, results }
+        // Rasa.io envelope: { code, metadata, results: [ { data: {...}, links: {...} }, ... ] }
+        // Each item wraps the actual record under a 'data' key — unwrap it.
         if (body.results && Array.isArray(body.results)) {
-            return body.results as Record<string, unknown>[];
+            const records = (body.results as Record<string, unknown>[]).map(item => {
+                const inner = item['data'];
+                return (inner && typeof inner === 'object' && !Array.isArray(inner))
+                    ? inner as Record<string, unknown>
+                    : item;
+            });
+            this._runningFetchTotal += records.length;
+            const pathLabel = this._lastFetchedPath || 'unknown';
+            console.log(`[Rasa.io] Fetched ${records.length} records (running total: ${this._runningFetchTotal}) from ${pathLabel}`);
+            return records;
         }
 
         // If responseDataKey is specified, use it
@@ -199,11 +218,17 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
 
     protected ExtractPaginationInfo(
         rawBody: unknown,
-        paginationType: PaginationType,
+        _paginationType: PaginationType,
         _currentPage: number,
         currentOffset: number,
         pageSize: number
     ): PaginationState {
+        // Hard cap — stop pagination once we've fetched enough records this run
+        if (this._runningFetchTotal >= MAX_RECORDS_PER_SYNC) {
+            console.log(`[Rasa.io] MaxRecords cap (${MAX_RECORDS_PER_SYNC}) reached — stopping pagination`);
+            return { HasMore: false };
+        }
+
         const body = rawBody as Record<string, unknown>;
         const metadata = body.metadata as Record<string, unknown> | undefined;
 
@@ -214,7 +239,6 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
         const totalRecords = metadata.record_count as number | undefined;
         const nextLink = metadata.next_link as string | undefined;
 
-        // Rasa.io uses offset pagination with next_link
         const hasMore = !!nextLink && nextLink.length > 0;
         const nextOffset = hasMore ? currentOffset + pageSize : undefined;
 
@@ -241,6 +265,12 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
         offset: number,
         _cursor?: string
     ): string {
+        // Track path for per-page logging (strip base URL to keep it short)
+        try {
+            this._lastFetchedPath = new URL(basePath).pathname;
+        } catch {
+            this._lastFetchedPath = basePath;
+        }
         const separator = basePath.includes('?') ? '&' : '?';
         const limit = obj.DefaultPageSize || DEFAULT_PAGE_SIZE;
         return `${basePath}${separator}skip=${offset}&limit=${limit}`;
@@ -339,32 +369,38 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
      * Rasa.io's /persons endpoint supports updated_since query param.
      */
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
+        // Reset per-object counter so cap applies independently per object per sync
+        this._runningFetchTotal = 0;
+
         const result = await super.FetchChanges(ctx);
 
-        // If we have a watermark and records, filter client-side for objects
-        // that don't support server-side updated_since filtering
+        // Only advance watermark on the final batch — premature advancement on HasMore=true
+        // would skip records if the sync is interrupted or capped mid-way
+        const isFinalBatch = !result.HasMore;
+
         if (ctx.WatermarkValue && result.Records.length > 0) {
             const watermarkDate = new Date(ctx.WatermarkValue);
             const filtered = result.Records.filter(r => {
                 const updated = r.Fields['updated'] as string | undefined;
-                if (!updated) return true; // Keep records without updated field
+                if (!updated) return true;
                 return new Date(updated) > watermarkDate;
             });
 
-            // Compute new watermark from latest updated timestamp
-            const latestUpdated = this.FindLatestTimestamp(result.Records);
+            console.log(`[Rasa.io ${ctx.ObjectName}] ${filtered.length} of ${result.Records.length} records changed since watermark`);
+
+            const latestUpdated = isFinalBatch ? this.FindLatestTimestamp(result.Records) : null;
             return {
                 Records: filtered,
                 HasMore: result.HasMore,
-                NewWatermarkValue: latestUpdated ?? ctx.WatermarkValue,
+                NewWatermarkValue: isFinalBatch ? (latestUpdated ?? ctx.WatermarkValue) : undefined,
             };
         }
 
-        // For full sync, set watermark to latest record timestamp
-        const latestUpdated = this.FindLatestTimestamp(result.Records);
+        // Full sync — only set watermark when pagination is complete
+        const latestUpdated = isFinalBatch ? this.FindLatestTimestamp(result.Records) : null;
         return {
             ...result,
-            NewWatermarkValue: latestUpdated ?? undefined,
+            NewWatermarkValue: isFinalBatch ? (latestUpdated ?? undefined) : undefined,
         };
     }
 
