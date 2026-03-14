@@ -6940,7 +6940,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         // 4. Request Type's DefaultAssignmentStrategy
         if (requestTypeId && this._requestTypeCache) {
-            const requestType = this._requestTypeCache.find(t => t.ID === requestTypeId);
+            const requestType = this._requestTypeCache.find(t => UUIDsEqual(t.ID, requestTypeId));
             if (requestType) {
                 const rtStrategy = parseAssignmentStrategy(requestType.DefaultAssignmentStrategy);
                 if (rtStrategy) {
@@ -6982,7 +6982,7 @@ The context is now within limits. Please retry your request with the recovered c
             const visited = new Set<string>(); // prevent infinite loops
             while (currentId && !visited.has(currentId)) {
                 visited.add(currentId);
-                const cat = this._categoryCache.find(c => c.ID === currentId);
+                const cat = this._categoryCache.find(c => UUIDsEqual(c.ID, currentId));
                 if (!cat) break;
 
                 const strategy = parseAssignmentStrategy(cat.AssignmentStrategy);
