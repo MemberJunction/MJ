@@ -117,7 +117,7 @@ export abstract class BaseAutoDocDriver {
   /**
    * Get sample values from a column
    */
-  protected abstract getSampleValues(
+  public abstract getSampleValues(
     schemaName: string,
     tableName: string,
     columnName: string,
