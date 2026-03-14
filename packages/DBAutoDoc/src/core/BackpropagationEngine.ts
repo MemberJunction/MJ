@@ -38,7 +38,10 @@ export class BackpropagationEngine {
     const triggersByTable = this.groupTriggersByTable(triggers);
 
     for (const [tableKey, tableTriggers] of triggersByTable) {
-      const [schemaName, tableName] = tableKey.split('.');
+      // Handle "SCHEMA.TABLE" or "SCHEMA.SCHEMA.TABLE" (LLM double-prefix)
+      const parts = tableKey.split('.');
+      const schemaName = parts[0];
+      const tableName = parts[parts.length - 1];
       const table = this.stateManager.findTable(state, schemaName, tableName);
 
       if (!table) {

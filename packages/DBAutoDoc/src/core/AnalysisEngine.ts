@@ -967,16 +967,26 @@ export class AnalysisEngine {
     sourceColumnName: string,
     targetColumnName: string
   ): void {
+    // Normalize: strip schema prefix from table names if present (LLM sometimes returns "SCHEMA.TABLE")
+    if (targetTableName.includes('.')) {
+      const parts = targetTableName.split('.');
+      targetSchemaName = parts[0];
+      targetTableName = parts[parts.length - 1];
+    }
+
     // Find source table and add to its dependsOn array
     const sourceSchema = state.schemas.find(s => s.name === sourceSchemaName);
     if (sourceSchema) {
       const sourceTable = sourceSchema.tables.find(t => t.name === sourceTableName);
       if (sourceTable) {
-        // Check if this dependency already exists
+        // Check if this dependency already exists (normalize existing entries for comparison)
         const existingDep = sourceTable.dependsOn.find(
-          dep => dep.schema === targetSchemaName &&
-                 dep.table === targetTableName &&
-                 dep.column === sourceColumnName
+          dep => {
+            const depTable = dep.table.includes('.') ? dep.table.split('.').pop()! : dep.table;
+            return dep.schema === targetSchemaName &&
+                   depTable === targetTableName &&
+                   dep.column === sourceColumnName;
+          }
         );
 
         if (!existingDep) {

@@ -133,8 +133,14 @@ export class MarkdownGenerator {
         // Relationships
         if (table.dependsOn && table.dependsOn.length > 0) {
           lines.push('**Depends On**:');
+          const seenDeps = new Set<string>();
           for (const dep of table.dependsOn) {
-            const link = `[${dep.schema}.${dep.table}](#${this.toAnchor(dep.table)})`;
+            // Strip schema prefix from table name if present (LLM sometimes stores "SCHEMA.TABLE")
+            const depTable = dep.table.includes('.') ? dep.table.split('.').pop()! : dep.table;
+            const depKey = `${dep.schema}.${depTable}.${dep.column}`;
+            if (seenDeps.has(depKey)) continue;
+            seenDeps.add(depKey);
+            const link = `[${dep.schema}.${depTable}](#${this.toAnchor(depTable)})`;
             lines.push(`- ${link} (via ${dep.column})`);
           }
           lines.push('');
@@ -142,8 +148,13 @@ export class MarkdownGenerator {
 
         if (table.dependents && table.dependents.length > 0) {
           lines.push('**Referenced By**:');
+          const seenRefs = new Set<string>();
           for (const dep of table.dependents) {
-            const link = `[${dep.schema}.${dep.table}](#${this.toAnchor(dep.table)})`;
+            const depTable = dep.table.includes('.') ? dep.table.split('.').pop()! : dep.table;
+            const refKey = `${dep.schema}.${depTable}.${dep.column}`;
+            if (seenRefs.has(refKey)) continue;
+            seenRefs.add(refKey);
+            const link = `[${dep.schema}.${depTable}](#${this.toAnchor(depTable)})`;
             lines.push(`- ${link}`);
           }
           lines.push('');
