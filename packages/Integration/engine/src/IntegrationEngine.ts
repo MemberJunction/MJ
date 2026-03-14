@@ -363,6 +363,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
             const batch = await config.connector.FetchChanges(ctx);
 
+            // Enforce MaxBatchSize — connectors are asked to respect it but may overshoot
+            if (batch.Records.length > this.MaxBatchSize) {
+                console.warn(
+                    `[IntegrationEngine] ${entityMap.ExternalObjectName}: connector returned ` +
+                    `${batch.Records.length} records, exceeding MaxBatchSize of ${this.MaxBatchSize}. ` +
+                    `Truncating to ${this.MaxBatchSize}.`
+                );
+                batch.Records = batch.Records.slice(0, this.MaxBatchSize);
+            }
+
             if (batch.Records.length > 0) {
                 const fingerprint = batch.Records.map(r => r.ExternalID).join(',');
                 if (fingerprint === previousBatchFingerprint) {
