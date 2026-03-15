@@ -446,6 +446,23 @@ const configInfoSchema = z.object({
   ]),
   /** Path to JSON file containing soft PK/FK definitions for tables without database constraints */
   additionalSchemaInfo: z.string().optional(),
+
+  /** Entity and field name normalization settings for ALL CAPS database identifiers */
+  entityNaming: z.object({
+    /** Normalize ALL CAPS table/entity names to Title Case (e.g., PAYMENT -> Payment). Default: true */
+    normalizeAllCaps: z.boolean().default(true),
+    /** Split compound ALL CAPS words using dictionary matching (e.g., INDIVIDUALDESIGNATION -> Individual Designation). Default: true */
+    splitCompoundWords: z.boolean().default(true),
+    /** Normalize ALL CAPS column/field names the same way. Default: true */
+    normalizeFieldNames: z.boolean().default(true),
+    /** Additional domain-specific words for the compound word splitter */
+    additionalDomainWords: z.string().array().default([]),
+  }).default({
+    normalizeAllCaps: true,
+    splitCompoundWords: true,
+    normalizeFieldNames: true,
+    additionalDomainWords: [],
+  }),
   logging: logInfoSchema,
   newEntityDefaults: newEntityDefaultsSchema,
   newSchemaDefaults: newSchemaDefaultsSchema,
