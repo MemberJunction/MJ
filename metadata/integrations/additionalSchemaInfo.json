@@ -288,5 +288,47 @@
                 }
             ]
         }
+    ],
+    "RasaIO": [
+        {
+            "TableName": "Persons",
+            "PrimaryKey": [
+                {
+                    "FieldName": "id",
+                    "Description": "Primary key from source system"
+                }
+            ]
+        },
+        {
+            "TableName": "Posts",
+            "PrimaryKey": [
+                {
+                    "FieldName": "id",
+                    "Description": "Primary key from source system"
+                }
+            ]
+        },
+        {
+            "TableName": "InsightActions",
+            "PrimaryKey": [
+                {
+                    "FieldName": "id",
+                    "Description": "Primary key from source system"
+                }
+            ]
+        },
+        {
+            "TableName": "InsightTopics",
+            "PrimaryKey": [
+                {
+                    "FieldName": "person_id",
+                    "Description": "Composite primary key — person identifier"
+                },
+                {
+                    "FieldName": "topic",
+                    "Description": "Composite primary key — topic name"
+                }
+            ]
+        }
     ]
 }

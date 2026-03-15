@@ -338,6 +338,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let recordsInMap = 0;
         let currentPage: number | undefined;
         let currentOffset: number | undefined;
+        let currentCursor: string | undefined;
         let batchCount = 0;
         let previousBatchFingerprint: string | undefined;
         const MAX_BATCHES_PER_MAP = 5000;
@@ -359,6 +360,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 ContextUser: contextUser,
                 CurrentPage: currentPage,
                 CurrentOffset: currentOffset,
+                CurrentCursor: currentCursor,
             };
 
             const batch = await config.connector.FetchChanges(ctx);
@@ -424,6 +426,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
             currentPage = batch.NextPage;
             currentOffset = batch.NextOffset;
+            currentCursor = batch.NextCursor;
             hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
 
@@ -582,10 +585,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const md = new Metadata();
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
-        // Use the entity's actual PK field (SourceRecordID for integration tables, ID for __mj targets)
         const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
-        const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
-        const loaded = await entity.InnerLoad(this.BuildCompositeKey(record.MatchedMJRecordID, pkFieldName));
+        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             throw new Error(`Failed to load ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
         }
@@ -636,8 +638,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const md = new Metadata();
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
         const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
-        const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
-        const loaded = await entity.InnerLoad(this.BuildCompositeKey(record.MatchedMJRecordID, pkFieldName));
+        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             throw new Error(`Failed to load ${record.MJEntityName} for deletion: ${record.MatchedMJRecordID}`);
         }
@@ -649,12 +651,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
-     * Builds a CompositeKey for a record lookup.
-     * Integration tables use the natural PK field from the source system.
+     * Builds a CompositeKey for a record lookup using the entity's PK field definitions.
+     * Supports both single-PK and composite-PK entities. For composite PKs the recordID
+     * is expected to be a '|'-delimited string of values in PK-field sequence order —
+     * the same format written by BaseRESTIntegrationConnector.ToExternalRecord.
      */
-    private BuildCompositeKey(id: string, fieldName: string = 'ID'): CompositeKey {
+    private BuildEntityPrimaryKey(
+        recordID: string,
+        pkFields: Array<{ Name: string }>
+    ): CompositeKey {
         const key = new CompositeKey();
-        key.KeyValuePairs.push({ FieldName: fieldName, Value: id });
+        if (pkFields.length <= 1) {
+            key.KeyValuePairs.push({ FieldName: pkFields[0]?.Name ?? 'ID', Value: recordID });
+        } else {
+            const parts = recordID.split('|');
+            for (let i = 0; i < pkFields.length; i++) {
+                key.KeyValuePairs.push({ FieldName: pkFields[i].Name, Value: parts[i] ?? '' });
+            }
+        }
         return key;
     }
 
