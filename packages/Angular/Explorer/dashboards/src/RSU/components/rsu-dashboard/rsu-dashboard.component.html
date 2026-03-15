@@ -1,0 +1,35 @@
+<div class="rsu-dashboard">
+  <div class="rsu-sidebar">
+    <div class="rsu-nav-item" [class.active]="ActiveTab === 'create'" (click)="OnTabChange('create')">
+      <i class="fa-solid fa-plus-circle"></i><span>Create Table</span>
+    </div>
+    <div class="rsu-nav-item" [class.active]="ActiveTab === 'history'" (click)="OnTabChange('history')">
+      <i class="fa-solid fa-clock-rotate-left"></i><span>Pipeline History</span>
+    </div>
+    <div class="rsu-nav-item" [class.active]="ActiveTab === 'status'" (click)="OnTabChange('status')">
+      <i class="fa-solid fa-signal"></i><span>System Status</span>
+    </div>
+  </div>
+
+  <div class="rsu-content">
+    @switch (ActiveTab) {
+      @case ('create') {
+        <mj-udt-creator></mj-udt-creator>
+      }
+      @case ('history') {
+        <div class="rsu-placeholder">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <h3>Pipeline History</h3>
+          <p>View past RSU pipeline runs, their status, and artifacts.</p>
+        </div>
+      }
+      @case ('status') {
+        <div class="rsu-placeholder">
+          <i class="fa-solid fa-signal"></i>
+          <h3>System Status</h3>
+          <p>Monitor RSU pipeline status, out-of-sync indicators, and metrics.</p>
+        </div>
+      }
+    }
+  </div>
+</div>

@@ -597,6 +597,23 @@ export class IntegrationDataService {
     return client.SchemaPreview(companyIntegrationID, objects, platform);
   }
 
+  /** Execute the full RSU pipeline for an integration entity map */
+  async RunSchemaPipeline(
+    companyIntegrationID: string,
+    entityMapID: string
+  ): Promise<{ Success: boolean; Message?: string }> {
+    const provider = Metadata.Provider as GraphQLDataProvider;
+    const gql = `mutation RunIntegrationSchemaPipeline($companyIntegrationID: String!, $entityMapID: String!) {
+      RunIntegrationSchemaPipeline(companyIntegrationID: $companyIntegrationID, entityMapID: $entityMapID) {
+        Success
+        Message
+      }
+    }`;
+    const result = await provider.ExecuteGQL(gql, { companyIntegrationID, entityMapID });
+    const data = result?.RunIntegrationSchemaPipeline as { Success: boolean; Message?: string } | undefined;
+    return data ?? { Success: false, Message: 'No response from server' };
+  }
+
   /** Get the connector's default configuration for quick setup */
   async GetDefaultConfig(companyIntegrationID: string): Promise<DefaultConfigResult> {
     const client = this.getIntegrationClient();

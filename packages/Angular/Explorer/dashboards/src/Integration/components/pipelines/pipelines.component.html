@@ -232,6 +232,23 @@
             <i class="fa-solid fa-database"></i> MJ Data
           </button>
           <div class="ve-action-sep"></div>
+          <button class="ve-btn ve-btn-ghost"
+                  [disabled]="IsRunningPipeline"
+                  (click)="RunSchemaPipeline()"
+                  title="Generate DDL, run CodeGen, and restart MJAPI for this mapping">
+            @if (IsRunningPipeline) {
+              <i class="fa-solid fa-spinner fa-spin"></i> Running Pipeline...
+            } @else {
+              <i class="fa-solid fa-gears"></i> Run Schema Pipeline
+            }
+          </button>
+          @if (PipelineResultMessage) {
+            <span [class]="PipelineResultSuccess ? 've-save-success' : 've-error-msg'">
+              <i [class]="PipelineResultSuccess ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"></i>
+              {{ PipelineResultMessage }}
+            </span>
+          }
+          <div class="ve-action-sep"></div>
           <button class="ve-btn ve-btn-ghost" (click)="AutoMapEditorFields()" title="Auto-map fields by name">
             <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map
           </button>

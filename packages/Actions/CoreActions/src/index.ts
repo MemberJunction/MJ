@@ -117,4 +117,5 @@ export * from './custom/mcp';
 
 // Schema Creation Actions
 export * from './custom/schema/create-table.action';
+export * from './custom/schema/agent-create-table.action';
 

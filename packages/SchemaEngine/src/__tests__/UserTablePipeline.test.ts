@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// Register built-in DDL providers with ClassFactory
+import '../ddl/SqlServerDDLProvider.js';
+import '../ddl/PostgresDDLProvider.js';
+
 import {
     UserTablePipeline,
     ValidateUserTableDefinition,

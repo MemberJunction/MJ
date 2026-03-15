@@ -180,6 +180,8 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
 import { VersionsModule } from '@memberjunction/ng-versions';
 // Integration Dashboard Module
 import { IntegrationModule } from './Integration/integration.module';
+// Runtime Schema Update (RSU) Dashboard Module
+import { RSUModule } from './RSU/rsu.module';
 // Scheduling Module from generic package (reusable panels and dialogs)
 import { SchedulingModule } from '@memberjunction/ng-scheduling';
 import { NgTreesModule } from '@memberjunction/ng-trees';
@@ -360,6 +362,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     MarkdownModule,
     VersionsModule,
     IntegrationModule,
+    RSUModule,
     SchedulingModule,
     NgTreesModule
   ],
@@ -461,7 +464,9 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
     VersionHistoryRestoreResourceComponent,
     VersionHistoryGraphResourceComponent,
     // Integration Dashboard Module (re-exports its components)
-    IntegrationModule
+    IntegrationModule,
+    // Runtime Schema Update Dashboard Module
+    RSUModule
   ]
 })
 export class DashboardsModule { }

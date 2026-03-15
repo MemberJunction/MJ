@@ -27,8 +27,12 @@ export type {
 // ─── Core Classes ────────────────────────────────────────────────────
 export { SchemaEngine } from './SchemaEngine.js';
 export { SchemaValidator } from './SchemaValidator.js';
-export { DDLGenerator, ValidateIdentifier, EscapeSqlString, resolveSqlType } from './DDLGenerator.js';
-export { TypeMapper } from './TypeMapper.js';
+export { DDLGenerator, GetPlatformProvider, ValidateIdentifier, EscapeSqlString, resolveSqlType } from './DDLGenerator.js';
+
+// ─── DDL Platform Providers ─────────────────────────────────────────
+export { BaseDDLPlatformProvider } from './ddl/BaseDDLPlatformProvider.js';
+export { SqlServerDDLProvider } from './ddl/SqlServerDDLProvider.js';
+export { PostgresDDLProvider } from './ddl/PostgresDDLProvider.js';
 export { MigrationFileWriter, FormatTimestamp, SanitizeForFileName } from './MigrationFileWriter.js';
 export { SchemaEvolution } from './SchemaEvolution.js';
 
@@ -57,3 +61,7 @@ export type {
     UserForeignKeyDefinition,
     UserTablePipelineResult,
 } from './UserTablePipeline.js';
+
+// ─── Metrics & Observability ────────────────────────────────────────
+export { RSUMetrics } from './RSUMetrics.js';
+export type { PipelineRunMetric, RSUMetricsSummary } from './RSUMetrics.js';

@@ -9,6 +9,7 @@
  * In-memory concurrency mutex (one operation at a time).
  */
 import { BaseSingleton } from '@memberjunction/global';
+import { RSUMetrics } from './RSUMetrics.js';
 
 // ─── Pipeline Input/Output Types ─────────────────────────────────────
 
@@ -303,7 +304,75 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         // Write audit log entry (best-effort, non-blocking)
         this.writeAuditLog(input, result).catch(() => { /* ignore audit failures */ });
 
+        // Record metrics (best-effort)
+        try {
+            const stepDurations: Record<string, number> = {};
+            for (const step of result.Steps) {
+                stepDurations[step.Name] = step.DurationMs;
+            }
+            RSUMetrics.Instance.RecordRun({
+                Timestamp: new Date(),
+                DurationMs: result.Steps.reduce((sum, s) => sum + s.DurationMs, 0),
+                Success: result.Success,
+                StepDurations: stepDurations,
+                ErrorStep: result.ErrorStep,
+                Description: input.Description,
+                AffectedTables: input.AffectedTables,
+                RetryCount: 0,
+            });
+        } catch { /* ignore metrics failures */ }
+
         return result;
+    }
+
+    /**
+     * Run the RSU pipeline with automatic retry for transient failures.
+     * Only retries steps that are known to be transient (SQL execution, CodeGen, compilation, restart).
+     * Validation and git steps are not retried.
+     *
+     * @param input Pipeline input
+     * @param maxRetries Maximum number of retries (default: 2, so 3 total attempts)
+     * @param baseDelayMs Base delay for exponential backoff (default: 5000ms)
+     */
+    public async RunPipelineWithRetry(
+        input: RSUPipelineInput,
+        maxRetries: number = 2,
+        baseDelayMs: number = 5000
+    ): Promise<RSUPipelineResult> {
+        const RETRYABLE_STEPS = new Set(['ExecuteMigration', 'RunCodeGen', 'CompileTypeScript', 'RestartMJAPI']);
+
+        let lastResult: RSUPipelineResult | null = null;
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            const result = await this.RunPipeline(input);
+
+            if (result.Success) {
+                if (attempt > 0) {
+                    console.log(`[RSU] Pipeline succeeded on retry attempt ${attempt}`);
+                }
+                return result;
+            }
+
+            lastResult = result;
+
+            // Check if the failed step is retryable
+            const failedStep = result.ErrorStep;
+            if (!failedStep || !RETRYABLE_STEPS.has(failedStep)) {
+                console.log(`[RSU] Step '${failedStep}' is not retryable — aborting`);
+                return result;
+            }
+
+            if (attempt >= maxRetries) {
+                console.log(`[RSU] Max retries (${maxRetries}) exhausted — aborting`);
+                return result;
+            }
+
+            const delayMs = baseDelayMs * Math.pow(2, attempt);
+            console.log(`[RSU] Step '${failedStep}' failed (attempt ${attempt + 1}/${maxRetries + 1}), retrying in ${delayMs}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+
+        return lastResult!;
     }
 
     /**

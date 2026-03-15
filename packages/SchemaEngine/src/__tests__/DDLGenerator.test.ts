@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { DDLGenerator, ValidateIdentifier, EscapeSqlString } from '../DDLGenerator.js';
 import type { TableDefinition } from '../interfaces.js';
 
+// Register built-in DDL providers with ClassFactory
+import '../ddl/SqlServerDDLProvider.js';
+import '../ddl/PostgresDDLProvider.js';
+
 const makeTable = (overrides: Partial<TableDefinition> = {}): TableDefinition => ({
     SchemaName: 'custom',
     TableName: 'TestTable',
