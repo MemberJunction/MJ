@@ -54,6 +54,12 @@ graph TD
 ### Advanced Features
 - **Relationship Discovery** -- Automatically detect missing primary and foreign keys using statistical analysis and LLM validation
 - **Sample Query Generation** -- Generate reference SQL queries for AI agents with alignment tracking
+- **Ground Truth System** -- Provide authoritative descriptions for schemas, tables, and columns that AI analysis must respect
+- **Incremental State Saves** -- State persisted to disk after every phase (introspection, sampling, discovery, per-table analysis)
+- **User-Approved Protection** -- Mark tables/columns as approved to prevent AI from overwriting descriptions
+- **Enhanced Resume** -- Resume with `--reanalyze-below-confidence` to target low-confidence tables while preserving ground truth
+- **Existing DB Descriptions** -- Automatically loads MS_Description (SQL Server), COMMENT (PostgreSQL/MySQL) as initial descriptions
+- **CodeGen Integration** -- Emit `additionalSchemaInfo.json` for MemberJunction CodeGen soft FK/PK support
 - **Granular Guardrails** -- Multi-level resource controls (run, phase, iteration limits)
 - **Resume Capability** -- Pause and resume analysis from checkpoint state files
 - **Programmatic API** -- Use as a library in your own applications
@@ -66,6 +72,7 @@ graph TD
 - **CSV Exports** -- Spreadsheet-ready table and column data
 - **Mermaid Diagrams** -- Standalone ERD files (.mmd and .html)
 - **Analysis Reports** -- Detailed metrics and quality assessments
+- **Additional Schema Info** -- CodeGen-compatible JSON for soft FK/PK metadata
 
 ## Installation
 
@@ -251,7 +258,7 @@ Generate SQL
 ### 4. Export
 
 ```bash
-db-auto-doc export --sql --markdown --html --csv --mermaid
+db-auto-doc export --sql --markdown --html --csv --mermaid --schema-info
 ```
 
 This generates:
@@ -260,11 +267,18 @@ This generates:
 - **HTML Documentation**: Interactive searchable documentation
 - **CSV Files**: tables.csv and columns.csv for spreadsheet analysis
 - **Mermaid Diagrams**: erd.mmd and erd.html for visualization
+- **Additional Schema Info**: `additionalSchemaInfo.json` for CodeGen soft FK/PK support
 
 Optionally apply directly to database:
 
 ```bash
 db-auto-doc export --sql --apply
+```
+
+Export only AI-discovered relationships (exclude hard DB constraints):
+
+```bash
+db-auto-doc export --schema-info --schema-info-discovered-only --confidence-threshold 70
 ```
 
 ### 5. Export Sample Queries to Metadata (Optional)
@@ -419,6 +433,125 @@ Analysis stops when:
 2. **All tables** meet confidence threshold
 3. **Max iterations** reached
 4. **Guardrail limits** exceeded (tokens, cost, duration)
+
+### Ground Truth System
+
+Provide authoritative, user-supplied documentation that AI analysis must respect. Ground truth descriptions are injected into prompts as `AUTHORITATIVE` context and are never overwritten by AI analysis or backpropagation.
+
+**Configuration:**
+```json
+{
+  "seedContext": {
+    "overallPurpose": "E-commerce platform for retail",
+    "businessDomains": ["Sales", "Inventory", "Users"],
+    "industryContext": "Retail"
+  },
+  "groundTruth": {
+    "databaseDescription": "Primary transactional database for online store",
+    "schemas": {
+      "dbo": { "description": "Core application schema", "businessDomain": "Core" },
+      "hr": { "description": "Human resources schema", "businessDomain": "HR" }
+    },
+    "tables": {
+      "dbo.Users": {
+        "description": "Registered user accounts with authentication data",
+        "notes": "Primary user table - synced from identity provider",
+        "businessDomain": "Identity",
+        "columns": {
+          "Email": { "description": "Primary email for authentication", "notes": "Must be unique" },
+          "Status": { "description": "Account status: Active, Suspended, Deleted" }
+        }
+      }
+    }
+  }
+}
+```
+
+**How it works:**
+- Tables/columns with ground truth are marked `userApproved: true` in state
+- AI prompts receive ground truth as `AUTHORITATIVE` context to guide analysis
+- Backpropagation skips user-approved tables/columns entirely
+- Ground truth tables are never cleared by `--reanalyze-below-confidence`
+- `businessDomain` falls back from table → schema if not specified at table level
+
+### Incremental State Saves
+
+State is persisted to disk at every phase boundary, not just at the end. If analysis is interrupted, you can resume from the last checkpoint:
+
+- After database introspection (schema structure captured)
+- After loading existing database descriptions
+- After data sampling (statistics and cardinality)
+- After each table's analysis iteration
+- After sanity checks and backpropagation
+
+### User-Approved Description Protection
+
+Tables and columns marked `userApproved: true` (via ground truth or manual approval) are protected from modification:
+
+- **Analysis Engine**: Skips user-approved tables during iterative analysis
+- **Column Updates**: Skips user-approved columns when applying AI descriptions
+- **Backpropagation**: Skips user-approved tables during re-analysis
+- **Reanalysis**: Ground truth items are never cleared by `--reanalyze-below-confidence`
+
+### Enhanced Resume
+
+Resume analysis with fine-grained control:
+
+```bash
+# Resume and re-analyze tables with confidence below 70%
+db-auto-doc analyze --resume ./state.json --reanalyze-below-confidence 0.7
+
+# Resume with a different iteration limit
+db-auto-doc analyze --resume ./state.json --max-iterations 20
+```
+
+The `--reanalyze-below-confidence` flag clears `userApproved` on non-ground-truth tables whose latest confidence is below the threshold, allowing them to be re-analyzed while protecting authoritative descriptions.
+
+### CodeGen Integration (Additional Schema Info)
+
+DBAutoDoc automatically emits `additionalSchemaInfo.json` in every analysis run folder. This file is compatible with MemberJunction CodeGen's soft FK/PK system, allowing AI-discovered relationships to be fed back into the metadata layer.
+
+**Output format** (matches CodeGen's `additionalSchemaInfo.json`):
+```json
+{
+  "wicket": [
+    {
+      "TableName": "Person",
+      "PrimaryKey": [
+        { "FieldName": "uuid", "Description": "AI-discovered primary key (confidence: 95%)" }
+      ]
+    },
+    {
+      "TableName": "Connection",
+      "ForeignKeys": [
+        {
+          "FieldName": "person_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Person",
+          "RelatedField": "uuid",
+          "Description": "AI-discovered relationship (confidence: 88%)"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Data sources:**
+1. Hard FK/PK from database introspection (always included unless `--schema-info-discovered-only`)
+2. AI-discovered PK/FK candidates from the relationship discovery phase
+
+**Export options:**
+- `--schema-info` -- Generate the file
+- `--schema-info-discovered-only` -- Only include AI-discovered keys (exclude hard DB constraints)
+- `--schema-info-confirmed-only` -- Only include confirmed candidates (exclude unvalidated)
+- `--confidence-threshold N` -- Minimum confidence score for discovered keys
+
+**Usage with CodeGen:**
+1. Run DBAutoDoc analysis on a legacy database
+2. Copy `additionalSchemaInfo.json` to your MJ project
+3. Set `codeGen.additionalSchemaInfo` path in `mj.config.cjs`
+4. Run CodeGen to apply soft FK/PK metadata to EntityField records
 
 ### Granular Guardrails
 
@@ -829,7 +962,8 @@ import {
   MarkdownGenerator,
   HTMLGenerator,
   CSVGenerator,
-  MermaidGenerator
+  MermaidGenerator,
+  AdditionalSchemaInfoGenerator
 } from '@memberjunction/db-auto-doc';
 
 // Load config
@@ -875,6 +1009,13 @@ const { tables, columns } = csvGen.generate(state);
 const mermaidGen = new MermaidGenerator();
 const erdDiagram = mermaidGen.generate(state);
 const erdHtml = mermaidGen.generateHtml(state);
+
+const schemaInfoGen = new AdditionalSchemaInfoGenerator();
+const schemaInfo = schemaInfoGen.generate(state, {
+  discoveredOnly: true,           // Only AI-discovered keys
+  confidenceThreshold: 70,        // Minimum confidence
+  confirmedOnly: true             // Only LLM-validated candidates
+});
 ```
 
 ## Cost Estimation

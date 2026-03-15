@@ -155,16 +155,30 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
    // Process each level sequentially, but entities within a level in parallel
    for (const level of entityLevelTree) {
       // now filter out each LEVEL to only include entities that are not needed for recompilation
-      const l = level.filter(e => 
-        !excludeSchemas.includes(e.SchemaName) && 
-        e.BaseViewGenerated && 
-        e.IncludeInAPI && 
-        !e.VirtualEntity && 
+      const l = level.filter(e =>
+        !excludeSchemas.includes(e.SchemaName) &&
+        e.BaseViewGenerated &&
+        e.IncludeInAPI &&
+        !e.VirtualEntity &&
         !ManageMetadataBase.newEntityList.includes(e.Name));
+
+      // Custom base views (BaseViewGenerated=false) also need sp_refreshview so SQL Server picks up
+      // any schema changes (new columns, etc.) from migrations before CodeGen runs. They are NOT
+      // regenerated if the refresh fails — we can only refresh, not replace, a custom view.
+      const customViewEntities = level.filter(e =>
+        !excludeSchemas.includes(e.SchemaName) &&
+        !e.BaseViewGenerated &&
+        e.IncludeInAPI &&
+        !e.VirtualEntity &&
+        (!excludeEntities || !excludeEntities.includes(e.Name)));
 
       let sqlCommand: string = '';
 
       if (this.dbProvider.NeedsViewRefresh) {
+        // Refresh custom views first so they're up to date before generated views are processed
+        for (const entity of customViewEntities) {
+          sqlCommand += this.dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
+        }
         for (const entity of l) {
           // if an excludeEntities variable was provided, skip this entity if it's in the list
           if (!excludeEntities || !excludeEntities.includes(entity.Name)) {
@@ -173,10 +187,11 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
         }
       }
 
-      // Execute the initial refresh attempts
+      // Execute the initial refresh attempts (custom views + generated views together)
       bSuccess = await this.executeSQLScript(ds, sqlCommand, false) && bSuccess;
-      
-      // Now check which views failed to refresh and regenerate them
+
+      // Now check which *generated* views failed to refresh and regenerate them.
+      // Custom views are not in this list — we can't regenerate a custom view.
       const failedEntities = await this.identifyFailedViewRefreshes(ds, l);
       if (failedEntities.length > 0) {
         logMessage(`Detected ${failedEntities.length} views that failed to refresh. Attempting to regenerate view definitions...`, 'Info');

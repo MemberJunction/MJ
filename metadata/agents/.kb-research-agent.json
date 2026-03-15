@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Knowledge Base Research Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
       "Description": "Specialized agent for querying organizational knowledge bases and curated internal knowledge systems. Expert at conversational knowledge retrieval, policy interpretation, and connecting related organizational information. Handles tools like Betty and other knowledge management platforms to access company policies, procedures, documentation, and institutional knowledge.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -71,8 +72,8 @@
       "ID": "0388084B-97A8-4C3D-A38B-B6CE60471A87"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:34.988Z",
-      "checksum": "36a7053cb886969d2c62d4b80463eff8aca77638f38437f42cd6d4b0f85b3554"
+      "lastModified": "2026-03-13T19:10:49.192Z",
+      "checksum": "73517e70a273478351dc8141dc1072fecd318f334dbf53b34b366e13108641ac"
     }
   }
 ]

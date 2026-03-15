@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Betty",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
       "Description": "Dedicated knowledge base assistant agent that provides direct access to Betty Bot. Betty is trained on your organization's knowledge base and can answer questions about company policies, procedures, documentation, and institutional knowledge. This agent provides deterministic, single-step execution by forwarding queries directly to Betty and returning responses with optional reference links.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
       "Status": "Active",
@@ -70,8 +71,8 @@
       "ID": "6C350E8D-5005-43C5-968C-D535202192CC"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:34.803Z",
-      "checksum": "66956315e20574ec7bc9ca05a9dc0797205cb4f18e3af339f317ec8e70d2ea0f"
+      "lastModified": "2026-03-13T19:10:49.004Z",
+      "checksum": "aadae2ab7ea725cfd570984e060c2fa1f8d72d36faa562f6ee48c16cbf9b13c9"
     }
   }
 ]

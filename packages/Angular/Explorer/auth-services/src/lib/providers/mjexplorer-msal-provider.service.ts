@@ -4,7 +4,7 @@ import { MJAuthBase } from '../mjexplorer-auth-base.service';
 import { BehaviorSubject, Observable, Subject, catchError, filter, from, map, of, throwError, takeUntil, take } from 'rxjs';
 import { MsalBroadcastService, MsalService, MSAL_INSTANCE, MSAL_GUARD_CONFIG, MSAL_INTERCEPTOR_CONFIG, MsalGuard } from '@azure/msal-angular';
 import { AccountInfo, AuthenticationResult } from '@azure/msal-common';
-import { CacheLookupPolicy, InteractionRequiredAuthError, InteractionStatus, PublicClientApplication, InteractionType, BrowserAuthError } from '@azure/msal-browser';
+import { CacheLookupPolicy, ClientAuthError, InteractionRequiredAuthError, InteractionStatus, PublicClientApplication, InteractionType, BrowserAuthError } from '@azure/msal-browser';
 import { LogError } from '@memberjunction/core';
 import { AngularAuthProviderConfig } from '../IAuthProvider';
 import {
@@ -393,7 +393,8 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         'no_tokens_found',
         'no_account_error',
         'login_required',
-        'consent_required'
+        'consent_required',
+        'token_refresh_required'  // ClientAuthError when cached token needs refresh
       ];
 
       if (interactionRequiredCodes.includes(errorCode || '') || error instanceof InteractionRequiredAuthError) {
@@ -434,6 +435,26 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         message,
         originalError: error,
         userMessage: 'Additional authentication is required. Please log in again.'
+      };
+    }
+
+    // ClientAuthError — covers codes like token_refresh_required that are not
+    // surfaced through BrowserAuthError or InteractionRequiredAuthError.
+    if (error instanceof ClientAuthError) {
+      if (errorCode === 'token_refresh_required') {
+        return {
+          type: AuthErrorType.INTERACTION_REQUIRED,
+          message,
+          originalError: error,
+          userMessage: 'Your session has expired. Please log in again.'
+        };
+      }
+
+      return {
+        type: AuthErrorType.TOKEN_EXPIRED,
+        message,
+        originalError: error,
+        userMessage: 'Your session has expired. Please log in again.'
       };
     }
 

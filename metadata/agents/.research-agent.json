@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Database Research Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
       "Description": "Specialized sub-agent for conducting database research. Explores schema structure, formulates optimized SQL queries, executes research queries with security validation, and synthesizes findings from database analysis. Works as a component of the main Research Agent.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -112,13 +113,14 @@
       "ID": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:35.113Z",
-      "checksum": "29af7ef3ae8e1ebaa61e303544375a68e602099573fccb7715efc5023594eec7"
+      "lastModified": "2026-03-13T19:10:49.854Z",
+      "checksum": "d34ffb323a3d69bf7b020f2f9be62bc63b79a1ccbb42c557b1dd73e419efe914"
     }
   },
   {
     "fields": {
       "Name": "File Research Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
       "Description": "Specialized agent for document and file system research. Expert at file type handling, content extraction strategies, document structure understanding, and cross-document synthesis. Handles storage provider enumeration, file search, and document analysis.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -258,13 +260,14 @@
       "ID": "63070640-7E8E-4953-B13C-9F840D6BDD81"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:35.114Z",
-      "checksum": "0abea6a905111122f95b42f648febdfc68e4e6713f672b8ef820271b2bdc03a6"
+      "lastModified": "2026-03-13T19:10:49.875Z",
+      "checksum": "d7c0be78b50d239b8dfd77c39dd7abe4f3fdf6621cf4f8681e0cf7d23283c3e2"
     }
   },
   {
     "fields": {
       "Name": "Web Research Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
       "Description": "Specialized agent for internet and web-based research. Expert at search query formulation, source credibility evaluation, citation extraction, and content summarization. Handles Google search, web page retrieval, and content analysis.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -348,13 +351,14 @@
       "ID": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:35.115Z",
-      "checksum": "722bb41785b91405eb74474af98eec37877e8af9180c746a81a4cf75d337e2b2"
+      "lastModified": "2026-03-13T19:10:49.892Z",
+      "checksum": "6aaa50d25ccf883913e0e4dbdfd0259666608a33a9a89cf28ac76d8418a3d732"
     }
   },
   {
     "fields": {
       "Name": "Research Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
       "Description": "Orchestrator agent for comprehensive research across multiple domains. Analyzes research requests, delegates tasks to specialized sub-agents (Web Research, Database Research, File Research, Report Writer), and coordinates the research workflow. Uses iterative methodology with source validation and contradiction detection. Delegates final synthesis and report generation to the Report Writer sub-agent.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -397,6 +401,7 @@
         {
           "fields": {
             "Name": "Research Report Writer",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
             "Description": "Expert report writer and analyst that synthesizes research findings into comprehensive, insightful reports. Analyzes patterns across data sources, draws well-reasoned conclusions, and presents findings with appropriate confidence levels and citations. Uses high-effort models for deep analytical thinking.",
             "ParentID": "@parent:ID",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
@@ -578,8 +583,8 @@
             "ID": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:35.331Z",
-            "checksum": "d5bebf5917fde8f448718738f5a7060e2130403e84c4b9880deebe051a93366d"
+            "lastModified": "2026-03-13T19:10:50.255Z",
+            "checksum": "eb7f907d6895c8460da771ea6d7095bdd877fd8eb2684d2bf0e81cbce2d1dfbd"
           }
         }
       ],
@@ -729,8 +734,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:35.120Z",
-      "checksum": "dc1a0ef4f2e49056d93e3491aad0707fcb5a90929f7bd8472c04d175b61b396e"
+      "lastModified": "2026-03-13T19:10:49.923Z",
+      "checksum": "60a494e770cbb957cbb097efad5b1a0f33be9f448b10899197f2fa3bc4032b7d"
     }
   }
 ]

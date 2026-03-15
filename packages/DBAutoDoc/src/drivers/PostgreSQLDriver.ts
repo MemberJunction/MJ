@@ -419,7 +419,7 @@ export class PostgreSQLDriver extends BaseAutoDocDriver {
     })) : [];
   }
 
-  protected async getSampleValues(
+  public async getSampleValues(
     schemaName: string,
     tableName: string,
     columnName: string,

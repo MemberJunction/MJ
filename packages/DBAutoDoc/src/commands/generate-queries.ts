@@ -128,7 +128,8 @@ export default class GenerateQueries extends Command {
         model,
         stateManager,
         effortLevel,
-        maxTokens
+        maxTokens,
+        config.ai.pricing
       );
 
       // Generate queries (will update state file incrementally)
