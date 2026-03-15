@@ -110,7 +110,10 @@ describe('RunSyncAction', () => {
             expect(mockRunSyncFn).toHaveBeenCalledWith(
                 'ci-001',
                 expect.objectContaining({ ID: 'user-1' }),
-                'Manual'
+                'Manual',
+                undefined,  // onProgress
+                undefined,  // onNotification
+                {}          // options (empty IntegrationSyncOptions)
             );
         });
 
@@ -224,7 +227,10 @@ describe('RunSyncAction', () => {
             expect(mockRunSyncFn).toHaveBeenCalledWith(
                 expect.any(String),
                 expect.anything(),
-                expected
+                expected,
+                undefined,  // onProgress
+                undefined,  // onNotification
+                expect.any(Object)  // options
             );
         });
     });
@@ -267,7 +273,14 @@ describe('RunSyncAction', () => {
             params.Params = [p];
 
             await action['InternalRunAction'](params);
-            expect(mockRunSyncFn).toHaveBeenCalledWith('ci-lowercase', expect.anything(), 'Manual');
+            expect(mockRunSyncFn).toHaveBeenCalledWith(
+                'ci-lowercase',
+                expect.anything(),
+                'Manual',
+                undefined,
+                undefined,
+                {}
+            );
         });
     });
 });

@@ -17,6 +17,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
+    "@memberjunction/integration-engine": "5.11.0",
     "@memberjunction/actions": "5.11.0",
     "@memberjunction/actions-base": "5.11.0",
     "@memberjunction/ai-core-plus": "5.11.0",

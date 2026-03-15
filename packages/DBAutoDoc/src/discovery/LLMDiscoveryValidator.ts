@@ -85,7 +85,9 @@ export class LLMDiscoveryValidator {
         reasoning: `LLM call failed: ${chatResult.errorMessage}`,
         confidenceAdjustment: 0,
         recommendations: [],
-        tokensUsed: 0
+        tokensUsed: 0,
+        inputTokens: 0,
+        outputTokens: 0
       };
     }
 
@@ -119,7 +121,9 @@ export class LLMDiscoveryValidator {
         reasoning: result.reasoning,
         confidenceAdjustment: 0, // Overall adjustment
         recommendations: result.recommendations || [],
-        tokensUsed: usage?.totalTokens || 0
+        tokensUsed: usage?.totalTokens || 0,
+        inputTokens: usage?.promptTokens || 0,
+        outputTokens: usage?.completionTokens || 0
       };
     } catch (parseError) {
       return {
@@ -127,7 +131,9 @@ export class LLMDiscoveryValidator {
         reasoning: `Failed to parse LLM response: ${(parseError as Error).message}\n\nRaw content:\n${content}`,
         confidenceAdjustment: 0,
         recommendations: [],
-        tokensUsed: usage?.totalTokens || 0
+        tokensUsed: usage?.totalTokens || 0,
+        inputTokens: usage?.promptTokens || 0,
+        outputTokens: usage?.completionTokens || 0
       };
     }
   }

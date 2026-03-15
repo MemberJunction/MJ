@@ -266,21 +266,23 @@
   font-size: 13px;
 }
 
-/* Card Menu */
-.card-menu-wrapper {
-  position: relative;
+/* Card Delete Button */
+.card-delete-btn {
   margin-left: auto;
-}
-
-.menu-trigger {
   background: none;
-  border: none;
+  border: 1px solid transparent;
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 6px;
   color: var(--mj-text-disabled);
-  font-size: 16px;
-  transition: background 0.15s;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+
+.card-delete-btn:hover {
+  background: var(--mj-status-error-bg);
+  border-color: var(--mj-status-error-border);
+  color: var(--mj-status-error);
 }
 
 .menu-trigger:hover {
@@ -1386,6 +1388,66 @@
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+/* Schedule section */
+.schedule-section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.schedule-section-header {
+  margin-bottom: 12px;
+}
+
+.schedule-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.schedule-section-title i {
+  color: #0076b6;
+}
+
+.schedule-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+}
+
+.schedule-empty-text {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.schedule-create-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #0076b6 0%, #005a8c 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.schedule-create-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 118, 182, 0.4);
 }
 
 /* Detail toolbar */

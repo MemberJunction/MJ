@@ -18,6 +18,7 @@ import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
+import { AgentRequestAssignmentStrategy } from './assignment-strategy';
 import { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
 import { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
 import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
@@ -451,6 +452,18 @@ export type ExecuteAgentResult<P = any> = {
      * @since 3.1.0
      */
     mediaOutputs?: MediaOutput[];
+
+    /**
+     * When a Chat step fires, BaseAgent creates a persistent AIAgentRequest row and
+     * returns the new record's ID here. Callers use this to:
+     * - Send notifications to the assigned user
+     * - Track conversation-request sync (resolver marks the request as Responded when the user replies)
+     * - Deep-link into the Agent Requests dashboard
+     *
+     * Null/undefined when the agent did not terminate on a Chat step.
+     * @since 5.12.0
+     */
+    feedbackRequestId?: string;
 }
 
 /**
@@ -1028,6 +1041,38 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * @since 2.127.0
      */
     agentTypeParams?: TAgentTypeParams;
+
+    /**
+     * Optional per-invocation override for feedback request assignment.
+     * Takes highest precedence over all metadata-driven defaults
+     * (agent type, category, request type).
+     *
+     * When an agent creates a feedback request via Chat step, this strategy
+     * determines who the request is assigned to and how. If not provided,
+     * the framework walks the resolution chain:
+     * 1. This field (highest precedence)
+     * 2. Agent Type's AssignmentStrategy
+     * 3. Agent's Category AssignmentStrategy (walks up ParentID tree)
+     * 4. Request Type's DefaultAssignmentStrategy
+     * 5. Fallback: assign to contextUser + console warning
+     *
+     * @since 5.12.0
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   assignmentStrategy: {
+     *     type: 'SpecificUser',
+     *     userID: 'finance-manager-user-id',
+     *     priority: 75,
+     *     expirationMinutes: 1440
+     *   }
+     * };
+     * ```
+     */
+    assignmentStrategy?: AgentRequestAssignmentStrategy;
 }
 
 /**

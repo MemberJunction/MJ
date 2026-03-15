@@ -4,8 +4,8 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
@@ -426,6 +426,28 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     pubSub.asyncIterator = pubSub.asyncIterableIterator;
   }
   PubSubManager.Instance.SetPubSubEngine(pubSub as unknown as PubSubEngine);
+
+  // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
+  // ANY BaseEntity save/delete occurs on this server — regardless of whether it
+  // originated from a GraphQL mutation or internal server-side code (agents, actions,
+  // task orchestrator, etc.).  This closes the gap where server-internal saves were
+  // invisible to browser BaseEngine caches.
+  MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
+    if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode) {
+      const beEvent = event.args as BaseEntityEvent;
+      if (beEvent.type === 'save' || beEvent.type === 'delete') {
+        PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
+          entityName: beEvent.baseEntity.EntityInfo.Name,
+          primaryKeyValues: JSON.stringify(beEvent.baseEntity.PrimaryKey.KeyValuePairs),
+          action: beEvent.type,
+          sourceServerId: MJGlobal.Instance.ProcessUUID,
+          timestamp: new Date(),
+          originSessionId: null,
+          recordData: beEvent.type === 'save' ? JSON.stringify(beEvent.baseEntity.GetAll()) : undefined,
+        });
+      }
+    }
+  });
 
   let schema = mergeSchemas({
     schemas: [

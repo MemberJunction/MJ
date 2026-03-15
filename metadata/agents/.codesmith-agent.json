@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Codesmith Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
       "Description": "Expert code generator and executor for data analysis and transformations. Generates JavaScript code, tests it in a secure sandbox, and iteratively refines it until successful. Supports lodash, date-fns, mathjs, papaparse, uuid, and validator libraries. Perfect for data manipulation, calculations, and analysis tasks.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -53,8 +54,8 @@
       "ID": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:34.847Z",
-      "checksum": "2d8fdcb5f5a92ccfbc5f86ab07f185714d6a25dada9155b21e8cd64fad196ba5"
+      "lastModified": "2026-03-13T19:10:49.055Z",
+      "checksum": "d556108b87971a2c734cd948927820e1b9b7a793b4cc65fc47d85daa033637e9"
     }
   }
 ]

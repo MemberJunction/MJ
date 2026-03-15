@@ -1,0 +1,152 @@
+.summary-loading {
+    display: flex;
+    justify-content: center;
+    padding: 16px;
+}
+
+.summary-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px;
+    background: #fff;
+}
+
+.summary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.summary-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.summary-name i {
+    color: #0076b6;
+}
+
+.status-chip {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-active {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.status-paused {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-disabled {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.status-pending {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.summary-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.meta-item i {
+    font-size: 11px;
+}
+
+.summary-stats {
+    display: flex;
+    gap: 16px;
+    padding: 8px 0;
+    border-top: 1px solid #f1f5f9;
+}
+
+.stat {
+    text-align: center;
+    flex: 1;
+}
+
+.stat-num {
+    display: block;
+    font-size: 16px;
+    font-weight: 700;
+    color: #334155;
+}
+
+.stat-num.success {
+    color: #10b981;
+}
+
+.stat-num.error {
+    color: #ef4444;
+}
+
+.stat-lbl {
+    display: block;
+    font-size: 10px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.summary-actions {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.edit-btn {
+    background: none;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: #0076b6;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: background 0.15s;
+}
+
+.edit-btn:hover {
+    background: #f0f9ff;
+}
+
+.summary-empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+    color: #94a3b8;
+    font-size: 13px;
+}
+
+.summary-empty i {
+    font-size: 16px;
+}
