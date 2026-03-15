@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Sage",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
       "Description": "Ambient agent in MJ that is always present in all conversations to help the user navigate functionality in MJ, handle basic requests, and bring in other agents to delegate work to",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -417,8 +418,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:24.381Z",
-      "checksum": "1e01cfdaaaa07b9114ffcf01e2e8a7a2e866f9b556004348cf5f746138690e29"
+      "lastModified": "2026-03-13T19:10:50.549Z",
+      "checksum": "a66219bfe659e82b1d183ae242d5375e0eb184b807f39076631920266344786a"
     }
   }
 ]

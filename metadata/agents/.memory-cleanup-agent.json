@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Memory Cleanup Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=System",
       "Description": "System agent that archives stale notes and examples based on retention policies. Archives notes not accessed within NoteRetentionDays and low-scoring examples after ExampleRetentionDays. Runs on a daily schedule.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -24,8 +25,8 @@
       "ID": "A4998A55-C023-47B4-9A20-1FC965F4B5D3"
     },
     "sync": {
-      "lastModified": "2026-01-27T02:14:24.288Z",
-      "checksum": "8925f5ad22adc85936ae43ab80b0e3cd688953d2c4a91414bedd5a7c50acde0e"
+      "lastModified": "2026-03-13T19:10:49.335Z",
+      "checksum": "761533276ac5c05e5317cad309409b9dfc502cd7cdfa35f8c23b30515fb037b7"
     }
   }
 ]

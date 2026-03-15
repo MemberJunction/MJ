@@ -98,6 +98,8 @@ export interface RelationshipDiscoveryIteration {
   startedAt: string;
   completedAt: string;
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
   discoveries: {
     newPKs: PKCandidate[];
     newFKs: FKCandidate[];
@@ -158,6 +160,14 @@ export interface RelationshipDiscoveryPhase {
   discovered: {
     primaryKeys: PKCandidate[];
     foreignKeys: FKCandidate[];
+  };
+
+  /** Resume tracking — which tables have been processed in each sub-phase */
+  progress?: {
+    pkTablesAnalyzed?: string[];   // "schema.table" keys that completed PK detection
+    fkTablesAnalyzed?: string[];   // "schema.table" keys that completed FK detection
+    llmValidated?: boolean;        // Whether LLM validation pass completed
+    sanityChecked?: boolean;       // Whether LLM sanity check completed
   };
 
   schemaEnhancements: {
@@ -302,4 +312,6 @@ export interface LLMValidationResult {
     details: string;
   }>;
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
 }

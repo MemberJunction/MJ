@@ -29,6 +29,8 @@ export class MJAIAgentRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJAIAgentRunMedias', sectionName: 'AI Agent Run Medias', isExpanded: false },
+            { sectionKey: 'mJAIAgentRequestsOriginatingAgentRunID', sectionName: 'AI Agent Requests (Originating Agent Run)', isExpanded: false },
+            { sectionKey: 'mJAIAgentRequestsResumingAgentRunID', sectionName: 'AI Agent Requests (Resuming Agent Run)', isExpanded: false },
             { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAIAgentRunsLastRunID', sectionName: 'AI Agent Runs (Last Run)', isExpanded: false }
         ]);

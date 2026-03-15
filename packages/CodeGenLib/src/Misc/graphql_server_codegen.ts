@@ -2,7 +2,7 @@ import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFrom
 import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';
-import { mjCoreSchema } from '../Config/config';
+import { mjCoreSchema, resolveEntityPackageName } from '../Config/config';
 import { makeDir, sortBySequenceAndCreatedAt } from './util';
 
 /**
@@ -75,12 +75,16 @@ export class GraphQLServerGeneratorBase {
       const fields: EntityFieldInfo[] = sortBySequenceAndCreatedAt(entity.Fields);
       const serverGraphQLTypeName: string = this.getServerGraphQLTypeName(entity);
 
-      if (includeFileHeader)
+      if (includeFileHeader) {
+        const resolvedLib = isInternal
+          ? generatedEntitiesImportLibrary
+          : resolveEntityPackageName(entity.SchemaName);
         sEntityOutput = this.generateEntitySpecificServerFileHeader(
           entity,
-          generatedEntitiesImportLibrary,
+          resolvedLib,
           excludeRelatedEntitiesExternalToSchema
         );
+      }
 
       sEntityOutput += this.generateServerEntityHeader(entity, serverGraphQLTypeName);
 
@@ -147,9 +151,38 @@ ${
 }
 
 
-${entities.length > 0 ? `import { ${entities.map((e) => `${e.ClassName}Entity`).join(', ')} } from '${importLibrary}';` : `export {}`}
+${this.generateEntityImports(entities, importLibrary, isInternal)}
     `;
     return sRet;
+  }
+
+  /**
+   * Generates import statements for entity classes, grouping by package when
+   * entityPackageName is a schema-to-package map.
+   */
+  protected generateEntityImports(entities: EntityInfo[], defaultLibrary: string, isInternal: boolean): string {
+    if (entities.length === 0) return 'export {}';
+
+    if (isInternal) {
+      // Core entities always import from the single library
+      return `import { ${entities.map((e) => `${e.ClassName}Entity`).join(', ')} } from '${defaultLibrary}';`;
+    }
+
+    // Group entities by their resolved package
+    const packageGroups = new Map<string, string[]>();
+    for (const entity of entities) {
+      const pkg = resolveEntityPackageName(entity.SchemaName);
+      const existing = packageGroups.get(pkg) ?? [];
+      existing.push(`${entity.ClassName}Entity`);
+      packageGroups.set(pkg, existing);
+    }
+
+    // Generate one import line per package
+    const imports: string[] = [];
+    for (const [pkg, classNames] of packageGroups) {
+      imports.push(`import { ${classNames.join(', ')} } from '${pkg}';`);
+    }
+    return imports.join('\n');
   }
 
   public generateEntitySpecificServerFileHeader(

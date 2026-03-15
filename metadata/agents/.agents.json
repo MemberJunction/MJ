@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Demo Loop Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Demo",
       "Description": "Simple demo agent showcasing loop agent capabilities. Can perform web searches, retrieve stock prices, get weather forecasts, look up census data, and fetch web page content. The AI dynamically determines the pathway and can execute multiple actions in parallel with no predetermined sequence.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -105,13 +106,14 @@
       "ID": "55399C30-C59B-47D2-A856-640DA89C46E4"
     },
     "sync": {
-      "lastModified": "2026-01-09T16:45:05.949Z",
-      "checksum": "4e6ba270e3e5aaee45782893694f05173e5701569a67c4c5fc41f16f994efefe"
+      "lastModified": "2026-03-13T19:10:48.426Z",
+      "checksum": "ee3d81d2f2d59ae055413bc5215b2c09bee8d4275fa73e20bcead78004a6f3b4"
     }
   },
   {
     "fields": {
       "Name": "Demo Minimal Loop Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Demo",
       "Description": "Minimal prompt demo agent to showcase AgentTypePromptParams. Same capabilities as Demo Loop Agent but with most optional prompt sections disabled to demonstrate token savings.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -230,13 +232,14 @@
       "ID": "2E081955-B2FD-4E13-81DF-5DC7C59126BE"
     },
     "sync": {
-      "lastModified": "2026-01-09T16:26:08.092Z",
-      "checksum": "26f66d6e188f1574583da9316ca4c34552d9bceebe6ea8736ccaa6093599a4cb"
+      "lastModified": "2026-03-13T19:10:48.447Z",
+      "checksum": "c866b0168549aee6b1098b0e2afbdedf0cbf30ef2337c0e405083cc38b34598e"
     }
   },
   {
     "fields": {
       "Name": "Demo Flow Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Demo",
       "Description": "Simple Agent Demo! This agent demonstrates the basic functionality of a flow agent, which follows a deterministic pathway",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
       "Status": "Disabled",
@@ -523,13 +526,14 @@
       "ID": "9B89A9E8-2BBB-46DE-A51A-A548FA9796C3"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:34.113Z",
-      "checksum": "fe05f05e37bb92cbd8e206e399c10f52ffa9ace979430afa58a0f0bddfc81772"
+      "lastModified": "2026-03-13T19:10:48.467Z",
+      "checksum": "4c73600f9765ff32c2c9deccf4df7c6b0806ea6b959ae475c20e6896425bed24"
     }
   },
   {
     "fields": {
       "Name": "Marketing Agent",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
       "Description": "Strategic orchestrator for marketing content creation workflows, managing sub-agents to deliver high-quality marketing materials. Good at writing blog post.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -565,6 +569,7 @@
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Copywriter Agent",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
             "Description": "Creative wordsmith specializing in crafting compelling initial drafts of marketing content with persuasive messaging!",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
@@ -700,14 +705,15 @@
             "ID": "8A322A1B-27EE-4A89-A6C4-A47C856E5842"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.435Z",
-            "checksum": "b9a92dcb24c9992ea80eca64e5c331eaa423793898436c06f13a11793f187489"
+            "lastModified": "2026-03-13T19:10:48.725Z",
+            "checksum": "7b191d3bd33e8261411ce4e172b9e84e84653a3e77a6ef97c6a5576a1f95289a"
           }
         },
         {
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "SEO AIEO Specialist Agent",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
             "Description": "Expert in optimizing content for both traditional search engines and AI-powered discovery platforms.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
@@ -800,14 +806,15 @@
             "ID": "62CF643B-18E5-4C3B-BD0A-B3206E87BCE8"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.436Z",
-            "checksum": "9b4656d46a05a60ea3e02a08e1210fc02758afde688ab7326994aa62b3f0a95f"
+            "lastModified": "2026-03-13T19:10:48.748Z",
+            "checksum": "eaf0a8db3a0c47f9e2d12caeb277aa0de0ef8f3147d8d1cf15a843ed7c169a6d"
           }
         },
         {
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Editor Agent",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
             "Description": "Meticulous content professional ensuring quality, accuracy, and effectiveness of all marketing materials.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
@@ -914,14 +921,15 @@
             "ID": "383FA7A1-E654-4D65-BC88-6CFE1C90086E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.437Z",
-            "checksum": "330e2e45a496a83aa65a3d42b5ce3a5f69d2b794456fb520ce57705c46b5478f"
+            "lastModified": "2026-03-13T19:10:48.771Z",
+            "checksum": "e75c9989d0a287c6c12939749bb73bca9f3e409c5b347a0e5dd93406a1f0e753"
           }
         },
         {
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Brand Guardian Agent",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
             "Description": "Final checkpoint ensuring all marketing content aligns with brand values, voice, and visual identity.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
@@ -1000,14 +1008,15 @@
             "ID": "414901EA-0BAE-43C1-9B9F-0A6B48B6B768"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.439Z",
-            "checksum": "e0ffd8ea9a01d1dda8315bc4cd7e3ca53a5085481fea940530be8bb4c621ea06"
+            "lastModified": "2026-03-13T19:10:48.793Z",
+            "checksum": "aec476d9d05b9dd68f33c918a984cf24a4f7d960d8935438b23bba23567ce243"
           }
         },
         {
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Publisher Agent",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Content Creation",
             "Description": "Handles final content distribution with platform-specific optimization (publishing tools under development).",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
@@ -1094,8 +1103,8 @@
             "ID": "6AD5B39D-CC3B-45E3-90F2-A00E2BC42E6D"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:34.460Z",
-            "checksum": "c6c4ffa22615131e59081f95fe581fad68ccd84494f510e95351088edd9f7484"
+            "lastModified": "2026-03-13T19:10:48.813Z",
+            "checksum": "2125c292b075c291bb0d6004981aeca164a448bec01078ab6b1fdbd9be6052e8"
           }
         }
       ]
@@ -1104,8 +1113,8 @@
       "ID": "4A7B4F1D-C536-409F-9206-F36FDEE64EDF"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:34.121Z",
-      "checksum": "e8b146ffd83e1e072b6ffcd0c67db5124e5fdda6707cdfa81d8fa2dbab4ec254"
+      "lastModified": "2026-03-13T19:10:48.506Z",
+      "checksum": "b61ad1d38dcafbacd300a4965ba3feba0bc057cc4eb3758730f95ae416e0803f"
     }
   }
 ]

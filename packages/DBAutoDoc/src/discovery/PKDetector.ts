@@ -156,6 +156,23 @@ export class PKDetector {
     const uniqueness = cachedStats.uniqueness;
     const hasNulls = cachedStats.nullCount > 0;
 
+    // Hard reject: PK columns cannot have nulls — this is definitional
+    if (hasNulls) {
+      console.log(`[PKDetector] REJECT ${column.name} - has ${cachedStats.nullCount} null values (PKs cannot be nullable)`);
+      return null;
+    }
+
+    // Hard reject: PK columns cannot have empty strings or zero values
+    if (cachedStats.sampleValues && cachedStats.sampleValues.length > 0) {
+      const hasBlankOrZero = cachedStats.sampleValues.some(v =>
+        v === '' || v === 0 || v === '0' || (typeof v === 'string' && v.trim() === '')
+      );
+      if (hasBlankOrZero) {
+        console.log(`[PKDetector] REJECT ${column.name} - has blank or zero values (PKs cannot have empty/zero values)`);
+        return null;
+      }
+    }
+
     // Analyze naming pattern
     const namingScore = this.calculateNamingScore(column.name);
 
