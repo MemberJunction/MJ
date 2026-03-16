@@ -1,7 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock all external dependencies
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', () => {
+    // Minimal BaseEntity mock with representative members so that getBaseEntityMemberNames()
+    // can walk the prototype chain and build the reserved-name set used by SafeCodeName().
+    class MockBaseEntity {
+        Config() {}
+        Save() {}
+        Delete() {}
+        Validate() {}
+        Get() {}
+        Set() {}
+        Refresh() {}
+        Revert() {}
+        NewRecord() {}
+        GetAll() {}
+        SetMany() {}
+        GetFieldByName() {}
+        InnerLoad() {}
+        LoadFromData() {}
+        get Dirty() { return false; }
+        get EntityInfo() { return null; }
+        get Fields() { return []; }
+        get PrimaryKey() { return null; }
+        get IsSaved() { return false; }
+    }
+    return {
+    BaseEntity: MockBaseEntity,
     EntityFieldInfo: class {},
     EntityFieldValueListType: { None: 'None', List: 'List', ListOrUserEntry: 'ListOrUserEntry' },
     EntityInfo: class {},
@@ -23,7 +48,8 @@ vi.mock('@memberjunction/core', () => ({
         };
         return map[sqlType.toLowerCase()] || 'string';
     })
-}));
+};
+});
 
 vi.mock('fs', async () => {
     const actual = await vi.importActual<typeof import('fs')>('fs');
@@ -50,7 +76,9 @@ vi.mock('../Misc/status_logging', () => ({
 
 vi.mock('../Database/manage-metadata', () => ({
     ValidatorResult: class {},
-    ManageMetadataBase: class {}
+    ManageMetadataBase: class {
+        static generatedValidators: unknown[] = [];
+    }
 }));
 
 vi.mock('../Config/config', () => ({
@@ -136,6 +164,102 @@ describe('EntitySubClassGeneratorBase', () => {
             expect(result).toBe('');
             expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('no primary keys'));
             warnSpy.mockRestore();
+        });
+
+        it('should rename field getter/setter when name conflicts with BaseEntity member', async () => {
+            const entity = {
+                Name: 'Actions',
+                ClassName: 'Action',
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', TSType: 'string', IsPrimaryKey: true, AutoIncrement: false }],
+                Fields: [
+                    { Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', AllowsNull: false, ReadOnly: false, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true },
+                    { Name: 'Config', CodeName: 'Config', Type: 'nvarchar', SQLFullType: 'nvarchar(MAX)', AllowsNull: true, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true }
+                ],
+                EntityObjectSubclassName: '',
+                EntityObjectSubclassImport: '',
+                AllowDeleteAPI: true,
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                CascadeDeletes: false,
+                IsChildType: false,
+                Status: 'Active',
+                SchemaName: '__mj',
+                BaseTable: 'Action',
+                BaseView: 'vwActions',
+                Description: ''
+            };
+
+            const result = await generator.generateEntitySubClass(
+                {} as Parameters<typeof generator.generateEntitySubClass>[0],
+                entity as Parameters<typeof generator.generateEntitySubClass>[1],
+                false,
+                true
+            );
+
+            // Config should be renamed to Config_ to avoid shadowing BaseEntity.Config
+            expect(result).toContain('get Config_()');
+            expect(result).toContain('set Config_(value:');
+            expect(result).toContain('avoid conflict with BaseEntity.Config');
+            // The underlying Get/Set calls should still use the original DB field name
+            expect(result).toContain("return this.Get('Config')");
+            expect(result).toContain("this.Set('Config', value)");
+        });
+
+        it('should NOT rename field getter/setter when name does not conflict', async () => {
+            const entity = {
+                Name: 'Actions',
+                ClassName: 'Action',
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID', TSType: 'string', IsPrimaryKey: true, AutoIncrement: false }],
+                Fields: [
+                    { Name: 'ID', CodeName: 'ID', Type: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', AllowsNull: false, ReadOnly: false, IsPrimaryKey: true, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true },
+                    { Name: 'Description', CodeName: 'Description', Type: 'nvarchar', SQLFullType: 'nvarchar(MAX)', AllowsNull: true, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true }
+                ],
+                EntityObjectSubclassName: '',
+                EntityObjectSubclassImport: '',
+                AllowDeleteAPI: true,
+                AllowCreateAPI: true,
+                AllowUpdateAPI: true,
+                CascadeDeletes: false,
+                IsChildType: false,
+                Status: 'Active',
+                SchemaName: '__mj',
+                BaseTable: 'Action',
+                BaseView: 'vwActions',
+                Description: ''
+            };
+
+            const result = await generator.generateEntitySubClass(
+                {} as Parameters<typeof generator.generateEntitySubClass>[0],
+                entity as Parameters<typeof generator.generateEntitySubClass>[1],
+                false,
+                true
+            );
+
+            // Description should NOT be renamed — it doesn't conflict with BaseEntity
+            expect(result).toContain('get Description()');
+            expect(result).toContain('set Description(value:');
+            expect(result).not.toContain('Description_');
+        });
+    });
+
+    describe('GenerateSchemaAndType', () => {
+        it('should rename Zod schema key when field name conflicts with BaseEntity member', () => {
+            const entity = {
+                Name: 'Actions',
+                ClassName: 'Action',
+                PrimaryKeys: [{ Name: 'ID', CodeName: 'ID' }],
+                Fields: [
+                    { Name: 'Config', CodeName: 'Config', Type: 'nvarchar', SQLFullType: 'nvarchar(MAX)', AllowsNull: true, ReadOnly: false, IsPrimaryKey: false, AutoIncrement: false, IsVirtual: false, AllowUpdateAPI: true, ValueListType: '', ValueListTypeEnum: 0, EntityFieldValues: [], Status: 'Active', NeedsQuotes: true, DisplayName: '', RelatedEntity: '', DefaultValue: '', Description: '' }
+                ]
+            };
+
+            const result = generator.GenerateSchemaAndType(
+                entity as Parameters<typeof generator.GenerateSchemaAndType>[0]
+            );
+
+            // Zod key should use Config_ to match the getter/setter
+            expect(result).toContain('Config_: z.');
+            expect(result).not.toMatch(/(?<![_])Config: z\./);
         });
     });
 });
