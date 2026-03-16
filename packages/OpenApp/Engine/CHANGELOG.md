@@ -1,5 +1,15 @@
 # @memberjunction/open-app-engine
 
+## 5.12.0
+
+### Patch Changes
+
+- 21a04c1: Support per-schema entity package resolution in CodeGen for OpenApp multi-package distribution
+- Updated dependencies [05f19ff]
+- Updated dependencies [d92502e]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/global@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes
