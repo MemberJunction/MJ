@@ -274,10 +274,37 @@ export class ComponentFeedbackPanelComponent implements OnDestroy {
     }
   }
 
+  /**
+   * Gets the effective bounding rect for a component marker element.
+   * display:contents elements return zero-size rects, so we compute
+   * the union bounding box of their children instead.
+   */
+  private getEffectiveRect(el: Element): DOMRect {
+    const rect = el.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) return rect;
+
+    // display:contents wrapper — union the bounding rects of all children
+    const children = el.children;
+    if (children.length === 0) return rect;
+
+    let top = Infinity, left = Infinity, bottom = -Infinity, right = -Infinity;
+    for (let i = 0; i < children.length; i++) {
+      const childRect = children[i].getBoundingClientRect();
+      if (childRect.width === 0 && childRect.height === 0) continue;
+      top = Math.min(top, childRect.top);
+      left = Math.min(left, childRect.left);
+      bottom = Math.max(bottom, childRect.bottom);
+      right = Math.max(right, childRect.right);
+    }
+
+    if (top === Infinity) return rect; // no visible children
+    return new DOMRect(left, top, right - left, bottom - top);
+  }
+
   private positionOverlay(overlay: HTMLElement, targetEl: Element): void {
     if (!this.ReactContainerElement) return;
 
-    const targetRect = targetEl.getBoundingClientRect();
+    const targetRect = this.getEffectiveRect(targetEl);
     const containerRect = this.ReactContainerElement.getBoundingClientRect();
 
     overlay.style.position = 'absolute';
