@@ -8,12 +8,28 @@ import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
 import { FKCandidate, FKEvidence, PKCandidate } from '../types/discovery.js';
 import { RelationshipDiscoveryConfig } from '../types/config.js';
+import { ColumnStatsCache } from './ColumnStatsCache.js';
 
 export class FKDetector {
   constructor(
     private driver: BaseAutoDocDriver,
-    private config: RelationshipDiscoveryConfig
+    private config: RelationshipDiscoveryConfig,
+    private statsCache?: ColumnStatsCache
   ) {}
+
+  /**
+   * Returns the list of FK-eligible column names for a table.
+   * A column is FK-eligible if it has a key-compatible data type and values look like keys.
+   * This list constrains what the LLM is allowed to recommend as FKs.
+   */
+  public getFKEligibleColumns(schemaName: string, tableName: string): string[] {
+    if (!this.statsCache) return [];
+    const tableStats = this.statsCache.getTableStats(schemaName, tableName);
+    if (!tableStats) return [];
+    return Array.from(tableStats.columns.values())
+      .filter(col => col.fkEligible)
+      .map(col => col.columnName);
+  }
 
   /**
    * Detect foreign key candidates for a table
@@ -36,6 +52,7 @@ export class FKDetector {
       // Tier 1: Skip non-key data types (dates, booleans, floats — never FK columns)
       if (this.isNonKeyDataType(sourceColumn.dataType)) {
         console.log(`[FKDetector]   Skip ${sourceColumn.name} - non-key data type (${sourceColumn.dataType})`);
+        this.markFKIneligible(sourceSchema, sourceTable.name, sourceColumn.name);
         continue;
       }
 
@@ -58,6 +75,7 @@ export class FKDetector {
         );
         if (!looksLikeKey) {
           console.log(`[FKDetector]   Skip ${sourceColumn.name} - values don't look like keys`);
+          this.markFKIneligible(sourceSchema, sourceTable.name, sourceColumn.name);
           continue;
         }
       }
@@ -577,5 +595,17 @@ export class FKDetector {
     }
 
     return Math.round(Math.min(score, 100));
+  }
+
+  /**
+   * Mark a column as not eligible to be a FK source in the stats cache.
+   * This prevents the LLM from recommending it as a FK.
+   */
+  private markFKIneligible(schemaName: string, tableName: string, columnName: string): void {
+    if (!this.statsCache) return;
+    const stats = this.statsCache.getColumnStats(schemaName, tableName, columnName);
+    if (stats) {
+      stats.fkEligible = false;
+    }
   }
 }

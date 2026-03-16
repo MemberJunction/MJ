@@ -868,10 +868,11 @@ import {
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
 
-// @memberjunction/scheduling-engine (2 classes)
+// @memberjunction/scheduling-engine (3 classes)
 import {
     ActionScheduledJobDriver,
     AgentScheduledJobDriver,
+    IntegrationSyncScheduledJobDriver,
 } from '@memberjunction/scheduling-engine';
 
 // @memberjunction/scheduling-engine-base (1 classes)
@@ -1564,6 +1565,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     UpdateScheduledJobAction,
     ActionScheduledJobDriver,
     AgentScheduledJobDriver,
+    IntegrationSyncScheduledJobDriver,
     MJScheduledJobEntityExtended,
     MJEntityPermissionEntityServer,
     SkipProxyAgent,
@@ -1583,7 +1585,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 664;
+export const CLASS_REGISTRATIONS_COUNT = 665;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

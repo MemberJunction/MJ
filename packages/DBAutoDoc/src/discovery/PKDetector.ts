@@ -18,6 +18,19 @@ export class PKDetector {
   ) {}
 
   /**
+   * Returns the list of PK-eligible column names for a table.
+   * A column is PK-eligible if it has zero nulls, zero blanks, and 100% unique values.
+   * This list constrains what the LLM is allowed to recommend as PKs.
+   */
+  public getPKEligibleColumns(schemaName: string, tableName: string): string[] {
+    const tableStats = this.statsCache.getTableStats(schemaName, tableName);
+    if (!tableStats) return [];
+    return Array.from(tableStats.columns.values())
+      .filter(col => col.pkEligible)
+      .map(col => col.columnName);
+  }
+
+  /**
    * Detect primary key candidates for a table
    */
   public async detectPKCandidates(
@@ -130,6 +143,12 @@ export class PKDetector {
       // Detect data pattern
       const dataPattern = this.detectDataPattern(stats.sampleValues, column.dataType);
 
+      const nullPercentage = stats.totalRows > 0 ? stats.nullCount / stats.totalRows : 0;
+      const uniqueness = stats.totalRows > 0 ? stats.distinctCount / stats.totalRows : 0;
+      const hasBlankOrZero = stats.sampleValues.some(v =>
+        v === '' || v === 0 || v === '0' || (typeof v === 'string' && v.trim() === '')
+      );
+
       cachedStats = {
         schemaName,
         tableName,
@@ -137,14 +156,18 @@ export class PKDetector {
         dataType: column.dataType,
         totalRows: stats.totalRows,
         nullCount: stats.nullCount,
-        nullPercentage: stats.totalRows > 0 ? stats.nullCount / stats.totalRows : 0,
+        nullPercentage,
         distinctCount: stats.distinctCount,
-        uniqueness: stats.totalRows > 0 ? stats.distinctCount / stats.totalRows : 0,
+        uniqueness,
         minValue: stats.minValue,
         maxValue: stats.maxValue,
         avgLength: stats.avgLength,
         dataPattern,
         sampleValues: stats.sampleValues,
+        // Deterministic PK eligibility: zero nulls, zero blanks, 100% unique
+        pkEligible: stats.nullCount === 0 && !hasBlankOrZero && uniqueness === 1.0 && stats.totalRows > 0,
+        // FK eligibility computed later by FKDetector (default true, refined by data type/value checks)
+        fkEligible: true,
         computedAt: new Date().toISOString(),
         queryTimeMs: Date.now() - startTime
       };
@@ -154,23 +177,22 @@ export class PKDetector {
 
     // Use cached stats for PK analysis
     const uniqueness = cachedStats.uniqueness;
-    const hasNulls = cachedStats.nullCount > 0;
 
-    // Hard reject: PK columns cannot have nulls — this is definitional
-    if (hasNulls) {
-      console.log(`[PKDetector] REJECT ${column.name} - has ${cachedStats.nullCount} null values (PKs cannot be nullable)`);
-      return null;
-    }
-
-    // Hard reject: PK columns cannot have empty strings or zero values
-    if (cachedStats.sampleValues && cachedStats.sampleValues.length > 0) {
-      const hasBlankOrZero = cachedStats.sampleValues.some(v =>
+    // Deterministic eligibility gate — a column is only PK-eligible if it has
+    // zero nulls, zero blanks, and 100% unique values. This is the mathematical
+    // definition of a primary key and cannot be overridden by the LLM.
+    if (!cachedStats.pkEligible) {
+      const reasons: string[] = [];
+      if (cachedStats.nullCount > 0) reasons.push(`${cachedStats.nullCount} nulls`);
+      if (cachedStats.uniqueness < 1.0) reasons.push(`${(cachedStats.uniqueness * 100).toFixed(1)}% unique (must be 100%)`);
+      if (cachedStats.totalRows === 0) reasons.push('empty table');
+      // Check for blanks in sample
+      const hasBlankOrZero = cachedStats.sampleValues?.some(v =>
         v === '' || v === 0 || v === '0' || (typeof v === 'string' && v.trim() === '')
       );
-      if (hasBlankOrZero) {
-        console.log(`[PKDetector] REJECT ${column.name} - has blank or zero values (PKs cannot have empty/zero values)`);
-        return null;
-      }
+      if (hasBlankOrZero) reasons.push('has blank/zero values');
+      console.log(`[PKDetector] REJECT ${column.name} - not PK-eligible: ${reasons.join(', ')}`);
+      return null;
     }
 
     // Analyze naming pattern
@@ -204,10 +226,7 @@ export class PKDetector {
       warnings: []
     };
 
-    // Add warnings
-    if (hasNulls) {
-      evidence.warnings.push('Column contains NULL values');
-    }
+    // Add warnings (nulls/blanks are already hard-rejected by eligibility gate)
     if (uniqueness < 1.0) {
       evidence.warnings.push(`Only ${(uniqueness * 100).toFixed(1)}% unique values`);
     }
@@ -459,10 +478,8 @@ export class PKDetector {
       score *= (1 - (fkLikelihood * 0.6)); // Up to 60% penalty for strong FK patterns
     }
 
-    // Penalties
-    if (evidence.nullCount > 0) {
-      score *= 0.7; // 30% penalty for nulls
-    }
+    // Note: null penalty removed — columns with nulls are now hard-rejected
+    // at the eligibility gate before reaching confidence scoring.
 
     // **STRICTER REQUIREMENT**: Require BOTH high uniqueness AND naming score
     if (evidence.uniqueness >= 0.95 && evidence.namingScore < 0.3) {
@@ -522,7 +539,9 @@ export class PKDetector {
   }
 
   /**
-   * Detect composite primary keys
+   * Detect composite primary keys.
+   * Each column in a composite key must individually be PK-eligible
+   * (zero nulls, zero blanks), and the combination must be 100% unique.
    */
   private async detectCompositeKeys(
     schemaName: string,
@@ -531,42 +550,63 @@ export class PKDetector {
   ): Promise<PKCandidate[]> {
     const candidates: PKCandidate[] = [];
 
-    // Look for common composite key patterns
-    // 1. Multiple columns ending in "ID"
+    // Look for common composite key patterns — columns ending in "ID" or "KEY"
     const idColumns = table.columns.filter(c =>
       /id$/i.test(c.name) || /key$/i.test(c.name)
     );
 
-    if (idColumns.length >= 2) {
-      // Check if combination is unique
-      const isUnique = await this.driver.checkColumnCombinationUniqueness(
-        schemaName,
-        table.name,
-        idColumns.map(c => c.name),
-        this.config.sampling.maxRowsPerTable
-      );
+    if (idColumns.length >= 2 && idColumns.length <= 4) {
+      // Each column must be individually PK-eligible (no nulls, no blanks)
+      // Uniqueness doesn't need to be 100% per column for composites,
+      // but nulls and blanks are still disqualifying.
+      const eligibleColumns = idColumns.filter(c => {
+        const stats = this.statsCache.getColumnStats(schemaName, table.name, c.name);
+        if (!stats) return false;
+        if (stats.nullCount > 0) {
+          console.log(`[PKDetector] Composite: skip ${c.name} - has ${stats.nullCount} nulls`);
+          return false;
+        }
+        const hasBlankOrZero = stats.sampleValues?.some(v =>
+          v === '' || v === 0 || v === '0' || (typeof v === 'string' && v.trim() === '')
+        );
+        if (hasBlankOrZero) {
+          console.log(`[PKDetector] Composite: skip ${c.name} - has blank/zero values`);
+          return false;
+        }
+        return true;
+      });
 
-      if (isUnique) {
-        const evidence: PKEvidence = {
-          uniqueness: 1.0,
-          nullCount: 0, // Assume no nulls if unique
-          totalRows: this.config.sampling.maxRowsPerTable,
-          dataPattern: 'composite',
-          namingScore: 0.8, // Good naming for composite
-          dataTypeScore: 0.9,
-          warnings: ['Composite key - verify with domain expert']
-        };
-
-        candidates.push({
+      if (eligibleColumns.length >= 2) {
+        // Check if combination is unique
+        const isUnique = await this.driver.checkColumnCombinationUniqueness(
           schemaName,
-          tableName: table.name,
-          columnNames: idColumns.map(c => c.name),
-          confidence: 75, // Moderate confidence for composite keys
-          evidence,
-          discoveredInIteration: iteration,
-          validatedByLLM: false,
-          status: 'candidate'
-        });
+          table.name,
+          eligibleColumns.map(c => c.name),
+          this.config.sampling.maxRowsPerTable
+        );
+
+        if (isUnique) {
+          const evidence: PKEvidence = {
+            uniqueness: 1.0,
+            nullCount: 0,
+            totalRows: this.config.sampling.maxRowsPerTable,
+            dataPattern: 'composite',
+            namingScore: 0.8,
+            dataTypeScore: 0.9,
+            warnings: ['Composite key - verify with domain expert']
+          };
+
+          candidates.push({
+            schemaName,
+            tableName: table.name,
+            columnNames: eligibleColumns.map(c => c.name),
+            confidence: 75,
+            evidence,
+            discoveredInIteration: iteration,
+            validatedByLLM: false,
+            status: 'candidate'
+          });
+        }
       }
     }
 

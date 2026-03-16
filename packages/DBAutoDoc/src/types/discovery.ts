@@ -234,6 +234,13 @@ export interface CachedColumnStats {
   sampleValues: Array<string | number | null>;
   valueDistribution?: Array<{ value: string | number; frequency: number }>;
 
+  // Deterministic eligibility flags — set once during stats gathering,
+  // used to constrain what the LLM can recommend as PKs/FKs.
+  /** True if column qualifies as a potential PK: zero nulls, zero blanks, 100% unique values */
+  pkEligible: boolean;
+  /** True if column qualifies as a potential FK source: non-date/bool/float type, values look like keys */
+  fkEligible: boolean;
+
   // Timing
   computedAt: string;
   queryTimeMs: number;

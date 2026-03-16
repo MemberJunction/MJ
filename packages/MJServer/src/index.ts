@@ -528,6 +528,13 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     level: 6
   }));
 
+  // Health check endpoint - registered before auth middleware so cloud
+  // platform probes (Azure App Service, AWS ALB, k8s, etc.) don't
+  // generate noisy auth errors in the logs.
+  app.get('/healthcheck', (_req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
+
   // Apply user-provided Express middleware (after compression, before routes)
   if (options?.ExpressMiddlewareBefore) {
     for (const mw of options.ExpressMiddlewareBefore) {
