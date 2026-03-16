@@ -1236,75 +1236,44 @@ Migration → CodeGen → Restart → Git → CI/CD
 
 ---
 
-## 15. Consumer 2: User Defined Tables (UDT)
+## 15. Consumer 2: User/Agent Entity Creation (formerly "UDT")
 
-The [User Defined Tables plan](user-defined-tables-architecture.md) describes an Airtable-like experience where users or agents can create tables via UI or natural language. With SchemaEngine + RSU, the UDT pipeline becomes straightforward.
+With RSU, there is no need for special "User Defined Table" tracking entities or a separate UDT pipeline. **Creating a table through RSU produces a regular MJ entity** — indistinguishable from hand-created ones. The entire MJ architecture (RunView, Record Changes, permissions, dashboards, Skip queries, CodeGen-generated typed classes, GraphQL CRUD) applies automatically.
 
-### UDT → SchemaEngine → RSU Flow
+### How It Works
 
 ```
-User/Agent: "Create a table for project milestones"
+User/Agent: "I need a table to track project milestones"
     ↓
-UserTablePipeline (new class)
-    ├── Parse user intent → UserTableDefinition
-    ├── Convert to TableDefinition:
-    │   SchemaName: "custom"
-    │   TableName: "UD_ProjectMilestones"
-    │   EntityName: "User: Project Milestones"
-    │   Columns: [Name, DueDate, Status, OwnerUserID]
-    ├── SchemaEngine.GenerateMigration(tableDef, platform)
-    └── RuntimeSchemaManager.RunPipeline(...)
+Entity Designer Agent (AI agent)
+    ├── Helps user define schema (columns, types, relationships)
+    ├── Validates design (reserved names, column limits)
+    ├── Generates TableDefinition
+    ├── Calls SchemaEngine.GenerateMigration(tableDef, platform)
+    └── Calls RuntimeSchemaManager.RunPipeline(...)
     ↓
 ~60 seconds later: fully operational MJ entity with CRUD, RunView, permissions
 ```
 
-### UDT-Specific Logic (NOT in SchemaEngine)
+### Why No Special UDT Tables
 
-- Naming convention: `custom.UD_{TableName}` for SQL tables, `User: {TableName}` for entity names
-- `UserDefinedTable` / `UserDefinedField` metadata entities to track what the user created
-- Permission setup: auto-create EntityPermission records for the creating user
-- Rate limiting: max 10 tables/user/day, max 50 fields/table
-- Validation: field count limits, reserved name checking
+The old plan called for `UserDefinedTable` / `UserDefinedField` metadata entities to track which tables were user-created. This is unnecessary because:
 
-### Why First-Class Entities
+- `__mj.Entity` and `__mj.EntityField` already track every entity and field in the system
+- The RSU audit log records who created what table and when
+- There is no functional difference between a "user-created" entity and any other entity
+- Separate tracking tables would duplicate metadata and require special-case code throughout MJ
 
-Real SQL tables through the standard MJ pipeline mean:
-- **Skip can query them** — standard SQL, RunView, no special handling
-- **Full MJ features** — Record Changes (versioning), permissions, audit trail, dashboards
-- **CodeGen produces typed classes** — strong typing, GraphQL resolvers, Angular forms
-- **No performance compromise** — real indexes, real query optimizer
+### Entity Designer Agent (Future)
 
-The only trade-off is the ~60-second MJAPI restart, which is acceptable for table creation (not a frequent operation).
+An AI agent that helps users design and create entities through conversation:
 
----
-
-## 16. Consumer 3: Agent-Driven Schema Creation
-
-AI agents can use SchemaEngine + RSU to create tables on the fly.
-
-### Example: Skip Analysis Agent
-
-```
-Skip: "I need to store the quarterly sales analysis results"
-    ↓
-Agent creates a TableDefinition:
-    SchemaName: "skip_analysis"
-    TableName: "QuarterlySalesResults_2026Q1"
-    Columns: [Region, Product, Revenue, UnitsSold, GrowthPct, AnalysisDate]
-    ↓
-SchemaEngine.GenerateMigration(...)
-    ↓
-RuntimeSchemaManager.RunPipeline(...)
-    ↓
-Agent: "Table created. I'll now populate it with the analysis results."
-```
-
-### Agent-Specific Considerations
-
-- Agents should use `Preview()` before `RunPipeline()` to confirm intent
-- Table naming conventions for agent-created tables (e.g., `agent.{AgentName}_{Purpose}`)
-- Auto-cleanup: agent-created tables could have a TTL or require periodic confirmation
-- The agent framework's `BaseAgent` would have a helper method for table creation
+- Understands the existing schema and can suggest relationships to existing entities
+- Validates column types, naming, and constraints
+- Previews the SQL before execution
+- Calls RSU to create the table
+- Can also modify existing entities (ALTER TABLE via SchemaEvolution)
+- Builds a UI around the entity creation experience
 
 ---
 
@@ -1390,21 +1359,21 @@ Agent: "Table created. I'll now populate it with the analysis results."
 
 **Estimated complexity**: Medium. Depends on existing CI/CD infrastructure.
 
-### Phase 5: UDT Pipeline
+### Phase 5: Entity Designer Agent
 
-**Goal**: Users and agents can create tables via UI or natural language.
+**Goal**: An AI agent that helps users design and create/modify entities through conversation or UI.
 
 **Tasks**:
-1. Create `UserTablePipeline` class (UDT → TableDefinition → SchemaEngine → RSU)
-2. Create `UserDefinedTable` / `UserDefinedField` MJ entities (metadata tracking)
-3. Implement naming conventions (`custom.UD_*`, `User: *`)
-4. Implement permission auto-setup
-5. Implement rate limiting and validation
-6. Create Angular UI for table definition (column picker, type selector)
-7. Create agent tool for natural-language table creation
-8. End-to-end test: user creates table in UI, agent creates table via conversation
+1. Create Entity Designer agent metadata (prompts, actions, configuration)
+2. Agent understands existing schema and suggests relationships
+3. Agent validates designs and previews SQL before execution
+4. Agent calls SchemaEngine + RSU to create/modify tables
+5. Angular UI for guided entity creation (optional — agent can work via chat)
+6. End-to-end test: user creates entity via agent conversation
 
-**Estimated complexity**: High. New UI, new entities, agent integration.
+**Note**: No special UDT tables or pipeline needed. RSU creates regular MJ entities. The agent is the user-friendly interface — RSU is the execution engine.
+
+**Estimated complexity**: Medium. Agent metadata + prompts, leverages existing RSU infrastructure.
 
 ### Phase 6: Polish & Hardening
 

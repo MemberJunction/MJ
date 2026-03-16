@@ -120,8 +120,5 @@ export * from './VersionHistory';
 // Integration Dashboard
 export * from './Integration';
 
-// Runtime Schema Update Dashboard
-export * from './RSU/rsu.module';
-
 // Module
 export * from './module';
