@@ -106,7 +106,9 @@ export class Introspector {
           isForeignKey: col.isForeignKey,
           checkConstraint: col.checkConstraint,
           defaultValue: col.defaultValue,
-          descriptionIterations: []
+          descriptionIterations: [],
+          pkSource: col.isPrimaryKey ? 'schema' as const : undefined,
+          fkSource: col.isForeignKey ? 'schema' as const : undefined,
         }));
 
         tables.push({

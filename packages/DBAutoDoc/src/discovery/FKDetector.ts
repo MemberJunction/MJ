@@ -49,6 +49,12 @@ export class FKDetector {
 
     // For each column in source table
     for (const sourceColumn of sourceTable.columns) {
+      // Skip columns already designated as manual FK from soft keys ground truth
+      if (sourceColumn.fkSource === 'manual') {
+        console.log(`[FKDetector]   Skip ${sourceColumn.name} - already designated as manual FK`);
+        continue;
+      }
+
       // Tier 1: Skip non-key data types (dates, booleans, floats — never FK columns)
       if (this.isNonKeyDataType(sourceColumn.dataType)) {
         console.log(`[FKDetector]   Skip ${sourceColumn.name} - non-key data type (${sourceColumn.dataType})`);

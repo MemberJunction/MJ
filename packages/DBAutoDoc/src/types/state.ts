@@ -115,6 +115,14 @@ export interface TableDefinition {
   userApproved?: boolean;
 }
 
+/**
+ * Origin of a primary key or foreign key flag on a column.
+ * - 'schema':     Defined in database DDL (hard constraint from introspection)
+ * - 'discovered': Inferred by the AI discovery phase
+ * - 'manual':     User-provided via additionalSchemaInfo ground truth file
+ */
+export type KeySource = 'schema' | 'discovered' | 'manual';
+
 export interface ColumnDefinition {
   name: string;
   dataType: string;
@@ -130,6 +138,10 @@ export interface ColumnDefinition {
   descriptionIterations: DescriptionIteration[];
   userDescription?: string;
   userApproved?: boolean;
+  /** Origin of the isPrimaryKey flag. Undefined in legacy state files (treat as 'schema'). */
+  pkSource?: KeySource;
+  /** Origin of the isForeignKey flag. Undefined in legacy state files (treat as 'schema'). */
+  fkSource?: KeySource;
 }
 
 export interface ForeignKeyReference {

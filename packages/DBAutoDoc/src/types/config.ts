@@ -37,6 +37,10 @@ export interface GroundTruthConfig {
   schemas?: Record<string, SchemaGroundTruth>;
   /** Table-level ground truth, keyed by "schema.table" */
   tables?: Record<string, TableGroundTruth>;
+  /** Path to an additionalSchemaInfo.json file with known soft PK/FK definitions.
+   *  Format matches MemberJunction CodeGen's additionalSchemaInfo (PascalCase).
+   *  Supports both flat { "Tables": [...] } and schema-as-key { "dbo": [...] } formats. */
+  additionalSchemaInfoFile?: string;
 }
 
 export interface SchemaGroundTruth {

@@ -42,6 +42,11 @@ export class PKDetector {
 
     // Single-column PK detection
     for (const column of table.columns) {
+      // Skip columns already designated as manual PK from soft keys ground truth
+      if (column.pkSource === 'manual') {
+        continue;
+      }
+
       const candidate = await this.analyzeSingleColumnPK(
         schemaName,
         table.name,

@@ -21,6 +21,8 @@ import { MarkdownGenerator } from '../generators/MarkdownGenerator.js';
 import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
 import { SampleQueryGenerator } from '../generators/SampleQueryGenerator.js';
 import { DBAutoDocConfig } from '../types/config.js';
+import { SoftKeysLoader } from '../utils/soft-keys-loader.js';
+import { SoftKeysMerger } from '../utils/soft-keys-merger.js';
 import { DatabaseDocumentation, AnalysisRun } from '../types/state.js';
 import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.js';
 import { DiscoveryEngine } from '../discovery/DiscoveryEngine.js';
@@ -178,6 +180,11 @@ export class AnalysisOrchestrator {
         await stateManager.save(state);
 
       }
+
+      // Merge soft PK/FK ground truth into state (if configured).
+      // Must happen AFTER introspection (so tables exist) but BEFORE discovery trigger
+      // (so manual keys are counted as existing PKs/FKs).
+      await this.applySoftKeys(state, stateManager);
 
       // Relationship Discovery Phase (if enabled)
       // Runs on both fresh and resumed runs; resumes from partial progress if interrupted
@@ -597,6 +604,47 @@ export class AnalysisOrchestrator {
     if (applied > 0) {
       this.onProgress('Ground truth applied', { descriptionsApplied: applied });
     }
+  }
+
+  /**
+   * Load and merge soft PK/FK definitions from an additionalSchemaInfo file.
+   * Must be called AFTER introspection (so tables exist in state)
+   * but BEFORE the discovery trigger analyzer (so manual keys are counted).
+   */
+  private async applySoftKeys(
+    state: DatabaseDocumentation,
+    stateManager: StateManager
+  ): Promise<void> {
+    const filePath = this.config.groundTruth?.additionalSchemaInfoFile;
+    if (!filePath) return;
+
+    this.onProgress('Loading soft PK/FK definitions', { file: filePath });
+
+    const loadResult = await SoftKeysLoader.loadFromFile(filePath);
+
+    // Validate references against actual schema state
+    const validationWarnings = SoftKeysLoader.validate(loadResult.tables, state.schemas);
+    for (const warning of [...loadResult.warnings, ...validationWarnings]) {
+      this.onProgress('Soft keys warning', { message: warning });
+    }
+
+    // Merge into state
+    const mergeResult = SoftKeysMerger.merge(state, loadResult.tables);
+
+    for (const warning of mergeResult.warnings) {
+      this.onProgress('Soft keys merge warning', { message: warning });
+    }
+
+    this.onProgress('Soft PK/FK definitions applied', {
+      pkAdded: mergeResult.pkAdded,
+      fkAdded: mergeResult.fkAdded,
+      tablesAffected: mergeResult.tablesAffected,
+      tableDescriptionsAdded: mergeResult.tableDescriptionsAdded,
+    });
+
+    // Save state with merged keys
+    stateManager.updateSummary(state);
+    await stateManager.save(state);
   }
 
   /**

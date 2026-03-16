@@ -1104,6 +1104,7 @@ export class DiscoveryEngine {
           const column = table.columns.find(c => c.name === columnName);
           if (column) {
             column.isPrimaryKey = true;
+            column.pkSource = 'discovered';
           }
         }
       }
@@ -1121,6 +1122,7 @@ export class DiscoveryEngine {
         const column = table.columns.find(c => c.name === fk.sourceColumn);
         if (column) {
           column.isForeignKey = true;
+          column.fkSource = 'discovered';
           column.foreignKeyReferences = {
             schema: fk.targetSchema,
             table: fk.targetTable,

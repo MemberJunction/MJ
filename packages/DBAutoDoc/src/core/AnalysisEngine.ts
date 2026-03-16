@@ -316,7 +316,7 @@ export class AnalysisEngine {
     }
 
     // Build ground truth context if available
-    const groundTruthContext = this.buildGroundTruthContext(tableNode.schema, tableNode.table);
+    const groundTruthContext = this.buildGroundTruthContext(tableNode.schema, tableNode.table, table);
 
     return {
       schema: tableNode.schema,
@@ -346,21 +346,43 @@ export class AnalysisEngine {
   }
 
   /**
-   * Build ground truth context for a table from config
+   * Build ground truth context for a table from config and manual relationships.
+   * Includes both text-based ground truth (from config) and relationship ground truth
+   * (from additionalSchemaInfo soft keys merged into state).
    */
-  private buildGroundTruthContext(schemaName: string, tableName: string): TableGroundTruthContext | undefined {
+  private buildGroundTruthContext(
+    schemaName: string,
+    tableName: string,
+    table: import('../types/state.js').TableDefinition
+  ): TableGroundTruthContext | undefined {
     const gt = this.config.groundTruth;
-    if (!gt) return undefined;
 
     const tableKey = `${schemaName}.${tableName}`;
-    const tableGT = gt.tables?.[tableKey];
-    const schemaGT = gt.schemas?.[schemaName];
+    const tableGT = gt?.tables?.[tableKey];
+    const schemaGT = gt?.schemas?.[schemaName];
 
-    // If no ground truth for this table or schema, return undefined
-    if (!tableGT && !schemaGT) return undefined;
+    // Collect manual relationship info from column state
+    const manualPKColumns = table.columns
+      .filter(c => c.pkSource === 'manual' && c.isPrimaryKey)
+      .map(c => c.name);
+
+    const manualFKs = table.columns
+      .filter(c => c.fkSource === 'manual' && c.isForeignKey && c.foreignKeyReferences)
+      .map(c => ({
+        column: c.name,
+        referencesTable: `${c.foreignKeyReferences!.schema}.${c.foreignKeyReferences!.table}`,
+        referencesColumn: c.foreignKeyReferences!.referencedColumn,
+      }));
+
+    const hasTextGroundTruth = tableGT || schemaGT;
+    const hasManualRelationships = manualPKColumns.length > 0 || manualFKs.length > 0;
+
+    // If no ground truth of any kind, return undefined
+    if (!hasTextGroundTruth && !hasManualRelationships) return undefined;
 
     const context: TableGroundTruthContext = {};
 
+    // Text-based ground truth
     if (tableGT?.description) context.tableDescription = tableGT.description;
     if (tableGT?.notes) context.tableNotes = tableGT.notes;
     if (tableGT?.businessDomain) context.businessDomain = tableGT.businessDomain;
@@ -374,6 +396,13 @@ export class AnalysisEngine {
         if (colGT.description) context.columnDescriptions[colName] = colGT.description;
         if (colGT.notes) context.columnNotes[colName] = colGT.notes;
       }
+    }
+
+    // Manual relationship ground truth
+    if (hasManualRelationships) {
+      context.manualRelationships = {};
+      if (manualPKColumns.length > 0) context.manualRelationships.primaryKeyColumns = manualPKColumns;
+      if (manualFKs.length > 0) context.manualRelationships.foreignKeys = manualFKs;
     }
 
     return context;

@@ -68,6 +68,15 @@ export interface TableGroundTruthContext {
   businessDomain?: string;
   columnDescriptions?: Record<string, string>;
   columnNotes?: Record<string, string>;
+  /** Manually curated PK/FK relationships from additionalSchemaInfo ground truth file */
+  manualRelationships?: {
+    primaryKeyColumns?: string[];
+    foreignKeys?: Array<{
+      column: string;
+      referencesTable: string;
+      referencesColumn: string;
+    }>;
+  };
 }
 
 export interface ParentTableDescription {
