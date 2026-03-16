@@ -137,6 +137,18 @@ This produces action metadata for their custom integration, following the same p
 
 ## 2. Database Changes
 
+### Required Migrations Summary
+
+Only **two migrations** are needed (combined into a single migration file):
+
+| Table | Change | Why |
+|-------|--------|-----|
+| `Action` | Add `Config NVARCHAR(MAX) NULL` | Carries routing JSON (integration name, object, verb) for `IntegrationActionExecutor` |
+| `IntegrationObject` | Add `WriteAPIPath NVARCHAR(500) NULL`, `WriteMethod NVARCHAR(10) NULL DEFAULT 'POST'`, `DeleteMethod NVARCHAR(10) NULL DEFAULT 'DELETE'` | Write-specific endpoint configuration when different from read path |
+
+**NOT needed:**
+- `IsWritable` on `IntegrationObjectField` — existing `IsReadOnly` column already covers this (invert the logic)
+
 ### 2.1 New Column: `Config` on Action Entity
 
 Add a single nullable column to the `Action` table:
@@ -169,18 +181,9 @@ interface IntegrationActionConfig {
 
 Non-integration actions ignore this field (it stays `NULL`). The field is generic enough that future action patterns can use it for their own purposes.
 
-### 2.2 IntegrationObjectField Enhancements
+### 2.2 IntegrationObjectField — No Migration Needed
 
-Add write-capability metadata to `IntegrationObjectField`:
-
-```sql
-ALTER TABLE ${flyway:defaultSchema}.[IntegrationObjectField]
-    ADD IsWritable BIT NOT NULL DEFAULT 1;
-    -- Whether this field can be set on Create/Update operations
-    -- Some fields are API-computed (e.g., CreatedAt, RecordID) and cannot be written
-```
-
-This already has `IsReadOnly` but adding `IsWritable` makes it explicit for the action generation utility — writable fields become Input params on Create/Update actions, read-only fields become Output-only params.
+The `IntegrationObjectField` entity already has `IsReadOnly BIT DEFAULT 0`. Rather than adding a redundant `IsReadOnly` column, we invert the existing flag: fields where `IsReadOnly = 0` are writable (become Input params on Create/Update actions), and fields where `IsReadOnly = 1` are read-only (become Output-only params). No migration required.
 
 ### 2.3 IntegrationObject Write Support
 
@@ -556,8 +559,8 @@ For each Integration:
            - Name: field.DisplayName or field.Name
            - Type:
              - Get verb: 'Output' (read fields are outputs)
-             - Create verb: 'Input' if IsWritable, skip if IsReadOnly
-             - Update verb: 'Input' if IsWritable, skip if IsReadOnly
+             - Create verb: 'Input' if NOT IsReadOnly, skip if IsReadOnly
+             - Update verb: 'Input' if NOT IsReadOnly, skip if IsReadOnly
              - Delete verb: skip (no field params)
              - Search verb: skip (uses SearchQuery string)
              - List verb: 'Output' (list returns field values)
@@ -565,7 +568,17 @@ For each Integration:
            - IsRequired: field.IsRequired AND verb is Create
            - Description: field.DisplayName or auto-generated
 
-      4. Generate ActionResultCodes:
+      4. Generate filtered list variants:
+         Where the integration object has known parent/filter relationships
+         (e.g., Deals → Company, Deals → Contact, Tasks → date range),
+         generate ADDITIONAL specific actions with strongly-typed filter params:
+           - "HubSpot - Get Deals by Company" with CompanyID (Input, required)
+           - "HubSpot - Get Deals by Contact" with ContactID (Input, required)
+           - "HubSpot - Get Upcoming Tasks" with StartDate/EndDate params
+         These are more discoverable than a generic List + filter string.
+         Vector search on action names/descriptions makes the explosion manageable.
+
+      5. Generate ActionResultCodes:
          - SUCCESS
          - NOT_FOUND (Get, Update, Delete)
          - VALIDATION_ERROR (Create, Update)
@@ -659,7 +672,7 @@ ActionSyncService.SyncActionsForIntegration(integrationId)
    - **New field added** → Add corresponding ActionParam to all relevant actions (Create/Update get Input params, Get/List get Output params)
    - **Field removed** → Remove the ActionParam from all relevant actions (or mark inactive)
    - **Field type changed** → Update the ActionParam's `ValueType` and `Description`
-   - **Field IsWritable changed** → Toggle whether it appears on Create/Update actions
+   - **Field IsReadOnly changed** → Toggle whether it appears as Input on Create/Update actions (IsReadOnly=1 means Output-only)
    - **New object added** → Generate full set of CRUD actions for the new object
    - **Object removed/disabled** → Set corresponding actions to `Status='Disabled'`
 
@@ -710,11 +723,11 @@ These are CRUD operations on well-defined business data objects in SaaS systems 
 | HubSpot - Get Deal | Get | Deals | Standard CRUD |
 | HubSpot - Update Deal | Update | Deals | Standard CRUD |
 | HubSpot - Search Deals | Search | Deals | Standard CRUD |
-| HubSpot - Get Deals by Company | List | Deals | Filtered list (by parent) |
-| HubSpot - Get Deals by Contact | List | Deals | Filtered list (by parent) |
+| HubSpot - Get Deals by Company | List | Deals | Filtered list (by parent) — keep as separate action with strongly-typed CompanyID param |
+| HubSpot - Get Deals by Contact | List | Deals | Filtered list (by parent) — keep as separate action with strongly-typed ContactID param |
 | HubSpot - Create Task | Create | Tasks | Standard CRUD |
 | HubSpot - Update Task | Update | Tasks | Standard CRUD |
-| HubSpot - Get Upcoming Tasks | List | Tasks | Filtered list (by date) |
+| HubSpot - Get Upcoming Tasks | List | Tasks | Filtered list (by date) — keep as separate action with strongly-typed date params |
 
 #### Form Builders — Typeform (6 actions → connector)
 
@@ -942,11 +955,10 @@ This is a metadata-only change (update Action.Name). Since agents reference acti
 ### Phase 0: Infrastructure (no user-visible changes)
 
 1. Add `Config` column to `Action` table (migration)
-2. Add CRUD methods to `BaseIntegrationConnector` and `BaseRESTIntegrationConnector`
-3. Build `IntegrationActionExecutor` class
-4. Build action generation CLI utility
-5. Add `IsWritable` to `IntegrationObjectField` (migration)
-6. Add `WriteAPIPath`, `WriteMethod`, `DeleteMethod` to `IntegrationObject` (migration)
+2. Add `WriteAPIPath`, `WriteMethod`, `DeleteMethod` to `IntegrationObject` (migration)
+3. Add CRUD methods to `BaseIntegrationConnector` and `BaseRESTIntegrationConnector`
+4. Build `IntegrationActionExecutor` class
+5. Build action generation CLI utility
 
 ### Phase 1: HubSpot Pilot
 
@@ -1000,7 +1012,6 @@ All new integrations follow the connector-first pattern:
 | Task | Package | Depends On |
 |------|---------|-----------|
 | Migration: Add `Config` to Action table | migrations/ | — |
-| Migration: Add `IsWritable` to IntegrationObjectField | migrations/ | — |
 | Migration: Add `WriteAPIPath`, `WriteMethod`, `DeleteMethod` to IntegrationObject | migrations/ | — |
 | Run CodeGen for new fields | — | Migrations applied |
 | Add CRUD types (`CRUDContext`, `IntegrationRecord`, etc.) | integration-engine | — |
@@ -1017,7 +1028,7 @@ All new integrations follow the connector-first pattern:
 |------|---------|-----------|
 | Add CRUD overrides to `HubSpotConnector` | integration-connectors | Phase 0 |
 | Set `SupportsWrite: true` on HubSpot objects | metadata/ | Phase 0 |
-| Populate `IsWritable` for HubSpot fields | metadata/ | Phase 0 |
+| Set `IsReadOnly` on read-only HubSpot fields (e.g., ID, CreatedAt) | metadata/ | Phase 0 |
 | Generate HubSpot action metadata | CLI utility | HubSpot CRUD |
 | Map to existing Action IDs | CLI utility --update | Generated metadata |
 | Integration test: compare generated vs hand-written results | tests/ | All of above |
@@ -1077,22 +1088,23 @@ Each provider can be done independently and in parallel:
 | Generation timing? | Build-time CLI utility |
 | Credential management? | CompanyIntegration → Credential entity only |
 | Schema drift? | Sync-on-update via entity save hooks |
+| Rate limiting? | Connector-level in the integration engine. Actions are an overlay on connectors, so rate limiting belongs where the HTTP calls happen. The connector already has the context (API keys, provider limits) to enforce rate limits. Both sync engine and action-invoked CRUD share the same connector instance, so a single rate limiter covers both paths. |
+| Filtered list actions? | **Explode, don't collapse.** Auto-generate specific filtered variants (e.g., "HubSpot - Get Deals by Company", "HubSpot - Get Upcoming Tasks") as separate actions with strongly-typed parameters and rich descriptions. More actions with clear names and params are better for discoverability — vector search makes it easy for agents and humans to find the right action. A generic List + filter param is harder to discover and use correctly. |
+| `IsWritable` column? | No — use existing `IsReadOnly` on `IntegrationObjectField` (invert the logic: `IsReadOnly = 0` means writable). No new migration needed. |
 
 ### Open for Discussion
 
-1. **Rate limiting coordination**: If both the sync engine and agent actions hit the same API simultaneously, they need shared rate limiting. Should this live on the connector instance (simple counter) or at a higher level (distributed rate limit service)? Recommend: connector-level for now, upgrade later if needed.
+1. **Batch operations**: Should we auto-generate "Batch Create Contacts" and "Batch Update Contacts" actions for providers that support batch APIs? Recommend: defer to Phase 5+ — single-record CRUD covers 90% of agent use cases.
 
-2. **Filtered list actions**: Should we auto-generate filtered variants like "HubSpot - Get Deals by Company" as separate actions? Or should the List action accept an optional filter param? Recommend: single List action with optional `Filter` param; the current "Get Deals by Company" actions are syntactic sugar that agents can achieve with the generic List + filter.
+2. **Credential scope for multi-tenant**: When an agent invokes an integration action, how does it know which `CompanyIntegrationID` to use? Options: (a) agent has it configured in its context, (b) inferred from the user's organization, (c) explicitly passed. Recommend: (c) explicitly passed as a required param, with agent context providing a default.
 
-3. **Batch operations**: Should we auto-generate "Batch Create Contacts" and "Batch Update Contacts" actions for providers that support batch APIs? Recommend: defer to Phase 5+ — single-record CRUD covers 90% of agent use cases.
+3. **Webhook/event actions**: Some platforms support webhooks (Typeform, JotForm "Watch New Responses"). Should the integration framework support event-driven actions? Recommend: defer — this is a fundamentally different pattern (push vs. pull) and warrants its own design.
 
-4. **Credential scope for multi-tenant**: When an agent invokes an integration action, how does it know which `CompanyIntegrationID` to use? Options: (a) agent has it configured in its context, (b) inferred from the user's organization, (c) explicitly passed. Recommend: (c) explicitly passed as a required param, with agent context providing a default.
+4. **Action description quality**: Auto-generated descriptions need to be good enough for AI agents to understand what the action does. Consider using a prompt template: "Retrieve a single {Object} record from {Integration} by its record ID. Returns all available fields including {top 5 field names}."
 
-5. **Webhook/event actions**: Some platforms support webhooks (Typeform, JotForm "Watch New Responses"). Should the integration framework support event-driven actions? Recommend: defer — this is a fundamentally different pattern (push vs. pull) and warrants its own design.
+5. **Existing BizApps package lifecycle**: After all CRUD actions are migrated to connectors, the BizApps packages (CRM, Accounting, LMS, FormBuilders) will shrink to only platform-specific actions. Should we keep the package structure or consolidate? Recommend: keep for now, consolidate in a future cleanup pass.
 
-6. **Action description quality**: Auto-generated descriptions need to be good enough for AI agents to understand what the action does. Consider using a prompt template: "Retrieve a single {Object} record from {Integration} by its record ID. Returns all available fields including {top 5 field names}."
-
-7. **Existing BizApps package lifecycle**: After all CRUD actions are migrated to connectors, the BizApps packages (CRM, Accounting, LMS, FormBuilders) will shrink to only platform-specific actions. Should we keep the package structure or consolidate? Recommend: keep for now, consolidate in a future cleanup pass.
+6. **Social media actions**: Classification of social media providers (Twitter, LinkedIn, Facebook, etc.) as standalone vs. integration is deferred for future discussion. Current plan keeps them as standalone custom actions.
 
 ---
 
