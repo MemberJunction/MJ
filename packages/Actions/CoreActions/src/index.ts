@@ -69,6 +69,7 @@ export * from './custom/integration/graphql-query.action';
 export * from './custom/integration/oauth-flow.action';
 export * from './custom/integration/api-rate-limiter.action';
 export * from './custom/integration/gamma-generate-presentation.action';
+export * from './custom/integration/integration-action-executor';
 
 // Security Actions
 export * from './custom/security/password-strength.action';

@@ -11,6 +11,8 @@ import type {
     CRUDResult,
     SearchContext,
     SearchResult,
+    ListContext,
+    ListResult,
 } from './types.js';
 
 /** Result of testing a connection to an external system */
@@ -196,6 +198,9 @@ export abstract class BaseIntegrationConnector {
     /** Whether this connector supports searching/querying records with filters. */
     public get SupportsSearch(): boolean { return false; }
 
+    /** Whether this connector supports paginated listing of records. */
+    public get SupportsListing(): boolean { return false; }
+
     // ─── Standard CRUD Operations ────────────────────────────────────
     // Default implementations throw if not supported. Subclasses override
     // both the capability getter AND the method to enable the operation.
@@ -242,6 +247,15 @@ export abstract class BaseIntegrationConnector {
      */
     public async SearchRecords(_ctx: SearchContext): Promise<SearchResult> {
         throw new Error(`SearchRecords is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Lists records with cursor-based pagination.
+     * Override in subclasses that support paginated listing.
+     * Check `SupportsListing` before calling.
+     */
+    public async ListRecords(_ctx: ListContext): Promise<ListResult> {
+        throw new Error(`ListRecords is not supported by ${this.constructor.name}`);
     }
 
     // ─── Core Abstract Methods ───────────────────────────────────────

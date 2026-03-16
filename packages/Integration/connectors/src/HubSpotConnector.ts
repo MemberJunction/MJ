@@ -11,6 +11,16 @@ import {
     type ConnectionTestResult,
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
+    type ExternalRecord,
+    type CRUDResult,
+    type CreateRecordContext,
+    type UpdateRecordContext,
+    type DeleteRecordContext,
+    type GetRecordContext,
+    type SearchContext,
+    type SearchResult,
+    type ListContext,
+    type ListResult,
 } from '@memberjunction/integration-engine';
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -186,7 +196,8 @@ const HUBSPOT_PROPERTIES: Record<string, string[]> = {
  *   "MinRequestIntervalMs": 100   // optional, default: 100
  * }
  *
- * DATA SAFETY: This connector is READ-ONLY. It never writes data back to HubSpot.
+ * Supports full CRUD: Get, Create, Update, Delete, Search, and List operations
+ * on all HubSpot CRM object types.
  */
 @RegisterClass(BaseIntegrationConnector, 'HubSpotConnector')
 export class HubSpotConnector extends BaseRESTIntegrationConnector {
@@ -201,6 +212,215 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     private get effectiveMaxRetries(): number { return this._config?.MaxRetries ?? MAX_RETRIES; }
     private get effectiveRequestTimeoutMs(): number { return this._config?.RequestTimeoutMs ?? REQUEST_TIMEOUT_MS; }
     private get effectiveMinRequestIntervalMs(): number { return this._config?.MinRequestIntervalMs ?? MIN_REQUEST_INTERVAL_MS; }
+
+    // ─── Capability Getters ──────────────────────────────────────────────
+
+    public override get SupportsCreate(): boolean { return true; }
+    public override get SupportsUpdate(): boolean { return true; }
+    public override get SupportsDelete(): boolean { return true; }
+    public override get SupportsSearch(): boolean { return true; }
+    public override get SupportsListing(): boolean { return true; }
+
+    // ─── CRUD Operations ─────────────────────────────────────────────────
+
+    /**
+     * Retrieves a single record by ExternalID (HubSpot object ID).
+     */
+    public override async GetRecord(ctx: GetRecordContext): Promise<ExternalRecord | null> {
+        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const propertiesParam = this.BuildPropertiesParam(ctx.ObjectName);
+        const url = `${HUBSPOT_API_BASE}/crm/v3/objects/${ctx.ObjectName}/${ctx.ExternalID}?${propertiesParam.replace(/^&/, '')}`;
+
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status === 404) return null;
+        this.ValidateCRUDResponse(response, 'GetRecord', ctx.ObjectName);
+
+        const raw = response.Body as Record<string, unknown>;
+        return this.RawToExternalRecord(raw, ctx.ObjectName);
+    }
+
+    /**
+     * Creates a new record in HubSpot.
+     */
+    public override async CreateRecord(ctx: CreateRecordContext): Promise<CRUDResult> {
+        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const url = `${HUBSPOT_API_BASE}/crm/v3/objects/${ctx.ObjectName}`;
+
+        const body = { properties: ctx.Attributes };
+        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
+
+        if (response.Status >= 200 && response.Status < 300) {
+            const created = response.Body as Record<string, unknown>;
+            return {
+                Success: true,
+                ExternalID: String(created['id'] ?? ''),
+                StatusCode: response.Status,
+            };
+        }
+
+        return this.BuildCRUDErrorResult(response, 'CreateRecord', ctx.ObjectName);
+    }
+
+    /**
+     * Updates an existing record in HubSpot by ExternalID.
+     */
+    public override async UpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> {
+        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const url = `${HUBSPOT_API_BASE}/crm/v3/objects/${ctx.ObjectName}/${ctx.ExternalID}`;
+
+        const body = { properties: ctx.Attributes };
+        const response = await this.MakeHTTPRequest(auth, url, 'PATCH', headers, body);
+
+        if (response.Status >= 200 && response.Status < 300) {
+            const updated = response.Body as Record<string, unknown>;
+            return {
+                Success: true,
+                ExternalID: String(updated['id'] ?? ctx.ExternalID),
+                StatusCode: response.Status,
+            };
+        }
+
+        return this.BuildCRUDErrorResult(response, 'UpdateRecord', ctx.ObjectName);
+    }
+
+    /**
+     * Deletes (archives) a record in HubSpot by ExternalID.
+     */
+    public override async DeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> {
+        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const url = `${HUBSPOT_API_BASE}/crm/v3/objects/${ctx.ObjectName}/${ctx.ExternalID}`;
+
+        const response = await this.MakeHTTPRequest(auth, url, 'DELETE', headers);
+
+        if (response.Status === 204 || (response.Status >= 200 && response.Status < 300)) {
+            return {
+                Success: true,
+                ExternalID: ctx.ExternalID,
+                StatusCode: response.Status,
+            };
+        }
+
+        return this.BuildCRUDErrorResult(response, 'DeleteRecord', ctx.ObjectName);
+    }
+
+    /**
+     * Searches HubSpot objects using the CRM search API.
+     */
+    public override async SearchRecords(ctx: SearchContext): Promise<SearchResult> {
+        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const url = `${HUBSPOT_API_BASE}/crm/v3/objects/${ctx.ObjectName}/search`;
+
+        const filters = Object.entries(ctx.Filters).map(([propertyName, value]) => ({
+            propertyName,
+            operator: 'EQ',
+            value,
+        }));
+
+        const properties = HUBSPOT_PROPERTIES[ctx.ObjectName] ?? [];
+        const body = {
+            filterGroups: [{ filters }],
+            properties,
+            limit: ctx.PageSize ?? 100,
+            after: ctx.Page != null && ctx.Page > 1 ? String((ctx.Page - 1) * (ctx.PageSize ?? 100)) : undefined,
+        };
+
+        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
+        this.ValidateCRUDResponse(response, 'SearchRecords', ctx.ObjectName);
+
+        const responseBody = response.Body as { results?: unknown[]; total?: number; paging?: { next?: { after?: string } } };
+        const results = responseBody.results ?? [];
+        const records = results.map(r => this.RawToExternalRecord(r as Record<string, unknown>, ctx.ObjectName));
+
+        return {
+            Records: records,
+            TotalCount: responseBody.total ?? records.length,
+            HasMore: responseBody.paging?.next?.after != null,
+        };
+    }
+
+    /**
+     * Lists records from a HubSpot object with cursor-based pagination.
+     */
+    public override async ListRecords(ctx: ListContext): Promise<ListResult> {
+        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const contextUser = ctx.ContextUser as UserInfo;
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+
+        const pageSize = ctx.PageSize ?? 100;
+        const propertiesParam = this.BuildPropertiesParam(ctx.ObjectName);
+        let url = `${HUBSPOT_API_BASE}/crm/v3/objects/${ctx.ObjectName}?limit=${pageSize}${propertiesParam}`;
+
+        if (ctx.Cursor) {
+            url += `&after=${encodeURIComponent(ctx.Cursor)}`;
+        }
+
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        this.ValidateCRUDResponse(response, 'ListRecords', ctx.ObjectName);
+
+        const responseBody = response.Body as { results?: unknown[]; total?: number; paging?: { next?: { after?: string } } };
+        const results = responseBody.results ?? [];
+        const records = results.map(r => this.RawToExternalRecord(r as Record<string, unknown>, ctx.ObjectName));
+        const nextCursor = responseBody.paging?.next?.after;
+
+        return {
+            Records: records,
+            HasMore: nextCursor != null,
+            NextCursor: nextCursor ?? undefined,
+            TotalCount: responseBody.total,
+        };
+    }
+
+    // ─── CRUD Helpers ────────────────────────────────────────────────────
+
+    /** Converts a raw HubSpot API object to an ExternalRecord. */
+    private RawToExternalRecord(raw: Record<string, unknown>, objectType: string): ExternalRecord {
+        const flat = this.FlattenHubSpotRecord(raw);
+        return {
+            ExternalID: String(raw['id'] ?? ''),
+            ObjectType: objectType,
+            Fields: flat,
+            ModifiedAt: raw['updatedAt'] ? new Date(raw['updatedAt'] as string) : undefined,
+        };
+    }
+
+    /** Validates a CRUD response and throws on non-2xx status. */
+    private ValidateCRUDResponse(response: RESTResponse, operation: string, objectName: string): void {
+        if (response.Status < 200 || response.Status >= 300) {
+            const bodyPreview = typeof response.Body === 'string'
+                ? response.Body.slice(0, 500)
+                : JSON.stringify(response.Body).slice(0, 500);
+            throw new Error(`[HubSpot] ${operation} on ${objectName} failed (HTTP ${response.Status}): ${bodyPreview}`);
+        }
+    }
+
+    /** Builds a CRUDResult for error responses. */
+    private BuildCRUDErrorResult(response: RESTResponse, operation: string, objectName: string): CRUDResult {
+        const bodyObj = response.Body as Record<string, unknown> | undefined;
+        const message = bodyObj?.['message']
+            ? String(bodyObj['message'])
+            : `[HubSpot] ${operation} on ${objectName} failed (HTTP ${response.Status})`;
+        return {
+            Success: false,
+            ErrorMessage: message,
+            StatusCode: response.Status,
+        };
+    }
 
     // ─── Abstract method implementations (BaseRESTIntegrationConnector) ──
 
@@ -231,7 +451,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         url: string,
         method: string,
         headers: Record<string, string>,
-        _body?: unknown
+        body?: unknown
     ): Promise<RESTResponse> {
         // Throttle: ensure minimum interval between requests
         const minInterval = this.effectiveMinRequestIntervalMs;
@@ -242,7 +462,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
         const maxRetries = this.effectiveMaxRetries;
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            const response = await this.FetchWithTimeout(url, method, headers);
+            const response = await this.FetchWithTimeout(url, method, headers, body);
             this.lastRequestTime = Date.now();
 
             if (response.status === 429) {
@@ -255,8 +475,13 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                 continue;
             }
 
-            const body = await response.json() as unknown;
-            return this.BuildRESTResponse(response, body);
+            // Handle empty responses (e.g., 204 No Content from DELETE)
+            if (response.status === 204) {
+                return this.BuildRESTResponse(response, {});
+            }
+
+            const responseBody = await response.json() as unknown;
+            return this.BuildRESTResponse(response, responseBody);
         }
 
         throw new Error(`HubSpot API request failed after ${maxRetries} retries: ${url}`);
@@ -616,17 +841,23 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
     // ─── HTTP helpers ────────────────────────────────────────────────
 
-    /** Executes an HTTP request with a timeout. */
+    /** Executes an HTTP request with a timeout and optional JSON body. */
     private async FetchWithTimeout(
         url: string,
         method: string,
-        headers: Record<string, string>
+        headers: Record<string, string>,
+        body?: unknown
     ): Promise<Response> {
         const controller = new AbortController();
         const timeoutMs = this.effectiveRequestTimeoutMs;
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         try {
-            return await fetch(url, { method, headers, signal: controller.signal });
+            const requestInit: RequestInit = { method, headers, signal: controller.signal };
+            if (body !== undefined) {
+                requestInit.body = JSON.stringify(body);
+                (requestInit.headers as Record<string, string>)['Content-Type'] = 'application/json';
+            }
+            return await fetch(url, requestInit);
         } catch (err) {
             if (err instanceof Error && err.name === 'AbortError') {
                 throw new Error(`HubSpot API request timed out after ${timeoutMs / 1000}s: ${url}`);

@@ -1007,32 +1007,48 @@ All new integrations follow the connector-first pattern:
 
 ## 10. Implementation Phases
 
-### Phase 0: Foundation (Est. ~2-3 weeks)
+### Release Mapping
 
-| Task | Package | Depends On |
-|------|---------|-----------|
-| Migration: Add `Config` to Action table | migrations/ | — |
-| Migration: Add `WriteAPIPath`, `WriteMethod`, `DeleteMethod` to IntegrationObject | migrations/ | — |
-| Run CodeGen for new fields | — | Migrations applied |
-| Add CRUD types (`CRUDContext`, `IntegrationRecord`, etc.) | integration-engine | — |
-| Add CRUD methods to `BaseIntegrationConnector` | integration-engine | Types |
-| Add default CRUD implementations to `BaseRESTIntegrationConnector` | integration-engine | Base CRUD methods |
-| Build `IntegrationActionExecutor` class | integration-actions or core-actions | CRUD methods |
-| Build action generation CLI utility | integration-engine (or new package) | All of above |
-| Add `Integrations` category hierarchy | metadata/ | — |
-| Unit tests for executor and generator | — | All of above |
+| Phase | Ships In | Notes |
+|-------|----------|-------|
+| Phase 0 (DB migrations + CodeGen) | **v5.12** | COMPLETE — migration applied, CodeGen run |
+| Phase 0 (Foundation code) + Phase 1 (HubSpot) | **v5.13** | Current work — code only, metadata to `/metadata/` folder |
+| Phase 2-5 | **v5.14+** | Future work |
 
-### Phase 1: HubSpot Pilot (~1 week)
+### Phase 0: Foundation
 
-| Task | Package | Depends On |
-|------|---------|-----------|
-| Add CRUD overrides to `HubSpotConnector` | integration-connectors | Phase 0 |
-| Set `SupportsWrite: true` on HubSpot objects | metadata/ | Phase 0 |
-| Set `IsReadOnly` on read-only HubSpot fields (e.g., ID, CreatedAt) | metadata/ | Phase 0 |
-| Generate HubSpot action metadata | CLI utility | HubSpot CRUD |
-| Map to existing Action IDs | CLI utility --update | Generated metadata |
-| Integration test: compare generated vs hand-written results | tests/ | All of above |
-| Flip existing HubSpot CRUD actions | metadata/ | Tests pass |
+**DB Migrations: COMPLETE (shipped in v5.12)**
+
+| Task | Status |
+|------|--------|
+| Migration: Add `Config` to Action table | DONE |
+| Migration: Add `WriteAPIPath`, `WriteMethod`, `DeleteMethod` to IntegrationObject | DONE |
+| Run CodeGen for new fields | DONE |
+
+**Code Implementation (shipping in v5.13):**
+
+| Task | Package | Status |
+|------|---------|--------|
+| Add CRUD types (`CRUDContext`, etc.) — already existed | `packages/Integration/engine/` | DONE (pre-existing) |
+| Add `ListContext`/`ListResult` types | `packages/Integration/engine/src/types.ts` | DONE |
+| Add `SupportsListing` getter + `ListRecords` to `BaseIntegrationConnector` | `packages/Integration/engine/` | DONE |
+| Export `ListContext`/`ListResult` from barrel | `packages/Integration/engine/src/index.ts` | DONE |
+| Build `IntegrationActionExecutor` class | `packages/Actions/CoreActions/src/custom/integration/` | DONE |
+| Build `ActionMetadataGenerator` class | `packages/Integration/engine/src/ActionMetadataGenerator.ts` | DONE |
+| Build HubSpot generation CLI script | `packages/Integration/engine/src/generate-hubspot-actions.ts` | DONE |
+| Add `Integrations` category hierarchy | `metadata/` | PENDING (needs ActionCategory record) |
+| Unit tests for executor and generator | respective packages | PENDING |
+
+### Phase 1: HubSpot Pilot (shipping in v5.13)
+
+| Task | Package | Status |
+|------|---------|--------|
+| Add CRUD overrides to `HubSpotConnector` (Get/Create/Update/Delete/Search/List) | `packages/Integration/connectors/` | DONE |
+| Override capability getters (`SupportsCreate/Update/Delete/Search/Listing`) | `packages/Integration/connectors/` | DONE |
+| Update `MakeHTTPRequest` + `FetchWithTimeout` to support request bodies | `packages/Integration/connectors/` | DONE |
+| Generate HubSpot action metadata (30 actions, 5 objects × 6 verbs) | CLI → `metadata/integration-actions-hubspot/` | DONE |
+| Build and verify compilation of all affected packages | all | DONE |
+| Map to existing Action IDs | CLI utility --update | DEFERRED to Phase 2+ |
 
 ### Phase 2: Remaining Providers (~2-3 weeks, parallelizable)
 
