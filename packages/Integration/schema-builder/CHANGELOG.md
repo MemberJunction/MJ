@@ -1,5 +1,18 @@
 # @memberjunction/integration-schema-builder
 
+## 5.12.0
+
+### Minor Changes
+
+- 6f9350c: migration
+
+### Patch Changes
+
+- Updated dependencies [6f9350c]
+- Updated dependencies [257512b]
+  - @memberjunction/integration-engine@5.12.0
+  - @memberjunction/global@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes

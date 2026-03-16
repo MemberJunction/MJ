@@ -1,5 +1,22 @@
 # @memberjunction/ng-workspace-initializer
 
+## 5.12.0
+
+### Patch Changes
+
+- Updated dependencies [05f19ff]
+- Updated dependencies [a57b8d5]
+- Updated dependencies [e87d153]
+- Updated dependencies [7def002]
+- Updated dependencies [d92502e]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/ng-shared-generic@5.12.0
+  - @memberjunction/ng-explorer-core@5.12.0
+  - @memberjunction/graphql-dataprovider@5.12.0
+  - @memberjunction/ng-auth-services@5.12.0
+  - @memberjunction/ng-shared@5.12.0
+  - @memberjunction/global@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes
