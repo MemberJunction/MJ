@@ -391,7 +391,7 @@ import {
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
-// @memberjunction/core-actions (101 classes)
+// @memberjunction/core-actions (103 classes)
 import {
     APIRateLimiterAction,
     AddRecordsToListAction,
@@ -429,7 +429,6 @@ import {
     ExecuteAIPromptAction,
     ExecuteCodeAction,
     ExecuteMCPToolAction,
-    ExecuteResearchQueryAction,
     ExploreDatabaseSchemaAction,
     ExternalChangeDetectionAction,
     FileCompressAction,
@@ -475,6 +474,9 @@ import {
     RemoveRecordsFromListAction,
     RetryAction,
     ReverseGeocodeAction,
+    RunAdhocQueryAction,
+    RunStoredQueryAction,
+    SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendSingleMessageAction,
     SlackWebhookAction,
@@ -1166,7 +1168,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     ExecuteAIPromptAction,
     ExecuteCodeAction,
     ExecuteMCPToolAction,
-    ExecuteResearchQueryAction,
     ExploreDatabaseSchemaAction,
     ExternalChangeDetectionAction,
     FileCompressAction,
@@ -1212,6 +1213,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     RemoveRecordsFromListAction,
     RetryAction,
     ReverseGeocodeAction,
+    RunAdhocQueryAction,
+    RunStoredQueryAction,
+    SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendSingleMessageAction,
     SlackWebhookAction,
@@ -1589,7 +1593,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 665;
+export const CLASS_REGISTRATIONS_COUNT = 667;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
