@@ -142,6 +142,22 @@
             "lastModified": "2026-01-28T22:07:13.567Z",
             "checksum": "73fdddb04de85d697d92618b1d41a2aa3f3c1bfb29329c953d5d2dbc65899a72"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-opus-4-5-20251101-v1:0",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 64000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -165,6 +181,21 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:13.623Z",
             "checksum": "b94014f12c88a6045798f071a2392374676e75515086627ac2ffad25098d5029"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude 4.5 Opus pricing on Amazon Bedrock as of March 2026"
           }
         }
       ]
@@ -231,6 +262,22 @@
             "lastModified": "2026-01-28T22:07:13.566Z",
             "checksum": "8201160a283008c489e5e156ce66955602feec5d88a28195b2a737c65ae22dbe"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-sonnet-4-5-20250929-v1:0",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 8192,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -254,6 +301,21 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:13.623Z",
             "checksum": "bf393686f9070598c262bca46c4ba105b161af7206833e99edef5eadad589399"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 3,
+            "OutputPricePerUnit": 15,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude 4.5 Sonnet pricing on Amazon Bedrock as of March 2026"
           }
         }
       ]
@@ -2020,6 +2082,39 @@
             "lastModified": "2026-01-28T22:07:14.578Z",
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "o4-mini",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 100000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.1,
+            "OutputPricePerUnit": 4.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "o4-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
+          }
         }
       ]
     },
@@ -2081,6 +2176,39 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.580Z",
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "o3",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 100000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 8,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "o3 pricing on Azure OpenAI (Global Standard) as of March 2026"
           }
         }
       ]
@@ -2883,6 +3011,22 @@
             "lastModified": "2026-01-28T22:07:14.572Z",
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-4.1-nano",
+            "MaxInputTokens": 1047576,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -2906,6 +3050,21 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:55.246Z",
             "checksum": "28bd601cf3708a06b2091308d009bf931fb90104a19c4dc3fbab02d6a2e04d8c"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.1,
+            "OutputPricePerUnit": 0.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-4.1-nano pricing on Azure OpenAI (Global Standard) as of March 2026"
           }
         }
       ]
@@ -2969,6 +3128,22 @@
             "lastModified": "2026-01-28T22:07:14.573Z",
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-4.1",
+            "MaxInputTokens": 1047576,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -2992,6 +3167,21 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:55.259Z",
             "checksum": "60ff02db453bf9d5c13d874eb9cd838f5bdf572ea5e66b7ac9e44c370aeda093"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 8,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-4.1 pricing on Azure OpenAI (Global Standard) as of March 2026"
           }
         }
       ]
@@ -3058,6 +3248,22 @@
             "lastModified": "2026-01-28T22:07:14.574Z",
             "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-5.1-codex-max",
+            "MaxInputTokens": 272000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -3081,6 +3287,21 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.822Z",
             "checksum": "c1044b117eb4f9ba81fbdfa869419021ab8260ac5c310a5f343e9dd3a4a71d1d"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.25,
+            "OutputPricePerUnit": 10,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-5.1-codex-max pricing on Azure OpenAI (Global Standard) as of March 2026"
           }
         }
       ]
@@ -3144,6 +3365,22 @@
             "lastModified": "2026-01-28T22:07:14.574Z",
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-4o-mini",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -3167,6 +3404,21 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:55.401Z",
             "checksum": "c43de2cb09c9f5cb7793821165e9b1d6d21d3444152414cd61b55b7e6fcade82"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-4o-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
           }
         }
       ]
@@ -3321,6 +3573,22 @@
             "lastModified": "2026-01-28T22:07:14.575Z",
             "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-5.2",
+            "MaxInputTokens": 400000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -3344,6 +3612,21 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.825Z",
             "checksum": "dc8b8aa1a38b402549a25cd0b5bccddd92620c68ea60e0acbc935fefbb799bf4"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.75,
+            "OutputPricePerUnit": 14,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-5.2 pricing on Azure OpenAI (Global Standard) as of March 2026"
           }
         }
       ]
@@ -3410,6 +3693,22 @@
             "lastModified": "2026-01-28T22:07:14.577Z",
             "checksum": "4a8fc3c08cc40c839ce2d6d86ecbae32db741b3c77113da1baea0506eb778d5b"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-5.1-codex-mini",
+            "MaxInputTokens": 400000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -3433,6 +3732,21 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.827Z",
             "checksum": "0c451beb04d93a2d506f7af0a4b828e12d645bd0223d57aa6f650e7777c029d8"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.25,
+            "OutputPricePerUnit": 2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-5.1-codex-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
           }
         }
       ]
@@ -3499,6 +3813,22 @@
             "lastModified": "2026-01-28T22:07:14.578Z",
             "checksum": "d24872775b6b88fa32721a592ac41bfa1af091bb6fcb6b751e9843354fc97eff"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-5.2-codex",
+            "MaxInputTokens": 272000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -3522,6 +3852,21 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.828Z",
             "checksum": "bf34864b0517cb89ad84ee2343bbbde70b93179f4b1a086b2fd9ddb80193eef6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.75,
+            "OutputPricePerUnit": 14,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-5.2-codex pricing on Azure OpenAI (Global Standard) as of March 2026"
           }
         }
       ]
@@ -3587,6 +3932,22 @@
             "lastModified": "2026-01-28T22:07:14.579Z",
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-4.1-mini",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -3610,6 +3971,21 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:55.543Z",
             "checksum": "e0ced8c8f0c81f90059b3b9f03ce03aa6d299e7d960fc27478b41b232b72e77d"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.4,
+            "OutputPricePerUnit": 1.6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-4.1-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
           }
         }
       ]
@@ -3673,6 +4049,22 @@
             "lastModified": "2026-01-28T22:07:14.578Z",
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-4o",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -3696,6 +4088,21 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:55.554Z",
             "checksum": "1169dbeaf765b43f4d6050513f45229a73dca1f8a81bee1cb157a13d17ac784b"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2.5,
+            "OutputPricePerUnit": 10,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-4o pricing on Azure OpenAI (Global Standard) as of March 2026"
           }
         }
       ]
@@ -3759,6 +4166,22 @@
             "lastModified": "2026-01-28T22:07:14.580Z",
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "o3-mini",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 100000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -3782,6 +4205,21 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:55.848Z",
             "checksum": "fc5c51f02fdfe6f228d6de34d79c16870e3aa3ab61a8db9fe2440b58148fe135"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.1,
+            "OutputPricePerUnit": 4.4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "o3-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
           }
         }
       ]
@@ -3932,6 +4370,22 @@
             "lastModified": "2026-01-28T22:07:14.582Z",
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "o1",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 100000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -3955,6 +4409,21 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:55.876Z",
             "checksum": "d14fe96db13727b32cb777319837ccf6f72845bc0d1e05ba0918d808ae3ac271"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 15,
+            "OutputPricePerUnit": 60,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "o1 pricing on Azure OpenAI (Global Standard) as of March 2026"
           }
         }
       ]
@@ -4633,6 +5102,22 @@
             "lastModified": "2026-01-28T22:07:14.585Z",
             "checksum": "8d34fb2047f638eea85e04ceb539bb0e7a241a18fca034add856a886551ed6cf"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-haiku-4-5-20251001-v1:0",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 64000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -4656,6 +5141,21 @@
           "sync": {
             "lastModified": "2026-01-28T22:07:14.835Z",
             "checksum": "c21a1301f9f33ff326afc70ff309df1171a356d29feb240e27512184aeee0735"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1,
+            "OutputPricePerUnit": 5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Haiku 4.5 pricing on Amazon Bedrock as of March 2026"
           }
         }
       ]
@@ -6765,6 +7265,38 @@
             "lastModified": "2026-01-28T22:07:14.841Z",
             "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "openai.gpt-oss-20b-1:0",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 16000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-oss-20b",
+            "MaxInputTokens": 131072,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -6810,6 +7342,36 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:57.512Z",
             "checksum": "e2501d2c56460e098851d68e07c53e54bb272be4daef9ad9f55519c4a10461d7"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.07,
+            "OutputPricePerUnit": 0.2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-OSS-20B pricing on Amazon Bedrock (US East) as of March 2026"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.03,
+            "OutputPricePerUnit": 0.1,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-OSS-20B pricing on Azure Foundry (Preview) as of March 2026. Available via managed compute and Foundry Local."
           }
         }
       ]
@@ -7945,7 +8507,7 @@
             "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
             "Priority": 0,
             "Status": "Active",
-            "DriverClass": "AzureOpenAILLM",
+            "DriverClass": "AzureLLM",
             "APIName": "gpt-5-mini",
             "MaxInputTokens": 128000,
             "MaxOutputTokens": 32000,
@@ -8037,7 +8599,7 @@
             "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
             "Priority": 0,
             "Status": "Active",
-            "DriverClass": "AzureOpenAILLM",
+            "DriverClass": "AzureLLM",
             "APIName": "gpt-5",
             "MaxInputTokens": 272000,
             "MaxOutputTokens": 128000,
@@ -8347,7 +8909,7 @@
             "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
             "Priority": 0,
             "Status": "Active",
-            "DriverClass": "AzureOpenAILLM",
+            "DriverClass": "AzureLLM",
             "APIName": "gpt-5-nano",
             "MaxInputTokens": 272000,
             "MaxOutputTokens": 128000,
@@ -8482,7 +9044,7 @@
             "Priority": 5,
             "Status": "Active",
             "DriverClass": "BedrockLLM",
-            "APIName": "anthropic.claude-3-opus-20240229",
+            "APIName": "anthropic.claude-opus-4-1-20250805-v1:0",
             "MaxInputTokens": 200000,
             "MaxOutputTokens": 4096,
             "SupportedResponseFormats": "Any, JSON",
@@ -9333,6 +9895,38 @@
             "lastModified": "2026-02-01T00:26:58.926Z",
             "checksum": "5679cfe3e79c693add4f7c7a098f0ab542741289737eaa6af7405925bdd2a5e2"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "openai.gpt-oss-120b-1:0",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 16000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-oss-120b",
+            "MaxInputTokens": 131072,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -9400,6 +9994,36 @@
           "sync": {
             "lastModified": "2026-02-01T00:26:59.066Z",
             "checksum": "e91bca74b29ccd315607e650ebf335be2e8706ade444d4d9eb2ff80bdc20e812"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-OSS-120B pricing on Amazon Bedrock (US East) as of March 2026"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.039,
+            "OutputPricePerUnit": 0.1,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-OSS-120B pricing on Azure Foundry (Preview, GlobalStandard SKU) as of March 2026. Requires Foundry project deployment."
           }
         }
       ]
@@ -10356,6 +10980,22 @@
             "lastModified": "2026-03-10T18:32:00.168Z",
             "checksum": "701f708ba212727c2e7247dd05afc3639fd5c2354e5b7869b82fe1fa43ab1522"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-5.4",
+            "MaxInputTokens": 272000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -10380,6 +11020,21 @@
             "lastModified": "2026-03-10T18:32:00.188Z",
             "checksum": "6f8f88ec077ff8d80920c57d3bea62418145aecbd57951277ede00009e23cc4e"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2.5,
+            "OutputPricePerUnit": 15,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-5.4 pricing on Azure OpenAI (Global Standard) as of March 2026"
+          }
         }
       ]
     },
@@ -10389,6 +11044,192 @@
     "sync": {
       "lastModified": "2026-03-10T18:31:59.720Z",
       "checksum": "e8922c066d44c501341c43a8703e7a3a2eb0fb116ce2d97f76cadde64b46c450"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Opus 4.6",
+      "PowerRank": 22,
+      "Description": "Anthropic's most capable model with full 1M token context window at standard pricing and 128K output tokens. Features adaptive thinking, fast mode (6x pricing for 2.5x faster output), web search, web fetch, and code execution tools. State-of-the-art long-context reliability with 76% on MRCR v2 (8-needle, 1M context).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "52B79053-6E59-44E9-B7D0-DA96C4EA3CF1"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-opus-4-6",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-opus-4-6-v1",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 4.6 pricing on Anthropic as of March 2026. Full 1M context at standard pricing. Fast mode available at 6x rates ($30/$150 per 1M tokens)."
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 4.6 pricing on Amazon Bedrock as of March 2026"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Sonnet 4.6",
+      "PowerRank": 20,
+      "Description": "Anthropic's balanced performance model with enhanced long-context capabilities. 200K standard context window (1M in beta) with 64K output tokens. Features adaptive thinking, web search, web fetch, and code execution tools. Same pricing as Sonnet 4.5 with improved reasoning and long-context reliability.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 6,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "7D7C3623-34BC-4DE5-B940-EC09367CFB3E"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-sonnet-4-6",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 64000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-sonnet-4-6",
+            "MaxInputTokens": 200000,
+            "MaxOutputTokens": 64000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 3,
+            "OutputPricePerUnit": 15,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Sonnet 4.6 pricing on Anthropic as of March 2026. Full 1M context at standard pricing (no long-context surcharge unlike Sonnet 4.5)."
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-03-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 3,
+            "OutputPricePerUnit": 15,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Sonnet 4.6 pricing on Amazon Bedrock as of March 2026"
+          }
+        }
+      ]
     }
   }
 ]

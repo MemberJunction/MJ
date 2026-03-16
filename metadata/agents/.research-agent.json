@@ -38,7 +38,13 @@
             "SourceType": "RunView",
             "EntityName": "MJ: Entities",
             "OrderBy": "Name ASC",
-            "FieldsToRetrieve": "[\"Name\", \"Description\", \"SchemaName\", \"BaseTable\", \"BaseView\"]",
+            "FieldsToRetrieve": [
+              "Name",
+              "Description",
+              "SchemaName",
+              "BaseTable",
+              "BaseView"
+            ],
             "ResultType": "simple",
             "DestinationType": "Data",
             "DestinationPath": null,
@@ -51,8 +57,40 @@
             "ID": "2F22C90E-05BF-4226-8F6F-209C74873D6F"
           },
           "sync": {
-            "lastModified": "2026-02-25T23:25:50.117Z",
-            "checksum": "bba158c2c079b16504175a9cb0e16bd25892cb6863e16ce82a49286791b0a0ee"
+            "lastModified": "2026-03-14T01:24:30.073Z",
+            "checksum": "c739ab6893ef4a7e9857120ff97c930e0d4ad4d8484f732e22d5dec55fc6fa26"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "AVAILABLE_QUERIES",
+            "Description": "Catalog of approved stored queries available for execution via Run Stored Query action. Check here before writing ad-hoc SQL — stored queries are pre-validated and optimized.",
+            "SourceType": "RunView",
+            "EntityName": "MJ: Queries",
+            "ExtraFilter": "Status = 'Approved'",
+            "OrderBy": "Name ASC",
+            "FieldsToRetrieve": [
+              "ID",
+              "Name",
+              "Description",
+              "CategoryID",
+              "Category"
+            ],
+            "ResultType": "simple",
+            "DestinationType": "Data",
+            "DestinationPath": null,
+            "ExecutionOrder": 2,
+            "Status": "Disabled",
+            "CachePolicy": "PerAgent",
+            "CacheTimeoutSeconds": 3600
+          },
+          "primaryKey": {
+            "ID": "3E1E5505-B357-4D01-A604-8821050F3147"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:24:30.027Z",
+            "checksum": "0a2186c5f11fd4819c931a3c31a76bb1cffe71c2b3008e14bb47767da05a012e"
           }
         }
       ],
@@ -74,15 +112,43 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Execute Research Query",
+            "ActionID": "@lookup:MJ: Actions.Name=Run Ad-hoc Query",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "ED43ED4D-2701-4978-A971-A00106E8757F"
           },
           "sync": {
-            "lastModified": "2026-02-13T21:09:23.782Z",
-            "checksum": "3a9ed68c620a32ff70c017ae8b88472a30d1336bf7c27e3244dc11e382c1f6e1"
+            "lastModified": "2026-03-14T01:24:30.109Z",
+            "checksum": "15c488e2b587f29fff4949a94d39b316e9ced0ab9b95f2ccb2a7aab442dae8cd"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Run Stored Query",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C6F8DCEE-A64B-49CC-893F-EE8A969F5CBD"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:24:30.087Z",
+            "checksum": "5b7279356b3c9a8c7855f7a210c5820061c71e4447866c4cf2f2b38003cb0c54"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Search Query Catalog",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3641DC95-7916-42B9-BE20-9964D9588E3E"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:24:30.048Z",
+            "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
           }
         }
       ],

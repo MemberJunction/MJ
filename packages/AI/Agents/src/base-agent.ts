@@ -6728,8 +6728,23 @@ The context is now within limits. Please retry your request with the recovered c
                     content: resultsMessage,
                     metadata: metadata
                 } as AgentChatMessage);
+
+                // Surface substantive action result messages as a separate instruction message.
+                // When action messages contain multi-line directives (e.g., "YOUR NEXT ACTION — pick one"),
+                // they get buried inside the JSON results structure above. LLMs treat JSON-wrapped text as
+                // data to acknowledge, not instructions to follow. By re-surfacing these messages as a
+                // standalone user message, the LLM reads them as explicit instructions.
+                const substantiveMessages = actionSummaries
+                    .filter(a => a.success && a.message && a.message.includes('\n'))
+                    .map(a => a.message);
+                if (substantiveMessages.length > 0) {
+                    params.conversationMessages.push({
+                        role: 'user',
+                        content: `IMPORTANT — Follow these instructions from the action results:\n\n${substantiveMessages.join('\n\n')}`
+                    });
+                }
             }
-            
+
             // Call agent type's post-processing for actions
             let finalPayload = currentPayload;
             

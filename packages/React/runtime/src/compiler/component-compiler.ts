@@ -234,7 +234,12 @@ export class ComponentCompiler {
           console.log('  - Has .component property:', 'component' in ${dep.name}Raw);
           console.log('  - .component type:', typeof ${dep.name}Raw.component);
         }` : ''}
-        const ${dep.name} = ${dep.name}Raw?.component || ${dep.name}Raw;
+        const ${dep.name}Unwrapped = ${dep.name}Raw?.component || ${dep.name}Raw;
+        const ${dep.name} = (props) => React.createElement(
+          'div',
+          { 'data-mj-component': '${dep.name}', style: { display: 'contents' } },
+          React.createElement(${dep.name}Unwrapped, props)
+        );
         ${debug ? `console.log('  - Final ${dep.name} type:', typeof ${dep.name});
         console.log('  - Final ${dep.name} is function:', typeof ${dep.name} === 'function');` : ''}`)
           .join('\n        ')
@@ -375,13 +380,17 @@ export class ComponentCompiler {
             };
           }, [props.callbacks]);
           
-          // Render the original component with enhanced callbacks
-          return React.createElement(DestructureWrapperUserComponent, {
+          // Render the original component with enhanced callbacks, wrapped in a DOM marker div
+          return React.createElement('div', {
+            'data-mj-component': '${componentName}',
+            'data-mj-root': 'true',
+            style: { display: 'contents' }
+          }, React.createElement(DestructureWrapperUserComponent, {
             ...props,
             callbacks: enhancedCallbacks
-          });
+          }));
         };
-        
+
         ComponentWithMethodRegistry.displayName = '${componentName}WithMethods';
         
         // Return the component object with method access
