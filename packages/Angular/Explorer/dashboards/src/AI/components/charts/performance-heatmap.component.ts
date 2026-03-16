@@ -54,7 +54,7 @@ export interface HeatmapConfig {
   `,
   styles: [`
     .performance-heatmap {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
       padding: 20px;
@@ -76,7 +76,7 @@ export interface HeatmapConfig {
       margin: 0;
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .chart-controls {
@@ -93,16 +93,16 @@ export interface HeatmapConfig {
     }
 
     .metric-selector label {
-      color: #666;
+      color: var(--mj-text-muted);
       font-weight: 500;
     }
 
     .metric-selector select {
       padding: 4px 8px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 11px;
-      background: white;
+      background: var(--mj-bg-surface);
     }
 
     .chart-container {
@@ -115,7 +115,7 @@ export interface HeatmapConfig {
     .chart-tooltip {
       position: absolute;
       background: rgba(0, 0, 0, 0.85);
-      color: white;
+      color: var(--mj-text-inverse);
       padding: 10px 12px;
       border-radius: 4px;
       font-size: 12px;
@@ -134,7 +134,7 @@ export interface HeatmapConfig {
     }
 
     .legend-title {
-      color: #666;
+      color: var(--mj-text-muted);
       font-weight: 500;
       white-space: nowrap;
     }
@@ -150,44 +150,44 @@ export interface HeatmapConfig {
       display: flex;
       justify-content: space-between;
       min-width: 80px;
-      color: #666;
+      color: var(--mj-text-muted);
       font-weight: 500;
     }
 
     /* Chart styles */
     :host ::ng-deep .heatmap-cell {
-      stroke: white;
+      stroke: var(--mj-bg-surface);
       stroke-width: 1;
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     :host ::ng-deep .heatmap-cell:hover {
-      stroke: #333;
+      stroke: var(--mj-text-primary);
       stroke-width: 2;
     }
 
     :host ::ng-deep .axis {
       font-size: 10px;
-      color: #666;
+      color: var(--mj-text-muted);
     }
 
     :host ::ng-deep .axis path {
-      stroke: #ddd;
+      stroke: var(--mj-border-default);
     }
 
     :host ::ng-deep .axis .tick line {
-      stroke: #ddd;
+      stroke: var(--mj-border-default);
     }
 
     :host ::ng-deep .axis .tick text {
-      fill: #666;
+      fill: var(--mj-text-muted);
     }
 
     :host ::ng-deep .axis-label {
       font-size: 11px;
       font-weight: 500;
-      fill: #333;
+      fill: var(--mj-text-primary);
     }
 
     .no-data {
@@ -196,13 +196,13 @@ export interface HeatmapConfig {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: #999;
+      color: var(--mj-text-disabled);
       gap: 12px;
     }
 
     .no-data i {
       font-size: 32px;
-      color: #ddd;
+      color: var(--mj-border-default);
     }
 
     @media (max-width: 768px) {
@@ -239,7 +239,27 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
   private margin = { top: 40, right: 20, bottom: 60, left: 80 };
 
   // Chart configuration
-  private defaultColorScheme = ['#f7fbff', '#deebf7', '#c6dbef', '#9ecae1', '#6baed6', '#4292c6', '#2171b5', '#08519c', '#08306b'];
+  private defaultColorScheme: string[] = [];
+
+  private getColorScheme(): string[] {
+    const style = getComputedStyle(document.documentElement);
+    const surface = style.getPropertyValue('--mj-bg-surface').trim() || '#ffffff';
+    const brandPrimary = style.getPropertyValue('--mj-brand-primary').trim() || '#0076b6';
+    // Build a 9-stop scale from surface white through brand primary to dark brand
+    const toSurface = d3.interpolateRgb(surface, brandPrimary);
+    const toDark = d3.interpolateRgb(brandPrimary, d3.rgb(brandPrimary).darker(2).formatHex());
+    return [
+      surface,
+      toSurface(0.15),
+      toSurface(0.3),
+      toSurface(0.5),
+      toSurface(0.7),
+      toSurface(0.85),
+      brandPrimary,
+      toDark(0.5),
+      toDark(1),
+    ];
+  }
   
   // Data processing
   selectedMetric = 'performance';
@@ -480,7 +500,10 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
     // Convert color to RGB and calculate luminance
     const rgb = d3.rgb(backgroundColor);
     const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
-    return luminance > 0.5 ? '#333' : '#fff';
+    const style = getComputedStyle(document.documentElement);
+    const darkText = style.getPropertyValue('--mj-text-primary').trim() || '#1e293b';
+    const lightText = style.getPropertyValue('--mj-text-inverse').trim() || '#ffffff';
+    return luminance > 0.5 ? darkText : lightText;
   }
 
   private formatCellValue(value: number): string {
@@ -530,7 +553,7 @@ export class PerformanceHeatmapComponent implements OnInit, AfterViewInit, OnCha
       .attr('x2', '100%');
 
     // Add color stops
-    const colorScheme = this.config.colorScheme || this.defaultColorScheme;
+    const colorScheme = this.config.colorScheme || this.getColorScheme();
     colorScheme.forEach((color, i) => {
       gradient.append('stop')
         .attr('offset', `${(i / (colorScheme.length - 1)) * 100}%`)

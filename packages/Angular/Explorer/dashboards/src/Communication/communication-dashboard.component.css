@@ -1,26 +1,21 @@
-/* ============================================================ */
-/* MD3 COMMUNICATION DASHBOARD                                  */
-/* ============================================================ */
 .communication-dashboard-container {
     display: flex;
     flex-direction: column;
     height: 100%;
     width: 100%;
-    background: var(--mat-sys-surface-container);
-    color: var(--mat-sys-on-surface);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     overflow: hidden;
 }
 
-/* ============================================================ */
-/* TOOLBAR                                                      */
-/* ============================================================ */
+/* TOOLBAR */
 .studio-toolbar {
     display: flex;
     align-items: center;
     padding: 0 12px;
-    background: var(--mat-sys-surface-container-lowest);
-    border-bottom: 1px solid var(--mat-sys-outline-variant);
+    background: var(--mj-bg-surface-card);
+    border-bottom: 1px solid var(--mj-border-default);
     min-height: 48px;
     gap: 8px;
     flex-shrink: 0;
@@ -36,26 +31,26 @@
 .brand-icon {
     width: 32px;
     height: 32px;
-    border-radius: var(--mat-sys-corner-small, 8px);
-    background: linear-gradient(135deg, var(--mat-sys-primary-container), color-mix(in srgb, var(--mat-sys-primary-container) 60%, var(--mat-sys-primary)));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--mat-sys-primary);
+    color: var(--mj-brand-primary);
     font-size: 14px;
 }
 
 .brand-label {
     font-weight: 700;
     font-size: 14px;
-    color: var(--mat-sys-on-surface);
+    color: var(--mj-text-primary);
     letter-spacing: -0.01em;
 }
 
 .toolbar-divider {
     width: 1px;
     height: 24px;
-    background: var(--mat-sys-outline-variant);
+    background: var(--mj-border-default);
     margin: 0 4px;
 }
 
@@ -68,10 +63,10 @@
     align-items: center;
     gap: 6px;
     padding: 6px 12px;
-    border: 1px solid var(--mat-sys-outline-variant);
-    border-radius: var(--mat-sys-corner-extra-small, 4px);
-    background: var(--mat-sys-surface-container-lowest);
-    color: var(--mat-sys-on-surface-variant);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 4px;
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-secondary);
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
@@ -80,9 +75,9 @@
 }
 
 .tb-btn:hover {
-    background: var(--mat-sys-surface-container-high);
-    border-color: var(--mat-sys-outline);
-    color: var(--mat-sys-on-surface);
+    background: var(--mj-bg-surface-sunken);
+    border-color: var(--mj-border-strong);
+    color: var(--mj-text-primary);
 }
 
 .tb-btn i {
@@ -98,22 +93,18 @@
     animation: spin 1s linear infinite;
 }
 
-/* ============================================================ */
-/* BODY LAYOUT                                                  */
-/* ============================================================ */
+/* BODY LAYOUT */
 .dashboard-body {
     display: flex;
     flex: 1;
     overflow: hidden;
 }
 
-/* ============================================================ */
-/* SIDEBAR                                                      */
-/* ============================================================ */
+/* SIDEBAR */
 .sidebar {
     width: 220px;
-    background: var(--mat-sys-surface-container-lowest);
-    border-right: 1px solid var(--mat-sys-outline-variant);
+    background: var(--mj-bg-surface-card);
+    border-right: 1px solid var(--mj-border-default);
     padding: 12px 8px;
     display: flex;
     flex-direction: column;
@@ -126,7 +117,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    color: var(--mat-sys-on-surface-variant);
+    color: var(--mj-text-muted);
     padding: 12px 12px 6px;
 }
 
@@ -135,22 +126,22 @@
     align-items: center;
     gap: 10px;
     padding: 10px 12px;
-    border-radius: var(--mat-sys-corner-small, 8px);
+    border-radius: 8px;
     cursor: pointer;
     transition: all 0.15s ease;
-    color: var(--mat-sys-on-surface-variant);
+    color: var(--mj-text-secondary);
     font-size: 13px;
     font-weight: 500;
 }
 
 .nav-item:hover {
-    background: var(--mat-sys-surface-container);
-    color: var(--mat-sys-on-surface);
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-primary);
 }
 
 .nav-item.selected {
-    background: var(--mat-sys-primary-container);
-    color: var(--mat-sys-on-primary-container);
+    background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
     font-weight: 600;
 }
 
@@ -163,17 +154,15 @@
 .sidebar-footer {
     margin-top: auto;
     padding-top: 8px;
-    border-top: 1px solid var(--mat-sys-outline-variant);
+    border-top: 1px solid var(--mj-border-default);
 }
 
-/* ============================================================ */
-/* MAIN CONTENT                                                 */
-/* ============================================================ */
+/* MAIN CONTENT */
 .main-content {
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
-    background: var(--mat-sys-surface-container);
+    background: var(--mj-bg-surface);
 }
 
 .tab-container {

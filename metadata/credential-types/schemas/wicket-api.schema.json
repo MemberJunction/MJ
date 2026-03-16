@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "apiSecret": {
+      "type": "string",
+      "title": "API Secret",
+      "description": "Wicket API secret (HMAC key used to sign JWT bearer tokens)",
+      "isSecret": true,
+      "order": 0
+    },
+    "adminUserUUID": {
+      "type": "string",
+      "title": "Admin User UUID",
+      "description": "UUID of the Wicket admin user (used as the JWT 'sub' claim)",
+      "isSecret": false,
+      "order": 1
+    },
+    "apiUrl": {
+      "type": "string",
+      "title": "API URL",
+      "description": "Full Wicket API base URL (e.g. https://sandbox-api.staging.wicketcloud.com). If omitted, derived from Tenant Name.",
+      "isSecret": false,
+      "order": 2
+    },
+    "tenantName": {
+      "type": "string",
+      "title": "Tenant Name",
+      "description": "Wicket tenant short name (e.g. 'acme'). Used to derive the API URL as https://{name}-api.wicketcloud.com when API URL is not provided.",
+      "isSecret": false,
+      "order": 3
+    },
+    "issuerDomain": {
+      "type": "string",
+      "title": "Issuer Domain",
+      "description": "Optional domain for the JWT 'iss' claim",
+      "isSecret": false,
+      "order": 4
+    }
+  },
+  "required": ["apiSecret", "adminUserUUID"]
+}

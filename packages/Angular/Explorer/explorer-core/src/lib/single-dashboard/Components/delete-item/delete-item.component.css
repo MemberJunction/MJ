@@ -27,7 +27,7 @@
       gap: 20px;
   }
   ::ng-deep .resource-wrap .k-label {
-    color: #424242;
+    color: var(--mj-text-secondary);
     font-size: 14px;
     font-style: normal;
     font-weight: 400;
@@ -40,4 +40,3 @@
     line-height: 32px;
     margin: 0;
   }
-  

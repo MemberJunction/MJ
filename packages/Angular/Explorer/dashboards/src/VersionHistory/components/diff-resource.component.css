@@ -12,20 +12,20 @@
 .page-title {
     font-size: 24px;
     font-weight: 700;
-    color: var(--text-primary, #1f2937);
+    color: var(--mj-text-primary);
     margin: 0 0 4px 0;
 }
 
 .page-subtitle {
     font-size: 14px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     margin: 0;
 }
 
 /* Config Panel */
 .config-panel {
-    background: var(--card-background, #ffffff);
-    border: 1px solid var(--border-color, #e5e7eb);
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
     border-radius: 12px;
     padding: 24px;
     margin-bottom: 24px;
@@ -42,23 +42,23 @@
     align-items: center;
     gap: 8px;
     padding: 8px 18px;
-    background: var(--hover-background, #f3f4f6);
+    background: var(--mj-bg-surface-sunken);
     border: 2px solid transparent;
     border-radius: 8px;
     cursor: pointer;
     font-size: 14px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     transition: all 0.2s ease;
 }
 
 .mode-btn:hover {
-    background: #e5e7eb;
+    background: var(--mj-border-default);
 }
 
 .mode-btn.active {
-    background: rgba(99, 102, 241, 0.08);
-    border-color: #6366f1;
-    color: #6366f1;
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
     font-weight: 600;
 }
 
@@ -78,25 +78,25 @@
     display: block;
     font-size: 13px;
     font-weight: 600;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     margin-bottom: 6px;
 }
 
 .selector-input {
     width: 100%;
     padding: 10px 12px;
-    background: var(--card-background, #ffffff);
-    border: 1px solid var(--border-color, #e5e7eb);
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-strong);
     border-radius: 8px;
     font-size: 14px;
-    color: var(--text-primary, #1f2937);
+    color: var(--mj-text-primary);
     outline: none;
     box-sizing: border-box;
 }
 
 .selector-input:focus {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .selector-arrow {
@@ -105,15 +105,15 @@
     align-items: center;
     gap: 4px;
     padding-bottom: 8px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     font-size: 16px;
 }
 
 .current-state-badge {
     font-size: 11px;
     font-weight: 600;
-    color: #6366f1;
-    background: rgba(99, 102, 241, 0.1);
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     padding: 2px 8px;
     border-radius: 8px;
     white-space: nowrap;
@@ -125,10 +125,10 @@
     align-items: center;
     gap: 8px;
     padding: 10px 24px;
-    background: #6366f1;
+    background: var(--mj-brand-primary);
     border: none;
     border-radius: 8px;
-    color: #ffffff;
+    color: var(--mj-text-inverse);
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
@@ -136,7 +136,7 @@
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: #4f46e5;
+    background: var(--mj-brand-primary-hover);
 }
 
 .btn-primary:disabled {
@@ -158,7 +158,7 @@
     gap: 10px;
     padding: 16px 20px;
     border-radius: 10px;
-    border: 1px solid var(--border-color, #e5e7eb);
+    border: 1px solid var(--mj-border-default);
 }
 
 .diff-stat i {
@@ -168,37 +168,37 @@
 .diff-stat-value {
     font-size: 22px;
     font-weight: 700;
-    color: var(--text-primary, #1f2937);
+    color: var(--mj-text-primary);
 }
 
 .diff-stat-label {
     font-size: 13px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
 }
 
 /* Change type colors */
 .change-added {
-    background: rgba(16, 185, 129, 0.06);
-    border-color: rgba(16, 185, 129, 0.2);
-    color: #059669;
+    background: color-mix(in srgb, var(--mj-status-success) 6%, transparent);
+    border-color: color-mix(in srgb, var(--mj-status-success) 20%, transparent);
+    color: var(--mj-status-success);
 }
 
 .change-removed {
-    background: rgba(239, 68, 68, 0.06);
-    border-color: rgba(239, 68, 68, 0.2);
-    color: #dc2626;
+    background: color-mix(in srgb, var(--mj-status-error) 6%, transparent);
+    border-color: color-mix(in srgb, var(--mj-status-error) 20%, transparent);
+    color: var(--mj-status-error);
 }
 
 .change-modified {
-    background: rgba(245, 158, 11, 0.06);
-    border-color: rgba(245, 158, 11, 0.2);
-    color: #d97706;
+    background: color-mix(in srgb, var(--mj-status-warning) 6%, transparent);
+    border-color: color-mix(in srgb, var(--mj-status-warning) 20%, transparent);
+    color: var(--mj-status-warning);
 }
 
 .change-unchanged {
-    background: rgba(107, 114, 128, 0.06);
-    border-color: rgba(107, 114, 128, 0.2);
-    color: #6b7280;
+    background: color-mix(in srgb, var(--mj-text-muted) 6%, transparent);
+    border-color: color-mix(in srgb, var(--mj-text-muted) 20%, transparent);
+    color: var(--mj-text-muted);
 }
 
 /* Entity Groups */
@@ -209,8 +209,8 @@
 }
 
 .entity-group {
-    background: var(--card-background, #ffffff);
-    border: 1px solid var(--border-color, #e5e7eb);
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
     border-radius: 10px;
     overflow: hidden;
 }
@@ -225,7 +225,7 @@
 }
 
 .entity-group-header:hover {
-    background: var(--hover-background, #f9fafb);
+    background: var(--mj-bg-surface-sunken);
 }
 
 .entity-group-left {
@@ -236,19 +236,19 @@
 
 .entity-group-left i:first-child {
     font-size: 12px;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-muted);
     width: 16px;
 }
 
 .entity-icon {
-    color: #6366f1;
+    color: var(--mj-brand-primary);
     font-size: 14px;
 }
 
 .entity-group-name {
     font-size: 15px;
     font-weight: 600;
-    color: var(--text-primary, #1f2937);
+    color: var(--mj-text-primary);
 }
 
 .entity-group-badges {
@@ -269,7 +269,7 @@
 /* Entity chevron animation */
 .entity-chevron {
     font-size: 11px;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-muted);
     width: 14px;
     text-align: center;
     transition: transform 0.2s ease;
@@ -281,7 +281,7 @@
 
 /* Entity group items */
 .entity-group-items {
-    border-top: 1px solid var(--border-color, #e5e7eb);
+    border-top: 1px solid var(--mj-border-default);
     padding: 8px 16px;
 }
 
@@ -315,7 +315,7 @@
 .diff-item-record {
     font-size: 13px;
     font-family: 'SF Mono', 'Fira Code', monospace;
-    color: var(--text-primary, #1f2937);
+    color: var(--mj-text-primary);
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -324,7 +324,7 @@
 
 .diff-item-display-name {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     font-weight: 500;
 }
 
@@ -337,7 +337,7 @@
     border: 1px solid transparent;
     border-radius: 4px;
     background: transparent;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-muted);
     font-size: 11px;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -345,9 +345,9 @@
 }
 
 .diff-item-open-btn:hover {
-    border-color: #6366f1;
-    color: #6366f1;
-    background: rgba(99, 102, 241, 0.06);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
 }
 
 .diff-item-type {
@@ -359,7 +359,7 @@
 
 .diff-item-chevron {
     font-size: 10px;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-muted);
     transition: transform 0.2s ease;
 }
 
@@ -387,20 +387,20 @@
 }
 
 .diff-field.change-added {
-    background: rgba(16, 185, 129, 0.06);
+    background: color-mix(in srgb, var(--mj-status-success) 6%, transparent);
 }
 
 .diff-field.change-modified {
-    background: rgba(245, 158, 11, 0.06);
+    background: color-mix(in srgb, var(--mj-status-warning) 6%, transparent);
 }
 
 .diff-field.change-removed {
-    background: rgba(239, 68, 68, 0.06);
+    background: color-mix(in srgb, var(--mj-status-error) 6%, transparent);
 }
 
 .diff-field-name {
     font-weight: 600;
-    color: var(--text-primary, #1f2937);
+    color: var(--mj-text-primary);
     min-width: 120px;
     flex-shrink: 0;
 }
@@ -414,7 +414,7 @@
 }
 
 .diff-field-old {
-    color: #ef4444;
+    color: var(--mj-status-error);
     text-decoration: line-through;
     opacity: 0.8;
     font-family: 'SF Mono', 'Fira Code', monospace;
@@ -425,13 +425,13 @@
 }
 
 .diff-field-arrow {
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-muted);
     font-size: 10px;
     flex-shrink: 0;
 }
 
 .diff-field-new {
-    color: #10b981;
+    color: var(--mj-status-success);
     font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 12px;
     overflow: hidden;
@@ -442,7 +442,7 @@
 .diff-fields-empty {
     padding: 6px 10px;
     font-size: 12px;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-muted);
     font-style: italic;
 }
 
@@ -459,19 +459,19 @@
     justify-content: center;
     width: 32px;
     height: 32px;
-    border: 1px solid var(--border-color, #e5e7eb);
+    border: 1px solid var(--mj-border-default);
     border-radius: 6px;
-    background: var(--card-background, #ffffff);
-    color: var(--text-tertiary, #9ca3af);
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-muted);
     font-size: 13px;
     cursor: pointer;
     transition: all 0.15s ease;
 }
 
 .toolbar-action-btn:hover {
-    border-color: #6366f1;
-    color: #6366f1;
-    background: rgba(99, 102, 241, 0.06);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
 }
 
 /* Empty State */
@@ -486,20 +486,20 @@
 
 .empty-icon {
     font-size: 48px;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-muted);
     margin-bottom: 16px;
 }
 
 .empty-state h3 {
     font-size: 18px;
     font-weight: 600;
-    color: var(--text-primary, #1f2937);
+    color: var(--mj-text-primary);
     margin: 0 0 8px 0;
 }
 
 .empty-state p {
     font-size: 14px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     margin: 0;
     max-width: 400px;
 }
@@ -511,18 +511,18 @@
     justify-content: center;
     width: 36px;
     height: 36px;
-    border: 1px solid var(--border-color, #e5e7eb);
+    border: 1px solid var(--mj-border-default);
     border-radius: 50%;
-    background: var(--card-background, #ffffff);
-    color: #6366f1;
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-brand-primary);
     font-size: 14px;
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
 .swap-btn:hover {
-    background: rgba(99, 102, 241, 0.1);
-    border-color: #6366f1;
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+    border-color: var(--mj-brand-primary);
     transform: rotate(180deg);
 }
 
@@ -546,25 +546,25 @@
     left: 12px;
     top: 50%;
     transform: translateY(-50%);
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-muted);
     font-size: 13px;
 }
 
 .diff-search-input {
     width: 100%;
     padding: 8px 12px 8px 36px;
-    border: 1px solid var(--border-color, #e5e7eb);
+    border: 1px solid var(--mj-border-strong);
     border-radius: 8px;
     font-size: 13px;
-    background: var(--card-background, #ffffff);
-    color: var(--text-primary, #1f2937);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
     box-sizing: border-box;
 }
 
 .diff-search-input:focus {
     outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .diff-filter-pills {
@@ -574,40 +574,40 @@
 
 .filter-pill {
     padding: 6px 14px;
-    border: 1px solid var(--border-color, #e5e7eb);
+    border: 1px solid var(--mj-border-default);
     border-radius: 16px;
-    background: var(--card-background, #ffffff);
+    background: var(--mj-bg-surface-card);
     font-size: 12px;
     font-weight: 500;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     cursor: pointer;
     transition: all 0.15s ease;
 }
 
 .filter-pill:hover {
-    border-color: #6366f1;
-    color: #6366f1;
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
 }
 
 .filter-pill.active {
-    background: #6366f1;
-    border-color: #6366f1;
-    color: #ffffff;
+    background: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
 }
 
 .filter-pill.change-added.active {
-    background: #059669;
-    border-color: #059669;
+    background: var(--mj-status-success);
+    border-color: var(--mj-status-success);
 }
 
 .filter-pill.change-removed.active {
-    background: #dc2626;
-    border-color: #dc2626;
+    background: var(--mj-status-error);
+    border-color: var(--mj-status-error);
 }
 
 .filter-pill.change-modified.active {
-    background: #d97706;
-    border-color: #d97706;
+    background: var(--mj-status-warning);
+    border-color: var(--mj-status-warning);
 }
 
 .diff-sort-toggle {
@@ -621,24 +621,24 @@
     justify-content: center;
     width: 32px;
     height: 32px;
-    border: 1px solid var(--border-color, #e5e7eb);
+    border: 1px solid var(--mj-border-default);
     border-radius: 6px;
-    background: var(--card-background, #ffffff);
-    color: var(--text-tertiary, #9ca3af);
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-muted);
     font-size: 13px;
     cursor: pointer;
     transition: all 0.15s ease;
 }
 
 .toggle-btn-sm:hover {
-    border-color: #6366f1;
-    color: #6366f1;
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
 }
 
 .toggle-btn-sm.active {
-    background: rgba(99, 102, 241, 0.1);
-    border-color: #6366f1;
-    color: #6366f1;
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
 }
 
 @media (max-width: 768px) {

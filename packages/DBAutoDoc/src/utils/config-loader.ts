@@ -23,6 +23,9 @@ export class ConfigLoader {
       // Validate required fields
       this.validate(config);
 
+      // Apply defaults for optional sections
+      this.applyDefaults(config);
+
       return config;
     } catch (error) {
       throw new Error(`Failed to load configuration: ${(error as Error).message}`);
@@ -114,6 +117,27 @@ export class ConfigLoader {
         exclude: ['sysdiagrams', '__MigrationHistory']
       }
     };
+  }
+
+  /**
+   * Apply defaults for optional configuration sections that may be missing
+   */
+  private static applyDefaults(config: DBAutoDocConfig): void {
+    if (!config.schemas) {
+      config.schemas = { exclude: ['sys', 'INFORMATION_SCHEMA'] };
+    }
+    if (!config.tables) {
+      config.tables = { exclude: ['sysdiagrams', '__MigrationHistory'] };
+    }
+    if (!config.analysis.convergence) {
+      config.analysis.convergence = { maxIterations: 10, stabilityWindow: 2, confidenceThreshold: 0.85 };
+    }
+    if (!config.analysis.backpropagation) {
+      config.analysis.backpropagation = { enabled: true, maxDepth: 3 };
+    }
+    if (!config.analysis.sanityChecks) {
+      config.analysis.sanityChecks = { dependencyLevel: true, schemaLevel: true, crossSchema: true };
+    }
   }
 
   /**

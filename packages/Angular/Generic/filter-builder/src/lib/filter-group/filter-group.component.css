@@ -1,9 +1,9 @@
 /* Scoped to mj-filter-group to prevent style leakage with ViewEncapsulation.None */
 mj-filter-group .filter-group {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   padding: 12px;
-  background: #fafafa;
+  background: var(--mj-bg-surface-card);
   transition: all 0.15s ease;
 }
 
@@ -15,7 +15,7 @@ mj-filter-group .filter-group.root {
 
 mj-filter-group .filter-group:not(.root) {
   margin-left: 16px;
-  border-left: 3px solid #1976d2;
+  border-left: 3px solid var(--mj-brand-primary);
 }
 
 mj-filter-group .filter-group[data-depth="1"]:not(.root) {
@@ -48,10 +48,10 @@ mj-filter-group .group-header {
 /* Logic Toggle */
 mj-filter-group .logic-toggle {
   display: flex;
-  background: #f4f4f5;
+  background: var(--mj-bg-surface-sunken);
   border-radius: 8px;
   padding: 3px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--mj-border-default);
 }
 
 mj-filter-group .logic-btn {
@@ -64,12 +64,12 @@ mj-filter-group .logic-btn {
   letter-spacing: 0.5px;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #71717a;
+  color: var(--mj-text-muted);
 }
 
 mj-filter-group .logic-btn:hover:not(:disabled) {
-  color: #3f3f46;
-  background: rgba(255, 255, 255, 0.5);
+  color: var(--mj-text-secondary);
+  background: color-mix(in srgb, var(--mj-bg-surface) 50%, transparent);
 }
 
 mj-filter-group .logic-btn:disabled {
@@ -78,9 +78,9 @@ mj-filter-group .logic-btn:disabled {
 }
 
 mj-filter-group .logic-btn.active {
-  background: white;
-  color: #3b82f6;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: var(--mj-bg-surface);
+  color: var(--mj-brand-primary);
+  box-shadow: var(--mj-shadow-sm);
   font-weight: 700;
 }
 
@@ -96,20 +96,20 @@ mj-filter-group .add-btn {
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  border: 1px dashed #d4d4d8;
-  background: white;
+  border: 1px dashed var(--mj-border-strong);
+  background: var(--mj-bg-surface);
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: #52525b;
+  color: var(--mj-text-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 mj-filter-group .add-btn:hover:not(:disabled) {
-  border-color: #3b82f6;
-  color: #3b82f6;
-  background: #eff6ff;
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 mj-filter-group .add-btn:disabled {
@@ -119,14 +119,14 @@ mj-filter-group .add-btn:disabled {
 
 mj-filter-group .add-btn.primary {
   border-style: solid;
-  border-color: #3b82f6;
-  background: #3b82f6;
-  color: white;
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse, white);
 }
 
 mj-filter-group .add-btn.primary:hover:not(:disabled) {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--mj-brand-primary-hover);
+  border-color: var(--mj-brand-primary-hover);
 }
 
 mj-filter-group .add-btn i {
@@ -134,14 +134,14 @@ mj-filter-group .add-btn i {
 }
 
 mj-filter-group .add-group {
-  border-color: #a855f7;
-  color: #a855f7;
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
 }
 
 mj-filter-group .add-group:hover:not(:disabled) {
-  border-color: #9333ea;
-  color: #9333ea;
-  background: #faf5ff;
+  border-color: var(--mj-brand-primary-hover);
+  color: var(--mj-brand-primary-hover);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 mj-filter-group .delete-group-btn {
@@ -153,15 +153,15 @@ mj-filter-group .delete-group-btn {
   border: none;
   background: transparent;
   border-radius: 8px;
-  color: #a1a1aa;
+  color: var(--mj-text-disabled);
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 14px;
 }
 
 mj-filter-group .delete-group-btn:hover:not(:disabled) {
-  background: #fef2f2;
-  color: #ef4444;
+  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+  color: var(--mj-status-error);
 }
 
 mj-filter-group .delete-group-btn:disabled {
@@ -193,13 +193,13 @@ mj-filter-group .logic-connector {
 mj-filter-group .connector-line {
   flex: 1;
   height: 1px;
-  background: #e0e0e0;
+  background: var(--mj-border-default);
 }
 
 mj-filter-group .connector-label {
   font-size: 11px;
   font-weight: 600;
-  color: #999;
+  color: var(--mj-text-disabled);
   letter-spacing: 0.5px;
 }
 
@@ -207,7 +207,7 @@ mj-filter-group .connector-label {
 mj-filter-group .empty-state {
   text-align: center;
   padding: 24px;
-  color: #999;
+  color: var(--mj-text-disabled);
 }
 
 mj-filter-group .empty-state p {

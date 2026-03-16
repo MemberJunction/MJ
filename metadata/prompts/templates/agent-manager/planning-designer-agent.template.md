@@ -89,7 +89,7 @@ Parent Agent
 ├─ Sub-Agent: Research Agent (handles web + analysis + reports)
 ├─ Sub-Agent: Database Research Agent (handles READ - data search)
 └─ Actions: Update Record, Create Record (for UPDATE and CREATE only)
-    ❌ NOT Execute Research Query (Database Research Agent has this!)
+    ❌ NOT Run Ad-hoc Query (Database Research Agent has this!)
     ❌ NOT Get Record (Database Research Agent searches better!)
 ```
 
@@ -207,7 +207,7 @@ Returns: "Create Record" action {
 **Actions**:
 - Update Record (ID from Find Candidate Actions result, for UPDATE operations)
 - Create Record (ID from Find Candidate Actions result, for CREATE operations)
-- ❌ **NOT** Execute Research Query (redundant - Database Research Agent has this!)
+- ❌ **NOT** Run Ad-hoc Query (redundant - Database Research Agent has this!)
 - ❌ **NOT** Get Record (redundant - Database Research Agent searches better!)
 
 **Prompt** (Full text showing READ → UPDATE → CREATE workflow):
@@ -263,7 +263,7 @@ Provide summary including:
 ✅ Searched for agents BEFORE actions - found Research Agent AND Database Research Agent
 ✅ Research Agent handles web research + analysis (3 subtasks)
 ✅ Database Research Agent handles READ operations (finding existing records with IDs)
-✅ Avoided redundant actions - no Execute Research Query or Get Record (Database Research Agent has these!)
+✅ Avoided redundant actions - no Run Ad-hoc Query or Get Record (Database Research Agent has these!)
 ✅ Called Database Research Agent for actual entity name, fields, and primary key
 ✅ Used Update Record and Create Record actions for UPDATE and CREATE only
 ✅ Prompt shows full workflow: READ → UPDATE → CREATE with proper delegation to sub-agents
@@ -273,7 +273,7 @@ Provide summary including:
 1. Always search for agents BEFORE searching for actions
 2. One capable agent can eliminate need for multiple actions
 3. **For database operations**: Database Research Agent for READ, CRUD actions for UPDATE/CREATE
-4. **Avoid redundancy**: Don't include both Database Research Agent AND Execute Research Query/Get Record
+4. **Avoid redundancy**: Don't include both Database Research Agent AND Run Ad-hoc Query/Get Record
 5. Never guess entity/field names - always call Database Research Agent for schema
 6. Handle case where required database entity doesn't exist
 7. Examine action parameters (input/output) to understand how to use them
@@ -339,8 +339,8 @@ The agent requires database support if the user mentions:
 - **Database Research Agent finds records**: Can search by any criteria ("where Category='X'", "created in last N days") and returns IDs + data
 - **Then use Update Record action**: Pass the IDs from Database Research Agent results to Update Record's PrimaryKey parameter
 
-**🚨 CRITICAL - Avoid Redundant Actions**: If you include Database Research Agent as a subagent, **DO NOT also add "Execute Research Query" or "Get Record" actions** - that's redundant! Database Research Agent already has these capabilities built-in (it uses Execute Research Query internally). Instead:
-- ❌ **WRONG**: Include Database Research Agent + Execute Research Query action
+**🚨 CRITICAL - Avoid Redundant Actions**: If you include Database Research Agent as a subagent, **DO NOT also add "Run Ad-hoc Query" or "Get Record" actions** - that's redundant! Database Research Agent already has these capabilities built-in (it uses Run Ad-hoc Query internally). Instead:
+- ❌ **WRONG**: Include Database Research Agent + Run Ad-hoc Query action
 - ✅ **CORRECT**: Include Database Research Agent only, delegate all READ operations to it in the prompt
 - In your prompt: "Call Database Research Agent to find records where [criteria]. Request JSON format and show all columns in max length to get full field values (default truncates at 50 chars)."
 
@@ -570,7 +570,7 @@ Use **imperative verbs** (ADD, UPDATE, DELETE, APPEND, REPLACE) and show full st
 
 **Item to Delete**:
 - **ID**: "GUID-FROM-PAYLOAD-ACTIONS-ARRAY"  // ✅ Required - identifies which action
-- **Name**: "Execute Research Query"
+- **Name**: "Run Ad-hoc Query"
 
 **Rationale**: Redundant - Database Research Agent already has this capability
 **Before/After**: [N] → [N-1] items

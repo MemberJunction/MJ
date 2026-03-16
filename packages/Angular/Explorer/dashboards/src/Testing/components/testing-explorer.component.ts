@@ -664,14 +664,14 @@ interface TestRunStatRow {
       align-items: center;
       height: 100%;
       min-height: 400px;
-      background: #f5f6fa;
+      background: var(--mj-bg-surface-sunken);
     }
 
     /* Layout */
     .explorer-layout {
       display: flex;
       height: 100%;
-      background: #f5f6fa;
+      background: var(--mj-bg-surface-sunken);
       overflow: hidden;
     }
 
@@ -681,8 +681,8 @@ interface TestRunStatRow {
     .sidebar {
       width: 280px;
       min-width: 280px;
-      background: #fff;
-      border-right: 1px solid #e8ecef;
+      background: var(--mj-bg-surface);
+      border-right: 1px solid var(--mj-border-default);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -699,14 +699,14 @@ interface TestRunStatRow {
       align-items: center;
       justify-content: space-between;
       padding: 16px;
-      border-bottom: 1px solid #e8ecef;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .sidebar-header h3 {
       margin: 0;
       font-size: 15px;
       font-weight: 700;
-      color: #2d3436;
+      color: var(--mj-text-primary);
     }
 
     .sidebar.collapsed .sidebar-header h3 {
@@ -720,17 +720,17 @@ interface TestRunStatRow {
       align-items: center;
       justify-content: center;
       background: transparent;
-      border: 1px solid #e8ecef;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
-      color: #636e72;
+      color: var(--mj-text-muted);
       cursor: pointer;
       font-size: 11px;
       transition: all 0.15s ease;
     }
 
     .sidebar-toggle:hover {
-      background: #f5f6fa;
-      color: #2d3436;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .sidebar-content {
@@ -747,7 +747,7 @@ interface TestRunStatRow {
       padding: 8px 16px 4px;
       font-size: 10px;
       font-weight: 700;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       text-transform: uppercase;
       letter-spacing: 0.8px;
     }
@@ -758,7 +758,7 @@ interface TestRunStatRow {
       gap: 8px;
       padding: 8px 16px;
       font-size: 13px;
-      color: #636e72;
+      color: var(--mj-text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
       white-space: nowrap;
@@ -766,13 +766,13 @@ interface TestRunStatRow {
     }
 
     .sidebar-item:hover {
-      background: #f5f6fa;
-      color: #2d3436;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .sidebar-item.active {
-      background: #e0f2f1;
-      color: #00897b;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
       font-weight: 600;
     }
 
@@ -791,19 +791,19 @@ interface TestRunStatRow {
 
     .sidebar-count {
       font-size: 11px;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       font-weight: 500;
       flex-shrink: 0;
     }
 
     .sidebar-item.active .sidebar-count {
-      color: #00897b;
+      color: var(--mj-brand-primary);
     }
 
     .sidebar-empty {
       padding: 8px 16px;
       font-size: 12px;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       font-style: italic;
     }
 
@@ -820,7 +820,7 @@ interface TestRunStatRow {
       justify-content: center;
       background: transparent;
       border: none;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       font-size: 9px;
       flex-shrink: 0;
@@ -829,8 +829,8 @@ interface TestRunStatRow {
     }
 
     .tree-toggle:hover {
-      background: #e8ecef;
-      color: #636e72;
+      background: var(--mj-border-default);
+      color: var(--mj-text-muted);
     }
 
     .tree-name {
@@ -856,8 +856,8 @@ interface TestRunStatRow {
       align-items: center;
       gap: 16px;
       padding: 16px 24px;
-      background: #fff;
-      border-bottom: 1px solid #e8ecef;
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
       flex-shrink: 0;
     }
 
@@ -874,8 +874,8 @@ interface TestRunStatRow {
       align-items: center;
       gap: 8px;
       padding: 8px 14px;
-      background: #f5f6fa;
-      border: 1px solid #e8ecef;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       min-width: 240px;
       max-width: 360px;
@@ -884,12 +884,12 @@ interface TestRunStatRow {
     }
 
     .toolbar-search-box:focus-within {
-      border-color: #00897b;
-      background: #fff;
+      border-color: var(--mj-brand-primary);
+      background: var(--mj-bg-surface);
     }
 
     .toolbar-search-box i {
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       font-size: 13px;
     }
 
@@ -899,25 +899,25 @@ interface TestRunStatRow {
       background: transparent;
       outline: none;
       font-size: 13px;
-      color: #2d3436;
+      color: var(--mj-text-primary);
     }
 
     .toolbar-search-box input::placeholder {
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
     }
 
     .clear-search {
       border: none;
       background: transparent;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       padding: 2px 4px;
       border-radius: 4px;
     }
 
     .clear-search:hover {
-      color: #636e72;
-      background: #e8ecef;
+      color: var(--mj-text-muted);
+      background: var(--mj-border-default);
     }
 
     .status-chips {
@@ -929,37 +929,37 @@ interface TestRunStatRow {
       display: inline-flex;
       align-items: center;
       padding: 6px 14px;
-      background: #f5f6fa;
+      background: var(--mj-bg-surface-sunken);
       border: 1px solid transparent;
       border-radius: 16px;
       font-size: 12px;
       font-weight: 600;
-      color: #636e72;
+      color: var(--mj-text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
     }
 
     .chip:hover {
-      background: #e8ecef;
+      background: var(--mj-border-default);
     }
 
     .chip.active {
-      color: #fff;
+      color: var(--mj-text-inverse);
     }
 
     .chip.active[data-status="active"] {
-      background: #2e7d32;
-      border-color: #2e7d32;
+      background: var(--mj-status-success);
+      border-color: var(--mj-status-success);
     }
 
     .chip.active[data-status="pending"] {
-      background: #e65100;
-      border-color: #e65100;
+      background: var(--mj-status-warning);
+      border-color: var(--mj-status-warning);
     }
 
     .chip.active[data-status="disabled"] {
-      background: #636e72;
-      border-color: #636e72;
+      background: var(--mj-text-muted);
+      border-color: var(--mj-text-muted);
     }
 
     .toolbar-right {
@@ -971,14 +971,14 @@ interface TestRunStatRow {
 
     .result-count {
       font-size: 12px;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       font-weight: 500;
       white-space: nowrap;
     }
 
     .view-toggle {
       display: flex;
-      border: 1px solid #e8ecef;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       overflow: hidden;
     }
@@ -989,26 +989,26 @@ interface TestRunStatRow {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #fff;
+      background: var(--mj-bg-surface);
       border: none;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       font-size: 13px;
       transition: all 0.15s ease;
     }
 
     .view-btn:not(:last-child) {
-      border-right: 1px solid #e8ecef;
+      border-right: 1px solid var(--mj-border-default);
     }
 
     .view-btn:hover {
-      background: #f5f6fa;
-      color: #636e72;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
     }
 
     .view-btn.active {
-      background: #00897b;
-      color: #fff;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     /* Buttons */
@@ -1027,24 +1027,24 @@ interface TestRunStatRow {
     }
 
     .btn-primary {
-      background: #00897b;
-      color: #fff;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .btn-primary:hover {
-      background: #00796b;
+      background: var(--mj-brand-primary-hover);
       transform: translateY(-1px);
-      box-shadow: 0 2px 8px rgba(0, 137, 123, 0.3);
+      box-shadow: var(--mj-shadow-md);
     }
 
     .btn-secondary {
-      background: #fff;
-      color: #636e72;
-      border: 1px solid #e8ecef;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-muted);
+      border: 1px solid var(--mj-border-default);
     }
 
     .btn-secondary:hover {
-      background: #f5f6fa;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .btn-sm {
@@ -1058,40 +1058,40 @@ interface TestRunStatRow {
       justify-content: space-between;
       align-items: center;
       padding: 10px 24px;
-      background: #fafafa;
-      border-bottom: 1px solid #e8ecef;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
       flex-shrink: 0;
     }
 
     .toggle-group {
       display: flex;
-      border: 1px solid #e8ecef;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       overflow: hidden;
     }
 
     .toggle-btn {
       padding: 6px 16px;
-      background: #fff;
+      background: var(--mj-bg-surface);
       border: none;
       font-size: 12px;
       font-weight: 600;
-      color: #636e72;
+      color: var(--mj-text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
     }
 
     .toggle-btn:not(:last-child) {
-      border-right: 1px solid #e8ecef;
+      border-right: 1px solid var(--mj-border-default);
     }
 
     .toggle-btn.active {
-      background: #00897b;
-      color: #fff;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .toggle-btn:hover:not(.active) {
-      background: #f5f6fa;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .sort-indicator {
@@ -1105,16 +1105,16 @@ interface TestRunStatRow {
       gap: 6px;
       padding: 6px 12px;
       background: transparent;
-      border: 1px solid #e8ecef;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       font-size: 12px;
       font-weight: 500;
-      color: #636e72;
+      color: var(--mj-text-muted);
       cursor: pointer;
     }
 
     .sort-btn:hover {
-      background: #f5f6fa;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .sort-btn i {
@@ -1139,19 +1139,19 @@ interface TestRunStatRow {
       margin: 0 0 16px 0;
       font-size: 16px;
       font-weight: 700;
-      color: #2d3436;
+      color: var(--mj-text-primary);
     }
 
     .section-title i {
-      color: #00897b;
+      color: var(--mj-brand-primary);
       font-size: 14px;
     }
 
     .section-count {
       font-size: 12px;
       font-weight: 600;
-      color: #b2bec3;
-      background: #f5f6fa;
+      color: var(--mj-text-disabled);
+      background: var(--mj-bg-surface-sunken);
       padding: 2px 8px;
       border-radius: 10px;
     }
@@ -1166,8 +1166,8 @@ interface TestRunStatRow {
     /* Suite Card */
     .suite-card,
     .test-card {
-      background: #fff;
-      border: 1px solid #e8ecef;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 10px;
       overflow: hidden;
       transition: all 0.2s ease;
@@ -1175,8 +1175,8 @@ interface TestRunStatRow {
 
     .suite-card:hover,
     .test-card:hover {
-      border-color: #b2dfdb;
-      box-shadow: 0 4px 16px rgba(0, 137, 123, 0.1);
+      border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
+      box-shadow: var(--mj-shadow-md);
     }
 
     .card-header {
@@ -1196,18 +1196,18 @@ interface TestRunStatRow {
     }
 
     .suite-icon {
-      color: #00897b;
+      color: var(--mj-brand-primary);
     }
 
     .test-icon {
-      color: #6366f1;
+      color: var(--mj-brand-primary);
     }
 
     .card-name {
       flex: 1;
       font-size: 14px;
       font-weight: 700;
-      color: #2d3436;
+      color: var(--mj-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1224,23 +1224,23 @@ interface TestRunStatRow {
     }
 
     .status-badge[data-status="active"] {
-      background: #e8f5e9;
-      color: #2e7d32;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .status-badge[data-status="pending"] {
-      background: #fff3e0;
-      color: #e65100;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
     }
 
     .status-badge[data-status="disabled"] {
-      background: #f5f6fa;
-      color: #636e72;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
     }
 
     .card-subtitle {
       font-size: 12px;
-      color: #636e72;
+      color: var(--mj-text-muted);
       margin-bottom: 6px;
     }
 
@@ -1248,7 +1248,7 @@ interface TestRunStatRow {
       display: inline-block;
       width: 3px;
       height: 3px;
-      background: #b2bec3;
+      background: var(--mj-text-disabled);
       border-radius: 50%;
       vertical-align: middle;
       margin: 0 6px;
@@ -1257,7 +1257,7 @@ interface TestRunStatRow {
     .card-description {
       margin: 0;
       font-size: 12px;
-      color: #636e72;
+      color: var(--mj-text-muted);
       line-height: 1.5;
       display: -webkit-box;
       -webkit-line-clamp: 2;
@@ -1274,7 +1274,7 @@ interface TestRunStatRow {
 
     .meta-item {
       font-size: 11px;
-      color: #636e72;
+      color: var(--mj-text-muted);
       display: flex;
       align-items: center;
       gap: 4px;
@@ -1282,7 +1282,7 @@ interface TestRunStatRow {
 
     .meta-item i {
       font-size: 10px;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
     }
 
     .card-tags {
@@ -1296,14 +1296,14 @@ interface TestRunStatRow {
       font-size: 10px;
       font-weight: 600;
       padding: 2px 8px;
-      background: #f5f6fa;
-      color: #636e72;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
       border-radius: 4px;
     }
 
     .tag-more {
-      background: #e8ecef;
-      color: #b2bec3;
+      background: var(--mj-border-default);
+      color: var(--mj-text-disabled);
     }
 
     /* Card Stats */
@@ -1311,12 +1311,12 @@ interface TestRunStatRow {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 1px;
-      background: #e8ecef;
-      border-top: 1px solid #e8ecef;
+      background: var(--mj-border-default);
+      border-top: 1px solid var(--mj-border-default);
     }
 
     .stat {
-      background: #fafafa;
+      background: var(--mj-bg-surface-card);
       padding: 10px 12px;
       text-align: center;
     }
@@ -1325,7 +1325,7 @@ interface TestRunStatRow {
       display: block;
       font-size: 10px;
       font-weight: 600;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       text-transform: uppercase;
       letter-spacing: 0.3px;
       margin-bottom: 2px;
@@ -1334,24 +1334,24 @@ interface TestRunStatRow {
     .stat-value {
       font-size: 14px;
       font-weight: 700;
-      color: #2d3436;
+      color: var(--mj-text-primary);
     }
 
-    .stat-value.good { color: #2e7d32; }
-    .stat-value.warn { color: #e65100; }
-    .stat-value.bad { color: #c62828; }
+    .stat-value.good { color: var(--mj-status-success); }
+    .stat-value.warn { color: var(--mj-status-warning); }
+    .stat-value.bad { color: var(--mj-status-error); }
 
-    .status-text[data-status="passed"] { color: #2e7d32; }
-    .status-text[data-status="failed"] { color: #c62828; }
-    .status-text[data-status="error"] { color: #e65100; }
-    .status-text[data-status="running"] { color: #1565c0; }
-    .status-text[data-status="pending"] { color: #e65100; }
-    .status-text[data-status="skipped"] { color: #636e72; }
+    .status-text[data-status="passed"] { color: var(--mj-status-success); }
+    .status-text[data-status="failed"] { color: var(--mj-status-error); }
+    .status-text[data-status="error"] { color: var(--mj-status-warning); }
+    .status-text[data-status="running"] { color: var(--mj-brand-primary); }
+    .status-text[data-status="pending"] { color: var(--mj-status-warning); }
+    .status-text[data-status="skipped"] { color: var(--mj-text-muted); }
 
     /* Suite Tests Preview */
     .card-tests-preview {
       padding: 10px 16px;
-      border-top: 1px solid #e8ecef;
+      border-top: 1px solid var(--mj-border-default);
     }
 
     .preview-test-row {
@@ -1369,15 +1369,15 @@ interface TestRunStatRow {
       flex-shrink: 0;
     }
 
-    .preview-dot[data-status="passed"] { background: #2e7d32; }
-    .preview-dot[data-status="failed"] { background: #c62828; }
-    .preview-dot[data-status="error"] { background: #e65100; }
-    .preview-dot[data-status="running"] { background: #1565c0; }
-    .preview-dot[data-status=""] { background: #b2bec3; }
+    .preview-dot[data-status="passed"] { background: var(--mj-status-success); }
+    .preview-dot[data-status="failed"] { background: var(--mj-status-error); }
+    .preview-dot[data-status="error"] { background: var(--mj-status-warning); }
+    .preview-dot[data-status="running"] { background: var(--mj-brand-primary); }
+    .preview-dot[data-status=""] { background: var(--mj-text-disabled); }
 
     .preview-test-name {
       flex: 1;
-      color: #2d3436;
+      color: var(--mj-text-primary);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -1390,14 +1390,14 @@ interface TestRunStatRow {
       text-align: right;
     }
 
-    .preview-score.good { color: #2e7d32; }
-    .preview-score.warn { color: #e65100; }
-    .preview-score.bad { color: #c62828; }
+    .preview-score.good { color: var(--mj-status-success); }
+    .preview-score.warn { color: var(--mj-status-warning); }
+    .preview-score.bad { color: var(--mj-status-error); }
 
     .preview-bar {
       width: 48px;
       height: 4px;
-      background: #e8ecef;
+      background: var(--mj-border-default);
       border-radius: 2px;
       overflow: hidden;
       flex-shrink: 0;
@@ -1409,9 +1409,9 @@ interface TestRunStatRow {
       transition: width 0.3s ease;
     }
 
-    .good-bg { background: #2e7d32; }
-    .warn-bg { background: #e65100; }
-    .bad-bg { background: #c62828; }
+    .good-bg { background: var(--mj-status-success); }
+    .warn-bg { background: var(--mj-status-warning); }
+    .bad-bg { background: var(--mj-status-error); }
 
     .preview-status {
       font-size: 10px;
@@ -1421,15 +1421,15 @@ interface TestRunStatRow {
       text-align: right;
     }
 
-    .preview-status[data-status="passed"] { color: #2e7d32; }
-    .preview-status[data-status="failed"] { color: #c62828; }
-    .preview-status[data-status="error"] { color: #e65100; }
-    .preview-status[data-status=""] { color: #b2bec3; }
+    .preview-status[data-status="passed"] { color: var(--mj-status-success); }
+    .preview-status[data-status="failed"] { color: var(--mj-status-error); }
+    .preview-status[data-status="error"] { color: var(--mj-status-warning); }
+    .preview-status[data-status=""] { color: var(--mj-text-disabled); }
 
     .preview-more {
       padding: 4px 0 0;
       font-size: 11px;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       font-style: italic;
     }
 
@@ -1438,8 +1438,8 @@ interface TestRunStatRow {
       display: flex;
       gap: 8px;
       padding: 12px 16px;
-      border-top: 1px solid #e8ecef;
-      background: #fafafa;
+      border-top: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-card);
     }
 
     /* Empty State */
@@ -1450,19 +1450,19 @@ interface TestRunStatRow {
 
     .empty-state i {
       font-size: 48px;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       margin-bottom: 16px;
     }
 
     .empty-state p {
       font-size: 16px;
-      color: #636e72;
+      color: var(--mj-text-muted);
       margin: 0 0 8px 0;
     }
 
     .empty-hint {
       font-size: 13px;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
     }
 
     /* ==========================================
@@ -1474,7 +1474,7 @@ interface TestRunStatRow {
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.3);
+      background: var(--mj-bg-overlay);
       z-index: 999;
       animation: fadeInBackdrop 0.2s ease;
     }
@@ -1489,8 +1489,8 @@ interface TestRunStatRow {
       top: 0;
       right: -100%;
       height: 100vh;
-      background: #fff;
-      box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+      background: var(--mj-bg-surface);
+      box-shadow: var(--mj-shadow-lg);
       z-index: 1000;
       transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       overflow: hidden;
@@ -1515,11 +1515,11 @@ interface TestRunStatRow {
     }
 
     .slideout-resize-handle:hover {
-      background: rgba(0, 137, 123, 0.3);
+      background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
     }
 
     .slideout-resize-handle:active {
-      background: rgba(0, 137, 123, 0.5);
+      background: color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
     }
 
     .slideout-container {
@@ -1534,7 +1534,7 @@ interface TestRunStatRow {
       align-items: center;
       justify-content: space-between;
       padding: 20px 24px;
-      border-bottom: 1px solid #e8ecef;
+      border-bottom: 1px solid var(--mj-border-default);
       flex-shrink: 0;
     }
 
@@ -1546,13 +1546,13 @@ interface TestRunStatRow {
 
     .slideout-title-icon {
       font-size: 18px;
-      color: #00897b;
+      color: var(--mj-brand-primary);
     }
 
     .slideout-title-text {
       font-size: 18px;
       font-weight: 700;
-      color: #2d3436;
+      color: var(--mj-text-primary);
     }
 
     .slideout-close-btn {
@@ -1562,18 +1562,18 @@ interface TestRunStatRow {
       align-items: center;
       justify-content: center;
       background: transparent;
-      border: 1px solid #e8ecef;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
-      color: #636e72;
+      color: var(--mj-text-muted);
       cursor: pointer;
       font-size: 14px;
       transition: all 0.15s ease;
     }
 
     .slideout-close-btn:hover {
-      background: #f5f6fa;
-      color: #2d3436;
-      border-color: #ccc;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
+      border-color: var(--mj-border-strong);
     }
 
     /* Type Toggle */
@@ -1581,7 +1581,7 @@ interface TestRunStatRow {
       display: flex;
       gap: 0;
       padding: 16px 24px;
-      border-bottom: 1px solid #e8ecef;
+      border-bottom: 1px solid var(--mj-border-default);
       flex-shrink: 0;
     }
 
@@ -1592,11 +1592,11 @@ interface TestRunStatRow {
       justify-content: center;
       gap: 8px;
       padding: 10px 16px;
-      background: #f5f6fa;
-      border: 1px solid #e8ecef;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       font-size: 13px;
       font-weight: 600;
-      color: #636e72;
+      color: var(--mj-text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
     }
@@ -1611,13 +1611,13 @@ interface TestRunStatRow {
     }
 
     .type-toggle-btn.active {
-      background: #00897b;
-      border-color: #00897b;
-      color: #fff;
+      background: var(--mj-brand-primary);
+      border-color: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .type-toggle-btn:hover:not(.active) {
-      background: #e8ecef;
+      background: var(--mj-border-default);
     }
 
     /* Error Banner */
@@ -1627,10 +1627,10 @@ interface TestRunStatRow {
       gap: 10px;
       margin: 16px 24px 0;
       padding: 12px 16px;
-      background: #fff5f5;
-      border: 1px solid #fed7d7;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
       border-radius: 8px;
-      color: #c53030;
+      color: var(--mj-status-error);
       font-size: 13px;
       flex-shrink: 0;
     }
@@ -1654,12 +1654,12 @@ interface TestRunStatRow {
     .form-section-title {
       font-size: 12px;
       font-weight: 700;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       text-transform: uppercase;
       letter-spacing: 0.8px;
       margin-bottom: 14px;
       padding-bottom: 8px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .form-group {
@@ -1670,23 +1670,23 @@ interface TestRunStatRow {
       display: block;
       font-size: 13px;
       font-weight: 600;
-      color: #2d3436;
+      color: var(--mj-text-primary);
       margin-bottom: 6px;
     }
 
     .form-required {
-      color: #e53e3e;
+      color: var(--mj-status-error);
     }
 
     .form-input,
     .form-textarea {
       width: 100%;
       padding: 10px 14px;
-      background: #fff;
-      border: 1px solid #e8ecef;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       font-size: 13px;
-      color: #2d3436;
+      color: var(--mj-text-primary);
       transition: border-color 0.2s ease;
       outline: none;
       box-sizing: border-box;
@@ -1695,13 +1695,13 @@ interface TestRunStatRow {
 
     .form-input:focus,
     .form-textarea:focus {
-      border-color: #00897b;
-      box-shadow: 0 0 0 3px rgba(0, 137, 123, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     .form-input::placeholder,
     .form-textarea::placeholder {
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
     }
 
     .form-textarea {
@@ -1718,7 +1718,7 @@ interface TestRunStatRow {
     .form-hint {
       display: block;
       font-size: 11px;
-      color: #b2bec3;
+      color: var(--mj-text-disabled);
       margin-top: 4px;
     }
 
@@ -1728,8 +1728,8 @@ interface TestRunStatRow {
       justify-content: flex-end;
       gap: 10px;
       padding: 16px 24px;
-      border-top: 1px solid #e8ecef;
-      background: #fafafa;
+      border-top: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-card);
       flex-shrink: 0;
     }
 
@@ -1747,7 +1747,7 @@ interface TestRunStatRow {
 
     /* Search Highlight */
     ::ng-deep mark.search-highlight {
-      background: #fff9c4;
+      background: color-mix(in srgb, var(--mj-status-warning) 20%, var(--mj-bg-surface));
       color: inherit;
       padding: 1px 2px;
       border-radius: 2px;

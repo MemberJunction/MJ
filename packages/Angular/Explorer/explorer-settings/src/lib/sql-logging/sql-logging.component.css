@@ -723,15 +723,15 @@
   }
 }
 
-/* Code editor keeps its dark theme for readability */
+/* Code editor keeps its dark theme for readability (intentionally hardcoded for code syntax) */
 .log-content {
   flex: 1;
   overflow: hidden;
   min-height: 300px;
   height: 100%;
   position: relative;
-  background: #1e1e1e;
-  color: #d4d4d4;
+  background: var(--mj-text-primary);
+  color: var(--mj-border-strong);
 }
 
 .log-content ::ng-deep .cm-editor {
@@ -745,18 +745,18 @@
 }
 
 .log-content ::ng-deep .cm-content {
-  background: #1e1e1e;
-  color: #d4d4d4;
+  background: var(--mj-text-primary);
+  color: var(--mj-border-strong);
 }
 
 .log-content ::ng-deep .cm-gutters {
-  background: #252526;
-  color: #858585;
-  border-right: 1px solid #464647;
+  background: var(--mj-text-primary);
+  color: var(--mj-text-disabled);
+  border-right: 1px solid var(--mj-text-secondary);
 }
 
 .log-content ::ng-deep .cm-activeLineGutter {
-  background: #2a2a2a;
+  background: var(--mj-text-primary);
 }
 
 .log-content ::ng-deep .cm-activeLine {

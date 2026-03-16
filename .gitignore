@@ -130,6 +130,7 @@ mj.config.ts
 packages/AI/MCPServer/build/Server.js
 
 **/.claude/settings.local.json
+**/.claude/scheduled_tasks.lock
 sql_logging/
 .sql-log-push/
 .sql-log-watch/
@@ -161,3 +162,5 @@ docker/workbench/.env.database
 # Integration e2e scripts (may contain secrets)
 packages/Integration/e2e/
 packages/Integration/e2e-screenshots/
+packages/MJExplorer/src/environments/environment.development.ts.msal.bak
+packages/DBAutoDoc/autocare-config.json

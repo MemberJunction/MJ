@@ -1,6 +1,17 @@
 import type { UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
-import type { ExternalRecord, DefaultFieldMapping, SourceSchemaInfo } from './types.js';
+import type {
+    ExternalRecord,
+    DefaultFieldMapping,
+    SourceSchemaInfo,
+    CreateRecordContext,
+    UpdateRecordContext,
+    DeleteRecordContext,
+    GetRecordContext,
+    CRUDResult,
+    SearchContext,
+    SearchResult,
+} from './types.js';
 
 /** Result of testing a connection to an external system */
 export interface ConnectionTestResult {
@@ -60,6 +71,12 @@ export interface FetchContext {
     BatchSize: number;
     /** User context for authorization */
     ContextUser: UserInfo;
+    /** Current page number for page-based pagination (1-based). Passed by engine on subsequent calls. */
+    CurrentPage?: number;
+    /** Current offset for offset-based pagination. Passed by engine on subsequent calls. */
+    CurrentOffset?: number;
+    /** Current cursor for cursor-based pagination. Passed by engine on subsequent calls. */
+    CurrentCursor?: string;
 }
 
 /** Result of a FetchChanges call, containing a batch of records */
@@ -70,6 +87,12 @@ export interface FetchBatchResult {
     HasMore: boolean;
     /** Updated watermark value after this batch */
     NewWatermarkValue?: string;
+    /** Next page number to pass back via FetchContext.CurrentPage on the next call (page-based pagination) */
+    NextPage?: number;
+    /** Next offset to pass back via FetchContext.CurrentOffset on the next call (offset-based pagination) */
+    NextOffset?: number;
+    /** Next cursor to pass back via FetchContext.CurrentCursor on the next call (cursor-based pagination) */
+    NextCursor?: string;
 }
 
 /** Configurable timeout values for connector operations */
@@ -151,8 +174,82 @@ export interface DefaultIntegrationConfig {
  * Abstract base class for integration connectors.
  * Each external system (HubSpot, Salesforce, etc.) implements this class
  * to provide system-specific data access and discovery.
+ *
+ * Subclasses declare their capabilities via the `SupportsX` getters.
+ * Callers can interrogate a connector instance to determine which
+ * operations it supports before attempting them.
  */
 export abstract class BaseIntegrationConnector {
+
+    // ─── Capability Getters ──────────────────────────────────────────
+    // Override in subclasses to declare which operations the connector supports.
+    // All connectors support Get (read/FetchChanges) by default.
+
+    /** Whether this connector supports reading/fetching records. Always true. */
+    public get SupportsGet(): boolean { return true; }
+
+    /** Whether this connector supports creating new records in the external system. */
+    public get SupportsCreate(): boolean { return false; }
+
+    /** Whether this connector supports updating existing records in the external system. */
+    public get SupportsUpdate(): boolean { return false; }
+
+    /** Whether this connector supports deleting records from the external system. */
+    public get SupportsDelete(): boolean { return false; }
+
+    /** Whether this connector supports searching/querying records with filters. */
+    public get SupportsSearch(): boolean { return false; }
+
+    // ─── Standard CRUD Operations ────────────────────────────────────
+    // Default implementations throw if not supported. Subclasses override
+    // both the capability getter AND the method to enable the operation.
+
+    /**
+     * Creates a new record in the external system.
+     * Override in subclasses that support write operations.
+     * Check `SupportsCreate` before calling.
+     */
+    public async CreateRecord(_ctx: CreateRecordContext): Promise<CRUDResult> {
+        throw new Error(`CreateRecord is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Updates an existing record in the external system.
+     * Override in subclasses that support write operations.
+     * Check `SupportsUpdate` before calling.
+     */
+    public async UpdateRecord(_ctx: UpdateRecordContext): Promise<CRUDResult> {
+        throw new Error(`UpdateRecord is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Deletes a record from the external system.
+     * Override in subclasses that support delete operations.
+     * Check `SupportsDelete` before calling.
+     */
+    public async DeleteRecord(_ctx: DeleteRecordContext): Promise<CRUDResult> {
+        throw new Error(`DeleteRecord is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Retrieves a single record by ID from the external system.
+     * Override in subclasses that support direct record retrieval.
+     */
+    public async GetRecord(_ctx: GetRecordContext): Promise<ExternalRecord | null> {
+        throw new Error(`GetRecord is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Searches for records matching the given filters.
+     * Override in subclasses that support search/query operations.
+     * Check `SupportsSearch` before calling.
+     */
+    public async SearchRecords(_ctx: SearchContext): Promise<SearchResult> {
+        throw new Error(`SearchRecords is not supported by ${this.constructor.name}`);
+    }
+
+    // ─── Core Abstract Methods ───────────────────────────────────────
+
     /**
      * Tests connectivity to the external system.
      * @param companyIntegration - The company integration entity with connection credentials
@@ -264,10 +361,17 @@ export abstract class BaseIntegrationConnector {
                     ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                 })),
                 PrimaryKeyFields: fields.filter(f => f.IsUniqueKey).map(f => f.Name),
-                Relationships: [],
+                Relationships: fields
+                    .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
+                    .map(f => ({
+                        FieldName: f.Name,
+                        TargetObject: f.ForeignKeyTarget!,
+                        TargetField: 'ID',
+                    })),
             });
         }
 
         return result;
     }
+
 }

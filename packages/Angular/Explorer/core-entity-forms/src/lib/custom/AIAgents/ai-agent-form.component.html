@@ -68,7 +68,7 @@
                   (click)="openPermissionsDialog()"
                   [title]="IsOpenToEveryone ? 'Open to everyone — click to manage permissions' : 'Restricted — click to manage permissions'">
                   <i class="fa-solid" [class.fa-lock-open]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"
-                  [style.color]="IsOpenToEveryone ? '#16a34a' : null"></i>
+                  [style.color]="IsOpenToEveryone ? 'var(--mj-status-success)' : null"></i>
                   {{ IsOpenToEveryone ? 'Open' : 'Restricted' }}
                 </button>
               }
@@ -104,7 +104,7 @@
               (click)="openPermissionsDialog()"
               [title]="IsOpenToEveryone ? 'Open to everyone' : 'Restricted'">
               <i class="fa-solid" [class.fa-lock-open]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"
-              [style.color]="IsOpenToEveryone ? '#16a34a' : null"></i>
+              [style.color]="IsOpenToEveryone ? 'var(--mj-status-success)' : null"></i>
             </button>
           }
           <button class="agent-header-mini-btn"
@@ -529,12 +529,12 @@
                       <p>Sub-agents help build complex workflows through hierarchical orchestration.</p>
                       <div class="empty-state-info">
                         <div class="info-card">
-                          <i class="fa-solid fa-link" style="color: #2196F3;"></i>
+                          <i class="fa-solid fa-link" style="color: var(--mj-status-info);"></i>
                           <strong>Child Sub-Agents</strong>
                           <p>Share payload structure, dedicated to parent</p>
                         </div>
                         <div class="info-card">
-                          <i class="fa-solid fa-share-nodes" style="color: #9C27B0;"></i>
+                          <i class="fa-solid fa-share-nodes" style="color: var(--mj-brand-primary);"></i>
                           <strong>Related Sub-Agents</strong>
                           <p>Reusable agents with payload mapping</p>
                         </div>
@@ -1212,6 +1212,33 @@
                           </kendo-dropdownlist>
                         } @else {
                           <span class="config-field-display">{{ record.Type || 'Not Set' }}</span>
+                        }
+                      </div>
+                    </div>
+                    <div class="config-card">
+                      <div class="config-card-header">
+                        <div class="config-card-icon">
+                          <i class="fa-solid fa-folder-tree"></i>
+                        </div>
+                        <div class="config-card-info">
+                          <h4>Category</h4>
+                          <p>Organizational category for this agent</p>
+                        </div>
+                      </div>
+                      <div class="config-card-content">
+                        @if (EditMode) {
+                          <mj-tree-dropdown
+                            [BranchConfig]="CategoryBranchConfig"
+                            [Value]="SelectedCategoryKey"
+                            SelectionMode="single"
+                            SelectableTypes="branch"
+                            Placeholder="Select a category..."
+                            [Clearable]="true"
+                            [EnableSearch]="true"
+                            (ValueChange)="OnCategoryChange($event)">
+                          </mj-tree-dropdown>
+                        } @else {
+                          <span class="config-field-display">{{ record.Category || 'Not Set' }}</span>
                         }
                       </div>
                     </div>

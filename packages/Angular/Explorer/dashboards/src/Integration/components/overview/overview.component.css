@@ -32,7 +32,7 @@
 }
 .notification-error {
   background: var(--mj-status-error-bg);
-  color: var(--mj-color-error-700);
+  color: var(--mj-status-error);
   border: 1px solid var(--mj-color-error-200);
 }
 .notification-dismiss {
@@ -389,7 +389,7 @@
 .stat-value {
   font-size: 13px;
   font-weight: 600;
-  color: var(--mj-color-neutral-700);
+  color: var(--mj-text-secondary);
 }
 .stat-error {
   color: var(--mj-status-error);
@@ -594,7 +594,7 @@
 }
 .feed-badge-green { background: var(--mj-status-success-bg); color: var(--mj-color-success-800); }
 .feed-badge-amber { background: var(--mj-color-warning-50); color: var(--mj-color-warning-800); }
-.feed-badge-red   { background: var(--mj-status-error-bg); color: var(--mj-color-error-700); }
+.feed-badge-red   { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
 
 .empty-hint {
   color: var(--mj-text-disabled);
