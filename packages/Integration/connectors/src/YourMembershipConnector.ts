@@ -356,10 +356,27 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             return pageResult;
         }
 
-        console.log(`[YM Members] Fetched ${pageResult.Records.length} member IDs, enriching...`);
+        // Client-side watermark filtering: YM's MemberList API returns all members
+        // every time (no server-side date filter), so we filter locally by LastUpdated.
+        const { changedRecords, newWatermark } = this.FilterByWatermark(
+            pageResult.Records, ctx.WatermarkValue, 'LastUpdated'
+        );
+
+        if (changedRecords.length === 0) {
+            return {
+                Records: [],
+                HasMore: pageResult.HasMore,
+                NextOffset: pageResult.NextOffset,
+                NextPage: pageResult.NextPage,
+                NextCursor: pageResult.NextCursor,
+                NewWatermarkValue: !pageResult.HasMore ? (newWatermark ?? pageResult.NewWatermarkValue) : undefined,
+            };
+        }
+
+        console.log(`[YM Members] Fetched ${pageResult.Records.length} member IDs, ${changedRecords.length} changed since watermark, enriching...`);
 
         const enriched = await this.EnrichMembersWithDetails(
-            ctx, pageResult.Records, ctx.CurrentOffset ?? 0, pageResult.Records.length
+            ctx, changedRecords, ctx.CurrentOffset ?? 0, changedRecords.length
         );
 
         return {
@@ -368,7 +385,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             NextOffset: pageResult.NextOffset,
             NextPage: pageResult.NextPage,
             NextCursor: pageResult.NextCursor,
-            NewWatermarkValue: !pageResult.HasMore ? pageResult.NewWatermarkValue : undefined,
+            NewWatermarkValue: !pageResult.HasMore ? (newWatermark ?? pageResult.NewWatermarkValue) : undefined,
         };
     }
 
