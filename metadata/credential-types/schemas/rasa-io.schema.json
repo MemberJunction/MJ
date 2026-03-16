@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "username": {
+      "type": "string",
+      "title": "Username",
+      "description": "Rasa.io account email address used for Basic auth when obtaining JWT tokens",
+      "format": "email",
+      "isSecret": false,
+      "order": 0
+    },
+    "password": {
+      "type": "string",
+      "title": "Password",
+      "description": "Rasa.io account password used for Basic auth when obtaining JWT tokens",
+      "isSecret": true,
+      "order": 1
+    },
+    "apiKey": {
+      "type": "string",
+      "title": "API Key",
+      "description": "Rasa.io API key (UUID format) included in the token request body",
+      "isSecret": true,
+      "order": 2
+    },
+    "communityIdentifier": {
+      "type": "string",
+      "title": "Community Identifier",
+      "description": "Optional Rasa.io community identifier to scope API calls to a specific newsletter community",
+      "isSecret": false,
+      "order": 3
+    }
+  },
+  "required": ["username", "password", "apiKey"]
+}

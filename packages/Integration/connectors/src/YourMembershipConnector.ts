@@ -144,12 +144,12 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
     ): Promise<RESTAuthContext> {
+        console.log(`[YM] Authenticating...`);
         const config = await this.ParseConfig(companyIntegration, contextUser);
-        // Store config so per-instance performance overrides take effect immediately
         this._config = config;
-        // Sync the adaptive interval to the configured minimum on every fresh auth
         this.currentRequestIntervalMs = this.effectiveMinRequestIntervalMs;
         const sessionId = await this.GetSession(config);
+        console.log(`[YM] Authenticated, sessionId length: ${sessionId.length}`);
         const auth: YMAuthContext = { SessionID: sessionId, Config: config };
         return auth;
     }
@@ -323,6 +323,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
      * engine writes each batch to the database before moving to the next.
      */
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
+        console.log(`[YM] FetchChanges called for '${ctx.ObjectName}' (batchSize=${ctx.BatchSize}, watermark=${ctx.WatermarkValue ?? 'none'}, offset=${ctx.CurrentOffset ?? 'none'})`);
+
         if (ctx.ObjectName === 'Groups' || ctx.ObjectName === 'GroupTypes') {
             return this.FetchGroups(ctx);
         }
@@ -345,57 +347,28 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
      * updated once all records have been written to the database.
      */
     private async FetchMemberBatch(ctx: FetchContext): Promise<FetchBatchResult> {
-        const offset = ctx.CurrentOffset ?? 0;
+        // Simple approach: fetch one page of member IDs, enrich them, return.
+        // The engine's outer loop handles pagination — it calls FetchChanges
+        // repeatedly with incrementing offsets until HasMore=false.
+        const pageResult = await super.FetchChanges(ctx);
 
-        // Fresh start: fetch full member list and cache the filtered result
-        if (offset === 0 || !this.memberFetchCache) {
-            this.memberFetchCache = null;
-
-            const fullResult = await super.FetchChanges(ctx);
-            const { changedRecords, newWatermark } = this.FilterByWatermark(
-                fullResult.Records,
-                ctx.WatermarkValue,
-                'LastUpdated'
-            );
-
-            console.log(
-                `[YM Members] ${changedRecords.length} of ${fullResult.Records.length} records changed since watermark`
-            );
-
-            this.memberFetchCache = { changedRecords, newWatermark };
+        if (pageResult.Records.length === 0) {
+            return pageResult;
         }
 
-        const { changedRecords, newWatermark } = this.memberFetchCache;
-        const total = changedRecords.length;
+        console.log(`[YM Members] Fetched ${pageResult.Records.length} member IDs, enriching...`);
 
-        if (total === 0) {
-            this.memberFetchCache = null;
-            return {
-                Records: [],
-                HasMore: false,
-                NewWatermarkValue: newWatermark ?? ctx.WatermarkValue ?? undefined,
-            };
-        }
-
-        const batchSlice = changedRecords.slice(offset, offset + this.effectiveEnrichBatchSize);
-        const nextOffset = offset + batchSlice.length;
-        const hasMore = nextOffset < total;
-
-        console.log(`[YM Members] Enriching records ${offset + 1}–${nextOffset} of ${total}`);
-
-        const enrichedBatch = await this.EnrichMembersWithDetails(ctx, batchSlice, offset, total);
-
-        // Clear cache after the final batch
-        if (!hasMore) {
-            this.memberFetchCache = null;
-        }
+        const enriched = await this.EnrichMembersWithDetails(
+            ctx, pageResult.Records, ctx.CurrentOffset ?? 0, pageResult.Records.length
+        );
 
         return {
-            Records: enrichedBatch,
-            HasMore: hasMore,
-            NextOffset: hasMore ? nextOffset : undefined,
-            // Only advance the watermark after all records are written
-            NewWatermarkValue: !hasMore ? (newWatermark ?? ctx.WatermarkValue ?? undefined) : undefined,
+            Records: enriched,
+            HasMore: pageResult.HasMore,
+            NextOffset: pageResult.NextOffset,
+            NextPage: pageResult.NextPage,
+            NextCursor: pageResult.NextCursor,
+            NewWatermarkValue: !pageResult.HasMore ? pageResult.NewWatermarkValue : undefined,
         };
     }
 

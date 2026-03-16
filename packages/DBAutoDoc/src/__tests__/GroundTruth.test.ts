@@ -320,13 +320,7 @@ describe('Low Confidence Reanalysis', () => {
       modelUsed: 'test',
       confidence: 0.9
     });
-    state.schemas[1].tables[0].descriptionIterations.push({
-      description: 'High conf desc',
-      reasoning: '',
-      generatedAt: '',
-      modelUsed: 'test',
-      confidence: 0.95
-    });
+    // Products (schemas[1].tables[0]) intentionally left with no iterations — confidence 0
 
     const lowConf = manager.getLowConfidenceTables(state, 0.7);
     // Users (0.4) and Products (0 — no iterations yet) are below threshold; Orders (0.9) is above
