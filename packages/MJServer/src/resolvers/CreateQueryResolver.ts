@@ -293,6 +293,9 @@ export class CreateQueryResultType {
     @Field(() => String, { nullable: true })
     EmbeddingModelName?: string;
 
+    @Field(() => String, { nullable: true })
+    TechnicalDescription?: string;
+
     // Related collections
     @Field(() => [QueryFieldType], { nullable: true })
     Fields?: QueryFieldType[];
@@ -348,6 +351,9 @@ export class UpdateQueryResultType {
 
     @Field(() => String, { nullable: true })
     EmbeddingModelName?: string;
+
+    @Field(() => String, { nullable: true })
+    TechnicalDescription?: string;
 
     // Related collections
     @Field(() => [QueryFieldType], { nullable: true })
@@ -477,6 +483,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                     EmbeddingVector: record.EmbeddingVector,
                     EmbeddingModelID: record.EmbeddingModelID,
                     EmbeddingModelName: record.EmbeddingModel,
+                    TechnicalDescription: record.TechnicalDescription,
                     Fields: record.QueryFields.map(f => ({
                         ID: f.ID,
                         QueryID: f.QueryID,
@@ -540,6 +547,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                         EmbeddingVector: existingQuery.EmbeddingVector,
                         EmbeddingModelID: existingQuery.EmbeddingModelID,
                         EmbeddingModelName: existingQuery.EmbeddingModel,
+                        TechnicalDescription: existingQuery.TechnicalDescription,
                         Fields: existingQuery.Fields?.map((f: any) => ({
                             ID: f.ID,
                             QueryID: f.QueryID,
@@ -736,6 +744,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 EmbeddingVector: queryEntity.EmbeddingVector,
                 EmbeddingModelID: queryEntity.EmbeddingModelID,
                 EmbeddingModelName: queryEntity.EmbeddingModel,
+                TechnicalDescription: queryEntity.TechnicalDescription,
                 Fields: queryEntity.QueryFields.map(f => ({
                     ID: f.ID,
                     QueryID: f.QueryID,

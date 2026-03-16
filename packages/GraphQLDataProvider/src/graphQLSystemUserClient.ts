@@ -639,6 +639,7 @@ export class GraphQLSystemUserClient {
                     EmbeddingVector
                     EmbeddingModelID
                     EmbeddingModelName
+                    TechnicalDescription
                     Fields {
                         ID
                         QueryID
@@ -722,6 +723,7 @@ export class GraphQLSystemUserClient {
                     EmbeddingVector
                     EmbeddingModelID
                     EmbeddingModelName
+                    TechnicalDescription
                     Fields {
                         ID
                         QueryID
@@ -2073,6 +2075,10 @@ export interface CreateQueryResult {
      */
     EmbeddingModelName?: string;
     /**
+     * Technical documentation of the query logic, performance considerations, and parameter usage (optional)
+     */
+    TechnicalDescription?: string;
+    /**
      * Array of fields discovered in the query (optional)
      */
     Fields?: QueryField[];
@@ -2212,6 +2218,10 @@ export interface UpdateQueryResult {
      * Name of the embedding model used (optional)
      */
     EmbeddingModelName?: string;
+    /**
+     * Technical documentation of the query logic, performance considerations, and parameter usage (optional)
+     */
+    TechnicalDescription?: string;
     /**
      * Array of fields discovered in the query (optional)
      */
