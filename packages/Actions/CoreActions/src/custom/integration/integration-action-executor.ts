@@ -26,7 +26,7 @@ import type { MJIntegrationEntity, MJCompanyIntegrationEntity } from '@memberjun
 type IntegrationActionVerb = 'Get' | 'Create' | 'Update' | 'Delete' | 'Search' | 'List';
 
 /**
- * JSON structure stored in Action.Config for integration-backed actions.
+ * JSON structure stored in Action.Config_ for integration-backed actions.
  * The action generation CLI populates this when creating action metadata.
  */
 interface IntegrationActionConfig {
@@ -44,7 +44,7 @@ interface IntegrationActionConfig {
  * Single shared DriverClass for all auto-generated integration actions.
  *
  * Every integration action uses `DriverClass='IntegrationActionExecutor'` and
- * stores its routing info in the Action.Config JSON field. At runtime this
+ * stores its routing info in the Action.Config_ JSON field. At runtime this
  * executor:
  *
  *   1. Parses Config JSON from the Action entity
@@ -90,9 +90,9 @@ export class IntegrationActionExecutor extends BaseAction {
     // ─── Config Parsing ──────────────────────────────────────────────
 
     private ParseConfig(params: RunActionParams): IntegrationActionConfig {
-        const configJson = params.Action?.Config;
+        const configJson = params.Action?.Config_;
         if (!configJson) {
-            throw new Error('Action.Config is required for IntegrationActionExecutor');
+            throw new Error('Action.Config_ is required for IntegrationActionExecutor');
         }
 
         const parsed = JSON.parse(configJson) as Record<string, unknown>;
@@ -102,7 +102,7 @@ export class IntegrationActionExecutor extends BaseAction {
 
         if (!integrationName || !objectName || !verb) {
             throw new Error(
-                `Invalid Action.Config — required fields: IntegrationName, ObjectName, Verb. ` +
+                `Invalid Action.Config_ — required fields: IntegrationName, ObjectName, Verb. ` +
                 `Got: ${configJson}`
             );
         }
