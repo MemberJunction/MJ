@@ -111,3 +111,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
   ]
 })
 export class CoreDashboardsModule { }
+
+// Re-export types needed by consumers via subpath import
+export type { ShareDialogResult, UserSharePermission } from './DashboardBrowser/dashboard-share-dialog.component';
+export { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-share-dialog.component';

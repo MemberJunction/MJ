@@ -61,3 +61,7 @@ import { ExplorerStateService } from './DataExplorer/services/explorer-state.ser
   ]
 })
 export class DataExplorerDashboardsModule { }
+
+// Re-export types and components needed by consumers via subpath import
+export { DataExplorerDashboardComponent } from './DataExplorer/data-explorer-dashboard.component';
+export type { DataExplorerFilter } from './DataExplorer/models/explorer-state.interface';

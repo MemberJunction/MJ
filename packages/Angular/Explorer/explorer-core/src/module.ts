@@ -37,7 +37,7 @@ import { ListDetailGridModule } from '@memberjunction/ng-list-detail-grid';
 
 // Local Components
 import { ConversationsModule } from '@memberjunction/ng-conversations';
-import { CoreDashboardsModule } from '@memberjunction/ng-dashboards';
+import { CoreDashboardsModule } from '@memberjunction/ng-dashboards/core-dashboards.module';
 import { DashboardViewerModule } from '@memberjunction/ng-dashboard-viewer';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';

@@ -3,7 +3,8 @@ import { BaseResourceComponent, NavigationService, BaseDashboard, DashboardConfi
 import { ResourceData, MJDashboardEntity, DashboardEngine, MJDashboardUserStateEntity, MJDashboardCategoryEntity, MJDashboardPartTypeEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, SafeJSONParse , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
-import { DataExplorerDashboardComponent, DataExplorerFilter, ShareDialogResult } from '@memberjunction/ng-dashboards';
+import type { DataExplorerFilter } from '@memberjunction/ng-dashboards/data-explorer-dashboards.module';
+import type { ShareDialogResult } from '@memberjunction/ng-dashboards/core-dashboards.module';
 import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEvent, AddPanelResult, DashboardPanel } from '@memberjunction/ng-dashboard-viewer';
 /**
  * Dashboard Resource Wrapper - displays a single dashboard in a tab
@@ -689,7 +690,8 @@ export class DashboardResource extends BaseResourceComponent {
         contextIcon?: string
     ): Promise<void> {
         try {
-            // Create the Data Explorer component directly (it's already registered)
+            // Lazy-load the Data Explorer component to keep it out of the initial bundle
+            const { DataExplorerDashboardComponent } = await import('@memberjunction/ng-dashboards/data-explorer-dashboards.module');
             this.containerElement.nativeElement.innerHTML = '';
             const componentRef = this.viewContainer.createComponent(DataExplorerDashboardComponent);
             this.componentRef = componentRef;
