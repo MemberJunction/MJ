@@ -5,7 +5,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--mj-bg-overlay);
   z-index: 999;
   animation: fadeIn 200ms ease;
 }
@@ -23,8 +23,8 @@
   bottom: 0;
   width: 450px;
   max-width: 90vw;
-  background: white;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.15);
+  background: var(--mj-bg-surface-card);
+  box-shadow: -2px 0 8px color-mix(in srgb, var(--mj-text-primary) 15%, transparent);
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -46,8 +46,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid #E5E7EB;
-  background: #F9FAFB;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-sunken);
 }
 
 .thread-title {
@@ -56,11 +56,11 @@
   gap: 10px;
   font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: var(--mj-text-primary);
 }
 
 .thread-title i {
-  color: #6B7280;
+  color: var(--mj-text-secondary);
 }
 
 .close-btn {
@@ -69,14 +69,14 @@
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  color: #6B7280;
+  color: var(--mj-text-secondary);
   font-size: 18px;
   transition: all 150ms ease;
 }
 
 .close-btn:hover {
-  background: #E5E7EB;
-  color: #111827;
+  background: var(--mj-border-default);
+  color: var(--mj-text-primary);
 }
 
 /* Loading State */
@@ -86,7 +86,7 @@
   justify-content: center;
   gap: 12px;
   padding: 40px;
-  color: #6B7280;
+  color: var(--mj-text-secondary);
 }
 
 .thread-loading i {
@@ -99,9 +99,9 @@
   align-items: center;
   gap: 10px;
   padding: 16px 20px;
-  background: #FEF2F2;
-  border-left: 3px solid #EF4444;
-  color: #991B1B;
+  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+  border-left: 3px solid var(--mj-status-error);
+  color: var(--mj-status-error);
   margin: 16px 20px;
   border-radius: 4px;
 }
@@ -116,8 +116,8 @@
 /* Parent Message */
 .parent-message {
   padding: 16px;
-  background: #F9FAFB;
-  border: 1px solid #E5E7EB;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   margin-bottom: 20px;
 }
@@ -131,17 +131,17 @@
 
 .message-sender {
   font-weight: 600;
-  color: #111827;
+  color: var(--mj-text-primary);
   font-size: 14px;
 }
 
 .message-time {
   font-size: 12px;
-  color: #6B7280;
+  color: var(--mj-text-secondary);
 }
 
 .message-body {
-  color: #374151;
+  color: var(--mj-text-primary);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
@@ -154,9 +154,9 @@
   align-items: center;
   gap: 6px;
   padding-top: 12px;
-  border-top: 1px solid #E5E7EB;
+  border-top: 1px solid var(--mj-border-default);
   font-size: 13px;
-  color: #6B7280;
+  color: var(--mj-text-secondary);
   font-weight: 500;
 }
 
@@ -177,7 +177,7 @@
   align-items: center;
   gap: 8px;
   padding: 40px 20px;
-  color: #9CA3AF;
+  color: var(--mj-text-muted);
   text-align: center;
 }
 
@@ -193,20 +193,20 @@
 /* Reply Item */
 .reply-item {
   padding: 12px;
-  background: white;
-  border: 1px solid #E5E7EB;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   transition: all 150ms ease;
 }
 
 .reply-item:hover {
-  border-color: #D1D5DB;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border-color: var(--mj-border-strong);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--mj-text-primary) 5%, transparent);
 }
 
 .reply-item.ai-reply {
-  background: #EFF6FF;
-  border-color: #DBEAFE;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface));
 }
 
 .reply-header {
@@ -218,17 +218,17 @@
 
 .reply-sender {
   font-weight: 600;
-  color: #111827;
+  color: var(--mj-text-primary);
   font-size: 13px;
 }
 
 .reply-time {
   font-size: 11px;
-  color: #9CA3AF;
+  color: var(--mj-text-muted);
 }
 
 .reply-body {
-  color: #374151;
+  color: var(--mj-text-primary);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
@@ -238,30 +238,32 @@
 /* Reply Input */
 .reply-input-container {
   padding: 16px 20px;
-  border-top: 1px solid #E5E7EB;
-  background: white;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
 }
 
 .reply-input {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #D1D5DB;
+  border: 1px solid var(--mj-border-default);
   border-radius: 6px;
   resize: vertical;
   font-family: inherit;
   font-size: 14px;
   min-height: 60px;
   transition: all 150ms ease;
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-primary);
 }
 
 .reply-input:focus {
   outline: none;
-  border-color: #0076B6;
-  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.1);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .reply-input:disabled {
-  background: #F3F4F6;
+  background: var(--mj-bg-surface-sunken);
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -277,8 +279,8 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: #0076B6;
-  color: white;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -288,13 +290,13 @@
 }
 
 .btn-send-reply:hover:not(:disabled) {
-  background: #005A8C;
+  background: var(--mj-brand-primary-hover);
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 118, 182, 0.2);
+  box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
 }
 
 .btn-send-reply:disabled {
-  background: #D1D5DB;
+  background: var(--mj-border-default);
   cursor: not-allowed;
   opacity: 0.6;
 }
@@ -309,14 +311,14 @@
 }
 
 .thread-content::-webkit-scrollbar-track {
-  background: #F3F4F6;
+  background: var(--mj-bg-surface-sunken);
 }
 
 .thread-content::-webkit-scrollbar-thumb {
-  background: #D1D5DB;
+  background: var(--mj-border-default);
   border-radius: 3px;
 }
 
 .thread-content::-webkit-scrollbar-thumb:hover {
-  background: #9CA3AF;
+  background: var(--mj-text-muted);
 }

@@ -1087,7 +1087,7 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
       return summary.SourceType.IconClass;
     }
     const name = summary.Integration.Integration ?? summary.Integration.Name;
-    return ResolveIntegrationIcon(name);
+    return ResolveIntegrationIcon(name, summary.Icon);
   }
 
   private statusToColor(color: string): string {

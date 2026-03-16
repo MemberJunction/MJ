@@ -1,0 +1,25 @@
+@if (IsOpen) {
+    <div class="slide-panel-backdrop" (click)="ClosePanel()"></div>
+    <div class="slide-panel" [class.open]="IsOpen">
+        <div class="slide-panel-header">
+            <div class="header-title">
+                <i class="fa-solid fa-calendar-check"></i>
+                <span>{{ PanelTitle }}</span>
+            </div>
+            <button class="close-btn" (click)="ClosePanel()">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        </div>
+        <div class="slide-panel-body">
+            <mj-scheduled-job-editor
+                [ScheduledJobID]="ScheduledJobID"
+                [JobTypeID]="JobTypeID"
+                [DefaultConfiguration]="DefaultConfiguration"
+                [HideJobType]="HideJobType"
+                (Saved)="OnSaved($event)"
+                (Deleted)="OnDeleted($event)"
+                (Cancelled)="ClosePanel()">
+            </mj-scheduled-job-editor>
+        </div>
+    </div>
+}

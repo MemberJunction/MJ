@@ -141,7 +141,7 @@ export class AppAccessDialogComponent implements OnDestroy {
    * Get the dialog icon color based on type
    */
   get iconColor(): string {
-    if (!this.config) return '#666';
+    if (!this.config) return 'var(--mj-text-secondary)';
 
     switch (this.config.type) {
       case 'not_installed':
@@ -156,7 +156,7 @@ export class AppAccessDialogComponent implements OnDestroy {
       case 'no_apps':
         return '#9E9E9E'; // Gray for info
       default:
-        return '#666';
+        return 'var(--mj-text-secondary)';
     }
   }
 

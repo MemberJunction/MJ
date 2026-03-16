@@ -107,14 +107,14 @@ const COMPONENT_TYPES = [
       justify-content: space-between;
       align-items: center;
       padding: 8px 12px;
-      border-bottom: 1px solid var(--mat-sys-outline-variant);
-      background: var(--mat-sys-surface);
+      border-bottom: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
       flex-shrink: 0;
     }
 
     .mode-toggle {
       display: inline-flex;
-      border: 1px solid var(--mat-sys-outline);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       overflow: hidden;
     }
@@ -126,7 +126,7 @@ const COMPONENT_TYPES = [
       padding: 4px 12px;
       border: none;
       background: transparent;
-      color: var(--mat-sys-on-surface-variant);
+      color: var(--mj-text-secondary);
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
@@ -135,16 +135,16 @@ const COMPONENT_TYPES = [
     }
 
     .mode-btn:not(:last-child) {
-      border-right: 1px solid var(--mat-sys-outline);
+      border-right: 1px solid var(--mj-border-default);
     }
 
     .mode-btn:hover {
-      background: var(--mat-sys-surface-container);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .mode-btn.active {
-      background: var(--mat-sys-primary);
-      color: var(--mat-sys-on-primary, #fff);
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .mode-btn i {
@@ -182,17 +182,17 @@ const COMPONENT_TYPES = [
     .form-label {
       font-size: 11px;
       font-weight: 600;
-      color: var(--mat-sys-on-surface-variant);
+      color: var(--mj-text-secondary);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
     .form-input {
       padding: 8px 12px;
-      border: 1px solid var(--mat-sys-outline);
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
-      background: var(--mat-sys-surface);
-      color: var(--mat-sys-on-surface);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
       font-size: 13px;
       font-family: inherit;
       outline: none;
@@ -200,16 +200,16 @@ const COMPONENT_TYPES = [
     }
 
     .form-input:focus {
-      border-color: var(--mat-sys-primary);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 15%, transparent);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
     }
 
     .form-textarea {
       padding: 8px 12px;
-      border: 1px solid var(--mat-sys-outline);
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
-      background: var(--mat-sys-surface);
-      color: var(--mat-sys-on-surface);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
       font-size: 13px;
       font-family: inherit;
       resize: vertical;
@@ -219,16 +219,16 @@ const COMPONENT_TYPES = [
     }
 
     .form-textarea:focus {
-      border-color: var(--mat-sys-primary);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 15%, transparent);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
     }
 
     .form-select {
       padding: 8px 12px;
-      border: 1px solid var(--mat-sys-outline);
+      border: 1px solid var(--mj-border-strong);
       border-radius: 6px;
-      background: var(--mat-sys-surface);
-      color: var(--mat-sys-on-surface);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-primary);
       font-size: 13px;
       font-family: inherit;
       outline: none;
@@ -237,8 +237,8 @@ const COMPONENT_TYPES = [
     }
 
     .form-select:focus {
-      border-color: var(--mat-sys-primary);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mat-sys-primary) 15%, transparent);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
     }
 
     .form-row {

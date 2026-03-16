@@ -24,7 +24,7 @@
 }
 
 .dialog-container {
-  background: white;
+  background: var(--mj-bg-surface-card);
   border-radius: 12px;
   padding: 32px;
   max-width: 420px;
@@ -54,20 +54,20 @@
   margin: 0 0 12px 0;
   font-size: 20px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--mj-text-primary);
 }
 
 .dialog-message {
   margin: 0 0 8px 0;
   font-size: 14px;
   line-height: 1.5;
-  color: #4a4a4a;
+  color: var(--mj-text-secondary);
 }
 
 .dialog-help {
   margin: 0 0 20px 0;
   font-size: 12px;
-  color: #888;
+  color: var(--mj-text-muted);
   font-style: italic;
 }
 
@@ -95,33 +95,33 @@
 }
 
 .dialog-btn.primary {
-  background: #2196F3;
+  background: var(--mj-brand-primary);
   color: white;
 }
 
 .dialog-btn.primary:hover:not(:disabled) {
-  background: #1976D2;
+  background: var(--mj-brand-primary-hover);
 }
 
 .dialog-btn.primary:active:not(:disabled) {
-  background: #1565C0;
+  background: var(--mj-brand-primary-hover);
 }
 
 .dialog-btn.secondary,
 .dialog-btn:not(.primary):not(.secondary) {
-  background: #f5f5f5;
-  color: #333;
-  border: 1px solid #ddd;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
+  border: 1px solid var(--mj-border-default);
 }
 
 .dialog-btn.secondary:hover:not(:disabled),
 .dialog-btn:not(.primary):not(.secondary):hover:not(:disabled) {
-  background: #e0e0e0;
+  background: var(--mj-bg-surface-hover);
 }
 
 .dialog-btn.secondary:active:not(:disabled),
 .dialog-btn:not(.primary):not(.secondary):active:not(:disabled) {
-  background: #d0d0d0;
+  background: var(--mj-bg-surface-active);
 }
 
 /* Spinner animation */

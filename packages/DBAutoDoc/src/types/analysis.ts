@@ -37,6 +37,8 @@ export interface AnalysisMetrics {
   tablesAnalyzed: number;
   columnsAnalyzed: number;
   totalTokensUsed: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
   totalCost: number;
   averageConfidence: number;
   lowConfidenceCount: number;
@@ -56,6 +58,16 @@ export interface TableAnalysisContext {
   userNotes?: string;
   seedContext?: any;
   allTables?: Array<{ schema: string; name: string }>;
+  /** Ground truth for this table from config — AI must align with this */
+  groundTruth?: TableGroundTruthContext;
+}
+
+export interface TableGroundTruthContext {
+  tableDescription?: string;
+  tableNotes?: string;
+  businessDomain?: string;
+  columnDescriptions?: Record<string, string>;
+  columnNotes?: Record<string, string>;
 }
 
 export interface ParentTableDescription {

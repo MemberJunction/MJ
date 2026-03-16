@@ -411,7 +411,7 @@ export class MySQLDriver extends BaseAutoDocDriver {
     })) : [];
   }
 
-  protected async getSampleValues(
+  public async getSampleValues(
     schemaName: string,
     tableName: string,
     columnName: string,

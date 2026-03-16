@@ -1,10 +1,10 @@
 .k-pane {
-  background-color: #F5F6FA;
+  background-color: var(--mj-bg-surface);
 }
 
 .content-margin {
   margin: 10px;
-} 
+}
 
 
 a {
@@ -19,14 +19,14 @@ a {
 .record-form {
   display: block;
   flex-direction: column;
-  background-color: #F5F6FA;
+  background-color: var(--mj-bg-surface);
   padding: 0;
   min-height: 100vh;
 }
 
 .record-form-group {
   margin-top: 0px;
-  background-color: #F5F6FA;
+  background-color: var(--mj-bg-surface);
 }
 
 button {
@@ -51,28 +51,16 @@ button {
   padding-bottom: 5px;
 }
 
-
-/* .record-form .record-form-row:nth-child(odd) {
-  background-color: #f2f2f2; 
-} */
-
-/* 
-.record-form .record-form-row:nth-child(even) {
-  background-color: #ffffff;  
-} */
-
 .record-form .record-form-row > :first-child {
   font-weight: bold;
   padding-right: 10px;
-} 
+}
 
 .record-form .record-form-row > span {
   white-space: pre-line;
   max-height: 300px;
   overflow: auto;
 }
-
- 
 
 @media (min-width: 768px) {
   .record-form-row {
@@ -92,7 +80,7 @@ button {
   flex-direction: column;
   gap: 16px;
   padding: 16px;
-  background-color: #F5F6FA;
+  background-color: var(--mj-bg-surface);
 }
 
 /* All field sections take full width */
@@ -116,9 +104,9 @@ button {
 }
 
 .form-card {
-  background: white;
+  background: var(--mj-bg-surface-card);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 4px var(--mj-shadow-sm);
   overflow: hidden;
 }
 
@@ -131,16 +119,16 @@ button {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
-  border-bottom: 2px solid #e5e7eb;
+  background: var(--mj-bg-surface-card);
+  border-bottom: 2px solid var(--mj-border-default);
   cursor: pointer;
   user-select: none;
   transition: all 0.3s ease;
 }
 
 .collapsible-header:hover {
-  background: linear-gradient(135deg, #f3f4f6 0%, #f9fafb 100%);
-  border-bottom-color: #667eea;
+  background: var(--mj-bg-surface-sunken);
+  border-bottom-color: var(--mj-brand-primary);
 }
 
 .collapsible-title {
@@ -152,18 +140,18 @@ button {
 
 .collapsible-title i {
   font-size: 20px;
-  color: #667eea;
+  color: var(--mj-brand-primary);
 }
 
 .collapsible-title h3 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--mj-text-primary);
 }
 
 .collapsible-header .collapse-icon {
-  color: #6b7280;
+  color: var(--mj-text-muted);
   transition: transform 0.3s ease;
 }
 
@@ -186,21 +174,21 @@ button {
 
 /* Related Entity Sections - Visual Distinction */
 .form-card.related-entity {
-  background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%);
-  border-left: 3px solid #3b82f6;
+  background: var(--mj-bg-surface-card);
+  border-left: 3px solid var(--mj-brand-primary);
 }
 
 .form-card.related-entity .collapsible-header {
-  background: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 100%);
+  background: var(--mj-bg-surface-sunken);
 }
 
 .form-card.related-entity .collapsible-header:hover {
-  background: linear-gradient(135deg, #bfdbfe 0%, #e0f2fe 100%);
-  border-bottom-color: #3b82f6;
+  background: var(--mj-bg-surface-card);
+  border-bottom-color: var(--mj-brand-primary);
 }
 
 .form-card.related-entity .collapsible-title i {
-  color: #3b82f6;
+  color: var(--mj-brand-primary);
 }
 
 /* Section Controls */
@@ -208,11 +196,11 @@ button {
   display: flex;
   gap: 10px;
   padding: 14px 18px;
-  background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
-  border-bottom: 2px solid #e5e7eb;
+  background: var(--mj-bg-surface-card);
+  border-bottom: 2px solid var(--mj-border-default);
   align-items: center;
   flex-wrap: wrap;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px var(--mj-shadow-sm);
 }
 
 .form-section-controls .control-group {
@@ -224,9 +212,9 @@ button {
 .form-section-controls button {
   padding: 8px 14px;
   font-size: 13px;
-  border: 1px solid #d1d5db;
-  background: white;
-  color: #374151;
+  border: 1px solid var(--mj-border-strong);
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
@@ -238,11 +226,11 @@ button {
 }
 
 .form-section-controls button:hover {
-  background: #667eea;
-  color: white;
-  border-color: #667eea;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  border-color: var(--mj-brand-primary);
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 2px 4px var(--mj-shadow-md);
 }
 
 .form-section-controls button:active {
@@ -257,27 +245,28 @@ button {
 .form-section-controls .section-search {
   padding: 8px 14px;
   font-size: 13px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--mj-border-strong);
   border-radius: 6px;
   width: 240px;
   transition: all 0.2s;
-  background: white;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
 }
 
 .form-section-controls .section-search:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .form-section-controls .section-search::placeholder {
-  color: #9ca3af;
+  color: var(--mj-text-muted);
   font-style: italic;
 }
 
 .form-section-controls .section-count {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--mj-text-muted);
   margin-left: auto;
   font-weight: 500;
 }
@@ -289,8 +278,8 @@ button {
 
 /* Section count badge */
 .section-count-badge {
-  background: #667eea;
-  color: white;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 12px;
@@ -299,8 +288,8 @@ button {
 
 /* Search highlighting in section names */
 .collapsible-title h3 .search-highlight {
-  background-color: #fef08a;
-  color: #854d0e;
+  background-color: var(--mj-status-warning);
+  color: var(--mj-text-primary);
   padding: 2px 4px;
   border-radius: 3px;
   font-weight: 700;
@@ -308,8 +297,8 @@ button {
 
 /* Row count badge in section headers */
 .collapsible-title .row-count-badge {
-  background: #10b981;
-  color: white;
+  background: var(--mj-status-success);
+  color: var(--mj-text-inverse);
   padding: 3px 6px 2px 6px;
   border-radius: 12px;
   font-size: 12px;
@@ -324,5 +313,5 @@ button {
 
 /* Gray badge for zero rows (loaded but empty) */
 .collapsible-title .row-count-badge.zero-rows {
-  background: #9ca3af;
+  background: var(--mj-text-muted);
 }
