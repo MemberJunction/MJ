@@ -1,6 +1,6 @@
-<div class="record-form-container">
+<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
   @if (record) {
-    <form class="record-form"  #form="ngForm" >
+    <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
       <mj-form-toolbar [Form]="this"></mj-form-toolbar>
       <div #topArea class="record-form-group">
       </div>
