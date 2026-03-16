@@ -517,7 +517,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 const replayProviders = await this.createReplayProviders(batchSize);
 
                 let numProcessed = 0;
-                const logInterval = Math.max(1, Math.floor(changes.length / 20)); // Log at ~5% intervals
+                const logInterval = Math.max(1, Math.floor(changes.length / 10)); // Log at ~10% intervals
                 for (let i = 0; i < changes.length; i += batchSize) {
                     const batch = changes.slice(i, i + batchSize);
 
