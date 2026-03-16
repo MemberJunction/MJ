@@ -391,7 +391,7 @@ import {
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
-// @memberjunction/core-actions (103 classes)
+// @memberjunction/core-actions (104 classes)
 import {
     APIRateLimiterAction,
     AddRecordsToListAction,
@@ -454,6 +454,7 @@ import {
     GraphQLQueryAction,
     HTTPRequestAction,
     IPGeolocationAction,
+    IntegrationActionExecutor,
     JSONTransformAction,
     ListMCPToolsAction,
     ListObjectsAction,
@@ -849,10 +850,11 @@ import {
     RunSyncAction,
 } from '@memberjunction/integration-actions';
 
-// @memberjunction/integration-connectors (5 classes)
+// @memberjunction/integration-connectors (6 classes)
 import {
     FileFeedConnector,
     HubSpotConnector,
+    RasaConnector,
     SalesforceConnector,
     WicketConnector,
     YourMembershipConnector,
@@ -1193,6 +1195,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     GraphQLQueryAction,
     HTTPRequestAction,
     IPGeolocationAction,
+    IntegrationActionExecutor,
     JSONTransformAction,
     ListMCPToolsAction,
     ListObjectsAction,
@@ -1560,6 +1563,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     RunSyncAction,
     FileFeedConnector,
     HubSpotConnector,
+    RasaConnector,
     SalesforceConnector,
     WicketConnector,
     YourMembershipConnector,
@@ -1593,7 +1597,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 667;
+export const CLASS_REGISTRATIONS_COUNT = 669;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -323,7 +323,7 @@ describe('YourMembershipConnector (watermark filtering)', () => {
         }
     });
 
-    it('should enrich all records regardless of watermark', async () => {
+    it('should filter to only changed records when watermark is set', async () => {
         const { connector, ctx, originalFetchChanges, makeRequest } = setupMemberTest(
             [
                 { ExternalID: '1', Fields: { ProfileID: 1, LastUpdated: '2026-01-15T10:00:00Z' } },
@@ -332,7 +332,6 @@ describe('YourMembershipConnector (watermark filtering)', () => {
             ],
             '2026-02-01T00:00:00Z',
             {
-                '1': { id: 1, firstName: 'Old', ResponseStatus: { ErrorCode: 'None' } },
                 '2': { id: 2, firstName: 'Changed', ResponseStatus: { ErrorCode: 'None' } },
                 '3': { id: 3, firstName: 'AlsoChanged', ResponseStatus: { ErrorCode: 'None' } },
             }
@@ -340,15 +339,15 @@ describe('YourMembershipConnector (watermark filtering)', () => {
 
         try {
             const result = await connector.FetchChanges(ctx);
-            // New behavior: all records from super.FetchChanges are enriched
-            // and returned. The engine handles watermark-based deduplication.
-            expect(result.Records.length).toBe(3);
+            // Only records 2 and 3 are after the watermark — record 1 is filtered out
+            expect(result.Records.length).toBe(2);
+            expect(result.Records.map(r => r.ExternalID).sort()).toEqual(['2', '3']);
 
-            // Detail endpoint called for all 3 records
+            // Detail endpoint only called for the 2 changed records
             const detailCalls = makeRequest.mock.calls.filter(
                 (c: unknown[]) => (c[1] as string).includes('Members/')
             );
-            expect(detailCalls.length).toBe(3);
+            expect(detailCalls.length).toBe(2);
         } finally {
             Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges = originalFetchChanges;
         }

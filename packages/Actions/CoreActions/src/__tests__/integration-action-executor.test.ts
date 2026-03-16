@@ -136,7 +136,7 @@ function makeParams(
 /** Calls the protected InternalRunAction via bracket access */
 async function run(executor: IntegrationActionExecutor, params: MockRunActionParams): Promise<ActionResultSimple> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (executor as Record<string, (...args: unknown[]) => Promise<ActionResultSimple>>)['InternalRunAction'](params);
+    return (executor as unknown as Record<string, (...args: unknown[]) => Promise<ActionResultSimple>>)['InternalRunAction'](params);
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────
