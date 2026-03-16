@@ -381,16 +381,13 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-explorer-core (11 classes)
+// @memberjunction/ng-explorer-core (8 classes)
 import {
     ArtifactResource,
-    ChatCollectionsResource,
     ChatConversationsResource,
-    ChatTasksResource,
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
-    NotificationsResource,
     QueryResource,
     SearchResultsResource,
     UserViewResource,
@@ -738,13 +735,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     WebURLConfigPanelComponent,
     WebURLPartComponent,
     ArtifactResource,
-    ChatCollectionsResource,
     ChatConversationsResource,
-    ChatTasksResource,
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
-    NotificationsResource,
     QueryResource,
     SearchResultsResource,
     UserViewResource,
@@ -755,7 +749,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 342;
+export const CLASS_REGISTRATIONS_COUNT = 339;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

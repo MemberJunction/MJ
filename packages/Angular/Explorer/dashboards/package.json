@@ -56,6 +56,10 @@
     "./mcp.module": {
       "types": "./dist/MCP/mcp.module.d.ts",
       "default": "./dist/MCP/mcp.module.js"
+    },
+    "./module": {
+      "types": "./dist/module.d.ts",
+      "default": "./dist/module.js"
     }
   },
   "files": [

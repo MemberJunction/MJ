@@ -119,8 +119,9 @@ export * from './VersionHistory';
 // Integration Dashboard
 export * from './Integration';
 
-// Module (backward-compatible wrapper)
-export * from './module';
+// NOTE: DashboardsModule (backward-compatible wrapper that imports ALL feature modules) is
+// intentionally not re-exported from the barrel to enable ESBuild code splitting.
+// Consumers who need it: import { DashboardsModule } from '@memberjunction/ng-dashboards/module'
 
 // Feature modules for lazy loading
 export * from './core-dashboards.module';
