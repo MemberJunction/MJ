@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/aiengine
 
+## 5.12.0
+
+### Minor Changes
+
+- 05f19ff: Add composable query system with semantic catalog search, CTE composition engine, server-side paging, query caching with TTL/dependency invalidation, and agent directive surfacing. Includes QueryCacheManager wrapper over LocalCacheManager, QueryPagingEngine for SQL-level OFFSET/FETCH paging, QueryCompositionEngine for platform-aware CTE generation, and SearchQueryCatalog action for vector-based query discovery. Renames PaginationComponent to DataPagerComponent and extracts into shared module.
+
+### Patch Changes
+
+- Updated dependencies [05f19ff]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/ai-engine-base@5.12.0
+  - @memberjunction/ai-core-plus@5.12.0
+  - @memberjunction/ai-vectors-memory@5.12.0
+  - @memberjunction/actions-base@5.12.0
+  - @memberjunction/storage@5.12.0
+  - @memberjunction/ai@5.12.0
+  - @memberjunction/global@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes

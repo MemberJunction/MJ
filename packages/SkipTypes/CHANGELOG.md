@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.12.0
+
+### Minor Changes
+
+- 05f19ff: Add composable query system with semantic catalog search, CTE composition engine, server-side paging, query caching with TTL/dependency invalidation, and agent directive surfacing. Includes QueryCacheManager wrapper over LocalCacheManager, QueryPagingEngine for SQL-level OFFSET/FETCH paging, QueryCompositionEngine for platform-aware CTE generation, and SearchQueryCatalog action for vector-based query discovery. Renames PaginationComponent to DataPagerComponent and extracts into shared module.
+
+### Patch Changes
+
+- Updated dependencies [05f19ff]
+- Updated dependencies [d92502e]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/ai-core-plus@5.12.0
+  - @memberjunction/interactive-component-types@5.12.0
+  - @memberjunction/data-context@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes

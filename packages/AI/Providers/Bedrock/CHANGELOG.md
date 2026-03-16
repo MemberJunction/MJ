@@ -1,5 +1,16 @@
 # @memberjunction/ai-bedrock
 
+## 5.12.0
+
+### Minor Changes
+
+- c21c28c: Amazon Bedrock and Azure Foundry AI Models
+
+### Patch Changes
+
+- @memberjunction/ai@5.12.0
+- @memberjunction/global@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes
