@@ -77,6 +77,8 @@ export interface FetchContext {
     CurrentPage?: number;
     /** Current offset for offset-based pagination. Passed by engine on subsequent calls. */
     CurrentOffset?: number;
+    /** Current cursor for cursor-based pagination. Passed by engine on subsequent calls. */
+    CurrentCursor?: string;
 }
 
 /** Result of a FetchChanges call, containing a batch of records */
@@ -91,6 +93,8 @@ export interface FetchBatchResult {
     NextPage?: number;
     /** Next offset to pass back via FetchContext.CurrentOffset on the next call (offset-based pagination) */
     NextOffset?: number;
+    /** Next cursor to pass back via FetchContext.CurrentCursor on the next call (cursor-based pagination) */
+    NextCursor?: string;
 }
 
 /** Configurable timeout values for connector operations */
