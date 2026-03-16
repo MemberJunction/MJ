@@ -3,7 +3,8 @@ import { MJActionEntity, MJAIAgentActionEntity, MJAIAgentLearningCycleEntity, MJ
 import { MJAIAgentRunEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
 import { RegisterClass, MJGlobal , UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
+import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJAIAgentFormComponent } from '../../generated/Entities/MJAIAgent/mjaiagent.form.component';
@@ -275,6 +276,30 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
     /** Agent types loaded from the database */
     public agentTypes: any[] = [];
+
+    /** TreeDropdown configuration for the agent category field */
+    public CategoryBranchConfig: TreeBranchConfig = {
+        EntityName: 'MJ: AI Agent Categories',
+        DisplayField: 'Name',
+        ParentIDField: 'ParentID',
+        DefaultIcon: 'fa-solid fa-folder',
+        OrderBy: 'Name ASC',
+        DescriptionField: 'Description'
+    };
+
+    /** Current category selection for the TreeDropdown */
+    public SelectedCategoryKey: CompositeKey | null = null;
+
+    /** Handle category selection change from the TreeDropdown */
+    public OnCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
+        if (value && !Array.isArray(value)) {
+            const idValue = value.KeyValuePairs?.find((kv: KeyValuePair) => kv.FieldName === 'ID')?.Value;
+            this.record.CategoryID = idValue ?? null;
+        } else {
+            this.record.CategoryID = null;
+        }
+        this.SelectedCategoryKey = Array.isArray(value) ? null : value;
+    }
 
     /** Currently selected context compression prompt */
     public selectedContextCompressionPrompt: any = null;
@@ -551,7 +576,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         await ActionEngineBase.Instance.Config(false);
 
         await this.loadAgentTypes();
-        
+
+        // Initialize category selection from the record's CategoryID
+        const categoryId = this.record?.CategoryID;
+        if (categoryId) {
+            this.SelectedCategoryKey = new CompositeKey([{ FieldName: 'ID', Value: categoryId }]);
+        }
+
         // Load context compression prompt if one is set
         if (this.record?.ContextCompressionPromptID) {
             await this.loadContextCompressionPrompt();
@@ -1135,10 +1166,10 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      */
     public getStatusBadgeColor(): string {
         switch (this.record?.Status) {
-            case 'Active': return '#28a745';
-            case 'Pending': return '#ffc107';
-            case 'Disabled': return '#6c757d';
-            default: return '#6c757d';
+            case 'Active': return 'var(--mj-status-success)';
+            case 'Pending': return 'var(--mj-status-warning)';
+            case 'Disabled': return 'var(--mj-text-muted)';
+            default: return 'var(--mj-text-muted)';
         }
     }
 
@@ -1534,17 +1565,17 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         switch (status?.toLowerCase()) {
             case 'completed':
             case 'success':
-                return '#28a745';
+                return 'var(--mj-status-success)';
             case 'failed':
             case 'error':
-                return '#dc3545';
+                return 'var(--mj-status-error)';
             case 'running':
             case 'in_progress':
-                return '#17a2b8';
+                return 'var(--mj-status-info)';
             case 'pending':
-                return '#ffc107';
+                return 'var(--mj-status-warning)';
             default:
-                return '#6c757d';
+                return 'var(--mj-text-muted)';
         }
     }
 
@@ -1680,9 +1711,9 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Gets the priority badge color
      */
     public getPriorityBadgeColor(priority: number): string {
-        if (priority <= 1) return '#dc3545'; // High priority - red
-        if (priority <= 5) return '#ffc107'; // Medium priority - yellow
-        return '#28a745'; // Low priority - green
+        if (priority <= 1) return 'var(--mj-status-error)'; // High priority - red
+        if (priority <= 5) return 'var(--mj-status-warning)'; // Medium priority - yellow
+        return 'var(--mj-status-success)'; // Low priority - green
     }
 
     /**
@@ -2269,7 +2300,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
      * Gets the badge color for a sub-agent based on its type
      */
     public getSubAgentBadgeColor(item: UnifiedSubAgent): string {
-        return item.type === 'child' ? '#2196F3' : '#9C27B0';
+        return item.type === 'child' ? 'var(--mj-status-info)' : 'var(--mj-brand-primary)';
     }
 
     /**

@@ -30,8 +30,7 @@ import { MessageListComponent } from './components/message/message-list.componen
 import { MessageInputComponent } from './components/message/message-input.component';
 import { MessageInputBoxComponent } from './components/message/message-input-box.component';
 import { SuggestedResponsesComponent } from './components/message/suggested-responses.component';
-import { FormQuestionComponent } from './components/message/form-question.component';
-import { AgentResponseFormComponent } from './components/message/agent-response-form.component';
+import { DynamicFormsModule } from '@memberjunction/ng-forms';
 import { ActionableCommandsComponent } from './components/message/actionable-commands.component';
 import { MentionDropdownComponent } from './components/mention/mention-dropdown.component';
 import { MentionEditorComponent } from './components/mention/mention-editor.component';
@@ -83,8 +82,6 @@ const COMPONENTS = [
   MessageInputComponent,
   MessageInputBoxComponent,
   SuggestedResponsesComponent,
-  FormQuestionComponent,
-  AgentResponseFormComponent,
   ActionableCommandsComponent,
   MentionDropdownComponent,
   MentionEditorComponent,
@@ -149,6 +146,7 @@ const COMPONENTS = [
     TestingModule,
     SharedGenericModule,
     MarkdownModule,
+    DynamicFormsModule,
     // Standalone components
     TasksFullViewComponent,
     CollectionShareModalComponent,

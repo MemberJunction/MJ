@@ -82,7 +82,7 @@ export interface VennRegionClickEvent {
       width: 100%;
       height: 100%;
       min-height: 300px;
-      background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+      background: linear-gradient(135deg, var(--mj-bg-surface-sunken) 0%, var(--mj-bg-surface-card) 100%);
       border-radius: 8px;
       overflow: hidden;
     }
@@ -129,7 +129,7 @@ export interface VennRegionClickEvent {
       display: flex;
       flex-direction: column;
       gap: 8px;
-      background: rgba(255, 255, 255, 0.95);
+      background: var(--mj-bg-surface-card);
       padding: 12px;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -156,12 +156,12 @@ export interface VennRegionClickEvent {
     .legend-name {
       font-size: 13px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .legend-count {
       font-size: 11px;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .empty-state {
@@ -170,7 +170,7 @@ export interface VennRegionClickEvent {
       left: 50%;
       transform: translate(-50%, -50%);
       text-align: center;
-      color: #999;
+      color: var(--mj-text-muted);
     }
 
     .empty-state i {
@@ -818,7 +818,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
         .attr('x', cx)
         .attr('y', cy + radius + 16)
         .attr('text-anchor', 'middle')
-        .attr('fill', '#666')
+        .attr('fill', 'var(--mj-text-secondary)')
         .attr('font-size', '11px')
         .text(set.listName.length > 15 ? set.listName.substring(0, 15) + '...' : set.listName);
     });

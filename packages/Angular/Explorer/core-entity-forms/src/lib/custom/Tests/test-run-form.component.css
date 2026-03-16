@@ -5,32 +5,32 @@
 
 /* CSS Custom Properties for Theming - using :host for Angular encapsulation */
 :host {
-  --test-primary: #2563eb;
-  --test-primary-light: #3b82f6;
-  --test-primary-dark: #1d4ed8;
-  --test-success: #10b981;
-  --test-success-light: #d1fae5;
-  --test-error: #ef4444;
-  --test-error-light: #fee2e2;
-  --test-warning: #f59e0b;
-  --test-warning-light: #fef3c7;
-  --test-timeout: #f97316;
-  --test-timeout-light: #ffedd5;
-  --test-running: #3b82f6;
-  --test-pending: #8b5cf6;
-  --test-skipped: #6b7280;
-  --test-bg: #f8fafc;
-  --test-surface: #ffffff;
-  --test-border: #e2e8f0;
-  --test-text: #1e293b;
-  --test-text-secondary: #64748b;
-  --test-text-muted: #94a3b8;
+  --test-primary: var(--mj-brand-primary);
+  --test-primary-light: var(--mj-brand-primary);
+  --test-primary-dark: var(--mj-brand-primary-hover);
+  --test-success: var(--mj-status-success);
+  --test-success-light: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+  --test-error: var(--mj-status-error);
+  --test-error-light: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+  --test-warning: var(--mj-status-warning);
+  --test-warning-light: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+  --test-timeout: var(--mj-status-warning);
+  --test-timeout-light: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+  --test-running: var(--mj-brand-primary);
+  --test-pending: var(--mj-brand-primary);
+  --test-skipped: var(--mj-text-muted);
+  --test-bg: var(--mj-bg-surface-card);
+  --test-surface: var(--mj-bg-surface);
+  --test-border: var(--mj-border-default);
+  --test-text: var(--mj-text-primary);
+  --test-text-secondary: var(--mj-text-muted);
+  --test-text-muted: var(--mj-text-disabled);
   --test-radius-sm: 6px;
   --test-radius-md: 10px;
   --test-radius-lg: 16px;
-  --test-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-  --test-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --test-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --test-shadow-sm: var(--mj-shadow-sm);
+  --test-shadow-md: var(--mj-shadow-md);
+  --test-shadow-lg: var(--mj-shadow-lg);
   --test-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   display: block;
   height: 100%;
@@ -56,8 +56,8 @@
   justify-content: center;
   gap: 12px;
   padding: 12px 20px;
-  background: linear-gradient(135deg, var(--test-error) 0%, #dc2626 100%);
-  color: white;
+  background: var(--test-error);
+  color: var(--mj-text-inverse);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -66,7 +66,7 @@
 }
 
 .error-banner:hover {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  background: var(--mj-status-error);
 }
 
 .error-banner i {
@@ -76,7 +76,7 @@
 .retry-btn {
   background: rgba(255, 255, 255, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
+  color: var(--mj-text-inverse);
   padding: 6px 12px;
   border-radius: var(--test-radius-sm);
   cursor: pointer;
@@ -144,7 +144,7 @@
 }
 
 .breadcrumb a:hover {
-  background: rgba(37, 99, 235, 0.1);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   text-decoration: none;
 }
 
@@ -190,7 +190,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: var(--mj-text-inverse);
   font-size: 24px;
   flex-shrink: 0;
   box-shadow: var(--test-shadow-md);
@@ -235,7 +235,7 @@
   gap: 6px;
   padding: 6px 14px;
   border-radius: 20px;
-  color: white;
+  color: var(--mj-text-inverse);
   font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
@@ -285,7 +285,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  background: var(--mj-bg-surface-sunken);
   border: 1px solid var(--test-border);
   border-radius: var(--test-radius-md);
   padding: 14px;
@@ -381,7 +381,7 @@
 }
 
 .info-chip.clickable:hover {
-  background: rgba(37, 99, 235, 0.1);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   color: var(--test-primary);
 }
 
@@ -428,7 +428,7 @@
 
 .tab:hover {
   color: var(--test-primary);
-  background: rgba(37, 99, 235, 0.05);
+  background: color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
 }
 
 .tab.active {
@@ -452,7 +452,7 @@
 }
 
 .tab.active .tab-badge {
-  background: rgba(37, 99, 235, 0.15);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
   color: var(--test-primary);
 }
 
@@ -504,28 +504,28 @@
 }
 
 .result-hero.passed {
-  background: linear-gradient(135deg, #ecfdf5 0%, var(--test-success-light) 100%);
+  background: var(--test-success-light);
   border-color: var(--test-success);
 }
 
 .result-hero.failed {
-  background: linear-gradient(135deg, #fef2f2 0%, var(--test-error-light) 100%);
+  background: var(--test-error-light);
   border-color: var(--test-error);
 }
 
 .result-hero.error {
-  background: linear-gradient(135deg, #fffbeb 0%, var(--test-warning-light) 100%);
+  background: var(--test-warning-light);
   border-color: var(--test-warning);
 }
 
 .result-hero.timeout {
-  background: linear-gradient(135deg, #fff7ed 0%, var(--test-timeout-light) 100%);
+  background: var(--test-timeout-light);
   border-color: var(--test-timeout);
 }
 
 .result-hero.running,
 .result-hero.pending {
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
   border-color: var(--test-primary-light);
 }
 
@@ -563,7 +563,7 @@
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  background: rgba(59, 130, 246, 0.2);
+  background: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
   animation: pulse 2s ease-in-out infinite;
 }
 
@@ -663,13 +663,13 @@
 }
 
 .check-item.passed {
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  border-color: #86efac;
+  background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-status-success) 40%, var(--mj-bg-surface));
 }
 
 .check-item.failed {
-  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-  border-color: #fca5a5;
+  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-status-error) 40%, var(--mj-bg-surface));
 }
 
 .check-status {
@@ -747,7 +747,7 @@
 
 .comparison-tab:hover {
   color: var(--test-text);
-  background: rgba(0, 0, 0, 0.05);
+  background: var(--mj-bg-overlay);
 }
 
 .comparison-tab.active {
@@ -795,7 +795,7 @@
 }
 
 .detail-card.clickable:hover {
-  background: rgba(37, 99, 235, 0.05);
+  background: color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
   border-color: var(--test-primary-light);
   transform: translateX(4px);
 }
@@ -864,7 +864,7 @@
 .error-content {
   border-radius: var(--test-radius-md);
   overflow: hidden;
-  border: 1px solid #fca5a5;
+  border: 1px solid color-mix(in srgb, var(--mj-status-error) 40%, var(--mj-bg-surface));
 }
 
 /* Result Details Section */
@@ -926,7 +926,7 @@
 }
 
 .ai-run-card:hover {
-  background: rgba(37, 99, 235, 0.05);
+  background: color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
   border-color: var(--test-primary-light);
   transform: translateX(4px);
   box-shadow: var(--test-shadow-sm);
@@ -938,8 +938,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--test-primary) 0%, var(--test-primary-dark) 100%);
-  color: white;
+  background: var(--test-primary);
+  color: var(--mj-text-inverse);
   border-radius: var(--test-radius-md);
   font-size: 18px;
   flex-shrink: 0;
@@ -947,11 +947,11 @@
 }
 
 .ai-run-icon.agent {
-  background: linear-gradient(135deg, var(--test-primary) 0%, var(--test-primary-dark) 100%);
+  background: var(--test-primary);
 }
 
 .ai-run-icon.prompt {
-  background: linear-gradient(135deg, #9333ea 0%, #7c3aed 100%);
+  background: var(--mj-brand-primary);
 }
 
 .ai-run-content {
@@ -991,17 +991,17 @@
 .status-chip.completed,
 .status-chip.passed {
   background: var(--test-success-light);
-  color: #059669;
+  color: var(--mj-status-success);
 }
 
 .status-chip.failed,
 .status-chip.error {
   background: var(--test-error-light);
-  color: #dc2626;
+  color: var(--mj-status-error);
 }
 
 .status-chip.running {
-  background: #dbeafe;
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
   color: var(--test-primary);
 }
 
@@ -1110,7 +1110,7 @@
 }
 
 .rating-stars i.filled {
-  color: #fbbf24;
+  color: var(--mj-status-warning);
 }
 
 .rating-value {
@@ -1135,12 +1135,12 @@
 
 .verdict-badge.correct {
   background: var(--test-success-light);
-  color: #059669;
+  color: var(--mj-status-success);
 }
 
 .verdict-badge.incorrect {
   background: var(--test-error-light);
-  color: #dc2626;
+  color: var(--mj-status-error);
 }
 
 .feedback-comments {
@@ -1239,7 +1239,7 @@
   width: 44px;
   height: 44px;
   border-radius: var(--test-radius-md);
-  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background: linear-gradient(90deg, var(--mj-border-default) 25%, var(--mj-bg-surface-sunken) 50%, var(--mj-border-default) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -1258,7 +1258,7 @@
 .skeleton-line {
   height: 14px;
   border-radius: 4px;
-  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background: linear-gradient(90deg, var(--mj-border-default) 25%, var(--mj-bg-surface-sunken) 50%, var(--mj-border-default) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -1720,12 +1720,12 @@
 
   .ai-run-card:active,
   .detail-card.clickable:active {
-    background: rgba(37, 99, 235, 0.1);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     transform: scale(0.98);
   }
 
   .tab:active {
-    background: rgba(37, 99, 235, 0.1);
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   }
 
   /* Larger touch targets */
@@ -1772,7 +1772,7 @@
   .skeleton-avatar,
   .skeleton-line {
     animation: none;
-    background: #e2e8f0;
+    background: var(--mj-border-default);
   }
 
   .result-pulse {
@@ -1786,7 +1786,7 @@
    =========================== */
 @media print {
   .test-run-form {
-    background: white;
+    background: var(--mj-bg-surface);
     height: auto;
   }
 
@@ -1809,7 +1809,7 @@
   .feedback-item {
     break-inside: avoid;
     box-shadow: none;
-    border: 1px solid #ddd;
+    border: 1px solid var(--mj-border-default);
   }
 
   .comparison-content,
@@ -1825,8 +1825,8 @@
 .tags-bar {
   margin-top: 16px;
   padding: 8px 14px;
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.04) 0%, rgba(37, 99, 235, 0.08) 100%);
-  border: 1px solid rgba(37, 99, 235, 0.15);
+  background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
   border-radius: 8px;
   max-width: 600px;
 }
@@ -1858,7 +1858,7 @@
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
-  background: rgba(37, 99, 235, 0.1);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   color: var(--test-primary);
   border-radius: 12px;
   font-size: 11px;
@@ -1891,7 +1891,7 @@
 .tags-bar-edit:hover {
   border-color: var(--test-primary);
   color: var(--test-primary);
-  background: rgba(37, 99, 235, 0.05);
+  background: color-mix(in srgb, var(--mj-brand-primary) 5%, transparent);
 }
 
 .tags-bar-edit i {
@@ -1907,7 +1907,7 @@
   border: 1px solid var(--test-primary);
   border-radius: var(--test-radius-md);
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+  box-shadow: var(--mj-shadow-md);
   max-width: 600px;
 }
 
@@ -1915,8 +1915,8 @@
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  background: rgba(37, 99, 235, 0.08);
-  border-bottom: 1px solid rgba(37, 99, 235, 0.2);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
 }
 
 .tags-editor-title {
@@ -2003,7 +2003,7 @@
   outline: none;
   border-color: var(--test-primary);
   background: var(--test-surface);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
 }
 
 .tag-text-input::placeholder {

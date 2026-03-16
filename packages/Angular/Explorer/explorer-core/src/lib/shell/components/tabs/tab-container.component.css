@@ -19,7 +19,7 @@
   width: 100%;
   height: 100%;
   position: relative;
-  background: var(--mj-bg-surface);
+  background: var(--mj-bg-page);
 }
 
 /* Direct content container for single-resource mode */
@@ -30,12 +30,12 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--mj-bg-surface);
+  background: var(--mj-bg-page);
   overflow: hidden;
 }
 
 .tab-content-container {
-  background: var(--mj-bg-surface);
+  background: var(--mj-bg-page);
   color: var(--mj-text-primary);
   padding: 20px;
 }
@@ -151,7 +151,7 @@ mj-tab-container .lm_content > * {
 }
 
 mj-tab-container .lm_content {
-  background: var(--mj-bg-surface) !important;
+  background: var(--mj-bg-page) !important;
   display: flex !important;
   flex-direction: column !important;
   height: 100% !important;
@@ -159,7 +159,7 @@ mj-tab-container .lm_content {
 }
 
 mj-tab-container .lm_item_container {
-  background: var(--mj-bg-surface) !important;
+  background: var(--mj-bg-page) !important;
 }
 
 /* Tab content wrapper - allow scrolling */

@@ -41,45 +41,45 @@ export type TestStatus = 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' |
     }
 
     .test-status-badge--passed {
-      background: rgba(76, 175, 80, 0.1);
-      color: #4caf50;
-      border: 1px solid rgba(76, 175, 80, 0.2);
+      background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
+      border: 1px solid color-mix(in srgb, var(--mj-status-success) 20%, transparent);
     }
 
     .test-status-badge--failed {
-      background: rgba(244, 67, 54, 0.1);
-      color: #f44336;
-      border: 1px solid rgba(244, 67, 54, 0.2);
+      background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
+      border: 1px solid color-mix(in srgb, var(--mj-status-error) 20%, transparent);
     }
 
     .test-status-badge--skipped {
-      background: rgba(158, 158, 158, 0.1);
-      color: #9e9e9e;
-      border: 1px solid rgba(158, 158, 158, 0.2);
+      background: color-mix(in srgb, var(--mj-text-disabled) 10%, var(--mj-bg-surface));
+      color: var(--mj-text-disabled);
+      border: 1px solid color-mix(in srgb, var(--mj-text-disabled) 20%, transparent);
     }
 
     .test-status-badge--error {
-      background: rgba(255, 152, 0, 0.1);
-      color: #ff9800;
-      border: 1px solid rgba(255, 152, 0, 0.2);
+      background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
+      border: 1px solid color-mix(in srgb, var(--mj-status-warning) 20%, transparent);
     }
 
     .test-status-badge--running {
-      background: rgba(33, 150, 243, 0.1);
-      color: #2196f3;
-      border: 1px solid rgba(33, 150, 243, 0.2);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
     }
 
     .test-status-badge--pending {
-      background: rgba(255, 193, 7, 0.1);
-      color: #ffc107;
-      border: 1px solid rgba(255, 193, 7, 0.2);
+      background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
+      border: 1px solid color-mix(in srgb, var(--mj-status-warning) 20%, transparent);
     }
 
     .test-status-badge--timeout {
-      background: rgba(255, 152, 0, 0.15);
-      color: #e65100;
-      border: 1px solid rgba(255, 152, 0, 0.3);
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
+      border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
     }
 
     .badge-text {

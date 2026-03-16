@@ -13,7 +13,7 @@
   margin-left: 24px;
   margin-top: 8px;
   padding-left: 12px;
-  border-left: 2px dashed #e0e6ed;
+  border-left: 2px dashed var(--mj-border-default);
 }
 
 /* State Displays */
@@ -25,12 +25,12 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   gap: 16px;
 }
 
 .error-state {
-  color: #dc3545;
+  color: var(--mj-status-error);
 }
 
 /* Loading and No Children States */
@@ -38,7 +38,7 @@
 .no-children {
   padding: 12px 20px;
   margin-left: 60px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   font-size: 13px;
   display: flex;
   align-items: center;
@@ -46,22 +46,22 @@
 }
 
 .loading-children i {
-  color: #2196f3;
+  color: var(--mj-brand-primary);
 }
 
 .no-children {
-  color: #868e96;
+  color: var(--mj-text-disabled);
   font-style: italic;
 }
 
 .no-children i {
-  color: #adb5bd;
+  color: var(--mj-text-disabled);
 }
 
 /* Sub-run steps container */
 .sub-run-steps {
   margin-left: 20px;
   padding-left: 20px;
-  border-left: 2px solid #e9ecef;
+  border-left: 2px solid var(--mj-border-default);
   margin-top: 8px;
 }

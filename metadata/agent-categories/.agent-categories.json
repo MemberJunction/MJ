@@ -1,0 +1,106 @@
+[
+  {
+    "fields": {
+      "Name": "MJ",
+      "Description": "Root category for all MemberJunction-shipped agents",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B2F21937-D5F0-41FD-ADB0-90C2A6925318"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:10:47.876Z",
+      "checksum": "78087a97f281bf35cd2eb6e41585073cc2d005347abbe875c60d64d5fa9f83d7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Assistant",
+      "Description": "Ambient conversational agents that help users navigate, search, and interact with the system",
+      "ParentID": "@lookup:MJ: AI Agent Categories.Name=MJ",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B9CB7669-D205-484A-9E9C-4C609827113A"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:10:47.898Z",
+      "checksum": "64b56360c3072e3b3c47f7462f0441a13c98d65fee9bd95da94df0b54310e267"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Research and Analysis",
+      "Description": "Agents specialized in data research, query building, and analytical workflows across multiple domains",
+      "ParentID": "@lookup:MJ: AI Agent Categories.Name=MJ",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "9B1D4F15-B24A-4949-A7AB-0FF83AEA4478"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:10:47.911Z",
+      "checksum": "4babc3a7e6f95b796d1cea0fa3cfe1fbd0ab93dc7868fcda18b8f720d0755b17"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Content Creation",
+      "Description": "Agents that generate code, visualizations, marketing content, and other creative outputs",
+      "ParentID": "@lookup:MJ: AI Agent Categories.Name=MJ",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "86DE1618-6289-43B0-93BD-BA34A9EBCC09"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:10:47.923Z",
+      "checksum": "2e59f8c9e29c68c7a809e391cf71daf666ca9ac6086ecdc380aead51763265ba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "System",
+      "Description": "Internal infrastructure agents for memory management, cleanup, and automated maintenance tasks",
+      "ParentID": "@lookup:MJ: AI Agent Categories.Name=MJ",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D1763D30-BDEE-47E2-A3B6-A77E62322BB7"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:10:47.934Z",
+      "checksum": "76d1eef716482ebd6622375ad54d87b2e890d29861cc9908e60186df9901e47b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Platform Management",
+      "Description": "Agents that manage the MemberJunction platform itself, including user onboarding and agent creation",
+      "ParentID": "@lookup:MJ: AI Agent Categories.Name=MJ",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "EEEFFF05-D597-4955-B074-2A55C12452A0"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:10:47.946Z",
+      "checksum": "b334ca2fd5291fb158e0301564b3c3ada728dc63eeb7952306e5cef9c7476fc0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Demo",
+      "Description": "Reference implementation agents demonstrating loop, flow, and minimal agent patterns",
+      "ParentID": "@lookup:MJ: AI Agent Categories.Name=MJ",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3DCCC0FE-159E-47F4-AF2D-01E966652F45"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:10:47.958Z",
+      "checksum": "74f6cdbb47c16070dce5ffdc1f3c76f714ceb2df8214e7f74ab360a80a0ae2b3"
+    }
+  }
+]

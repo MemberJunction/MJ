@@ -120,6 +120,25 @@
               </div>
             </div>
           </div>
+          <!-- Delete confirmation overlay -->
+          @if (IsDeleteConfirming(job.jobId)) {
+            <div class="delete-confirm-overlay" (click)="$event.stopPropagation()">
+              <div class="delete-confirm-content">
+                <i class="fa-solid fa-triangle-exclamation delete-warn-icon"></i>
+                <span class="delete-confirm-text">Delete this scheduled job?</span>
+                <div class="delete-confirm-actions">
+                  <button class="delete-confirm-btn" [disabled]="IsDeleting" (click)="ConfirmDelete(job.jobId, $event)">
+                    @if (IsDeleting) {
+                      <i class="fa-solid fa-spinner fa-spin"></i> Deleting...
+                    } @else {
+                      Delete
+                    }
+                  </button>
+                  <button class="delete-cancel-btn" (click)="CancelDelete($event)">Cancel</button>
+                </div>
+              </div>
+            </div>
+          }
           <!-- Card Footer -->
           <div class="job-card-footer">
             <button class="action-btn" (click)="ToggleJobStatus(job, $event)">
@@ -130,6 +149,10 @@
               <i class="fa-solid fa-up-right-from-square"></i>
               Full Details
             </button>
+            <button class="action-btn action-btn-danger" (click)="ShowDeleteConfirm(job, $event)">
+              <i class="fa-solid fa-trash-can"></i>
+              Delete
+            </button>
           </div>
         </div>
       }
@@ -137,18 +160,11 @@
   }
 
   <!-- Slideout Panel -->
-  @if (SlideoutOpen) {
-    <div class="slideout-backdrop" (click)="CloseSlideout()"></div>
-  }
-  <div class="slideout-panel" [class.open]="SlideoutOpen" [style.width.px]="SlideoutWidth">
-    <div class="slideout-resize-handle" (mousedown)="OnResizeStart($event)"></div>
-    @if (SlideoutOpen) {
-      <app-job-slideout
-        [Mode]="SlideoutMode"
-        [Job]="SelectedJob"
-        (Close)="CloseSlideout()"
-        (Saved)="OnSlideoutSaved()">
-      </app-job-slideout>
-    }
-  </div>
+  <mj-scheduled-job-slide-panel
+    [IsOpen]="SlideoutOpen"
+    [ScheduledJobID]="SelectedJob?.jobId ?? null"
+    (Close)="CloseSlideout()"
+    (Saved)="OnSlideoutSaved()"
+    (Deleted)="OnSlideoutSaved()">
+  </mj-scheduled-job-slide-panel>
 </div>

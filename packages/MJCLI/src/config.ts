@@ -99,10 +99,10 @@ const dynamicPackagesSchema = z.object({
 // Schema for database-dependent config (required fields)
 const mjConfigSchema = z.object({
   dbHost: z.string().default('localhost'),
-  dbDatabase: z.string(),
+  dbDatabase: z.string().min(1),
   dbPort: z.number({ coerce: true }).default(1433),
-  codeGenLogin: z.string(),
-  codeGenPassword: z.string(),
+  codeGenLogin: z.string().min(1),
+  codeGenPassword: z.string().min(1),
   migrationsLocation: z.string().optional().default('filesystem:./migrations'),
   dbEncrypt: z.coerce.boolean().default(true),
   dbTrustServerCertificate: z.coerce.boolean().default(false),
@@ -154,9 +154,25 @@ export const config = result?.config as MJConfig | undefined;
 export const getValidatedConfig = (): MJConfig => {
   const parsedConfig = mjConfigSchema.safeParse(result?.config);
   if (!parsedConfig.success) {
+    const fieldEnvMap: Record<string, string> = {
+      dbHost: 'DB_HOST',
+      dbPort: 'DB_PORT',
+      dbDatabase: 'DB_DATABASE',
+      codeGenLogin: 'CODEGEN_DB_USERNAME',
+      codeGenPassword: 'CODEGEN_DB_PASSWORD',
+    };
+
+    const issues = parsedConfig.error.issues.map(i => {
+      const field = i.path.join('.');
+      const envVar = fieldEnvMap[field];
+      return envVar ? `  - ${field} (env: ${envVar})` : `  - ${field}`;
+    });
+
     throw new Error(
-      `Invalid or missing mj.config.cjs file. Database commands require valid configuration.\n` +
-      `Missing fields: ${parsedConfig.error.issues.map(i => i.path.join('.')).join(', ')}`
+      `Database credentials are missing or empty. The following fields are required:\n` +
+      `${issues.join('\n')}\n\n` +
+      `Set these in your .env file or mj.config.cjs. ` +
+      `If using mj.config.cjs, ensure the field names match exactly (e.g. codeGenLogin, not dbUsername).`
     );
   }
   return parsedConfig.data;

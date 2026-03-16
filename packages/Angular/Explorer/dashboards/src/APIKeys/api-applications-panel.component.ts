@@ -95,7 +95,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
     // Default UI config for categories without explicit configuration
     private readonly defaultUIConfig = {
         icon: 'fa-solid fa-ellipsis',
-        color: '#6b7280'
+        color: 'var(--mj-text-muted)'
     };
 
     constructor(cdr: ChangeDetectorRef) {

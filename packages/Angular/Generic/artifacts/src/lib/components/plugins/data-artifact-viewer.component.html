@@ -70,7 +70,7 @@
                       </div>
                     </div>
                     <div class="query-dropdown-item" (click)="OnOpenSavedQuery(); OnCloseDropdown()">
-                      <i class="fas fa-external-link-alt" style="color:#6c757d"></i>
+                      <i class="fas fa-external-link-alt" style="color:var(--mj-text-muted)"></i>
                       <div>
                         <div class="dropdown-label">Open Saved Query</div>
                         <div class="dropdown-desc">View "{{ SavedQueryDisplayName }}" (saved at v{{ SavedAtVersion }})</div>
@@ -130,11 +130,15 @@
           <mj-query-data-grid
             [ColumnConfigs]="GridColumnConfigs"
             [Data]="GridData"
+            [TotalRowCount]="PagerTotalRowCount"
+            [PageNumber]="PagerPageNumber"
+            [PageSize]="PagerPageSize"
             [ShowToolbar]="false"
             [ShowRefresh]="false"
             [PersistState]="false"
             [SelectionMode]="'none'"
             (EntityLinkClick)="OnEntityLinkClick($event)"
+            (PageChange)="OnPageChange($event)"
             Height="100%">
           </mj-query-data-grid>
         } @else if (HasError) {
@@ -146,11 +150,15 @@
           <mj-query-data-grid
             [ColumnConfigs]="GridColumnConfigs"
             [Data]="GridData"
+            [TotalRowCount]="PagerTotalRowCount"
+            [PageNumber]="PagerPageNumber"
+            [PageSize]="PagerPageSize"
             [ShowToolbar]="false"
             [ShowRefresh]="false"
             [PersistState]="false"
             [SelectionMode]="'none'"
             (EntityLinkClick)="OnEntityLinkClick($event)"
+            (PageChange)="OnPageChange($event)"
             Height="100%">
           </mj-query-data-grid>
         }

@@ -202,6 +202,12 @@ export interface IQueryInfoBase {
      */
     QualityRank: number;
     /**
+     * When true, this query can be referenced by other queries via the composition syntax
+     * `{{query:"CategoryPath/QueryName"}}`. Only queries with Reusable=true AND Status='Approved'
+     * are eligible for composition.
+     */
+    Reusable: boolean;
+    /**
      * When true, query results will be cached in memory with TTL expiration
      */
     CacheEnabled: boolean;

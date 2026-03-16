@@ -9,8 +9,8 @@
   align-items: center;
   gap: 0.5rem;
   padding: 1rem;
-  background-color: var(--mj-error-bg, #fef2f2);
-  color: var(--mj-error-text, #dc2626);
+  background-color: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-error);
   border-radius: 8px;
   font-size: 0.875rem;
 }
@@ -30,7 +30,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 0;
-  border-bottom: 1px solid var(--mj-border-color, #e5e7eb);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .info-row:last-child {
@@ -41,19 +41,19 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: var(--mj-text-secondary, #6b7280);
+  color: var(--mj-text-secondary);
   font-size: 0.875rem;
 }
 
 .info-label i {
   width: 1rem;
   text-align: center;
-  color: var(--mj-text-tertiary, #9ca3af);
+  color: var(--mj-text-disabled);
 }
 
 .info-value {
   font-weight: 500;
-  color: var(--mj-text-primary, #1f2937);
+  color: var(--mj-text-primary);
   text-align: right;
 }
 
@@ -68,18 +68,18 @@
 }
 
 .type-owner {
-  background-color: var(--mj-warning-bg, #fef3c7);
-  color: var(--mj-warning-text, #d97706);
+  background-color: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-warning);
 }
 
 .type-admin {
-  background-color: var(--mj-info-bg, #dbeafe);
-  color: var(--mj-info-text, #2563eb);
+  background-color: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 .type-user {
-  background-color: var(--mj-neutral-bg, #f3f4f6);
-  color: var(--mj-neutral-text, #4b5563);
+  background-color: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
 }
 
 .status-badge {
@@ -91,13 +91,13 @@
 }
 
 .status-badge.active {
-  background-color: var(--mj-success-bg, #dcfce7);
-  color: var(--mj-success-text, #16a34a);
+  background-color: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-success);
 }
 
 .status-badge.inactive {
-  background-color: var(--mj-error-bg, #fef2f2);
-  color: var(--mj-error-text, #dc2626);
+  background-color: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-error);
 }
 
 @media (max-width: 480px) {

@@ -929,6 +929,16 @@ export type RunQueryResult = {
      * Only differs from RowCount when StartRow or MaxRows are used.
      */
     TotalRowCount: number;
+    /**
+     * The page number returned (1-based). Derived from StartRow and MaxRows.
+     * Undefined when paging is not active.
+     */
+    PageNumber?: number;
+    /**
+     * The page size used for this result.
+     * Undefined when paging is not active.
+     */
+    PageSize?: number;
     ExecutionTime: number;
     ErrorMessage: string;
     /**
