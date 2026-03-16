@@ -156,6 +156,8 @@ export class StateManager {
       topP,
       topK,
       totalTokensUsed: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
       estimatedCost: 0,
       warnings: [],
       errors: [],
@@ -176,7 +178,7 @@ export class StateManager {
     reasoning: string,
     confidence: number,
     modelUsed: string,
-    triggeredBy: 'initial' | 'backpropagation' | 'refinement' | 'dependency_sanity_check' | 'schema_sanity_check' | 'cross_schema_sanity_check'
+    triggeredBy: 'initial' | 'backpropagation' | 'refinement' | 'dependency_sanity_check' | 'schema_sanity_check' | 'cross_schema_sanity_check' | 'ground_truth' | 'existing_db_description'
   ): void {
     const iteration: DescriptionIteration = {
       description,
@@ -283,19 +285,29 @@ export class StateManager {
 
     for (const schema of state.schemas) {
       for (const table of schema.tables) {
-        if (table.descriptionIterations.length > 0) {
-          const latest = table.descriptionIterations[table.descriptionIterations.length - 1];
-          const confidence = latest.confidence ?? 0;
+        // Tables with no description iterations are undescribed — treat as zero confidence
+        if (table.descriptionIterations.length === 0) {
+          lowConfidence.push({
+            schema: schema.name,
+            table: table.name,
+            confidence: 0,
+            description: '',
+            reasoning: 'Table has not been analyzed yet'
+          });
+          continue;
+        }
 
-          if (confidence < threshold) {
-            lowConfidence.push({
-              schema: schema.name,
-              table: table.name,
-              confidence,
-              description: latest.description,
-              reasoning: latest.reasoning
-            });
-          }
+        const latest = table.descriptionIterations[table.descriptionIterations.length - 1];
+        const confidence = latest.confidence ?? 0;
+
+        if (confidence < threshold) {
+          lowConfidence.push({
+            schema: schema.name,
+            table: table.name,
+            confidence,
+            description: latest.description,
+            reasoning: latest.reasoning
+          });
         }
       }
     }
@@ -359,6 +371,8 @@ export class StateManager {
     // Aggregate from all analysis runs
     let totalPromptsRun = 0;
     let totalTokens = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
     let estimatedCost = 0;
 
     for (const run of state.phases.descriptionGeneration) {
@@ -369,6 +383,8 @@ export class StateManager {
 
       // Sum tokens and cost
       totalTokens += run.totalTokensUsed;
+      totalInputTokens += run.totalInputTokens || 0;
+      totalOutputTokens += run.totalOutputTokens || 0;
       estimatedCost += run.estimatedCost;
     }
 
@@ -376,8 +392,8 @@ export class StateManager {
     state.summary = {
       ...state.summary,
       totalPromptsRun,
-      totalInputTokens: 0,  // TODO: Will need to track separately when available
-      totalOutputTokens: 0, // TODO: Will need to track separately when available
+      totalInputTokens,
+      totalOutputTokens,
       totalTokens,
       totalSchemas: state.schemas.length,
       totalTables,

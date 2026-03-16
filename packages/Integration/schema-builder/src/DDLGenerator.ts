@@ -37,11 +37,17 @@ export class DDLGenerator {
         const lines: string[] = [];
 
         // User-configured columns (includes PK fields as regular columns)
+        const pkFieldSet = new Set(config.PrimaryKeyFields.map(f => f.toLowerCase()));
         for (const col of config.Columns) {
             ValidateIdentifier(col.TargetColumnName, 'column');
             const nullable = col.IsNullable ? 'NULL' : 'NOT NULL';
             const defaultExpr = col.DefaultValue != null ? ` DEFAULT ${col.DefaultValue}` : '';
-            lines.push(`    ${q(col.TargetColumnName)} ${col.TargetSqlType} ${nullable}${defaultExpr}`);
+            // NVARCHAR(MAX) cannot be indexed — cap PK columns to NVARCHAR(450)
+            const isPkCol = pkFieldSet.has(col.TargetColumnName.toLowerCase());
+            const sqlType = isPkCol && col.TargetSqlType.toUpperCase() === 'NVARCHAR(MAX)'
+                ? 'NVARCHAR(450)'
+                : col.TargetSqlType;
+            lines.push(`    ${q(col.TargetColumnName)} ${sqlType} ${nullable}${defaultExpr}`);
         }
 
         // Standard integration columns (prefixed to avoid collisions)

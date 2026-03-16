@@ -1218,6 +1218,33 @@
                     <div class="config-card">
                       <div class="config-card-header">
                         <div class="config-card-icon">
+                          <i class="fa-solid fa-folder-tree"></i>
+                        </div>
+                        <div class="config-card-info">
+                          <h4>Category</h4>
+                          <p>Organizational category for this agent</p>
+                        </div>
+                      </div>
+                      <div class="config-card-content">
+                        @if (EditMode) {
+                          <mj-tree-dropdown
+                            [BranchConfig]="CategoryBranchConfig"
+                            [Value]="SelectedCategoryKey"
+                            SelectionMode="single"
+                            SelectableTypes="branch"
+                            Placeholder="Select a category..."
+                            [Clearable]="true"
+                            [EnableSearch]="true"
+                            (ValueChange)="OnCategoryChange($event)">
+                          </mj-tree-dropdown>
+                        } @else {
+                          <span class="config-field-display">{{ record.Category || 'Not Set' }}</span>
+                        }
+                      </div>
+                    </div>
+                    <div class="config-card">
+                      <div class="config-card-header">
+                        <div class="config-card-icon">
                           <i class="fa-solid fa-bolt"></i>
                         </div>
                         <div class="config-card-info">

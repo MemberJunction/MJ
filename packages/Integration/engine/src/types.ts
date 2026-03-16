@@ -117,6 +117,10 @@ export interface MappedRecord {
 export interface SyncResult {
     /** Whether the overall sync completed without fatal errors */
     Success: boolean;
+    /** Summary error message when the sync fails or completes with errors */
+    ErrorMessage?: string;
+    /** The CompanyIntegrationRun ID created for this sync */
+    RunID?: string;
     /** Total records processed */
     RecordsProcessed: number;
     /** New records created in MJ */
@@ -133,6 +137,31 @@ export interface SyncResult {
     Errors: SyncRecordError[];
     /** Watermark value after this sync for incremental next-run */
     WatermarkAfter?: string;
+    /** Per-entity-map results breakdown */
+    EntityMapResults?: EntityMapSyncResult[];
+    /** Duration of the sync in milliseconds */
+    Duration?: number;
+}
+
+/** Per-entity-map result within a sync run */
+export interface EntityMapSyncResult {
+    /** The entity map ID */
+    EntityMapID: string;
+    /** External object name */
+    ExternalObjectName: string;
+    /** Target MJ entity name */
+    EntityName: string;
+    /** Whether this entity map synced without errors */
+    Success: boolean;
+    /** Record counts for this entity map */
+    RecordsProcessed: number;
+    RecordsCreated: number;
+    RecordsUpdated: number;
+    RecordsDeleted: number;
+    RecordsErrored: number;
+    RecordsSkipped: number;
+    /** Duration of this entity map sync in milliseconds */
+    Duration?: number;
 }
 
 /** Error details for a single record during sync */
@@ -197,6 +226,16 @@ export interface SyncNotification {
 /** Callback invoked after a sync run completes (success or failure) */
 export type OnNotificationCallback = (notification: SyncNotification) => void;
 
+/** Options for controlling integration sync behavior */
+export interface IntegrationSyncOptions {
+    /** Restrict sync to specific entity map IDs. If omitted, all enabled maps are synced. */
+    EntityMapIDs?: string[];
+    /** Force a full sync, ignoring watermarks. Defaults to false. */
+    FullSync?: boolean;
+    /** Links this sync run to a ScheduledJobRun for traceability. */
+    ScheduledJobRunID?: string;
+}
+
 // ─── Source Schema Introspection Types ──────────────────────────────
 // These types define the schema introspection contract for connectors.
 // Used by the Schema Builder (packages/Integration/schema-builder) to
@@ -260,6 +299,84 @@ export interface SourceRelationshipInfo {
     TargetObject: string;
     /** Target field name (usually the PK). */
     TargetField: string;
+}
+
+// ─── CRUD & Search Types ─────────────────────────────────────────────
+// Standardized types for connector CRUD operations and search.
+// Connectors that support write or search operations use these types.
+
+/** Context for a CRUD operation against an external system */
+export interface CRUDContext {
+    /** The company integration entity providing connection details */
+    CompanyIntegration: unknown; // MJCompanyIntegrationEntity (avoids circular import)
+    /** External object name to operate on */
+    ObjectName: string;
+    /** User context for authorization */
+    ContextUser: unknown; // UserInfo (avoids circular import)
+}
+
+/** Context for creating a record in an external system */
+export interface CreateRecordContext extends CRUDContext {
+    /** Field values for the new record */
+    Attributes: Record<string, unknown>;
+    /** Optional relationship data (JSON:API relationships, FK references, etc.) */
+    Relationships?: Record<string, unknown>;
+}
+
+/** Context for updating a record in an external system */
+export interface UpdateRecordContext extends CRUDContext {
+    /** External ID of the record to update */
+    ExternalID: string;
+    /** Field values to update */
+    Attributes: Record<string, unknown>;
+    /** Optional relationship data to update */
+    Relationships?: Record<string, unknown>;
+}
+
+/** Context for deleting a record from an external system */
+export interface DeleteRecordContext extends CRUDContext {
+    /** External ID of the record to delete */
+    ExternalID: string;
+}
+
+/** Context for retrieving a single record from an external system */
+export interface GetRecordContext extends CRUDContext {
+    /** External ID of the record to retrieve */
+    ExternalID: string;
+}
+
+/** Result of a CRUD operation (create, update, or delete) */
+export interface CRUDResult {
+    /** Whether the operation succeeded */
+    Success: boolean;
+    /** External ID of the created/updated record */
+    ExternalID?: string;
+    /** Error message if the operation failed */
+    ErrorMessage?: string;
+    /** HTTP status code (for REST connectors) or operation-specific code */
+    StatusCode: number;
+}
+
+/** Context for searching records in an external system */
+export interface SearchContext extends CRUDContext {
+    /** Filter predicates (connector-specific format) */
+    Filters: Record<string, string>;
+    /** Sort expression (connector-specific format) */
+    Sort?: string;
+    /** Page number (1-based) */
+    Page?: number;
+    /** Maximum records per page */
+    PageSize?: number;
+}
+
+/** Result of a search operation */
+export interface SearchResult {
+    /** Matching records */
+    Records: ExternalRecord[];
+    /** Total number of matching records (may exceed returned count) */
+    TotalCount: number;
+    /** Whether more pages of results exist */
+    HasMore: boolean;
 }
 
 /** A default field mapping returned by a connector's discovery */

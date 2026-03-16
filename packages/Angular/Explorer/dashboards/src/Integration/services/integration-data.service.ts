@@ -133,6 +133,8 @@ export interface IntegrationDefinitionRow {
 export interface IntegrationSummary {
   Integration: MJCompanyIntegrationEntity;
   SourceType: MJIntegrationSourceTypeEntity | null;
+  /** Icon from the Integration entity — FA class, URL, or base64 */
+  Icon: string | null;
   LatestRun: IntegrationRunRow | null;
   RecentRuns: IntegrationRunRow[];
   StatusColor: 'green' | 'amber' | 'red' | 'gray';
@@ -219,10 +221,29 @@ const INTEGRATION_ICON_MAP: Array<{ Pattern: RegExp; Icon: string }> = [
   { Pattern: /calendar|event/i, Icon: 'fa-solid fa-calendar' }
 ];
 
-/** Resolve an integration name to a Font Awesome icon class */
-export function ResolveIntegrationIcon(name: string): string {
+/**
+ * Resolve an integration icon. Checks the entity's Icon field first (supports
+ * Font Awesome classes, URLs, and base64), then falls back to pattern-based
+ * name matching, then to a generic plug icon.
+ */
+export function ResolveIntegrationIcon(name: string, entityIcon?: string | null): string {
+  // If the Integration entity has an Icon value that looks like a FA class, use it directly
+  if (entityIcon && entityIcon.startsWith('fa-')) {
+    return entityIcon;
+  }
+  // Fall back to pattern-based name matching
   const match = INTEGRATION_ICON_MAP.find(m => m.Pattern.test(name));
   return match ? match.Icon : 'fa-solid fa-plug';
+}
+
+/**
+ * Check if the Icon field contains an image URL or base64 data URI
+ * (as opposed to a Font Awesome class). Used by templates to decide
+ * whether to render an <i> or an <img>.
+ */
+export function IsImageIcon(icon: string | null | undefined): boolean {
+  if (!icon) return false;
+  return icon.startsWith('http') || icon.startsWith('data:') || icon.startsWith('/');
 }
 
 @Injectable({
@@ -251,7 +272,8 @@ export class IntegrationDataService {
     const runs = runsResult.Results;
     const sourceTypes = engine.SourceTypes;
 
-    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes));
+    const integrationDefs = engine.Integrations;
+    return integrations.map(integration => this.buildSummary(integration, runs, sourceTypes, integrationDefs));
   }
 
   async LoadEntityMaps(companyIntegrationID: string, _provider?: IRunViewProvider | null): Promise<MJCompanyIntegrationEntityMapEntity[]> {
@@ -735,6 +757,102 @@ export class IntegrationDataService {
     return IntegrationEngineBase.Instance.Watermarks.filter(w => mapIDSet.has(w.EntityMapID.toLowerCase()));
   }
 
+  /**
+   * Auto-map all entities in a given schema to a company integration.
+   * For each entity in the schema that doesn't already have an entity map,
+   * creates an entity map (ExternalObjectName = BaseTable) and 1:1 field maps
+   * for every non-system column. Returns the count of maps created.
+   */
+  async AutoMapSchema(
+    companyIntegrationID: string,
+    schemaName: string,
+    direction: 'Pull' | 'Push' | 'Bidirectional' = 'Pull'
+  ): Promise<{ EntityMapsCreated: number; FieldMapsCreated: number; Errors: string[] }> {
+    const md = new Metadata();
+    const errors: string[] = [];
+
+    // Get entities in the target schema
+    const schemaEntities = md.Entities.filter(
+      e => e.SchemaName.toLowerCase() === schemaName.toLowerCase()
+    );
+    if (schemaEntities.length === 0) {
+      return { EntityMapsCreated: 0, FieldMapsCreated: 0, Errors: [`No entities found in schema "${schemaName}"`] };
+    }
+
+    // Load existing entity maps to avoid duplicates
+    const existingMaps = await this.LoadEntityMaps(companyIntegrationID);
+    const existingEntityIDs = new Set(existingMaps.map(m => m.ID.toLowerCase()));
+
+    // Build a set of entity IDs that already have maps (by EntityID)
+    const mappedEntityIDs = new Set<string>();
+    for (const em of existingMaps) {
+      mappedEntityIDs.add((em as unknown as { EntityID: string }).EntityID?.toLowerCase() ?? '');
+    }
+    // Also load full map data to check EntityID
+    const engine = IntegrationEngineBase.Instance;
+    await engine.Config(false);
+    const allMaps = engine.GetEntityMapsForCompanyIntegration(companyIntegrationID);
+    for (const em of allMaps) {
+      mappedEntityIDs.add(em.EntityID.toLowerCase());
+    }
+
+    let entityMapsCreated = 0;
+    let fieldMapsCreated = 0;
+
+    for (const entity of schemaEntities) {
+      // Skip if already mapped
+      if (mappedEntityIDs.has(entity.ID.toLowerCase())) continue;
+
+      // Create entity map
+      const entityMap = await this.CreateEntityMap({
+        CompanyIntegrationID: companyIntegrationID,
+        ExternalObjectName: entity.BaseTable,
+        EntityID: entity.ID,
+        SyncDirection: direction
+      });
+
+      if (!entityMap) {
+        errors.push(`Failed to create entity map for ${entity.Name}`);
+        continue;
+      }
+      entityMapsCreated++;
+
+      // Create 1:1 field maps for all non-system fields
+      const fields = entity.Fields.filter(
+        f => !f.Name.startsWith('__mj')
+      );
+
+      for (const field of fields) {
+        const isKey = field.Name.toLowerCase() === 'uuid' || field.IsPrimaryKey;
+        const fm = await this.CreateFieldMap({
+          EntityMapID: entityMap.ID,
+          SourceFieldName: field.Name,
+          DestinationFieldName: field.Name,
+          IsKeyField: isKey,
+          IsRequired: isKey,
+          Direction: direction === 'Bidirectional' ? 'Both' : 'SourceToDest'
+        });
+        if (fm) {
+          fieldMapsCreated++;
+        } else {
+          errors.push(`Failed to create field map for ${entity.Name}.${field.Name}`);
+        }
+      }
+    }
+
+    return { EntityMapsCreated: entityMapsCreated, FieldMapsCreated: fieldMapsCreated, Errors: errors };
+  }
+
+  /** Load available schemas (for auto-map schema picker) */
+  LoadSchemas(): string[] {
+    const md = new Metadata();
+    const schemas = new Set<string>();
+    for (const entity of md.Entities) {
+      if (entity.SchemaName) schemas.add(entity.SchemaName);
+    }
+    return Array.from(schemas).sort();
+  }
+
   /** Load entity map count per company integration (used by Overview cards) */
   async LoadEntityMapCounts(_provider?: IRunViewProvider | null): Promise<Map<string, number>> {
     await IntegrationEngineBase.Instance.Config(false);
@@ -772,7 +890,8 @@ export class IntegrationDataService {
   private buildSummary(
     integration: MJCompanyIntegrationEntity,
     allRuns: IntegrationRunRow[],
-    sourceTypes: MJIntegrationSourceTypeEntity[]
+    sourceTypes: MJIntegrationSourceTypeEntity[],
+    integrationDefs: MJIntegrationEntity[]
   ): IntegrationSummary {
     const integrationRuns = allRuns.filter(r => UUIDsEqual(r.CompanyIntegrationID, integration.ID));
     const latestRun = integrationRuns.length > 0 ? integrationRuns[0] : null;
@@ -783,10 +902,14 @@ export class IntegrationDataService {
     const totalErrors = integrationRuns.filter(r => r.Status === 'Failed').length;
     const durationMs = this.computeDuration(latestRun);
     const sourceType = this.resolveSourceType(integration, sourceTypes);
+    const integrationName = integration.Integration ?? '';
+    const def = integrationDefs.find(d => d.Name === integrationName);
+    const icon = (def?.Get('Icon') as string | null) ?? null;
 
     return {
       Integration: integration,
       SourceType: sourceType,
+      Icon: icon,
       LatestRun: latestRun,
       RecentRuns: recentRuns,
       StatusColor: statusColor,

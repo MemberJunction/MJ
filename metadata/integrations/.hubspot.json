@@ -8,7 +8,8 @@
       "NavigationBaseURL": "https://app.hubspot.com",
       "BatchMaxRequestCount": 100,
       "BatchRequestWaitTime": 250,
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=OAuth2 Client Credentials"
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=OAuth2 Client Credentials",
+      "Icon": "fa-brands fa-hubspot"
     },
     "relatedEntities": {
       "MJ: Integration Objects": [
@@ -4499,8 +4500,8 @@
       "ID": "3DD4C246-8E89-4483-9B42-58B59BB3BCEF"
     },
     "sync": {
-      "lastModified": "2026-03-05T20:56:35.356Z",
-      "checksum": "7a9ceba778d79513a37d4538db9369ca9ef1659e8ace18e469ac07d6af805eb9"
+      "lastModified": "2026-03-12T21:00:28.243Z",
+      "checksum": "a910cfcc2a48b32891faf3b58f753b0f4fbc7621cfd6c3f8a56926416cb9117b"
     }
   }
 ]

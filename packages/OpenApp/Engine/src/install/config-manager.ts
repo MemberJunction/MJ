@@ -251,6 +251,170 @@ function FindMatchingBracket(content: string, openPos: number): number {
     return depth === 0 ? pos - 1 : -1;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTITY PACKAGE NAME MAPPING
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Adds an entityPackageName mapping to mj.config.cjs for an installed app.
+ *
+ * CodeGen uses `entityPackageName` to resolve per-schema entity imports.
+ * When it's a Record<schemaName, packageName>, each schema's entities are
+ * imported from the correct npm package.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param manifest - The app's validated manifest
+ * @returns Operation result
+ */
+export function AddEntityPackageMapping(
+    repoRoot: string,
+    manifest: MJAppManifest
+): ConfigOperationResult {
+    const schemaName = manifest.schema?.name;
+    if (!schemaName) {
+        return { Success: true }; // No schema → nothing to map
+    }
+
+    const entityPkg = ResolveEntityPackageFromManifest(manifest);
+    if (!entityPkg) {
+        return { Success: true }; // No entities package found → nothing to map
+    }
+
+    const configPath = resolveConfigPath(repoRoot);
+    if (!configPath) {
+        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}. Expected: ${CONFIG_FILE_NAME}` };
+    }
+
+    try {
+        let content = readFileSync(configPath, 'utf-8');
+        content = EnsureEntityPackageNameSection(content);
+        content = AddEntityPackageEntry(content, schemaName, entityPkg);
+        writeFileSync(configPath, content, 'utf-8');
+        return { Success: true };
+    }
+    catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { Success: false, ErrorMessage: `Failed to update entityPackageName config: ${message}` };
+    }
+}
+
+/**
+ * Removes an entityPackageName mapping for an app's schema from mj.config.cjs.
+ *
+ * @param repoRoot - Absolute path to the monorepo root
+ * @param schemaName - The schema name to remove the mapping for
+ * @returns Operation result
+ */
+export function RemoveEntityPackageMapping(
+    repoRoot: string,
+    schemaName: string
+): ConfigOperationResult {
+    if (!schemaName) {
+        return { Success: true };
+    }
+
+    const configPath = resolveConfigPath(repoRoot);
+    if (!configPath) {
+        return { Success: false, ErrorMessage: `No MJ config file found in ${repoRoot}` };
+    }
+
+    try {
+        let content = readFileSync(configPath, 'utf-8');
+        content = RemoveEntityPackageEntry(content, schemaName);
+        writeFileSync(configPath, content, 'utf-8');
+        return { Success: true };
+    }
+    catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { Success: false, ErrorMessage: `Failed to remove entityPackageName mapping: ${message}` };
+    }
+}
+
+/**
+ * Resolves the entity package name from a manifest.
+ *
+ * Priority:
+ * 1. Explicit `schema.entityPackage` field
+ * 2. First `library`-role package in `packages.shared` whose name contains "entities"
+ */
+function ResolveEntityPackageFromManifest(manifest: MJAppManifest): string | undefined {
+    // Explicit declaration takes priority
+    if (manifest.schema?.entityPackage) {
+        return manifest.schema.entityPackage;
+    }
+
+    // Auto-detect from shared packages
+    const sharedPkgs = manifest.packages?.shared ?? [];
+    const entitiesPkg = sharedPkgs.find(
+        (pkg) => pkg.role === 'library' && pkg.name.toLowerCase().includes('entities')
+    );
+    return entitiesPkg?.name;
+}
+
+/**
+ * Ensures entityPackageName exists as a Record in the config.
+ * If it exists as a string, converts it to a Record with the string as a fallback comment.
+ * If it doesn't exist, adds an empty Record section.
+ */
+function EnsureEntityPackageNameSection(content: string): string {
+    // Check if entityPackageName already exists as a Record (has opening brace)
+    const recordMatch = content.match(/entityPackageName\s*:\s*\{/);
+    if (recordMatch) {
+        return content; // Already a Record — nothing to do
+    }
+
+    // Check if entityPackageName exists as a string
+    const stringMatch = content.match(/entityPackageName\s*:\s*['"]([^'"]*)['"]\s*,?/);
+    if (stringMatch) {
+        // Convert string to Record, preserving the old value as a comment
+        const oldValue = stringMatch[1];
+        const replacement = `entityPackageName: {\n    // Converted from string value '${oldValue}' by mj app install\n  },`;
+        return content.replace(stringMatch[0], replacement);
+    }
+
+    // entityPackageName doesn't exist at all — insert before the closing };
+    const insertionPoint = content.lastIndexOf('};');
+    if (insertionPoint === -1) {
+        return content;
+    }
+
+    const section = `\n  entityPackageName: {\n  },\n`;
+    return content.slice(0, insertionPoint) + section + content.slice(insertionPoint);
+}
+
+/**
+ * Adds a single schema→package entry to the entityPackageName Record.
+ * If the schema already has a mapping, it is replaced.
+ */
+function AddEntityPackageEntry(content: string, schemaName: string, packageName: string): string {
+    // First remove any existing entry for this schema to avoid duplicates
+    content = RemoveEntityPackageEntry(content, schemaName);
+
+    // Find the entityPackageName Record opening brace
+    const recordMatch = content.match(/entityPackageName\s*:\s*\{/);
+    if (!recordMatch || recordMatch.index === undefined) {
+        return content;
+    }
+
+    const bracePos = content.indexOf('{', recordMatch.index);
+    const entryStr = `\n    '${schemaName}': '${packageName}',`;
+
+    // Insert right after the opening brace
+    return content.slice(0, bracePos + 1) + entryStr + content.slice(bracePos + 1);
+}
+
+/**
+ * Removes a schema entry from the entityPackageName Record.
+ */
+function RemoveEntityPackageEntry(content: string, schemaName: string): string {
+    // Match a line like: 'schemaName': 'package-name',
+    const pattern = new RegExp(
+        `\\s*'${EscapeRegex(schemaName)}'\\s*:\\s*'[^']*'\\s*,?`,
+        'g'
+    );
+    return content.replace(pattern, '');
+}
+
 /**
  * Escapes special regex characters in a string.
  */

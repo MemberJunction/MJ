@@ -1,0 +1,329 @@
+.agent-requests-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 20px;
+    background: var(--mj-bg-page);
+}
+
+/* Header */
+.requests-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.page-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-title i {
+    color: var(--mj-brand-primary);
+}
+
+.pending-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--mj-status-warning);
+    color: var(--mj-text-inverse);
+}
+
+/* Search */
+.search-box {
+    position: relative;
+    width: 280px;
+}
+
+.search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--mj-text-muted);
+    font-size: 13px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 8px 12px 8px 32px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    box-sizing: border-box;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--mj-border-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+/* Filters */
+.filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.filter-group {
+    display: flex;
+    gap: 8px;
+}
+
+.filter-select {
+    padding: 6px 10px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+}
+
+.clear-filters-btn {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.clear-filters-btn:hover {
+    background: var(--mj-bg-surface-active);
+    color: var(--mj-text-primary);
+}
+
+/* Loading */
+.loading-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 0;
+}
+
+/* Empty State */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    text-align: center;
+}
+
+.empty-icon {
+    font-size: 48px;
+    color: var(--mj-text-disabled);
+    margin-bottom: 16px;
+}
+
+.empty-text {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    color: var(--mj-text-secondary);
+}
+
+.empty-subtext {
+    margin: 0;
+    font-size: 13px;
+    color: var(--mj-text-muted);
+}
+
+/* Request Cards */
+.requests-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.request-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.request-card:hover {
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.request-card.actionable {
+    border-left: 3px solid var(--mj-status-warning);
+}
+
+.request-card.expired {
+    opacity: 0.7;
+}
+
+.card-left {
+    flex-shrink: 0;
+    padding-top: 2px;
+}
+
+.type-icon {
+    font-size: 18px;
+    color: var(--mj-brand-primary);
+}
+
+.card-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.card-top-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+}
+
+.request-type-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.request-text {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.card-meta {
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.meta-item {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.meta-item.expired {
+    color: var(--mj-status-error-text);
+}
+
+.card-right {
+    flex-shrink: 0;
+    color: var(--mj-text-disabled);
+    font-size: 12px;
+    padding-top: 4px;
+}
+
+/* Badges */
+.status-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-requested {
+    background: var(--mj-status-info-bg);
+    color: var(--mj-status-info-text);
+    border: 1px solid var(--mj-status-info-border);
+}
+
+.status-approved,
+.status-responded {
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success-text);
+    border: 1px solid var(--mj-status-success-border);
+}
+
+.status-rejected,
+.status-canceled {
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
+    border: 1px solid var(--mj-status-error-border);
+}
+
+.status-expired {
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+    border: 1px solid var(--mj-status-warning-border);
+}
+
+.priority-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.priority-low {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+}
+
+.priority-normal {
+    background: var(--mj-status-info-bg);
+    color: var(--mj-status-info-text);
+}
+
+.priority-high {
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+}
+
+.priority-critical {
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
+}
+
+.expired-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+}

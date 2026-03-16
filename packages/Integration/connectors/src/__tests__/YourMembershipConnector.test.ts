@@ -521,20 +521,22 @@ describe('YourMembershipConnector (enrichment)', () => {
 // ─── GetBaseURL tests ───────────────────────────────────────────
 
 describe('YourMembershipConnector (GetBaseURL)', () => {
-    it('should build base URL from configuration ClientID', () => {
+    it('should build base URL from auth Config ClientID', () => {
         const connector = new YourMembershipConnector();
         const getBaseURL = (connector as unknown as Record<string, (...args: unknown[]) => string>)['GetBaseURL'].bind(connector);
 
-        const ci = createMockCompanyIntegration({ ClientID: '12345', APIKey: 'k', APIPassword: 'p' });
-        expect(getBaseURL(ci)).toBe('https://ws.yourmembership.com/Ams/12345');
+        const ci = createMockCompanyIntegration({ APIKey: 'k', APIPassword: 'p' });
+        const auth = { Config: { ClientID: '12345', APIKey: 'k', APIPassword: 'p' } };
+        expect(getBaseURL(ci, auth)).toBe('https://ws.yourmembership.com/Ams/12345');
     });
 
-    it('should throw when no ClientID in configuration', () => {
+    it('should throw when no ClientID in auth or configuration', () => {
         const connector = new YourMembershipConnector();
         const getBaseURL = (connector as unknown as Record<string, (...args: unknown[]) => string>)['GetBaseURL'].bind(connector);
 
         const ci = { Get: () => null } as unknown as MJCompanyIntegrationEntity;
-        expect(() => getBaseURL(ci)).toThrow('Cannot determine YM base URL');
+        const auth = { Config: {} };
+        expect(() => getBaseURL(ci, auth)).toThrow('Cannot determine YM base URL');
     });
 });
 

@@ -74,6 +74,8 @@ export interface QueryGenerationPhase {
   status: 'running' | 'completed' | 'failed';
   queriesGenerated: number;
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
   estimatedCost: number;
   errorMessage?: string;
 }
@@ -126,6 +128,8 @@ export interface ColumnDefinition {
   statistics?: ColumnStatistics;
   description?: string;
   descriptionIterations: DescriptionIteration[];
+  userDescription?: string;
+  userApproved?: boolean;
 }
 
 export interface ForeignKeyReference {
@@ -192,8 +196,10 @@ export interface DescriptionIteration {
   generatedAt: string;
   modelUsed: string;
   confidence?: number;
-  triggeredBy?: 'initial' | 'backpropagation' | 'refinement' | 'dependency_sanity_check' | 'schema_sanity_check' | 'cross_schema_sanity_check';
+  triggeredBy?: 'initial' | 'backpropagation' | 'refinement' | 'dependency_sanity_check' | 'schema_sanity_check' | 'cross_schema_sanity_check' | 'ground_truth' | 'existing_db_description';
   changedFrom?: string;
+  /** If true, this description came from user-provided ground truth config */
+  isGroundTruth?: boolean;
 }
 
 export interface AnalysisRun {
@@ -213,6 +219,8 @@ export interface AnalysisRun {
   topP?: number;
   topK?: number;
   totalTokensUsed: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
   estimatedCost: number;
   warnings: string[];
   errors: string[];
@@ -240,6 +248,8 @@ export interface PhaseMetric {
   startedAt: string;
   completedAt?: string;
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
   estimatedCost: number;
   warned?: boolean;      // Did this phase trigger a token warning?
   exceeded?: boolean;    // Did this phase exceed its hard limit?
@@ -253,6 +263,8 @@ export interface IterationMetrics {
   startedAt: string;
   completedAt?: string;
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
   estimatedCost: number;
   duration: number; // milliseconds
   warned?: boolean;  // Did this iteration trigger a warning?

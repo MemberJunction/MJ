@@ -26,6 +26,24 @@
         placeholder="Search agents...">
     </div>
     
+    <!-- Category Filter (TreeDropdown) -->
+    <div class="filter-group">
+      <label class="filter-label">
+        <span class="fa-solid fa-folder-tree"></span>
+        Category
+      </label>
+      <mj-tree-dropdown
+        [BranchConfig]="CategoryBranchConfig"
+        [Value]="SelectedCategoryKey"
+        SelectionMode="single"
+        SelectableTypes="branch"
+        Placeholder="All Categories"
+        [Clearable]="true"
+        [EnableSearch]="true"
+        (ValueChange)="onCategoryChange($event)">
+      </mj-tree-dropdown>
+    </div>
+
     <!-- Agent Type Filter -->
     <div class="filter-group">
       <label class="filter-label">

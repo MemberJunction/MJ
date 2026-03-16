@@ -179,7 +179,10 @@ export class PromptEngine {
       };
 
       // 3. Execute with AI/Core (follows RunView pattern - doesn't throw)
+      console.log(`[PromptEngine] Calling LLM (model: ${params.model}, prompt length: ${renderedPrompt.length} chars)`);
+      const llmStartTime = Date.now();
       const chatResult: ChatResult = await this.llm.ChatCompletion(params);
+      console.log(`[PromptEngine] LLM responded in ${((Date.now() - llmStartTime) / 1000).toFixed(1)}s (success: ${chatResult.success})`);
 
       // 4. Check success (IMPORTANT: like RunView, check .success property)
       if (!chatResult.success) {
@@ -203,6 +206,8 @@ export class PromptEngine {
             success: false,
             errorMessage: `Failed to parse JSON response\n\nRaw content:\n${content}`,
             tokensUsed: usage?.totalTokens || 0,
+            inputTokens: usage?.promptTokens || 0,
+            outputTokens: usage?.completionTokens || 0,
             promptInput: renderedPrompt,
             promptOutput: content
           };
@@ -216,6 +221,8 @@ export class PromptEngine {
         success: true,
         result: parsedResult,
         tokensUsed: usage?.totalTokens || 0,
+        inputTokens: usage?.promptTokens || 0,
+        outputTokens: usage?.completionTokens || 0,
         cost: usage?.cost,
         promptInput: renderedPrompt,
         promptOutput: content
@@ -280,7 +287,9 @@ export class PromptEngine {
           return {
             success: false,
             errorMessage: chatResult.errorMessage,
-            tokensUsed: 0
+            tokensUsed: 0,
+            inputTokens: 0,
+            outputTokens: 0
           };
         }
 
@@ -293,13 +302,17 @@ export class PromptEngine {
           return {
             success: false,
             errorMessage: `JSON parse error`,
-            tokensUsed: usage?.totalTokens || 0
+            tokensUsed: usage?.totalTokens || 0,
+            inputTokens: usage?.promptTokens || 0,
+            outputTokens: usage?.completionTokens || 0
           };
         }
         return {
           success: true,
           result: parsed,
           tokensUsed: usage?.totalTokens || 0,
+          inputTokens: usage?.promptTokens || 0,
+          outputTokens: usage?.completionTokens || 0,
           cost: usage?.cost
         };
       });

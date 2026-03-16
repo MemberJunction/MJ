@@ -176,6 +176,7 @@
 }
 
 .job-card {
+    position: relative;
     background: var(--mj-bg-surface-card);
     border-radius: 16px;
     border: 1px solid var(--mj-border-default);
@@ -403,14 +404,14 @@
 
 .slideout-resize-handle {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 5px;
-    height: 100%;
-    cursor: col-resize;
-    background: transparent;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
     z-index: 10;
-    transition: background 0.2s;
+    border-radius: 16px;
+    backdrop-filter: blur(4px);
 }
 
 .slideout-resize-handle:hover {
@@ -419,6 +420,99 @@
 
 .slideout-resize-handle:active {
     background: color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
+}
+
+/* ── Delete Confirmation Overlay ─────────────────────────── */
+.delete-confirm-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.95);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    border-radius: 16px;
+    backdrop-filter: blur(4px);
+}
+
+.delete-confirm-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+}
+
+.delete-warn-icon {
+    font-size: 1.5rem;
+    color: var(--mj-status-error);
+}
+
+.delete-confirm-text {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.delete-confirm-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.delete-confirm-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    background: var(--mj-status-error);
+    color: var(--mj-text-inverse);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: background 0.2s;
+}
+
+.delete-confirm-btn:hover:not(:disabled) {
+    background: var(--mj-status-error-text);
+}
+
+.delete-confirm-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.delete-cancel-btn {
+    padding: 6px 16px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.delete-cancel-btn:hover {
+    background: var(--mj-bg-surface-sunken);
+    border-color: var(--mj-border-strong);
+}
+
+/* ── Danger Action Button ───────────────────────────────── */
+.action-btn-danger {
+    margin-left: auto;
+    color: var(--mj-status-error);
+    border-color: var(--mj-status-error-border);
+}
+
+.action-btn-danger:hover {
+    background: var(--mj-status-error-bg);
+    border-color: var(--mj-status-error);
+    color: var(--mj-status-error-text);
 }
 
 /* ── Responsive ──────────────────────────────────────────── */
@@ -442,11 +536,5 @@
     .search-box {
         min-width: auto;
         flex: 1;
-    }
-    .slideout-panel {
-        width: 100% !important;
-    }
-    .slideout-resize-handle {
-        display: none;
     }
 }

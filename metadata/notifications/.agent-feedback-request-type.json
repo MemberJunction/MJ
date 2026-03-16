@@ -1,0 +1,22 @@
+{
+  "entityName": "MJ: User Notification Types",
+  "fields": {
+    "Name": "Agent Feedback Request",
+    "Description": "Notifications sent when an AI agent needs human input, approval, or a decision before it can continue execution",
+    "DefaultInApp": true,
+    "DefaultEmail": false,
+    "DefaultSMS": false,
+    "AllowUserPreference": true,
+    "Icon": "fa-solid fa-comment-dots",
+    "Color": "#FF9800",
+    "AutoExpireDays": 30,
+    "Priority": 5
+  },
+  "primaryKey": {
+    "ID": "972C9F5F-4A9F-4D80-BA5E-6015145F2426"
+  },
+  "sync": {
+    "lastModified": "2026-03-13T19:10:47.857Z",
+    "checksum": "c2b783ef94c4b18f1e24c634110c456b693cf11b2ecf4848aa201b35006cc164"
+  }
+}

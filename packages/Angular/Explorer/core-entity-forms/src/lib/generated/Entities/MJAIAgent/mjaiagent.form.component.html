@@ -135,9 +135,18 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AgentTypePromptParams"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CategoryID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -255,7 +264,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadDownstreamPaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -263,7 +272,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadUpstreamPaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -271,7 +280,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadSelfReadPaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -279,7 +288,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadSelfWritePaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -295,7 +304,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="FinalPayloadValidation"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -319,7 +328,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="StartingPayloadValidation"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -518,7 +527,7 @@
             [Record]="record"
             [ShowLabel]="false"
             FieldName="ScopeConfig"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -570,7 +579,7 @@
             [Record]="record"
             [ShowLabel]="false"
             FieldName="RerankerConfiguration"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

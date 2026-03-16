@@ -9,6 +9,7 @@ import { LayoutModule } from '@progress/kendo-angular-layout';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
 import { NgTreesModule } from '@memberjunction/ng-trees';
+import { SchedulingModule } from '@memberjunction/ng-scheduling';
 
 import { OverviewComponent } from './components/overview/overview.component';
 import { PipelinesComponent } from './components/pipelines/pipelines.component';
@@ -43,7 +44,8 @@ import { IntegrationDataService } from './services/integration-data.service';
     LayoutModule,
     SharedGenericModule,
     CredentialsModule,
-    NgTreesModule
+    NgTreesModule,
+    SchedulingModule
   ],
   providers: [
     IntegrationDataService

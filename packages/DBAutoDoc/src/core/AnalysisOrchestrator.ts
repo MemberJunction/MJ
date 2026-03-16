@@ -18,6 +18,7 @@ import { PromptEngine } from '../prompts/PromptEngine.js';
 import { AnalysisEngine } from './AnalysisEngine.js';
 import { SQLGenerator } from '../generators/SQLGenerator.js';
 import { MarkdownGenerator } from '../generators/MarkdownGenerator.js';
+import { AdditionalSchemaInfoGenerator } from '../generators/AdditionalSchemaInfoGenerator.js';
 import { SampleQueryGenerator } from '../generators/SampleQueryGenerator.js';
 import { DBAutoDocConfig } from '../types/config.js';
 import { DatabaseDocumentation, AnalysisRun } from '../types/state.js';
@@ -28,6 +29,10 @@ export interface AnalysisOptions {
   config: DBAutoDocConfig;
   resumeFromState?: string; // Path to existing state file to resume from
   onProgress?: (message: string, data?: any) => void;
+  /** Only re-analyze tables with confidence below this threshold (used with resume) */
+  reanalyzeBelowConfidence?: number;
+  /** Override max iterations from config for this run */
+  maxIterations?: number;
 }
 
 export interface OrchestratorResult {
@@ -42,11 +47,15 @@ export class AnalysisOrchestrator {
   private config: DBAutoDocConfig;
   private resumeFromState?: string;
   private onProgress: (message: string, data?: any) => void;
+  private reanalyzeBelowConfidence?: number;
+  private maxIterationsOverride?: number;
 
   constructor(options: AnalysisOptions) {
     this.config = options.config;
     this.resumeFromState = options.resumeFromState;
     this.onProgress = options.onProgress || (() => {});
+    this.reanalyzeBelowConfidence = options.reanalyzeBelowConfidence;
+    this.maxIterationsOverride = options.maxIterations;
   }
 
   /**
@@ -77,6 +86,23 @@ export class AnalysisOrchestrator {
           this.config.database.server
         );
       }
+
+      // Apply seedContext from config to state
+      if (this.config.seedContext) {
+        state.seedContext = this.config.seedContext;
+      }
+
+      // Apply ground truth descriptions to state (these are authoritative)
+      this.applyGroundTruth(state, stateManager);
+
+      // If resuming with reanalyzeBelowConfidence, mark low-confidence tables for re-analysis
+      if (this.resumeFromState && this.reanalyzeBelowConfidence != null) {
+        this.markLowConfidenceForReanalysis(state, this.reanalyzeBelowConfidence);
+      }
+
+      // Save initial state immediately so there's always a file on disk
+      stateManager.updateSummary(state);
+      await stateManager.save(state);
 
       // Connect to database
       this.onProgress('Connecting to database');
@@ -117,6 +143,14 @@ export class AnalysisOrchestrator {
           tables: schemas.reduce((sum, s) => sum + s.tables.length, 0)
         });
 
+        // Load existing descriptions from database metadata (MS_Description, etc.)
+        this.onProgress('Loading existing database descriptions');
+        await this.loadExistingDescriptions(state, db.getDriver(), stateManager);
+
+        // Save state after introspection + existing descriptions
+        stateManager.updateSummary(state);
+        await stateManager.save(state);
+
         // Analyze data
         this.onProgress('Analyzing table data');
         const sampler = new DataSampler(driver, this.config.analysis);
@@ -139,62 +173,95 @@ export class AnalysisOrchestrator {
           errors: samplingErrors
         });
 
-        // Relationship Discovery Phase (if enabled)
-        if (this.config.analysis.relationshipDiscovery?.enabled) {
-          this.onProgress('Checking if relationship discovery should run');
+        // Save state after sampling
+        stateManager.updateSummary(state);
+        await stateManager.save(state);
 
-          const triggerAnalysis = DiscoveryTriggerAnalyzer.analyzeSchemas(state.schemas);
+      }
 
-          if (triggerAnalysis.shouldRun) {
+      // Relationship Discovery Phase (if enabled)
+      // Runs on both fresh and resumed runs; resumes from partial progress if interrupted
+      const discoveryComplete = state.phases?.keyDetection?.completedAt != null;
+
+      if (this.config.analysis.relationshipDiscovery?.enabled && !discoveryComplete) {
+        this.onProgress('Checking if relationship discovery should run');
+        const driver = db.getDriver();
+
+        const triggerAnalysis = DiscoveryTriggerAnalyzer.analyzeSchemas(state.schemas);
+
+        if (triggerAnalysis.shouldRun) {
+          const isResume = state.phases?.keyDetection?.progress != null;
+          if (isResume) {
+            this.onProgress('Resuming incomplete relationship discovery', {
+              pkTablesAlreadyDone: state.phases.keyDetection!.progress!.pkTablesAnalyzed?.length || 0,
+              fkTablesAlreadyDone: state.phases.keyDetection!.progress!.fkTablesAnalyzed?.length || 0,
+              existingPKs: state.phases.keyDetection!.discovered.primaryKeys.length,
+              existingFKs: state.phases.keyDetection!.discovered.foreignKeys.length
+            });
+          } else {
             this.onProgress('Relationship discovery triggered', {
               reason: triggerAnalysis.reason,
               tablesWithoutPK: triggerAnalysis.details.tablesWithoutPK,
               actualFKs: triggerAnalysis.details.totalFKs,
               expectedMinFKs: triggerAnalysis.details.expectedMinFKs
             });
-
-            const discoveryEngine = new DiscoveryEngine({
-              driver,
-              config: this.config.analysis.relationshipDiscovery,
-              aiConfig: this.config.ai,
-              schemas: state.schemas,
-              onProgress: this.onProgress
-            });
-
-            // Calculate token budget for discovery
-            const totalTokenBudget = this.config.analysis.guardrails?.maxTokensPerRun;
-            const discoveryRatio = this.config.analysis.relationshipDiscovery.tokenBudget?.ratioOfTotal || 0.25;
-            const discoveryTokenBudget = totalTokenBudget
-              ? Math.floor(totalTokenBudget * discoveryRatio)
-              : this.config.analysis.relationshipDiscovery.tokenBudget?.maxTokens || 50000;
-
-            const discoveryResult = await discoveryEngine.discover(discoveryTokenBudget, triggerAnalysis);
-
-            // Save to new phases structure
-            state.phases.keyDetection = discoveryResult.phase;
-
-            // Apply discovered relationships to schema
-            discoveryEngine.applyDiscoveriesToState(state, discoveryResult.phase);
-
-            // Merge column statistics into schema columns
-            discoveryResult.statsCache.mergeIntoSchemas(state.schemas);
-
-            this.onProgress('Relationship discovery complete', {
-              primaryKeysDiscovered: discoveryResult.phase.discovered.primaryKeys.length,
-              foreignKeysDiscovered: discoveryResult.phase.discovered.foreignKeys.length,
-              tokensUsed: discoveryResult.phase.tokenBudget.used,
-              guardrailsReached: discoveryResult.guardrailsReached,
-              totalSchemas: state.schemas.length
-            });
-
-            // Save state with discovery results and stats cache
-            await stateManager.save(state);
-          } else {
-            this.onProgress('Relationship discovery skipped', {
-              reason: triggerAnalysis.reason
-            });
           }
+
+          const discoveryEngine = new DiscoveryEngine({
+            driver,
+            config: this.config.analysis.relationshipDiscovery,
+            aiConfig: this.config.ai,
+            schemas: state.schemas,
+            onProgress: this.onProgress,
+            onCheckpoint: async (phase) => {
+              state.phases.keyDetection = phase;
+              discoveryEngine.applyDiscoveriesToState(state, phase);
+              stateManager.updateSummary(state);
+              await stateManager.save(state);
+            }
+          });
+
+          // Calculate token budget for discovery
+          const totalTokenBudget = this.config.analysis.guardrails?.maxTokensPerRun;
+          const discoveryRatio = this.config.analysis.relationshipDiscovery.tokenBudget?.ratioOfTotal || 0.25;
+          const discoveryTokenBudget = totalTokenBudget
+            ? Math.floor(totalTokenBudget * discoveryRatio)
+            : this.config.analysis.relationshipDiscovery.tokenBudget?.maxTokens || 50000;
+
+          // Pass existing phase for resume, or let discover() create a new one
+          const discoveryResult = await discoveryEngine.discover(
+            discoveryTokenBudget,
+            triggerAnalysis,
+            isResume ? state.phases.keyDetection : undefined
+          );
+
+          // Save to new phases structure
+          state.phases.keyDetection = discoveryResult.phase;
+
+          // Apply discovered relationships to schema
+          discoveryEngine.applyDiscoveriesToState(state, discoveryResult.phase);
+
+          // Merge column statistics into schema columns
+          discoveryResult.statsCache.mergeIntoSchemas(state.schemas);
+
+          this.onProgress('Relationship discovery complete', {
+            primaryKeysDiscovered: discoveryResult.phase.discovered.primaryKeys.length,
+            foreignKeysDiscovered: discoveryResult.phase.discovered.foreignKeys.length,
+            tokensUsed: discoveryResult.phase.tokenBudget.used,
+            guardrailsReached: discoveryResult.guardrailsReached,
+            totalSchemas: state.schemas.length
+          });
+
+          // Save state with discovery results and stats cache
+          stateManager.updateSummary(state);
+          await stateManager.save(state);
+        } else {
+          this.onProgress('Relationship discovery skipped', {
+            reason: triggerAnalysis.reason
+          });
         }
+      } else if (discoveryComplete) {
+        this.onProgress('Relationship discovery: using completed results from prior run');
       }
 
       // Topological sort
@@ -209,7 +276,7 @@ export class AnalysisOrchestrator {
       await promptEngine.initialize();
 
       const iterationTracker = new IterationTracker();
-      const analysisEngine = new AnalysisEngine(this.config, promptEngine, stateManager, iterationTracker);
+      const analysisEngine = new AnalysisEngine(this.config, promptEngine, stateManager, iterationTracker, this.onProgress);
 
       // Create analysis run
       const run = stateManager.createAnalysisRun(
@@ -231,8 +298,10 @@ export class AnalysisOrchestrator {
       analysisEngine.startAnalysis(run);
 
       // Main iteration loop
+      const maxIterations = this.maxIterationsOverride ?? this.config.analysis.convergence.maxIterations;
       let converged = false;
-      while (!converged && run.iterationsPerformed < this.config.analysis.convergence.maxIterations) {
+      let guardrailExceeded = false;
+      while (!converged && !guardrailExceeded && run.iterationsPerformed < maxIterations) {
         iterationTracker.incrementIteration(state, run);
         this.onProgress('Starting iteration', { iteration: run.iterationsPerformed });
 
@@ -240,7 +309,13 @@ export class AnalysisOrchestrator {
         for (let levelNum = 0; levelNum < levels.length; levelNum++) {
           this.onProgress('Processing level', { level: levelNum, tables: levels[levelNum].length });
 
-          const triggers = await analysisEngine.processLevel(state, run, levelNum, levels[levelNum]);
+          const levelResult = await analysisEngine.processLevel(state, run, levelNum, levels[levelNum]);
+
+          if (levelResult.guardrailExceeded) {
+            guardrailExceeded = true;
+            this.onProgress('Guardrail exceeded — stopping iteration loop');
+            break;
+          }
 
           // Dependency-level sanity check
           if (this.config.analysis.sanityChecks.dependencyLevel && levels[levelNum].length > 0) {
@@ -248,14 +323,16 @@ export class AnalysisOrchestrator {
           }
 
           // Backpropagation
-          if (triggers.length > 0 && this.config.analysis.backpropagation.enabled) {
-            await analysisEngine.executeBackpropagation(state, run, triggers);
+          if (levelResult.triggers.length > 0 && this.config.analysis.backpropagation.enabled) {
+            await analysisEngine.executeBackpropagation(state, run, levelResult.triggers);
           }
 
           // Save state after each level
           stateManager.updateSummary(state);
           await stateManager.save(state);
         }
+
+        if (guardrailExceeded) break;
 
         // Check convergence
         converged = analysisEngine.checkConvergence(state, run);
@@ -279,7 +356,10 @@ export class AnalysisOrchestrator {
 
       // Complete run
       if (!converged) {
-        iterationTracker.completeRun(run, false, 'Max iterations reached');
+        const reason = guardrailExceeded
+          ? 'Guardrail limit exceeded (duration/tokens/cost)'
+          : 'Max iterations reached';
+        iterationTracker.completeRun(run, false, reason);
       }
 
       // Sample Query Generation (if enabled)
@@ -305,6 +385,12 @@ export class AnalysisOrchestrator {
       const markdown = mdGen.generate(state);
       const mdPath = path.join(runFolder, 'summary.md');
       await fs.writeFile(mdPath, markdown, 'utf-8');
+
+      // Generate additionalSchemaInfo.json for CodeGen soft FK/PK support
+      const schemaInfoGen = new AdditionalSchemaInfoGenerator();
+      const schemaInfo = schemaInfoGen.generate(state, {});
+      const schemaInfoPath = path.join(runFolder, 'additionalSchemaInfo.json');
+      await fs.writeFile(schemaInfoPath, schemaInfo, 'utf-8');
 
       // Close database
       await db.close();
@@ -374,6 +460,174 @@ export class AnalysisOrchestrator {
   }
 
   /**
+   * Load existing descriptions from database metadata (e.g., MS_Description in SQL Server)
+   * and use them as initial descriptions for tables and columns.
+   */
+  private async loadExistingDescriptions(
+    state: DatabaseDocumentation,
+    driver: import('../drivers/BaseAutoDocDriver.js').BaseAutoDocDriver,
+    stateManager: StateManager
+  ): Promise<void> {
+    let loaded = 0;
+
+    for (const schema of state.schemas) {
+      for (const table of schema.tables) {
+        try {
+          const descriptions = await driver.getExistingDescriptions(schema.name, table.name);
+
+          for (const desc of descriptions) {
+            if (!desc.description || desc.description.trim().length === 0) continue;
+
+            if (desc.target === 'table') {
+              // Only apply if no description exists yet
+              if (!table.description) {
+                stateManager.updateTableDescription(
+                  table,
+                  desc.description,
+                  'Loaded from existing database metadata',
+                  0.5, // Medium confidence since we don't know the quality
+                  'existing_db',
+                  'existing_db_description'
+                );
+                loaded++;
+              }
+            } else if (desc.target === 'column' && desc.targetName) {
+              const column = table.columns.find(c => c.name === desc.targetName);
+              if (column && !column.description) {
+                stateManager.updateColumnDescription(
+                  column,
+                  desc.description,
+                  'Loaded from existing database metadata',
+                  'existing_db'
+                );
+                loaded++;
+              }
+            }
+          }
+        } catch (error) {
+          // Non-fatal — continue with other tables
+          console.warn(`Warning: Could not load existing descriptions for ${schema.name}.${table.name}: ${(error as Error).message}`);
+        }
+      }
+    }
+
+    if (loaded > 0) {
+      this.onProgress('Loaded existing descriptions', { descriptionsLoaded: loaded });
+    }
+  }
+
+  /**
+   * Apply ground truth descriptions from config to state.
+   * Ground truth entries are stored as description iterations with isGroundTruth=true
+   * and the table/column is marked as userApproved so the analysis engine skips it.
+   */
+  private applyGroundTruth(state: DatabaseDocumentation, stateManager: StateManager): void {
+    const gt = this.config.groundTruth;
+    if (!gt) return;
+
+    let applied = 0;
+
+    // Apply schema-level ground truth
+    if (gt.schemas) {
+      for (const [schemaName, schemaGT] of Object.entries(gt.schemas)) {
+        const schema = state.schemas.find(s => s.name === schemaName);
+        if (schema && schemaGT.description) {
+          schema.description = schemaGT.description;
+          schema.descriptionIterations.push({
+            description: schemaGT.description,
+            reasoning: 'User-provided ground truth',
+            generatedAt: new Date().toISOString(),
+            modelUsed: 'ground_truth',
+            confidence: 1.0,
+            triggeredBy: 'ground_truth',
+            isGroundTruth: true
+          });
+          applied++;
+        }
+      }
+    }
+
+    // Apply table-level and column-level ground truth
+    if (gt.tables) {
+      for (const [tableKey, tableGT] of Object.entries(gt.tables)) {
+        const [schemaName, tableName] = tableKey.split('.');
+        const table = stateManager.findTable(state, schemaName, tableName);
+        if (!table) continue;
+
+        if (tableGT.description) {
+          table.description = tableGT.description;
+          table.userDescription = tableGT.description;
+          table.userApproved = true;
+          table.descriptionIterations.push({
+            description: tableGT.description,
+            reasoning: tableGT.notes || 'User-provided ground truth',
+            generatedAt: new Date().toISOString(),
+            modelUsed: 'ground_truth',
+            confidence: 1.0,
+            triggeredBy: 'ground_truth',
+            isGroundTruth: true
+          });
+          applied++;
+        }
+
+        // Apply column-level ground truth
+        if (tableGT.columns) {
+          for (const [colName, colGT] of Object.entries(tableGT.columns)) {
+            const column = table.columns.find(c => c.name === colName);
+            if (column && colGT.description) {
+              column.description = colGT.description;
+              column.userDescription = colGT.description;
+              column.userApproved = true;
+              column.descriptionIterations.push({
+                description: colGT.description,
+                reasoning: colGT.notes || 'User-provided ground truth',
+                generatedAt: new Date().toISOString(),
+                modelUsed: 'ground_truth',
+                confidence: 1.0,
+                triggeredBy: 'ground_truth',
+                isGroundTruth: true
+              });
+              applied++;
+            }
+          }
+        }
+      }
+    }
+
+    if (applied > 0) {
+      this.onProgress('Ground truth applied', { descriptionsApplied: applied });
+    }
+  }
+
+  /**
+   * Mark low-confidence tables for re-analysis by clearing their userApproved flag.
+   * Used when resuming with --reanalyze-below-confidence.
+   */
+  private markLowConfidenceForReanalysis(state: DatabaseDocumentation, threshold: number): void {
+    let marked = 0;
+    for (const schema of state.schemas) {
+      for (const table of schema.tables) {
+        // Don't touch ground truth tables
+        const hasGroundTruth = table.descriptionIterations.some(i => i.isGroundTruth);
+        if (hasGroundTruth) continue;
+
+        if (table.descriptionIterations.length > 0) {
+          const latest = table.descriptionIterations[table.descriptionIterations.length - 1];
+          const confidence = latest.confidence ?? 0;
+          if (confidence < threshold) {
+            table.userApproved = false;
+            marked++;
+          }
+        }
+      }
+    }
+
+    if (marked > 0) {
+      this.onProgress('Marked tables for re-analysis', { tablesMarked: marked, belowConfidence: threshold });
+    }
+  }
+
+  /**
    * Generate sample queries for AI agents (like Skip)
    */
   private async generateSampleQueries(
@@ -390,7 +644,7 @@ export class AnalysisOrchestrator {
     const effortLevel = this.config.ai.effortLevel || 75;
     const maxTokens = this.config.ai.maxTokens || 16000;
 
-    const generator = new SampleQueryGenerator(config, promptEngine, driver, model, stateManager, effortLevel, maxTokens);
+    const generator = new SampleQueryGenerator(config, promptEngine, driver, model, stateManager, effortLevel, maxTokens, this.config.ai.pricing);
 
     try {
       const result = await generator.generateQueries(state.schemas);
@@ -419,6 +673,8 @@ export class AnalysisOrchestrator {
           status: 'failed',
           queriesGenerated: 0,
           tokensUsed: 0,
+          inputTokens: 0,
+          outputTokens: 0,
           estimatedCost: 0,
           errorMessage: (error as Error).message
         };

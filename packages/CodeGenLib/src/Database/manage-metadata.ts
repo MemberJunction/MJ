@@ -8,7 +8,7 @@ import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { SQLParser } from "@memberjunction/core-entities-server";
-import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
+import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
 import * as fs from 'fs';
@@ -385,7 +385,7 @@ export class ManageMetadataBase {
       }
 
       // Schema-as-key format: iterate over keys, skip metadata and special section keys
-      const metadataKeys = new Set(['$schema', 'description', 'version', 'VirtualEntities', 'ISARelationships', 'Entities', 'Tables']);
+      const metadataKeys = new Set(['$schema', 'description', 'version', 'VirtualEntities', 'ISARelationships', 'Entities', 'Tables', 'Schemas']);
       for (const key of Object.keys(config)) {
          if (metadataKeys.has(key)) continue;
 
@@ -728,6 +728,11 @@ export class ManageMetadataBase {
          bSuccess = false;
       }
       logStatus(`    > Loaded SchemaInfo records in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
+
+      // Apply schema prefixes from additionalSchemaInfo.json (if configured)
+      // This enriches SchemaInfo records with entity name prefix/suffix rules
+      // derived from DBAutoDoc analysis, before new entity creation uses them.
+      this.applySchemaPrefixesFromConfig();
 
       start = new Date();
       logStatus('   Creating new entities...');
@@ -2333,7 +2338,15 @@ export class ManageMetadataBase {
          if (!currentFieldData) {
             // field doesn't exist, let's create it
             const sql = this.dbProvider.addColumnSQL(entity.SchemaName, entity.BaseTable, fieldName, this.timestampType, allowNull, allowNull ? undefined : this.utcNow());
-            await this.LogSQLAndExecute(pool, sql, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`);
+            // addColumnSQL may return multiple statements separated by ;\n (e.g. the Azure-safe
+            // DATETIMEOFFSET NOT NULL path: ADD NULL → UPDATE → ALTER NOT NULL → ADD CONSTRAINT).
+            // SQL Server compiles an entire batch before executing, so later statements that
+            // reference the newly-added column fail with "Invalid column name". Execute each
+            // statement in its own batch to avoid this.
+            const statements = sql.split(';\n').filter(s => s.trim().length > 0);
+            for (const stmt of statements) {
+               await this.LogSQLAndExecute(pool, stmt, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`);
+            }
          }
          else {
             // field does exist, let's first check the data type/nullability
@@ -2478,7 +2491,8 @@ export class ManageMetadataBase {
          const fields = fieldsResult.recordset;
          if (fields && fields.length > 0)
             for (const field of fields) {
-               const sDisplayName = stripTrailingChars(convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
+               const namingOptions = configInfo.entityNaming?.normalizeFieldNames !== false ? this.getEntityNamingOptions() : undefined;
+               const sDisplayName = stripTrailingChars(createDisplayName(field.Name, namingOptions), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
                   const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()}, DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
                   await this.LogSQLAndExecute(pool, sSQL, `SQL text to update display name for field ${field.Name}`);
@@ -2556,7 +2570,7 @@ export class ManageMetadataBase {
                fieldDisplayName = "Deleted At";
                break;
             default:
-               fieldDisplayName = convertCamelCaseToHaveSpaces(n.FieldName).trim();
+               fieldDisplayName = createDisplayName(n.FieldName).trim();
                break;
       }
       const parsedDefaultValue = this.parseDefaultValue(n.DefaultValue);
@@ -2815,6 +2829,59 @@ export class ManageMetadataBase {
       catch (e) {
          logError(e as string);
          return false;
+      }
+   }
+
+   /**
+    * Applies schema-level entity name prefix/suffix rules from additionalSchemaInfo.json.
+    * The file may contain a top-level "Schemas" array with entries like:
+    * ```json
+    * { "name": "CRM", "entityNamePrefix": "CRM: ", "entityNameSuffix": "" }
+    * ```
+    * These are merged into the cached SchemaInfo records so that `getNewEntityNameRule()`
+    * can resolve them during entity creation. Config-file rules (mj.config.cjs) still
+    * take priority over these — this just provides a fallback from DBAutoDoc output.
+    */
+   protected applySchemaPrefixesFromConfig(): void {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return;
+
+      const schemas = config.Schemas;
+      if (!Array.isArray(schemas) || schemas.length === 0) return;
+
+      let applied = 0;
+      for (const schemaDef of schemas) {
+         const schemaName = schemaDef.name as string;
+         const prefix = (schemaDef.entityNamePrefix as string) ?? '';
+         const suffix = (schemaDef.entityNameSuffix as string) ?? '';
+
+         if (!schemaName || (prefix === '' && suffix === '')) continue;
+
+         // Check if this schema already has a prefix/suffix in the cached records
+         const existing = ManageMetadataBase._schemaInfoRecords.find(
+            s => s.SchemaName.trim().toLowerCase() === schemaName.trim().toLowerCase()
+         );
+
+         if (existing) {
+            // Only apply if the existing record doesn't already have prefix/suffix set
+            if (existing.EntityNamePrefix == null && existing.EntityNameSuffix == null) {
+               existing.EntityNamePrefix = prefix;
+               existing.EntityNameSuffix = suffix;
+               applied++;
+            }
+         } else {
+            // Schema not in cache yet — add it
+            ManageMetadataBase._schemaInfoRecords.push({
+               SchemaName: schemaName,
+               EntityNamePrefix: prefix,
+               EntityNameSuffix: suffix,
+            });
+            applied++;
+         }
+      }
+
+      if (applied > 0) {
+         logStatus(`   > Applied ${applied} schema name prefix/suffix rules from additionalSchemaInfo.json`);
       }
    }
 
@@ -3356,9 +3423,21 @@ export class ManageMetadataBase {
    }
    
    protected simpleNewEntityName(schemaName: string, tableName: string): string {
-      const convertedTableName = convertCamelCaseToHaveSpaces(tableName);
+      const convertedTableName = createDisplayName(tableName, this.getEntityNamingOptions());
       const pluralName = generatePluralName(convertedTableName, {capitalizeFirstLetterOnly: true});
       return this.markupEntityName(schemaName, pluralName);
+   }
+
+   /**
+    * Returns EntityNamingOptions derived from the entityNaming config section.
+    * These control ALL CAPS normalization and compound word splitting behavior.
+    */
+   protected getEntityNamingOptions(): import("@memberjunction/global").EntityNamingOptions {
+      return {
+         normalizeAllCaps: configInfo.entityNaming?.normalizeAllCaps ?? true,
+         splitCompoundWords: configInfo.entityNaming?.splitCompoundWords ?? true,
+         additionalDomainWords: configInfo.entityNaming?.additionalDomainWords,
+      };
    }
 
    /**

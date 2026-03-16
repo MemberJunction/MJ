@@ -25,6 +25,7 @@ function createSummary(overrides: Partial<IntegrationSummary> = {}): Integration
     TotalRecordsSyncedToday: 0,
     TotalErrors: 0,
     DurationMs: null,
+    Icon: null,
     ...overrides
   };
 }

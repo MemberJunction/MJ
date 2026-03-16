@@ -1,0 +1,60 @@
+@if (IsLoading) {
+    <div class="summary-loading">
+        <mj-loading size="small"></mj-loading>
+    </div>
+} @else if (Job) {
+    <div class="summary-card">
+        <div class="summary-header">
+            <div class="summary-name">
+                <i class="fa-solid fa-calendar-check"></i>
+                {{ Job.Name }}
+            </div>
+            <span class="status-chip" [class]="StatusClass">{{ Job.Status }}</span>
+        </div>
+
+        <div class="summary-meta">
+            <div class="meta-item">
+                <i class="fa-regular fa-clock"></i>
+                <span>{{ Job.CronExpression }}</span>
+            </div>
+            @if (Job.Timezone && Job.Timezone !== 'UTC') {
+                <div class="meta-item">
+                    <i class="fa-solid fa-globe"></i>
+                    <span>{{ Job.Timezone }}</span>
+                </div>
+            }
+        </div>
+
+        <div class="summary-stats">
+            <div class="stat">
+                <span class="stat-num">{{ TotalRuns }}</span>
+                <span class="stat-lbl">Runs</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num success">{{ SuccessRuns }}</span>
+                <span class="stat-lbl">OK</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num error">{{ FailedRuns }}</span>
+                <span class="stat-lbl">Failed</span>
+            </div>
+            <div class="stat">
+                <span class="stat-num">{{ SuccessRate }}</span>
+                <span class="stat-lbl">Rate</span>
+            </div>
+        </div>
+
+        @if (ShowEditButton) {
+            <div class="summary-actions">
+                <button class="edit-btn" (click)="OnEditClick()">
+                    <i class="fa-solid fa-pen-to-square"></i> Edit Schedule
+                </button>
+            </div>
+        }
+    </div>
+} @else {
+    <div class="summary-empty">
+        <i class="fa-regular fa-calendar-xmark"></i>
+        <span>No schedule configured</span>
+    </div>
+}

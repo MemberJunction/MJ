@@ -16,6 +16,7 @@ import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJS
 import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
+import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
@@ -55,7 +56,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   @Input() conversation: MJConversationEntity | null = null;
   @Input() threadId: string | null = null;
-  @Input() isNewConversation: boolean = false;
+
+  private _isNewConversation: boolean = false;
+  @Input()
+  set isNewConversation(value: boolean) {
+    this._isNewConversation = value;
+    if (value) {
+      this.focusEmptyStateInput();
+    }
+  }
+  get isNewConversation(): boolean {
+    return this._isNewConversation;
+  }
 
   // Using getter/setter to ensure correct type handling
   private _pendingMessage: string | null = null;
@@ -112,6 +124,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
+  @ViewChild(ConversationEmptyStateComponent) private emptyStateComponent?: ConversationEmptyStateComponent;
 
   public messages: MJConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
@@ -507,6 +520,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    */
   public getCachedInputs(): Array<{conversationId: string; conversationName: string | null}> {
     return Array.from(this.messageInputMetadataCache.values());
+  }
+
+  /**
+   * Focus the message input inside the empty state component.
+   * Uses a delay to allow Angular to render the empty state if it's being created.
+   */
+  private focusEmptyStateInput(): void {
+    setTimeout(() => {
+      if (this.emptyStateComponent) {
+        this.emptyStateComponent.FocusInput();
+      }
+    }, 150);
   }
 
   /**

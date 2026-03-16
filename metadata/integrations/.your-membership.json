@@ -8,7 +8,8 @@
       "NavigationBaseURL": null,
       "BatchMaxRequestCount": 100,
       "BatchRequestWaitTime": 250,
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=YourMembership API"
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=YourMembership API",
+      "Icon": "fa-solid fa-id-card"
     },
     "relatedEntities": {
       "MJ: Integration Objects": [
@@ -10249,8 +10250,8 @@
       "ID": "B68743BB-0370-4E07-8DF1-501139403149"
     },
     "sync": {
-      "lastModified": "2026-03-05T20:56:35.387Z",
-      "checksum": "399648613effb0671aac35b7ef86c9824c1f5aa10fa49104f2128cfe515c1c78"
+      "lastModified": "2026-03-12T21:00:33.332Z",
+      "checksum": "cbf6b5db5400cf9002a9df2ff84596d70f8190d2fbfc8356037b665039b8530a"
     }
   }
 ]

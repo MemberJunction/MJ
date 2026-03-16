@@ -2,7 +2,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 import { ActionResultSimple, RunActionParams, ActionParam } from '@memberjunction/actions-base';
-import { IntegrationEngine, SyncResult, SyncTriggerType } from '@memberjunction/integration-engine';
+import { IntegrationEngine, SyncResult, SyncTriggerType, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 
 /**
  * MJ Action that triggers a sync for a CompanyIntegration.
@@ -37,10 +37,14 @@ export class RunSyncAction extends BaseAction {
             }
 
             const triggerType = this.parseTriggerType(this.getStringParam(params, 'TriggerType'));
+            const options = this.buildSyncOptions(params);
             const result = await IntegrationEngine.Instance.RunSync(
                 companyIntegrationID,
                 params.ContextUser,
-                triggerType
+                triggerType,
+                undefined, // onProgress
+                undefined, // onNotification
+                options
             );
 
             this.addOutputParams(params, result);
@@ -60,6 +64,22 @@ export class RunSyncAction extends BaseAction {
                 Message: message
             };
         }
+    }
+
+    private buildSyncOptions(params: RunActionParams): IntegrationSyncOptions {
+        const options: IntegrationSyncOptions = {};
+
+        const fullSyncRaw = this.getStringParam(params, 'FullSync');
+        if (fullSyncRaw?.toLowerCase() === 'true') {
+            options.FullSync = true;
+        }
+
+        const entityMapIDsRaw = this.getStringParam(params, 'EntityMapIDs');
+        if (entityMapIDsRaw) {
+            options.EntityMapIDs = entityMapIDsRaw.split(',').map(id => id.trim()).filter(id => id.length > 0);
+        }
+
+        return options;
     }
 
     private parseTriggerType(value: string | undefined): SyncTriggerType {

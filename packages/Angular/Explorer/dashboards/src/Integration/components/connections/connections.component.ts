@@ -129,6 +129,10 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   DetailSearchTerm = '';
   IsDetailLoading = false;
 
+  // Schedule state (for the selected integration)
+  ScheduledJobID: string | null = null;
+  ShowScheduleSlidePanel = false;
+
   // Entity map editor state (field mapping detail view)
   EditorEntityMap: EntityMapRow | null = null;
 
@@ -170,6 +174,18 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   DDLPreviewWarnings: string[] = [];
   IsGeneratingDDL = false;
   IsCreatingEntity = false;
+
+  // Auto-map schema state
+  ShowAutoMapPanel = false;
+  AutoMapSchemas: string[] = [];
+  AutoMapSelectedSchema = '';
+  AutoMapDirection: 'Pull' | 'Push' | 'Bidirectional' = 'Pull';
+  IsAutoMapping = false;
+  AutoMapResult: { EntityMapsCreated: number; FieldMapsCreated: number; Errors: string[] } | null = null;
+
+  // Sync state
+  SyncingIntegrationID: string | null = null;
+  SyncResult: { Success: boolean; Message: string } | null = null;
 
   // Delete confirmation state
   DeleteConfirmID: string | null = null;
@@ -242,8 +258,8 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     return `status-badge status-badge-${badge.toLowerCase()}`;
   }
 
-  GetIntegrationIcon(name: string): string {
-    return this.resolveIconByName(name);
+  GetIntegrationIcon(name: string, icon?: string | null): string {
+    return ResolveIntegrationIcon(name, icon);
   }
 
   GetIconBrandColor(name: string): string {
@@ -489,15 +505,35 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   // Sync action
   // ---------------------------------------------------------------------------
 
+  IsSyncing(integrationID: string): boolean {
+    return UUIDsEqual(this.SyncingIntegrationID, integrationID);
+  }
+
   async RunSync(integrationID: string): Promise<void> {
+    if (this.SyncingIntegrationID) return;
+    this.SyncingIntegrationID = integrationID;
+    this.SyncResult = null;
+    this.cdr.detectChanges();
+
     try {
       const result = await this.dataService.RunSync(integrationID);
+      this.SyncResult = result;
       if (!result.Success) {
         console.error('[IntegrationConnections] Sync failed:', result.Message);
       }
       await this.LoadData();
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.SyncResult = { Success: false, Message: `Sync error: ${message}` };
       console.error('[IntegrationConnections] RunSync error:', err);
+    } finally {
+      this.SyncingIntegrationID = null;
+      this.cdr.detectChanges();
+      // Auto-clear result after 8 seconds
+      setTimeout(() => {
+        this.SyncResult = null;
+        this.cdr.detectChanges();
+      }, 8000);
     }
   }
 
@@ -508,11 +544,15 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   async SelectIntegrationCard(summary: IntegrationSummary): Promise<void> {
     this.SelectedSummary = summary;
     this.DetailSearchTerm = '';
+    this.ScheduledJobID = null;
     this.IsDetailLoading = true;
     this.cdr.detectChanges();
 
     try {
-      const maps = await this.loadEntityMapsForIntegration(summary.Integration.ID);
+      const [maps] = await Promise.all([
+        this.loadEntityMapsForIntegration(summary.Integration.ID),
+        this.loadScheduledJobForIntegration(summary.Integration.ID)
+      ]);
       this.DetailEntityMaps = maps;
       this.DetailFilteredMaps = maps;
     } catch (err) {
@@ -528,7 +568,76 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.DetailEntityMaps = [];
     this.DetailFilteredMaps = [];
     this.DetailSearchTerm = '';
+    this.ScheduledJobID = null;
+    this.ShowScheduleSlidePanel = false;
     this.cdr.detectChanges();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Schedule management
+  // ---------------------------------------------------------------------------
+
+  OpenSchedulePanel(): void {
+    this.ShowScheduleSlidePanel = true;
+    this.cdr.detectChanges();
+  }
+
+  CloseSchedulePanel(): void {
+    this.ShowScheduleSlidePanel = false;
+    this.cdr.detectChanges();
+  }
+
+  async OnScheduleSaved(): Promise<void> {
+    this.ShowScheduleSlidePanel = false;
+    if (this.SelectedSummary) {
+      await this.loadScheduledJobForIntegration(this.SelectedSummary.Integration.ID);
+    }
+    this.cdr.detectChanges();
+  }
+
+  async OnScheduleDeleted(): Promise<void> {
+    this.ShowScheduleSlidePanel = false;
+    this.ScheduledJobID = null;
+    this.cdr.detectChanges();
+  }
+
+  get ScheduleDefaultConfiguration(): string {
+    if (!this.SelectedSummary) return '{}';
+    return JSON.stringify({
+      CompanyIntegrationID: this.SelectedSummary.Integration.ID
+    }, null, 2);
+  }
+
+  get IntegrationSyncJobTypeID(): string | null {
+    return this.integrationSyncJobTypeID;
+  }
+
+  private integrationSyncJobTypeID: string | null = null;
+
+  private async loadScheduledJobForIntegration(companyIntegrationID: string): Promise<void> {
+    try {
+      const md = new Metadata();
+      const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
+      await ci.Load(companyIntegrationID);
+      const scheduledJobID = ci.Get('ScheduledJobID') as string | null;
+      this.ScheduledJobID = scheduledJobID ?? null;
+
+      // Also look up the Integration Sync job type ID for pre-populating new schedules
+      if (!this.integrationSyncJobTypeID) {
+        const rv = new RunView();
+        const typeResult = await rv.RunView<{ ID: string }>({
+          EntityName: 'MJ: Scheduled Job Types',
+          ExtraFilter: `Name='Integration Sync'`,
+          Fields: ['ID'],
+          ResultType: 'simple'
+        });
+        if (typeResult.Success && typeResult.Results.length > 0) {
+          this.integrationSyncJobTypeID = typeResult.Results[0].ID;
+        }
+      }
+    } catch (err) {
+      console.warn('[IntegrationConnections] Failed to load schedule info:', err);
+    }
   }
 
   OnDetailSearch(event: Event): void {
@@ -1034,6 +1143,60 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   // ---------------------------------------------------------------------------
+  // Auto-Map Schema
+  // ---------------------------------------------------------------------------
+
+  ToggleAutoMapPanel(): void {
+    this.ShowAutoMapPanel = !this.ShowAutoMapPanel;
+    if (this.ShowAutoMapPanel) {
+      this.AutoMapSchemas = this.dataService.LoadSchemas();
+      this.AutoMapSelectedSchema = '';
+      this.AutoMapDirection = 'Pull';
+      this.AutoMapResult = null;
+    }
+    this.cdr.detectChanges();
+  }
+
+  CloseAutoMapPanel(): void {
+    this.ShowAutoMapPanel = false;
+    this.AutoMapResult = null;
+    this.cdr.detectChanges();
+  }
+
+  get CanAutoMap(): boolean {
+    return !!this.AutoMapSelectedSchema && !this.IsAutoMapping;
+  }
+
+  async RunAutoMap(): Promise<void> {
+    if (!this.CanAutoMap || !this.SelectedSummary) return;
+    this.IsAutoMapping = true;
+    this.AutoMapResult = null;
+    this.cdr.detectChanges();
+
+    try {
+      this.AutoMapResult = await this.dataService.AutoMapSchema(
+        this.SelectedSummary.Integration.ID,
+        this.AutoMapSelectedSchema,
+        this.AutoMapDirection
+      );
+
+      // Reload entity maps to reflect new maps
+      if (this.AutoMapResult.EntityMapsCreated > 0) {
+        const maps = await this.loadEntityMapsForIntegration(this.SelectedSummary.Integration.ID);
+        this.DetailEntityMaps = maps;
+        this.DetailFilteredMaps = this.applyDetailFilter();
+        this.EntityMapCounts = this.countMapsByIntegration(await this.loadAllEntityMaps());
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.AutoMapResult = { EntityMapsCreated: 0, FieldMapsCreated: 0, Errors: [message] };
+    } finally {
+      this.IsAutoMapping = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
 
@@ -1062,19 +1225,26 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   private async saveCompanyIntegration(): Promise<string | null> {
-    if (this.SavedIntegrationID) return this.SavedIntegrationID;
     if (!this.SelectedCompanyID || !this.SelectedIntegration) return null;
 
     const md = new Metadata();
     const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
-    ci.NewRecord();
-    ci.CompanyID = this.SelectedCompanyID;
-    ci.IntegrationID = this.SelectedIntegration.ID;
-    ci.Name = this.ConnectionName || this.SelectedIntegration.Name;
-    ci.IsActive = false;
-    if (this.SelectedCredential) {
-      ci.CredentialID = this.SelectedCredential.ID;
+
+    if (this.SavedIntegrationID) {
+      // Record already exists — reload it so we can update fields that may have changed
+      // (e.g. credential selected after initial save)
+      const loaded = await ci.Load(this.SavedIntegrationID);
+      if (!loaded) return this.SavedIntegrationID; // fallback to existing ID
     }
+    else {
+      ci.NewRecord();
+      ci.CompanyID = this.SelectedCompanyID;
+      ci.IntegrationID = this.SelectedIntegration.ID;
+      ci.IsActive = false;
+    }
+
+    ci.Name = this.ConnectionName || this.SelectedIntegration.Name;
+    ci.CredentialID = this.SelectedCredential?.ID ?? null;
 
     const saved = await ci.Save();
     if (saved) {
@@ -1105,10 +1275,6 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       counts.set(map.CompanyIntegrationID, current + 1);
     }
     return counts;
-  }
-
-  private resolveIconByName(name: string): string {
-    return ResolveIntegrationIcon(name);
   }
 
   private resolveBrandColor(name: string): string {

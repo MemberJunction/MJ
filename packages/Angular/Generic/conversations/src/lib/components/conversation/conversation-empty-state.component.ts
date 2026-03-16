@@ -1,6 +1,7 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 import { PendingAttachment } from '../mention/mention-editor.component';
+import { MessageInputComponent } from '../message/message-input.component';
 
 @Component({
   standalone: false,
@@ -12,6 +13,8 @@ export class ConversationEmptyStateComponent {
   @Input() currentUser!: UserInfo;
   @Input() disabled: boolean = false;
   @Input() showSidebarToggle: boolean = false;
+
+  @ViewChild(MessageInputComponent) private messageInput?: MessageInputComponent;
 
   @Output() messageSent = new EventEmitter<{text: string; attachments: PendingAttachment[]}>();
   @Output() sidebarToggleClicked = new EventEmitter<void>();
@@ -141,6 +144,18 @@ export class ConversationEmptyStateComponent {
   private selectRandomPrompts(count: number): Array<{icon: string; title: string; prompt: string}> {
     const shuffled = [...this.allSuggestedPrompts].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, count);
+  }
+
+  /**
+   * Focus the message input programmatically.
+   * Called by parent when the user clicks "New Conversation" while already on the empty state.
+   */
+  public FocusInput(): void {
+    setTimeout(() => {
+      if (this.messageInput) {
+        this.messageInput.inputBox?.focus();
+      }
+    }, 100);
   }
 
   onEmptyStateSubmit(event: {text: string; attachments: PendingAttachment[]}): void {

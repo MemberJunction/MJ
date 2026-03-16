@@ -25,6 +25,8 @@
     "prompts",
     "templates",
     "notifications",
+    "agent-categories",
+    "agent-request-types",
     "agent-types",
     "agents",
     "scheduled-jobs",

@@ -2,7 +2,7 @@ import { ChangeDetectorRef, Component, OnInit, OnDestroy, inject } from '@angula
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, RunView } from '@memberjunction/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData, MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJCompanyIntegrationEntity, MJScheduledJobEntity } from '@memberjunction/core-entities';
 import { IntegrationDataService, ResolveIntegrationIcon } from '../../services/integration-data.service';
 
 // ---------------------------------------------------------------------------
@@ -23,6 +23,7 @@ interface ScheduleRow {
   LastScheduledRunAt: string | null;
   IsLocked: boolean;
   LockedAt: string | null;
+  ScheduledJobID: string | null;
 }
 
 interface TimelineMarker {
@@ -104,6 +105,9 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
   private cdr = inject(ChangeDetectorRef);
   private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
+  /** JobTypeID for "Integration Sync" scheduled job type (from MJ metadata) */
+  private readonly INTEGRATION_SYNC_JOB_TYPE_ID = '4CD34733-4751-4572-B946-17DF6CB3EC90';
+
   // ---------------------------------------------------------------------------
   // Lifecycle
   // ---------------------------------------------------------------------------
@@ -152,7 +156,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
           'ID', 'Name', 'Integration', 'Company', 'IsActive',
           'ScheduleEnabled', 'ScheduleType', 'ScheduleIntervalMinutes',
           'CronExpression', 'NextScheduledRunAt', 'LastScheduledRunAt',
-          'IsLocked', 'LockedAt'
+          'IsLocked', 'LockedAt', 'ScheduledJobID'
         ],
         ResultType: 'simple'
       });
@@ -248,11 +252,20 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
       const entity = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await entity.Load(integrationID);
 
-      // Use Set() method since scheduling fields are not in the generated class yet
+      // Resolve effective values (pending change wins over stored value)
+      const scheduleEnabled = changes.ScheduleEnabled ?? (entity.Get('ScheduleEnabled') as boolean);
+      const scheduleType = (changes.ScheduleType ?? entity.Get('ScheduleType') as string) as 'Manual' | 'Interval' | 'Cron';
+      const cronExpression = changes.CronExpression ?? (entity.Get('CronExpression') as string | null);
+      const intervalMinutes = changes.ScheduleIntervalMinutes ?? (entity.Get('ScheduleIntervalMinutes') as number | null);
+
+      // Apply schedule fields to the entity
       if (changes.ScheduleEnabled !== undefined) entity.Set('ScheduleEnabled', changes.ScheduleEnabled);
       if (changes.ScheduleType !== undefined) entity.Set('ScheduleType', changes.ScheduleType);
       if (changes.ScheduleIntervalMinutes !== undefined) entity.Set('ScheduleIntervalMinutes', changes.ScheduleIntervalMinutes);
       if (changes.CronExpression !== undefined) entity.Set('CronExpression', changes.CronExpression);
+
+      // Create/update/disable the linked ScheduledJob so the scheduler actually fires
+      await this.SyncScheduledJob(entity, scheduleEnabled, scheduleType, cronExpression, intervalMinutes, integrationID);
 
       const saved = await entity.Save();
       if (saved) {
@@ -266,6 +279,109 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
     } finally {
       this.SavingID = null;
       this.cdr.detectChanges();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Scheduled job sync helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Creates, updates, or disables the ScheduledJob record linked to this integration.
+   * When enabled with a real schedule type, ensures an Active ScheduledJob exists.
+   * When disabled or set to Manual, marks the ScheduledJob as Disabled (if one exists).
+   */
+  private async SyncScheduledJob(
+    entity: MJCompanyIntegrationEntity,
+    enabled: boolean,
+    scheduleType: 'Manual' | 'Interval' | 'Cron',
+    cronExpression: string | null,
+    intervalMinutes: number | null,
+    integrationID: string
+  ): Promise<void> {
+    const effectiveCron = this.ResolveCronExpression(scheduleType, cronExpression, intervalMinutes);
+    const existingJobID = entity.Get('ScheduledJobID') as string | null;
+    const shouldBeActive = enabled && scheduleType !== 'Manual' && !!effectiveCron;
+
+    if (shouldBeActive) {
+      const jobID = await this.UpsertScheduledJob(existingJobID, entity, effectiveCron!, integrationID);
+      if (jobID !== existingJobID) {
+        entity.Set('ScheduledJobID', jobID);
+      }
+    } else if (existingJobID) {
+      await this.DisableScheduledJob(existingJobID);
+    }
+  }
+
+  /** Converts schedule type + config into a cron expression. */
+  private ResolveCronExpression(
+    scheduleType: 'Manual' | 'Interval' | 'Cron',
+    cronExpression: string | null,
+    intervalMinutes: number | null
+  ): string | null {
+    if (scheduleType === 'Cron') return cronExpression;
+    if (scheduleType === 'Interval' && intervalMinutes) return this.IntervalToCron(intervalMinutes);
+    return null;
+  }
+
+  /** Converts an interval in minutes to an equivalent cron expression. */
+  private IntervalToCron(minutes: number): string {
+    if (minutes < 60) return `*/${minutes} * * * *`;
+    const hours = minutes / 60;
+    if (Number.isInteger(hours)) return hours === 1 ? '0 * * * *' : `0 */${hours} * * *`;
+    return `*/${minutes} * * * *`;
+  }
+
+  /**
+   * Creates a new ScheduledJob or updates the existing one.
+   * Returns the ID of the job (new or existing).
+   */
+  private async UpsertScheduledJob(
+    existingJobID: string | null,
+    entity: MJCompanyIntegrationEntity,
+    cronExpression: string,
+    integrationID: string
+  ): Promise<string> {
+    const md = new Metadata();
+
+    if (existingJobID) {
+      const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
+      const loaded = await job.Load(existingJobID);
+      if (loaded) {
+        job.Set('CronExpression', cronExpression);
+        job.Set('Status', 'Active');
+        // Reset NextRunAt so the scheduler picks up the new cron immediately
+        job.Set('NextRunAt', new Date());
+        await job.Save();
+        return existingJobID;
+      }
+    }
+
+    // No existing job (or failed to load) — create a new one
+    const integrationName = (entity.Get('Name') as string) ?? (entity.Get('Integration') as string) ?? 'Integration';
+    const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
+    job.NewRecord();
+    job.Set('Name', `${integrationName} Sync`);
+    job.Set('JobTypeID', this.INTEGRATION_SYNC_JOB_TYPE_ID);
+    job.Set('CronExpression', cronExpression);
+    job.Set('Timezone', 'UTC');
+    job.Set('Status', 'Active');
+    job.Set('ConcurrencyMode', 'Skip');
+    job.Set('Configuration', JSON.stringify({ CompanyIntegrationID: integrationID }));
+    // Set NextRunAt to now so the scheduler fires it on next poll without needing a restart
+    job.Set('NextRunAt', new Date());
+    await job.Save();
+    return job.Get('ID') as string;
+  }
+
+  /** Sets an existing ScheduledJob to Disabled so it stops firing. */
+  private async DisableScheduledJob(jobID: string): Promise<void> {
+    const md = new Metadata();
+    const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
+    const loaded = await job.Load(jobID);
+    if (loaded) {
+      job.Set('Status', 'Disabled');
+      await job.Save();
     }
   }
 

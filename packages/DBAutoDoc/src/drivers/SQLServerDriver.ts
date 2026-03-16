@@ -399,7 +399,7 @@ export class SQLServerDriver extends BaseAutoDocDriver {
     return result.success && result.data ? result.data : [];
   }
 
-  protected async getSampleValues(
+  public async getSampleValues(
     schemaName: string,
     tableName: string,
     columnName: string,

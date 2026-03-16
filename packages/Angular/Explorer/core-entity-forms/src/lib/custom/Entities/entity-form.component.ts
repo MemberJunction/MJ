@@ -21,6 +21,7 @@ import { ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagra
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
+import { RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
 import { MJEntityFormComponent } from '../../generated/Entities/MJEntity/mjentity.form.component';
 
 export type ExplorerSection =
@@ -632,6 +633,32 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         this.activeSection = section;
         this.closeDetailPanel();
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Handle record opened from the entity viewer (double-click or open button).
+     * Emits a Navigate event so the host app can open the record.
+     */
+    public OnRecordOpened(event: RecordOpenedEvent): void {
+        this.Navigate.emit({
+            Kind: 'record',
+            EntityName: event.entity.Name,
+            PrimaryKey: event.compositeKey
+        });
+    }
+
+    /**
+     * Handle add requested from the entity viewer toolbar.
+     * Emits a Navigate event to create a new record of this entity type.
+     */
+    public OnAddRequested(): void {
+        if (this.entity) {
+            this.Navigate.emit({
+                Kind: 'new-record',
+                EntityName: this.entity.Name,
+                DefaultValues: {}
+            });
+        }
     }
 
     public toggleFieldGroup(groupId: string): void {

@@ -17,7 +17,7 @@ import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, type Git
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
-import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages } from './config-manager.js';
+import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping } from './config-manager.js';
 import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
@@ -519,6 +519,7 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     Callbacks?.OnProgress?.('Config', 'Removing config, client bootstrap, and package references...');
     await Promise.all([
       Promise.resolve(RemoveServerDynamicPackages(context.RepoRoot, options.AppName)),
+      Promise.resolve(manifest.schema ? RemoveEntityPackageMapping(context.RepoRoot, manifest.schema.name) : undefined),
       HandleClientBootstrapRegeneration(context),
       Promise.resolve(
         RemoveAppPackages({
@@ -815,12 +816,23 @@ async function HandlePackageInstallation(manifest: MJAppManifest, context: Orche
 }
 
 /**
- * Adds server dynamic package entries to mj.config.cjs for the app.
+ * Adds server dynamic package entries and entity package mapping to mj.config.cjs for the app.
  */
 function HandleServerConfig(manifest: MJAppManifest, context: OrchestratorContext): InternalResult {
   context.Callbacks?.OnProgress?.('Config', 'Updating server config...');
-  const result = AddServerDynamicPackages(context.RepoRoot, manifest);
-  return { Success: result.Success, ErrorMessage: result.ErrorMessage };
+
+  const dynamicResult = AddServerDynamicPackages(context.RepoRoot, manifest);
+  if (!dynamicResult.Success) {
+    return { Success: false, ErrorMessage: dynamicResult.ErrorMessage };
+  }
+
+  // Add entityPackageName mapping so CodeGen resolves per-schema imports correctly
+  const entityResult = AddEntityPackageMapping(context.RepoRoot, manifest);
+  if (!entityResult.Success) {
+    return { Success: false, ErrorMessage: entityResult.ErrorMessage };
+  }
+
+  return { Success: true };
 }
 
 /**

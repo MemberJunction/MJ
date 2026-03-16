@@ -73,7 +73,7 @@
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
     "@memberjunction/ai": "5.11.0",
-    "@memberjunction/ai-provider-bundle": "5.11.0",
+    "@memberjunction/server-bootstrap": "5.11.0",
     "@memberjunction/core": "5.11.0",
     "@memberjunction/global": "5.11.0",
     "@oclif/core": "^3.27.0",

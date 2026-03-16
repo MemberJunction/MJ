@@ -49,6 +49,27 @@ Understanding from tables this table references:
 {% endfor %}
 {% endif %}
 
+{% if groundTruth %}
+## Ground Truth (AUTHORITATIVE — You MUST align with this)
+The database owner has provided the following authoritative documentation. Your descriptions MUST be consistent with this ground truth. Do NOT contradict it. You may expand on it with additional detail, but the core meaning must match exactly.
+
+{% if groundTruth.tableDescription %}**Table Description (AUTHORITATIVE)**: {{ groundTruth.tableDescription }}{% endif %}
+{% if groundTruth.tableNotes %}**Table Notes**: {{ groundTruth.tableNotes }}{% endif %}
+{% if groundTruth.businessDomain %}**Business Domain (AUTHORITATIVE)**: {{ groundTruth.businessDomain }}{% endif %}
+{% if groundTruth.columnDescriptions %}
+**Column Descriptions (AUTHORITATIVE)**:
+{% for colName, colDesc in groundTruth.columnDescriptions %}
+- **{{ colName }}**: {{ colDesc }}
+{% endfor %}
+{% endif %}
+{% if groundTruth.columnNotes %}
+**Column Notes**:
+{% for colName, colNote in groundTruth.columnNotes %}
+- **{{ colName }}**: {{ colNote }}
+{% endfor %}
+{% endif %}
+{% endif %}
+
 {% if userNotes %}
 ## User Notes
 {{ userNotes }}

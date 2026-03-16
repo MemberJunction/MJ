@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -154,7 +154,8 @@ export class RunAIAgentResolver extends ResolverBase {
             errorMessage: result.agentRun?.ErrorMessage,
             finalStep: result.agentRun?.FinalStep,
             cancelled: result.agentRun?.Status === 'Cancelled',
-            cancellationReason: result.agentRun?.CancellationReason
+            cancellationReason: result.agentRun?.CancellationReason,
+            feedbackRequestId: result.feedbackRequestId
         };
 
         // Safely extract agent run data using GetAll() for proper serialization
@@ -432,6 +433,21 @@ export class RunAIAgentResolver extends ResolverBase {
             }
 
             const executionTime = Date.now() - startTime;
+
+            // Sync feedback request if this is a continuation run (user responded via conversation)
+            if (lastRunId && result.agentRun?.ID) {
+                await this.syncFeedbackRequestFromConversation(
+                    lastRunId,
+                    result.agentRun.ID,
+                    userMessage,
+                    currentUser
+                );
+            }
+
+            // Send notification if agent created a feedback request (Chat step)
+            if (result.feedbackRequestId) {
+                await this.sendFeedbackRequestNotification(result, currentUser, pubSub, userPayload);
+            }
 
             // Create notification if enabled and artifact was created successfully
             if (createNotification && result.success && artifactInfo && artifactInfo.artifactId && artifactInfo.versionId && artifactInfo.versionNumber) {
@@ -753,6 +769,112 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
+     * When a continuation run completes (lastRunId was provided), sync the corresponding
+     * AIAgentRequest by marking it as responded. This keeps the dashboard accurate when
+     * users respond to Chat steps via the conversation UI.
+     *
+     * Called server-side in the resolver so the conversation UI doesn't need any changes.
+     */
+    private async syncFeedbackRequestFromConversation(
+        lastRunId: string,
+        newRunId: string,
+        userMessage: string | undefined,
+        contextUser: UserInfo
+    ): Promise<void> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<MJAIAgentRequestEntity>({
+                EntityName: 'MJ: AI Agent Requests',
+                ExtraFilter: `OriginatingAgentRunID='${lastRunId}' AND Status='Requested'`,
+                MaxRows: 1,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!result.Success || !result.Results || result.Results.length === 0) {
+                return; // No pending request for this run — normal for non-Chat continuations
+            }
+
+            const request = result.Results[0];
+            request.Status = 'Responded';
+            request.RespondedAt = new Date();
+            request.ResponseByUserID = contextUser.ID;
+            request.ResumingAgentRunID = newRunId;
+            if (userMessage) {
+                request.Response = userMessage;
+            }
+
+            const saved = await request.Save();
+            if (saved) {
+                LogStatus(`📋 Synced feedback request ${request.ID} → Responded (via conversation)`);
+            } else {
+                LogError(`Failed to save feedback request sync for ${request.ID}`);
+            }
+        } catch (error) {
+            // Don't let sync failure break the agent execution
+            LogError(`Error syncing feedback request: ${(error as Error).message}`);
+        }
+    }
+
+    /**
+     * Sends a notification when an agent creates a feedback request (Chat step).
+     * Called after execution completes if the result contains a feedbackRequestId.
+     */
+    private async sendFeedbackRequestNotification(
+        result: ExecuteAgentResult,
+        contextUser: UserInfo,
+        pubSub: PubSubEngine,
+        userPayload: UserPayload
+    ): Promise<void> {
+        if (!result.feedbackRequestId) {
+            return;
+        }
+
+        try {
+            // Get agent name
+            await AIEngine.Instance.Config(false, contextUser);
+            const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, result.agentRun?.AgentID));
+            const agentName = agent?.Name || 'Agent';
+
+            // Truncate message for notification
+            const message = result.agentRun?.Message || 'Agent needs your input';
+            const truncatedMessage = message.length > 200 ? message.substring(0, 197) + '...' : message;
+
+            const notificationEngine = NotificationEngine.Instance;
+            await notificationEngine.Config(false, contextUser);
+            const notifResult = await notificationEngine.SendNotification({
+                userId: contextUser.ID,
+                typeNameOrId: 'Agent Feedback Request',
+                title: `${agentName} needs your input`,
+                message: truncatedMessage,
+                resourceConfiguration: {
+                    type: 'agent-request',
+                    requestId: result.feedbackRequestId
+                }
+            }, contextUser);
+
+            if (notifResult.success && notifResult.inAppNotificationId) {
+                LogStatus(`📬 Feedback request notification sent (ID: ${notifResult.inAppNotificationId})`);
+
+                // Publish real-time notification event
+                pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+                    userPayload: JSON.stringify(userPayload),
+                    message: JSON.stringify({
+                        type: 'notification',
+                        notificationId: notifResult.inAppNotificationId,
+                        action: 'create',
+                        title: `${agentName} needs your input`,
+                        message: truncatedMessage
+                    })
+                });
+            } else if (!notifResult.success) {
+                LogError(`Feedback request notification failed: ${notifResult.errors?.join(', ')}`);
+            }
+        } catch (error) {
+            LogError(`Error sending feedback request notification: ${(error as Error).message}`);
+        }
+    }
+
+    /**
      * Optimized mutation that loads conversation history server-side.
      * This avoids sending large attachment data from client to server.
      *
@@ -849,6 +971,183 @@ export class RunAIAgentResolver extends ResolverBase {
             return {
                 success: false,
                 errorMessage,
+                result: JSON.stringify({ success: false, errorMessage })
+            };
+        }
+    }
+
+    /**
+     * Respond to a pending AIAgentRequest from the dashboard or API.
+     * Updates the request record with the response and optionally spawns a
+     * new agent run to resume execution with the human's input.
+     */
+    @Mutation(() => AIAgentRunResult)
+    async RespondToAgentRequest(
+        @Arg('requestId') requestId: string,
+        @Arg('status') status: string,
+        @Ctx() { userPayload, providers, dataSource }: AppContext,
+        @Arg('response', { nullable: true }) response?: string,
+        @Arg('responseData', { nullable: true }) responseData?: string,
+        @Arg('resumeAgent', { nullable: true }) resumeAgent?: boolean
+    ): Promise<AIAgentRunResult> {
+        const startTime = Date.now();
+        try {
+            const currentUser = this.GetUserFromPayload(userPayload);
+            if (!currentUser) {
+                throw new Error('Unable to determine current user');
+            }
+
+            const md = new Metadata();
+            const request = await md.GetEntityObject<MJAIAgentRequestEntity>(
+                'MJ: AI Agent Requests',
+                currentUser
+            );
+            if (!(await request.Load(requestId))) {
+                throw new Error(`Agent request ${requestId} not found`);
+            }
+
+            if (request.Status !== 'Requested') {
+                throw new Error(`Request ${requestId} is already ${request.Status}, cannot respond`);
+            }
+
+            // Validate status
+            const validStatuses = ['Approved', 'Rejected', 'Responded'];
+            if (!validStatuses.includes(status)) {
+                throw new Error(`Invalid status "${status}". Must be one of: ${validStatuses.join(', ')}`);
+            }
+
+            // Update the request
+            request.Status = status as 'Approved' | 'Rejected' | 'Responded';
+            request.Response = response || null;
+            request.ResponseData = responseData || null;
+            request.RespondedAt = new Date();
+            request.ResponseByUserID = currentUser.ID;
+
+            const saved = await request.Save();
+            if (!saved) {
+                throw new Error(`Failed to save response for request ${requestId}`);
+            }
+
+            LogStatus(`📋 Agent request ${requestId} → ${status} by ${currentUser.Email || currentUser.ID}`);
+
+            const executionTime = Date.now() - startTime;
+            return {
+                success: true,
+                executionTimeMs: executionTime,
+                result: JSON.stringify({
+                    success: true,
+                    requestId: requestId,
+                    status: status,
+                    resumed: false
+                })
+            };
+        } catch (error) {
+            const executionTime = Date.now() - startTime;
+            const errorMessage = (error as Error).message || 'Unknown error';
+            LogError(`RespondToAgentRequest failed: ${errorMessage}`, undefined, error);
+            return {
+                success: false,
+                errorMessage,
+                executionTimeMs: executionTime,
+                result: JSON.stringify({ success: false, errorMessage })
+            };
+        }
+    }
+
+    /**
+     * Reassign an agent request to a different user.
+     * Updates RequestForUserID and sends a notification to the new assignee.
+     */
+    @Mutation(() => AIAgentRunResult)
+    async ReassignAgentRequest(
+        @Arg('requestId') requestId: string,
+        @Arg('newUserID') newUserID: string,
+        @Ctx() { userPayload }: AppContext,
+        @Arg('note', { nullable: true }) note?: string
+    ): Promise<AIAgentRunResult> {
+        const startTime = Date.now();
+        try {
+            const currentUser = this.GetUserFromPayload(userPayload);
+            if (!currentUser) {
+                throw new Error('Unable to determine current user');
+            }
+
+            const md = new Metadata();
+            const request = await md.GetEntityObject<MJAIAgentRequestEntity>(
+                'MJ: AI Agent Requests',
+                currentUser
+            );
+            if (!(await request.Load(requestId))) {
+                throw new Error(`Agent request ${requestId} not found`);
+            }
+
+            if (request.Status !== 'Requested') {
+                throw new Error(`Request ${requestId} is ${request.Status} and cannot be reassigned`);
+            }
+
+            const previousUserID = request.RequestForUserID;
+            request.RequestForUserID = newUserID;
+
+            // Append reassignment note to Comments
+            if (note || previousUserID) {
+                const timestamp = new Date().toISOString();
+                const reassignEntry = `[${timestamp} by ${currentUser.Email || currentUser.ID}] Reassigned from ${previousUserID || '(unassigned)'} to ${newUserID}${note ? ` — "${note}"` : ''}`;
+                request.Comments = request.Comments
+                    ? `${request.Comments}\n${reassignEntry}`
+                    : reassignEntry;
+            }
+
+            const saved = await request.Save();
+            if (!saved) {
+                throw new Error(`Failed to save reassignment for request ${requestId}`);
+            }
+
+            // Send notification to new assignee
+            try {
+                await AIEngine.Instance.Config(false, currentUser);
+                const agent = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, request.AgentID));
+                const agentName = agent?.Name || 'Agent';
+                const truncatedRequest = request.Request.length > 200
+                    ? request.Request.substring(0, 197) + '...'
+                    : request.Request;
+
+                const notificationEngine = NotificationEngine.Instance;
+                await notificationEngine.Config(false, currentUser);
+                await notificationEngine.SendNotification({
+                    userId: newUserID,
+                    typeNameOrId: 'Agent Feedback Request',
+                    title: `${agentName} request assigned to you`,
+                    message: truncatedRequest,
+                    resourceConfiguration: {
+                        type: 'agent-request',
+                        requestId: requestId
+                    }
+                }, currentUser);
+            } catch (notifError) {
+                LogError(`Failed to send reassignment notification: ${(notifError as Error).message}`);
+            }
+
+            LogStatus(`📋 Agent request ${requestId} reassigned to ${newUserID}`);
+
+            const executionTime = Date.now() - startTime;
+            return {
+                success: true,
+                executionTimeMs: executionTime,
+                result: JSON.stringify({
+                    success: true,
+                    requestId,
+                    newUserID,
+                    reassigned: true
+                })
+            };
+        } catch (error) {
+            const executionTime = Date.now() - startTime;
+            const errorMessage = (error as Error).message || 'Unknown error';
+            LogError(`ReassignAgentRequest failed: ${errorMessage}`, undefined, error);
+            return {
+                success: false,
+                errorMessage,
+                executionTimeMs: executionTime,
                 result: JSON.stringify({ success: false, errorMessage })
             };
         }

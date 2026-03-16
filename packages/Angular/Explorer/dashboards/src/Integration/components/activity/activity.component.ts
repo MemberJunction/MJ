@@ -19,7 +19,7 @@ interface WatermarkRow {
   EntityMapID: string;
   WatermarkType: string;
   WatermarkValue: string | null;
-  LastAppliedAt: string | null;
+  LastSyncAt: string | null;
   EntityMap: string;
 }
 
@@ -151,8 +151,8 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
     const result = await rv.RunView<WatermarkRow>({
       EntityName: 'MJ: Company Integration Sync Watermarks',
       ExtraFilter: `EntityMapID IN (${entityMapIDs})`,
-      OrderBy: 'LastAppliedAt DESC',
-      Fields: ['ID', 'EntityMapID', 'WatermarkType', 'WatermarkValue', 'LastAppliedAt'],
+      OrderBy: 'LastSyncAt DESC',
+      Fields: ['ID', 'EntityMapID', 'WatermarkType', 'WatermarkValue', 'LastSyncAt'],
       ResultType: 'simple'
     });
 
