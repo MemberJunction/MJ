@@ -81,6 +81,7 @@
     "@memberjunction/scheduling-actions": "5.11.0",
     "@memberjunction/scheduling-engine": "5.11.0",
     "@memberjunction/scheduling-engine-base": "5.11.0",
+    "@memberjunction/schema-engine": "5.11.0",
     "@memberjunction/templates": "5.11.0",
     "@memberjunction/testing-engine": "5.11.0"
   },

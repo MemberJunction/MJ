@@ -13,6 +13,9 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 export class RSUDashboardComponent extends BaseResourceComponent {
   private cdr = inject(ChangeDetectorRef);
 
+  async GetResourceDisplayName(): Promise<string> { return 'Schema Management'; }
+  async GetResourceIconClass(): Promise<string> { return 'fa-solid fa-database'; }
+
   ActiveTab: 'create' | 'history' | 'status' = 'create';
 
   OnTabChange(tab: 'create' | 'history' | 'status'): void {

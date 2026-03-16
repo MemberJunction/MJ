@@ -36,6 +36,9 @@ const COLUMN_TYPES = [
 export class UDTCreatorComponent extends BaseResourceComponent {
   private cdr = inject(ChangeDetectorRef);
 
+  async GetResourceDisplayName(): Promise<string> { return 'Create Table'; }
+  async GetResourceIconClass(): Promise<string> { return 'fa-solid fa-table'; }
+
   TableName = '';
   TableDescription = '';
   Columns: UDTColumn[] = [this.NewColumn()];
