@@ -1,0 +1,269 @@
+[
+  {
+    "fields": {
+      "Name": "Run Stored Query",
+      "Description": "Executes a stored query by ID or name, with optional parameters. Uses the full query pipeline including composition resolution, Nunjucks templating, caching, and audit logging. Preferred over ad-hoc SQL when a matching stored query exists.",
+      "DriverClass": "Run Stored Query",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-play",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "QueryID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the stored query to execute. Either QueryID or QueryName is required.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1702DF7A-6725-45A6-9518-1A62E62F85F5"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.277Z",
+            "checksum": "fdc3334fc4a30027528097560a7fa8a6e906f39ad82a309b5e4ac2e5f12a358e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "QueryName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the stored query to execute. Either QueryID or QueryName is required.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BC716022-3467-4951-9B0A-148C1517B01D"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.290Z",
+            "checksum": "577c361ba6c5656e02d39d402e2aeb2142e6ef09c6bf5221ec18178712a52105"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Parameters",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "JSON object of parameter key-value pairs to pass to the query. Keys must match query parameter names defined in the stored query.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3888306F-0A82-4142-AE2C-D9B69CA0FF7C"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.304Z",
+            "checksum": "7f18848d39c5ee0ac93229f7f18af8fc842f92f0ec46a6a2c49c93dff2768323"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRows",
+            "DefaultValue": "1000",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of rows to return. Default: 1000.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D7BD577F-4319-44E5-BD54-717921DE538B"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.317Z",
+            "checksum": "28d3a9d3b0bb52519e08183c88ec0f0d4f691a8d1cd1bb6f32164f9a4873191c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DataFormat",
+            "DefaultValue": "csv",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Format for data output: 'csv' (token efficient) or 'json' (structured). Default: csv.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6BD1A1AF-2776-4C30-AE77-CE2EE49A026D"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.329Z",
+            "checksum": "559631290542217b6b5817330ca53fdcacfaeae2578ed092453d591327661928"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ColumnMaxLength",
+            "DefaultValue": "50",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum character length for column values. Values longer than this are trimmed with '...' suffix. Set to 0 for full values. Default: 50.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D574E1E2-6065-4C32-B7B4-B9E01EFC59E6"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.341Z",
+            "checksum": "fa1f5bbd8cc50262415188f0f1ce4d68cce6b1a26437472c85bb8e56d1e0a4f3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Query results formatted according to DataFormat parameter.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BA0362E0-25C6-4C3D-B13F-420699BB5A15"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.353Z",
+            "checksum": "9ad0a6dd4fa925ac86e1d396df240cbe6407be6353b4dcf4bed4c6d46f0ef435"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RowCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of rows returned by the query.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0D46FC75-463D-429E-9FA5-E3EFED3BF06F"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.364Z",
+            "checksum": "794c9c7dfcf6be9801aa374377680a73f74ea71c6ac2ccc04ccc67e6ab28e7cf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExecutionTimeMs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Query execution time in milliseconds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2F6CFB3E-ACE2-4142-8CE2-696D02FD50D4"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.376Z",
+            "checksum": "0656a84cae7ae5b3a127d50864b1824eb0300006ed22ac20db31baae160da33f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "QuerySQL",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The resolved SQL that was executed (after composition and parameter substitution).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "33C5C661-EC7C-45E9-B933-C4C74C4A0150"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.387Z",
+            "checksum": "76831f5439f8fa0d6d71e1f29462d05d807a90e9864890a834911c0bd849c5ef"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Saved query executed successfully and returned results."
+          },
+          "primaryKey": {
+            "ID": "F764D5F1-F02E-47DD-BB2A-4E515E047F84"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.433Z",
+            "checksum": "66d08837f12055d94029063854c781a962da9fcfa423e71f9cb907c8bb00d07f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No query found matching the provided QueryID or QueryName."
+          },
+          "primaryKey": {
+            "ID": "73C1823A-8750-41A1-8238-87391D9F6B88"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.443Z",
+            "checksum": "0ee5fd5432c5a62cd3dfd27997ba36878d9ab8429cc1b579e09a26dbf7f26d8b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_IDENTIFIER",
+            "IsSuccess": false,
+            "Description": "Neither QueryID nor QueryName was provided. At least one is required."
+          },
+          "primaryKey": {
+            "ID": "E407BDDD-7C45-4F29-ABC5-29E885AF4641"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.453Z",
+            "checksum": "9d18abe0b97ae63534e241a8dd356e9ec3b0a052a452aa0ca736097e17d15e60"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_EXECUTION_FAILED",
+            "IsSuccess": false,
+            "Description": "Query execution failed. Check error message for specific details."
+          },
+          "primaryKey": {
+            "ID": "86B86399-9CFE-474F-8602-CDE790297DA4"
+          },
+          "sync": {
+            "lastModified": "2026-03-12T17:31:18.463Z",
+            "checksum": "3b9dcb0d89029bc8160340b4f7e9d1761e1b103b75f078a0332ce1e69a478061"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C97F2BCE-609E-4EAA-8D3F-99771BDF48A0"
+    },
+    "sync": {
+      "lastModified": "2026-03-12T17:31:18.189Z",
+      "checksum": "a3d0578d958b9f36f8376f9f532073c9adb9a1cb7c14cc152fe31753557332eb"
+    }
+  }
+]
