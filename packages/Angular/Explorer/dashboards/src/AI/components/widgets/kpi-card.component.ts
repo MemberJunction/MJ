@@ -58,11 +58,11 @@ export interface KPICardData {
     `,
   styles: [`
     .kpi-card {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 16px;
       padding: 20px;
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-      border: 1px solid #e5e7eb;
+      border: 1px solid var(--mj-border-default);
       border-left: 4px solid transparent;
       transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
       min-height: 130px;
@@ -74,14 +74,14 @@ export interface KPICardData {
     .kpi-card:hover {
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
       transform: translateY(-3px);
-      border-color: #c7d2fe;
+      border-color: color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface));
     }
 
-    .kpi-card--primary { border-left-color: #6366f1; }
-    .kpi-card--success { border-left-color: #10b981; }
-    .kpi-card--warning { border-left-color: #f59e0b; }
-    .kpi-card--danger { border-left-color: #ef4444; }
-    .kpi-card--info { border-left-color: #8b5cf6; }
+    .kpi-card--primary { border-left-color: var(--mj-brand-primary); }
+    .kpi-card--success { border-left-color: var(--mj-status-success); }
+    .kpi-card--warning { border-left-color: var(--mj-status-warning); }
+    .kpi-card--danger { border-left-color: var(--mj-status-error); }
+    .kpi-card--info { border-left-color: var(--mj-brand-accent); }
 
     .kpi-card__header {
       display: flex;
@@ -101,30 +101,30 @@ export interface KPICardData {
     }
 
     .kpi-card--primary .kpi-card__icon {
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
-      color: #6366f1;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
     .kpi-card--success .kpi-card__icon {
-      background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.15) 100%);
-      color: #10b981;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
     .kpi-card--warning .kpi-card__icon {
-      background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.15) 100%);
-      color: #f59e0b;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
     }
     .kpi-card--danger .kpi-card__icon {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.15) 100%);
-      color: #ef4444;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
     .kpi-card--info .kpi-card__icon {
-      background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(167, 139, 250, 0.15) 100%);
-      color: #8b5cf6;
+      background: color-mix(in srgb, var(--mj-brand-accent) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-accent);
     }
 
     .kpi-card__title {
       font-size: 11px;
       font-weight: 700;
-      color: #64748b;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -139,7 +139,7 @@ export interface KPICardData {
     .kpi-card__value {
       font-size: 26px;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--mj-text-primary);
       margin-bottom: 4px;
       line-height: 1.1;
       letter-spacing: -0.02em;
@@ -147,7 +147,7 @@ export interface KPICardData {
 
     .kpi-card__subtitle {
       font-size: 11px;
-      color: #94a3b8;
+      color: var(--mj-text-muted);
       margin-bottom: 6px;
     }
 
@@ -163,7 +163,7 @@ export interface KPICardData {
     }
 
     .trend-period {
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
     }
 
     .kpi-card__loading {
@@ -231,17 +231,17 @@ export class KPICardComponent implements OnInit {
   }
 
   getTrendColor(): string {
-    if (!this.data.trend) return '#999';
-    
+    if (!this.data.trend) return 'var(--mj-text-disabled)';
+
     switch (this.data.trend.direction) {
       case 'up':
-        return '#4caf50';
+        return 'var(--mj-status-success)';
       case 'down':
-        return '#f44336';
+        return 'var(--mj-status-error)';
       case 'stable':
-        return '#999';
+        return 'var(--mj-text-disabled)';
       default:
-        return '#999';
+        return 'var(--mj-text-disabled)';
     }
   }
 }

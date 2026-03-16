@@ -13,7 +13,7 @@ import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { MSSQLConnection, sqlConfig } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
-import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbType } from './Config/config';
+import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbType, getExternalEntitySchemas } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import * as MJ from '@memberjunction/core';
 import { RunCommandsBase } from './Misc/runCommand';
@@ -291,7 +291,11 @@ export class RunCodeGenBase {
       if (graphqlOutputDir) {
         if (isVerbose) startSpinner('Generating GraphQL Resolver Code...');
         const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
-        const entityPackageName = configInfo.entityPackageName || 'mj_generatedentities';
+        // Note: for non-internal entities, generateEntityImports() resolves per-entity via
+        // resolveEntityPackageName(), so this default is only used as an isInternal signal.
+        const entityPackageName = typeof configInfo.entityPackageName === 'string'
+          ? (configInfo.entityPackageName || 'mj_generatedentities')
+          : 'mj_generatedentities';
         if (!graphQLGenerator.generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, entityPackageName, false)) {
           failSpinner('Error generating GraphQL Resolver code');
           return;
@@ -308,11 +312,18 @@ export class RunCodeGenBase {
         } else if (isVerbose) succeedSpinner('CORE Entity Subclass Code generated');
       }
 
+      // Filter out entities whose schemas have external packages (from installed OpenApps).
+      // These entities already have generated classes/forms in their respective npm packages.
+      const externalSchemas = getExternalEntitySchemas().map(s => s.toLowerCase());
+      const localNonCoreEntities = externalSchemas.length > 0
+        ? nonCoreEntities.filter(e => !externalSchemas.includes(e.SchemaName.toLowerCase()))
+        : nonCoreEntities;
+
       const entitySubClassOutputDir = outputDir('EntitySubClasses', true)!;
       if (entitySubClassOutputDir) {
         if (isVerbose) startSpinner('Generating Entity Subclass Code...');
         const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, nonCoreEntities, entitySubClassOutputDir, skipDB)) {
+        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, localNonCoreEntities, entitySubClassOutputDir, skipDB)) {
           failSpinner('Error generating entity subclass code');
           return;
         } else if (isVerbose) succeedSpinner('Entity Subclass Code generated');
@@ -332,7 +343,7 @@ export class RunCodeGenBase {
       if (angularOutputDir) {
         if (isVerbose) startSpinner('Generating Angular Code...');
         const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
-        if (!(await angularGenerator.generateAngularCode(nonCoreEntities, angularOutputDir, '', currentUser))) {
+        if (!(await angularGenerator.generateAngularCode(localNonCoreEntities, angularOutputDir, '', currentUser))) {
           failSpinner('Error generating Angular code');
           return;
         } else if (isVerbose) succeedSpinner('Angular Code generated');

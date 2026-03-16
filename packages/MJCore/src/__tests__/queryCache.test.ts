@@ -230,5 +230,155 @@ describe('QueryCache', () => {
 
             expect(cleaned).toBe(0);
         });
+
+        it('should also clean expired count cache entries', () => {
+            vi.useFakeTimers();
+
+            cache.SetTotalRowCount('q1', {}, 100, { enabled: true, ttlMinutes: 1 });
+            cache.SetTotalRowCount('q2', {}, 200, { enabled: true, ttlMinutes: 120 });
+
+            vi.advanceTimersByTime(5 * 60 * 1000);
+
+            const cleaned = cache.cleanupExpired();
+
+            expect(cleaned).toBe(1);
+            expect(cache.GetTotalRowCount('q1', {}, enabledConfig)).toBeNull();
+            expect(cache.GetTotalRowCount('q2', {}, enabledConfig)).toBe(200);
+
+            vi.useRealTimers();
+        });
+    });
+
+    // ─── Paged cache (C.3) ─────────────────────────────────────────────────
+
+    describe('GetPaged / SetPaged', () => {
+        it('should cache and retrieve paged results', () => {
+            const page1 = [{ id: 1 }, { id: 2 }];
+            cache.SetPaged('q1', { filter: 'x' }, 0, 2, page1, enabledConfig);
+
+            const entry = cache.GetPaged('q1', { filter: 'x' }, 0, 2, enabledConfig);
+            expect(entry).not.toBeNull();
+            expect(entry!.results).toEqual(page1);
+        });
+
+        it('should store different pages as separate entries', () => {
+            cache.SetPaged('q1', {}, 0, 10, [{ page: 1 }], enabledConfig);
+            cache.SetPaged('q1', {}, 10, 10, [{ page: 2 }], enabledConfig);
+
+            const p1 = cache.GetPaged('q1', {}, 0, 10, enabledConfig);
+            const p2 = cache.GetPaged('q1', {}, 10, 10, enabledConfig);
+
+            expect(p1!.results).toEqual([{ page: 1 }]);
+            expect(p2!.results).toEqual([{ page: 2 }]);
+        });
+
+        it('should not collide with non-paged cache for same query', () => {
+            cache.set('q1', {}, [{ full: true }], enabledConfig);
+            cache.SetPaged('q1', {}, 0, 10, [{ paged: true }], enabledConfig);
+
+            const full = cache.get('q1', {}, enabledConfig);
+            const paged = cache.GetPaged('q1', {}, 0, 10, enabledConfig);
+
+            expect(full!.results).toEqual([{ full: true }]);
+            expect(paged!.results).toEqual([{ paged: true }]);
+        });
+
+        it('should respect TTL expiration', () => {
+            vi.useFakeTimers();
+
+            cache.SetPaged('q1', {}, 0, 10, [{ id: 1 }], { enabled: true, ttlMinutes: 1 });
+            vi.advanceTimersByTime(2 * 60 * 1000);
+
+            expect(cache.GetPaged('q1', {}, 0, 10, enabledConfig)).toBeNull();
+
+            vi.useRealTimers();
+        });
+
+        it('should return null when disabled', () => {
+            cache.SetPaged('q1', {}, 0, 10, [{ id: 1 }], disabledConfig);
+            expect(cache.GetPaged('q1', {}, 0, 10, disabledConfig)).toBeNull();
+        });
+    });
+
+    // ─── TotalRowCount cache (C.6) ─────────────────────────────────────────
+
+    describe('GetTotalRowCount / SetTotalRowCount', () => {
+        it('should cache and retrieve a count', () => {
+            cache.SetTotalRowCount('q1', { region: 'US' }, 42, enabledConfig);
+
+            const count = cache.GetTotalRowCount('q1', { region: 'US' }, enabledConfig);
+            expect(count).toBe(42);
+        });
+
+        it('should return null on miss', () => {
+            expect(cache.GetTotalRowCount('nonexistent', {}, enabledConfig)).toBeNull();
+        });
+
+        it('should respect TTL', () => {
+            vi.useFakeTimers();
+
+            cache.SetTotalRowCount('q1', {}, 100, { enabled: true, ttlMinutes: 1 });
+            vi.advanceTimersByTime(2 * 60 * 1000);
+
+            expect(cache.GetTotalRowCount('q1', {}, enabledConfig)).toBeNull();
+
+            vi.useRealTimers();
+        });
+
+        it('should be cleared by clear(queryId)', () => {
+            cache.SetTotalRowCount('q1', {}, 50, enabledConfig);
+            cache.SetTotalRowCount('q2', {}, 75, enabledConfig);
+
+            cache.clear('q1');
+
+            expect(cache.GetTotalRowCount('q1', {}, enabledConfig)).toBeNull();
+            expect(cache.GetTotalRowCount('q2', {}, enabledConfig)).toBe(75);
+        });
+
+        it('should be cleared by clear() (all)', () => {
+            cache.SetTotalRowCount('q1', {}, 50, enabledConfig);
+            cache.SetTotalRowCount('q2', {}, 75, enabledConfig);
+
+            cache.clear();
+
+            expect(cache.GetTotalRowCount('q1', {}, enabledConfig)).toBeNull();
+            expect(cache.GetTotalRowCount('q2', {}, enabledConfig)).toBeNull();
+        });
+
+        it('should not return value when disabled', () => {
+            cache.SetTotalRowCount('q1', {}, 100, disabledConfig);
+            expect(cache.GetTotalRowCount('q1', {}, disabledConfig)).toBeNull();
+        });
+    });
+
+    // ─── Ad-hoc cache key generation (C.4) ─────────────────────────────────
+
+    describe('GenerateAdhocCacheKey', () => {
+        it('should produce a deterministic key', () => {
+            const sql = 'SELECT * FROM Users WHERE Active = 1';
+            const key1 = QueryCache.GenerateAdhocCacheKey(sql);
+            const key2 = QueryCache.GenerateAdhocCacheKey(sql);
+
+            expect(key1).toBe(key2);
+        });
+
+        it('should prefix keys with adhoc:', () => {
+            const key = QueryCache.GenerateAdhocCacheKey('SELECT 1');
+            expect(key).toMatch(/^adhoc:/);
+        });
+
+        it('should produce different keys for different SQL', () => {
+            const key1 = QueryCache.GenerateAdhocCacheKey('SELECT 1');
+            const key2 = QueryCache.GenerateAdhocCacheKey('SELECT 2');
+
+            expect(key1).not.toBe(key2);
+        });
+
+        it('should treat whitespace differences as distinct', () => {
+            const key1 = QueryCache.GenerateAdhocCacheKey('SELECT  1');
+            const key2 = QueryCache.GenerateAdhocCacheKey('SELECT 1');
+
+            expect(key1).not.toBe(key2);
+        });
     });
 });

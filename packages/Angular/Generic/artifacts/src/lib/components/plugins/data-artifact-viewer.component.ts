@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { QueryEngine, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
+import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, NavigationRequest } from '../base-artifact-viewer.component';
 import { SaveQueryResult } from './save-query-dialog.component';
 
@@ -121,6 +122,11 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public ShowUpdateDropdown = false;
   public IsSaving = false;
   public SavingMessage = '';
+
+  /** Paging state — passed through to mj-query-data-grid's embedded pager */
+  public PagerTotalRowCount = 0;
+  public PagerPageNumber = 1;
+  public PagerPageSize = 100;
 
   /** Query sync state — drives the toolbar UI for saved query actions */
   public QuerySyncState: QuerySyncState = 'no-query-latest';
@@ -245,13 +251,28 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * Converts the grid's recordId string into a CompositeKey for the artifact viewer pipeline.
    */
   public OnEntityLinkClick(event: QueryEntityLinkClickEvent): void {
+    const md = new Metadata();
+    const entity = md.Entities.find(e => e.Name === event.entityName);
+    const pkFieldName = entity?.FirstPrimaryKey?.Name ?? 'ID';
+
     const compositeKey = new CompositeKey([
-      new KeyValuePair('ID', event.recordId)
+      new KeyValuePair(pkFieldName, event.recordId)
     ]);
     this.openEntityRecord.emit({
       entityName: event.entityName,
       compositeKey
     });
+  }
+
+  /**
+   * Handle page change from the data grid's embedded pager.
+   * Re-executes the live SQL with the new page parameters.
+   */
+  public async OnPageChange(event: PageChangeEvent): Promise<void> {
+    if (!this.spec?.metadata?.sql) return;
+    this.PagerPageNumber = event.PageNumber;
+    this.PagerPageSize = event.PageSize;
+    await this.LoadLiveData();
   }
 
   /**
@@ -265,13 +286,29 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     try {
       const rq = new RunQuery();
-      const result = await rq.RunQuery({ SQL: this.spec!.metadata!.sql! });
+      const startRow = (this.PagerPageNumber - 1) * this.PagerPageSize;
+      const result = await rq.RunQuery({
+        SQL: this.spec!.metadata!.sql!,
+        StartRow: startRow,
+        MaxRows: this.PagerPageSize
+      });
 
       if (result.Success) {
         this.GridData = result.Results;
         this.liveRowCount = result.RowCount;
         this.liveExecutionTime = result.ExecutionTime;
         this.IsLive = true;
+
+        // Update pager state from result
+        if (result.TotalRowCount != null) {
+          this.PagerTotalRowCount = result.TotalRowCount;
+        }
+        if (result.PageNumber != null) {
+          this.PagerPageNumber = result.PageNumber;
+        }
+        if (result.PageSize != null) {
+          this.PagerPageSize = result.PageSize;
+        }
       } else {
         this.HandleQueryError(result.ErrorMessage || 'Query execution failed');
       }

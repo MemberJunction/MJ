@@ -5,19 +5,19 @@
 .sp-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0);
+    background: transparent;
     z-index: 1000;
     transition: background 0.3s ease;
     pointer-events: none;
 }
 
 .sp-backdrop.visible {
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--mj-bg-overlay);
     pointer-events: auto;
 }
 
 .sp-dialog-backdrop.visible {
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--mj-bg-overlay);
 }
 
 /* ================================================================= */
@@ -29,8 +29,8 @@
     top: 0;
     right: 0;
     height: 100vh;
-    background: var(--card-background, #ffffff);
-    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.12);
+    background: var(--mj-bg-surface);
+    box-shadow: var(--mj-shadow-lg);
     z-index: 1001;
     display: flex;
     flex-direction: column;
@@ -54,9 +54,9 @@
     left: 50%;
     transform: translate(-50%, -50%) scale(0.95);
     max-height: 85vh;
-    background: var(--card-background, #ffffff);
+    background: var(--mj-bg-surface);
     border-radius: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--mj-shadow-lg);
     z-index: 1001;
     display: flex;
     flex-direction: column;
@@ -91,20 +91,20 @@
 .sp-resize-handle:hover .sp-resize-grip,
 .sp-resize-handle:active .sp-resize-grip {
     opacity: 1;
-    background: #6366f1;
+    background: var(--mj-brand-primary);
 }
 
 .sp-resize-grip {
     width: 3px;
     height: 40px;
-    background: var(--border-color, #d1d5db);
+    background: var(--mj-border-strong);
     border-radius: 3px;
     opacity: 0;
     transition: opacity 0.2s ease, background 0.2s ease;
 }
 
 .sp-resize-handle:hover {
-    background: rgba(99, 102, 241, 0.04);
+    background: color-mix(in srgb, var(--mj-brand-primary) 4%, transparent);
 }
 
 /* ================================================================= */
@@ -116,14 +116,14 @@
     align-items: center;
     justify-content: space-between;
     padding: 16px 24px;
-    border-bottom: 1px solid var(--border-color, #e5e7eb);
+    border-bottom: 1px solid var(--mj-border-default);
     flex-shrink: 0;
 }
 
 .sp-title {
     font-size: 18px;
     font-weight: 700;
-    color: var(--text-primary, #1f2937);
+    color: var(--mj-text-primary);
     margin: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -140,7 +140,7 @@
     background: none;
     border: none;
     border-radius: 8px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     cursor: pointer;
     transition: all 0.15s ease;
     font-size: 16px;
@@ -148,8 +148,8 @@
 }
 
 .sp-close-btn:hover {
-    background: var(--hover-background, #f3f4f6);
-    color: var(--text-primary, #1f2937);
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-primary);
 }
 
 /* ================================================================= */

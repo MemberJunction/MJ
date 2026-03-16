@@ -3,7 +3,7 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: white;
+  background: var(--mj-bg-surface);
 }
 
 .component-preview {
@@ -30,7 +30,7 @@
   justify-content: center;
   padding: 40px;
   text-align: center;
-  color: #dc3545;
+  color: var(--mj-status-error);
   flex: 1;
   min-height: 300px;
 }
@@ -44,7 +44,7 @@
 }
 .error-state p {
   margin: 0 0 12px 0;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 .error-state details {
   margin-top: 16px;
@@ -53,20 +53,20 @@
 }
 .error-state details summary {
   cursor: pointer;
-  color: #495057;
+  color: var(--mj-text-secondary);
   font-weight: 500;
   margin-bottom: 8px;
 }
 .error-state details summary:hover {
-  color: #212529;
+  color: var(--mj-text-primary);
 }
 .error-state details pre {
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-sunken);
   padding: 12px;
   border-radius: 4px;
   overflow-x: auto;
   font-size: 12px;
-  color: #495057;
+  color: var(--mj-text-secondary);
   margin: 0;
 }
 
@@ -78,20 +78,46 @@
   justify-content: center;
   padding: 40px;
   text-align: center;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   flex: 1;
 }
 .no-code-state i {
   font-size: 48px;
   margin-bottom: 16px;
-  color: #5B4FE9;
+  color: var(--mj-brand-primary);
 }
 .no-code-state h3 {
   margin: 0 0 8px 0;
   font-size: 20px;
-  color: #495057;
+  color: var(--mj-text-secondary);
 }
 .no-code-state p {
   margin: 0 0 8px 0;
-  color: #6c757d;
+  color: var(--mj-text-muted);
+}
+
+/* Feedback toggle button */
+.feedback-toggle-btn {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background-color: var(--mj-brand-primary, #3B82F6);
+  color: var(--mj-text-inverse, #ffffff);
+  font-size: 18px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  z-index: 5;
+}
+
+.feedback-toggle-btn:hover {
+  background-color: var(--mj-brand-primary-hover, #2563EB);
+  transform: scale(1.1);
 }

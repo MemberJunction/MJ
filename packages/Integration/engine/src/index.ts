@@ -28,10 +28,20 @@ export type {
     SyncNotificationSeverity,
     SyncNotification,
     OnNotificationCallback,
+    IntegrationSyncOptions,
+    EntityMapSyncResult,
     SourceSchemaInfo,
     SourceObjectInfo,
     SourceFieldInfo,
     SourceRelationshipInfo,
+    CRUDContext,
+    CreateRecordContext,
+    UpdateRecordContext,
+    DeleteRecordContext,
+    GetRecordContext,
+    CRUDResult,
+    SearchContext,
+    SearchResult,
 } from './types.js';
 
 // Error classification helpers

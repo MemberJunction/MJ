@@ -1,0 +1,271 @@
+.form-question {
+  margin-bottom: 16px;
+}
+
+.question-label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--mj-text-primary);
+  font-size: 14px;
+}
+
+.required-indicator {
+  color: var(--mj-status-error);
+  margin-left: 2px;
+}
+
+.help-text {
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+  margin-bottom: 8px;
+  font-style: italic;
+}
+
+/* Default widths - controlled by input-container width classes */
+.question-input,
+.question-textarea,
+.question-dropdown {
+  width: 100%;
+  max-width: 100%;
+}
+
+.question-dropdown {
+  padding: 8px 12px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+  background-color: var(--mj-bg-surface);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+  padding-right: 32px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  color: var(--mj-text-primary);
+}
+
+.question-dropdown:hover {
+  border-color: var(--mj-border-strong);
+}
+
+.question-dropdown:focus {
+  outline: none;
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.question-dropdown:disabled {
+  background-color: var(--mj-bg-surface-sunken);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.question-textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.question-buttongroup {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent) transparent;
+}
+
+.question-buttongroup::-webkit-scrollbar {
+  height: 6px;
+}
+
+.question-buttongroup::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.question-buttongroup::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+  border-radius: 3px;
+}
+
+.question-buttongroup::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
+}
+
+.buttongroup-option {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.buttongroup-option i {
+  margin-right: 6px;
+}
+
+.question-radio-group,
+.question-checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.radio-option,
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+  flex: 0 0 auto;
+}
+
+.radio-label,
+.checkbox-label {
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.radio-label i,
+.checkbox-label i {
+  color: var(--mj-text-secondary);
+}
+
+.validation-error {
+  color: var(--mj-status-error);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* Required field styling */
+.form-question.required .question-label {
+  font-weight: 600;
+}
+
+/* Slider styling */
+.question-slider-container {
+  width: 100%;
+}
+
+.question-slider {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.slider-value {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--mj-brand-primary);
+  padding: 4px 0;
+}
+
+/* Date range styling */
+.question-daterange {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.daterange-start,
+.daterange-end {
+  flex: 1;
+  min-width: 150px;
+}
+
+.daterange-separator {
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  white-space: nowrap;
+}
+
+/* Mobile adjustments for date range */
+@media (max-width: 480px) {
+  .question-daterange {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .daterange-separator {
+    text-align: center;
+    padding: 4px 0;
+  }
+}
+
+/* ===== Semantic Width Classes ===== */
+/* Controls field width based on expected content length */
+
+.input-container {
+  display: block;
+}
+
+/* Narrow fields - for numbers, dates, times, short codes */
+.input-container.width-narrow {
+  max-width: 200px;
+}
+
+.input-container.width-narrow .question-input,
+.input-container.width-narrow .question-dropdown {
+  width: 100%;
+}
+
+/* Medium fields - for names, cities, phone numbers (DEFAULT) */
+.input-container.width-medium {
+  max-width: 450px;
+}
+
+.input-container.width-medium .question-input,
+.input-container.width-medium .question-dropdown {
+  width: 100%;
+}
+
+/* Wide fields - for emails, URLs, long text */
+.input-container.width-wide {
+  max-width: 100%;
+}
+
+.input-container.width-wide .question-input,
+.input-container.width-wide .question-dropdown {
+  width: 100%;
+}
+
+/* Full width - for textarea, search fields */
+.input-container.width-full {
+  max-width: 100%;
+}
+
+.input-container.width-full .question-input,
+.input-container.width-full .question-textarea,
+.input-container.width-full .question-dropdown {
+  width: 100%;
+}
+
+/* Auto-width - for dropdowns, radio, checkbox (sizes to content) */
+.input-container.width-auto {
+  max-width: 350px;
+  min-width: 150px;
+  width: auto;
+}
+
+.input-container.width-auto .question-dropdown {
+  width: 100%;
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 600px) {
+  .input-container.width-narrow,
+  .input-container.width-medium,
+  .input-container.width-wide,
+  .input-container.width-auto {
+    max-width: 100%;
+  }
+}

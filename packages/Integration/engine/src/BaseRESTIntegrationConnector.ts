@@ -4,7 +4,6 @@ import type { MJCompanyIntegrationEntity, MJIntegrationObjectEntity, MJIntegrati
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
     BaseIntegrationConnector,
-    type ConnectionTestResult,
     type ExternalObjectSchema,
     type ExternalFieldSchema,
     type FetchContext,
@@ -57,6 +56,8 @@ export type PaginationType = 'Cursor' | 'None' | 'Offset' | 'PageNumber';
 interface PaginatedFetchResult {
     Records: Record<string, unknown>[];
     HasMore: boolean;
+    NextPage?: number;
+    NextOffset?: number;
 }
 
 /** Maximum number of pages to fetch before stopping (safety limit to prevent infinite loops) */
@@ -85,7 +86,8 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * passed to BuildHeaders and MakeHTTPRequest for every request.
      */
     protected abstract Authenticate(
-        companyIntegration: MJCompanyIntegrationEntity
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
     ): Promise<RESTAuthContext>;
 
     /**
@@ -141,7 +143,8 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * Combined with the object's APIPath to form the full request URL.
      */
     protected abstract GetBaseURL(
-        companyIntegration: MJCompanyIntegrationEntity
+        companyIntegration: MJCompanyIntegrationEntity,
+        auth: RESTAuthContext
     ): string;
 
     // ── BaseIntegrationConnector implementations ─────────────────────
@@ -209,8 +212,8 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
         const obj = this.GetCachedObject(ctx.CompanyIntegration.IntegrationID, ctx.ObjectName);
         const fields = this.GetCachedFields(obj.ID);
-        const auth = await this.Authenticate(ctx.CompanyIntegration);
-        const baseURL = this.GetBaseURL(ctx.CompanyIntegration);
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
+        const baseURL = this.GetBaseURL(ctx.CompanyIntegration, auth);
 
         const templateVars = this.DetectTemplateVars(obj.APIPath);
 
@@ -234,12 +237,14 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         ctx: FetchContext
     ): Promise<FetchBatchResult> {
         const fullPath = this.BuildFullURL(baseURL, obj.APIPath);
-        const result = await this.FetchWithPagination(auth, fullPath, obj, ctx.BatchSize);
+        const result = await this.FetchWithPagination(auth, fullPath, obj, ctx);
         const pkFieldName = this.FindPrimaryKeyFieldName(fields);
 
         return {
             Records: result.Records.map(r => this.ToExternalRecord(r, ctx.ObjectName, pkFieldName)),
             HasMore: result.HasMore,
+            NextPage: result.NextPage,
+            NextOffset: result.NextOffset,
         };
     }
 
@@ -274,7 +279,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         for (const parentID of parentIDs) {
             const resolvedPath = this.SubstituteTemplateVars(obj.APIPath, parentInfo.templateVar, parentID);
             const fullURL = this.BuildFullURL(baseURL, resolvedPath);
-            const result = await this.FetchWithPagination(auth, fullURL, obj, ctx.BatchSize - allRecords.length);
+            const result = await this.FetchWithPagination(auth, fullURL, obj, ctx);
 
             const tagged = result.Records.map(r => {
                 r[parentInfo.fkFieldName] = parentID;
@@ -282,7 +287,6 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             });
 
             allRecords.push(...tagged);
-            if (allRecords.length >= ctx.BatchSize) break;
         }
 
         return { Records: allRecords, HasMore: false };
@@ -408,13 +412,13 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         auth: RESTAuthContext,
         basePath: string,
         obj: MJIntegrationObjectEntity,
-        maxRecords: number
+        ctx: FetchContext
     ): Promise<PaginatedFetchResult> {
         if (!obj.SupportsPagination || obj.PaginationType === 'None') {
             return this.FetchSinglePage(auth, basePath, obj);
         }
 
-        return this.FetchPaginatedLoop(auth, basePath, obj, maxRecords);
+        return this.FetchPaginatedLoop(auth, basePath, obj, ctx);
     }
 
     /**
@@ -441,17 +445,17 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         auth: RESTAuthContext,
         basePath: string,
         obj: MJIntegrationObjectEntity,
-        maxRecords: number
+        ctx: FetchContext
     ): Promise<PaginatedFetchResult> {
         const allRecords: Record<string, unknown>[] = [];
-        let page = 1;
-        let offset = 0;
+        let page = ctx.CurrentPage ?? 1;
+        let offset = ctx.CurrentOffset ?? 0;
         let cursor: string | undefined;
         let hasMore = true;
         let pageCount = 0;
         let previousFirstRecordKey: string | undefined;
 
-        while (hasMore && allRecords.length < maxRecords && pageCount < MAX_PAGINATION_PAGES) {
+        while (hasMore && pageCount < MAX_PAGINATION_PAGES) {
             pageCount++;
             const url = this.BuildPaginatedURL(basePath, obj, page, offset, cursor);
             const requestURL = this.AppendDefaultQueryParams(url, obj);
@@ -497,7 +501,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             hasMore = false; // prevent the engine's outer loop from restarting pagination
         }
 
-        return { Records: allRecords, HasMore: hasMore };
+        return { Records: allRecords, HasMore: hasMore, NextPage: page, NextOffset: offset };
     }
 
     // ── URL building helpers ─────────────────────────────────────────

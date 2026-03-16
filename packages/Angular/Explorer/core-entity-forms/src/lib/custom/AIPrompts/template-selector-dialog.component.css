@@ -15,13 +15,13 @@
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 15px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .dialog-header h3 {
   margin: 0;
   font-size: 1.5rem;
-  color: #333;
+  color: var(--mj-text-primary);
 }
 
 .header-actions {
@@ -46,7 +46,7 @@
   left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: #999;
+  color: var(--mj-text-muted);
   pointer-events: none;
 }
 
@@ -71,21 +71,21 @@
   gap: 10px;
   padding: 60px;
   font-size: 1.1rem;
-  color: #666;
+  color: var(--mj-text-secondary);
 }
 
 .loading-container i {
   font-size: 1.5rem;
-  color: #007bff;
+  color: var(--mj-brand-primary);
 }
 
 /* Templates Container */
 .templates-container {
   flex: 1;
   overflow-y: auto;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--mj-border-default);
   border-radius: 4px;
-  background: white;
+  background: var(--mj-bg-surface);
   padding: 10px;
 }
 
@@ -105,18 +105,18 @@
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-card);
   margin-bottom: 8px;
 }
 
 .template-item:hover {
-  border-color: #007bff;
-  background: #e3f2fd;
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
 }
 
 .template-item.selected {
-  border-color: #007bff;
-  background: #e3f2fd;
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
 }
 
 .grid-mode .template-item {
@@ -158,7 +158,7 @@
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #333;
+  color: var(--mj-text-primary);
   word-break: break-word;
 }
 
@@ -173,7 +173,7 @@
   border-radius: 12px;
   font-size: 0.75rem;
   font-weight: 500;
-  color: white;
+  color: var(--mj-text-inverse);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -181,7 +181,7 @@
 /* Template Description */
 .template-description {
   margin-bottom: 12px;
-  color: #666;
+  color: var(--mj-text-secondary);
   font-size: 0.9rem;
   line-height: 1.4;
 }
@@ -192,7 +192,7 @@
   flex-wrap: wrap;
   gap: 15px;
   font-size: 0.85rem;
-  color: #777;
+  color: var(--mj-text-muted);
 }
 
 .metadata-item {
@@ -203,7 +203,7 @@
 
 .metadata-item i {
   font-size: 0.8rem;
-  color: #999;
+  color: var(--mj-text-muted);
 }
 
 /* No Templates State */
@@ -214,12 +214,12 @@
   justify-content: center;
   padding: 60px 20px;
   text-align: center;
-  color: #666;
+  color: var(--mj-text-secondary);
 }
 
 .no-templates i {
   margin-bottom: 20px;
-  color: #ccc;
+  color: var(--mj-text-muted);
 }
 
 .no-templates h4 {
@@ -230,14 +230,14 @@
 .no-templates p {
   margin: 0;
   font-size: 0.9rem;
-  color: #999;
+  color: var(--mj-text-muted);
 }
 
 /* Dialog Actions */
 .dialog-actions {
   margin-top: 20px;
   padding-top: 20px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--mj-border-default);
 }
 
 .action-buttons {
@@ -260,39 +260,39 @@
     padding: 15px;
     height: 500px;
   }
-  
+
   .search-filter-section {
     flex-direction: column;
     gap: 10px;
   }
-  
+
   .category-filter {
     min-width: auto;
   }
-  
+
   .templates-container.grid-mode {
     grid-template-columns: 1fr;
   }
-  
+
   .template-header {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .template-status {
     margin-left: 0;
     margin-top: 5px;
   }
-  
+
   .template-metadata {
     flex-direction: column;
     gap: 8px;
   }
-  
+
   .action-buttons {
     flex-direction: column;
   }
-  
+
   .action-buttons button {
     min-width: auto;
   }
@@ -304,15 +304,15 @@
 }
 
 .templates-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--mj-bg-surface-card);
   border-radius: 4px;
 }
 
 .templates-container::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--mj-border-strong);
   border-radius: 4px;
 }
 
 .templates-container::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--mj-text-muted);
 }

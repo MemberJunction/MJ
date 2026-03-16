@@ -98,6 +98,8 @@ export interface RelationshipDiscoveryIteration {
   startedAt: string;
   completedAt: string;
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
   discoveries: {
     newPKs: PKCandidate[];
     newFKs: FKCandidate[];
@@ -158,6 +160,14 @@ export interface RelationshipDiscoveryPhase {
   discovered: {
     primaryKeys: PKCandidate[];
     foreignKeys: FKCandidate[];
+  };
+
+  /** Resume tracking — which tables have been processed in each sub-phase */
+  progress?: {
+    pkTablesAnalyzed?: string[];   // "schema.table" keys that completed PK detection
+    fkTablesAnalyzed?: string[];   // "schema.table" keys that completed FK detection
+    llmValidated?: boolean;        // Whether LLM validation pass completed
+    sanityChecked?: boolean;       // Whether LLM sanity check completed
   };
 
   schemaEnhancements: {
@@ -223,6 +233,13 @@ export interface CachedColumnStats {
   dataPattern: 'sequential' | 'guid' | 'composite' | 'natural' | 'unknown';
   sampleValues: Array<string | number | null>;
   valueDistribution?: Array<{ value: string | number; frequency: number }>;
+
+  // Deterministic eligibility flags — set once during stats gathering,
+  // used to constrain what the LLM can recommend as PKs/FKs.
+  /** True if column qualifies as a potential PK: zero nulls, zero blanks, 100% unique values */
+  pkEligible: boolean;
+  /** True if column qualifies as a potential FK source: non-date/bool/float type, values look like keys */
+  fkEligible: boolean;
 
   // Timing
   computedAt: string;
@@ -302,4 +319,6 @@ export interface LLMValidationResult {
     details: string;
   }>;
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
 }

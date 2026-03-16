@@ -42,6 +42,7 @@
     "@memberjunction/ng-base-types": "5.11.0",
     "@memberjunction/ng-code-editor": "5.11.0",
     "@memberjunction/ng-container-directives": "5.11.0",
+    "@memberjunction/ng-forms": "5.11.0",
     "@memberjunction/ng-notifications": "5.11.0",
     "@memberjunction/ng-shared-generic": "5.11.0",
     "@memberjunction/ng-tasks": "5.11.0",

@@ -1,0 +1,157 @@
+<div class="feedback-panel-overlay" (click)="ClosePanel()">
+  <div class="feedback-panel" (click)="$event.stopPropagation()">
+    <!-- Header -->
+    <div class="panel-header">
+      <div class="panel-title">
+        <i class="fa-solid fa-comment-dots"></i>
+        <span>Component Feedback</span>
+      </div>
+      <button class="close-button" (click)="ClosePanel()">
+        <i class="fa-solid fa-times"></i>
+      </button>
+    </div>
+
+    <!-- Content -->
+    <div class="panel-content">
+      <!-- Component Tree Section -->
+      <div class="tree-section">
+        <div class="section-header">
+          <i class="fa-solid fa-sitemap"></i>
+          <span>Select Component</span>
+        </div>
+
+        @if (ComponentSpec) {
+          <div class="component-tree">
+            @for (item of GetTreeItems(); track item.spec.name) {
+              <div
+                class="tree-item"
+                [class.selected]="IsSelected(item.spec)"
+                [style.padding-left]="GetIndentation(item.depth)"
+                (click)="SelectComponent(item.spec)"
+                (mouseenter)="HoverTreeItem(item.spec)"
+                (mouseleave)="ClearTreeItemHover()">
+
+                @if (item.hasChildren) {
+                  <i
+                    class="tree-toggle fa-solid"
+                    [class.fa-chevron-right]="!IsNodeExpanded(item.spec)"
+                    [class.fa-chevron-down]="IsNodeExpanded(item.spec)"
+                    (click)="ToggleNode(item.spec, $event)">
+                  </i>
+                } @else {
+                  <span class="tree-spacer"></span>
+                }
+
+                <i class="fa-solid fa-cube component-icon"></i>
+
+                <div class="component-info">
+                  <span class="component-name">{{ item.spec.title || item.spec.name }}</span>
+                  @if (item.spec.location === 'registry') {
+                    <span class="component-badge registry">Registry</span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="empty-state">
+            <i class="fa-solid fa-info-circle"></i>
+            <span>No component hierarchy available</span>
+          </div>
+        }
+      </div>
+
+      <!-- Feedback Form Section -->
+      <div class="feedback-section">
+        @if (SelectedSpec) {
+          <div class="selected-component-info">
+            <div class="section-header">
+              <i class="fa-solid fa-star"></i>
+              <span>Rate: {{ SelectedSpec.title || SelectedSpec.name }}</span>
+            </div>
+
+            @if (SelectedSpec.description) {
+              <p class="component-description">{{ SelectedSpec.description }}</p>
+            }
+
+            <!-- Star Rating -->
+            <div class="star-rating-container">
+              <label class="rating-label">Your Rating</label>
+              <div class="star-rating">
+                @for (star of [1, 2, 3, 4, 5]; track star) {
+                  <i
+                    class="star"
+                    [class.fa-solid]="IsStarFilled(star)"
+                    [class.fa-regular]="!IsStarFilled(star)"
+                    [class.fa-star]="true"
+                    (click)="SetRating(star)"
+                    (mouseenter)="SetHoverRating(star)"
+                    (mouseleave)="ClearHoverRating()">
+                  </i>
+                }
+              </div>
+              @if (StarRating > 0) {
+                <span class="rating-text">{{ StarRating }} out of 5 stars</span>
+              } @else {
+                <span class="rating-text placeholder">Click to rate</span>
+              }
+            </div>
+
+            <!-- Comment Input -->
+            <div class="comment-container">
+              <label class="comment-label">
+                Comments
+                <span class="optional-label">(optional)</span>
+              </label>
+              <textarea
+                class="comment-input"
+                [(ngModel)]="FeedbackComments"
+                placeholder="Share your thoughts about this component..."
+                rows="4"
+                maxlength="1000">
+              </textarea>
+              @if (FeedbackComments.length > 0) {
+                <span class="char-count">{{ FeedbackComments.length }}/1000</span>
+              }
+            </div>
+
+            <!-- Submit Button -->
+            <div class="submit-container">
+              <button
+                class="submit-button"
+                [disabled]="!CanSubmit()"
+                (click)="SubmitFeedback()">
+                @if (IsSubmitting) {
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  <span>Submitting...</span>
+                } @else {
+                  <i class="fa-solid fa-paper-plane"></i>
+                  <span>Submit Feedback</span>
+                }
+              </button>
+            </div>
+
+            <!-- Success/Error Messages -->
+            @if (SubmitSuccess) {
+              <div class="message success-message">
+                <i class="fa-solid fa-check-circle"></i>
+                <span>Feedback submitted successfully!</span>
+              </div>
+            }
+            @if (SubmitError) {
+              <div class="message error-message">
+                <i class="fa-solid fa-exclamation-circle"></i>
+                <span>{{ SubmitError }}</span>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="no-selection-message">
+            <i class="fa-solid fa-hand-pointer"></i>
+            <p>Select a component from the tree to provide feedback</p>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+</div>

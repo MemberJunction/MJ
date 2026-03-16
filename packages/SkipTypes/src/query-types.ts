@@ -271,6 +271,13 @@ export class SkipQueryInfo implements IQueryInfoBase {
      */
     Entities?: SkipQueryEntityInfo[];
 
+    /**
+     * When true, this query can be referenced by other queries via the composition syntax
+     * `{{query:"CategoryPath/QueryName"}}`. Only queries with Reusable=true AND Status='Approved'
+     * are eligible for composition.
+     */
+    Reusable: boolean = false;
+
     CacheEnabled: boolean = false;
     CacheMaxSize: number;
     CacheTTLMinutes: number;

@@ -45,7 +45,7 @@ import { UUIDsEqual } from '@memberjunction/global';
   styles: [`
     .gantt-task-viewer {
       height: 100%;
-      background: white;
+      background: var(--mj-bg-surface);
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -66,21 +66,21 @@ import { UUIDsEqual } from '@memberjunction/global';
 
     .gantt-resizer {
       width: 4px;
-      background: #E5E7EB;
+      background: var(--mj-border-default);
       cursor: col-resize;
       flex-shrink: 0;
       transition: background 0.2s;
     }
 
     .gantt-resizer:hover {
-      background: #3B82F6;
+      background: var(--mj-brand-primary);
     }
 
     .task-detail-panel {
       min-width: 300px;
       max-width: 600px;
       height: 100%;
-      border-left: 1px solid #E5E7EB;
+      border-left: 1px solid var(--mj-border-default);
       flex-shrink: 0;
     }
 
@@ -92,8 +92,8 @@ import { UUIDsEqual } from '@memberjunction/global';
 
     :host ::ng-deep .gantt_grid_scale,
     :host ::ng-deep .gantt_task_scale {
-      background: #F9FAFB;
-      border-bottom: 2px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border-bottom: 2px solid var(--mj-border-default);
     }
 
     :host ::ng-deep .gantt_task .gantt_task_content {
@@ -103,7 +103,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     .no-tasks {
       text-align: center;
       padding: 80px 20px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
     }
 
     .no-tasks i {

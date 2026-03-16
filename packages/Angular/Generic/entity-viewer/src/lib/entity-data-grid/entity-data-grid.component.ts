@@ -15,6 +15,7 @@ import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { buildPkString, computeFieldsList } from '../utils/record.util';
 import { MJUserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle, ViewGridAggregatesConfig, ViewGridAggregate } from '@memberjunction/core-entities';
 import {
@@ -29,6 +30,7 @@ import {
   GetRowIdParams,
   themeAlpine,
   SortChangedEvent as AgSortChangedEvent,
+  type Theme,
   ColumnResizedEvent,
   ColumnMovedEvent,
   SelectionChangedEvent,
@@ -266,6 +268,35 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   get MaxBlocksInCache(): number {
     return this._maxBlocksInCache;
   }
+
+  /**
+   * Whether to show the shared PaginationComponent below the grid.
+   * When true, displays page-based navigation (first/prev/next/last) using the
+   * TotalRowCount from server responses. The pager auto-hides when there's only one page.
+   */
+  @Input() ShowPager: boolean = false;
+
+  /**
+   * Current page number for the shared pager (1-based).
+   * Set by parent when using external data with server-side paging.
+   */
+  @Input() PagerPageNumber: number = 1;
+
+  /**
+   * Total row count from server for the shared pager.
+   * When using external data ([Data] input), the parent must set this
+   * so the pager knows the total number of rows across all pages.
+   */
+  @Input()
+  set TotalRowCount(value: number) {
+    this.totalRowCount = value;
+  }
+
+  /**
+   * Emits when the user navigates to a different page via the shared PaginationComponent.
+   * Parent components should handle this by re-fetching data with updated StartRow/MaxRows.
+   */
+  @Output() PageChange = new EventEmitter<PageChangeEvent>();
 
   // ========================================
   // External Data Input
@@ -1215,9 +1246,23 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
   private gridApi: GridApi | null = null;
 
   /** AG Grid theme (v34+) with custom selection colors */
-  public agGridTheme = themeAlpine.withParams({
-    selectedRowBackgroundColor: '#fff3cd',  // More visible mellow yellow selection
-    rowHoverColor: '#f5f5f5'
+  public agGridTheme: Theme = themeAlpine.withParams({
+    backgroundColor: 'var(--mj-bg-surface)',
+    foregroundColor: 'var(--mj-text-primary)',
+    textColor: 'var(--mj-text-primary)',
+    borderColor: 'var(--mj-border-default)',
+    chromeBackgroundColor: 'var(--mj-bg-surface-card)',
+    headerBackgroundColor: 'var(--mj-bg-surface-card)',
+    headerTextColor: 'var(--mj-text-secondary)',
+    cellTextColor: 'var(--mj-text-primary)',
+    subtleTextColor: 'var(--mj-text-muted)',
+    dataBackgroundColor: 'var(--mj-bg-surface)',
+    oddRowBackgroundColor: 'var(--mj-bg-surface-card)',
+    rowHoverColor: 'var(--mj-bg-surface-hover, color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface)))',
+    selectedRowBackgroundColor: 'color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface))',
+    accentColor: 'var(--mj-brand-primary)',
+    borderRadius: 'var(--mj-radius-sm)',
+    browserColorScheme: 'inherit',
   });
 
   /** AG Grid row selection configuration */

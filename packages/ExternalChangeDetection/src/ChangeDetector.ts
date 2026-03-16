@@ -132,9 +132,19 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
 
             const [createResult, updateResult, deleteResult] = await rq.RunQueries([
                 { QueryName: 'ExternalChangeDetection_DetectCreations', Parameters: commonParams },
-                { QueryName: 'ExternalChangeDetection_DetectUpdates', Parameters: commonParams },
+                { QueryName: 'ExternalChangeDetection_DetectUpdates', Parameters: {
+                    EntityID: commonParams.EntityID,
+                    SchemaName: commonParams.SchemaName,
+                    BaseView: commonParams.BaseView,
+                    ColumnList: commonParams.ColumnList,
+                    PrimaryKeyJoin: commonParams.PrimaryKeyJoin,
+                    UpdatedAtField: commonParams.UpdatedAtField
+                } },
                 { QueryName: 'ExternalChangeDetection_DetectDeletions', Parameters: {
-                    ...commonParams,
+                    EntityID: commonParams.EntityID,
+                    SchemaName: commonParams.SchemaName,
+                    BaseView: commonParams.BaseView,
+                    PrimaryKeyJoin: commonParams.PrimaryKeyJoin,
                     PrimaryKeyIsNull: entity.PrimaryKeys.map(pk => `ot.${this._dialect.QuoteIdentifier(pk.Name)} IS NULL`).join(' AND ')
                 } }
             ], this.ContextUser);
@@ -365,8 +375,9 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 const quotedTable = this._dialect.QuoteSchema(e.entity.SchemaName, e.entity.BaseView);
                 const sql = `SELECT * FROM ${quotedTable}
                             WHERE ${e.keys.map(k => `(${k.KeyValuePairs.map(kvp => {
-                                    const f = e.entity.Fields.find(f => kvp.FieldName.trim().toLowerCase() === f.Name);
-                                    const quotes = f?.NeedsQuotes ? "'" : "";
+                                    const f = e.entity.Fields.find(f => kvp.FieldName.trim().toLowerCase() === f.Name.trim().toLowerCase());
+                                    const needsQuotes = f?.NeedsQuotes || typeof kvp.Value === 'string';
+                                    const quotes = needsQuotes ? "'" : "";
                                     const quotedField = this._dialect.QuoteIdentifier(kvp.FieldName);
                                     const escapedValue = typeof kvp.Value === 'string' ? kvp.Value.replace(/'/g, "''") : kvp.Value;
                                     return `${quotedField}=${quotes}${escapedValue}${quotes}`
@@ -503,13 +514,16 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 LogStatus(`Replaying ${changes.length} changes`);
 
                 let numProcessed = 0;
+                const logInterval = Math.max(1, Math.floor(changes.length / 20)); // Log at ~5% intervals
                 for (let i = 0; i < changes.length; i += batchSize) {
                     const batch = changes.slice(i, i + batchSize);
-                    
+
                     const batchPromises = batch.map(async (c) => {
                         const result = await this.ReplayChange(md, c);
                         numProcessed++;
-                        UpdateCurrentConsoleProgress(`   Replayed ${numProcessed} of ${changes.length} changes`, numProcessed, changes.length);
+                        if (numProcessed % logInterval === 0 || numProcessed === changes.length) {
+                            UpdateCurrentConsoleProgress(`   Replayed ${numProcessed} of ${changes.length} changes`, numProcessed, changes.length);
+                        }
                         return result;
                     });
 

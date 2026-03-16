@@ -26,6 +26,19 @@ To enable fast mode (2.5x faster Opus 4.6 responses), add `"fastMode": true` to 
   - No `unknown` as a lazy alternative
 - **Why**: MemberJunction has strong typing throughout - there's always a proper type available
 
+### 2b. NO WEAK TYPING — NEVER USE BaseEntity `.Get()` / `.Set()` AS A SUBSTITUTE FOR GENERATED TYPES
+- **NEVER use `record.Get('FieldName')` or `record.Set('FieldName', value)`** to access entity fields that should have strongly-typed properties
+- **NEVER write code that depends on fields not yet in generated types** — if a migration hasn't run and CodeGen hasn't generated the types, **wait for CodeGen** before writing code that references those fields
+- `.Get()` and `.Set()` are dynamic, stringly-typed accessors with zero compile-time safety — they bypass the entire point of MJ's generated entity classes
+- The correct workflow when adding new database columns:
+  1. Write the migration
+  2. Run the migration + CodeGen to generate types
+  3. **Then** write TypeScript code using the strongly-typed properties
+- If you find yourself reaching for `.Get()` or `.Set()`, STOP — it means either:
+  - The types exist and you should use the typed property instead
+  - The types don't exist yet because CodeGen hasn't run — wait for it before writing dependent code
+- **Why**: `.Get()`/`.Set()` fail silently on typos, have no IntelliSense, no refactoring support, and no compile-time checking. They are the `any` of the entity world.
+
 ### 3. NO DESTRUCTIVE GIT OPERATIONS WITHOUT EXPLICIT APPROVAL
 - **NEVER run `git checkout -- <file>` or `git restore <file>`** to discard changes without the user explicitly approving — even in bypass/auto-approve permission mode
 - **NEVER run `git reset --hard`** without explicit approval
@@ -318,6 +331,7 @@ MemberJunction uses `@RegisterClass` decorators with a dynamic class factory (`M
 
 ## Database Migrations
 - See `/migrations/CLAUDE.md` for comprehensive migration guidelines
+- **Migration folder**: Always use the highest-numbered `migrations/v*/` folder (currently `migrations/v5/`). Check `ls migrations/v*/` if unsure.
 - Key points:
   - Use format `VYYYYMMDDHHMM__v[VERSION].x_[DESCRIPTION].sql`
   - Always use hardcoded UUIDs (not NEWID())
@@ -841,6 +855,140 @@ const ids = result.Results.map(r => r.ID);
   }
   ```
 
+## 🚨 CRITICAL: Design Token System — NO HARDCODED COLORS 🚨
+
+MemberJunction uses a comprehensive CSS custom property (design token) system defined in `packages/Angular/Generic/shared/src/lib/_tokens.scss`. **Every color in component CSS MUST use design tokens.** Hardcoded hex values (`#264FAF`, `#333`, `#f5f5f5`, etc.) break dark mode, prevent white-labeling, and create maintenance debt.
+
+### The Rule
+
+**NEVER write hardcoded hex/rgb colors in component CSS.** Always use the appropriate semantic token. This applies to ALL properties: `color`, `background`, `border`, `fill`, `box-shadow`, `outline`, etc.
+
+```css
+/* ❌ WRONG — hardcoded hex values */
+.my-component {
+    color: #333;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+}
+
+/* ✅ CORRECT — semantic design tokens */
+.my-component {
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+}
+```
+
+### Token Categories (Use ONLY Semantic Tokens)
+
+**NEVER use primitive tokens (`--mj-color-neutral-*`, `--mj-color-brand-*`) in component CSS.** Primitives don't adapt to dark mode. Always use semantic tokens:
+
+#### Text Colors
+| Token | Purpose |
+|---|---|
+| `--mj-text-primary` | Main body text, headings |
+| `--mj-text-secondary` | Supporting text, labels |
+| `--mj-text-muted` | De-emphasized text, captions |
+| `--mj-text-disabled` | Disabled/placeholder text |
+| `--mj-text-inverse` | Text on dark/colored backgrounds |
+| `--mj-text-link` | Clickable links |
+
+#### Background Colors
+| Token | Purpose |
+|---|---|
+| `--mj-bg-page` | Full-page background |
+| `--mj-bg-surface` | Cards, panels, modals |
+| `--mj-bg-surface-card` | Slightly tinted cards, secondary surfaces |
+| `--mj-bg-surface-sunken` | Inset areas, code backgrounds |
+| `--mj-bg-surface-elevated` | Elevated surfaces, dropdowns |
+| `--mj-bg-surface-hover` | Hover states on surfaces |
+| `--mj-bg-surface-active` | Active/pressed states |
+| `--mj-bg-overlay` | Modal/drawer backdrops |
+
+#### Border Colors
+| Token | Purpose |
+|---|---|
+| `--mj-border-default` | Standard borders |
+| `--mj-border-subtle` | Very light borders |
+| `--mj-border-strong` | Emphasized borders, scrollbar thumbs |
+| `--mj-border-focus` | Focus rings |
+
+#### Brand Colors
+| Token | Purpose |
+|---|---|
+| `--mj-brand-primary` | Primary buttons, active states, accents |
+| `--mj-brand-primary-hover` | Primary hover state |
+| `--mj-brand-primary-active` | Primary pressed state |
+
+#### Status Colors
+| Token | Purpose |
+|---|---|
+| `--mj-status-success` / `-bg` / `-text` / `-border` | Success states |
+| `--mj-status-warning` / `-bg` / `-text` / `-border` | Warning states (orange) |
+| `--mj-status-error` / `-bg` / `-text` / `-border` | Error states (red) |
+| `--mj-status-info` / `-bg` / `-text` / `-border` | Informational states |
+
+#### Logo Tokens
+| Token | Purpose |
+|---|---|
+| `--mj-logo-mark` | Logo icon (auto-switches light/dark) |
+| `--mj-logo-mark-inverse` | Logo icon for dark backgrounds |
+| `--mj-logo-wordmark` | Full logo with text |
+| `--mj-logo-color` | Loading spinner fill color |
+
+### Common Hex → Token Mappings
+
+When migrating or reviewing code, use these mappings:
+
+| Hex | Token |
+|---|---|
+| `#333`, `#334155` | `--mj-text-primary` |
+| `#555`, `#475569`, `#666` | `--mj-text-secondary` |
+| `#757575`, `#888`, `#64748b` | `--mj-text-muted` |
+| `#999`, `#94a3b8`, `#aaa` | `--mj-text-disabled` |
+| `#fff` (on colored bg) | `--mj-text-inverse` |
+| `white` (background) | `--mj-bg-surface` |
+| `#f5f5f5`, `#f8f9fa`, `#f9f9f9`, `#fafafa` | `--mj-bg-surface-card` |
+| `#f0f0f0`, `#f1f1f1`, `#f1f5f9` | `--mj-bg-surface-sunken` |
+| `#e0e0e0`, `#e2e8f0`, `#d1d5db`, `#e5e7eb` | `--mj-border-default` |
+| `#ccc`, `#cbd5e1` | `--mj-border-strong` |
+| `#ef6c00`, `#ff6600` (warning/orange) | `--mj-status-warning` |
+| `#e65100` (dark orange) | `--mj-status-warning-text` |
+| `#e53e3e`, `#dc2626` (error/red) | `--mj-status-error` |
+| `#c53030`, `#b91c1c` (dark red) | `--mj-status-error-text` |
+| `#264FAF`, `#0076b6` (MJ blue) | `--mj-brand-primary` |
+
+### Translucent Colors with `color-mix()`
+
+For translucent variants of token colors (tinted backgrounds, focus rings), use `color-mix()`:
+
+```css
+/* ✅ Tinted background from a token */
+background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+
+/* ✅ Focus ring from a token */
+box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+
+/* ✅ Subtle warning background */
+background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface));
+```
+
+### When Hardcoded Colors ARE Acceptable
+
+1. **SVG data URIs** — CSS variables cannot be used inside `url("data:image/svg+xml,...")`. Use `%23` encoded hex.
+2. **Code editor backgrounds** — Dark-on-dark code editors (e.g., `#1e1e1e` for CodeMirror) are intentionally static.
+3. **Categorical/chart colors** — Data visualization colors that must remain distinct regardless of theme.
+4. **`rgba()` alpha on white** — `rgba(255, 255, 255, 0.15)` for overlays on colored backgrounds is fine since it's relative to the surface it sits on.
+5. **CSS variable fallbacks** — `var(--mj-text-inverse, white)` fallback values are acceptable.
+
+### Before Submitting Any CSS
+
+Run this mental checklist:
+1. Does every `color:`, `background:`, `border-color:`, `fill:` use a token? If not, fix it.
+2. Did I use a **semantic** token (not a primitive like `--mj-color-neutral-300`)? Primitives don't adapt to dark mode.
+3. Will this look correct in dark mode? Semantic tokens auto-adapt; hardcoded values don't.
+4. For `white`/`#fff` — is it text on a colored background (`--mj-text-inverse`) or a surface background (`--mj-bg-surface`)?
+
 ## Icon Libraries
 - **Primary**: Font Awesome (already included) - Use for all icons throughout the application
 - Font Awesome classes: `fa-solid`, `fa-regular`, `fa-light`, `fa-brands` etc.
@@ -1130,7 +1278,7 @@ MemberJunction includes a powerful code generation system that automatically cre
    - Foreign key relationships and computed fields
    - Value list enums from database constraints
 
-2. **Database Objects** (`migrations/v2/CodeGen_Run_*.sql`)
+2. **Database Objects** (`migrations/v5/CodeGen_Run_*.sql`)
    - Stored procedures (spCreate, spUpdate, spDelete) 
    - Database views with proper joins and computed fields
    - Foreign key indexes for performance
@@ -1192,7 +1340,7 @@ When you add fields like `PromptRole` and `PromptPosition`:
 - **Entity Classes**: `packages/MJCoreEntities/src/generated/entity_subclasses.ts`
 - **Server APIs**: `packages/MJServer/src/generated/generated.ts` 
 - **Angular Forms**: `packages/Angular/Explorer/core-entity-forms/src/lib/generated/`
-- **Migration SQL**: `migrations/v2/CodeGen_Run_YYYY-MM-DD_HH-MM-SS.sql`
+- **Migration SQL**: `migrations/v5/CodeGen_Run_YYYY-MM-DD_HH-MM-SS.sql`
 
 ## AI Model and Vendor Configuration
 
@@ -1378,6 +1526,45 @@ When metadata records contain JSON blobs (schemas, templates, etc.):
 1. Create a subdirectory named for the content type (e.g., `schemas/`, `templates/`)
 2. Name files descriptively with appropriate extension (e.g., `api-key.schema.json`)
 3. Use the `@file:relative/path.json` syntax in the main metadata file
+
+### Seeding New Lookup/Reference Tables
+When a migration creates a new lookup or reference table (e.g., `AIAgentRequestType`, `ResourceType`), **never seed it with SQL INSERT statements in the migration**. Instead, use the metadata file system:
+
+1. Create a new directory under `/metadata/` named for the entity (e.g., `agent-request-types/`)
+2. Create `.mj-sync.json` with the entity configuration:
+   ```json
+   {
+     "entity": "MJ: AI Agent Request Types",
+     "filePattern": "**/.*.json",
+     "defaults": {},
+     "pull": {
+       "createNewFileIfNotFound": true,
+       "newFileName": ".agent-request-types.json",
+       "appendRecordsToExistingFile": true,
+       "updateExistingRecords": true,
+       "preserveFields": [],
+       "excludeFields": [],
+       "mergeStrategy": "merge",
+       "backupBeforeUpdate": true,
+       "backupDirectory": ".backups",
+       "filter": "",
+       "externalizeFields": [],
+       "ignoreNullFields": true,
+       "ignoreVirtualFields": true,
+       "lookupFields": {},
+       "relatedEntities": {}
+     }
+   }
+   ```
+3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — these are auto-populated by mj-sync on first push.
+4. Push with: `npx mj sync push --dir=metadata --include="agent-request-types"`
+
+**Why metadata files over SQL INSERTs:**
+- Version-controlled, declarative, and human-readable
+- `@lookup:` references resolve entity names to IDs automatically
+- `mj sync push` handles upsert semantics — safe to re-run
+- Consistent with how all other MJ reference data is managed
+- See `/metadata/resource-types/` for a clean example of a seeded lookup table
 
 ### Application Metadata
 When creating new applications with custom dashboards:

@@ -14,6 +14,7 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunQuery, RunQueryParams, Metadata, QueryInfo, QueryFieldInfo } from '@memberjunction/core';
+import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { RunQueryResult } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import {
@@ -28,6 +29,7 @@ import {
     GetRowIdParams,
     themeAlpine,
     SortChangedEvent as AgSortChangedEvent,
+    type Theme,
     ColumnResizedEvent,
     ColumnMovedEvent,
     SelectionChangedEvent,
@@ -278,6 +280,21 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
      */
     @Output() RefreshRequest = new EventEmitter<void>();
 
+    /**
+     * Total row count for server-side paging (from RunQueryResult.TotalRowCount).
+     * When > 0 and TotalPages > 1, the data pager is displayed below the grid.
+     */
+    @Input() TotalRowCount: number = 0;
+
+    /** Current page number (1-based) for server-side paging */
+    @Input() PageNumber: number = 1;
+
+    /** Page size for server-side paging */
+    @Input() PageSize: number = 100;
+
+    /** Fired when the user navigates to a different page */
+    @Output() PageChange = new EventEmitter<PageChangeEvent>();
+
     // ========================================
     // Internal State
     // ========================================
@@ -287,7 +304,24 @@ export class QueryDataGridComponent implements OnInit, OnDestroy {
     public Columns: QueryGridColumnConfig[] = [];
     public SortState: QueryGridSortState[] = [];
     public SelectedRows: Record<string, unknown>[] = [];
-    public Theme = themeAlpine;
+    public Theme: Theme = themeAlpine.withParams({
+        backgroundColor: 'var(--mj-bg-surface)',
+        foregroundColor: 'var(--mj-text-primary)',
+        textColor: 'var(--mj-text-primary)',
+        borderColor: 'var(--mj-border-default)',
+        chromeBackgroundColor: 'var(--mj-bg-surface-card)',
+        headerBackgroundColor: 'var(--mj-bg-surface-card)',
+        headerTextColor: 'var(--mj-text-secondary)',
+        cellTextColor: 'var(--mj-text-primary)',
+        subtleTextColor: 'var(--mj-text-muted)',
+        dataBackgroundColor: 'var(--mj-bg-surface)',
+        oddRowBackgroundColor: 'var(--mj-bg-surface-card)',
+        rowHoverColor: 'var(--mj-bg-surface-hover, color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface)))',
+        selectedRowBackgroundColor: 'color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface))',
+        accentColor: 'var(--mj-brand-primary)',
+        borderRadius: 'var(--mj-radius-sm)',
+        browserColorScheme: 'inherit',
+    });
 
     private destroy$ = new Subject<void>();
     private stateChangeSubject = new Subject<QueryGridStateChangedEvent>();

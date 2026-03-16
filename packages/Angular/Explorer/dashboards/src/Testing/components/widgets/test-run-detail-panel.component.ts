@@ -132,16 +132,16 @@ import { OracleResult } from './oracle-breakdown-table.component';
     `,
   styles: [`
     .test-run-detail-panel {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
       overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      box-shadow: var(--mj-shadow-md);
     }
 
     .detail-header {
       padding: 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
@@ -175,7 +175,7 @@ import { OracleResult } from './oracle-breakdown-table.component';
     .close-btn {
       background: rgba(255, 255, 255, 0.2);
       border: none;
-      color: white;
+      color: var(--mj-text-inverse);
       padding: 8px 12px;
       border-radius: 4px;
       cursor: pointer;
@@ -198,15 +198,15 @@ import { OracleResult } from './oracle-breakdown-table.component';
     }
 
     .metric-card {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       padding: 16px;
       border-radius: 8px;
-      border-left: 4px solid #2196f3;
+      border-left: 4px solid var(--mj-brand-primary);
     }
 
     .metric-label {
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -216,14 +216,14 @@ import { OracleResult } from './oracle-breakdown-table.component';
     .metric-value {
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .target-link {
       display: flex;
       align-items: center;
       gap: 6px;
-      color: #2196f3;
+      color: var(--mj-brand-primary);
       cursor: pointer;
       font-size: 14px;
     }
@@ -244,27 +244,27 @@ import { OracleResult } from './oracle-breakdown-table.component';
       align-items: center;
       margin-bottom: 12px;
       padding-bottom: 8px;
-      border-bottom: 1px solid #e0e0e0;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .section-header h4 {
       margin: 0;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
     .section-header h4 i {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .toggle-btn {
       background: none;
       border: none;
-      color: #666;
+      color: var(--mj-text-secondary);
       cursor: pointer;
       padding: 4px 8px;
       border-radius: 4px;
@@ -272,7 +272,7 @@ import { OracleResult } from './oracle-breakdown-table.component';
     }
 
     .toggle-btn:hover {
-      background: #f0f0f0;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .details-content {
@@ -280,8 +280,8 @@ import { OracleResult } from './oracle-breakdown-table.component';
     }
 
     .json-viewer {
-      background: #f8f9fa;
-      border: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface-card);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       padding: 16px;
       font-size: 11px;
@@ -293,7 +293,7 @@ import { OracleResult } from './oracle-breakdown-table.component';
     }
 
     .feedback-form {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       padding: 16px;
       border-radius: 8px;
     }
@@ -314,12 +314,12 @@ import { OracleResult } from './oracle-breakdown-table.component';
     .form-group label {
       font-size: 12px;
       font-weight: 600;
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     .rating-input {
       padding: 8px 12px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 14px;
     }
@@ -334,7 +334,7 @@ import { OracleResult } from './oracle-breakdown-table.component';
       align-items: center;
       gap: 8px;
       font-size: 13px;
-      color: #333;
+      color: var(--mj-text-primary);
       cursor: pointer;
     }
 
@@ -346,7 +346,7 @@ import { OracleResult } from './oracle-breakdown-table.component';
 
     .comments-textarea {
       padding: 10px 12px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 13px;
       font-family: inherit;
@@ -354,8 +354,8 @@ import { OracleResult } from './oracle-breakdown-table.component';
     }
 
     .submit-btn {
-      background: #2196f3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border: none;
       padding: 10px 20px;
       border-radius: 4px;
@@ -369,7 +369,7 @@ import { OracleResult } from './oracle-breakdown-table.component';
     }
 
     .submit-btn:hover:not(:disabled) {
-      background: #1976d2;
+      background: var(--mj-brand-primary-hover);
     }
 
     .submit-btn:disabled {
