@@ -226,11 +226,46 @@ ORDER BY r.TotalRevenue DESC`;
         expect(result.DataSQL).toContain('__cq_1 AS');
         expect(result.DataSQL).toContain('[__paged] AS');
         expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY');
-        expect(result.DataSQL).toContain('ORDER BY r.TotalRevenue DESC');
+        // After remapping, ORDER BY should use projected column names, not table aliases
+        expect(result.DataSQL).toContain('ORDER BY TotalRevenue DESC');
 
         // Count query should also have all CTEs
         expect(result.CountSQL).toContain('__cq_0 AS');
         expect(result.CountSQL).toContain('[__paged] AS');
         expect(result.CountSQL).toContain('TotalRowCount');
+    });
+
+    it('remaps ORDER BY with COALESCE and aliased columns to projected names', () => {
+        // Include SQL comments like the real composition engine produces
+        const sql = `WITH [__cte_Active_Users_k1gvl3] AS (
+-- Reusable base query: Returns all active users with basic profile info
+SELECT u.ID, u.Name, u.Email, u.Type, u.__mj_CreatedAt AS CreatedAt
+FROM __mj.vwUsers u
+WHERE u.IsActive = 1
+),
+[__cte_Recent_Entity_Changes_sokwc2] AS (
+-- Reusable base query: Returns recent record changes grouped by entity
+SELECT e.Name AS EntityName, COUNT(*) AS ChangeCount, MAX(rc.CreatedAt) AS LatestChange
+FROM __mj.vwRecordChanges rc
+INNER JOIN __mj.vwEntities e ON e.ID = rc.EntityID
+WHERE rc.CreatedAt >= DATEADD(DAY, -30, GETUTCDATE())
+GROUP BY e.Name
+)
+-- Composed query: Joins Active Users with Recent Entity Changes
+-- Demonstrates composition syntax
+SELECT au.Name AS UserName, au.Email, au.Type AS UserType, COALESCE(rc.ChangeCount, 0) AS RecentChanges, rc.LatestChange
+FROM [__cte_Active_Users_k1gvl3] au
+LEFT JOIN [__cte_Recent_Entity_Changes_sokwc2] rc ON rc.EntityName IN (
+    SELECT e.Name FROM __mj.vwEntities e WHERE e.ID IN (
+        SELECT DISTINCT EntityID FROM __mj.vwRecordChanges WHERE UserID = au.ID
+    )
+)
+ORDER BY COALESCE(rc.ChangeCount, 0) DESC, au.Name`;
+
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+        // ORDER BY should use projected names, not table aliases
+        expect(result.DataSQL).toContain('ORDER BY RecentChanges DESC, UserName');
+        expect(result.DataSQL).not.toContain('ORDER BY COALESCE(rc.ChangeCount');
     });
 });
