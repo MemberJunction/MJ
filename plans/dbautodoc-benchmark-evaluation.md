@@ -3,7 +3,7 @@
 ## Purpose
 Run DBAutoDoc against well-known public databases with ground truth (declared PKs, FKs, extended properties), then measure discovery accuracy and description quality. This provides reproducible proof points for the research paper.
 
----
+--- 
 
 ## Benchmark Databases
 

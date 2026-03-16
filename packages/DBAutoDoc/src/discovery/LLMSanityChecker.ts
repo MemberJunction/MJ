@@ -8,6 +8,7 @@ import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
 import { AIConfig } from '../types/config.js';
 import { createLLMInstance } from '../utils/llm-factory.js';
+import { ColumnStatsCache } from './ColumnStatsCache.js';
 
 export interface SanityCheckResult {
   invalidPKs: Array<{
@@ -31,7 +32,7 @@ export interface SanityCheckResult {
 export class LLMSanityChecker {
   private llm: BaseLLM;
 
-  constructor(private aiConfig: AIConfig) {
+  constructor(private aiConfig: AIConfig, private statsCache?: ColumnStatsCache) {
     // Create LLM instance using shared factory (DRY principle)
     this.llm = createLLMInstance(aiConfig.provider, aiConfig.apiKey);
   }
@@ -153,6 +154,7 @@ CRITICAL RULES:
 4. Boolean/flag fields are NEVER primary keys
 5. Each table should have exactly 1 PK (or a composite PK with 2-3 columns max)
 6. Foreign keys should reference another table, not point to themselves
+7. **HARD CONSTRAINT**: You may ONLY validate candidates from the list below. You CANNOT suggest new PK or FK columns that are not already candidates — eligibility has been determined by statistical analysis (zero nulls, zero blanks, 100% unique values for PKs; key-compatible data types for FKs). If a column is not in the candidate list, it mathematically cannot be a PK or FK.
 
 DETECTED PRIMARY KEY CANDIDATES:
 

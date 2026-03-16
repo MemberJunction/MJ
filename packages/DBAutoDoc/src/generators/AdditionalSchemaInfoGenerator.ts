@@ -50,8 +50,18 @@ interface TableSchemaInfo {
   ForeignKeys?: SoftFKEntry[];
 }
 
+interface SchemaNameInfo {
+  name: string;
+  entityNamePrefix: string;
+  entityNameSuffix: string;
+  description?: string;
+}
+
 /** Schema-keyed output format matching CodeGen's additionalSchemaInfo.json */
-type AdditionalSchemaInfo = Record<string, TableSchemaInfo[]>;
+interface AdditionalSchemaInfoOutput {
+  Schemas: SchemaNameInfo[];
+  [schemaName: string]: TableSchemaInfo[] | SchemaNameInfo[];
+}
 
 export class AdditionalSchemaInfoGenerator {
   /**
@@ -61,6 +71,10 @@ export class AdditionalSchemaInfoGenerator {
    * 1. Hard FK/PK data already in state.schemas (from database introspection)
    * 2. Discovered PK/FK candidates from state.phases.keyDetection (AI discovery)
    *
+   * Also emits a top-level "Schemas" array with entity name prefix/suffix
+   * recommendations derived from schema names, for use by CodeGen to prevent
+   * entity name collisions across schemas.
+   *
    * When discoveredOnly is true, only source (2) is included — useful when
    * CodeGen already handles the hard constraints from the database.
    */
@@ -68,7 +82,9 @@ export class AdditionalSchemaInfoGenerator {
     state: DatabaseDocumentation,
     options: AdditionalSchemaInfoOptions = {}
   ): string {
-    const result: AdditionalSchemaInfo = {};
+    const result: AdditionalSchemaInfoOutput = {
+      Schemas: this.generateSchemaNameInfo(state),
+    };
     const threshold = options.confidenceThreshold ?? 0;
 
     // Collect discovered candidates from key detection phase
@@ -102,6 +118,74 @@ export class AdditionalSchemaInfoGenerator {
     }
 
     return JSON.stringify(result, null, 4);
+  }
+
+  /**
+   * Generates schema-level entity name prefix recommendations.
+   * For multi-schema databases, each schema gets a prefix to prevent
+   * entity name collisions (e.g., "Accounting: " for ACCOUNTING schema).
+   *
+   * Prefix rules:
+   * - Single-schema databases: no prefix (empty string)
+   * - Short recognized acronyms (CRM, AI, HR, ERP, etc.): keep as-is
+   * - Compound names with underscores: normalize (AI_COMMERCE_CONTEXT -> "AI Commerce Context: ")
+   * - Regular names: title-case (ACCOUNTING -> "Accounting: ")
+   */
+  private generateSchemaNameInfo(state: DatabaseDocumentation): SchemaNameInfo[] {
+    // Single schema — no prefixes needed
+    if (state.schemas.length <= 1) {
+      return state.schemas.map(s => ({
+        name: s.name,
+        entityNamePrefix: '',
+        entityNameSuffix: '',
+        description: s.description || undefined,
+      }));
+    }
+
+    return state.schemas.map(s => ({
+      name: s.name,
+      entityNamePrefix: this.generateSchemaPrefix(s.name) + ' ',
+      entityNameSuffix: '',
+      description: s.description || undefined,
+    }));
+  }
+
+  /**
+   * Generates a human-readable prefix from a schema name.
+   * Examples:
+   *   "CRM" -> "CRM:"
+   *   "ACCOUNTING" -> "Accounting:"
+   *   "AI_COMMERCE_CONTEXT" -> "AI Commerce Context:"
+   *   "CRM_V2" -> "CRM V2:"
+   */
+  private generateSchemaPrefix(schemaName: string): string {
+    const knownAcronyms = new Set([
+      'CRM', 'AI', 'HR', 'ERP', 'ETL', 'API', 'MJ', 'UI', 'UX', 'IT', 'QA',
+    ]);
+
+    if (schemaName.includes('_')) {
+      // Split on underscores, process each part
+      const parts = schemaName.split('_').filter(p => p.length > 0);
+      const normalized = parts.map(part => {
+        if (knownAcronyms.has(part.toUpperCase())) {
+          return part.toUpperCase();
+        }
+        // Check if it's a version-like suffix (V2, V3, etc.)
+        if (/^V\d+$/i.test(part)) {
+          return part.toUpperCase();
+        }
+        return part.charAt(0).toUpperCase() + part.slice(1).toLowerCase();
+      });
+      return normalized.join(' ') + ':';
+    }
+
+    // Single word — check if it's a known acronym
+    if (knownAcronyms.has(schemaName.toUpperCase())) {
+      return schemaName.toUpperCase() + ':';
+    }
+
+    // Title-case it
+    return schemaName.charAt(0).toUpperCase() + schemaName.slice(1).toLowerCase() + ':';
   }
 
   /**

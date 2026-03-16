@@ -329,9 +329,14 @@ describe('Low Confidence Reanalysis', () => {
     });
 
     const lowConf = manager.getLowConfidenceTables(state, 0.7);
-    expect(lowConf).toHaveLength(1);
-    expect(lowConf[0].table).toBe('Users');
-    expect(lowConf[0].confidence).toBe(0.4);
+    // Users (0.4) and Products (0 — no iterations yet) are below threshold; Orders (0.9) is above
+    expect(lowConf).toHaveLength(2);
+    const users = lowConf.find(t => t.table === 'Users');
+    const products = lowConf.find(t => t.table === 'Products');
+    expect(users).toBeDefined();
+    expect(users!.confidence).toBe(0.4);
+    expect(products).toBeDefined();
+    expect(products!.confidence).toBe(0);
   });
 
   it('should not mark ground truth tables for reanalysis', () => {

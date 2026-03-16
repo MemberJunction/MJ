@@ -514,21 +514,35 @@ DBAutoDoc automatically emits `additionalSchemaInfo.json` in every analysis run 
 **Output format** (matches CodeGen's `additionalSchemaInfo.json`):
 ```json
 {
-  "wicket": [
+  "Schemas": [
     {
-      "TableName": "Person",
+      "name": "CRM",
+      "entityNamePrefix": "CRM: ",
+      "entityNameSuffix": "",
+      "description": "Customer relationship management tables"
+    },
+    {
+      "name": "ACCOUNTING",
+      "entityNamePrefix": "Accounting: ",
+      "entityNameSuffix": "",
+      "description": "Financial and accounting tables"
+    }
+  ],
+  "CRM": [
+    {
+      "TableName": "CUSTOMER",
       "PrimaryKey": [
-        { "FieldName": "uuid", "Description": "AI-discovered primary key (confidence: 95%)" }
+        { "FieldName": "CUSTOMER_ID", "Description": "AI-discovered primary key (confidence: 95%)" }
       ]
     },
     {
-      "TableName": "Connection",
+      "TableName": "ORDER",
       "ForeignKeys": [
         {
-          "FieldName": "person_id",
-          "SchemaName": "wicket",
-          "RelatedTable": "Person",
-          "RelatedField": "uuid",
+          "FieldName": "CUSTOMER_ID",
+          "SchemaName": "CRM",
+          "RelatedTable": "CUSTOMER",
+          "RelatedField": "CUSTOMER_ID",
           "Description": "AI-discovered relationship (confidence: 88%)"
         }
       ]
@@ -536,6 +550,20 @@ DBAutoDoc automatically emits `additionalSchemaInfo.json` in every analysis run 
   ]
 }
 ```
+
+#### Schemas Section (Entity Name Prefixes)
+
+The top-level `Schemas` array provides entity naming recommendations for CodeGen. For multi-schema databases, each schema gets a prefix to prevent entity name collisions when CodeGen creates MemberJunction entities.
+
+**Prefix generation rules:**
+- **Single-schema databases**: No prefix (empty string) — collisions are impossible
+- **Known acronyms** (CRM, AI, HR, ERP, ETL, API, etc.): Kept uppercase (e.g., `"CRM: "`)
+- **Compound underscore names**: Normalized with title-case (e.g., `AI_COMMERCE_CONTEXT` → `"AI Commerce Context: "`)
+- **Regular names**: Title-cased (e.g., `ACCOUNTING` → `"Accounting: "`)
+
+CodeGen reads the `Schemas` array and applies prefixes to `SchemaInfo` records, which are then prepended to entity display names during entity creation. This ensures entities like `CRM.CUSTOMER` and `SALES.CUSTOMER` become `"CRM: Customer"` and `"Sales: Customer"` instead of colliding.
+
+#### PK/FK Data
 
 **Data sources:**
 1. Hard FK/PK from database introspection (always included unless `--schema-info-discovered-only`)
@@ -551,7 +579,7 @@ DBAutoDoc automatically emits `additionalSchemaInfo.json` in every analysis run 
 1. Run DBAutoDoc analysis on a legacy database
 2. Copy `additionalSchemaInfo.json` to your MJ project
 3. Set `codeGen.additionalSchemaInfo` path in `mj.config.cjs`
-4. Run CodeGen to apply soft FK/PK metadata to EntityField records
+4. Run CodeGen to apply soft FK/PK metadata and schema prefixes to entity records
 
 ### Granular Guardrails
 
