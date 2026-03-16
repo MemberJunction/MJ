@@ -59,10 +59,10 @@ export class DiscoveryEngine {
     // Create stats cache and detectors
     this.statsCache = new ColumnStatsCache();
     this.pkDetector = new PKDetector(this.driver, this.config, this.statsCache);
-    this.fkDetector = new FKDetector(this.driver, this.config);
+    this.fkDetector = new FKDetector(this.driver, this.config, this.statsCache);
 
     // Create LLM sanity checker (runs once after statistical detection)
-    this.sanityChecker = new LLMSanityChecker(this.aiConfig);
+    this.sanityChecker = new LLMSanityChecker(this.aiConfig, this.statsCache);
 
     // Create LLM validator if enabled (runs per-table validation)
     if (this.config.llmValidation?.enabled) {
@@ -743,9 +743,30 @@ export class DiscoveryEngine {
           continue;
         }
 
-        // Process LLM recommendations
+        // Process LLM recommendations — enforce eligibility constraints
         for (const rec of result.recommendations) {
           const recId = `${rec.target}:${rec.schemaName}.${rec.tableName}.${rec.columnName}`;
+
+          // Gate: LLM cannot add or confirm PKs/FKs for ineligible columns
+          if ((rec.type === 'confirm' || rec.type === 'add_new') && rec.columnName) {
+            if (rec.target === 'pk') {
+              const eligible = this.pkDetector.getPKEligibleColumns(
+                rec.schemaName || schemaName, rec.tableName || tableName
+              );
+              if (!eligible.includes(rec.columnName)) {
+                console.log(`[DiscoveryEngine] BLOCKED LLM ${rec.type} PK for ${rec.columnName} — not PK-eligible (must have zero nulls, zero blanks, 100% unique)`);
+                continue;
+              }
+            } else if (rec.target === 'fk') {
+              const eligible = this.fkDetector.getFKEligibleColumns(
+                rec.schemaName || schemaName, rec.tableName || tableName
+              );
+              if (!eligible.includes(rec.columnName)) {
+                console.log(`[DiscoveryEngine] BLOCKED LLM ${rec.type} FK for ${rec.columnName} — not FK-eligible (non-key data type or values don't look like keys)`);
+                continue;
+              }
+            }
+          }
 
           if (rec.type === 'confirm') {
             validated.push(recId);

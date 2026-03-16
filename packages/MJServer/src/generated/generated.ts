@@ -1988,6 +1988,9 @@ export class MJAction_ {
     @MaxLength(36)
     DefaultCompactPromptID?: string;
         
+    @Field({nullable: true, description: `Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.`}) 
+    Config?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Category?: string;
@@ -2113,6 +2116,9 @@ export class CreateMJActionInput {
 
     @Field({ nullable: true })
     DefaultCompactPromptID: string | null;
+
+    @Field({ nullable: true })
+    Config: string | null;
 }
     
 
@@ -2183,6 +2189,9 @@ export class UpdateMJActionInput {
 
     @Field({ nullable: true })
     DefaultCompactPromptID?: string | null;
+
+    @Field({ nullable: true })
+    Config?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -43402,6 +43411,18 @@ export class MJIntegrationObject_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `API path for create/update operations when different from the read APIPath. If NULL, the read APIPath is used for writes as well.`}) 
+    @MaxLength(500)
+    WriteAPIPath?: string;
+        
+    @Field({nullable: true, description: `HTTP method for create operations. Defaults to POST.`}) 
+    @MaxLength(10)
+    WriteMethod?: string;
+        
+    @Field({nullable: true, description: `HTTP method for delete operations. Defaults to DELETE.`}) 
+    @MaxLength(10)
+    DeleteMethod?: string;
+        
     @Field() 
     @MaxLength(100)
     Integration: string;
@@ -43469,6 +43490,15 @@ export class CreateMJIntegrationObjectInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    WriteAPIPath: string | null;
+
+    @Field({ nullable: true })
+    WriteMethod?: string | null;
+
+    @Field({ nullable: true })
+    DeleteMethod?: string | null;
 }
     
 
@@ -43527,6 +43557,15 @@ export class UpdateMJIntegrationObjectInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    WriteAPIPath?: string | null;
+
+    @Field({ nullable: true })
+    WriteMethod?: string | null;
+
+    @Field({ nullable: true })
+    DeleteMethod?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

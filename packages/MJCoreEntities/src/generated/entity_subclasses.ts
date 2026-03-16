@@ -686,7 +686,7 @@ export const MJActionSchema = z.object({
         * * Description: If set to 1, the Action will generate code for the provided UserPrompt on the next Save even if the UserPrompt hasn't changed. This is useful to force regeneration when other candidates (such as a change in Action Inputs/Outputs) occurs or on demand by a user.`),
     RetentionPeriod: z.number().nullable().describe(`
         * * Field Name: RetentionPeriod
-        * * Display Name: Retention Period
+        * * Display Name: Retention Period (Days)
         * * SQL Data Type: int
         * * Description: Number of days to retain execution logs; NULL for indefinite.`),
     Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
@@ -732,21 +732,26 @@ export const MJActionSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: Default prompt for compacting/summarizing this action's results when used by agents with CompactMode=AISummary. Action designers define how their specific results should be summarized. Can be overridden per agent in AIAgentAction.CompactPromptID.`),
+    Config: z.string().nullable().describe(`
+        * * Field Name: Config
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(255)`),
     CodeApprovedByUser: z.string().nullable().describe(`
         * * Field Name: CodeApprovedByUser
-        * * Display Name: Code Approved By User
+        * * Display Name: Code Approved By (User)
         * * SQL Data Type: nvarchar(100)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent
+        * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(425)`),
     DefaultCompactPrompt: z.string().nullable().describe(`
         * * Field Name: DefaultCompactPrompt
-        * * Display Name: Default Compact Prompt
+        * * Display Name: Default Compact Prompt Text
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -15041,7 +15046,7 @@ export const MJIntegrationObjectSchema = z.object({
         * * Description: Foreign key to the Integration that owns this object`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Internal Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Internal/programmatic name of the external object (e.g., Members, Events)`),
     DisplayName: z.string().nullable().describe(`
@@ -15142,6 +15147,23 @@ export const MJIntegrationObjectSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    WriteAPIPath: z.string().nullable().describe(`
+        * * Field Name: WriteAPIPath
+        * * Display Name: Write API Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: API path for create/update operations when different from the read APIPath. If NULL, the read APIPath is used for writes as well.`),
+    WriteMethod: z.string().nullable().describe(`
+        * * Field Name: WriteMethod
+        * * Display Name: Write Method
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: POST
+        * * Description: HTTP method for create operations. Defaults to POST.`),
+    DeleteMethod: z.string().nullable().describe(`
+        * * Field Name: DeleteMethod
+        * * Display Name: Delete Method
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: DELETE
+        * * Description: HTTP method for delete operations. Defaults to DELETE.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * Display Name: Integration Name
@@ -25035,7 +25057,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
 
     /**
     * * Field Name: RetentionPeriod
-    * * Display Name: Retention Period
+    * * Display Name: Retention Period (Days)
     * * SQL Data Type: int
     * * Description: Number of days to retain execution logs; NULL for indefinite.
     */
@@ -25140,8 +25162,21 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     }
 
     /**
+    * * Field Name: Config
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.
+    */
+    get Config(): string | null {
+        return this.Get('Config');
+    }
+    set Config(value: string | null) {
+        this.Set('Config', value);
+    }
+
+    /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(255)
     */
     get Category(): string | null {
@@ -25150,7 +25185,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
 
     /**
     * * Field Name: CodeApprovedByUser
-    * * Display Name: Code Approved By User
+    * * Display Name: Code Approved By (User)
     * * SQL Data Type: nvarchar(100)
     */
     get CodeApprovedByUser(): string | null {
@@ -25159,7 +25194,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent
+    * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(425)
     */
     get Parent(): string | null {
@@ -25168,7 +25203,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
 
     /**
     * * Field Name: DefaultCompactPrompt
-    * * Display Name: Default Compact Prompt
+    * * Display Name: Default Compact Prompt Text
     * * SQL Data Type: nvarchar(255)
     */
     get DefaultCompactPrompt(): string | null {
@@ -62527,7 +62562,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
 
     /**
     * * Field Name: Name
-    * * Display Name: Internal Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Internal/programmatic name of the external object (e.g., Members, Events)
     */
@@ -62756,6 +62791,47 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: WriteAPIPath
+    * * Display Name: Write API Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: API path for create/update operations when different from the read APIPath. If NULL, the read APIPath is used for writes as well.
+    */
+    get WriteAPIPath(): string | null {
+        return this.Get('WriteAPIPath');
+    }
+    set WriteAPIPath(value: string | null) {
+        this.Set('WriteAPIPath', value);
+    }
+
+    /**
+    * * Field Name: WriteMethod
+    * * Display Name: Write Method
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: POST
+    * * Description: HTTP method for create operations. Defaults to POST.
+    */
+    get WriteMethod(): string | null {
+        return this.Get('WriteMethod');
+    }
+    set WriteMethod(value: string | null) {
+        this.Set('WriteMethod', value);
+    }
+
+    /**
+    * * Field Name: DeleteMethod
+    * * Display Name: Delete Method
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: DELETE
+    * * Description: HTTP method for delete operations. Defaults to DELETE.
+    */
+    get DeleteMethod(): string | null {
+        return this.Get('DeleteMethod');
+    }
+    set DeleteMethod(value: string | null) {
+        this.Set('DeleteMethod', value);
     }
 
     /**

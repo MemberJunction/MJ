@@ -62,13 +62,13 @@ describe('AdditionalSchemaInfoGenerator', () => {
   const generator = new AdditionalSchemaInfoGenerator();
 
   describe('Empty state', () => {
-    it('should return empty JSON object for state with no schemas', () => {
+    it('should return only Schemas array for state with no schemas', () => {
       const state = createTestState();
       const result = JSON.parse(generator.generate(state));
-      expect(result).toEqual({});
+      expect(result).toEqual({ Schemas: [] });
     });
 
-    it('should return empty JSON object for schemas with no PK/FK columns', () => {
+    it('should return only Schemas array for schemas with no PK/FK columns', () => {
       const state = createTestState({
         schemas: [createSchema('dbo', [
           createTable({
@@ -80,7 +80,11 @@ describe('AdditionalSchemaInfoGenerator', () => {
         ])]
       });
       const result = JSON.parse(generator.generate(state));
-      expect(result).toEqual({});
+      // Single schema gets no prefix
+      expect(result.Schemas).toHaveLength(1);
+      expect(result.Schemas[0].name).toBe('dbo');
+      expect(result.Schemas[0].entityNamePrefix).toBe('');
+      expect(result.dbo).toBeUndefined();
     });
   });
 
@@ -451,9 +455,10 @@ describe('AdditionalSchemaInfoGenerator', () => {
       const low = JSON.parse(generator.generate(state, { confidenceThreshold: 30 }));
       expect(low.dbo[0].ForeignKeys).toHaveLength(1);
 
-      // With threshold above candidate confidence — should exclude
+      // With threshold above candidate confidence — should exclude (only Schemas remains)
       const high = JSON.parse(generator.generate(state, { confidenceThreshold: 50 }));
-      expect(high).toEqual({});
+      expect(high.dbo).toBeUndefined();
+      expect(high.Schemas).toBeDefined();
     });
 
     it('should exclude rejected candidates', () => {
@@ -517,7 +522,8 @@ describe('AdditionalSchemaInfoGenerator', () => {
       });
 
       const result = JSON.parse(generator.generate(state));
-      expect(result).toEqual({});
+      expect(result.dbo).toBeUndefined();
+      expect(result.Schemas).toBeDefined();
     });
 
     it('should filter to confirmed-only when option is set', () => {
@@ -613,9 +619,10 @@ describe('AdditionalSchemaInfoGenerator', () => {
       expect(withIntrospected.dbo[0].PrimaryKey).toHaveLength(1);
       expect(withIntrospected.dbo[0].ForeignKeys).toHaveLength(1);
 
-      // discoveredOnly: excludes introspected (no discoveries → empty)
+      // discoveredOnly: excludes introspected (no discoveries → only Schemas key)
       const discovered = JSON.parse(generator.generate(state, { discoveredOnly: true }));
-      expect(discovered).toEqual({});
+      expect(discovered.dbo).toBeUndefined();
+      expect(discovered.Schemas).toBeDefined();
     });
 
     it('should include only AI-discovered keys when discoveredOnly is true', () => {
@@ -723,9 +730,12 @@ describe('AdditionalSchemaInfoGenerator', () => {
       });
 
       const result = JSON.parse(generator.generate(state));
-      expect(Object.keys(result)).toEqual(['dbo', 'hr']);
+      // Schemas key is always present, plus the schema-keyed entries
+      expect(Object.keys(result)).toEqual(expect.arrayContaining(['Schemas', 'dbo', 'hr']));
       expect(result.dbo[0].TableName).toBe('Users');
       expect(result.hr[0].TableName).toBe('Employees');
+      // Multi-schema gets prefixes
+      expect(result.Schemas).toHaveLength(2);
     });
 
     it('should omit schemas with no key data', () => {
@@ -747,7 +757,9 @@ describe('AdditionalSchemaInfoGenerator', () => {
       });
 
       const result = JSON.parse(generator.generate(state));
-      expect(Object.keys(result)).toEqual(['dbo']);
+      // Only 'dbo' has key data; 'staging' is omitted (but Schemas is always present)
+      expect(Object.keys(result)).toEqual(expect.arrayContaining(['Schemas', 'dbo']));
+      expect(result.staging).toBeUndefined();
     });
   });
 
