@@ -88,6 +88,10 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
     /** Running count of records fetched for the current object in this sync run */
     private _runningFetchTotal = 0;
 
+    /** Tracks all ExternalIDs seen per object in this sync run to detect API wrap-around */
+    private _seenIDs: Map<string, Set<string>> = new Map();
+
+
     /** Last fetched URL path, used for per-page logging */
     private _lastFetchedPath = '';
 
@@ -115,8 +119,10 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser?: UserInfo
     ): Promise<RESTAuthContext> {
+        console.log(`[Rasa.io] Authenticating...`);
         const config = await this.ParseConfig(companyIntegration, contextUser);
         const token = await this.GetToken(config);
+        console.log(`[Rasa.io] Authenticated successfully, token length: ${token.length}`);
         const auth: RasaAuthContext = { Token: token, Config: config };
         return auth;
     }
@@ -257,8 +263,19 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
 
         const totalRecords = metadata.record_count as number | undefined;
         const nextLink = metadata.next_link as string | undefined;
-        const hasMore = !!nextLink && nextLink.length > 0;
 
+        // Count actual records returned in this page
+        const results = body.results;
+        const returnedCount = Array.isArray(results) ? results.length : 0;
+
+        // If the API returned fewer records than the page size, this is the last page.
+        // The Rasa API returns next_link even past the end of the dataset, so we cannot
+        // rely on next_link alone. Fewer records than requested = no more data.
+        if (returnedCount < pageSize) {
+            return { HasMore: false, TotalRecords: totalRecords };
+        }
+
+        const hasMore = !!nextLink && nextLink.length > 0;
         if (!hasMore) {
             return { HasMore: false, TotalRecords: totalRecords };
         }
@@ -274,7 +291,7 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
                 // Non-numeric skip param = base64 cursor token (insights/actions)
                 nextCursor = skipParam;
             } else {
-                nextOffset = currentOffset + pageSize;
+                nextOffset = currentOffset + returnedCount;
             }
         } catch {
             nextOffset = currentOffset + pageSize;
@@ -441,11 +458,14 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
      * (set in BuildPaginatedURL), so no client-side filtering is needed here.
      */
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
-        // Reset counter only on the first page. Don't reset when serving from buffer
+        console.log(`[Rasa.io] FetchChanges called for '${ctx.ObjectName}' (batchSize=${ctx.BatchSize}, watermark=${ctx.WatermarkValue ?? 'none'}, offset=${ctx.CurrentOffset ?? 'none'}, cursor=${ctx.CurrentCursor ?? 'none'})`);
+
+        // Reset counter and seen-IDs on the first page. Don't reset when serving from buffer
         // (buffer calls also have no offset/cursor but the buffer key will be present).
         const isFirstCall = !ctx.CurrentOffset && !ctx.CurrentPage && !ctx.CurrentCursor;
         if (isFirstCall && !this._batchBuffer.has(ctx.ObjectName)) {
             this._runningFetchTotal = 0;
+            this._seenIDs.set(ctx.ObjectName, new Set());
         }
 
         // Store for use in BuildPaginatedURL and NormalizeResponse
@@ -459,6 +479,21 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
         }
 
         const result = await super.FetchChanges(ctx);
+
+        // Detect API wrap-around: track all seen IDs, stop when entire batch is duplicates
+        const seen = this._seenIDs.get(ctx.ObjectName);
+        if (seen && result.Records.length > 0) {
+            const dupeCount = result.Records.filter(r => seen.has(r.ExternalID)).length;
+            for (const r of result.Records) seen.add(r.ExternalID);
+
+            if (dupeCount === result.Records.length) {
+                return {
+                    Records: [],
+                    HasMore: false,
+                    NewWatermarkValue: this.FindLatestTimestamp(result.Records) ?? ctx.WatermarkValue ?? undefined,
+                };
+            }
+        }
 
         // When a non-paginated endpoint returns more than BatchSize in one shot,
         // buffer the full set and serve it in chunks so no records are silently dropped.
