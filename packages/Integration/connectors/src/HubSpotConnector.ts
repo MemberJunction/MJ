@@ -208,9 +208,11 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
     ): Promise<RESTAuthContext> {
+        console.log(`[HubSpot] Authenticating...`);
         const credentials = await this.LoadCredentials(companyIntegration, contextUser);
         const config = this.BuildConnectionConfig(credentials, companyIntegration);
         this._config = config;
+        console.log(`[HubSpot] Authenticated, token length: ${credentials.AccessToken?.length ?? 0}`);
         const auth: HubSpotAuthContext = {
             Token: credentials.AccessToken,
             Credentials: credentials,
@@ -268,7 +270,6 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     ): Record<string, unknown>[] {
         const body = rawBody as Record<string, unknown>;
 
-        // Extract the records array using the responseDataKey (typically "results")
         let records: unknown[];
         if (responseDataKey != null) {
             const data = body[responseDataKey];
@@ -280,8 +281,9 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             return [];
         }
 
-        // Flatten HubSpot's nested { id, properties: {...}, createdAt, updatedAt, archived }
-        return records.map(r => this.FlattenHubSpotRecord(r as Record<string, unknown>));
+        const flattened = records.map(r => this.FlattenHubSpotRecord(r as Record<string, unknown>));
+        console.log(`[HubSpot] NormalizeResponse: ${flattened.length} records flattened`);
+        return flattened;
     }
 
     protected ExtractPaginationInfo(
