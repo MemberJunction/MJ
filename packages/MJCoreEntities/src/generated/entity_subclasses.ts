@@ -732,7 +732,7 @@ export const MJActionSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: Default prompt for compacting/summarizing this action's results when used by agents with CompactMode=AISummary. Action designers define how their specific results should be summarized. Can be overridden per agent in AIAgentAction.CompactPromptID.`),
-    Config: z.string().nullable().describe(`
+    ActionConfig: z.string().nullable().describe(`
         * * Field Name: Config
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
@@ -25167,10 +25167,10 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional JSON configuration for the action. For integration actions, contains routing info: integrationName, objectName, verb, and optional connectorConfig. Non-integration actions leave this NULL.
     */
-    get Config(): string | null {
+    get ActionConfig(): string | null {
         return this.Get('Config');
     }
-    set Config(value: string | null) {
+    set ActionConfig(value: string | null) {
         this.Set('Config', value);
     }
 
