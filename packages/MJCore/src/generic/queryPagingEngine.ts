@@ -58,8 +58,13 @@ export class QueryPagingEngine {
         const existingCTEs = ctePrefix ? ctePrefix + ',\n' : 'WITH ';
         const cteChain = `${existingCTEs}${pagingCTEName} AS (\n${cleanSelect}\n)`;
 
-        // Determine ORDER BY for the outer query
-        const outerOrderBy = orderByClause || QueryPagingEngine.defaultOrderBy(platform);
+        // Determine ORDER BY for the outer query, remapping table-qualified
+        // references to projected column names since the outer query is
+        // SELECT * FROM [__paged] where table aliases don't exist.
+        const rawOrderBy = orderByClause || QueryPagingEngine.defaultOrderBy(platform);
+        const outerOrderBy = orderByClause
+            ? QueryPagingEngine.remapOrderByToProjectedNames(rawOrderBy, cleanSelect)
+            : rawOrderBy;
 
         // Build platform-specific data query
         const pagingClause = QueryPagingEngine.buildPagingClause(startRow, maxRows, platform);
@@ -233,6 +238,146 @@ export class QueryPagingEngine {
         }
         // SQL Server
         return `OFFSET ${startRow} ROWS FETCH NEXT ${maxRows} ROWS ONLY`;
+    }
+
+    /**
+     * Remaps ORDER BY expressions so they reference the projected column names
+     * from the SELECT list rather than table-qualified aliases (e.g. `r.Total`
+     * becomes `TotalRevenue` if the SELECT has `r.Total AS TotalRevenue`).
+     *
+     * This is necessary because the outer query is `SELECT * FROM [__paged]`
+     * where the original table aliases no longer exist.
+     */
+    static remapOrderByToProjectedNames(orderByClause: string, selectSQL: string): string {
+        const aliasMap = QueryPagingEngine.buildSelectAliasMap(selectSQL);
+
+        // Split ORDER BY into terms at top-level commas
+        const terms = QueryPagingEngine.splitAtTopLevelCommas(orderByClause);
+
+        const remapped = terms.map(term => {
+            const trimmed = term.trim();
+
+            // Separate direction suffix (ASC, DESC, NULLS FIRST, NULLS LAST)
+            const dirMatch = trimmed.match(/\s+(ASC|DESC)(\s+NULLS\s+(FIRST|LAST))?\s*$/i);
+            const expr = dirMatch ? trimmed.substring(0, dirMatch.index!).trim() : trimmed;
+            const direction = dirMatch ? dirMatch[0] : '';
+
+            // Normalize whitespace for comparison
+            const normalizedExpr = expr.replace(/\s+/g, ' ').trim();
+
+            // 1. Try exact match against SELECT expressions
+            const exactMatch = aliasMap.get(normalizedExpr.toUpperCase());
+            if (exactMatch) {
+                return exactMatch + direction;
+            }
+
+            // 2. Try stripping table alias prefixes from the expression
+            //    e.g., COALESCE(rc.ChangeCount, 0) → COALESCE(ChangeCount, 0)
+            const stripped = normalizedExpr.replace(/\b[a-zA-Z_]\w*\./g, '');
+            const strippedMatch = aliasMap.get(stripped.toUpperCase());
+            if (strippedMatch) {
+                return strippedMatch + direction;
+            }
+
+            // 3. If expr itself is a simple table.column, strip the prefix
+            //    and check if the bare column is a projected name
+            const dotMatch = expr.match(/^[a-zA-Z_]\w*\.([a-zA-Z_]\w*)$/);
+            if (dotMatch) {
+                return dotMatch[1] + direction;
+            }
+
+            // 4. Fallback: strip all table prefixes and hope for the best
+            return stripped + direction;
+        });
+
+        return remapped.join(', ');
+    }
+
+    /**
+     * Parses the SELECT list from a SQL statement and builds a map of
+     * normalized expression → projected column name.
+     *
+     * For `SELECT au.Name AS UserName, COALESCE(rc.Count, 0) AS Total`
+     * returns Map { "AU.NAME" → "UserName", "COALESCE(RC.COUNT, 0)" → "Total" }
+     *
+     * Also indexes the stripped (no table prefix) versions:
+     * { "COALESCE(COUNT, 0)" → "Total", "NAME" → "UserName" }
+     */
+    private static buildSelectAliasMap(selectSQL: string): Map<string, string> {
+        const map = new Map<string, string>();
+
+        // Strip leading SQL comments (-- line comments and /* block comments */)
+        const stripped = selectSQL.replace(/^(\s*(--[^\n]*\n|\/\*[\s\S]*?\*\/))*\s*/i, '');
+
+        // Extract the column list between SELECT [DISTINCT] and the first top-level FROM
+        const selectMatch = stripped.match(/^SELECT\s+(?:DISTINCT\s+)?/i);
+        if (!selectMatch) return map;
+
+        const afterSelect = stripped.substring(selectMatch[0].length);
+
+        // Find top-level FROM
+        const upperAfter = afterSelect.toUpperCase();
+        let depth = 0;
+        let fromPos = -1;
+        for (let i = 0; i < afterSelect.length; i++) {
+            const ch = afterSelect[i];
+            if (ch === '(') depth++;
+            else if (ch === ')') depth--;
+            else if (depth === 0 && i + 5 <= afterSelect.length) {
+                if (upperAfter.substring(i, i + 5) === 'FROM ' || upperAfter.substring(i, i + 5) === 'FROM\n' || upperAfter.substring(i, i + 5) === 'FROM\t') {
+                    if (i === 0 || /\s/.test(afterSelect[i - 1])) {
+                        fromPos = i;
+                        break;
+                    }
+                }
+            }
+        }
+
+        const columnList = fromPos === -1 ? afterSelect : afterSelect.substring(0, fromPos);
+        const items = QueryPagingEngine.splitAtTopLevelCommas(columnList);
+
+        for (const item of items) {
+            const trimmed = item.trim();
+            if (!trimmed) continue;
+
+            // Check for AS alias (case insensitive, must be word-bounded)
+            const asMatch = trimmed.match(/\s+AS\s+(\[?\w+\]?)\s*$/i);
+            if (asMatch) {
+                const expr = trimmed.substring(0, asMatch.index!).trim();
+                const alias = asMatch[1].replace(/[[\]]/g, ''); // strip brackets
+                const normalizedExpr = expr.replace(/\s+/g, ' ').toUpperCase();
+                map.set(normalizedExpr, alias);
+
+                // Also index the stripped version (no table prefixes)
+                const strippedExpr = normalizedExpr.replace(/\b[A-Z_]\w*\./g, '');
+                if (strippedExpr !== normalizedExpr) {
+                    map.set(strippedExpr, alias);
+                }
+            }
+        }
+
+        return map;
+    }
+
+    /**
+     * Splits a SQL fragment by commas that are not inside parentheses.
+     */
+    private static splitAtTopLevelCommas(sql: string): string[] {
+        const parts: string[] = [];
+        let depth = 0;
+        let start = 0;
+
+        for (let i = 0; i < sql.length; i++) {
+            const ch = sql[i];
+            if (ch === '(') depth++;
+            else if (ch === ')') depth--;
+            else if (ch === ',' && depth === 0) {
+                parts.push(sql.substring(start, i));
+                start = i + 1;
+            }
+        }
+        parts.push(sql.substring(start));
+        return parts;
     }
 
     /**
