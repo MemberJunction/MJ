@@ -150,7 +150,7 @@ export class DependencyPhase {
       throw new InstallerError(
         'dependencies',
         'NPM_INSTALL_TIMEOUT',
-        'npm install timed out after 10 minutes.',
+        'npm install timed out after 15 minutes.',
         'Run "npm install" manually at the repo root. Check network connectivity.'
       );
     }
@@ -169,7 +169,7 @@ export class DependencyPhase {
         throw new InstallerError(
           'dependencies',
           'NPM_INSTALL_TIMEOUT',
-          'npm install --legacy-peer-deps timed out after 10 minutes.',
+          'npm install --legacy-peer-deps timed out after 15 minutes.',
           'Run "npm install --legacy-peer-deps" manually at the repo root.'
         );
       }
@@ -336,7 +336,7 @@ export class DependencyPhase {
     const args = ['install', ...extraArgs];
     return this.processRunner.Run('npm', args, {
       Cwd: dir,
-      TimeoutMs: 600_000, // 10 minutes
+      TimeoutMs: 900_000, // 15 minutes
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
           Type: 'step:progress',
