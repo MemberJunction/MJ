@@ -2429,7 +2429,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
                 try {
                     const newObject = MJGlobal.Instance.ClassFactory.CreateInstance<T>(BaseEntity, entityName, entity, this);
-                    await newObject.Config(actualContextUser);
+                    await newObject.ConfigEntity(actualContextUser);
 
                     // Initialize IS-A parent entity composition chain before any data operations
                     await newObject.InitializeParentEntity();

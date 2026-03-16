@@ -1143,7 +1143,7 @@ export abstract class BaseEntity<T = unknown> {
      * created/configured. When you call Metadata/Provider GetEntityObject() this is done automatically for you. In nearly all cases you should go through GetEntityObject() anyway
      * and not ever directly instantiate a BaseEntity derived class.
      */
-    public async Config(contextUser: UserInfo) {
+    public async ConfigEntity(contextUser: UserInfo) {
         this.ContextCurrentUser = contextUser;
     }
 
