@@ -5,6 +5,7 @@ import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-reac
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
 import { CompositeKey } from '@memberjunction/core';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
+import { ComponentFeedbackPanelComponent } from './component-feedback-panel/component-feedback-panel.component';
 
 /**
  * Viewer component for interactive Component artifacts (React-based UI components)
@@ -43,6 +44,9 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     // then fall back to the stripped local spec as last resort.
     return this.reactComponent?.resolvedComponentSpec || this._cachedResolvedSpec || this.component;
   }
+
+  // Feedback panel
+  public ShowFeedbackPanel = false;
 
   // Error state
   public hasError = false;
@@ -245,5 +249,9 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       entityName: event.entityName,
       compositeKey: event.key
     });
+  }
+
+  ToggleFeedbackPanel(): void {
+    this.ShowFeedbackPanel = !this.ShowFeedbackPanel;
   }
 }
