@@ -377,12 +377,11 @@ interface CategoryNode {
           [style.left.px]="entityDropdownPosition.left"
           [style.width.px]="entityDropdownPosition.width"
           [class.dropdown-above]="entityDropdownPosition.openAbove">
-          <div class="entity-dropdown-backdrop" (click)="closeEntityDropdown()"></div>
           <div class="entity-dropdown-content" [class.open-above]="entityDropdownPosition.openAbove">
             @for (entity of filteredEntities; track entity) {
               <div
                 class="dropdown-item"
-                (click)="selectEntity(entity)">
+                (mousedown)="selectEntity(entity); $event.preventDefault()">
                 {{entity.Name}}
               </div>
             }
@@ -1196,15 +1195,6 @@ interface CategoryNode {
       z-index: 10002; /* Above modal (1001) */
     }
 
-    .entity-dropdown-backdrop {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: -1;
-    }
-
     .entity-dropdown-content {
       max-height: 200px;
       overflow-y: auto;
@@ -1333,10 +1323,10 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent) {
-    // Close entity dropdown when clicking outside
+    // Close entity dropdown when clicking outside the input or dropdown
     if (this.showEntityDropdown) {
       const target = event.target as HTMLElement;
-      if (!target.closest('.custom-select-wrapper')) {
+      if (!target.closest('.custom-select-wrapper') && !target.closest('.entity-dropdown-portal')) {
         this.showEntityDropdown = false;
       }
     }
@@ -1650,6 +1640,12 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     this.filteredEntities = this.availableEntities.filter(e =>
       e.Name.toLowerCase().includes(lowerTerm)
     );
+    // Ensure dropdown is visible while typing
+    if (!this.showEntityDropdown && term) {
+      this.showEntityDropdown = true;
+    }
+    // Clear selection when user modifies the search text
+    this.selectedEntityId = '';
   }
 
   openEntityDropdown(inputElement: HTMLInputElement) {
