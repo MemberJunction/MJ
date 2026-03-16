@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass, SQLExpressionValidator } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
-import { BaseEntity, LogError } from "@memberjunction/core";
+import { BaseEntity, LogError, QueryCompositionEngine } from "@memberjunction/core";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
@@ -32,7 +32,7 @@ import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
  * ```typescript
  * // Simple SELECT query
  * await runAction({
- *   ActionName: 'Execute Research Query',
+ *   ActionName: 'Run Ad-hoc Query',
  *   Params: [{
  *     Name: 'Query',
  *     Value: 'SELECT TOP 100 * FROM Customers WHERE Country = ''USA'''
@@ -41,7 +41,7 @@ import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
  *
  * // Query with timeout
  * await runAction({
- *   ActionName: 'Execute Research Query',
+ *   ActionName: 'Run Ad-hoc Query',
  *   Params: [{
  *     Name: 'Query',
  *     Value: 'SELECT COUNT(*) FROM Orders GROUP BY CustomerID'
@@ -52,8 +52,8 @@ import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Execute Research Query")
-export class ExecuteResearchQueryAction extends BaseAction {
+@RegisterClass(BaseAction, "Run Ad-hoc Query")
+export class RunAdhocQueryAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const startTime = Date.now();
@@ -92,8 +92,11 @@ export class ExecuteResearchQueryAction extends BaseAction {
                 } as ActionResultSimple;
             }
 
+            // Resolve {{query:"..."}} composition macros if present
+            const resolvedQuery = this.resolveCompositionTokens(normalizedQuery, params);
+
             // Ensure query returns limited results
-            const limitedQuery = this.ensureRowLimit(normalizedQuery, maxRows);
+            const limitedQuery = this.ensureRowLimit(resolvedQuery, maxRows);
 
             const dataProvider = BaseEntity.Provider as SQLServerDataProvider;
 
@@ -103,7 +106,7 @@ export class ExecuteResearchQueryAction extends BaseAction {
 
                 const results = await Promise.race([
                     dataProvider.ExecuteSQL(limitedQuery, null, {
-                        description: 'Execute Research Query',
+                        description: 'Run Ad-hoc Query',
                         ignoreLogging: false,
                         isMutation: false
                     }, params.ContextUser),
@@ -454,6 +457,26 @@ export class ExecuteResearchQueryAction extends BaseAction {
             .replace(/\\n/g, '\n')
             .replace(/\\r/g, '\r')
             .replace(/\\t/g, '\t');
+    }
+
+    /**
+     * Resolves {{query:"..."}} composition macros in ad-hoc SQL.
+     * This enables agents to write SQL that references saved reusable queries
+     * using the same composition syntax as stored queries.
+     */
+    private resolveCompositionTokens(sql: string, params: RunActionParams): string {
+        const engine = new QueryCompositionEngine();
+        if (!engine.HasCompositionTokens(sql)) {
+            return sql;
+        }
+
+        const result = engine.ResolveComposition(
+            sql,
+            'sqlserver',
+            params.ContextUser
+        );
+
+        return result.ResolvedSQL;
     }
 
     /**

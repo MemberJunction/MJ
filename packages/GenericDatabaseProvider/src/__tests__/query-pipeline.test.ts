@@ -383,8 +383,10 @@ describe('GenericDatabaseProvider Query Pipeline', () => {
             const query = makeQueryInfo({ ID: 'q-1', Name: 'Paged Query', SQL: 'SELECT 1' });
             provider.setMockQueries([query]);
 
-            const rows = Array.from({ length: 20 }, (_, i) => ({ id: i + 1 }));
-            provider.executeSQLResults = [rows];
+            // SQL-level paging: first call = data query (paged subset), second call = count query
+            const pagedRows = [{ id: 6 }, { id: 7 }, { id: 8 }];
+            const countResult = [{ TotalRowCount: 20 }];
+            provider.executeSQLResults = [pagedRows, countResult];
 
             const result = await provider.testInternalRunQuery(
                 { QueryID: 'q-1', StartRow: 5, MaxRows: 3 },

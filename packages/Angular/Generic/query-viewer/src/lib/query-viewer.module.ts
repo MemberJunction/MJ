@@ -7,6 +7,7 @@ import { AgGridModule } from 'ag-grid-angular';
 
 // MJ Components
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -31,6 +32,7 @@ import { QueryInfoPanelComponent } from './query-info-panel/query-info-panel.com
         FormsModule,
         AgGridModule,
         SharedGenericModule,
+        PaginationComponent,
         ExportServiceModule,
         MarkdownModule,
         CodeEditorModule

@@ -81,6 +81,15 @@ export type RunQueryParams = {
      * 2. Otherwise the LocalCacheManager's default TTL will be used (typically 5 minutes)
      */
     CacheLocalTTL?: number
+
+    /**
+     * Optional TTL (time-to-live) in minutes for server-side caching of ad-hoc SQL queries.
+     * When set to a value > 0 and the query uses the `SQL` field (ad-hoc mode), results
+     * will be cached using a hash of the SQL string as the cache key.
+     * Subsequent identical SQL executions within the TTL window return cached results.
+     * Has no effect on saved queries (they use QueryInfo.CacheConfig instead).
+     */
+    AdhocCacheTTLMinutes?: number
 }
 
 /**

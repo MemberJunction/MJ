@@ -33,7 +33,7 @@ You have access to four specialized sub-agents. Invoke them by calling the appro
 **Capabilities**:
 - Get Entity List (discover available database entities)
 - Get Entity Details (understand entity structure and sample data)
-- Execute Research Query (run validated SQL queries)
+- Run Ad-hoc Query (run validated SQL queries)
 
 **When to use**:
 - Researching data in organizational databases

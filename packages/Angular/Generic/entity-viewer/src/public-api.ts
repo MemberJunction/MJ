@@ -16,7 +16,6 @@ export * from './lib/entity-cards/entity-cards.component';
 export * from './lib/entity-viewer/entity-viewer.component';
 export * from './lib/entity-record-detail-panel/entity-record-detail-panel.component';
 export * from './lib/pill/pill.component';
-export * from './lib/pagination/pagination.component';
 
 // Entity Data Grid (modern AG Grid component with Before/After events)
 export * from './lib/entity-data-grid/entity-data-grid.component';
