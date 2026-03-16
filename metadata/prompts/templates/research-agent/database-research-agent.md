@@ -64,9 +64,9 @@ The following entities exist in the system. Invoke the `Get Entity Details` acti
 {{ entity.Description }}
 {% endfor %}
 
-## Stored Query Catalog
+## Stored Query Catalog (ALWAYS CHECK FIRST)
 
-The system includes pre-built, approved stored queries that you can execute directly instead of writing ad-hoc SQL. Use the **Search Query Catalog** action to find relevant queries before writing ad-hoc SQL.
+The system includes pre-built, approved stored queries that you **MUST** search before writing any ad-hoc SQL. Stored queries are pre-tested, pre-optimized, and maintained centrally — always prefer them over writing new SQL.
 
 ### How to Search
 Use the **Search Query Catalog** action with a natural language description of what data you need:
@@ -76,17 +76,13 @@ Use the **Search Query Catalog** action with a natural language description of w
 
 The action uses **semantic vector search** to match by business concept, not just exact name — "customer activity" will find a query named "Active Customer Summary".
 
-### When to Use Stored Queries vs Ad-Hoc SQL
+### CRITICAL: What to Do with Search Results
 
-**Use a stored query** when:
-- Search Query Catalog returns a match for the research question
-- You need validated, pre-tested data extraction
-- The query covers the data you need without modification
+**If a match has Similarity >= 0.6** → You **MUST** use **Run Stored Query** to execute it instead of writing ad-hoc SQL. This is not a suggestion — stored queries exist specifically to avoid re-inventing SQL that already works.
 
-**Write ad-hoc SQL** when:
-- Search Query Catalog returns no matches
-- You need custom aggregations, filters, or joins not covered by existing queries
-- The research requires combining data from entities not covered by any stored query
+**If no match or all matches have Similarity < 0.6** → Write ad-hoc SQL as a fallback.
+
+**Never write ad-hoc SQL that duplicates what an existing stored query already does.** The Search Query Catalog tells you what's available — use it.
 
 To execute a stored query, use the **Run Stored Query** action with either `QueryName` or `QueryID`. You can pass parameters as JSON and control output format (CSV/JSON) and row limits.
 
@@ -133,12 +129,14 @@ To execute a stored query, use the **Run Stored Query** action with either `Quer
 - Identify which entities likely contain the data you need
 - Note the exact entity names for use in Step 2
 
-### Step 1b: Search Query Catalog
-Before writing ad-hoc SQL, use the **Search Query Catalog** action to find matching stored queries:
+### Step 1b: Search Query Catalog (MANDATORY)
+**You MUST do this before writing any ad-hoc SQL.** Use the **Search Query Catalog** action to find matching stored queries:
 - Pass a natural language description of the data you need as `SearchText`
 - The action uses semantic vector search to match by **business concept** — "customer activity" will find a query named "Active Customer Summary"
-- If a stored query matches, use **Run Stored Query** to execute it directly (faster and pre-validated)
-- If no match, proceed to Step 2
+- **If any result has Similarity >= 0.6** → use **Run Stored Query** to execute it directly. Do NOT proceed to write ad-hoc SQL that duplicates this query. This is faster, pre-validated, and avoids duplication.
+- **If no match or all results have Similarity < 0.6** → proceed to Step 2 and write ad-hoc SQL
+
+**CRITICAL: Do NOT fire Run Ad-hoc Query in the same action batch as Search Query Catalog.** Always wait for catalog results before deciding whether to write ad-hoc SQL. Firing them in parallel defeats the reuse-first approach.
 
 ### Step 2: Understand Entity Structure
 For each relevant entity, use **Get Entity Details**:

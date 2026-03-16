@@ -127,6 +127,15 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 this.EmbeddingModelID = null;
             }
 
+            // Auto-set Reusable=true for queries in Golden-Queries/ categories.
+            // Golden Queries are composable building blocks, so they should always be reusable.
+            if (this.CategoryID) {
+                const categoryPath = this.buildCategoryPathFromID(this.CategoryID);
+                if (categoryPath.toLowerCase().startsWith('golden-queries/') || categoryPath.toLowerCase() === 'golden-queries') {
+                    this.Reusable = true;
+                }
+            }
+
             // Save the query first without AI processing (no transaction needed for basic save)
             const saveResult = await super.Save(options);
             if (!saveResult) {
@@ -177,6 +186,25 @@ export class MJQueryEntityServer extends MJQueryEntity {
         }
     }
      
+    /**
+     * Builds a category path string from a CategoryID by walking up the category hierarchy.
+     * Returns a path like "Golden-Queries/Sales" or "Golden-Queries".
+     */
+    private buildCategoryPathFromID(categoryID: string): string {
+        const categories = Metadata.Provider.QueryCategories;
+        const segments: string[] = [];
+        let currentID: string | null = categoryID;
+
+        while (currentID) {
+            const cat = categories.find(c => c.ID.toLowerCase() === currentID!.toLowerCase());
+            if (!cat) break;
+            segments.unshift(cat.Name);
+            currentID = cat.ParentID;
+        }
+
+        return segments.join('/');
+    }
+
     /**
      * Asynchronous version of extractAndSyncData that runs outside the main save operation
      * to prevent connection pool exhaustion

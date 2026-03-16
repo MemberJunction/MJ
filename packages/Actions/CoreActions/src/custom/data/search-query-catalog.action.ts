@@ -84,12 +84,7 @@ export class SearchQueryCatalogAction extends BaseAction {
                 return {
                     Success: true,
                     ResultCode: 'NO_MATCHES',
-                    Message: JSON.stringify({
-                        message: 'No matching queries found in the catalog',
-                        searchText,
-                        resultCount: 0,
-                        results: []
-                    })
+                    Message: `No matching queries found in the catalog for: "${searchText}". Proceed with schema exploration and fresh SQL.`
                 };
             }
 
@@ -123,15 +118,16 @@ export class SearchQueryCatalogAction extends BaseAction {
                 Value: results.length
             });
 
+            // Build a plain-text directive — the agent framework wraps action results in
+            // JSON.stringify, so plain text avoids double-encoding that buries instructions.
+            // Prefer non-parameterized queries for composition (parameterized ones require
+            // runtime params and can't be directly composed for aggregate use cases).
+            const message = this.buildDirectiveMessage(results);
+
             return {
                 Success: true,
                 ResultCode: 'SUCCESS',
-                Message: JSON.stringify({
-                    message: `Found ${results.length} matching quer${results.length === 1 ? 'y' : 'ies'}`,
-                    searchText,
-                    resultCount: results.length,
-                    results
-                }, null, 2)
+                Message: message
             };
 
         } catch (error) {
@@ -157,5 +153,82 @@ export class SearchQueryCatalogAction extends BaseAction {
     private getParamValue(params: RunActionParams, name: string): string | undefined {
         const param = params.Params.find(p => p.Name.toLowerCase() === name.toLowerCase());
         return param?.Value !== undefined && param?.Value !== null ? String(param.Value) : undefined;
+    }
+
+    /**
+     * Builds the plain-text directive message from search results.
+     * If a composable match >= 0.6 exists, returns Option A/B instructions.
+     * Otherwise, tells the LLM to proceed with fresh SQL.
+     */
+    private buildDirectiveMessage(results: Record<string, unknown>[]): string {
+        const bestOverall = results[0];
+        const bestComposable = results.find(r =>
+            (r.Similarity as number) >= 0.6 && !this.hasTemplateParams(r)
+        );
+        const recommend = bestComposable || bestOverall;
+        const similarity = recommend.Similarity as number;
+
+        if (similarity < 0.6) {
+            return `Found ${results.length} queries but no high-confidence composable matches (best: ${Math.round(similarity * 100)}%). Proceed with schema exploration and fresh SQL.`;
+        }
+
+        const name = recommend.Name as string;
+        const category = recommend.Category as string;
+        const categoryPath = category ? `${category}/${name}` : name;
+        const queryID = recommend.QueryID as string;
+        const sql = recommend.SQL as string | undefined;
+        const columns = sql ? this.extractSelectColumns(sql) : '';
+
+        const lines: string[] = [`Found ${results.length} matching queries.`];
+
+        if (bestComposable && bestComposable !== bestOverall) {
+            lines.push(`Note: "${bestOverall.Name}" scored highest (${Math.round((bestOverall.Similarity as number) * 100)}%) but is parameterized — not directly composable.`);
+            lines.push(`Best composable match: "${name}" (${Math.round(similarity * 100)}% similarity).`);
+        } else {
+            lines.push(`Best match: "${name}" (${Math.round(similarity * 100)}% similarity).`);
+        }
+
+        lines.push(
+            '',
+            'YOUR NEXT ACTION — pick one:',
+            '',
+            'Option A — Fully covers the request? Call "Run Stored Query":',
+            `  Action: "Run Stored Query"`,
+            `  Params: { QueryID: "${queryID}", DataFormat: "json" }`,
+            '',
+            'Option B — Partially covers? Call "Run Ad-hoc Query" with composition SQL:',
+            `  Action: "Run Ad-hoc Query"`,
+            `  Params: { Query: "SELECT base.*, <extra columns> FROM {{query:\\"${categoryPath}\\"}} base <extra JOINs> ORDER BY <column>", MaxRows: 100, DataFormat: "json" }`
+        );
+        if (columns) {
+            lines.push(`  The stored query provides these columns: ${columns}`);
+        }
+        lines.push(
+            '  Add only the columns/JOINs the user needs that aren\'t already in the stored query.',
+            '',
+            'Do NOT call Get Entity Details or write fresh SQL — use one of the options above.',
+            '',
+            'Top matches:'
+        );
+        for (const r of results.slice(0, 5)) {
+            const sim = Math.round((r.Similarity as number) * 100);
+            const paramFlag = this.hasTemplateParams(r) ? ' [parameterized]' : '';
+            lines.push(`  - ${r.Name} (${r.Category}) — ${sim}%${paramFlag} — ${r.Description || r.Name}`);
+        }
+
+        return lines.join('\n');
+    }
+
+    /** Extracts column aliases from the SELECT portion of SQL (before FROM). */
+    private extractSelectColumns(sql: string): string {
+        const fromIndex = sql.search(/\bFROM\b/i);
+        const selectPart = fromIndex > 0 ? sql.substring(0, fromIndex) : sql;
+        return [...selectPart.matchAll(/\bAS\s+(\w+)/gi)].map(m => m[1]).join(', ');
+    }
+
+    /** Checks if a query's SQL contains Nunjucks template params ({{ }}) but not composition macros. */
+    private hasTemplateParams(result: Record<string, unknown>): boolean {
+        const sql = result.SQL as string | undefined;
+        return sql ? /\{\{(?!query:)/.test(sql) : false;
     }
 }

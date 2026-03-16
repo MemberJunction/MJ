@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Run Ad-hoc Query",
-      "Description": "Executes a read-only SQL SELECT query for ad-hoc purposes with security validation. Ensures SELECT-only operations, prevents dangerous SQL operations, enforces timeouts, and logs all queries for audit trail. SQL syntax validation is performed by SQL Server during execution.",
+      "Description": "Executes a read-only SQL SELECT query for ad-hoc purposes with security validation. Supports {{query:\"CategoryPath/QueryName\"}} composition macros — the composition engine resolves these into CTEs before execution, enabling reuse of saved queries. Ensures SELECT-only operations, prevents dangerous SQL operations, enforces timeouts, and logs all queries for audit trail.",
       "DriverClass": "Run Ad-hoc Query",
       "Type": "Custom",
       "Status": "Active",
@@ -411,8 +411,8 @@
       "ID": "4B92BDED-4AD6-497A-B16E-BAE85BAB7563"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:03.153Z",
-      "checksum": "1b5fd1ad01b943f4bc235edd5cb6e54678d8b5ad5ec715155b0c1198a64e5b61"
+      "lastModified": "2026-03-15T04:42:03.896Z",
+      "checksum": "a2d93a0750b0bfd43de7b542600f12c02c03d13a1b25b163816a82f425f3fbfb"
     }
   }
 ]

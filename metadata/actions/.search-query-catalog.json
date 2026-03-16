@@ -20,6 +20,13 @@
             "IsArray": false,
             "Description": "Natural language description of what data you need. Match by business concept, not exact query names. For example: 'monthly revenue by region' or 'active customers with recent orders'.",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "3B1BD60E-FDA9-498D-9E83-8AE2EEEF7FD4"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:23:53.003Z",
+            "checksum": "ffa501e7660595d18befb93b05c0c05fc9d5ba28ea1d09a66b29abe060decbd0"
           }
         },
         {
@@ -32,6 +39,13 @@
             "IsArray": false,
             "Description": "Maximum number of matching queries to return. Default: 10.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "93B422EF-924E-44A9-A78B-E98EA58C7192"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:23:53.015Z",
+            "checksum": "10bf8c0765b0c77a69e39daef4a6f13a127197cf1d25de1519c323d8aeaabb1d"
           }
         },
         {
@@ -44,6 +58,13 @@
             "IsArray": false,
             "Description": "Minimum similarity score (0-1) for results. Lower values return more results. Default: 0.3.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9975A5C4-6D04-4B38-8B40-6AB441C8F415"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:23:53.028Z",
+            "checksum": "1bb828e0b29a42595e15a59d6ea85c6318c59d625f49c7c92ae6fa3f5d42354b"
           }
         },
         {
@@ -56,6 +77,13 @@
             "IsArray": false,
             "Description": "If true, only return queries marked as Reusable (for composition via {{query:\"...\"}} syntax). Default: false.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "595832CB-672A-4949-B347-1DEF8F575B9D"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:23:53.039Z",
+            "checksum": "e1efcc477dbe3ecc32d29a9e490d47b958b0ad4ca2d98ad29aa3f8ef6eefb54c"
           }
         },
         {
@@ -68,6 +96,13 @@
             "IsArray": false,
             "Description": "If true, only return queries with Status='Approved'. Default: true.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "96E0C10A-63D6-4385-9B4D-5EA8BCC9F6AE"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:23:53.051Z",
+            "checksum": "7355d76ff9ce62c163ee2f8f1609db80222dad2fb93f3f40206d2f27b4cda47c"
           }
         },
         {
@@ -80,6 +115,13 @@
             "IsArray": false,
             "Description": "If true, include the SQL text of each matching query in results. Useful for composition planning. Default: false.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C738DC4B-8DE2-48A0-83F4-05C95BCAC15A"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:23:53.063Z",
+            "checksum": "34036a26465210a2cd77371e8a16fd5bcb699f0967a9abb5cdc8e374e78cc786"
           }
         },
         {
@@ -91,6 +133,13 @@
             "IsArray": true,
             "Description": "Array of matching queries with QueryID, Name, Description, Category, Similarity score, Status, Reusable flag, and optionally SQL.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1A09C141-0B36-4966-9093-6EAF72791768"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:23:53.074Z",
+            "checksum": "9414baddf1a9d6d9ae89a176ac65a989987bb499558d6f2e91b3b3fe07ff3613"
           }
         },
         {
@@ -102,6 +151,13 @@
             "IsArray": false,
             "Description": "Number of matching queries found.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B959DFEA-49C4-4172-9111-D369CA62AC9F"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:23:53.084Z",
+            "checksum": "6b9340605c07bb405f6b1b0ade63742c8eef52bef58a10eadcab012e4e024a46"
           }
         }
       ],
@@ -112,6 +168,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Found one or more matching queries in the catalog."
+          },
+          "primaryKey": {
+            "ID": "F4B862CA-1BF8-459F-9247-77FFAE1C2B65"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:23:53.094Z",
+            "checksum": "53b44c23258f824e41c94a274c4e366abddbfd952488d21df782c7d6bf700e26"
           }
         },
         {
@@ -120,6 +183,13 @@
             "ResultCode": "NO_MATCHES",
             "IsSuccess": true,
             "Description": "Search completed but no queries matched the criteria. Proceed with ad-hoc SQL."
+          },
+          "primaryKey": {
+            "ID": "B44130FA-6B2E-4FE1-A69D-C902F9911E8F"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:23:53.104Z",
+            "checksum": "efd2e12f6e841e85cb8ec1e559a3911505962f1454f78269b3081abe3c775bdf"
           }
         },
         {
@@ -128,6 +198,13 @@
             "ResultCode": "MISSING_PARAMETER",
             "IsSuccess": false,
             "Description": "SearchText parameter is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "1DC1739C-FFD2-435B-9DA0-1836C8A5D773"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:23:53.119Z",
+            "checksum": "4b313ebdaafded3b16a763ec7570665912211da65ead3758fa027a51fd5f2fd2"
           }
         },
         {
@@ -136,9 +213,23 @@
             "ResultCode": "EMBEDDING_FAILED",
             "IsSuccess": false,
             "Description": "Failed to generate embedding for the search text or load query embeddings."
+          },
+          "primaryKey": {
+            "ID": "4A4B0534-6B56-4DEA-B63F-674D719C555F"
+          },
+          "sync": {
+            "lastModified": "2026-03-14T01:23:53.129Z",
+            "checksum": "89cdb1e10754c00717c99ba69e4c1f477e8ec26ee095e7bb5921e369b46cdde8"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "BBE6D9BF-BDF6-46AB-9D67-12EBBEBE24DC"
+    },
+    "sync": {
+      "lastModified": "2026-03-14T01:23:52.967Z",
+      "checksum": "ffa0b476edf4408c5e7b6cc6af1a6566c067eb4bf6ff929fbfb0aa631f34863e"
     }
   }
 ]
