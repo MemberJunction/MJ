@@ -65,11 +65,11 @@ export class AnalysisOrchestrator {
    */
   public async execute(): Promise<OrchestratorResult> {
     try {
-      // Create run folder
+      // Create run folder (or reuse existing one when resuming)
       if (!this.config.output.outputDir) {
         throw new Error('output.outputDir must be specified in config');
       }
-      const runFolder = await this.createRunFolder(this.config.output.outputDir);
+      const runFolder = await this.resolveRunFolder(this.config.output.outputDir, this.resumeFromState);
       const stateFilePath = path.join(runFolder, 'state.json');
 
       this.onProgress('Created run folder', { path: runFolder });
@@ -440,6 +440,23 @@ export class AnalysisOrchestrator {
     existingState.resumedFromFile = resumePath;
 
     return existingState;
+  }
+
+  /**
+   * Resolve the run folder: reuse the source folder when resuming from a state file
+   * inside an existing run-N directory, otherwise create a new numbered folder.
+   */
+  private async resolveRunFolder(outputDir: string, resumeFromState?: string): Promise<string> {
+    if (resumeFromState) {
+      const resumeDir = path.resolve(path.dirname(resumeFromState));
+      const folderName = path.basename(resumeDir);
+      if (/^run-\d+$/.test(folderName)) {
+        // Reuse the existing run folder so resume continues in-place
+        await fs.mkdir(resumeDir, { recursive: true });
+        return resumeDir;
+      }
+    }
+    return this.createRunFolder(outputDir);
   }
 
   /**
