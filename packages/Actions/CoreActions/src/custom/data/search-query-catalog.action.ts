@@ -118,14 +118,14 @@ export class SearchQueryCatalogAction extends BaseAction {
                 Value: results.length
             });
 
-            // Build directive content — instructions the AI should follow to pick the
-            // right query execution path (run stored vs compose ad-hoc SQL).
-            const { summary, directives } = this.buildDirectiveMessage(results);
+            // Build the full message (preserved for backward compatibility) and
+            // structured AI directives for the agent framework.
+            const { message, directives } = this.buildDirectiveMessage(results);
 
             return {
                 Success: true,
                 ResultCode: 'SUCCESS',
-                Message: summary,
+                Message: message,
                 AIDirectives: directives.length > 0 ? directives : undefined
             };
 
@@ -155,10 +155,10 @@ export class SearchQueryCatalogAction extends BaseAction {
     }
 
     /**
-     * Builds an informational summary and, when a high-confidence composable match
-     * exists, structured AI directives telling the agent which action to call next.
+     * Builds the original full-text message (preserved for backward compatibility)
+     * and structured AI directives for the agent framework.
      */
-    private buildDirectiveMessage(results: Record<string, unknown>[]): { summary: string; directives: AIDirective[] } {
+    private buildDirectiveMessage(results: Record<string, unknown>[]): { message: string; directives: AIDirective[] } {
         const bestOverall = results[0];
         const bestComposable = results.find(r =>
             (r.Similarity as number) >= 0.6 && !this.hasTemplateParams(r)
@@ -168,7 +168,7 @@ export class SearchQueryCatalogAction extends BaseAction {
 
         if (similarity < 0.6) {
             return {
-                summary: `Found ${results.length} queries but no high-confidence composable matches (best: ${Math.round(similarity * 100)}%). Proceed with schema exploration and fresh SQL.`,
+                message: `Found ${results.length} queries but no high-confidence composable matches (best: ${Math.round(similarity * 100)}%). Proceed with schema exploration and fresh SQL.`,
                 directives: []
             };
         }
@@ -180,19 +180,42 @@ export class SearchQueryCatalogAction extends BaseAction {
         const sql = recommend.SQL as string | undefined;
         const columns = sql ? this.extractSelectColumns(sql) : '';
 
-        // Informational summary for the action result JSON
-        const summaryParts: string[] = [`Found ${results.length} matching queries.`];
+        // Build the full message matching the original format
+        const lines: string[] = [`Found ${results.length} matching queries.`];
+
         if (bestComposable && bestComposable !== bestOverall) {
-            summaryParts.push(`Note: "${bestOverall.Name}" scored highest (${Math.round((bestOverall.Similarity as number) * 100)}%) but is parameterized — not directly composable.`);
-            summaryParts.push(`Best composable match: "${name}" (${Math.round(similarity * 100)}% similarity).`);
+            lines.push(`Note: "${bestOverall.Name}" scored highest (${Math.round((bestOverall.Similarity as number) * 100)}%) but is parameterized — not directly composable.`);
+            lines.push(`Best composable match: "${name}" (${Math.round(similarity * 100)}% similarity).`);
         } else {
-            summaryParts.push(`Best match: "${name}" (${Math.round(similarity * 100)}% similarity).`);
+            lines.push(`Best match: "${name}" (${Math.round(similarity * 100)}% similarity).`);
         }
-        summaryParts.push('', 'Top matches:');
+
+        lines.push(
+            '',
+            'YOUR NEXT ACTION — pick one:',
+            '',
+            'Option A — Fully covers the request? Call "Run Stored Query":',
+            `  Action: "Run Stored Query"`,
+            `  Params: { QueryID: "${queryID}", DataFormat: "json" }`,
+            '',
+            'Option B — Partially covers? Call "Run Ad-hoc Query" with composition SQL:',
+            `  Action: "Run Ad-hoc Query"`,
+            `  Params: { Query: "SELECT base.*, <extra columns> FROM {{query:\\"${categoryPath}\\"}} base <extra JOINs> ORDER BY <column>", MaxRows: 100, DataFormat: "json" }`
+        );
+        if (columns) {
+            lines.push(`  The stored query provides these columns: ${columns}`);
+        }
+        lines.push(
+            '  Add only the columns/JOINs the user needs that aren\'t already in the stored query.',
+            '',
+            'Do NOT call Get Entity Details or write fresh SQL — use one of the options above.',
+            '',
+            'Top matches:'
+        );
         for (const r of results.slice(0, 5)) {
             const sim = Math.round((r.Similarity as number) * 100);
             const paramFlag = this.hasTemplateParams(r) ? ' [parameterized]' : '';
-            summaryParts.push(`  - ${r.Name} (${r.Category}) — ${sim}%${paramFlag} — ${r.Description || r.Name}`);
+            lines.push(`  - ${r.Name} (${r.Category}) — ${sim}%${paramFlag} — ${r.Description || r.Name}`);
         }
 
         // Structured AI directives — surfaced by the agent framework
@@ -218,7 +241,7 @@ export class SearchQueryCatalogAction extends BaseAction {
         }
 
         return {
-            summary: summaryParts.join('\n'),
+            message: lines.join('\n'),
             directives
         };
     }
