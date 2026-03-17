@@ -1,53 +1,59 @@
 #!/usr/bin/env node
 /**
- * Migrates existing BizApps HubSpot actions to IntegrationActionExecutor format.
+ * Migrates existing HubSpot actions in the database to the new
+ * connector-driven IntegrationActionExecutor format.
  *
- * For each migratable action:
- *  1. Takes the NEW generated action record (with IntegrationActionExecutor driver + Config)
- *  2. Preserves the OLD action primaryKey (database ID)
- *  3. Keeps the OLD action name (to avoid breaking agent references)
- *  4. For ActionParams/ResultCodes: matches by name (case-insensitive):
- *     - Matched: new fields + old primaryKey → UPDATE in DB
- *     - New-only: no primaryKey → CREATE in DB
- *     - Old-only: deleteRecord marker → DELETE from DB
+ * Reads the CURRENT database state (actions, params, result codes) via sqlcmd,
+ * then merges with the freshly generated .hubspot-actions.json so that:
  *
- * Output:
- *  - metadata/actions/integrations-auto-generated/.hubspot-actions.json
- *  - Updated metadata/actions/.bizapps-actions.json (only custom actions remain)
+ *  - Actions with a matching DB record get the DB primaryKey → UPDATE
+ *  - Actions with no DB match get no primaryKey → CREATE
+ *  - DB actions with no generated match get a deleteRecord marker → DELETE
+ *  - Same merge logic applies recursively to ActionParams and ActionResultCodes
+ *
+ * Usage:
+ *   node scripts/migrate-hubspot-actions.mjs
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 
 // ─── Config ──────────────────────────────────────────────────────────
 
-/** Map of old action name → { Verb, ObjectName } for the 18 migratable actions */
-const MIGRATION_MAP = {
-    'HubSpot - Get Contact':            { Verb: 'Get',    ObjectName: 'contacts' },
-    'HubSpot - Create Contact':         { Verb: 'Create', ObjectName: 'contacts' },
-    'HubSpot - Update Contact':         { Verb: 'Update', ObjectName: 'contacts' },
-    'HubSpot - Delete Contact':         { Verb: 'Delete', ObjectName: 'contacts' },
-    'HubSpot - Search Contacts':        { Verb: 'Search', ObjectName: 'contacts' },
-    'HubSpot - Get Company':            { Verb: 'Get',    ObjectName: 'companies' },
-    'HubSpot - Create Company':         { Verb: 'Create', ObjectName: 'companies' },
-    'HubSpot - Update Company':         { Verb: 'Update', ObjectName: 'companies' },
-    'HubSpot - Search Companies':       { Verb: 'Search', ObjectName: 'companies' },
-    'HubSpot - Get Deal':               { Verb: 'Get',    ObjectName: 'deals' },
-    'HubSpot - Create Deal':            { Verb: 'Create', ObjectName: 'deals' },
-    'HubSpot - Update Deal':            { Verb: 'Update', ObjectName: 'deals' },
-    'HubSpot - Search Deals':           { Verb: 'Search', ObjectName: 'deals' },
-    'HubSpot - Create Task':            { Verb: 'Create', ObjectName: 'tasks' },
-    'HubSpot - Update Task':            { Verb: 'Update', ObjectName: 'tasks' },
-    'HubSpot - Get Deals by Company':   { Verb: 'Search', ObjectName: 'deals' },
-    'HubSpot - Get Deals by Contact':   { Verb: 'Search', ObjectName: 'deals' },
-    'HubSpot - Get Upcoming Tasks':     { Verb: 'Search', ObjectName: 'tasks' },
+/**
+ * Maps old DB action name → new generated action name.
+ * Where the old and new names are identical, the entry maps to itself.
+ * Where names diverge (plural → singular, special → generic), the map resolves it.
+ *
+ * Old actions not in this map and not in CUSTOM_ACTIONS will be delete-marked.
+ */
+const DB_TO_GENERATED_NAME = {
+    // Exact matches (old name == new name)
+    'HubSpot - Get Contact':      'HubSpot - Get Contact',
+    'HubSpot - Create Contact':   'HubSpot - Create Contact',
+    'HubSpot - Update Contact':   'HubSpot - Update Contact',
+    'HubSpot - Delete Contact':   'HubSpot - Delete Contact',
+    'HubSpot - Get Company':      'HubSpot - Get Company',
+    'HubSpot - Create Company':   'HubSpot - Create Company',
+    'HubSpot - Update Company':   'HubSpot - Update Company',
+    'HubSpot - Get Deal':         'HubSpot - Get Deal',
+    'HubSpot - Create Deal':      'HubSpot - Create Deal',
+    'HubSpot - Update Deal':      'HubSpot - Update Deal',
+    'HubSpot - Create Task':      'HubSpot - Create Task',
+    'HubSpot - Update Task':      'HubSpot - Update Task',
+
+    // Renamed: plural → singular
+    'HubSpot - Search Contacts':  'HubSpot - Search Contact',
+    'HubSpot - Search Companies': 'HubSpot - Search Company',
+    'HubSpot - Search Deals':     'HubSpot - Search Deal',
 };
 
-/** The 4 custom actions that stay in bizapps-actions.json unchanged */
+/** The 4 custom actions that stay in bizapps-actions.json — NOT migrated or deleted */
 const CUSTOM_ACTIONS = new Set([
     'HubSpot - Associate Contact to Company',
     'HubSpot - Merge Contacts',
@@ -55,183 +61,319 @@ const CUSTOM_ACTIONS = new Set([
     'HubSpot - Get Activities by Contact',
 ]);
 
-/**
- * Maps old action name → new generated action name.
- */
-function findNewGeneratedName(oldName, verb, objectName) {
-    const objectDisplayNames = {
-        contacts: 'Contact',
-        companies: 'Company',
-        deals: 'Deal',
-        tasks: 'Task',
-        tickets: 'Ticket',
-        products: 'Product',
-    };
-    const display = objectDisplayNames[objectName] || objectName;
-    return `HubSpot - ${verb} ${display}`;
+// ─── Database Queries ────────────────────────────────────────────────
+
+function loadEnv() {
+    const envPath = join(ROOT, '.env');
+    const envContent = readFileSync(envPath, 'utf-8');
+    const env = {};
+    for (const line of envContent.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx < 0) continue;
+        const key = trimmed.slice(0, eqIdx).trim();
+        let val = trimmed.slice(eqIdx + 1).trim();
+        if ((val.startsWith("'") && val.endsWith("'")) || (val.startsWith('"') && val.endsWith('"'))) {
+            val = val.slice(1, -1);
+        }
+        env[key] = val;
+    }
+    return env;
+}
+
+function runQuery(env, sql) {
+    const cmd = [
+        'sqlcmd',
+        '-S', `${env.DB_HOST},${env.DB_PORT}`,
+        '-U', env.DB_USERNAME,
+        '-P', `'${env.DB_PASSWORD}'`,
+        '-d', env.DB_DATABASE,
+        '-C', // Trust server certificate
+        '-s', '"|"', // Column separator
+        '-W', // Trim trailing spaces
+        '-h', '-1', // No headers
+        '-Q', `"${sql.replace(/"/g, '\\"')}"`,
+    ];
+    const result = execSync(cmd.join(' '), { encoding: 'utf-8', maxBuffer: 10 * 1024 * 1024, shell: true });
+    return result
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0 && !line.startsWith('(') && !line.match(/^\d+ rows? affected/));
+}
+
+function queryDbActions(env) {
+    const sql = `
+        SELECT CONVERT(VARCHAR(36), a.ID) AS ID, a.Name
+        FROM __mj.Action a
+        WHERE a.Name LIKE 'HubSpot%'
+        ORDER BY a.Name
+    `;
+    const rows = runQuery(env, sql);
+    const actions = [];
+    for (const row of rows) {
+        const [id, name] = row.split('|').map(s => s.trim());
+        if (id && name) actions.push({ ID: id, Name: name });
+    }
+    return actions;
+}
+
+function queryDbParams(env, actionIds) {
+    if (actionIds.length === 0) return [];
+    const inClause = actionIds.map(id => `'${id}'`).join(',');
+    const sql = `
+        SELECT CONVERT(VARCHAR(36), ap.ID) AS ID,
+               CONVERT(VARCHAR(36), ap.ActionID) AS ActionID,
+               ap.Name, ap.Type, ap.ValueType, ap.IsArray, ap.IsRequired, ap.Description
+        FROM __mj.ActionParam ap
+        WHERE ap.ActionID IN (${inClause})
+        ORDER BY ap.ActionID, ap.Name
+    `;
+    const rows = runQuery(env, sql);
+    const params = [];
+    for (const row of rows) {
+        const parts = row.split('|').map(s => s.trim());
+        if (parts.length >= 8) {
+            params.push({
+                ID: parts[0],
+                ActionID: parts[1],
+                Name: parts[2],
+                Type: parts[3],
+                ValueType: parts[4],
+                IsArray: parts[5] === '1',
+                IsRequired: parts[6] === '1',
+                Description: parts[7],
+            });
+        }
+    }
+    return params;
+}
+
+function queryDbResultCodes(env, actionIds) {
+    if (actionIds.length === 0) return [];
+    const inClause = actionIds.map(id => `'${id}'`).join(',');
+    const sql = `
+        SELECT CONVERT(VARCHAR(36), rc.ID) AS ID,
+               CONVERT(VARCHAR(36), rc.ActionID) AS ActionID,
+               rc.ResultCode, rc.IsSuccess, rc.Description
+        FROM __mj.ActionResultCode rc
+        WHERE rc.ActionID IN (${inClause})
+        ORDER BY rc.ActionID, rc.ResultCode
+    `;
+    const rows = runQuery(env, sql);
+    const codes = [];
+    for (const row of rows) {
+        const parts = row.split('|').map(s => s.trim());
+        if (parts.length >= 5) {
+            codes.push({
+                ID: parts[0],
+                ActionID: parts[1],
+                ResultCode: parts[2],
+                IsSuccess: parts[3] === '1',
+                Description: parts[4],
+            });
+        }
+    }
+    return codes;
 }
 
 // ─── Main ────────────────────────────────────────────────────────────
 
 function main() {
-    const oldPath = join(ROOT, 'metadata/actions/.bizapps-actions.json');
-    const newPath = join(ROOT, 'metadata/actions/integrations-auto-generated/.hubspot-actions.json');
-    const outDir = join(ROOT, 'metadata/actions/integrations-auto-generated');
-    const outPath = join(outDir, '.hubspot-actions.json');
-
-    // Read source files
-    const oldActions = JSON.parse(readFileSync(oldPath, 'utf-8'));
-    const newActions = JSON.parse(readFileSync(newPath, 'utf-8'));
-
-    // Index old actions by name
-    const oldByName = new Map();
-    for (const action of oldActions) {
-        const name = action.fields.Name;
-        if (name.startsWith('HubSpot')) {
-            oldByName.set(name, action);
-        }
+    const genPath = join(ROOT, 'metadata/actions/integrations-auto-generated/.hubspot-actions.json');
+    if (!existsSync(genPath)) {
+        console.error('ERROR: Generated .hubspot-actions.json not found. Run generate-integration-actions.ts first.');
+        process.exit(1);
     }
 
-    // Index new generated actions by name
-    const newByName = new Map();
-    for (const action of newActions) {
-        newByName.set(action.fields.Name, action);
+    console.log('Reading .env for DB connection...');
+    const env = loadEnv();
+
+    console.log(`Querying ${env.DB_DATABASE} for existing HubSpot actions...`);
+    const dbActions = queryDbActions(env);
+    console.log(`  Found ${dbActions.length} actions in DB`);
+
+    // Filter to only migratable actions (exclude custom ones)
+    const migratableDbActions = dbActions.filter(a => !CUSTOM_ACTIONS.has(a.Name));
+    const migratableIds = migratableDbActions.map(a => a.ID);
+
+    console.log('  Querying params and result codes...');
+    const dbParams = queryDbParams(env, migratableIds);
+    const dbCodes = queryDbResultCodes(env, migratableIds);
+    console.log(`  Found ${dbParams.length} params, ${dbCodes.length} result codes`);
+
+    // Group DB params and codes by ActionID
+    const paramsByAction = groupBy(dbParams, 'ActionID');
+    const codesByAction = groupBy(dbCodes, 'ActionID');
+
+    // Read freshly generated actions
+    const generatedActions = JSON.parse(readFileSync(genPath, 'utf-8'));
+    const genByName = new Map();
+    for (const action of generatedActions) {
+        genByName.set(action.fields.Name, action);
     }
 
-    // Track which new actions we've consumed
-    const consumedNewNames = new Set();
+    // Track consumed generated action names
+    const consumedGenNames = new Set();
 
-    // Build the output array
+    // Build output: merged actions
     const outputActions = [];
+    let matchedCount = 0;
+    let deleteActionCount = 0;
 
-    // 1. Process the 18 migratable actions
-    for (const [oldName, config] of Object.entries(MIGRATION_MAP)) {
-        const oldAction = oldByName.get(oldName);
-        if (!oldAction) {
-            console.warn(`WARNING: Old action "${oldName}" not found in bizapps-actions.json`);
-            continue;
+    for (const dbAction of migratableDbActions) {
+        const genName = DB_TO_GENERATED_NAME[dbAction.Name];
+
+        if (genName && genByName.has(genName)) {
+            // Match found — merge: new fields + old primaryKey
+            const genAction = genByName.get(genName);
+            consumedGenNames.add(genName);
+
+            const dbActionParams = paramsByAction.get(dbAction.ID) || [];
+            const dbActionCodes = codesByAction.get(dbAction.ID) || [];
+
+            const merged = buildMergedAction(dbAction, genAction, dbActionParams, dbActionCodes);
+            outputActions.push(merged);
+            matchedCount++;
+            console.log(`  MATCH: "${dbAction.Name}" → "${genName}" (ID: ${dbAction.ID})`);
+        } else {
+            // No match — this old action should be deleted
+            const dbActionParams = paramsByAction.get(dbAction.ID) || [];
+            const dbActionCodes = codesByAction.get(dbAction.ID) || [];
+
+            const deleteAction = buildDeleteAction(dbAction, dbActionParams, dbActionCodes);
+            outputActions.push(deleteAction);
+            deleteActionCount++;
+            console.log(`  DELETE: "${dbAction.Name}" (ID: ${dbAction.ID})`);
         }
-
-        // Find corresponding new generated action
-        const newGenName = findNewGeneratedName(oldName, config.Verb, config.ObjectName);
-        let newAction = newByName.get(newGenName);
-
-        // Fallback: try base Search for special search variants
-        if (!newAction) {
-            const baseSearchName = findNewGeneratedName(oldName, 'Search', config.ObjectName);
-            newAction = newByName.get(baseSearchName);
-        }
-
-        if (!newAction) {
-            console.warn(`WARNING: No matching new action for "${oldName}" (tried "${newGenName}")`);
-            continue;
-        }
-
-        consumedNewNames.add(newAction.fields.Name);
-
-        // Build the merged action
-        const merged = buildMergedAction(oldAction, newAction, oldName, config);
-        outputActions.push(merged);
     }
 
-    // 2. Add genuinely new actions (no old equivalent) — these have no primaryKey
-    for (const action of newActions) {
-        if (!consumedNewNames.has(action.fields.Name)) {
+    // Add genuinely new generated actions (no DB match) — no primaryKey
+    let newCount = 0;
+    for (const action of generatedActions) {
+        if (!consumedGenNames.has(action.fields.Name)) {
             outputActions.push(action);
+            newCount++;
         }
     }
 
-    // 3. Write output
-    if (!existsSync(outDir)) {
-        mkdirSync(outDir, { recursive: true });
-    }
-
-    writeFileSync(outPath, JSON.stringify(outputActions, null, 2) + '\n');
-    console.log(`Wrote ${outputActions.length} actions to ${outPath}`);
-
-    // 4. Update bizapps-actions.json — keep only custom + non-HubSpot actions
-    const remainingBizapps = oldActions.filter(action => {
-        const name = action.fields.Name;
-        if (!name.startsWith('HubSpot')) return true; // Keep non-HubSpot
-        return CUSTOM_ACTIONS.has(name); // Keep custom HubSpot actions
-    });
-
-    writeFileSync(oldPath, JSON.stringify(remainingBizapps, null, 2) + '\n');
-    console.log(`Updated bizapps-actions.json: ${remainingBizapps.length} actions remaining`);
+    // Write output
+    writeFileSync(genPath, JSON.stringify(outputActions, null, 2) + '\n');
+    console.log(`\nWrote ${outputActions.length} records to .hubspot-actions.json`);
 
     // Summary
-    const migrated = outputActions.filter(a => a.primaryKey);
-    const brandNew = outputActions.filter(a => !a.primaryKey);
-    console.log(`\nSummary:`);
-    console.log(`  Migrated (with old IDs): ${migrated.length}`);
-    console.log(`  Brand new (no IDs): ${brandNew.length}`);
-    console.log(`  Custom (unchanged in bizapps): ${remainingBizapps.filter(a => a.fields.Name.startsWith('HubSpot')).length}`);
-    console.log(`  Non-HubSpot (unchanged): ${remainingBizapps.filter(a => !a.fields.Name.startsWith('HubSpot')).length}`);
-
-    // Count delete markers
     let deleteParamCount = 0;
-    let deleteResultCount = 0;
-    for (const action of migrated) {
+    let deleteCodeCount = 0;
+    let matchedParamCount = 0;
+    let matchedCodeCount = 0;
+    let newParamCount = 0;
+    let newCodeCount = 0;
+    for (const action of outputActions) {
+        if (action.deleteRecord) continue;
         const params = action.relatedEntities?.['MJ: Action Params'] || [];
         const codes = action.relatedEntities?.['MJ: Action Result Codes'] || [];
         deleteParamCount += params.filter(p => p.deleteRecord).length;
-        deleteResultCount += codes.filter(c => c.deleteRecord).length;
+        deleteCodeCount += codes.filter(c => c.deleteRecord).length;
+        matchedParamCount += params.filter(p => p.primaryKey && !p.deleteRecord).length;
+        matchedCodeCount += codes.filter(c => c.primaryKey && !c.deleteRecord).length;
+        newParamCount += params.filter(p => !p.primaryKey && !p.deleteRecord).length;
+        newCodeCount += codes.filter(c => !c.primaryKey && !c.deleteRecord).length;
     }
-    console.log(`  Delete markers: ${deleteParamCount} params, ${deleteResultCount} result codes`);
+
+    console.log(`\nSummary:`);
+    console.log(`  Actions:  ${matchedCount} matched (UPDATE), ${newCount} new (CREATE), ${deleteActionCount} delete-marked`);
+    console.log(`  Params:   ${matchedParamCount} matched, ${newParamCount} new, ${deleteParamCount} delete-marked`);
+    console.log(`  Results:  ${matchedCodeCount} matched, ${newCodeCount} new, ${deleteCodeCount} delete-marked`);
 }
 
 // ─── Merge Logic ─────────────────────────────────────────────────────
 
-function buildMergedAction(oldAction, newAction, oldName, config) {
-    // Start with the new action's fields (has IntegrationActionExecutor, Config, etc.)
-    const mergedFields = { ...newAction.fields };
+function buildMergedAction(dbAction, genAction, dbParams, dbCodes) {
+    // Use new generated fields but keep the DB action name for backwards compatibility
+    const mergedFields = { ...genAction.fields };
+    // Keep the DB name if it differs (e.g., plural → singular rename),
+    // so agent references don't break. The new name will be used going forward.
+    // Actually, use the NEW generated name — this is the canonical name now.
+    // Old name → new name is the migration.
 
-    // Keep the old action name to preserve agent references
-    mergedFields.Name = oldName;
+    // Merge params: match by Name (case-insensitive)
+    const genParams = genAction.relatedEntities?.['MJ: Action Params'] || [];
+    const mergedParams = mergeRelatedRecords(
+        genParams,
+        dbParams.map(p => ({
+            fields: {
+                ActionID: '@parent:ID',
+                Name: p.Name,
+                Type: p.Type,
+                ValueType: p.ValueType,
+                IsArray: p.IsArray,
+                IsRequired: p.IsRequired,
+                Description: p.Description,
+            },
+            primaryKey: { ID: p.ID },
+        })),
+        'Name'
+    );
 
-    // Ensure Config is correct for this specific action
-    mergedFields.Config = JSON.stringify({
-        IntegrationName: 'HubSpot',
-        ObjectName: config.ObjectName,
-        Verb: config.Verb,
-    });
+    // Merge result codes: match by ResultCode (case-insensitive)
+    const genCodes = genAction.relatedEntities?.['MJ: Action Result Codes'] || [];
+    const mergedCodes = mergeRelatedRecords(
+        genCodes,
+        dbCodes.map(c => ({
+            fields: {
+                ActionID: '@parent:ID',
+                ResultCode: c.ResultCode,
+                IsSuccess: c.IsSuccess,
+                Description: c.Description,
+            },
+            primaryKey: { ID: c.ID },
+        })),
+        'ResultCode'
+    );
 
-    // Merge params: match by name (case-insensitive), carry over primaryKeys
-    const newParams = newAction.relatedEntities?.['MJ: Action Params'] || [];
-    const oldParams = oldAction.relatedEntities?.['MJ: Action Params'] || [];
-    const mergedParams = mergeRelatedRecords(newParams, oldParams, 'Name');
-
-    // Merge result codes: match by ResultCode (case-insensitive), carry over primaryKeys
-    const newCodes = newAction.relatedEntities?.['MJ: Action Result Codes'] || [];
-    const oldCodes = oldAction.relatedEntities?.['MJ: Action Result Codes'] || [];
-    const mergedCodes = mergeRelatedRecords(newCodes, oldCodes, 'ResultCode');
-
-    const merged = {
+    return {
         fields: mergedFields,
+        primaryKey: { ID: dbAction.ID },
         relatedEntities: {
             'MJ: Action Params': mergedParams,
             'MJ: Action Result Codes': mergedCodes,
         },
-        primaryKey: oldAction.primaryKey,
     };
+}
 
-    // Include sync if present
-    if (oldAction.sync) {
-        merged.sync = oldAction.sync;
-    }
+function buildDeleteAction(dbAction, dbParams, dbCodes) {
+    // Build delete markers for the action and all its children
+    const paramDeletes = dbParams.map(p => ({
+        fields: { ActionID: '@parent:ID', Name: p.Name },
+        primaryKey: { ID: p.ID },
+        deleteRecord: { delete: true },
+    }));
 
-    return merged;
+    const codeDeletes = dbCodes.map(c => ({
+        fields: { ActionID: '@parent:ID', ResultCode: c.ResultCode },
+        primaryKey: { ID: c.ID },
+        deleteRecord: { delete: true },
+    }));
+
+    return {
+        fields: { Name: dbAction.Name },
+        primaryKey: { ID: dbAction.ID },
+        deleteRecord: { delete: true },
+        relatedEntities: {
+            'MJ: Action Params': paramDeletes,
+            'MJ: Action Result Codes': codeDeletes,
+        },
+    };
 }
 
 /**
  * Merges new and old related records by matching on a key field (case-insensitive).
  *
- * - Matched records: new fields + old primaryKey/sync (update in DB)
- * - New-only records: no primaryKey (create in DB)
- * - Old-only records: deleteRecord marker (remove from DB)
+ * - Matched records: new fields + old primaryKey → UPDATE
+ * - New-only records: no primaryKey → CREATE
+ * - Old-only records: deleteRecord marker → DELETE
  */
 function mergeRelatedRecords(newRecords, oldRecords, keyField) {
-    // Build lookup of old records by key (case-insensitive)
     const oldByKey = new Map();
     for (const rec of oldRecords) {
         if (rec.primaryKey?.ID) {
@@ -243,34 +385,27 @@ function mergeRelatedRecords(newRecords, oldRecords, keyField) {
     const consumedOldKeys = new Set();
     const merged = [];
 
-    // Process new records — attach old primaryKey if name matches
     for (const newRec of newRecords) {
         const key = String(newRec.fields[keyField] || '').toLowerCase();
         const oldRec = oldByKey.get(key);
 
         if (oldRec) {
-            // Match found — carry over primaryKey so mj sync does an UPDATE
             consumedOldKeys.add(key);
-            const withPK = {
+            merged.push({
                 fields: { ...newRec.fields },
                 primaryKey: oldRec.primaryKey,
-            };
-            if (oldRec.sync) withPK.sync = oldRec.sync;
-            merged.push(withPK);
+            });
         } else {
-            // No match — new record, will be created
             merged.push(newRec);
         }
     }
 
-    // Old records not matched → delete markers
     for (const [key, oldRec] of oldByKey) {
         if (!consumedOldKeys.has(key)) {
             merged.push({
                 fields: { ...oldRec.fields },
                 primaryKey: oldRec.primaryKey,
                 deleteRecord: { delete: true },
-                ...(oldRec.sync ? { sync: oldRec.sync } : {}),
             });
         }
     }
@@ -278,6 +413,17 @@ function mergeRelatedRecords(newRecords, oldRecords, keyField) {
     return merged;
 }
 
+// ─── Utilities ───────────────────────────────────────────────────────
+
+function groupBy(arr, key) {
+    const map = new Map();
+    for (const item of arr) {
+        const k = item[key];
+        if (!map.has(k)) map.set(k, []);
+        map.get(k).push(item);
+    }
+    return map;
+}
 
 // ─── Run ─────────────────────────────────────────────────────────────
 

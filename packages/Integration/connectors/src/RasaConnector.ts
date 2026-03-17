@@ -156,6 +156,8 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
         const config = super.GetActionGeneratorConfig();
         if (!config) return null;
         config.IconClass = 'fa-solid fa-envelope-open-text';
+        config.CategoryDescription = 'Rasa.io email newsletter integration for managing subscribers, newsletters, and engagement data';
+        config.ParentCategoryName = 'Communication';
         // Rasa.io is read-only but we still want Search/List actions for querying
         config.IncludeSearch = true;
         config.IncludeList = true;

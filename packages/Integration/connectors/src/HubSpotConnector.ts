@@ -426,6 +426,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const config = super.GetActionGeneratorConfig();
         if (!config) return null;
         config.IconClass = 'fa-brands fa-hubspot';
+        config.CreateCategory = false; // HubSpot category already exists in metadata/action-categories
         return config;
     }
 

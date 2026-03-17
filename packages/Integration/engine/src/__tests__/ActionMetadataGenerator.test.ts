@@ -128,12 +128,13 @@ describe('ActionMetadataGenerator', () => {
             }
         });
 
-        it('should include Config JSON with correct routing info', () => {
+        it('should include Config as a plain object with correct routing info', () => {
             const result = generator.Generate(createConfig());
             const getAction = result.ActionRecords.find(a => a.fields['Name'] === 'TestCRM - Get Contact');
             expect(getAction).toBeDefined();
 
-            const config = JSON.parse(getAction!.fields['Config'] as string);
+            const config = getAction!.fields['Config'] as Record<string, unknown>;
+            expect(config).toBeTypeOf('object');
             expect(config.IntegrationName).toBe('TestCRM');
             expect(config.ObjectName).toBe('contacts');
             expect(config.Verb).toBe('Get');
@@ -357,6 +358,40 @@ describe('ActionMetadataGenerator', () => {
                     expect(code.fields['ActionID']).toBe('@parent:ID');
                 }
             }
+        });
+    });
+
+    describe('Category generation', () => {
+        it('should emit a category record by default', () => {
+            const result = generator.Generate(createConfig());
+            expect(result.CategoryRecords).toHaveLength(1);
+            expect(result.CategoryRecords[0].fields['Name']).toBe('TestCategory');
+            expect(result.CategoryRecords[0].fields['Status']).toBe('Active');
+        });
+
+        it('should include ParentID lookup when ParentCategoryName is set', () => {
+            const config = createConfig({ ParentCategoryName: 'Business Apps' });
+            const result = generator.Generate(config);
+            expect(result.CategoryRecords[0].fields['ParentID']).toBe(
+                '@lookup:MJ: Action Categories.Name=Business Apps'
+            );
+        });
+
+        it('should not emit category records when CreateCategory is false', () => {
+            const config = createConfig({ CreateCategory: false });
+            const result = generator.Generate(config);
+            expect(result.CategoryRecords).toHaveLength(0);
+        });
+
+        it('should use CategoryDescription when provided', () => {
+            const config = createConfig({ CategoryDescription: 'My custom desc' });
+            const result = generator.Generate(config);
+            expect(result.CategoryRecords[0].fields['Description']).toBe('My custom desc');
+        });
+
+        it('should fallback to a default description', () => {
+            const result = generator.Generate(createConfig());
+            expect(result.CategoryRecords[0].fields['Description']).toBe('TestCRM integration actions');
         });
     });
 

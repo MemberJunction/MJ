@@ -246,6 +246,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         const config = super.GetActionGeneratorConfig();
         if (!config) return null;
         config.IconClass = 'fa-solid fa-id-card';
+        config.CategoryDescription = 'YourMembership AMS integration for managing members, events, dues, and association data';
+        config.ParentCategoryName = 'Business Apps';
         // YM is read-only but we still want Search/List for querying
         config.IncludeSearch = true;
         config.IncludeList = true;

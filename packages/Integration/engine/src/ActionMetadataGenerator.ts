@@ -66,6 +66,12 @@ export interface ActionGeneratorConfig {
     IncludeSearch?: boolean;
     /** Whether to include List actions (requires connector support) */
     IncludeList?: boolean;
+    /** Description for the auto-generated action category */
+    CategoryDescription?: string;
+    /** Parent category name for the auto-generated category (e.g., "CRM", "Business Apps") */
+    ParentCategoryName?: string;
+    /** Whether to emit a category record. Defaults to true. Set false if the category already exists in metadata. */
+    CreateCategory?: boolean;
 }
 
 /** A single generated action record in mj-sync format */
@@ -87,12 +93,19 @@ interface ActionResultCodeRecord {
     fields: Record<string, unknown>;
 }
 
+/** A single generated category record in mj-sync format */
+interface CategoryRecord {
+    fields: Record<string, unknown>;
+}
+
 /** Complete output from the generator */
 export interface GeneratedActionMetadata {
     /** The .mj-sync.json configuration file content */
     SyncConfig: Record<string, unknown>;
     /** The action records JSON (array of ActionRecord) */
     ActionRecords: ActionRecord[];
+    /** Category records to emit (empty if CreateCategory is false or not configured) */
+    CategoryRecords: CategoryRecord[];
 }
 
 // ─── Generator ───────────────────────────────────────────────────────
@@ -117,6 +130,7 @@ export class ActionMetadataGenerator {
         return {
             SyncConfig: this.BuildSyncConfig(),
             ActionRecords: actions,
+            CategoryRecords: this.BuildCategoryRecords(config),
         };
     }
 
@@ -313,7 +327,7 @@ export class ActionMetadataGenerator {
                 Status: 'Active',
                 DriverClass: 'IntegrationActionExecutor',
                 CategoryID: `@lookup:MJ: Action Categories.Name=${config.CategoryName}`,
-                Config: JSON.stringify(actionConfig),
+                Config: actionConfig,
                 IconClass: config.IconClass ?? 'fa-solid fa-plug',
             },
             relatedEntities: {
@@ -426,6 +440,23 @@ export class ActionMetadataGenerator {
                 },
             },
         };
+    }
+
+    // ─── Category Generation ─────────────────────────────────────────
+
+    private BuildCategoryRecords(config: ActionGeneratorConfig): CategoryRecord[] {
+        if (config.CreateCategory === false) return [];
+
+        const fields: Record<string, unknown> = {
+            Name: config.CategoryName,
+            Description: config.CategoryDescription || `${config.IntegrationName} integration actions`,
+            Status: 'Active',
+        };
+        if (config.ParentCategoryName) {
+            fields['ParentID'] = `@lookup:MJ: Action Categories.Name=${config.ParentCategoryName}`;
+        }
+
+        return [{ fields }];
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────

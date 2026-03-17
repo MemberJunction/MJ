@@ -7,7 +7,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"members\",\"Verb\":\"Get\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "members",
+        "Verb": "Get"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -21,6 +25,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "The unique ID of the Member record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "919EB9EE-866B-4650-84A3-AE3291B060F4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.079Z",
+            "checksum": "a26923fdda6fbf1b5f0621688263c6fa6694f4aa73c215f6b46511d3591d2df5"
           }
         },
         {
@@ -32,6 +43,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "61146C05-B98B-4430-99E1-BACBE49D0FDA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.091Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -43,6 +61,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Member record with all fields"
+          },
+          "primaryKey": {
+            "ID": "2BC87BD7-A503-48DD-94B8-B9597BE1624C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.100Z",
+            "checksum": "1a5f2e07fa927b7b053ead4b7f7057726d436f611b64ff8b3c605b5c36575337"
           }
         },
         {
@@ -54,6 +79,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Member email address (key field)"
+          },
+          "primaryKey": {
+            "ID": "174CBFFA-7687-4018-9D08-6130CFE84ED6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.111Z",
+            "checksum": "1fff2c00063ab7245ea5ee98f0b19115740664c3139c87560f044870a1c296ef"
           }
         },
         {
@@ -65,6 +97,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Member first name"
+          },
+          "primaryKey": {
+            "ID": "C358298F-F0F4-4F4B-88BD-3E73F78485A3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.122Z",
+            "checksum": "a30433b38fc6a76d286ca069673813bbae7a26de4e573aab8d8b6e82e92ed4de"
           }
         },
         {
@@ -76,6 +115,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Member last name"
+          },
+          "primaryKey": {
+            "ID": "9611FBDA-961A-4598-B44B-D37F41C04D1F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.133Z",
+            "checksum": "b28c6c50f35b86bebe98841c79f9cbb9a8e42cc606d77ce5a765805138e4de6f"
           }
         },
         {
@@ -87,6 +133,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Member phone number"
+          },
+          "primaryKey": {
+            "ID": "944C0CA3-ECB3-4AB6-B8A4-D16022B4FD73"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.144Z",
+            "checksum": "839cdab9f8b5938789bd694b04ac3855c940742a8f4aab0989d43415d89e5b0b"
           }
         },
         {
@@ -98,6 +151,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Member company/organization"
+          },
+          "primaryKey": {
+            "ID": "0785CE09-5848-40D0-8CD8-0E69B2CB7FC6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.156Z",
+            "checksum": "c99cbcada65612a59cef63ffce13a6d242fd1426bf1b9b117f98f1ef0d059926"
           }
         },
         {
@@ -109,6 +169,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Membership type code/status"
+          },
+          "primaryKey": {
+            "ID": "33132906-4131-4025-B4BF-720BF4A43AEE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.166Z",
+            "checksum": "ca9773042ad14da266fa2e75b77c9a9fbd9582b8913f69bcb53cae90a130a0de"
           }
         },
         {
@@ -120,6 +187,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "YM profile identifier"
+          },
+          "primaryKey": {
+            "ID": "47C8348E-21D3-4A20-8CF5-D0D7D1D22331"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.175Z",
+            "checksum": "de1861f6d56a406665252fa9f6d22a7c7ad7e6c3331ff51934a3833bec8885e0"
           }
         },
         {
@@ -131,6 +205,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Street address line 1"
+          },
+          "primaryKey": {
+            "ID": "0EE825C0-923C-45FD-B6A0-F6A36380CD44"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.209Z",
+            "checksum": "609682530709727cf2f1a849413ccfb536a48a3706d2ca84983e0ab1b19f86e3"
           }
         },
         {
@@ -142,6 +223,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "City"
+          },
+          "primaryKey": {
+            "ID": "D680D547-981F-40D1-BB63-3DC4BF614444"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.221Z",
+            "checksum": "e2c493aa1d37a0a11b7628c4bb05a50aa907bb4f0e5df3a391d20b4ee22a4098"
           }
         },
         {
@@ -153,6 +241,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "State/province"
+          },
+          "primaryKey": {
+            "ID": "15DDFBD2-85B8-45B8-88DF-E1615631F8E4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.232Z",
+            "checksum": "0871117e99e70414328e53da3903e69cb862dea3f4045f747d318d71ca65c1c4"
           }
         },
         {
@@ -164,6 +259,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Postal/zip code"
+          },
+          "primaryKey": {
+            "ID": "4E7601EC-B19C-44A8-8917-32929954B483"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.243Z",
+            "checksum": "495b61ddad06a8d30105ff247af47242907bf338e783bab122754a2b6082564d"
           }
         },
         {
@@ -175,6 +277,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Country"
+          },
+          "primaryKey": {
+            "ID": "D179962B-8B48-48BB-A3CE-029D3B280AB5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.254Z",
+            "checksum": "f86219ec06710b74ed1571285beae971b7de2950afd5da4e86ea00df75c7b7e6"
           }
         },
         {
@@ -186,6 +295,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Membership expiration date"
+          },
+          "primaryKey": {
+            "ID": "6548EF7F-CF67-4408-A012-361FD5BE929E"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.264Z",
+            "checksum": "7bd7eda07e6f8037de36d4d8bf86a4d2a430d89a9492eb160345e9de2729a912"
           }
         },
         {
@@ -197,6 +313,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "When the member record was last updated"
+          },
+          "primaryKey": {
+            "ID": "B67AE54F-8C93-4BFD-A5A1-E20EBBB5F960"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.273Z",
+            "checksum": "3d045bd515cf0034b817edf4a0b5d843698de92450a91840e1e04a85d3f1b62f"
           }
         }
       ],
@@ -207,6 +330,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "B375F1F7-DD13-463A-8D8B-C2BFC34CA508"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.283Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
           }
         },
         {
@@ -215,6 +345,13 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "F4DF8B43-7905-4EED-B93C-B7C8570A25B3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.292Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         },
         {
@@ -223,9 +360,23 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "F65E3303-3D56-4477-85F3-E617CE65988A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.299Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "031C8901-3A3E-42F5-AB32-60C3FFA3BD00"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.630Z",
+      "checksum": "d5ee7619fa1c08ae2de67a79a395920505036fcf692e2944d1047a5dbe877ebc"
     }
   },
   {
@@ -236,7 +387,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"members\",\"Verb\":\"Search\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "members",
+        "Verb": "Search"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -250,6 +405,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "860553F8-F588-40AD-82AE-7B94E71FF3AA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.335Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -261,6 +423,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "A51BBA8C-C379-4726-981A-8C2384AAA43A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.346Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
           }
         },
         {
@@ -272,6 +441,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "BACC533F-0EB6-4F48-9F37-966C81852637"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.359Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
           }
         },
         {
@@ -283,6 +459,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "56A74883-543E-4C62-80AC-D2655B7A5067"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.371Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -294,6 +477,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Member first name"
+          },
+          "primaryKey": {
+            "ID": "3764A830-3C6F-4365-86FA-2197CFBFC849"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.381Z",
+            "checksum": "81e29d38c5c9313fa2838dff974304c1faf35769adcd938a9810fb7a8e22fe44"
           }
         },
         {
@@ -305,6 +495,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Member last name"
+          },
+          "primaryKey": {
+            "ID": "D6E0A431-5842-4560-8DF0-60903E77310B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.391Z",
+            "checksum": "06055d581f3c25935e4b902df276af374aa6f7938806d5580b596db30e9988a7"
           }
         },
         {
@@ -316,6 +513,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Member phone number"
+          },
+          "primaryKey": {
+            "ID": "0726E225-9604-4456-84EA-473629335915"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.401Z",
+            "checksum": "9bc7b3e7e1ae5b30404665d7ea03cdeea02d28dcaf2f1730e0278c6e442b978a"
           }
         },
         {
@@ -327,6 +531,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Member company/organization"
+          },
+          "primaryKey": {
+            "ID": "44598CC4-71CE-43F1-93FB-E3D834647C83"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.410Z",
+            "checksum": "0ea1b5d34f0753279647e8da6a678ec3ac344bcdc3ad81fb4c38af00d1ca2b67"
           }
         },
         {
@@ -338,6 +549,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Membership type code/status"
+          },
+          "primaryKey": {
+            "ID": "FA56186C-3F4D-48AD-8109-1322188F5FFB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.420Z",
+            "checksum": "8b92f0e597ec4f220786854725afd4809910aa1b7f787c7c33d01aa871d7e7c0"
           }
         },
         {
@@ -349,6 +567,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "YM profile identifier"
+          },
+          "primaryKey": {
+            "ID": "96E0E937-91E1-4B4E-B5C2-C97FF694535D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.430Z",
+            "checksum": "a38890968f0293b4d79fc6aadd10851c34acd375c797023492832eee9979daaf"
           }
         },
         {
@@ -360,6 +585,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Street address line 1"
+          },
+          "primaryKey": {
+            "ID": "A2C71584-A659-4B55-843F-E2F3772E9CBD"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.466Z",
+            "checksum": "3b9ace4348ca338d825034c13d9e55e00346a07ecfdbf9dbca6fc032700cb661"
           }
         },
         {
@@ -371,6 +603,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "City"
+          },
+          "primaryKey": {
+            "ID": "81E113B6-C29D-4E0E-ADD2-04B9FBF2B1A5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.476Z",
+            "checksum": "c0f0ab423d3d385e24ac07ae1b556ab61100c06a2ca4b88c386546622d390f84"
           }
         },
         {
@@ -382,6 +621,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "State/province"
+          },
+          "primaryKey": {
+            "ID": "0F1AFFE0-FD04-4236-A3F1-A1F096B4D492"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.488Z",
+            "checksum": "0634ddc8bafa09f08b4b7eb184340272d0a8bb2def8bbd7c4e4dcaf6105b3c21"
           }
         },
         {
@@ -393,6 +639,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Postal/zip code"
+          },
+          "primaryKey": {
+            "ID": "85D59A0C-84FB-418F-A828-AA0E8389AB9A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.500Z",
+            "checksum": "ea56ace7d82dd90df6d72b9d4e4eeec839cc412faf854b4e521ba2cfc7fa9bd4"
           }
         },
         {
@@ -404,6 +657,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Country"
+          },
+          "primaryKey": {
+            "ID": "7F97CA5C-B9D1-4A23-A77E-B4A997F03568"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.510Z",
+            "checksum": "4074f25a3eab99697eb647f52955833af8683a0333deafa55c50afb0d64f38e2"
           }
         },
         {
@@ -415,6 +675,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Membership expiration date"
+          },
+          "primaryKey": {
+            "ID": "F991D4EB-CA6D-4DB5-9DDB-0A365CACF502"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.521Z",
+            "checksum": "569a34d72f7777d22666827e9a3c0404b59f84785a0c6f8c0ec7df66e28e5fa7"
           }
         },
         {
@@ -426,6 +693,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "When the member record was last updated"
+          },
+          "primaryKey": {
+            "ID": "CFE75183-0861-491E-B80A-A5C5FFAF066B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.532Z",
+            "checksum": "eda4a48c881a6bcb970fd8d9c59b56823f236c62326aa44ad29fda4dc6bb1513"
           }
         },
         {
@@ -437,6 +711,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of matching Member records"
+          },
+          "primaryKey": {
+            "ID": "CED9FC4D-6BEF-4014-8FCB-40A7D5A5B9DF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.543Z",
+            "checksum": "5fa7c027f81b45324f03cb5cacf21436fbadc2defd8cc0c26e919ca606a78cc5"
           }
         },
         {
@@ -448,6 +729,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "442D0103-C4E1-4727-847C-A288B8FBCD70"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.554Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
           }
         },
         {
@@ -459,6 +747,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "A049448F-C4FA-40AC-9237-8CA2D684C13B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.562Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         }
       ],
@@ -469,6 +764,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "D3C69CC7-A3FC-4AF7-898D-73A8D6D3D2A3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.596Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
           }
         },
         {
@@ -477,9 +779,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "797ED431-8833-4EEB-985D-D73B76F01DE0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.607Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "48FFE656-5F65-4439-8E19-21F18AD4D7BC"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.643Z",
+      "checksum": "0963589b3d1628130344203915974a54e9adcb1872839a11f3a069b8341f31cf"
     }
   },
   {
@@ -490,7 +806,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"members\",\"Verb\":\"List\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "members",
+        "Verb": "List"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -504,6 +824,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "E4B55235-9708-4F0C-845D-E62C8C4015AB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.618Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -515,6 +842,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "C8EEC6D6-9FDA-4342-AB9B-079C28744256"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.629Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
           }
         },
         {
@@ -526,6 +860,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "FC82E05D-F15F-4D6D-B029-AD3C3A2AAECB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.638Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
           }
         },
         {
@@ -537,6 +878,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "1F51048C-D833-4351-81B8-2A89C3C03471"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.648Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -548,6 +896,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of Member records in this page"
+          },
+          "primaryKey": {
+            "ID": "FEE4E239-12A6-49B6-A4C7-12B5C4AC0E97"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.660Z",
+            "checksum": "fe37247c1403e7c431e2e0ff406c5760382418ca33815a507b16f6c5b8b04049"
           }
         },
         {
@@ -559,6 +914,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "B8FE8AC4-224B-4191-8DD4-64E71D4FCF0D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.673Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         },
         {
@@ -570,6 +932,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "CBBD2F7B-515E-4D97-A871-5896CDD1C11A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.685Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
           }
         },
         {
@@ -581,6 +950,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "599C0D6C-98EE-4D2F-8810-B14BDE547E5B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.697Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
           }
         }
       ],
@@ -591,6 +967,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "D601B63D-682A-41B9-B18E-F293B94CF3CA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.736Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
           }
         },
         {
@@ -599,9 +982,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "667636E7-E388-4AA6-8821-0AB2A5BB5A2D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.746Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "8D7C16CD-7819-46EC-AB7D-DF6BD6DE7A85"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.656Z",
+      "checksum": "2f015e0adb2aa464b56561373528b38106ef6764e073e405bb2edb3905b4b444"
     }
   },
   {
@@ -612,7 +1009,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"events\",\"Verb\":\"Get\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "events",
+        "Verb": "Get"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -626,6 +1027,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "The unique ID of the Event record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "088165B2-8098-40F4-8E22-08C58B8C6F08"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.757Z",
+            "checksum": "65194b0402911fcb423db1f2331f56e65452bb645097882295f910f2e115092f"
           }
         },
         {
@@ -637,6 +1045,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "50174307-9784-430E-9ACC-DD75FAEB1045"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.769Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -648,6 +1063,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Event record with all fields"
+          },
+          "primaryKey": {
+            "ID": "3023B47E-7B17-4CE1-A120-AD34D608BE94"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.781Z",
+            "checksum": "2e6a5c791e9be2d39f587bdcdca95ec2f8d99f6d3c5dfbe5af342dcb5f358fa2"
           }
         },
         {
@@ -659,6 +1081,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Event identifier"
+          },
+          "primaryKey": {
+            "ID": "CCE5E9F4-35F6-44FD-832E-7C6A848FAED0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.791Z",
+            "checksum": "82c34a3923e3169ceec0c9270165350f6724d225a103aa66d8d43f4f8e59a877"
           }
         },
         {
@@ -670,6 +1099,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Event name"
+          },
+          "primaryKey": {
+            "ID": "8B89E81D-F10F-404A-99F2-520CE555B966"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.801Z",
+            "checksum": "09d5ecee0293a3cd6d3b3d570c207204f0dc4ccf0df9ad18a9dc400fab53f8cb"
           }
         },
         {
@@ -681,6 +1117,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Event start date"
+          },
+          "primaryKey": {
+            "ID": "BB03DC3A-5463-4FCD-BE6B-03F5CFD83D7A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.811Z",
+            "checksum": "05cf2dedad71314ed0d67b2cb7be90e34d4c4d8173938df617310c75db6b75a8"
           }
         },
         {
@@ -692,6 +1135,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Event end date"
+          },
+          "primaryKey": {
+            "ID": "B94FC9AC-5A22-45B1-8571-43CFEEAF1637"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.820Z",
+            "checksum": "3e9717ceebff8378c3fb6c93ec41dca8e019ab4772a3305c0e17b4f236828308"
           }
         }
       ],
@@ -702,6 +1152,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "1D309975-A920-4A03-9F29-46DFC10CEB5F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.829Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
           }
         },
         {
@@ -710,6 +1167,13 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "301D2510-59A2-4037-B87F-D3F3F7DD7794"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.864Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         },
         {
@@ -718,9 +1182,23 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "E70E0C56-F4CC-46CC-8BEA-63F64B0A954B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.876Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "2645FD92-1EB6-4FB9-A3A6-D9279B9A2473"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.669Z",
+      "checksum": "cdea1d7383d115ee4384e6ae02098cf362c04f44cab5792d5c7764110edb18b2"
     }
   },
   {
@@ -731,7 +1209,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"events\",\"Verb\":\"Search\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "events",
+        "Verb": "Search"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -745,6 +1227,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "1BF629AE-49F2-4128-B0B5-CCE1422385D2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.888Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -756,6 +1245,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "DEE67DB2-C2AC-45ED-84B2-224352C11FE2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.898Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
           }
         },
         {
@@ -767,6 +1263,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "F150E27E-8F14-4EC4-9C63-12240B4DE6F4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.909Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
           }
         },
         {
@@ -778,6 +1281,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "BCFA3736-9A9B-400D-B760-0DFA1D5E1F56"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.922Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -789,6 +1299,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Event name"
+          },
+          "primaryKey": {
+            "ID": "D113499D-5AB0-4FF6-9BD9-31641189145B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.932Z",
+            "checksum": "bee8faf669fcd248e8142bab2144f9905cff5b9e4b5cae6e8a9ae81dd717e573"
           }
         },
         {
@@ -800,6 +1317,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Event start date"
+          },
+          "primaryKey": {
+            "ID": "A3A9755F-E990-4F3D-A047-6C7EB2618FF2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.942Z",
+            "checksum": "b348b7382ab8420c49919d3ea44ea682d9a473c072db92cbaa76272676648ff6"
           }
         },
         {
@@ -811,6 +1335,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Event end date"
+          },
+          "primaryKey": {
+            "ID": "C81EB443-E8FE-4991-BDD7-A02521F49691"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.952Z",
+            "checksum": "ff678a50e5f7ae27bd7015245225d49a6c0a9b3e2a28b9a6e49c5347a1c1eb06"
           }
         },
         {
@@ -822,6 +1353,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of matching Event records"
+          },
+          "primaryKey": {
+            "ID": "3FD4BA2F-0629-4F87-94F6-70DCCB90CA4B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.962Z",
+            "checksum": "adbd4309bb8fd6dbc14be0c321b3b0965245e87011826c38f6dd06b6b8b0a24c"
           }
         },
         {
@@ -833,6 +1371,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "A0A64486-D603-4652-A1F0-EBC40C552F9C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:14.994Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
           }
         },
         {
@@ -844,6 +1389,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "FE55E90B-1A3D-46A4-816E-63A2C3DCCCE0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.004Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         }
       ],
@@ -854,6 +1406,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "82A6525A-8665-4977-B1F3-98F90C72A33B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.014Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
           }
         },
         {
@@ -862,9 +1421,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "63F2D1AA-A047-41E6-BD1D-4E0F034A45A8"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.024Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "E3A756EA-C1B5-496B-AD56-557BD98678CD"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.683Z",
+      "checksum": "ae1e3e058e7b1bf57d3bd50afb18c7f6c3d63a67cb2f1b007bd45b783c67d3cb"
     }
   },
   {
@@ -875,7 +1448,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"events\",\"Verb\":\"List\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "events",
+        "Verb": "List"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -889,6 +1466,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "3FB4E240-DE56-4EC5-9202-D2989FF8C9E1"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.034Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -900,6 +1484,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "BEB764DE-964E-497E-BB4E-31DB0B46C300"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.044Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
           }
         },
         {
@@ -911,6 +1502,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "E3078504-72F5-49CE-A12A-8F20E7EA3401"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.055Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
           }
         },
         {
@@ -922,6 +1520,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "8B4CFF48-51E1-495F-81B8-A3839E9AEEC8"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.065Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -933,6 +1538,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of Event records in this page"
+          },
+          "primaryKey": {
+            "ID": "2C908AD5-EA32-4313-8A0C-4DC665622961"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.076Z",
+            "checksum": "b1dc4bc35123c2879ce18e4f0d5079eaa2e25dcd6b9b537afed779ff0975a314"
           }
         },
         {
@@ -944,6 +1556,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "21188076-BA03-4C2F-AEE7-70B8FCFF6117"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.086Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         },
         {
@@ -955,6 +1574,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "6479F32E-0109-4856-A25D-E396B5793BBD"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.119Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
           }
         },
         {
@@ -966,6 +1592,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "C1E6C979-9A7B-4040-9C3E-B92893F6EEF6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.129Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
           }
         }
       ],
@@ -976,6 +1609,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "F338961C-6B49-404E-8CAF-AB78C1579A7B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.137Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
           }
         },
         {
@@ -984,9 +1624,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "F8799F47-FF74-4F50-BA28-8862D8577FE4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.145Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "1F647245-CF6B-4FF4-8F85-CE14AC8FD5A4"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.696Z",
+      "checksum": "c3aa2250747b11c1cf1fe9933e69f2f9ed14f796e43263f8c10bef0a3adf9c8e"
     }
   },
   {
@@ -997,7 +1651,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"event-registrations\",\"Verb\":\"Get\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "event-registrations",
+        "Verb": "Get"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -1011,6 +1669,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "The unique ID of the Event Registration record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "05745B91-FB53-4AEF-8A86-AD08702CA82C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.156Z",
+            "checksum": "1a7c6a034c26ab8b94563d93411efeed2141c2f4e882912841059c44e28fcb2a"
           }
         },
         {
@@ -1022,6 +1687,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "ED35BFEC-825B-448F-A9BC-5AD2A1AF20F7"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.166Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -1033,6 +1705,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Event Registration record with all fields"
+          },
+          "primaryKey": {
+            "ID": "8CBAC8B4-0B53-4F42-9619-E8C09DBE2761"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.176Z",
+            "checksum": "67d8e9fa1dda541385bed65e26942388f996fe163fda76f84f2ddf84e0c4e0a3"
           }
         },
         {
@@ -1044,6 +1723,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Registration ID"
+          },
+          "primaryKey": {
+            "ID": "A805C32A-4521-428B-BE0F-A78942C05563"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.188Z",
+            "checksum": "3c89ea2375d6c220c2ae31cc65c19e32f5c6a82f8ff75ec1fc91765562198cd6"
           }
         },
         {
@@ -1055,6 +1741,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Associated event ID"
+          },
+          "primaryKey": {
+            "ID": "096650F0-637D-42FA-9BCD-21E91B76CDA2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.197Z",
+            "checksum": "230d990e93c1ed1086d91185c6161e43a1098c736fb4cb6762de48c6dfd34329"
           }
         },
         {
@@ -1066,6 +1759,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Registrant first name"
+          },
+          "primaryKey": {
+            "ID": "B500DBCE-66A1-4B76-8331-BE110183D5EE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.206Z",
+            "checksum": "1c2b0d5cdebfb008055bad32631aad19237f6e01a73aedbbb086c07bb3f81a8e"
           }
         },
         {
@@ -1077,6 +1777,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Registrant last name"
+          },
+          "primaryKey": {
+            "ID": "7E6EC35E-B53E-49A2-AF26-158797E8166F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.240Z",
+            "checksum": "c080d006b2ecca1b429ec835f93bed6f92660025cad7245ed66a23a4978f5ec0"
           }
         },
         {
@@ -1088,6 +1795,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Registrant display name"
+          },
+          "primaryKey": {
+            "ID": "02F4EE45-E288-4896-8369-05417015FFC3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.251Z",
+            "checksum": "9705e29c4ef9bc916611c7b3fd9d60a8a211aaa0f75a79098084e66290dbe42f"
           }
         },
         {
@@ -1099,6 +1813,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "When registration occurred"
+          },
+          "primaryKey": {
+            "ID": "ED8B3EA2-7380-40F9-940A-B1864E46C23A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.263Z",
+            "checksum": "790d5f60bccf06a8a960df459f3c9983f846095c30e02b49450544cca6713301"
           }
         },
         {
@@ -1110,6 +1831,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether this is the primary registrant"
+          },
+          "primaryKey": {
+            "ID": "778F911B-F882-4EF2-8951-AF2B6C4DFBF5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.275Z",
+            "checksum": "a080e286522cee4d27fba981bba9477df20df908c995be21168b3ad05f33ce8f"
           }
         }
       ],
@@ -1120,6 +1848,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "B62C872C-8083-4222-A4B8-3AB86CC0E212"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.284Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
           }
         },
         {
@@ -1128,6 +1863,13 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "5BA08572-3099-46CF-8847-CBD2A8CE3511"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.292Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         },
         {
@@ -1136,9 +1878,23 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "710CA6A4-AF6D-4B2C-9CB8-3C490C3300FF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.300Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "9A291B6E-4AEF-4150-8511-C7B1B1CFFC22"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.708Z",
+      "checksum": "bab5b2a92d6fc8c7e60eeff1920eb44578d87074863f49f6d0d3712256536f2f"
     }
   },
   {
@@ -1149,7 +1905,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"event-registrations\",\"Verb\":\"Search\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "event-registrations",
+        "Verb": "Search"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -1163,6 +1923,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "123817F9-7DA9-4A09-B763-1CCAA813B580"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.311Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -1174,6 +1941,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "6A6CD3B8-36B8-4727-ADD9-B5329BD46BFF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.323Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
           }
         },
         {
@@ -1185,6 +1959,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "A56D526B-8F7F-4A09-832B-87615121272C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.333Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
           }
         },
         {
@@ -1196,6 +1977,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "16E96FBF-A352-4509-8F47-A1B3727C077C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.367Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -1207,6 +1995,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Associated event ID"
+          },
+          "primaryKey": {
+            "ID": "D2E9532A-E7D3-4A8F-85B1-D7E9C4A9F386"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.377Z",
+            "checksum": "0540cb2a36750a44173e0290322c625126ad2d08e44eb9677be9f9a641db547f"
           }
         },
         {
@@ -1218,6 +2013,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Registrant first name"
+          },
+          "primaryKey": {
+            "ID": "58C46198-BC8B-4CA4-A5AA-FBFC9E7D17C3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.387Z",
+            "checksum": "9eff98fe6706bed58787247bbf0f963410003abb2bc01bbabe53da92012d97ac"
           }
         },
         {
@@ -1229,6 +2031,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Registrant last name"
+          },
+          "primaryKey": {
+            "ID": "05196AF8-CC4B-4D02-BCCE-56EE58C1A39C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.397Z",
+            "checksum": "28bdd8ddf58f7349bb9b50e9bf5ad49ed1e0163b710eab32af752c8cb3152c41"
           }
         },
         {
@@ -1240,6 +2049,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Registrant display name"
+          },
+          "primaryKey": {
+            "ID": "F099085F-05D4-403B-857E-CD32C4FE02F9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.406Z",
+            "checksum": "c72585b075da58780556bfc6f5c9d0d947d351984d18340c857d7cbbbff34a13"
           }
         },
         {
@@ -1251,6 +2067,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "When registration occurred"
+          },
+          "primaryKey": {
+            "ID": "C3B15F9B-7321-4A21-A10A-44452A9760DF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.418Z",
+            "checksum": "f50d4cb6dcb84f31bd4018a6ee5be2728be4e398e7e9cbf181ab71891d058ed3"
           }
         },
         {
@@ -1262,6 +2085,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether this is the primary registrant"
+          },
+          "primaryKey": {
+            "ID": "053E1323-68FD-456B-AC76-973281619022"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.428Z",
+            "checksum": "75028252e1511c041ab95f75f410ee6541feb93b89789ad1bbb267fad1ac7510"
           }
         },
         {
@@ -1273,6 +2103,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of matching Event Registration records"
+          },
+          "primaryKey": {
+            "ID": "77A03B63-E0E7-45BC-BEE0-346573831F29"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.438Z",
+            "checksum": "b58698b52290bf3457ade3ae95698af13ebcd6290f0858bef0cd89ec7284f7b5"
           }
         },
         {
@@ -1284,6 +2121,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "A1A38898-2C67-425E-91FB-9599DFE8E945"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.448Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
           }
         },
         {
@@ -1295,6 +2139,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "6E783343-0A9B-4542-8971-7B56B9146EA6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.457Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         }
       ],
@@ -1305,6 +2156,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "AA79AFBE-3F17-41EB-B1EA-9EBC89DE0B53"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.489Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
           }
         },
         {
@@ -1313,9 +2171,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "FA45F6B6-5578-4E68-AE52-899E1764CBE4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.501Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "D7B924A5-17FD-4CE5-BC7B-5C85933C0882"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.720Z",
+      "checksum": "8fcebb9df40c6f3165be1648f1fe18f6bda600ee28915ae2b8473937c9e58864"
     }
   },
   {
@@ -1326,7 +2198,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"event-registrations\",\"Verb\":\"List\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "event-registrations",
+        "Verb": "List"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -1340,6 +2216,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "34105A11-0B8B-4CC3-B28A-8FDEB6574C3B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.512Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -1351,6 +2234,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "DD0247DA-56EB-4BC7-953A-DCB1D747DEA6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.522Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
           }
         },
         {
@@ -1362,6 +2252,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "A70425C0-2CE8-4E61-A9DD-8A6A6060A7F7"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.533Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
           }
         },
         {
@@ -1373,6 +2270,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "3D1DECD8-85F1-4C65-96DB-0D2562F1D6C8"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.544Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -1384,6 +2288,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of Event Registration records in this page"
+          },
+          "primaryKey": {
+            "ID": "323A75E3-F115-448C-9689-BB6A44B810ED"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.554Z",
+            "checksum": "71a145f73e74a76b531f5d7fd6df73cea07e33ec7cd4ea470425c38b877ecd6a"
           }
         },
         {
@@ -1395,6 +2306,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "ED2D55F7-7782-45A7-B01A-152A01E57008"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.564Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         },
         {
@@ -1406,6 +2324,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "6027B809-5C0B-42FB-A74A-B8B8D70B4F35"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.574Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
           }
         },
         {
@@ -1417,6 +2342,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "BCDBB1F3-D72E-40A2-B7CE-115FFE7AA9B5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.585Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
           }
         }
       ],
@@ -1427,6 +2359,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "D31414A8-24D6-4473-973D-F556AA4E6E59"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.618Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
           }
         },
         {
@@ -1435,9 +2374,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "8DF5D598-8A33-4259-91B9-D82CB7EBFAE0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.627Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "4DF1FBE7-7F62-493F-9F47-CB9983F79FC6"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.732Z",
+      "checksum": "1d54eb64dd8a241bc397380680faaf308fcfcbdd03d5f88688e9d072904221ad"
     }
   },
   {
@@ -1448,7 +2401,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"event-sessions\",\"Verb\":\"Get\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "event-sessions",
+        "Verb": "Get"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -1462,6 +2419,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "The unique ID of the Event Session record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "A714795C-535A-4402-86A4-B4FF3271BE80"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.638Z",
+            "checksum": "0a9d8c85efeb782e733f8a974348f8f57290e9f0f9735fc1e7b02e3e68e87cef"
           }
         },
         {
@@ -1473,6 +2437,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "D70522E0-BA0C-4454-B43B-DCC17EDE2A0B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.647Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -1484,6 +2455,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Event Session record with all fields"
+          },
+          "primaryKey": {
+            "ID": "32598A8E-A712-4485-BF87-BF6F0F5F7FED"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.659Z",
+            "checksum": "8df39345880cd1520d7c265e09033ed4947feec243cd0b6f62ab37fa635d2563"
           }
         },
         {
@@ -1495,6 +2473,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Session identifier"
+          },
+          "primaryKey": {
+            "ID": "9A9C0022-FE20-4F37-A11B-5A733D7CCE29"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.670Z",
+            "checksum": "250ffcef494fc5ef529879f242ad37802ccd78fd8eaa3c79b942e94fad08806e"
           }
         },
         {
@@ -1506,6 +2491,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Associated event ID"
+          },
+          "primaryKey": {
+            "ID": "0832D464-C2A0-43CF-BF6E-0B5DD585F0B0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.681Z",
+            "checksum": "230d990e93c1ed1086d91185c6161e43a1098c736fb4cb6762de48c6dfd34329"
           }
         },
         {
@@ -1517,6 +2509,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Session name"
+          },
+          "primaryKey": {
+            "ID": "1FC6AC7F-8119-40DF-B1AE-FF87ADE4C247"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.691Z",
+            "checksum": "ea93ace52898007b41812009c0a0c15eab050d31423f9badc2ea78881d1dc974"
           }
         },
         {
@@ -1528,6 +2527,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Session presenter"
+          },
+          "primaryKey": {
+            "ID": "26467BA5-B8A2-49DC-9105-BEDF24CEFA06"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.701Z",
+            "checksum": "e874fe80057d266848a2a8469ce8348664ddcf6b77bf389a3e976958716da0d7"
           }
         },
         {
@@ -1539,6 +2545,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Session start date/time"
+          },
+          "primaryKey": {
+            "ID": "0FA3A0BA-C962-4CD4-824D-3F6F174428EE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.709Z",
+            "checksum": "dfcacfe0a8f68bf3e68203a2b6933a33e20214d38e34c8c2e5f9da7638d7f6e7"
           }
         },
         {
@@ -1550,6 +2563,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Session end date/time"
+          },
+          "primaryKey": {
+            "ID": "687ED43E-0B0E-4188-AFBD-AA252244060C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.744Z",
+            "checksum": "275a2830971aa42d99aa7e5e83c455506baa8b40947cfc40dca0e4047774998f"
           }
         }
       ],
@@ -1560,6 +2580,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "0224877B-401C-48DC-B2D0-FEED612AAEAD"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.753Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
           }
         },
         {
@@ -1568,6 +2595,13 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "C1E9AACE-DA2A-453A-8821-CDEA12515D7B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.763Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         },
         {
@@ -1576,9 +2610,23 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "4B7FA1B6-0842-4902-BCE5-7AEC8E20F197"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.772Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "9E3B4708-7928-40CC-81B6-D191699BC49D"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.743Z",
+      "checksum": "eaad36b94222b3792843b773c02f3c30cd377db6cfe920ffc032c154daa264e5"
     }
   },
   {
@@ -1589,7 +2637,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"event-sessions\",\"Verb\":\"Search\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "event-sessions",
+        "Verb": "Search"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -1603,6 +2655,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "ED52AF9E-D0EB-4A45-B481-9168CA44FE82"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.782Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -1614,6 +2673,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "7561C5A9-2570-4532-AED0-2100B1F357AB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.792Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
           }
         },
         {
@@ -1625,6 +2691,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "E30CA64B-E409-4734-8D86-0B7858F0CB41"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.802Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
           }
         },
         {
@@ -1636,6 +2709,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "5AF2F023-3F66-494D-83B0-0634A0AC0B44"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.812Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -1647,6 +2727,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Associated event ID"
+          },
+          "primaryKey": {
+            "ID": "FF62AD05-D386-4C8F-A82E-BC0B8FA07873"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.824Z",
+            "checksum": "0540cb2a36750a44173e0290322c625126ad2d08e44eb9677be9f9a641db547f"
           }
         },
         {
@@ -1658,6 +2745,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Session name"
+          },
+          "primaryKey": {
+            "ID": "18F31FC2-E7C1-425B-A2C0-60C366D21397"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.834Z",
+            "checksum": "e51fd9b5ebeb07d886fbcb663a3f24f840d44c6b5914791fbd62ff158d178791"
           }
         },
         {
@@ -1669,6 +2763,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Session presenter"
+          },
+          "primaryKey": {
+            "ID": "F244AC93-4636-469F-952B-8C1CBD2A0046"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.869Z",
+            "checksum": "0cf42b1d86fda4303d3c9fb686da8232c57221d46f5c1a457959edc80247f025"
           }
         },
         {
@@ -1680,6 +2781,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Session start date/time"
+          },
+          "primaryKey": {
+            "ID": "3EB84609-A599-4F75-88B5-61DB1AE82A82"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.880Z",
+            "checksum": "f1f4c209750458c1b13d40c03bce4119e15d19c15a9d25a322b1d3c3d5ef0594"
           }
         },
         {
@@ -1691,6 +2799,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Session end date/time"
+          },
+          "primaryKey": {
+            "ID": "8238BC5E-4205-4316-B179-90B532B0DA5C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.891Z",
+            "checksum": "cc8adb17bd6e87e582555702f483e3211b7228b08132111b8b46d0c9794aa18f"
           }
         },
         {
@@ -1702,6 +2817,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of matching Event Session records"
+          },
+          "primaryKey": {
+            "ID": "E74D158E-9F51-43E8-B6C6-FEC264C8A9E0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.903Z",
+            "checksum": "8edd89f00a511104c5e3bef2d1dc2d5884196c48f3e86586080633c6d522d4a1"
           }
         },
         {
@@ -1713,6 +2835,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "649A9A41-8885-41A8-8AF0-3958B3589569"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.913Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
           }
         },
         {
@@ -1724,6 +2853,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "7B8B900B-17E0-4D5B-8343-04B84E956F87"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.923Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         }
       ],
@@ -1734,6 +2870,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "465BA496-D5C0-49B8-92FA-A7CED7D666EC"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.931Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
           }
         },
         {
@@ -1742,9 +2885,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "EC24D577-D30D-4611-A075-DFF5CBA44AAC"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.941Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "C202053C-9054-4334-AC0F-B6A48EC6EE14"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.807Z",
+      "checksum": "fb1660290a8e6aea83bece7f2872d3b027e5083acff336f20d344c0107d6501f"
     }
   },
   {
@@ -1755,7 +2912,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"event-sessions\",\"Verb\":\"List\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "event-sessions",
+        "Verb": "List"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -1769,6 +2930,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "0AAD3D39-E172-46A6-8AF7-97D3E225356A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.952Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -1780,6 +2948,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "969706D2-B584-47F5-AE82-ED1A1FC0C003"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.961Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
           }
         },
         {
@@ -1791,6 +2966,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "8CB63E59-1763-437E-A06A-DF941D6F3810"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:15.995Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
           }
         },
         {
@@ -1802,6 +2984,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "32D242FA-0203-4A85-A51D-9ABA33CA635B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.006Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -1813,6 +3002,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of Event Session records in this page"
+          },
+          "primaryKey": {
+            "ID": "1296C94D-C5F5-4DC2-A203-8EA1E01B1139"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.016Z",
+            "checksum": "84b99f1d167748abcf88064b5a1ce6f828fb38750c0c7bebd5ed2b23fe2dd016"
           }
         },
         {
@@ -1824,6 +3020,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "FB09CAF9-D13F-4FC0-B958-9B2A482E014B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.026Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         },
         {
@@ -1835,6 +3038,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "5E4C2865-210E-4E35-A001-3124E6F732CA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.036Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
           }
         },
         {
@@ -1846,6 +3056,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "93FE2DAB-E55B-49DA-B60B-D3189D942EC9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.046Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
           }
         }
       ],
@@ -1856,6 +3073,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "43A0EF46-944A-46BD-AA66-1E8F01B4A946"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.055Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
           }
         },
         {
@@ -1864,9 +3088,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "52E765A5-A9EE-4C77-B018-CC487A3A9C0A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.064Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "F9626746-6AEF-48D1-B58F-5703EA207E31"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.820Z",
+      "checksum": "238f4fe06839197123dbf99c848499e2ff39c1971c6b922ec39a421e914c6981"
     }
   },
   {
@@ -1877,7 +3115,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"groups\",\"Verb\":\"Get\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "groups",
+        "Verb": "Get"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -1891,6 +3133,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "The unique ID of the Group record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "CD154A9F-4E28-441E-AE39-B497553E0DD6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.077Z",
+            "checksum": "4bdaf562b6b6f906c027c9c907ca6c07d2deb7d2f760cb35b245898c646c827c"
           }
         },
         {
@@ -1902,6 +3151,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "21407F55-FC42-41C5-A1AD-BCF04583F2D9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.086Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -1913,6 +3169,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Group record with all fields"
+          },
+          "primaryKey": {
+            "ID": "727D8B90-DC68-4C7B-8837-5D91FF38EB8C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.120Z",
+            "checksum": "f9d3a77678b16e744034d2b85b0bb2708c47b9ffb1fc1f1648f72702bf5694aa"
           }
         },
         {
@@ -1924,6 +3187,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Group identifier"
+          },
+          "primaryKey": {
+            "ID": "2EF3705D-0F43-46C2-9EFC-FFC3075CA8F8"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.131Z",
+            "checksum": "1ceb728f8365b89fbae1a33b538279a0b136d4a99aaa492f6de629f1c5c0f2d7"
           }
         },
         {
@@ -1935,6 +3205,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Group name"
+          },
+          "primaryKey": {
+            "ID": "2763CD0C-FD03-4022-A5A2-AC83217BCB26"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.145Z",
+            "checksum": "dd3b2c463f5be31b725a7723ced56cfb2c6883a457b800aca33d64e20c05baa8"
           }
         },
         {
@@ -1946,6 +3223,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Associated group type ID"
+          },
+          "primaryKey": {
+            "ID": "FB65701C-1120-4DE3-8287-CD7182BA849A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.156Z",
+            "checksum": "2af3d1ee35620153da07ec3d40c17c1846e924d414ce24da5c1133c73b0d18fc"
           }
         },
         {
@@ -1957,6 +3241,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Group type name"
+          },
+          "primaryKey": {
+            "ID": "A17DF6E0-3084-400C-A704-9ACC43978717"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.166Z",
+            "checksum": "d22ed4f9dc5e042873652a92bf8148e5cf4cf8df27433fb7733c7aa71ed595d2"
           }
         }
       ],
@@ -1967,6 +3258,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "28CC879E-E3E5-4E79-B18E-8607FA06C592"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.175Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
           }
         },
         {
@@ -1975,6 +3273,13 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "D9ADB793-A038-4509-AA60-5C4ED8F1E621"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.185Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         },
         {
@@ -1983,9 +3288,23 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "C3536500-9FDB-4E10-AD06-063074EFE84B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.194Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "E20F59DB-0D44-4CA9-841F-5B2347C236A5"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.834Z",
+      "checksum": "97812a5be7e47eee8c4c8a659f65cdf85f69f89cab0ea755df3e8f9828bbd742"
     }
   },
   {
@@ -1996,7 +3315,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"groups\",\"Verb\":\"Search\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "groups",
+        "Verb": "Search"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -2010,6 +3333,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "1D2AD8C1-DCF8-4552-9A5B-FCD692112A84"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.205Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -2021,6 +3351,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "5872B84A-4AA4-4A50-B73C-8370B8B240A3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.214Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
           }
         },
         {
@@ -2032,6 +3369,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "7AA77077-1D64-4300-B519-DD57BF11D772"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.249Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
           }
         },
         {
@@ -2043,6 +3387,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "976C8749-364A-4327-B3DE-DF331160869B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.260Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -2054,6 +3405,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Group name"
+          },
+          "primaryKey": {
+            "ID": "C6D71C18-0B84-4653-8CD8-35DB8240FE3B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.270Z",
+            "checksum": "f8af33fd01e93614b5fcfffd669982e87a1a818b54fb46b61e359159943a0ecd"
           }
         },
         {
@@ -2065,6 +3423,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Associated group type ID"
+          },
+          "primaryKey": {
+            "ID": "4304D075-73D5-4CD9-BAB0-C7D08A91C7FE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.281Z",
+            "checksum": "c93c79e82201da90a475ae93237e7fdbd974f1309138ca8614d7a78832b06f1d"
           }
         },
         {
@@ -2076,6 +3441,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Group type name"
+          },
+          "primaryKey": {
+            "ID": "ED684211-8E3D-4F46-A141-D4D8B6B5BD0D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.291Z",
+            "checksum": "ef4846a595e4fb50ffcb7f0f2537b1a223e07a727dfbe5644ae6e281bb60e00a"
           }
         },
         {
@@ -2087,6 +3459,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of matching Group records"
+          },
+          "primaryKey": {
+            "ID": "058DFDB6-2AF7-4DC1-8DE0-76339346E732"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.303Z",
+            "checksum": "b85fe317d8523e72122fc68cb3c4fe05b57ba33f924f23ed09a4ae9b0b51282f"
           }
         },
         {
@@ -2098,6 +3477,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "A179BED7-DE90-40C7-A88B-4EA45EA5D04B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.315Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
           }
         },
         {
@@ -2109,6 +3495,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "F04CE3B8-9433-42DA-B940-DBF28CB06A5F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.325Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         }
       ],
@@ -2119,6 +3512,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "7764F384-5519-414C-82B5-1B36DA361129"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.335Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
           }
         },
         {
@@ -2127,9 +3527,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "5352E6B6-A2C9-4ECC-A0B3-A1B26E2C45E2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.343Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "159C5702-6753-461E-820B-2B1090DF82DB"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.846Z",
+      "checksum": "6f1656c57d6a1e1e497ef3838faa45d5c3e3c6f50afefb17255df450a51868e4"
     }
   },
   {
@@ -2140,7 +3554,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"groups\",\"Verb\":\"List\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "groups",
+        "Verb": "List"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -2154,6 +3572,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "A9430B6C-1A62-4683-A52C-41556F1EA08F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.377Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -2165,6 +3590,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "F5C0976E-69FE-4841-A3FA-5022FBBA8933"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.389Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
           }
         },
         {
@@ -2176,6 +3608,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "8AC296FD-46CC-4C99-AB66-2EC73C9C1B25"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.400Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
           }
         },
         {
@@ -2187,6 +3626,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "F8BA2ED5-C4D9-4E84-A31D-DCEA1B06F467"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.411Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -2198,6 +3644,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of Group records in this page"
+          },
+          "primaryKey": {
+            "ID": "DE5C411B-E28B-4419-8489-AB568DCA228D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.422Z",
+            "checksum": "2d51f2b4fae58971d898932dee2cd74a052e56311a16bf0830529fbf4462da06"
           }
         },
         {
@@ -2209,6 +3662,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "D2111C11-B05C-49EE-B1ED-2FA4B13FE1E0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.432Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         },
         {
@@ -2220,6 +3680,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "9063F7B1-25AB-4D11-960C-23B2DA4A05B9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.442Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
           }
         },
         {
@@ -2231,6 +3698,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "4C6B386B-7878-4ED5-8B1F-1CA6238DD0CB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.451Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
           }
         }
       ],
@@ -2241,6 +3715,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "AFE5A95B-78C8-43DE-9C66-7CA9FCD14F15"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.460Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
           }
         },
         {
@@ -2249,9 +3730,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "FFE285BD-E575-41BF-B4FD-1FFECAD26137"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.468Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "3E9798C8-DC74-4501-B691-041FCB32BD27"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.859Z",
+      "checksum": "4bcdb549cb2621832c4a4c45de05eb0c186eced6208434d2c8a08dc00993773e"
     }
   },
   {
@@ -2262,7 +3757,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"invoice-items\",\"Verb\":\"Get\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "invoice-items",
+        "Verb": "Get"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -2276,6 +3775,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "The unique ID of the Invoice Item record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "9CCA1CEC-E125-449D-8ECA-83A359D339A1"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.504Z",
+            "checksum": "03f3487729799a572d87f385d6dedd7a2c0f42972e07ca13d7799f4fd1dba888"
           }
         },
         {
@@ -2287,6 +3793,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "10AB510E-29DC-4D24-A213-BF644DDD947F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.515Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -2298,6 +3811,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Invoice Item record with all fields"
+          },
+          "primaryKey": {
+            "ID": "DA81B7C1-3D6B-40A5-B8E3-031725D61314"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.525Z",
+            "checksum": "95845dbf82e158fab987f6218e653bf82b283d264af756f7cc16fa6e2a7b3f07"
           }
         },
         {
@@ -2309,6 +3829,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Line item identifier"
+          },
+          "primaryKey": {
+            "ID": "945EACF0-0080-4C10-BBB7-94E5491E3DBF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.534Z",
+            "checksum": "bbfc9c88294f4a3a065b19d85ac18d79a253d4ceaa45f25762276c5ba3b306c8"
           }
         },
         {
@@ -2320,6 +3847,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Invoice number"
+          },
+          "primaryKey": {
+            "ID": "B231F095-C7DB-4C08-874F-88BF42E83378"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.544Z",
+            "checksum": "4697fa903419f9a7ec347f5a38d78fcc3e52e2e7a09078a5b333a06b055d99c9"
           }
         },
         {
@@ -2331,6 +3865,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Type of invoice"
+          },
+          "primaryKey": {
+            "ID": "D055D7C0-E20F-4352-9E29-53FBA83FAA90"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.557Z",
+            "checksum": "a5a6d99502298b9180ab15f91c07793105aa8cb4c14535c765f498cbf92b56ea"
           }
         },
         {
@@ -2342,6 +3883,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Website member ID"
+          },
+          "primaryKey": {
+            "ID": "04953401-DB5A-4807-B815-FF6C1DD51DF5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.568Z",
+            "checksum": "35782669af5a90831a390bfa15092445f44986e061863b60d9a2a285af629e47"
           }
         },
         {
@@ -2353,6 +3901,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Line item description"
+          },
+          "primaryKey": {
+            "ID": "493625F4-EAB3-422D-8000-D78110518EF0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.577Z",
+            "checksum": "d9bb90b9ad648df86064c6d1744456e11ffa04b4edc71fc5c016d8f21f9c4874"
           }
         },
         {
@@ -2364,6 +3919,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Line item amount"
+          },
+          "primaryKey": {
+            "ID": "A7BA872A-BE5F-43B7-BF30-96B7158F2569"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.587Z",
+            "checksum": "a60184deee06b6cdfd34e1a707dd08b21ec8eee3f984f88689117bdd27f08c53"
           }
         },
         {
@@ -2375,6 +3937,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Line item date"
+          },
+          "primaryKey": {
+            "ID": "0CBF1012-789C-42C6-B3E6-EE5DA33D1391"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.595Z",
+            "checksum": "1ff9fbcf195ff77803cbe7443a1c22e738553241763d74683bf05004d78b85fd"
           }
         }
       ],
@@ -2385,6 +3954,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "6A09F172-456C-4079-85A6-5125688CC6C2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.627Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
           }
         },
         {
@@ -2393,6 +3969,13 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "8A4CAB13-694F-4BF1-B1F3-D1BE2062AD54"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.636Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         },
         {
@@ -2401,9 +3984,23 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "3AF508C0-88AD-4C55-8DC5-D611ED7C673E"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.646Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "8AC5019C-441E-4FB9-954C-32F505D55550"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.874Z",
+      "checksum": "8c8b3d7e5eb7192d5ba6b8a65ef5b586cdf4cc5f58daf6cdf9ad49a928f1ba32"
     }
   },
   {
@@ -2414,7 +4011,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"invoice-items\",\"Verb\":\"Search\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "invoice-items",
+        "Verb": "Search"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -2428,6 +4029,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "2D4785F5-C10D-4537-AB85-03F42583C40E"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.657Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -2439,6 +4047,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "2559FFB8-6540-4D47-BAEF-9814763A1004"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.667Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
           }
         },
         {
@@ -2450,6 +4065,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "2DB243B7-5C13-449C-9162-E324D71B2D19"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.677Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
           }
         },
         {
@@ -2461,6 +4083,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "484C5F01-60DD-479B-A395-750B0112BF8A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.689Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -2472,6 +4101,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Invoice number"
+          },
+          "primaryKey": {
+            "ID": "4DBCF43E-2DC1-41CB-9C4F-CB4238D5E7A0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.699Z",
+            "checksum": "627d310e6f00199feece2c9b09419b61948aff47270c78b01c63f94c43f21e66"
           }
         },
         {
@@ -2483,6 +4119,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Type of invoice"
+          },
+          "primaryKey": {
+            "ID": "0B4FBD37-A4E5-43A7-B114-2BDE7938FE0D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.710Z",
+            "checksum": "b7390f5dc2a309ddc2d1de134e0587e42c390c3c77c380c4dbf9cba801b53b81"
           }
         },
         {
@@ -2494,6 +4137,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Website member ID"
+          },
+          "primaryKey": {
+            "ID": "A6708BD0-3B95-4F66-9224-367FA78E84F3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.719Z",
+            "checksum": "e0454760ae7638b5e83c9df9d593bae75c1cf6cbe8805461af46ef6afb432be4"
           }
         },
         {
@@ -2505,6 +4155,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Line item description"
+          },
+          "primaryKey": {
+            "ID": "7717EB01-8A9F-41CF-9F25-A6908D48981B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.751Z",
+            "checksum": "dd1977f41b2e8edf48b4f49d03ea925497b2936bc1cb620a40bdfd2dc25cfba9"
           }
         },
         {
@@ -2516,6 +4173,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Line item amount"
+          },
+          "primaryKey": {
+            "ID": "715B781E-75E4-4E67-ADF9-E97A82FB293F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.762Z",
+            "checksum": "9afa47e35f085c7a2f8bd3caac483149151de53e8acc6568426d146f02c104d6"
           }
         },
         {
@@ -2527,6 +4191,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Line item date"
+          },
+          "primaryKey": {
+            "ID": "0CA70CA1-9F9D-45AB-A2EA-F41934DADB1E"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.772Z",
+            "checksum": "dd8bda0c4de3e4d73f93aab44dff33133826525694d0f27e96cec8f6cf9ef285"
           }
         },
         {
@@ -2538,6 +4209,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of matching Invoice Item records"
+          },
+          "primaryKey": {
+            "ID": "ABF01422-1D31-4BB1-A1B6-FD9879116894"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.783Z",
+            "checksum": "a6e7818405361b0fb3fb2164d5587fd2fcbb75f217c7436252b648be276beeae"
           }
         },
         {
@@ -2549,6 +4227,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "CE5618F8-428F-48F3-8AAE-1E8F4E068FB8"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.794Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
           }
         },
         {
@@ -2560,6 +4245,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "574927B8-7A33-4F5B-B287-32A2F2F72AAA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.804Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         }
       ],
@@ -2570,6 +4262,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "DEB78683-0406-403D-AA59-405938AF390A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.816Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
           }
         },
         {
@@ -2578,9 +4277,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "19C14591-DF26-4E08-87A5-1C7A500D7FD4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.825Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "FF91DD16-CAC9-4F1A-8987-B16C2F8A459F"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.887Z",
+      "checksum": "e29e5b66c4be7d1acdb5fb6db1b6dfc13d0c29b9ee6f56e94a0c53d354805725"
     }
   },
   {
@@ -2591,7 +4304,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"invoice-items\",\"Verb\":\"List\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "invoice-items",
+        "Verb": "List"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -2605,6 +4322,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "364CFB12-5EB5-4842-B328-437A668C6E81"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.834Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -2616,6 +4340,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "547B861D-4BF2-49A2-AA24-01ED3D8A7C81"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.843Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
           }
         },
         {
@@ -2627,6 +4358,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "DBC3166C-B38A-451E-88F3-1671D7C94A78"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.877Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
           }
         },
         {
@@ -2638,6 +4376,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "5138E5A6-0F8A-4164-9928-C12D56B12385"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.886Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -2649,6 +4394,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of Invoice Item records in this page"
+          },
+          "primaryKey": {
+            "ID": "D3612ABF-CF75-48FA-95FC-5607B9A5B7C4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.895Z",
+            "checksum": "fed573f17f02143c3730635df3c9450dd06528434af8578a19d9aa3eac4865cb"
           }
         },
         {
@@ -2660,6 +4412,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "12C8BDC2-7CC5-4EBD-8628-A1D5FBF7EB04"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.904Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         },
         {
@@ -2671,6 +4430,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "1F3DDAA6-5412-4864-BC4F-6BE9156ACAA9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.914Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
           }
         },
         {
@@ -2682,6 +4448,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "891C390F-89AE-4296-BA07-C8DAFD543B37"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.922Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
           }
         }
       ],
@@ -2692,6 +4465,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "458C5D01-46D8-420F-91DB-B265EF9190D0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.931Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
           }
         },
         {
@@ -2700,9 +4480,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "965EF9FD-00D6-4053-B27B-905F1CAB6575"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.940Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "827675FA-EAC4-40B9-A2D2-A63E4CD143B9"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.900Z",
+      "checksum": "7465132b8ea6f9a30a9b0a50f2296b9c3bfd0042a6ee14a45dbb6a878e78ce26"
     }
   },
   {
@@ -2713,7 +4507,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"dues-transactions\",\"Verb\":\"Get\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "dues-transactions",
+        "Verb": "Get"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -2727,6 +4525,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "The unique ID of the Dues Transaction record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "FBDFD9C3-A206-4945-8312-5D7935E82B26"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.951Z",
+            "checksum": "20fd88d6993391edb1b90232d3fa4d46facb9638ee3dbcf5b34140d6adfe9b50"
           }
         },
         {
@@ -2738,6 +4543,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "7963440F-A26F-43ED-B33A-FB4307C88541"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.960Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -2749,6 +4561,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Dues Transaction record with all fields"
+          },
+          "primaryKey": {
+            "ID": "9565C6F7-B6B3-47E7-AB04-2DB62C7F95A2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:16.993Z",
+            "checksum": "941744723b7d99f10d58f73be5a0812a14cd1d2012d7b377c6a385d8c67e6933"
           }
         },
         {
@@ -2760,6 +4579,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Transaction identifier"
+          },
+          "primaryKey": {
+            "ID": "DB5CC83A-DDBE-4627-83FF-3AFF990C4169"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.003Z",
+            "checksum": "f439826e1effef7d4175b8fafef9bdd0dd2b6a0c5551501f3a379837d0709048"
           }
         },
         {
@@ -2771,6 +4597,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Website member ID"
+          },
+          "primaryKey": {
+            "ID": "A9FCF7DA-1760-466A-BD5B-E3A1C826DF15"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.014Z",
+            "checksum": "159378f5991f460b38501105febdc69309cb65015637f67b8ee60b041b526f40"
           }
         },
         {
@@ -2782,6 +4615,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Transaction status"
+          },
+          "primaryKey": {
+            "ID": "24A31758-549A-4A5F-BB3A-F2A064CD0DE6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.024Z",
+            "checksum": "49b31e330f9c87d596543e32980383adcfb2a3c2f27ad7c2044cf0acacd4f47a"
           }
         },
         {
@@ -2793,6 +4633,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Transaction amount"
+          },
+          "primaryKey": {
+            "ID": "16B70D8D-CE73-4582-A219-C25B30A943AC"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.034Z",
+            "checksum": "7ab421d878bf3b6c5dc009d4fefac4c9a60bff92af0e60791194ab4919b73690"
           }
         },
         {
@@ -2804,6 +4651,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Membership type requested"
+          },
+          "primaryKey": {
+            "ID": "651E77DE-A388-4D6F-90DE-9AA81916C5D0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.045Z",
+            "checksum": "5516d8a0cd930fe91a6f8dde9759ba368588695d2ea50f34f083b3c4a4c3755b"
           }
         },
         {
@@ -2815,6 +4669,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "When transaction was submitted"
+          },
+          "primaryKey": {
+            "ID": "24302407-EE1F-49E8-A6DB-46FF7B655DEE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.055Z",
+            "checksum": "64771ffa9831a0ff22547e540cf38f19fb675c9b87e2eaeb5d03661f5a8564a2"
           }
         }
       ],
@@ -2825,6 +4686,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "2DBCB95A-5FB6-4529-8B71-522FDB5B131B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.065Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
           }
         },
         {
@@ -2833,6 +4701,13 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "B6E0D278-A43E-4CA8-90A3-F4E734C97C57"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.073Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         },
         {
@@ -2841,9 +4716,23 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "CB10D2A0-B83E-4266-B550-2195ACF4E791"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.080Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "425D3441-D006-43D7-BE08-C129F5F9F242"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.913Z",
+      "checksum": "ba2f89c7a04fc7ebadaba14b89a60b906277ab279b1a935b0ff7f4012c3e1dc8"
     }
   },
   {
@@ -2854,7 +4743,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"dues-transactions\",\"Verb\":\"Search\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "dues-transactions",
+        "Verb": "Search"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -2868,6 +4761,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "06ACFB2D-73CF-49CC-B18C-7160F32CBEB7"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.118Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -2879,6 +4779,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "B7DCEEEE-F7A5-4271-9236-A517F75299B3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.128Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
           }
         },
         {
@@ -2890,6 +4797,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "B1E95426-0B54-4CE3-AB77-A91236DFE0B6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.138Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
           }
         },
         {
@@ -2901,6 +4815,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "2E80B225-CD89-445D-9520-A94970F23A8F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.149Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -2912,6 +4833,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Website member ID"
+          },
+          "primaryKey": {
+            "ID": "6E677033-41FB-4439-8DC9-C0904DFC7A84"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.159Z",
+            "checksum": "07e1834707394fba54733cd8a923728b2f35f716359655a2e6512606da27ce8b"
           }
         },
         {
@@ -2923,6 +4851,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Transaction status"
+          },
+          "primaryKey": {
+            "ID": "895E57BB-42BF-47F7-BFC6-56E3720AAB51"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.170Z",
+            "checksum": "a3aa59f0e49065bec0da0c60668ea564c110612fd2b3163051975e978b18f75f"
           }
         },
         {
@@ -2934,6 +4869,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Transaction amount"
+          },
+          "primaryKey": {
+            "ID": "C59F7BCA-23D6-4848-B2DF-036588505DD1"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.181Z",
+            "checksum": "751593857e64f9d0093062ecc3eaa0e210478e6076298fb3420421d87a0e211a"
           }
         },
         {
@@ -2945,6 +4887,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Membership type requested"
+          },
+          "primaryKey": {
+            "ID": "33111D93-0F1F-448F-A7B1-8190B4C903D0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.191Z",
+            "checksum": "d985642c442475fac66a58976f0fd056d705db370b717f61fb6fdc99fa1fb10f"
           }
         },
         {
@@ -2956,6 +4905,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "When transaction was submitted"
+          },
+          "primaryKey": {
+            "ID": "3CD4CECD-05EC-4C72-B0EB-C3120B3069BA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.204Z",
+            "checksum": "8b071f44730c3142e72d80cb7828c3bf04f39381258f0547146c833e51bc3053"
           }
         },
         {
@@ -2967,6 +4923,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of matching Dues Transaction records"
+          },
+          "primaryKey": {
+            "ID": "9AA94359-38DD-4260-BEB3-417C8D400624"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.214Z",
+            "checksum": "b7e93b0d3de37bbae5400c9a8b387117441b65805950389197d2b58f7b60605a"
           }
         },
         {
@@ -2978,6 +4941,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "91B97B14-B2FA-4A27-97B5-A181502BFE4C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.247Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
           }
         },
         {
@@ -2989,6 +4959,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "EB2C6462-6868-4AEA-A56C-09B5A9BE9CA0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.257Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         }
       ],
@@ -2999,6 +4976,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "10993393-1296-48EB-86E4-EDC7ED5B2FEB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.266Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
           }
         },
         {
@@ -3007,9 +4991,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "5198081C-E1CF-470C-B550-D43B5983F05B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.275Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "B3B6E378-59EB-4482-85FC-39B2166C8B21"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.923Z",
+      "checksum": "26b8d7c56ae5c98697cb66cb3b4bba40ba95492864a00b539f5e6e21ef841f8e"
     }
   },
   {
@@ -3020,7 +5018,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"dues-transactions\",\"Verb\":\"List\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "dues-transactions",
+        "Verb": "List"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -3034,6 +5036,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "3BFAACC2-251D-4721-AE8D-6438F4BA3809"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.287Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -3045,6 +5054,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "0378D22E-AE8E-41E9-9284-642B5C7A2A2E"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.297Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
           }
         },
         {
@@ -3056,6 +5072,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "4CD321B4-1A57-405B-B0BE-22693EE07754"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.307Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
           }
         },
         {
@@ -3067,6 +5090,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "0B30F799-B6F8-40D3-B2A7-F44AD8EFAFCB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.317Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -3078,6 +5108,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of Dues Transaction records in this page"
+          },
+          "primaryKey": {
+            "ID": "4A06573D-9E2C-4553-943A-FB4F566BF7DE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.326Z",
+            "checksum": "751e24413421f8ba0968e5208845d9e7f85ca9304444aeee394c26adc7e58c95"
           }
         },
         {
@@ -3089,6 +5126,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "17D6619E-010E-4F9B-880B-74259DD9C555"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.337Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         },
         {
@@ -3100,6 +5144,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "73B378A4-0C2E-4F5C-AD5B-A1330283DA22"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.374Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
           }
         },
         {
@@ -3111,6 +5162,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "3633D654-5F4D-41FF-BE5E-88341DB0F816"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.385Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
           }
         }
       ],
@@ -3121,6 +5179,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "321B4247-9AC4-4E3D-B79D-3716E73F7A9D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.395Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
           }
         },
         {
@@ -3129,9 +5194,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "EA089126-B9E1-4418-AC93-117A7B677B6E"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.405Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "FF5B62C1-7AC6-4630-A8F3-4E53821A0F4E"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.973Z",
+      "checksum": "16652c63aa6cf908ef654204ae00358359ffe0270c87429dae7ef3e269c801d8"
     }
   },
   {
@@ -3142,7 +5221,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"donation-history\",\"Verb\":\"Get\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "donation-history",
+        "Verb": "Get"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -3156,6 +5239,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "The unique ID of the Donation record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "CBE17127-3576-43A6-AB2D-4227068D89EA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.416Z",
+            "checksum": "1e13ee9d610e5bf57ad6d9f9e6b9bf29f37078144bf44421944be655205daf01"
           }
         },
         {
@@ -3167,6 +5257,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "4C199A5E-AAA0-43A1-B6B6-0F76163EA841"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.426Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -3178,6 +5275,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Donation record with all fields"
+          },
+          "primaryKey": {
+            "ID": "1EAA79A5-EE1E-40C7-9212-B8FCD6053D2B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.435Z",
+            "checksum": "348bcabbe563d406ea1c5785e1be8857e0eeae8ef36291efbfccd2d5a1a0ebfb"
           }
         },
         {
@@ -3189,6 +5293,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Donation identifier"
+          },
+          "primaryKey": {
+            "ID": "4957F75D-0D56-4109-9545-238AB40997AF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.447Z",
+            "checksum": "1dd7590f2188360af901e2a8a09df41c8518a6829cf1ce75e67eda839d37a92b"
           }
         },
         {
@@ -3200,6 +5311,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Donor profile ID"
+          },
+          "primaryKey": {
+            "ID": "82A4C2FD-8F0D-4C9D-B67E-5669720F89D2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.458Z",
+            "checksum": "c695b34ebe05775344e79378a154009b0012750b1e521ffc79280cad4ecc3f93"
           }
         },
         {
@@ -3211,6 +5329,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Donation amount"
+          },
+          "primaryKey": {
+            "ID": "7DE54466-733C-4C12-9CBE-8E3F16F3FC38"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.467Z",
+            "checksum": "8b961a7fa654651daf446e570cfe01cf325b398c85dc9f0d963ff0186d95e323"
           }
         },
         {
@@ -3222,6 +5347,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Donation fund name"
+          },
+          "primaryKey": {
+            "ID": "126130DC-7B01-408D-9B57-18344BEEB66C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.504Z",
+            "checksum": "f9aafa7bba9f29fb0f696fbe51ca661a1225e6fcefe7a1c09a6961d5bdc741f1"
           }
         },
         {
@@ -3233,6 +5365,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "When the donation was made"
+          },
+          "primaryKey": {
+            "ID": "F691631A-84CA-4F2E-8792-0452B9DE315C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.514Z",
+            "checksum": "becb18503f9e34e78a2df43caee43fdfef1d315f0b7fa68d96ad13377a7cd38b"
           }
         },
         {
@@ -3244,6 +5383,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Donation status"
+          },
+          "primaryKey": {
+            "ID": "F5428C7E-BC10-4A70-8EFA-98E7E3D1315B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.525Z",
+            "checksum": "0b778d82a11cba7d7fd141415c81d82c6428cfcae57784d0d2ea998e8deb5dcf"
           }
         }
       ],
@@ -3254,6 +5400,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "3151E3B7-AE86-4721-B390-97F8A7D26FA4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.537Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
           }
         },
         {
@@ -3262,6 +5415,13 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "3A379678-0B8A-481C-98D2-2D7A84EBF6A2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.546Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         },
         {
@@ -3270,9 +5430,23 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "AB287D14-9F72-4C28-89C1-6B0EF9C6628B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.555Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "4C3B9167-D17C-45F8-8086-8C4DA9DE0C1E"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.987Z",
+      "checksum": "e095e780f92b4744ca3821fa647381a548072566889cf9b644a3ba6ed69175f0"
     }
   },
   {
@@ -3283,7 +5457,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"donation-history\",\"Verb\":\"Search\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "donation-history",
+        "Verb": "Search"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -3297,6 +5475,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "9757AB6B-32BC-4742-80F0-C4872AF58420"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.566Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -3308,6 +5493,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "C6124922-0AE3-4DA0-8025-53E018DAF19B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.576Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
           }
         },
         {
@@ -3319,6 +5511,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "3873E2D8-A919-45DC-BA45-F1CC3B77E2B7"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.586Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
           }
         },
         {
@@ -3330,6 +5529,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "BDC58572-A6F2-483A-AD16-22DA9278C0F8"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.594Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -3341,6 +5547,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Donor profile ID"
+          },
+          "primaryKey": {
+            "ID": "FEDCB145-BC33-4712-962A-1B4EF855ECF7"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.632Z",
+            "checksum": "c184377a0aa11efbeb4c6573618171f02fb5be55eeb67a5e49a5f8b66f67b090"
           }
         },
         {
@@ -3352,6 +5565,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Donation amount"
+          },
+          "primaryKey": {
+            "ID": "BD384129-8ED1-4552-8B59-D422D609CAE9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.643Z",
+            "checksum": "e03c33f0099514b784c646da81f9f9b800cf1486f3166fc5f8bc31401c39bd19"
           }
         },
         {
@@ -3363,6 +5583,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Donation fund name"
+          },
+          "primaryKey": {
+            "ID": "3EAB3724-42DF-495E-B78F-F3A026C3DDD9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.654Z",
+            "checksum": "727b12a66915b0201a88126f1deac5e2a6c61da35a576e5d02f5aeb746c7ceaf"
           }
         },
         {
@@ -3374,6 +5601,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "When the donation was made"
+          },
+          "primaryKey": {
+            "ID": "6C77A279-CBE3-4259-8B28-DAF39CA9AECC"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.665Z",
+            "checksum": "0a9ac78fd1f1719e5f41da8a866253b612615a5f6c8f144856bc1cc80fceb592"
           }
         },
         {
@@ -3385,6 +5619,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Donation status"
+          },
+          "primaryKey": {
+            "ID": "E27473DF-309E-4F1A-B459-D1AC2A6E10EC"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.676Z",
+            "checksum": "90b01d73d24f5566704b517af415a327b9ec2f71546509553d1301140ed77b9b"
           }
         },
         {
@@ -3396,6 +5637,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of matching Donation records"
+          },
+          "primaryKey": {
+            "ID": "D1A83507-A8DE-471F-BDE4-4F6585DCBFA5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.688Z",
+            "checksum": "3a9c5f5ecabab4fc71df12d901d85f8f6844d455162042b8f3aa97fb55ba7c6f"
           }
         },
         {
@@ -3407,6 +5655,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "60CB8F37-C443-4062-9620-1A51B6C33AA5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.699Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
           }
         },
         {
@@ -3418,6 +5673,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "616B6CB5-306B-418D-82D3-88C7CBD00F38"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.708Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         }
       ],
@@ -3428,6 +5690,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "B58231DA-A4DB-4E43-85D2-E6A25116105B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.717Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
           }
         },
         {
@@ -3436,9 +5705,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "3E93A556-07FE-416B-900A-11014D2B33AE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.724Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "FFBA6275-DBF0-447F-A4FE-6046D9ED7C10"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:13.998Z",
+      "checksum": "e7cec57428ad0421d05546f3acaa3768aac3b432812fd3765047963d4b192764"
     }
   },
   {
@@ -3449,7 +5732,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"donation-history\",\"Verb\":\"List\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "donation-history",
+        "Verb": "List"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -3463,6 +5750,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "123B0D1F-151A-441F-931B-0DB221ED5817"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.760Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -3474,6 +5768,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "5322BDED-D127-435F-8488-F3C2E47B6554"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.774Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
           }
         },
         {
@@ -3485,6 +5786,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "F9AC080D-F3EB-4E8C-8A34-8DA1248130B6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.785Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
           }
         },
         {
@@ -3496,6 +5804,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "354C161D-E371-45A3-BAC8-426E18AA5CDC"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.796Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -3507,6 +5822,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of Donation records in this page"
+          },
+          "primaryKey": {
+            "ID": "0285C46A-CDAD-4828-9531-7AC8E6AA56BD"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.806Z",
+            "checksum": "bbb4e71e7edbbb8efb00fca345f34cdf5e9f9f1c94ed40f0978fc5ae458b0efc"
           }
         },
         {
@@ -3518,6 +5840,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "2669888D-8113-412B-98F1-F87822645282"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.817Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         },
         {
@@ -3529,6 +5858,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "933EFFE0-2796-4C66-A25A-8662FFD260BB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.826Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
           }
         },
         {
@@ -3540,6 +5876,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "8E8E018B-1143-498B-BC06-F3E18B45E133"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.836Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
           }
         }
       ],
@@ -3550,6 +5893,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "F818177A-B5C0-480C-8C0A-2380B369CE91"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.846Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
           }
         },
         {
@@ -3558,9 +5908,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "C9D140BF-585C-4898-8B1C-1C09438C852B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.855Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "DB239B50-617D-4E7B-B6CD-24584D23CB0C"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:14.010Z",
+      "checksum": "921f4c924f82962aacf213585e1a365d90cd52e7487cb52d01c072379c9013e9"
     }
   },
   {
@@ -3571,7 +5935,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"career-openings\",\"Verb\":\"Get\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "career-openings",
+        "Verb": "Get"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -3585,6 +5953,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "The unique ID of the Career Opening record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "21936758-6B27-4F8E-8B5F-6F81D24C4AFA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.887Z",
+            "checksum": "41a6b25ada302c7214eaae1fe00c83a81890c55d79468ff1c6aa87911e8ca761"
           }
         },
         {
@@ -3596,6 +5971,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "9D90B744-96D1-49A4-9DED-339ECC0E8A41"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.897Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -3607,6 +5989,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Career Opening record with all fields"
+          },
+          "primaryKey": {
+            "ID": "0828C75D-35FA-4E00-BD8F-95BE30AE9462"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.907Z",
+            "checksum": "5383982eb239bfc169268b43b08dc09bd1449ace7ac6716f915b68d8ce1e03e3"
           }
         },
         {
@@ -3618,6 +6007,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Career opening identifier"
+          },
+          "primaryKey": {
+            "ID": "B3C3CD81-B63B-4CC0-A89F-1AA9555790B2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.917Z",
+            "checksum": "698ef678a728786eea26ae991074ca0daedf29414f14ca0b73fe3e9d1408627d"
           }
         },
         {
@@ -3629,6 +6025,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Job position/title"
+          },
+          "primaryKey": {
+            "ID": "388B0D11-547F-486D-97BB-C35D3E5615BD"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.929Z",
+            "checksum": "505ecb115ad70aa298935bda6feda0161c65a322190ddb2c29aea71e8bc25023"
           }
         },
         {
@@ -3640,6 +6043,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Hiring organization"
+          },
+          "primaryKey": {
+            "ID": "7DA2C846-2A42-4258-9CFE-824EDCA7026F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.939Z",
+            "checksum": "cf543014a4ef287a446ebe135ed5ba018c8e4339a5307f261c4c9e288e566cee"
           }
         },
         {
@@ -3651,6 +6061,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "When the listing was posted"
+          },
+          "primaryKey": {
+            "ID": "00D937C5-813F-4A25-AF91-725A38906E6A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.949Z",
+            "checksum": "875d37fcb9bbf1fff967c5e2b5a1d4f6f86fafbeb43d1ecedb320c800ab87b90"
           }
         }
       ],
@@ -3661,6 +6078,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "EEE58AE8-F98A-4881-8C69-58B68E498DD2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.959Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
           }
         },
         {
@@ -3669,6 +6093,13 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "93C0353E-3AC7-4AE7-8D79-781A350282C6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.968Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         },
         {
@@ -3677,9 +6108,23 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "E1874363-4FDF-4960-90CD-D18FE818E041"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:17.975Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "6597274F-A06F-43BC-8F81-08B368119101"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:14.023Z",
+      "checksum": "1f4b88fee52c715df2d801b9d6fcc4ab4be12608eb11f05e8eadae30d8d92271"
     }
   },
   {
@@ -3690,7 +6135,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"career-openings\",\"Verb\":\"Search\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "career-openings",
+        "Verb": "Search"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -3704,6 +6153,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "081BACD8-52DF-4FC7-8781-8640293BF5BB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.013Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -3715,6 +6171,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "3A941EEA-9BC0-4E02-86D0-357AF5EF5FEB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.024Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
           }
         },
         {
@@ -3726,6 +6189,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "51388762-12B6-443F-978E-9BA765F3ACA9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.035Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
           }
         },
         {
@@ -3737,6 +6207,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "33B9E7CB-75E5-4F96-A36C-6E3F8E2EE90A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.047Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -3748,6 +6225,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Job position/title"
+          },
+          "primaryKey": {
+            "ID": "4ABA9687-30FB-466A-B75E-D2FA2CCED1BF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.058Z",
+            "checksum": "777a292303e2f99ac408b6c2eb7b16d94d65851cd5639362bd681073cd1e7a85"
           }
         },
         {
@@ -3759,6 +6243,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Hiring organization"
+          },
+          "primaryKey": {
+            "ID": "5D2D7AA3-8154-4C2D-BDD1-9734D1DA902D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.069Z",
+            "checksum": "712f952802d02017235d9bb65f00331f2336d58c3855ce9d415b2dfdf5ef95f4"
           }
         },
         {
@@ -3770,6 +6261,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "When the listing was posted"
+          },
+          "primaryKey": {
+            "ID": "BC4E1AEC-253A-4049-9D3C-946532A82EDC"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.079Z",
+            "checksum": "edf5c0ff5d9313d7bb1aa6f3394b965ebbc33ef19f2fd020b8c511720855f062"
           }
         },
         {
@@ -3781,6 +6279,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of matching Career Opening records"
+          },
+          "primaryKey": {
+            "ID": "006D87FD-90B4-4E48-BD77-193A60CFC1D9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.091Z",
+            "checksum": "831c7869dc8886c479692369f8b888c1f611f82ce55eb8d6d9de61c9fc557bec"
           }
         },
         {
@@ -3792,6 +6297,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "2B05D143-7BD3-45D7-9C1C-6A2C9E96943D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.102Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
           }
         },
         {
@@ -3803,6 +6315,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "38A09762-E60E-47B2-8024-69E655C9B170"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.110Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         }
       ],
@@ -3813,6 +6332,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "A5BE134E-14E7-4643-BD44-4F33893460D6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.146Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
           }
         },
         {
@@ -3821,9 +6347,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "5009EC57-2D0E-40F2-9262-3F99A9FC5AE6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.156Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "42DC7880-101E-465B-B4B2-9D4597C64205"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:14.036Z",
+      "checksum": "bdda9985e376260deff980f7db5bb2d426c101b2dff1b9a797bdb2965030db41"
     }
   },
   {
@@ -3834,7 +6374,11 @@
       "Status": "Active",
       "DriverClass": "IntegrationActionExecutor",
       "CategoryID": "@lookup:MJ: Action Categories.Name=YourMembership",
-      "Config": "{\"IntegrationName\":\"YourMembership\",\"ObjectName\":\"career-openings\",\"Verb\":\"List\"}",
+      "Config": {
+        "IntegrationName": "YourMembership",
+        "ObjectName": "career-openings",
+        "Verb": "List"
+      },
       "IconClass": "fa-solid fa-id-card"
     },
     "relatedEntities": {
@@ -3848,6 +6392,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "18C0CE30-8D2A-4D72-ABBD-B88A8028C5F4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.168Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
           }
         },
         {
@@ -3859,6 +6410,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "5F6C3659-3167-40CE-B497-6A910396365F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.179Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
           }
         },
         {
@@ -3870,6 +6428,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "854C25DC-A42B-4C89-87D4-885269A06B0F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.192Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
           }
         },
         {
@@ -3881,6 +6446,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "AC268BD3-FD13-40C1-A8C1-4F4BD7A3E931"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.202Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
           }
         },
         {
@@ -3892,6 +6464,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Array of Career Opening records in this page"
+          },
+          "primaryKey": {
+            "ID": "DD6DA2E6-F7E8-4E2C-A72D-85DB99B58E1D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.211Z",
+            "checksum": "caf0bf1802e53b7d2ab33ed63a3706fa90306f56490c17af92772a22c4e33e68"
           }
         },
         {
@@ -3903,6 +6482,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "DAA2F862-72E3-4E04-A8C7-BA9E45C9E15B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.220Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
           }
         },
         {
@@ -3914,6 +6500,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "E62CBBE1-E1DD-41B0-B627-F699E29ECBBF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.230Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
           }
         },
         {
@@ -3925,6 +6518,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "5E5FC462-93A1-44B5-BE45-C60ED73965DA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.239Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
           }
         }
       ],
@@ -3935,6 +6535,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "B5904987-A5C0-42BD-8BEB-5A4F41516F06"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.254Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
           }
         },
         {
@@ -3943,9 +6550,23 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "84AD1C57-5B45-4472-9298-3B91D62635A2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:18.262Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "721BBBE0-5778-4B39-80C7-D8388E68483A"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:14.046Z",
+      "checksum": "a6f04dfee25dcd8d509dcd9d5241d541ca1bc7562819b37f8209970207df0856"
     }
   }
 ]
