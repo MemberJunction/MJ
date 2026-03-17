@@ -58,6 +58,15 @@ export class ActionResultSimple {
     * Optional, additional information about the result of the action
     */
    public Message?: string;
+
+   /**
+    * Optional array of directive messages intended for the LLM agent.
+    * Unlike Message (which is informational), directives are surfaced as
+    * explicit instructions the LLM should follow. Use this for steering
+    * agent behavior (e.g., "pick one of these options as your next step").
+    * Do NOT use for informational summaries or batch result logs.
+    */
+   public LLMDirectives?: string[];
 }
 
 /**
@@ -93,6 +102,12 @@ export class ActionResult {
     * All parameters including inputs and outputs are provided here for convenience
     */
    public Params?: ActionParam[];
+
+   /**
+    * Optional array of directive messages intended for the LLM agent.
+    * Propagated from ActionResultSimple.LLMDirectives returned by the action implementation.
+    */
+   public LLMDirectives?: string[];
 }
 
 /**

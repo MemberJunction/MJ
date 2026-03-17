@@ -3533,6 +3533,7 @@ The context is now within limits. Please retry your request with the recovered c
                 success: result.Success,
                 resultCode: result.Result?.ResultCode || 'N/A',
                 message: result.Message || null,
+                llmDirectives: result.LLMDirectives,
                 outputs: outputParams.reduce((acc: any, param: any) => {
                     acc[param.Name] = param.Value;
                     return acc;
@@ -6668,7 +6669,8 @@ The context is now within limits. Please retry your request with the recovered c
                     success: result.success,
                     params: sanitizedParams,
                     resultCode: actionResult?.Result?.ResultCode || (result.success ? 'SUCCESS' : 'ERROR'),
-                    message: result.success ? actionResult?.Message || 'Action completed' : result.error
+                    message: result.success ? actionResult?.Message || 'Action completed' : result.error,
+                    llmDirectives: result.success ? actionResult?.LLMDirectives : undefined
                 };
             });
             
@@ -6729,18 +6731,16 @@ The context is now within limits. Please retry your request with the recovered c
                     metadata: metadata
                 } as AgentChatMessage);
 
-                // Surface substantive action result messages as a separate instruction message.
-                // When action messages contain multi-line directives (e.g., "YOUR NEXT ACTION — pick one"),
-                // they get buried inside the JSON results structure above. LLMs treat JSON-wrapped text as
-                // data to acknowledge, not instructions to follow. By re-surfacing these messages as a
-                // standalone user message, the LLM reads them as explicit instructions.
-                const substantiveMessages = actionSummaries
-                    .filter(a => a.success && a.message && a.message.includes('\n'))
-                    .map(a => a.message);
-                if (substantiveMessages.length > 0) {
+                // Surface explicit LLM directives from action results as a separate instruction message.
+                // Actions that need the LLM to follow specific instructions (not just acknowledge data)
+                // populate LLMDirectives on their ActionResultSimple return value.
+                const allDirectives = actionSummaries
+                    .filter(a => a.success && a.llmDirectives && a.llmDirectives.length > 0)
+                    .flatMap(a => a.llmDirectives!);
+                if (allDirectives.length > 0) {
                     params.conversationMessages.push({
                         role: 'user',
-                        content: `IMPORTANT — Follow these instructions from the action results:\n\n${substantiveMessages.join('\n\n')}`
+                        content: `IMPORTANT — Follow these instructions from the action results:\n\n${allDirectives.join('\n\n')}`
                     });
                 }
             }

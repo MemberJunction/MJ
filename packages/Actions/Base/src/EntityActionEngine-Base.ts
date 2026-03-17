@@ -72,6 +72,12 @@ export class EntityActionResult {
      * All parameters including inputs and outputs are provided here for convenience
      */
     public Params?: ActionParam[];
+
+    /**
+     * Optional array of directive messages intended for the LLM agent.
+     * Propagated from ActionResult.LLMDirectives.
+     */
+    public LLMDirectives?: string[];
  }
 
 /**

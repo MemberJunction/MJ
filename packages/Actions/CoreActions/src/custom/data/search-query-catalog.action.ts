@@ -118,16 +118,15 @@ export class SearchQueryCatalogAction extends BaseAction {
                 Value: results.length
             });
 
-            // Build a plain-text directive — the agent framework wraps action results in
-            // JSON.stringify, so plain text avoids double-encoding that buries instructions.
-            // Prefer non-parameterized queries for composition (parameterized ones require
-            // runtime params and can't be directly composed for aggregate use cases).
-            const message = this.buildDirectiveMessage(results);
+            // Build directive content — instructions the LLM should follow to pick the
+            // right query execution path (run stored vs compose ad-hoc SQL).
+            const { summary, directive } = this.buildDirectiveMessage(results);
 
             return {
                 Success: true,
                 ResultCode: 'SUCCESS',
-                Message: message
+                Message: summary,
+                LLMDirectives: directive ? [directive] : undefined
             };
 
         } catch (error) {
@@ -156,11 +155,10 @@ export class SearchQueryCatalogAction extends BaseAction {
     }
 
     /**
-     * Builds the plain-text directive message from search results.
-     * If a composable match >= 0.6 exists, returns Option A/B instructions.
-     * Otherwise, tells the LLM to proceed with fresh SQL.
+     * Builds an informational summary and, when a high-confidence composable match
+     * exists, an LLM directive telling the agent which action to call next.
      */
-    private buildDirectiveMessage(results: Record<string, unknown>[]): string {
+    private buildDirectiveMessage(results: Record<string, unknown>[]): { summary: string; directive: string | undefined } {
         const bestOverall = results[0];
         const bestComposable = results.find(r =>
             (r.Similarity as number) >= 0.6 && !this.hasTemplateParams(r)
@@ -169,7 +167,10 @@ export class SearchQueryCatalogAction extends BaseAction {
         const similarity = recommend.Similarity as number;
 
         if (similarity < 0.6) {
-            return `Found ${results.length} queries but no high-confidence composable matches (best: ${Math.round(similarity * 100)}%). Proceed with schema exploration and fresh SQL.`;
+            return {
+                summary: `Found ${results.length} queries but no high-confidence composable matches (best: ${Math.round(similarity * 100)}%). Proceed with schema exploration and fresh SQL.`,
+                directive: undefined
+            };
         }
 
         const name = recommend.Name as string;
@@ -179,17 +180,23 @@ export class SearchQueryCatalogAction extends BaseAction {
         const sql = recommend.SQL as string | undefined;
         const columns = sql ? this.extractSelectColumns(sql) : '';
 
-        const lines: string[] = [`Found ${results.length} matching queries.`];
-
+        // Informational summary for the action result JSON
+        const summaryParts: string[] = [`Found ${results.length} matching queries.`];
         if (bestComposable && bestComposable !== bestOverall) {
-            lines.push(`Note: "${bestOverall.Name}" scored highest (${Math.round((bestOverall.Similarity as number) * 100)}%) but is parameterized — not directly composable.`);
-            lines.push(`Best composable match: "${name}" (${Math.round(similarity * 100)}% similarity).`);
+            summaryParts.push(`Note: "${bestOverall.Name}" scored highest (${Math.round((bestOverall.Similarity as number) * 100)}%) but is parameterized — not directly composable.`);
+            summaryParts.push(`Best composable match: "${name}" (${Math.round(similarity * 100)}% similarity).`);
         } else {
-            lines.push(`Best match: "${name}" (${Math.round(similarity * 100)}% similarity).`);
+            summaryParts.push(`Best match: "${name}" (${Math.round(similarity * 100)}% similarity).`);
+        }
+        summaryParts.push('', 'Top matches:');
+        for (const r of results.slice(0, 5)) {
+            const sim = Math.round((r.Similarity as number) * 100);
+            const paramFlag = this.hasTemplateParams(r) ? ' [parameterized]' : '';
+            summaryParts.push(`  - ${r.Name} (${r.Category}) — ${sim}%${paramFlag} — ${r.Description || r.Name}`);
         }
 
-        lines.push(
-            '',
+        // LLM directive — surfaced as a separate instruction message by the agent framework
+        const directiveLines: string[] = [
             'YOUR NEXT ACTION — pick one:',
             '',
             'Option A — Fully covers the request? Call "Run Stored Query":',
@@ -199,24 +206,20 @@ export class SearchQueryCatalogAction extends BaseAction {
             'Option B — Partially covers? Call "Run Ad-hoc Query" with composition SQL:',
             `  Action: "Run Ad-hoc Query"`,
             `  Params: { Query: "SELECT base.*, <extra columns> FROM {{query:\\"${categoryPath}\\"}} base <extra JOINs> ORDER BY <column>", MaxRows: 100, DataFormat: "json" }`
-        );
+        ];
         if (columns) {
-            lines.push(`  The stored query provides these columns: ${columns}`);
+            directiveLines.push(`  The stored query provides these columns: ${columns}`);
         }
-        lines.push(
+        directiveLines.push(
             '  Add only the columns/JOINs the user needs that aren\'t already in the stored query.',
             '',
-            'Do NOT call Get Entity Details or write fresh SQL — use one of the options above.',
-            '',
-            'Top matches:'
+            'Do NOT call Get Entity Details or write fresh SQL — use one of the options above.'
         );
-        for (const r of results.slice(0, 5)) {
-            const sim = Math.round((r.Similarity as number) * 100);
-            const paramFlag = this.hasTemplateParams(r) ? ' [parameterized]' : '';
-            lines.push(`  - ${r.Name} (${r.Category}) — ${sim}%${paramFlag} — ${r.Description || r.Name}`);
-        }
 
-        return lines.join('\n');
+        return {
+            summary: summaryParts.join('\n'),
+            directive: directiveLines.join('\n')
+        };
     }
 
     /** Extracts column aliases from the SELECT portion of SQL (before FROM). */
