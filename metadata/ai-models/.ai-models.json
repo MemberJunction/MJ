@@ -157,6 +157,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "9E5440A1-D496-441E-8112-463E34765CD1"
           }
         }
       ],
@@ -196,6 +199,9 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude 4.5 Opus pricing on Amazon Bedrock as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "F4A9EDDC-66f9-4565-9A39-268D58036379"
           }
         }
       ]
@@ -277,6 +283,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "64AFB52F-BCB3-4DEE-A02F-65673F0270CE"
           }
         }
       ],
@@ -316,6 +325,9 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude 4.5 Sonnet pricing on Amazon Bedrock as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "7AC65CE1-1FE3-49AC-9580-28C4DEE68D9F"
           }
         }
       ]
@@ -5117,6 +5129,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7641B6DF-3093-4C4A-B2FE-DDE3E571CFA0"
           }
         }
       ],
@@ -5156,6 +5171,9 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude Haiku 4.5 pricing on Amazon Bedrock as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "6436D300-9E79-4E8A-A7F7-A0CC89A63EAB"
           }
         }
       ]
@@ -7280,6 +7298,9 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "4AEB2616-A8F9-44B3-B958-D4E7C5C966A9"
           }
         },
         {
@@ -7296,6 +7317,9 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "504E2C33-5D41-407E-992E-B4C8A0F4FF25"
           }
         }
       ],
@@ -7357,6 +7381,9 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-OSS-20B pricing on Amazon Bedrock (US East) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "DCCC3E1A-B295-45F4-BEA8-A7DB4BBF80FB"
           }
         },
         {
@@ -7372,6 +7399,9 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-OSS-20B pricing on Azure Foundry (Preview) as of March 2026. Available via managed compute and Foundry Local."
+          },
+          "primaryKey": {
+            "ID": "70712E7F-50CF-412C-B427-68FBA196AB76"
           }
         }
       ]
@@ -9910,6 +9940,9 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "9CF812C3-0E8D-4972-A25D-A3359A5AE1CF"
           }
         },
         {
@@ -9926,6 +9959,9 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "88CE86DD-5D44-4A91-A4EC-56A85DB0D994"
           }
         }
       ],
@@ -10009,6 +10045,9 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-OSS-120B pricing on Amazon Bedrock (US East) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "678C3B1B-91FA-4019-B1AE-BDD19A8AE089"
           }
         },
         {
@@ -10024,6 +10063,9 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-OSS-120B pricing on Azure Foundry (Preview, GlobalStandard SKU) as of March 2026. Requires Foundry project deployment."
+          },
+          "primaryKey": {
+            "ID": "83592F9D-AB6E-44AF-851A-8337D2C108ED"
           }
         }
       ]
@@ -10995,6 +11037,9 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6C1287CD-240A-4A22-8990-6421AFFB7232"
           }
         }
       ],
@@ -11034,6 +11079,9 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-5.4 pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "A8398816-238C-4047-A525-307CEA36E7A7"
           }
         }
       ]
@@ -11070,6 +11118,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "A62ED2F7-E784-4326-B08E-8EF0335D4FB6"
           }
         },
         {
@@ -11086,6 +11137,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "852E7334-957A-40D9-B945-AFE9E8E2E3D5"
           }
         },
         {
@@ -11102,6 +11156,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "5BE6B17F-030D-47A6-8AE2-A9F4DCE45B9C"
           }
         }
       ],
@@ -11119,6 +11176,9 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude Opus 4.6 pricing on Anthropic as of March 2026. Full 1M context at standard pricing. Fast mode available at 6x rates ($30/$150 per 1M tokens)."
+          },
+          "primaryKey": {
+            "ID": "5BE6B17F-030D-47A6-8AE2-A9F4DCE45B9C"
           }
         },
         {
@@ -11134,9 +11194,15 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude Opus 4.6 pricing on Amazon Bedrock as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "8D1DE4D6-1638-4879-ABEB-D5405DCD9599"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "5B979A77-1B17-42F6-9424-1B0ED7527673"
     }
   },
   {
@@ -11163,6 +11229,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "BEACA666-F43A-4105-ADE4-87DED1575671"
           }
         },
         {
@@ -11179,6 +11248,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "3FF6CCCA-6E57-4300-8C2F-01F450F29AC4"
           }
         },
         {
@@ -11195,6 +11267,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C4A8498E-28B6-4F12-882A-7626764DA0CF"
           }
         }
       ],
@@ -11212,6 +11287,9 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude Sonnet 4.6 pricing on Anthropic as of March 2026. Full 1M context at standard pricing (no long-context surcharge unlike Sonnet 4.5)."
+          },
+          "primaryKey": {
+            "ID": "A09B493C-789D-4B2B-8F8E-892043149DCE"
           }
         },
         {
@@ -11227,9 +11305,15 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Claude Sonnet 4.6 pricing on Amazon Bedrock as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "D5F7BE82-07BC-468F-875B-49715B58A1C9"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "4979A654-122D-42C9-9BEF-1BBE7AA08C99"
     }
   }
 ]
