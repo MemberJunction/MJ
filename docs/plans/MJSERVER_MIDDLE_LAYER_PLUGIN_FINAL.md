@@ -1,6 +1,6 @@
-# MJServer Middleware Plugin Architecture — Final Design
+# MJServer Middleware Architecture — Final Design
 
-> **Status**: Implementation Plan (replaces `MJSERVER_MIDDLE_LAYER_PLUGIN.md`)
+> **Status**: Implementation Complete — Phases 1 & 3 done, Phase 2 (BCSaaS migration) is separate repo
 > **Branch**: `JF_Server_Middleware`
 > **Issues**: [#2047](https://github.com/MemberJunction/MJ/issues/2047) (Open Apps cannot inject middleware), [#1963](https://github.com/MemberJunction/MJ/issues/1963) (Server Modernization)
 > **Prerequisite**: None (independent of PR #2037 ServerExtensionsCore)
@@ -13,7 +13,7 @@
 1. [Design Principles](#1-design-principles)
 2. [What to REMOVE](#2-what-to-remove)
 3. [What to KEEP](#3-what-to-keep)
-4. [The New Pattern: BaseMiddlewarePlugin](#4-the-new-pattern-basemiddlewareplugin)
+4. [The New Pattern: BaseServerMiddleware](#4-the-new-pattern-baseservermiddleware)
 5. [Separation from Server Extensions (PR #2037)](#5-separation-from-server-extensions-pr-2037)
 6. [BCSaaS Migration Guide](#6-bcsaas-migration-guide)
 7. [Exhaustive File-Level Plan](#7-exhaustive-file-level-plan)
@@ -48,17 +48,17 @@ Startup function returns { ExpressMiddlewarePostAuth: [...], PreRunViewHooks: [.
 
 This is a **config-bag-threading** pattern — the opposite of self-registration. It also has a type problem: `@memberjunction/global` has no dependency on Express, so `DynamicPackageResult` is typed as `Record<string, unknown>` — all type safety is lost.
 
-Additionally, `HookRegistry` was created as a new registry specifically for this middleware plugin work. It duplicates what `ClassFactory` already provides — registration, priority ordering, and key-based deduplication — but for functions instead of classes. This adds a second extensibility pattern that MJ developers need to learn and maintain.
+Additionally, `HookRegistry` was created as a new registry specifically for this server middleware work. It duplicates what `ClassFactory` already provides — registration, priority ordering, and key-based deduplication — but for functions instead of classes. This adds a second extensibility pattern that MJ developers need to learn and maintain.
 
 ### The fix: One pattern for everything
 
-Middleware plugins should use the same `@RegisterClass` pattern as everything else:
+Server middleware should use the same `@RegisterClass` pattern as everything else:
 
-1. Define `BaseMiddlewarePlugin` — the contract for middleware plugins
-2. Plugins decorate with `@RegisterClass(BaseMiddlewarePlugin, key)` — self-registration on import
-3. The class manifest ensures the plugin is imported
-4. `serve()` discovers all plugins via `ClassFactory.GetAllRegistrations(BaseMiddlewarePlugin)` — key-based deduplication handles replacement, registration order handles execution ordering
-5. Hooks are methods on the plugin class — extracted by `serve()` and stored in a simple global array for `ProviderBase`/`BaseEntity` to consume
+1. Define `BaseServerMiddleware` — the contract for server middleware
+2. Subclasses decorate with `@RegisterClass(BaseServerMiddleware, key)` — self-registration on import
+3. The class manifest ensures the middleware class is imported
+4. `serve()` discovers all middleware via `ClassFactory.GetAllRegistrations(BaseServerMiddleware)` — key-based deduplication handles replacement, registration order handles execution ordering
+5. Hooks are methods on the middleware class — extracted by `serve()` and stored in a simple global array for `ProviderBase`/`BaseEntity` to consume
 
 No new registries. No config bags. No merge logic. The same `@RegisterClass` + `ClassFactory` pattern used by entities, forms, actions, and resolvers.
 
@@ -72,7 +72,7 @@ No new registries. No config bags. No merge logic. The same `@RegisterClass` + `
 
 **What**: The entire `HookRegistry` class, `HookRegistrationOptions` interface, and `HookEntry` internal type.
 
-**Why**: `HookRegistry` was created for the middleware plugin work as a second global registry alongside `ClassFactory`. Its three features map directly to existing `ClassFactory` capabilities:
+**Why**: `HookRegistry` was created for the server middleware work as a second global registry alongside `ClassFactory`. Its three features map directly to existing `ClassFactory` capabilities:
 
 | HookRegistry feature | ClassFactory equivalent |
 |---------------------|----------------------|
@@ -90,7 +90,7 @@ No new registries. No config bags. No merge logic. The same `@RegisterClass` + `
 
 **What**: The entire file — `DynamicPackageLoader` class, `DynamicPackageLoad` interface, `DynamicLoadResult` interface, and `DynamicPackageResult` type.
 
-**Why**: The class manifest system (`mj codegen manifest`) already handles discovering and importing `@RegisterClass`-decorated classes. If a plugin package is installed as an npm dependency, the manifest's `prestart`/`prebuild` script finds it and generates a static import. This makes `DynamicPackageLoader`'s dynamic `import()` redundant. Plugin packages should be installed as npm dependencies and discovered by the manifest — no runtime dynamic loading needed.
+**Why**: The class manifest system (`mj codegen manifest`) already handles discovering and importing `@RegisterClass`-decorated classes. If a middleware package is installed as an npm dependency, the manifest's `prestart`/`prebuild` script finds it and generates a static import. This makes `DynamicPackageLoader`'s dynamic `import()` redundant. Middleware packages should be installed as npm dependencies and discovered by the manifest — no runtime dynamic loading needed.
 
 **Changes**:
 - Delete the entire `DynamicPackageLoader.ts` file
@@ -104,7 +104,7 @@ No new registries. No config bags. No merge logic. The same `@RegisterClass` + `
 
 **What**: The `MERGEABLE_KEYS` constant (lines 126–134) and `mergeExtensibilityOptions()` function (lines 140–154).
 
-**Why**: These exist to merge `DynamicPackageResult` bags into `MJServerOptions`. With `@RegisterClass`, there's nothing to merge — plugins register themselves and `serve()` discovers them via `ClassFactory`.
+**Why**: These exist to merge `DynamicPackageResult` bags into `MJServerOptions`. With `@RegisterClass`, there's nothing to merge — middleware classes register themselves and `serve()` discovers them via `ClassFactory`.
 
 **Changes**:
 - Delete `MERGEABLE_KEYS`
@@ -117,7 +117,7 @@ No new registries. No config bags. No merge logic. The same `@RegisterClass` + `
 
 **What**: The `HookWithOptions<T>` interface, `HookOrEntry<T>` union type, and the `registerHookEntry()` helper function.
 
-**Why**: These exist because `DynamicPackageResult` needed to carry hooks with priority/namespace metadata through the config-bag chain. With `@RegisterClass`, hooks are methods on the plugin class — no wrapper types needed.
+**Why**: These exist because `DynamicPackageResult` needed to carry hooks with priority/namespace metadata through the config-bag chain. With `@RegisterClass`, hooks are methods on the middleware class — no wrapper types needed.
 
 **Changes**:
 - In `hooks.ts`: Delete `HookWithOptions<T>` interface and `HookOrEntry<T>` type
@@ -130,7 +130,7 @@ No new registries. No config bags. No merge logic. The same `@RegisterClass` + `
 
 **What**: The `ExpressMiddlewarePostAuth`, `PreRunViewHooks`, `PostRunViewHooks`, `PreSaveHooks` properties.
 
-**Why**: All replaced by `BaseMiddlewarePlugin`. Plugins declare their middleware via `GetPostAuthMiddleware()` and their hooks via `PreRunView()` / `PreSave()` / `PostRunView()` methods. `serve()` discovers and activates them via `ClassFactory`.
+**Why**: All replaced by `BaseServerMiddleware`. Middleware classes declare their Express handlers via `GetPostAuthMiddleware()` and their hooks via `PreRunView()` / `PreSave()` / `PostRunView()` methods. `serve()` discovers and activates them via `ClassFactory`.
 
 **Changes**: Remove all four properties from `ServerExtensibilityOptions`.
 
@@ -164,16 +164,16 @@ No new registries. No config bags. No merge logic. The same `@RegisterClass` + `
 
 ### 3a. `@RegisterClass` + `ClassFactory` (existing)
 
-The core extensibility mechanism. Already in `@memberjunction/global`. No changes needed. Plugins register via decorator, `serve()` discovers via `ClassFactory.GetAllRegistrations()`.
+The core extensibility mechanism. Already in `@memberjunction/global`. No changes needed. Middleware classes register via decorator, `serve()` discovers via `ClassFactory.GetAllRegistrations()`.
 
 ### 3b. Class manifest system (existing)
 
-`mj codegen manifest` scans the dependency tree for `@RegisterClass`-decorated classes and generates static imports. This ensures plugin classes are imported (triggering registration) even when bundlers would tree-shake them.
+`mj codegen manifest` scans the dependency tree for `@RegisterClass`-decorated classes and generates static imports. This ensures middleware classes are imported (triggering registration) even when bundlers would tree-shake them.
 
 - Pre-built manifests ship inside bootstrap packages (`@memberjunction/server-bootstrap`)
 - Supplemental manifests are generated by MJAPI's `prestart` script with `--exclude-packages @memberjunction`
 
-No changes needed. Plugin packages installed as npm dependencies are automatically discovered.
+No changes needed. Middleware packages installed as npm dependencies are automatically discovered.
 
 ### 3c. Hook type definitions (`PreRunViewHook`, `PostRunViewHook`, `PreSaveHook`)
 
@@ -187,20 +187,20 @@ Already in `packages/MJServer/src/context.ts`. No changes needed.
 
 Already working: `CurrentUserTenantContext` resolver + `GraphQLDataProvider` auto-stamp. No changes needed.
 
-### 3f. `ExpressMiddlewareBefore`, `ExpressMiddlewareAfter`, `ConfigureExpressApp`, `ApolloPlugins`, `SchemaTransformers`
+### 3f. ~~`ExpressMiddlewareBefore`, `ExpressMiddlewareAfter`, `ConfigureExpressApp`, `ApolloPlugins`, `SchemaTransformers`~~ — REMOVED
 
-These remain on `ServerExtensibilityOptions` for the static `createMJServer()` config path. They're for the host application (MJAPI entry point) to declaratively configure the server at compile time. Plugins contribute to the same pipeline stages via their own methods (`GetPreAuthMiddleware()`, `GetPostRouteMiddleware()`, `GetApolloPlugins()`, `GetSchemaTransformers()`, `ConfigureExpressApp()`). At each stage, `serve()` merges both sources — static config runs first, then plugin contributions in registration order.
+> **Update (2026-03-16)**: These 5 properties and the entire `ServerExtensibilityOptions` interface were removed. They were all added in the same commit as the middleware architecture work (`b19cd4096f`) and are fully redundant with `BaseServerMiddleware` methods. `MJServerOptions` reverted to its original pre-middleware form: just `onBeforeServe` and `restApiOptions`. All extensibility now flows through `@RegisterClass(BaseServerMiddleware, key)` classes.
 
 ---
 
-## 4. The New Pattern: BaseMiddlewarePlugin
+## 4. The New Pattern: BaseServerMiddleware
 
 ### 4a. Design
 
-A single abstract class in `@memberjunction/server` that defines the contract for middleware plugins. Uses the same `@RegisterClass` + `ClassFactory` pattern as entities, forms, actions, and resolvers.
+A single abstract class in `@memberjunction/server` that defines the contract for server middleware. Uses the same `@RegisterClass` + `ClassFactory` pattern as entities, forms, actions, and resolvers.
 
 ```typescript
-// packages/MJServer/src/plugins/BaseMiddlewarePlugin.ts
+// packages/MJServer/src/middleware/BaseServerMiddleware.ts
 
 import type { RequestHandler, ErrorRequestHandler, Application } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
@@ -208,20 +208,20 @@ import type { GraphQLSchema } from 'graphql';
 import type { RunViewParams, UserInfo, BaseEntity, RunViewResult } from '@memberjunction/core';
 
 /**
- * Base class for middleware plugins that intercept the MJServer request pipeline.
+ * Base class for server middleware that intercepts the MJServer request pipeline.
  *
- * Plugins register via @RegisterClass(BaseMiddlewarePlugin, key) and are
+ * Subclasses register via @RegisterClass(BaseServerMiddleware, key) and are
  * discovered by serve() via ClassFactory.GetAllRegistrations().
  *
- * Key-based deduplication: If two plugins register with the same key,
+ * Key-based deduplication: If two middleware classes register with the same key,
  * ClassFactory returns the highest-priority one — the other is replaced.
  * This is how BCSaaS replaces MJ's built-in tenant filtering.
  *
  * For adding new routes/endpoints (webhooks, bot endpoints), see
  * ServerExtensionsCore and BaseServerExtension (PR #2037).
- * BaseMiddlewarePlugin is for intercepting the existing pipeline, not adding to it.
+ * BaseServerMiddleware is for intercepting the existing pipeline, not adding to it.
  */
-export abstract class BaseMiddlewarePlugin {
+export abstract class BaseServerMiddleware {
     // ─── Identity ─────────────────────────────────────────────────────
 
     /**
@@ -230,8 +230,8 @@ export abstract class BaseMiddlewarePlugin {
     abstract get Label(): string;
 
     /**
-     * Whether this plugin is active. Override to check config, env vars, etc.
-     * Disabled plugins are never instantiated or activated by serve().
+     * Whether this middleware is active. Override to check config, env vars, etc.
+     * Disabled middleware classes are never instantiated or activated by serve().
      * Default: true.
      */
     get Enabled(): boolean { return true; }
@@ -339,12 +339,12 @@ const DATA_HOOKS_KEY = '__mj_dataHooks';
 
 /**
  * Registers a hook function into a named slot. Called by serve() after
- * plugin discovery and deduplication. Hooks are stored in insertion order
+ * middleware discovery and deduplication. Hooks are stored in insertion order
  * (serve() inserts them in ClassFactory registration order — MJ first,
  * then middle-layer, then app).
  *
  * This is intentionally simple — no priority logic, no namespace logic.
- * All that intelligence lives in serve() where plugins are discovered
+ * All that intelligence lives in serve() where middleware is discovered
  * via ClassFactory.
  */
 export function RegisterDataHook(hookName: HookName | string, hook: unknown): void {
@@ -380,17 +380,17 @@ export function ClearAllDataHooks(): void {
 }
 ```
 
-### 4c. How `serve()` discovers and activates plugins
+### 4c. How `serve()` discovers and activates middleware
 
 ```typescript
 // In serve(), at the top level (before pipeline assembly):
 
 import { MJGlobal } from '@memberjunction/global';
 import { RegisterDataHook } from '@memberjunction/core';
-import { BaseMiddlewarePlugin } from './plugins/BaseMiddlewarePlugin.js';
+import { BaseServerMiddleware } from './middleware/BaseServerMiddleware.js';
 
-// ─── Discover all middleware plugins via ClassFactory ─────
-const allRegistrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseMiddlewarePlugin);
+// ─── Discover all server middleware via ClassFactory ─────
+const allRegistrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseServerMiddleware);
 
 // ─── Deduplicate by key (same key → highest priority wins) ─────
 // This is the replacement mechanism: if BCSaaS registers with the same
@@ -403,7 +403,7 @@ const uniqueKeys = new Set(
 const winnerRegistrations: typeof allRegistrations = [];
 for (const key of uniqueKeys) {
     // GetRegistration returns the single highest-priority match for this key
-    const winner = MJGlobal.Instance.ClassFactory.GetRegistration(BaseMiddlewarePlugin, key);
+    const winner = MJGlobal.Instance.ClassFactory.GetRegistration(BaseServerMiddleware, key);
     if (winner) winnerRegistrations.push(winner);
 }
 
@@ -411,56 +411,56 @@ for (const key of uniqueKeys) {
 // Execution order follows ClassFactory registration order, which mirrors
 // the dependency graph: MJ packages register first → middle-layer next → app last.
 // No explicit Priority needed — the manifest's import order IS the execution order.
-const plugins: BaseMiddlewarePlugin[] = [];
+const middlewares: BaseServerMiddleware[] = [];
 for (const reg of winnerRegistrations) {
-    const PluginClass = reg.SubClass as new () => BaseMiddlewarePlugin;
-    const plugin = new PluginClass();
-    if (plugin.Enabled) {
-        plugins.push(plugin);
+    const MwClass = reg.SubClass as new () => BaseServerMiddleware;
+    const mw = new MwClass();
+    if (mw.Enabled) {
+        middlewares.push(mw);
     }
 }
 
-// ─── Initialize all plugins ─────
-for (const plugin of plugins) {
-    await plugin.Initialize();
-    console.log(`  ✓ Plugin: ${plugin.Label}`);
+// ─── Initialize all middleware ─────
+for (const mw of middlewares) {
+    await mw.Initialize();
+    console.log(`  ✓ Middleware: ${mw.Label}`);
 }
 
-// ─── Collect plugin contributions for each pipeline stage ─────
+// ─── Collect middleware contributions for each pipeline stage ─────
 // These are gathered once and applied at the appropriate point in pipeline assembly.
 
-const pluginPreAuthMiddleware: RequestHandler[] = [];
-const pluginPostAuthMiddleware: RequestHandler[] = [];
-const pluginPostRouteMiddleware: (RequestHandler | ErrorRequestHandler)[] = [];
-const pluginApolloPlugins: ApolloServerPlugin[] = [];
-const pluginSchemaTransformers: ((schema: GraphQLSchema) => GraphQLSchema)[] = [];
+const mwPreAuth: RequestHandler[] = [];
+const mwPostAuth: RequestHandler[] = [];
+const mwPostRoute: (RequestHandler | ErrorRequestHandler)[] = [];
+const mwApolloPlugins: ApolloServerPlugin[] = [];
+const mwSchemaTransformers: ((schema: GraphQLSchema) => GraphQLSchema)[] = [];
 
-for (const plugin of plugins) {
-    pluginPreAuthMiddleware.push(...plugin.GetPreAuthMiddleware());
-    pluginPostAuthMiddleware.push(...plugin.GetPostAuthMiddleware());
-    pluginPostRouteMiddleware.push(...plugin.GetPostRouteMiddleware());
-    pluginApolloPlugins.push(...plugin.GetApolloPlugins());
-    pluginSchemaTransformers.push(...plugin.GetSchemaTransformers());
+for (const mw of middlewares) {
+    mwPreAuth.push(...mw.GetPreAuthMiddleware());
+    mwPostAuth.push(...mw.GetPostAuthMiddleware());
+    mwPostRoute.push(...mw.GetPostRouteMiddleware());
+    mwApolloPlugins.push(...mw.GetApolloPlugins());
+    mwSchemaTransformers.push(...mw.GetSchemaTransformers());
 
     // Express app configuration escape hatch
-    if (plugin.ConfigureExpressApp) {
-        await plugin.ConfigureExpressApp(app);
+    if (mw.ConfigureExpressApp) {
+        await mw.ConfigureExpressApp(app);
     }
 
     // Extract hook methods and register in the global hook store
     // (ProviderBase/BaseEntity will read these via GetDataHooks())
-    RegisterDataHook('PreRunView', plugin.PreRunView.bind(plugin));
-    RegisterDataHook('PostRunView', plugin.PostRunView.bind(plugin));
-    RegisterDataHook('PreSave', plugin.PreSave.bind(plugin));
+    RegisterDataHook('PreRunView', mw.PreRunView.bind(mw));
+    RegisterDataHook('PostRunView', mw.PostRunView.bind(mw));
+    RegisterDataHook('PreSave', mw.PreSave.bind(mw));
 }
 
-// Then at each pipeline stage, apply BOTH static config and plugin contributions:
+// Then at each pipeline stage, apply middleware contributions:
 //
-// Pre-auth:    options.ExpressMiddlewareBefore  + pluginPreAuthMiddleware
-// Post-auth:   pluginPostAuthMiddleware  (static config removed — use plugins)
-// Post-route:  options.ExpressMiddlewareAfter   + pluginPostRouteMiddleware
-// Apollo:      built-in plugins + options.ApolloPlugins + pluginApolloPlugins
-// Schema:      built-in transformers + options.SchemaTransformers + pluginSchemaTransformers
+// Pre-auth:    mwPreAuth
+// Post-auth:   mwPostAuth
+// Post-route:  mwPostRoute
+// Apollo:      built-in plugins + mwApolloPlugins
+// Schema:      built-in transformers + mwSchemaTransformers
 ```
 
 ### 4d. How ProviderBase/BaseEntity consume hooks (minimal change)
@@ -493,22 +493,22 @@ const preSaveHooks = GetDataHooks<PreSaveHook>('PreSave');
 
 The consumption code in `RunPreRunViewHooks()`, `RunPostRunViewHooks()`, and `RunPreSaveHooks()` stays exactly the same — they iterate an array of hook functions and call each one.
 
-### 4e. MJ's built-in multi-tenancy becomes a plugin
+### 4e. MJ's built-in multi-tenancy becomes a middleware class
 
-The current multi-tenancy code in `serve()` (lines 551–676) moves into a `BaseMiddlewarePlugin` subclass:
+The current multi-tenancy code in `serve()` (lines 551–676) moves into a `BaseServerMiddleware` subclass:
 
 ```typescript
-// packages/MJServer/src/plugins/MJTenantFilterPlugin.ts
+// packages/MJServer/src/middleware/MJTenantFilterMiddleware.ts
 
 import { RegisterClass } from '@memberjunction/global';
-import { BaseMiddlewarePlugin } from './BaseMiddlewarePlugin.js';
+import { BaseServerMiddleware } from './BaseServerMiddleware.js';
 import { configInfo } from '../config.js';
 import { createTenantMiddleware, createTenantPreRunViewHook, createTenantPreSaveHook } from '../multiTenancy/index.js';
 import type { RequestHandler } from 'express';
 import type { RunViewParams, UserInfo, BaseEntity } from '@memberjunction/core';
 
-@RegisterClass(BaseMiddlewarePlugin, 'mj:tenantFilter')
-export class MJTenantFilterPlugin extends BaseMiddlewarePlugin {
+@RegisterClass(BaseServerMiddleware, 'mj:tenantFilter')
+export class MJTenantFilterMiddleware extends BaseServerMiddleware {
     get Label(): string { return 'mj:tenantFilter'; }
 
     // Only active when multiTenancy is enabled in config
@@ -530,11 +530,11 @@ export class MJTenantFilterPlugin extends BaseMiddlewarePlugin {
 }
 ```
 
-BCSaaS **extends** `MJTenantFilterPlugin` — same pattern as custom entity forms extending generated forms:
+BCSaaS **extends** `MJTenantFilterMiddleware` — same pattern as custom entity forms extending generated forms:
 
 ```typescript
-@RegisterClass(BaseMiddlewarePlugin, 'mj:tenantFilter')
-export class BCSaaSPlugin extends MJTenantFilterPlugin {
+@RegisterClass(BaseServerMiddleware, 'mj:tenantFilter')
+export class BCSaaSMiddleware extends MJTenantFilterMiddleware {
     // Inherits Label, Enabled
     // ClassFactory auto-increments registration priority → BCSaaS wins over parent
 
@@ -553,7 +553,7 @@ export class BCSaaSPlugin extends MJTenantFilterPlugin {
 }
 ```
 
-`ClassFactory.GetRegistration(BaseMiddlewarePlugin, 'mj:tenantFilter')` returns BCSaaS — it has higher ClassFactory priority (auto-incremented because it's registered after its parent). MJ's built-in plugin is never instantiated. **All-or-nothing replacement** — middleware, PreRunView, and PreSave all come from BCSaaS.
+`ClassFactory.GetRegistration(BaseServerMiddleware, 'mj:tenantFilter')` returns BCSaaS — it has higher ClassFactory priority (auto-incremented because it's registered after its parent). MJ's built-in middleware is never instantiated. **All-or-nothing replacement** — middleware, PreRunView, and PreSave all come from BCSaaS.
 
 Benefits of subclassing:
 - **No explicit priority juggling** — ClassFactory auto-increment handles replacement
@@ -564,9 +564,9 @@ This is more correct than HookRegistry's per-hook namespace replacement, where y
 
 ### 4f. Why NOT a separate `BaseDataHook` class in `@memberjunction/core`?
 
-An earlier design considered splitting the base class: `BaseDataHook` in core (hook methods only), `BaseMiddlewarePlugin extends BaseDataHook` in server (adds Express middleware).
+An earlier design considered splitting the base class: `BaseDataHook` in core (hook methods only), `BaseServerMiddleware extends BaseDataHook` in server (adds Express middleware).
 
-This split is unnecessary because `ProviderBase` doesn't need to discover plugin classes directly. It just calls `GetDataHooks()` which returns pre-registered hook functions. The discovery and extraction happen in `serve()` (in `@memberjunction/server`), not in `ProviderBase` (in `@memberjunction/core`).
+This split is unnecessary because `ProviderBase` doesn't need to discover middleware classes directly. It just calls `GetDataHooks()` which returns pre-registered hook functions. The discovery and extraction happen in `serve()` (in `@memberjunction/server`), not in `ProviderBase` (in `@memberjunction/core`).
 
 The bridge between server and core is the two thin functions (`RegisterDataHook` / `GetDataHooks`), not a class hierarchy.
 
@@ -576,17 +576,17 @@ The bridge between server and core is the two thin functions (`RegisterDataHook`
 
 ### These are independent concerns on independent timelines
 
-| Aspect | Middleware Plugins (this PR) | Server Extensions (PR #2037) |
+| Aspect | Server Middleware (this PR) | Server Extensions (PR #2037) |
 |--------|------------------------------|------------------------------|
 | **Purpose** | Intercept the existing Express/Apollo pipeline | Add new routes/endpoints to the server |
 | **Examples** | `bcTenantContextMiddleware`, `bcPreRunViewHook`, `bcPreSaveHook` | Slack webhook routes, Teams bot endpoints |
 | **Auth model** | Depends on MJ's unified auth (`req.userPayload`) | Often brings its own auth (HMAC, Bot Framework) |
 | **Lifecycle** | Stateless — no meaningful init/shutdown | Stateful — needs Initialize/Shutdown/HealthCheck |
 | **Pipeline position** | Runs inside `auth → query → save` chain | Runs alongside the main pipeline on separate routes |
-| **Registration** | `@RegisterClass(BaseMiddlewarePlugin, key)` | `@RegisterClass(BaseServerExtension, driverClass)` |
+| **Registration** | `@RegisterClass(BaseServerMiddleware, key)` | `@RegisterClass(BaseServerExtension, driverClass)` |
 | **Base class location** | `@memberjunction/server` | `@memberjunction/server` (PR #2037) |
 
-### Why not force middleware plugins into BaseServerExtension?
+### Why not force server middleware into BaseServerExtension?
 
 Making BCSaaS implement `BaseServerExtension` would require:
 - Empty `Shutdown()` and `HealthCheck()` methods (middleware is stateless)
@@ -625,20 +625,20 @@ export function LoadBCSaaSServer(): DynamicPackageResult {
 
 **Flow**: `LoadBCSaaSServer()` → returns config bag → `DynamicPackageLoader` captures → `ServerBootstrap` merges → `serve()` applies
 
-### After (`@RegisterClass` pattern — subclasses `MJTenantFilterPlugin`)
+### After (`@RegisterClass` pattern — subclasses `MJTenantFilterMiddleware`)
 
 ```typescript
-// packages/server/src/BCSaaSPlugin.ts (BCSaaS)
+// packages/server/src/BCSaaSMiddleware.ts (BCSaaS)
 
 import { RegisterClass } from '@memberjunction/global';
-import { BaseMiddlewarePlugin, MJTenantFilterPlugin } from '@memberjunction/server';
+import { BaseServerMiddleware, MJTenantFilterMiddleware } from '@memberjunction/server';
 import { bcTenantContextMiddleware } from './bcTenantContextMiddleware.js';
 import { createBCPreRunViewHook, createBCPreSaveHook } from './bcHooks.js';
 import type { RequestHandler } from 'express';
 import type { RunViewParams, UserInfo, BaseEntity } from '@memberjunction/core';
 
-@RegisterClass(BaseMiddlewarePlugin, 'mj:tenantFilter')
-export class BCSaaSPlugin extends MJTenantFilterPlugin {
+@RegisterClass(BaseServerMiddleware, 'mj:tenantFilter')
+export class BCSaaSMiddleware extends MJTenantFilterMiddleware {
     // Inherits Label='mj:tenantFilter', Enabled check
     // ClassFactory auto-increments → BCSaaS wins over parent
 
@@ -662,15 +662,15 @@ export class BCSaaSPlugin extends MJTenantFilterPlugin {
 
 | File | Change |
 |------|--------|
-| `packages/server/src/BCSaaSPlugin.ts` | **NEW** — Plugin class with `@RegisterClass(BaseMiddlewarePlugin, 'mj:tenantFilter')` |
-| `packages/server/src/index.ts` | Export `BCSaaSPlugin` (for manifest discovery) |
+| `packages/server/src/BCSaaSMiddleware.ts` | **NEW** — Middleware class with `@RegisterClass(BaseServerMiddleware, 'mj:tenantFilter')` |
+| `packages/server/src/index.ts` | Export `BCSaaSMiddleware` (for manifest discovery) |
 | `packages/server-bootstrap/src/index.ts` | `LoadBCSaaSServer()` becomes empty/void — or can be removed entirely if manifest handles import |
 | `packages/server/src/bcTenantContextMiddleware.ts` | No change |
-| `packages/server/src/bcHooks.ts` | No change (hook functions stay as-is, just called from plugin methods) |
+| `packages/server/src/bcHooks.ts` | No change (hook functions stay as-is, just called from middleware methods) |
 
 ### What changes in `mj.config.cjs`
 
-The `dynamicPackages.server` section is removed entirely. Plugin discovery is handled by `@RegisterClass` + class manifest. Plugin packages just need to be installed as npm dependencies — the manifest scanner finds them automatically.
+The `dynamicPackages.server` section is removed entirely. Middleware discovery is handled by `@RegisterClass` + class manifest. Middleware packages just need to be installed as npm dependencies — the manifest scanner finds them automatically.
 
 ---
 
@@ -744,48 +744,21 @@ Remove the export of `DynamicPackageLoader.ts`.
 
 ### 7c. `@memberjunction/server` — `packages/MJServer/`
 
-#### NEW: `src/plugins/BaseMiddlewarePlugin.ts`
+#### NEW: `src/middleware/BaseServerMiddleware.ts`
 
-The abstract base class as defined in section 4a. Exports: `BaseMiddlewarePlugin`.
+The abstract base class as defined in section 4a. Exports: `BaseServerMiddleware`.
 
-#### NEW: `src/plugins/MJTenantFilterPlugin.ts`
+#### NEW: `src/middleware/MJTenantFilterMiddleware.ts`
 
-MJ's built-in multi-tenancy as a `BaseMiddlewarePlugin` subclass (section 4e). Registers with key `'mj:tenantFilter'`. Conditionally enabled via `configInfo.multiTenancy?.enabled`.
+MJ's built-in multi-tenancy as a `BaseServerMiddleware` subclass (section 4e). Registers with key `'mj:tenantFilter'`. Conditionally enabled via `configInfo.multiTenancy?.enabled`.
 
-#### NEW: `src/plugins/index.ts`
+#### NEW: `src/middleware/index.ts`
 
-Barrel export for the plugins directory.
+Barrel export for the middleware directory.
 
-#### MODIFY: `src/hooks.ts`
+#### DELETE: `src/hooks.ts`
 
-**Delete**:
-- `HookWithOptions<T>` interface (lines 24–29)
-- `HookOrEntry<T>` type alias (line 32)
-- Re-export of `PreRunViewHook`, `PostRunViewHook`, `PreSaveHook`, `HookName`, `HookRegistrationOptions` from `@memberjunction/core` (line 14)
-- Import of `PreRunViewHook`, `PostRunViewHook`, `PreSaveHook`, `HookRegistrationOptions` from `@memberjunction/core` (line 16)
-- `ExpressMiddlewarePostAuth` property from `ServerExtensibilityOptions` (lines 56–64)
-- `PreRunViewHooks`, `PostRunViewHooks`, `PreSaveHooks` properties from `ServerExtensibilityOptions` (lines 66–76)
-
-**Result**: `ServerExtensibilityOptions` becomes:
-
-```typescript
-export interface ServerExtensibilityOptions {
-  /** Express middleware applied after compression but before OAuth/REST/GraphQL routes */
-  ExpressMiddlewareBefore?: RequestHandler[];
-
-  /** Express middleware/error handlers applied after all routes */
-  ExpressMiddlewareAfter?: (RequestHandler | ErrorRequestHandler)[];
-
-  /** Escape hatch for advanced Express app configuration */
-  ConfigureExpressApp?: (app: Application) => void | Promise<void>;
-
-  /** Additional Apollo Server plugins */
-  ApolloPlugins?: ApolloServerPlugin[];
-
-  /** Schema transformers applied after built-in directive transformers */
-  SchemaTransformers?: ((schema: GraphQLSchema) => GraphQLSchema)[];
-}
-```
+> **Update (2026-03-16)**: The entire file was deleted. All 5 remaining `ServerExtensibilityOptions` properties (`ExpressMiddlewareBefore`, `ExpressMiddlewareAfter`, `ConfigureExpressApp`, `ApolloPlugins`, `SchemaTransformers`) were redundant with `BaseServerMiddleware` methods and were removed. `MJServerOptions` reverted to its original form: `{ onBeforeServe?, restApiOptions? }`.
 
 #### MODIFY: `src/index.ts`
 
@@ -794,33 +767,33 @@ export interface ServerExtensibilityOptions {
 - The `registerHookEntry()` function (lines 142–152)
 - The hook registration loops for `PreRunViewHooks`, `PostRunViewHooks`, `PreSaveHooks` (lines 640–654)
 - The `options?.ExpressMiddlewarePostAuth` loop (lines 559–563)
-- The inline multi-tenancy middleware and hook registration (lines 549–676) — replaced by `MJTenantFilterPlugin`
+- The inline multi-tenancy middleware and hook registration (lines 549–676) — replaced by `MJTenantFilterMiddleware`
 
 **Add**:
-- Import `BaseMiddlewarePlugin` from `./plugins/BaseMiddlewarePlugin.js`
+- Import `BaseServerMiddleware` from `./middleware/BaseServerMiddleware.js`
 - Import `RegisterDataHook` from `@memberjunction/core`
 - Import `MJGlobal` from `@memberjunction/global`
-- Plugin discovery and activation block (section 4c) in the post-auth middleware slot
-- Export `BaseMiddlewarePlugin` and related types
+- Middleware discovery and activation block (section 4c) in the post-auth middleware slot
+- Export `BaseServerMiddleware` and related types
 
-#### NEW: `src/__tests__/BaseMiddlewarePlugin.test.ts`
+#### NEW: `src/__tests__/BaseServerMiddleware.test.ts`
 
-Unit tests for plugin discovery and activation:
-- No plugins registered → no middleware, no hooks
-- Single plugin → middleware applied, hooks registered
-- Multiple plugins with different keys → all activated in registration order
-- Same-key replacement → only highest ClassFactory-priority plugin activated
-- Disabled plugin (Enabled = false) → skipped
-- Registration order → MJ plugins run before middle-layer and app plugins
+Unit tests for middleware discovery and activation:
+- No middleware registered → no Express handlers, no hooks
+- Single middleware → handlers applied, hooks registered
+- Multiple middleware with different keys → all activated in registration order
+- Same-key replacement → only highest ClassFactory-priority middleware activated
+- Disabled middleware (Enabled = false) → skipped
+- Registration order → MJ middleware runs before middle-layer and app middleware
 - Initialize() is called before middleware/hooks are extracted
 
 #### MODIFY: `src/__tests__/middleware-integration.test.ts`
 
-Update tests that construct `ServerExtensibilityOptions` with `ExpressMiddlewarePostAuth` or hook arrays to use `@RegisterClass(BaseMiddlewarePlugin, ...)` pattern instead.
+Update tests that construct `ServerExtensibilityOptions` with `ExpressMiddlewarePostAuth` or hook arrays to use `@RegisterClass(BaseServerMiddleware, ...)` pattern instead.
 
 #### MODIFY: `src/__tests__/bcsaas-integration.test.ts`
 
-Update BCSaaS integration tests to verify plugin-based registration.
+Update BCSaaS integration tests to verify `@RegisterClass`-based registration.
 
 #### MODIFY: `src/__tests__/mjapi-bootstrap.test.ts`
 
@@ -846,7 +819,7 @@ Update tests that verify `DynamicPackageResult` merging to verify ClassFactory-b
 - `createMJServer()` serverOptions construction: remove passthrough of deleted properties (lines 242–249)
 
 **Add re-export**:
-- `export { BaseMiddlewarePlugin } from '@memberjunction/server';` — convenience re-export
+- `export { BaseServerMiddleware } from '@memberjunction/server';` — convenience re-export
 
 ---
 
@@ -857,7 +830,7 @@ Update tests that verify `DynamicPackageResult` merging to verify ClassFactory-b
 | `packages/GraphQLDataProvider/src/graphQLDataProvider.ts` | TenantContext auto-sync already working |
 | `packages/MJCore/src/generic/securityInfo.ts` | `TenantContext` interface and getter/setter already in place |
 | `packages/MJServer/src/context.ts` | Unified auth middleware already correct |
-| `packages/MJServer/src/multiTenancy/index.ts` | Factory functions (`createTenantMiddleware`, `createTenantPreRunViewHook`, `createTenantPreSaveHook`) stay as-is — called from `MJTenantFilterPlugin` |
+| `packages/MJServer/src/multiTenancy/index.ts` | Factory functions (`createTenantMiddleware`, `createTenantPreRunViewHook`, `createTenantPreSaveHook`) stay as-is — called from `MJTenantFilterMiddleware` |
 | `packages/MJServer/src/resolvers/CurrentUserContextResolver.ts` | `CurrentUserTenantContext` resolver already correct |
 
 ---
@@ -874,29 +847,29 @@ Update to reference this document instead of the old one.
 
 #### KEEP: `MJSERVER_MIDDLEWARE_TEST_PLAN.md`
 
-Update to reflect plugin-based registration pattern.
+Update to reflect `@RegisterClass`-based middleware pattern.
 
 ---
 
 ## 8. Implementation Order
 
-### Phase 1: Add `dataHooks.ts` and `BaseMiddlewarePlugin` (non-breaking, additive)
+### Phase 1: Add `dataHooks.ts` and `BaseServerMiddleware` (non-breaking, additive)
 
 1. Create `packages/MJCore/src/generic/dataHooks.ts` — move hook types from `hookRegistry.ts`, add `RegisterDataHook`/`GetDataHooks`/`ClearAllDataHooks`
 2. Add barrel export in `packages/MJCore/src/index.ts` (export both `hookRegistry` and `dataHooks` temporarily)
-3. Create `packages/MJServer/src/plugins/BaseMiddlewarePlugin.ts`
-4. Create `packages/MJServer/src/plugins/MJTenantFilterPlugin.ts`
-5. Add plugin discovery block in `serve()` **alongside** the existing `ExpressMiddlewarePostAuth`/hook registration (both paths active temporarily)
-6. Write unit tests for `BaseMiddlewarePlugin` discovery and `dataHooks` functions
+3. Create `packages/MJServer/src/middleware/BaseServerMiddleware.ts`
+4. Create `packages/MJServer/src/middleware/MJTenantFilterMiddleware.ts`
+5. Add middleware discovery block in `serve()` **alongside** the existing `ExpressMiddlewarePostAuth`/hook registration (both paths active temporarily)
+6. Write unit tests for `BaseServerMiddleware` discovery and `dataHooks` functions
 7. Build `@memberjunction/core` and `@memberjunction/server`, run tests
 
 ### Phase 2: Migrate BCSaaS to `@RegisterClass` pattern
 
-1. Create `BCSaaSPlugin` class in SaaS `packages/server/src/BCSaaSPlugin.ts` with `@RegisterClass(BaseMiddlewarePlugin, 'mj:tenantFilter')`
-2. Update SaaS `packages/server/src/index.ts` to export `BCSaaSPlugin`
+1. Create `BCSaaSMiddleware` class in SaaS `packages/server/src/BCSaaSMiddleware.ts` with `@RegisterClass(BaseServerMiddleware, 'mj:tenantFilter')`
+2. Update SaaS `packages/server/src/index.ts` to export `BCSaaSMiddleware`
 3. Update SaaS `packages/server-bootstrap/src/index.ts` — `LoadBCSaaSServer()` returns `void` (or is removed)
 4. Test BCSaaS end-to-end via yalc against updated MJ packages
-5. Verify: MJ's `MJTenantFilterPlugin` is replaced by BCSaaS's `BCSaaSPlugin` (same key, higher priority)
+5. Verify: MJ's `MJTenantFilterMiddleware` is replaced by BCSaaS's `BCSaaSMiddleware` (same key, higher priority)
 
 ### Phase 3: Remove dead-end patterns (breaking for consumers of old API)
 
@@ -912,7 +885,7 @@ Update to reflect plugin-based registration pattern.
    - Remove `HookWithOptions`, `HookOrEntry`, `registerHookEntry()`, hook re-exports
    - Remove hook arrays and `ExpressMiddlewarePostAuth` from `ServerExtensibilityOptions`
    - Remove old `ExpressMiddlewarePostAuth` loop and hook registration loops from `serve()`
-   - Remove inline multi-tenancy registration (now handled by `MJTenantFilterPlugin`)
+   - Remove inline multi-tenancy registration (now handled by `MJTenantFilterMiddleware`)
 4. In `@memberjunction/server-bootstrap`:
    - Remove `MERGEABLE_KEYS`, `mergeExtensibilityOptions()`, merge loop
    - Remove `loadDynamicOpenAppPackages()` function and all `DynamicPackageLoader` imports
@@ -939,10 +912,10 @@ Request arrives
 Compression
     │
     ▼
-ExpressMiddlewareBefore (static config) + plugin.GetPreAuthMiddleware()  ← PLUGIN SLOT
+mw.GetPreAuthMiddleware()  ← MIDDLEWARE SLOT
     │
     ▼
-plugin.ConfigureExpressApp() + ConfigureExpressApp (static config)  ← PLUGIN SLOT
+mw.ConfigureExpressApp()  ← MIDDLEWARE SLOT
     │
     ▼
 OAuth callback routes (unauthenticated)
@@ -955,9 +928,9 @@ Unified Auth Middleware (createUnifiedAuthMiddleware)
   │  Sets req.userPayload, req.mjUser
     │
     ▼
-plugin.GetPostAuthMiddleware()  ← PLUGIN SLOT
-  │  Runs all activated plugins' post-auth middleware in registration order
-  │  e.g., MJTenantFilterPlugin OR BCSaaSPlugin (replaces MJ's via same key)
+mw.GetPostAuthMiddleware()  ← MIDDLEWARE SLOT
+  │  Runs all activated middleware's post-auth handlers in registration order
+  │  e.g., MJTenantFilterMiddleware OR BCSaaSMiddleware (replaces MJ's via same key)
     │
     ▼
 OAuth authenticated routes
@@ -967,13 +940,13 @@ REST API endpoints (read req.userPayload — no re-auth)
     │
     ▼
 GraphQL middleware (contextFunction reads req.userPayload — no re-auth)
-  │  Apollo plugins: built-in + static config + plugin.GetApolloPlugins()  ← PLUGIN SLOT
-  │  Schema: built-in transformers + static config + plugin.GetSchemaTransformers()  ← PLUGIN SLOT
+  │  Apollo plugins: built-in + mw.GetApolloPlugins()  ← MIDDLEWARE SLOT
+  │  Schema: built-in transformers + mw.GetSchemaTransformers()  ← MIDDLEWARE SLOT
   │  Resolvers access hooks via GetDataHooks()
-  │  PreRunView/PostRunView/PreSave hooks run at ProviderBase/BaseEntity level  ← PLUGIN SLOT
+  │  PreRunView/PostRunView/PreSave hooks run at ProviderBase/BaseEntity level  ← MIDDLEWARE SLOT
     │
     ▼
-ExpressMiddlewareAfter (static config) + plugin.GetPostRouteMiddleware()  ← PLUGIN SLOT
+mw.GetPostRouteMiddleware()  ← MIDDLEWARE SLOT
 ```
 
 ### Hook Execution (Inside GraphQL/REST Operations)
@@ -984,10 +957,10 @@ RunView called
     ▼
 GetDataHooks<PreRunViewHook>('PreRunView') → runs all in registration order
   │  MJ packages register first (dependencies), then middle-layer, then app:
-  │  MJTenantFilterPlugin.PreRunView (if multi-tenancy enabled)
+  │  MJTenantFilterMiddleware.PreRunView (if multi-tenancy enabled)
   │  — OR —
-  │  BCSaaSPlugin.PreRunView (replaces MJ's via same ClassFactory key)
-  │  Then: Application-level plugin hooks
+  │  BCSaaSMiddleware.PreRunView (replaces MJ's via same ClassFactory key)
+  │  Then: Application-level middleware hooks
     │
     ▼
 Database query executes
@@ -1004,9 +977,9 @@ BaseEntity.Save() called
     │
     ▼
 GetDataHooks<PreSaveHook>('PreSave') → runs all in registration order
-  │  MJTenantFilterPlugin.PreSave (validates tenant column)
+  │  MJTenantFilterMiddleware.PreSave (validates tenant column)
   │  — OR —
-  │  BCSaaSPlugin.PreSave (validates org ownership)
+  │  BCSaaSMiddleware.PreSave (validates org ownership)
     │
     ▼
 Database write executes
@@ -1024,8 +997,8 @@ Database write executes
 - `HookOrEntry<T>` type (from `@memberjunction/server`)
 
 ### New types/classes
-- `BaseMiddlewarePlugin` abstract class (in `@memberjunction/server`)
-- `MJTenantFilterPlugin` class (in `@memberjunction/server`)
+- `BaseServerMiddleware` abstract class (in `@memberjunction/server`)
+- `MJTenantFilterMiddleware` class (in `@memberjunction/server`)
 
 ### New functions (replacing HookRegistry)
 - `RegisterDataHook(hookName, hook)` (in `@memberjunction/core`)
@@ -1039,8 +1012,8 @@ Database write executes
 - `DynamicLoadResult` (from `@memberjunction/global`)
 - `DynamicPackageLoad` (from `@memberjunction/global`)
 
-### Modified interfaces
-- `ServerExtensibilityOptions` — `ExpressMiddlewarePostAuth`, `PreRunViewHooks`, `PostRunViewHooks`, `PreSaveHooks` removed
+### Deleted interfaces (additional)
+- `ServerExtensibilityOptions` — deleted entirely (all extensibility via `BaseServerMiddleware`)
 
 ### Deleted functions
 - `registerHookEntry()` (from `@memberjunction/server`)
@@ -1051,16 +1024,16 @@ Database write executes
 - `PreRunViewHook`, `PostRunViewHook`, `PreSaveHook` from `@memberjunction/server-bootstrap`
 
 ### Re-exports added
-- `BaseMiddlewarePlugin` from `@memberjunction/server-bootstrap` (convenience)
+- `BaseServerMiddleware` from `@memberjunction/server-bootstrap` (convenience)
 
 ### Mechanisms used (all existing)
 
 | Mechanism | Role | Package |
 |-----------|------|---------|
-| `@RegisterClass` decorator | Plugin self-registration on import | `@memberjunction/global` |
-| `ClassFactory.GetAllRegistrations()` | Plugin discovery by `serve()` | `@memberjunction/global` |
+| `@RegisterClass` decorator | Middleware self-registration on import | `@memberjunction/global` |
+| `ClassFactory.GetAllRegistrations()` | Middleware discovery by `serve()` | `@memberjunction/global` |
 | `ClassFactory.GetRegistration(base, key)` | Key-based deduplication (replacement) | `@memberjunction/global` |
-| Class manifest (`mj codegen manifest`) | Ensures plugin imports happen (tree-shaking prevention) | `@memberjunction/codegen-lib` |
+| Class manifest (`mj codegen manifest`) | Ensures middleware imports happen (tree-shaking prevention) | `@memberjunction/codegen-lib` |
 | `GetGlobalObjectStore()` | Backing store for `RegisterDataHook`/`GetDataHooks` | `@memberjunction/global` |
 
 ### Mechanisms removed
