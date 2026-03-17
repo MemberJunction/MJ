@@ -160,6 +160,10 @@
           },
           "primaryKey": {
             "ID": "9E5440A1-D496-441E-8112-463E34765CD1"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.393Z",
+            "checksum": "2e4bfae36ae0498e1196cdf72adf70862996272f055ebd371f7ccae0b7ef49b7"
           }
         }
       ],
@@ -201,7 +205,11 @@
             "Comments": "Claude 4.5 Opus pricing on Amazon Bedrock as of March 2026"
           },
           "primaryKey": {
-            "ID": "F4A9EDDC-66f9-4565-9A39-268D58036379"
+            "ID": "F4A9EDDC-66F9-4565-9A39-268D58036379"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.725Z",
+            "checksum": "dbfb344a5158c3e9072f40ac26109682fe8e2ea9c254f7e7408887e796592011"
           }
         }
       ]
@@ -286,6 +294,10 @@
           },
           "primaryKey": {
             "ID": "64AFB52F-BCB3-4DEE-A02F-65673F0270CE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.398Z",
+            "checksum": "d5e5d3781f77b43b7fd2af89c8d0e6a462ab6ad7bff39d68166dcd425d2c021b"
           }
         }
       ],
@@ -328,6 +340,10 @@
           },
           "primaryKey": {
             "ID": "7AC65CE1-1FE3-49AC-9580-28C4DEE68D9F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.729Z",
+            "checksum": "301686b14517a985b3bd77b8c5a08711e254cf015d8ffa773fe39aa9e173edad"
           }
         }
       ]
@@ -2109,6 +2125,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "FAAAD978-FFA6-4D3E-BDEC-FAA6F326E3EC"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.363Z",
+            "checksum": "a4e6682f1ebae5225f75579ac3e6d38129a2dde87bce038b818aff6dd52c1dd7"
           }
         }
       ],
@@ -2126,6 +2149,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "o4-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "8F21BD20-899B-4C32-BD4E-1D56BF26698D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.624Z",
+            "checksum": "90d7e5fbf4657383606726d16ea2ff50b260f9cf96e06d537abf38379c3daa4d"
           }
         }
       ]
@@ -2204,6 +2234,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "4B1733D5-A4B1-49F0-97E3-D18B8259A146"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.357Z",
+            "checksum": "63d8bc2e0c8ed721719edb116782f111a07e52b2fb7fbe5c5d421b160fff5869"
           }
         }
       ],
@@ -2221,6 +2258,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "o3 pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "D5B91538-9EEE-4F8C-B7E0-4B4C912C757F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.618Z",
+            "checksum": "9452742c4e53b7893b9d5bd617c9287f0672931ec715dd78a3233d6eb819fc12"
           }
         }
       ]
@@ -3038,6 +3082,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "07326AFE-4CA9-41BF-AABA-4512AB43E630"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.394Z",
+            "checksum": "b9b2f08352d7cf939e9c6f0fbf91bb1a8ed351636f3605935244f4defc326db8"
           }
         }
       ],
@@ -3077,6 +3128,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-4.1-nano pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "6177E858-5057-4D16-8698-6931AF060319"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.721Z",
+            "checksum": "321bcbb59fc45086cea66bf355805d1480ddda146f5c3fef0a896c74d96073eb"
           }
         }
       ]
@@ -3155,6 +3213,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "A1FE3643-3001-4D83-82A3-05371F20C63A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.388Z",
+            "checksum": "6ae1ea789e860f04a9a726054aa282ddf5d7c1d2aac8245ebd4a0fc878ad5c59"
           }
         }
       ],
@@ -3194,6 +3259,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-4.1 pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "45C3F3D5-E964-4A7F-9898-240FB9C7A005"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.723Z",
+            "checksum": "fc058266bf9da964b99f22c41009f04a792455cfb2e5626062e82c6fbf59be97"
           }
         }
       ]
@@ -3275,6 +3347,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "B76DC6F6-93AC-42AE-AA24-DECFE4C215B9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.388Z",
+            "checksum": "d330d40e87f71592a09271e81fbb9290a9d684e47cd14c5dd1e8b021cf24d2c8"
           }
         }
       ],
@@ -3314,6 +3393,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-5.1-codex-max pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "76BD05B6-B322-4CC6-8D8D-7F7FD900F4B8"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.719Z",
+            "checksum": "b0a48709316f61788bd6d5afc6ad6ff774c155cdf507b6828dcf26783425ddb9"
           }
         }
       ]
@@ -3392,6 +3478,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "5DCFB8D5-33CA-4AD3-8A02-E12A7BE19EFA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.378Z",
+            "checksum": "6741383e018792a9074f25146be58fbb74ddd566b046705138116d70ebdb90e5"
           }
         }
       ],
@@ -3431,6 +3524,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-4o-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "04682D16-B0E6-4FE5-88D9-B9D71670D239"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.712Z",
+            "checksum": "5a12590423f8eaa7d81f9ee68195ab1654d2faa675c546139e3c31225f92c1b4"
           }
         }
       ]
@@ -3600,6 +3700,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "DBA7C989-8576-4196-B356-8C9F0761F511"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.390Z",
+            "checksum": "6da3a828fe3cb88bbacbbb4a937ab4630745d51fd97648b8b94e444287a289d9"
           }
         }
       ],
@@ -3639,6 +3746,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-5.2 pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "0802DE88-096F-4D66-89BA-5E1D47BEE8BF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.726Z",
+            "checksum": "c643e52f19835cb37fc76f62a6763a13db0d86edf94490482d707648a183050d"
           }
         }
       ]
@@ -3720,6 +3834,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "30A007C7-68A5-482A-A36E-ADA3AA5CC1BE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.395Z",
+            "checksum": "db0b51bcd57e5ffdb64ac288db9066d96adefbfb3b05ec2adb2af3c462f8443e"
           }
         }
       ],
@@ -3759,6 +3880,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-5.1-codex-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "48961FDB-5162-4E5A-A667-8ADD0AA2D901"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.721Z",
+            "checksum": "e79c11ce4f5d4241871966cb06b593f6e7880f8c993d5982f389d816156644e9"
           }
         }
       ]
@@ -3840,6 +3968,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "B53F5BD0-BA73-4684-BD7D-59BA239C0BED"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.376Z",
+            "checksum": "8aeada73ed2dc0d56495247d9ea186f34e5a3a6a7d50f80570dc4e1d78529689"
           }
         }
       ],
@@ -3879,6 +4014,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-5.2-codex pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "B846C35F-AAE8-467B-8141-738C90C1568D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.711Z",
+            "checksum": "e3df1cc7253fa8f3cfff3a7352b185e50902a611e571e3a028d0ff7fec65b89f"
           }
         }
       ]
@@ -3959,6 +4101,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "8491CA05-4BE4-4040-92BE-3CDA2EE49994"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.373Z",
+            "checksum": "fec13be53067458636aabbae8ad5ed0d1ec352e2e39748b7265ce31d8c0db1c1"
           }
         }
       ],
@@ -3998,6 +4147,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-4.1-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "5025B274-5E29-4A33-85E2-532FDAFCC7A9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.712Z",
+            "checksum": "fba19af7c1f09c8dd87f63914f84f2daf4c269ce43ab3362bd188a29f96822e4"
           }
         }
       ]
@@ -4076,6 +4232,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "B47095BB-70AF-4E1A-8E47-0D8303C023E7"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.357Z",
+            "checksum": "2fe6c4c302754f30bf0fa16fb8b1632579c8f9c121511b98231b904a25d7a415"
           }
         }
       ],
@@ -4115,6 +4278,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT-4o pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "C0950C4C-AE3E-48B5-B944-979C79D8AD52"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.708Z",
+            "checksum": "be0e95fe005756490626ad4a393412a56faf3ca03af0743a5bbdef7dc3fd061b"
           }
         }
       ]
@@ -4193,6 +4363,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "64636F9B-06F5-4FAF-80DD-CF9F8F82EE26"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.366Z",
+            "checksum": "2936934d8237276d16822b92901d9f7bc3b7cf160fa3746ab6baf5426929126b"
           }
         }
       ],
@@ -4232,6 +4409,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "o3-mini pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "D233DF30-1371-43F4-B198-830C34821D74"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.710Z",
+            "checksum": "68a0db014cc6258eaa689b7b51492eaafc39d1eba18e2ffb5e0ef52caef6b1ef"
           }
         }
       ]
@@ -4397,6 +4581,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "721A1F08-32B2-4DE2-B4B2-7A57C1CAF018"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.342Z",
+            "checksum": "16b094d350dbb9456d2a20563a7671d51afeb2204807da0163a74bc628a2661e"
           }
         }
       ],
@@ -4436,6 +4627,13 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "o1 pricing on Azure OpenAI (Global Standard) as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "559352AC-EA0A-4669-A7B5-5CD2AD048F0B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.706Z",
+            "checksum": "fde29688ac9540e2d10b9260ee9fcccc0632a2b54deb75838710b7532913cfbc"
           }
         }
       ]
@@ -5132,6 +5330,10 @@
           },
           "primaryKey": {
             "ID": "7641B6DF-3093-4C4A-B2FE-DDE3E571CFA0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.390Z",
+            "checksum": "91fbdf0b02a9de0eb7e5808ce8083f9a664e294fa44f7ddf5bdd745c1be21ba6"
           }
         }
       ],
@@ -5174,6 +5376,10 @@
           },
           "primaryKey": {
             "ID": "6436D300-9E79-4E8A-A7F7-A0CC89A63EAB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.722Z",
+            "checksum": "c9ad826e59579842ab20565b53dfe6e2e894d14bb16e584c9b063aa7abc82776"
           }
         }
       ]
@@ -7301,6 +7507,10 @@
           },
           "primaryKey": {
             "ID": "4AEB2616-A8F9-44B3-B958-D4E7C5C966A9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.698Z",
+            "checksum": "09164f23a2fcf5064ea18512711791a2b1c558f50e292bd7bb8db304a87f8c05"
           }
         },
         {
@@ -7320,6 +7530,10 @@
           },
           "primaryKey": {
             "ID": "504E2C33-5D41-407E-992E-B4C8A0F4FF25"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.733Z",
+            "checksum": "d3861467e112aa8149146016430260a72f77fed60e21ca1825596fc4724169b1"
           }
         }
       ],
@@ -7384,6 +7598,10 @@
           },
           "primaryKey": {
             "ID": "DCCC3E1A-B295-45F4-BEA8-A7DB4BBF80FB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.771Z",
+            "checksum": "b42d18d3b0fb7eb7c9b65492adf8f5a17673cfb731d13d9cdaad5678845e94f6"
           }
         },
         {
@@ -7402,6 +7620,10 @@
           },
           "primaryKey": {
             "ID": "70712E7F-50CF-412C-B427-68FBA196AB76"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.775Z",
+            "checksum": "95050383c21a2287d6d09c721b62721d40bd33387d88e9be96ac287673b26a49"
           }
         }
       ]
@@ -8550,8 +8772,8 @@
             "ID": "B964EDCF-625C-4D0B-B0FC-C1D5E8CF24B1"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.743Z",
-            "checksum": "5b6cb12dd405082eaa5e2eeb232a6d1a4504fa1009a57a42a836965e85249416"
+            "lastModified": "2026-03-17T01:57:33.372Z",
+            "checksum": "63d8d2055870c4d030540cc2be2811b91cec89c3d445834b2a6db58aeeb176f1"
           }
         }
       ],
@@ -8642,8 +8864,8 @@
             "ID": "C00086B7-E296-40BE-95D4-1FDEDFAAC79D"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.411Z",
-            "checksum": "0315d8e4531c943aeea6684b783743f9ae22f184db532424da0bce42c0bf5c62"
+            "lastModified": "2026-03-17T01:57:33.092Z",
+            "checksum": "966e14265c6110c74a39574d09f34997da360f66c3457d2c6d39ce35292bdb3a"
           }
         },
         {
@@ -8952,8 +9174,8 @@
             "ID": "3E7D9C36-3C18-42F5-AE09-562E2C2436BC"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.743Z",
-            "checksum": "8d89d0849093d3c2087d69b3c6e924a97113a803f5c21faae1a3be3dabcf7749"
+            "lastModified": "2026-03-17T01:57:33.366Z",
+            "checksum": "4913ad389b7f54bb554b75e1eb59935d66065eb240a8c9b46af57566ccc7fd51"
           }
         }
       ],
@@ -9086,8 +9308,8 @@
             "ID": "3363B831-66DC-4E62-8AAC-9F2A2B12D59E"
           },
           "sync": {
-            "lastModified": "2026-01-28T22:07:14.767Z",
-            "checksum": "8179e5e932b6881d467c6fb2bab8b8caf8b07191230c32e100281abe58c32292"
+            "lastModified": "2026-03-17T01:57:33.364Z",
+            "checksum": "da88391a0591b4189b1b6016a530ca24b29270def9eb40a4a85288155b6d2655"
           }
         }
       ],
@@ -9943,6 +10165,10 @@
           },
           "primaryKey": {
             "ID": "9CF812C3-0E8D-4972-A25D-A3359A5AE1CF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.732Z",
+            "checksum": "2f4f0f2657a271dd1cf6089d0e935e30d5653370efafc27c2d5a90f4f923eaea"
           }
         },
         {
@@ -9962,6 +10188,10 @@
           },
           "primaryKey": {
             "ID": "88CE86DD-5D44-4A91-A4EC-56A85DB0D994"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.751Z",
+            "checksum": "2c8cb5d1690c671ef6c25da7fedc547491713f3f8e31bf4669ab91f422b7c5b3"
           }
         }
       ],
@@ -10048,6 +10278,10 @@
           },
           "primaryKey": {
             "ID": "678C3B1B-91FA-4019-B1AE-BDD19A8AE089"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.784Z",
+            "checksum": "b3c40946f8ac065892d854524e137d5475d152e493047c8cee5e2293daa90571"
           }
         },
         {
@@ -10066,6 +10300,10 @@
           },
           "primaryKey": {
             "ID": "83592F9D-AB6E-44AF-851A-8337D2C108ED"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.789Z",
+            "checksum": "fced76b13eab22911d16214e1f6cfdb253cc5567374f091d17b4f5205777fd1a"
           }
         }
       ]
@@ -10298,7 +10536,7 @@
       "ID": "A4F2213B-E99D-46E5-806B-B71BF4DE653E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:31.338Z",
+      "lastModified": "2026-03-17T02:02:56.883Z",
       "checksum": "cc3482b007f476dbbdf590abdb2159b2e0c3576cf9e54c5f8619b61dc3eaa5cf"
     }
   },
@@ -10720,7 +10958,7 @@
       "ID": "93B65E90-49F3-40F6-8C75-F18C7A80AC3B"
     },
     "sync": {
-      "lastModified": "2026-02-27T20:01:06.160Z",
+      "lastModified": "2026-03-17T02:02:56.719Z",
       "checksum": "b1e90e85cc58bf29bdb72a46335b22ea91ac46c457d68e9910c317f1ca130001"
     }
   },
@@ -10963,7 +11201,7 @@
       "ID": "E8C833BC-1723-4B4B-9B12-0629EB5190A3"
     },
     "sync": {
-      "lastModified": "2026-03-10T18:31:59.704Z",
+      "lastModified": "2026-03-17T02:02:56.721Z",
       "checksum": "4231b27ee4cb7eea70189afcb9feead6b8fa8d5ef9b440f75ea6c238a8df9615"
     }
   },
@@ -11040,6 +11278,10 @@
           },
           "primaryKey": {
             "ID": "6C1287CD-240A-4A22-8990-6421AFFB7232"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.389Z",
+            "checksum": "6dfd1c8c6c0bc01d8ec04e5a2eef728cea8fe5b386000652f666b0b6fd4f775d"
           }
         }
       ],
@@ -11082,6 +11324,10 @@
           },
           "primaryKey": {
             "ID": "A8398816-238C-4047-A525-307CEA36E7A7"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.723Z",
+            "checksum": "5fc0c8678d0937b5c99fbcc32365c4505ffb903473e11741d80414b20720c7e0"
           }
         }
       ]
@@ -11090,7 +11336,7 @@
       "ID": "82081D5B-67B1-400A-ABF8-ACB1F045251F"
     },
     "sync": {
-      "lastModified": "2026-03-10T18:31:59.720Z",
+      "lastModified": "2026-03-17T02:02:56.722Z",
       "checksum": "e8922c066d44c501341c43a8703e7a3a2eb0fb116ce2d97f76cadde64b46c450"
     }
   },
@@ -11121,6 +11367,10 @@
           },
           "primaryKey": {
             "ID": "A62ED2F7-E784-4326-B08E-8EF0335D4FB6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.052Z",
+            "checksum": "855fe6d2f60967860a8183f7790fefe88ca5d1b5d8efb698e65b239d38b8f014"
           }
         },
         {
@@ -11140,6 +11390,10 @@
           },
           "primaryKey": {
             "ID": "852E7334-957A-40D9-B945-AFE9E8E2E3D5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.204Z",
+            "checksum": "ebbc51cf36e360fe596237029e035041d399722a6b4f7f2e4c189a7f7f5f449f"
           }
         },
         {
@@ -11159,6 +11413,10 @@
           },
           "primaryKey": {
             "ID": "5BE6B17F-030D-47A6-8AE2-A9F4DCE45B9C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.364Z",
+            "checksum": "bf2d7d1bdb5ba5f714686a98165daa2c6631791f4efc708e5bba62e5129c7933"
           }
         }
       ],
@@ -11178,7 +11436,11 @@
             "Comments": "Claude Opus 4.6 pricing on Anthropic as of March 2026. Full 1M context at standard pricing. Fast mode available at 6x rates ($30/$150 per 1M tokens)."
           },
           "primaryKey": {
-            "ID": "5BE6B17F-030D-47A6-8AE2-A9F4DCE45B9C"
+            "ID": "8D1DE4D6-1638-4879-ABEB-D5405DCD9599"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.625Z",
+            "checksum": "e22cf8eaedfc7d68742863924967e3fea56ab2878141fc10e1f251079067c989"
           }
         },
         {
@@ -11196,13 +11458,21 @@
             "Comments": "Claude Opus 4.6 pricing on Amazon Bedrock as of March 2026"
           },
           "primaryKey": {
-            "ID": "8D1DE4D6-1638-4879-ABEB-D5405DCD9599"
+            "ID": "F05316EC-CE9F-4B4B-B450-DBDED24C336A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.713Z",
+            "checksum": "dec3b6313fb2f2426efe655851250373c7392a882b4577d3c476220ec097cb65"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "5B979A77-1B17-42F6-9424-1B0ED7527673"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T01:57:33.713Z",
+      "checksum": "ebc5fe23a5f67f9a908e61c641afbde9bc8d67bfd4262d33c3caee3fb5e71fb5"
     }
   },
   {
@@ -11232,6 +11502,10 @@
           },
           "primaryKey": {
             "ID": "BEACA666-F43A-4105-ADE4-87DED1575671"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.060Z",
+            "checksum": "855fe6d2f60967860a8183f7790fefe88ca5d1b5d8efb698e65b239d38b8f014"
           }
         },
         {
@@ -11251,6 +11525,10 @@
           },
           "primaryKey": {
             "ID": "3FF6CCCA-6E57-4300-8C2F-01F450F29AC4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.218Z",
+            "checksum": "087358d0424930fc5dd137471c9b71c396dc452cfa9e6029da77e07e68a3b9f1"
           }
         },
         {
@@ -11270,6 +11548,10 @@
           },
           "primaryKey": {
             "ID": "C4A8498E-28B6-4F12-882A-7626764DA0CF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.374Z",
+            "checksum": "6ced3ccbedfa96aff24fe7d7a1365ce5dea0d908f5ce61c051e142e19a12d3f9"
           }
         }
       ],
@@ -11290,6 +11572,10 @@
           },
           "primaryKey": {
             "ID": "A09B493C-789D-4B2B-8F8E-892043149DCE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.631Z",
+            "checksum": "f10e9a9185026b2680dc4be75f339790aaefabaeb35a77aafbd708fe7c17b8ad"
           }
         },
         {
@@ -11308,12 +11594,20 @@
           },
           "primaryKey": {
             "ID": "D5F7BE82-07BC-468F-875B-49715B58A1C9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T01:57:33.714Z",
+            "checksum": "03e3768d8ab7550dd2802cc8809a17109113d54a871c20d8f72be80e90e05d9e"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "4979A654-122D-42C9-9BEF-1BBE7AA08C99"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T01:57:33.714Z",
+      "checksum": "a41c2b101e9565ea597222242b095036ac8e36e64141b26d711c869cba06b2d4"
     }
   }
 ]
