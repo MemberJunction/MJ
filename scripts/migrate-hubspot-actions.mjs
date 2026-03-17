@@ -6,8 +6,10 @@
  *  1. Takes the NEW generated action record (with IntegrationActionExecutor driver + Config)
  *  2. Preserves the OLD action primaryKey (database ID)
  *  3. Keeps the OLD action name (to avoid breaking agent references)
- *  4. For ActionParams: adds deleteRecord markers for ALL old params (they'll be replaced by new ones)
- *  5. Same for ActionResultCodes: deleteRecord markers for all old codes
+ *  4. For ActionParams/ResultCodes: matches by name (case-insensitive):
+ *     - Matched: new fields + old primaryKey → UPDATE in DB
+ *     - New-only: no primaryKey → CREATE in DB
+ *     - Old-only: deleteRecord marker → DELETE from DB
  *
  * Output:
  *  - metadata/actions/integrations-auto-generated/.hubspot-actions.json
@@ -194,21 +196,15 @@ function buildMergedAction(oldAction, newAction, oldName, config) {
         Verb: config.Verb,
     });
 
-    // Build params: new params (no primaryKey) + old params as deleteRecord
+    // Merge params: match by name (case-insensitive), carry over primaryKeys
     const newParams = newAction.relatedEntities?.['MJ: Action Params'] || [];
     const oldParams = oldAction.relatedEntities?.['MJ: Action Params'] || [];
-    const mergedParams = [
-        ...newParams, // New params without primaryKey — will be created
-        ...buildDeleteMarkers(oldParams), // Old params marked for deletion
-    ];
+    const mergedParams = mergeRelatedRecords(newParams, oldParams, 'Name');
 
-    // Build result codes: new codes (no primaryKey) + old codes as deleteRecord
+    // Merge result codes: match by ResultCode (case-insensitive), carry over primaryKeys
     const newCodes = newAction.relatedEntities?.['MJ: Action Result Codes'] || [];
     const oldCodes = oldAction.relatedEntities?.['MJ: Action Result Codes'] || [];
-    const mergedCodes = [
-        ...newCodes, // New codes without primaryKey — will be created
-        ...buildDeleteMarkers(oldCodes), // Old codes marked for deletion
-    ];
+    const mergedCodes = mergeRelatedRecords(newCodes, oldCodes, 'ResultCode');
 
     const merged = {
         fields: mergedFields,
@@ -228,23 +224,60 @@ function buildMergedAction(oldAction, newAction, oldName, config) {
 }
 
 /**
- * Creates deleteRecord markers for all old sub-records that have primaryKeys.
- * This tells MetadataSync to remove them from the database.
+ * Merges new and old related records by matching on a key field (case-insensitive).
+ *
+ * - Matched records: new fields + old primaryKey/sync (update in DB)
+ * - New-only records: no primaryKey (create in DB)
+ * - Old-only records: deleteRecord marker (remove from DB)
  */
-function buildDeleteMarkers(oldRecords) {
-    const markers = [];
+function mergeRelatedRecords(newRecords, oldRecords, keyField) {
+    // Build lookup of old records by key (case-insensitive)
+    const oldByKey = new Map();
     for (const rec of oldRecords) {
         if (rec.primaryKey?.ID) {
-            markers.push({
-                fields: { ...rec.fields },
-                primaryKey: rec.primaryKey,
+            const key = String(rec.fields[keyField] || '').toLowerCase();
+            oldByKey.set(key, rec);
+        }
+    }
+
+    const consumedOldKeys = new Set();
+    const merged = [];
+
+    // Process new records — attach old primaryKey if name matches
+    for (const newRec of newRecords) {
+        const key = String(newRec.fields[keyField] || '').toLowerCase();
+        const oldRec = oldByKey.get(key);
+
+        if (oldRec) {
+            // Match found — carry over primaryKey so mj sync does an UPDATE
+            consumedOldKeys.add(key);
+            const withPK = {
+                fields: { ...newRec.fields },
+                primaryKey: oldRec.primaryKey,
+            };
+            if (oldRec.sync) withPK.sync = oldRec.sync;
+            merged.push(withPK);
+        } else {
+            // No match — new record, will be created
+            merged.push(newRec);
+        }
+    }
+
+    // Old records not matched → delete markers
+    for (const [key, oldRec] of oldByKey) {
+        if (!consumedOldKeys.has(key)) {
+            merged.push({
+                fields: { ...oldRec.fields },
+                primaryKey: oldRec.primaryKey,
                 deleteRecord: { delete: true },
-                ...(rec.sync ? { sync: rec.sync } : {}),
+                ...(oldRec.sync ? { sync: oldRec.sync } : {}),
             });
         }
     }
-    return markers;
+
+    return merged;
 }
+
 
 // ─── Run ─────────────────────────────────────────────────────────────
 

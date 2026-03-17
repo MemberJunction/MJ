@@ -16,7 +16,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -43,17 +43,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Person record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -522,7 +511,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -549,17 +538,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Post record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -1050,7 +1028,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -1077,17 +1055,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Insight Action record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -1468,7 +1435,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -1495,17 +1462,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Insight Topic record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {

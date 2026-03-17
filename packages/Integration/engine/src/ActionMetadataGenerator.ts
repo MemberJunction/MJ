@@ -160,10 +160,9 @@ export class ActionMetadataGenerator {
         displayName: string
     ): ActionRecord {
         const params: ActionParamRecord[] = [
-            this.BuildSystemParam('ExternalID', 'Input', true, `The unique ID of the ${displayName} record to retrieve`),
+            this.BuildSystemParam('ExternalID', 'Both', true, `The unique ID of the ${displayName} record to retrieve`),
             this.BuildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
             this.BuildSystemParam('Record', 'Output', false, `The retrieved ${displayName} record with all fields`),
-            this.BuildSystemParam('ExternalID', 'Output', false, `The external ID of the retrieved record`),
         ];
 
         // Add output params for each field so agents know what fields exist
@@ -207,7 +206,7 @@ export class ActionMetadataGenerator {
         displayName: string
     ): ActionRecord {
         const params: ActionParamRecord[] = [
-            this.BuildSystemParam('ExternalID', 'Input', true, `The external ID of the ${displayName} record to update`),
+            this.BuildSystemParam('ExternalID', 'Both', true, `The external ID of the ${displayName} record to update`),
             this.BuildSystemParam('CompanyIntegrationID', 'Input', false, 'Optional: specific CompanyIntegration to use'),
         ];
 
@@ -216,8 +215,6 @@ export class ActionMetadataGenerator {
             if (field.IsReadOnly || field.IsPrimaryKey) continue;
             params.push(this.FieldToInputParam(field, false)); // Not required for updates
         }
-
-        params.push(this.BuildSystemParam('ExternalID', 'Output', false, `The external ID of the updated record`));
 
         return this.BuildAction(config, obj, 'Update', displayName,
             `Updates an existing ${displayName} record in ${config.IntegrationName}. Only provided fields are changed.`,

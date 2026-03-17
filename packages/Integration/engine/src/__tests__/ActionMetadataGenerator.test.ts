@@ -170,7 +170,7 @@ describe('ActionMetadataGenerator', () => {
             const getAction = result.ActionRecords.find(a => (a.fields['Name'] as string).includes('Get Contact'));
             const params = getAction!.relatedEntities['MJ: Action Params'];
 
-            const externalIdParam = params.find(p => p.fields['Name'] === 'ExternalID' && p.fields['Type'] === 'Input');
+            const externalIdParam = params.find(p => p.fields['Name'] === 'ExternalID' && p.fields['Type'] === 'Both');
             expect(externalIdParam).toBeDefined();
             expect(externalIdParam!.fields['IsRequired']).toBe(true);
         });
@@ -181,8 +181,9 @@ describe('ActionMetadataGenerator', () => {
             const params = getAction!.relatedEntities['MJ: Action Params'];
 
             const outputParams = params.filter(p => p.fields['Type'] === 'Output');
-            // Should have: Record, ExternalID (system), plus email, firstname, hs_object_id, createdate (per-field)
-            expect(outputParams.length).toBeGreaterThanOrEqual(6);
+            // Should have: Record (system), plus email, firstname, hs_object_id, createdate (per-field)
+            // ExternalID is now Type='Both', not Output
+            expect(outputParams.length).toBeGreaterThanOrEqual(5);
 
             const emailOutput = outputParams.find(p => p.fields['Name'] === 'email');
             expect(emailOutput).toBeDefined();
@@ -238,7 +239,7 @@ describe('ActionMetadataGenerator', () => {
             const updateAction = result.ActionRecords.find(a => (a.fields['Name'] as string).includes('Update Contact'));
             const params = updateAction!.relatedEntities['MJ: Action Params'];
 
-            const idParam = params.find(p => p.fields['Name'] === 'ExternalID' && p.fields['Type'] === 'Input');
+            const idParam = params.find(p => p.fields['Name'] === 'ExternalID' && p.fields['Type'] === 'Both');
             expect(idParam).toBeDefined();
             expect(idParam!.fields['IsRequired']).toBe(true);
         });

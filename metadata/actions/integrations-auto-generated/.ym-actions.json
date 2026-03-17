@@ -16,7 +16,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -43,17 +43,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Member record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -632,7 +621,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -659,17 +648,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Event record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -1028,7 +1006,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -1055,17 +1033,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Event Registration record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -1490,7 +1457,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -1517,17 +1484,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Event Session record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -1930,7 +1886,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -1957,17 +1913,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Group record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -2326,7 +2271,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -2353,17 +2298,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Invoice Item record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -2788,7 +2722,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -2815,17 +2749,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Dues Transaction record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -3228,7 +3151,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -3255,17 +3178,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Donation record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -3668,7 +3580,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -3695,17 +3607,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Career Opening record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {

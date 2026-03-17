@@ -16,7 +16,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -48,23 +48,19 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "email",
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": false,
             "Description": "Contact email address"
+          },
+          "primaryKey": {
+            "ID": "786FD2B9-DFA5-46F4-A23C-0FAB858EC98C"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.718Z",
+            "checksum": "ef46d804e804ad8de1880227350bd998a9ac5f7b26675ea743179a9017d70744"
           }
         },
         {
@@ -376,27 +372,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Email",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Contact email (provide either this or ContactId)",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "786FD2B9-DFA5-46F4-A23C-0FAB858EC98C"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.718Z",
-            "checksum": "ef46d804e804ad8de1880227350bd998a9ac5f7b26675ea743179a9017d70744"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "IncludeAssociations",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -484,6 +459,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "6D315222-2F5F-4AC6-9D87-D526DF7ACD57"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.723Z",
+            "checksum": "a9f1746aba9f790837abadf29fdfa48790be6e0319e376869f1ce255bb4d60f1"
           }
         },
         {
@@ -500,24 +482,6 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Record not found"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Contact retrieved successfully"
-          },
-          "primaryKey": {
-            "ID": "6D315222-2F5F-4AC6-9D87-D526DF7ACD57"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.723Z",
-            "checksum": "a9f1746aba9f790837abadf29fdfa48790be6e0319e376869f1ce255bb4d60f1"
           }
         },
         {
@@ -617,6 +581,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "Contact email address"
+          },
+          "primaryKey": {
+            "ID": "AA73B7E2-047F-4551-9A9C-0A0D100E1863"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:08.991Z",
+            "checksum": "ea07f0491e25f327b6876bad651e5244678e2ec4c3d845a6a2c7682f91f2e6b1"
           }
         },
         {
@@ -628,6 +599,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Contact first name"
+          },
+          "primaryKey": {
+            "ID": "727FEFB8-5D9B-4888-8840-8ABE07C4A15E"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:08.993Z",
+            "checksum": "3e9c9f86dce68f92c50a31ad30eb839115a1183d3667479b5236a7b86496af6a"
           }
         },
         {
@@ -639,6 +617,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Contact last name"
+          },
+          "primaryKey": {
+            "ID": "0C5BEFF0-8A0D-4984-BF4A-E2480C2DBBC9"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:08.995Z",
+            "checksum": "abd9cb0034f830a6384dd66f49512037e3a270d560a2b2dc020fd4361f8414f5"
           }
         },
         {
@@ -650,6 +635,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Contact phone number"
+          },
+          "primaryKey": {
+            "ID": "D79C3A57-3246-4D2A-A301-3324602223AC"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:08.998Z",
+            "checksum": "b6c8c610b462e98563b5f74b6884b30512e988ff99622097fb809a9f11f6e277"
           }
         },
         {
@@ -672,6 +664,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Associated company name"
+          },
+          "primaryKey": {
+            "ID": "FDA79CD5-E86C-4174-A565-F11FABF22155"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.000Z",
+            "checksum": "28917d3f2a9f8b0790e2a808614bc423e44e9c30e153b0a5f90da496951f5301"
           }
         },
         {
@@ -683,6 +682,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Contact job title"
+          },
+          "primaryKey": {
+            "ID": "367B2272-D59F-4580-9CB2-1DC686C813A5"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.002Z",
+            "checksum": "4f8e0dbde99856402e113bb25feca795731cb5af54385d27ec37ce0421b33c32"
           }
         },
         {
@@ -694,6 +700,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Lifecycle stage (subscriber, lead, opportunity, customer, etc.)"
+          },
+          "primaryKey": {
+            "ID": "A7C6F29F-CE4E-4F8A-8920-D79D155C4CE8"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.005Z",
+            "checksum": "8fb7f490d896edc5b0fe4e2351e691365e2c623d0d7ddb06f666b2dd1b4f8e61"
           }
         },
         {
@@ -841,154 +854,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Email",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Contact's email address (required)",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "AA73B7E2-047F-4551-9A9C-0A0D100E1863"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:08.991Z",
-            "checksum": "ea07f0491e25f327b6876bad651e5244678e2ec4c3d845a6a2c7682f91f2e6b1"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "FirstName",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Contact's first name",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "727FEFB8-5D9B-4888-8840-8ABE07C4A15E"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:08.993Z",
-            "checksum": "3e9c9f86dce68f92c50a31ad30eb839115a1183d3667479b5236a7b86496af6a"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "LastName",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Contact's last name",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "0C5BEFF0-8A0D-4984-BF4A-E2480C2DBBC9"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:08.995Z",
-            "checksum": "abd9cb0034f830a6384dd66f49512037e3a270d560a2b2dc020fd4361f8414f5"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Phone",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Contact's phone number",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "D79C3A57-3246-4D2A-A301-3324602223AC"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:08.998Z",
-            "checksum": "b6c8c610b462e98563b5f74b6884b30512e988ff99622097fb809a9f11f6e277"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Company",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Contact's company name",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "FDA79CD5-E86C-4174-A565-F11FABF22155"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.000Z",
-            "checksum": "28917d3f2a9f8b0790e2a808614bc423e44e9c30e153b0a5f90da496951f5301"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "JobTitle",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Contact's job title",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "367B2272-D59F-4580-9CB2-1DC686C813A5"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.002Z",
-            "checksum": "4f8e0dbde99856402e113bb25feca795731cb5af54385d27ec37ce0421b33c32"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "LifecycleStage",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Contact's lifecycle stage (defaults to 'lead')",
-            "IsRequired": false,
-            "DefaultValue": "lead"
-          },
-          "primaryKey": {
-            "ID": "A7C6F29F-CE4E-4F8A-8920-D79D155C4CE8"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.005Z",
-            "checksum": "8fb7f490d896edc5b0fe4e2351e691365e2c623d0d7ddb06f666b2dd1b4f8e61"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "AssociateWithCompanyId",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -1055,6 +920,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Create operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "33CDEDE6-E477-4FD6-B23A-9E10BC5F1101"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.132Z",
+            "checksum": "e9fc8accda55fc770a29a3bc1ae7e2946b77b8dce2260138dea9dd94e46b6de6"
           }
         },
         {
@@ -1079,24 +951,6 @@
             "ResultCode": "NOT_SUPPORTED",
             "IsSuccess": false,
             "Description": "Create not supported by this connector"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Contact created successfully"
-          },
-          "primaryKey": {
-            "ID": "33CDEDE6-E477-4FD6-B23A-9E10BC5F1101"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.132Z",
-            "checksum": "e9fc8accda55fc770a29a3bc1ae7e2946b77b8dce2260138dea9dd94e46b6de6"
           }
         },
         {
@@ -1180,7 +1034,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -1207,6 +1061,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Contact email address"
+          },
+          "primaryKey": {
+            "ID": "1DABCD53-B101-47E5-9A8B-3675ADF84949"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.151Z",
+            "checksum": "99d812d1cb8b49b75898ff6a3b234a08f3e151f555a9336fd4999d338d9b49ea"
           }
         },
         {
@@ -1218,6 +1079,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Contact first name"
+          },
+          "primaryKey": {
+            "ID": "87898A32-9791-4996-80AE-8F4D4422837A"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.153Z",
+            "checksum": "18d2784799087d1e7fdc336e67286dd2203e213f37f376aebe1a17ff9802c2d5"
           }
         },
         {
@@ -1229,6 +1097,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Contact last name"
+          },
+          "primaryKey": {
+            "ID": "3253F5FB-E0B6-4AF7-8514-2FFB8DF7F393"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.154Z",
+            "checksum": "3020ede90c458cfe3903d608dfa33d0633bb4690abff2499aba5900cb9d6b877"
           }
         },
         {
@@ -1240,6 +1115,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Contact phone number"
+          },
+          "primaryKey": {
+            "ID": "A0D22A48-FE97-4F81-BF8C-31F0AA1258FC"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.227Z",
+            "checksum": "4e0af770de4aeb7b780f8ad1fe30154d92c3216c267ac4e2b26a773269d82933"
           }
         },
         {
@@ -1284,6 +1166,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Lifecycle stage (subscriber, lead, opportunity, customer, etc.)"
+          },
+          "primaryKey": {
+            "ID": "7858E9BE-68E4-4C18-8C1C-4D25A072D72A"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.228Z",
+            "checksum": "b93060499535ed0424fd0c55f0038c8175af3bfb146fa17c22644aa6184fb337"
           }
         },
         {
@@ -1399,17 +1288,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the updated record"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "CompanyID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -1447,111 +1325,6 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:09.149Z",
             "checksum": "f5e303773239ef205b43e1730f823daa000bede682ff961764c11bde14c25ad2"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Email",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Contact's email to find and update (provide either this or ContactId)",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "1DABCD53-B101-47E5-9A8B-3675ADF84949"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.151Z",
-            "checksum": "99d812d1cb8b49b75898ff6a3b234a08f3e151f555a9336fd4999d338d9b49ea"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "FirstName",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Updated first name",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "87898A32-9791-4996-80AE-8F4D4422837A"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.153Z",
-            "checksum": "18d2784799087d1e7fdc336e67286dd2203e213f37f376aebe1a17ff9802c2d5"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "LastName",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Updated last name",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "3253F5FB-E0B6-4AF7-8514-2FFB8DF7F393"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.154Z",
-            "checksum": "3020ede90c458cfe3903d608dfa33d0633bb4690abff2499aba5900cb9d6b877"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Phone",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Updated phone number",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "A0D22A48-FE97-4F81-BF8C-31F0AA1258FC"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.227Z",
-            "checksum": "4e0af770de4aeb7b780f8ad1fe30154d92c3216c267ac4e2b26a773269d82933"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "LifecycleStage",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Updated lifecycle stage",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "7858E9BE-68E4-4C18-8C1C-4D25A072D72A"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.228Z",
-            "checksum": "b93060499535ed0424fd0c55f0038c8175af3bfb146fa17c22644aa6184fb337"
           }
         },
         {
@@ -1623,6 +1396,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Update operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "ED26A2C1-C5F5-4027-A675-C717493245CD"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.233Z",
+            "checksum": "658d3593e4758fc8079ce4b4f1caa559f88bb4e6a3e3c55851efdc4cd970eccd"
           }
         },
         {
@@ -1647,24 +1427,6 @@
             "ResultCode": "NOT_SUPPORTED",
             "IsSuccess": false,
             "Description": "Update not supported by this connector"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Contact updated successfully"
-          },
-          "primaryKey": {
-            "ID": "ED26A2C1-C5F5-4027-A675-C717493245CD"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.233Z",
-            "checksum": "658d3593e4758fc8079ce4b4f1caa559f88bb4e6a3e3c55851efdc4cd970eccd"
           }
         },
         {
@@ -1877,6 +1639,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Delete operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "C88DCA82-50E5-4DE4-B762-AB11386E584A"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.334Z",
+            "checksum": "742bbbe7103b0031aabe7e26d4545f36ca4b72da9324c0720d2a089ab2cee550"
           }
         },
         {
@@ -1901,24 +1670,6 @@
             "ResultCode": "NOT_SUPPORTED",
             "IsSuccess": false,
             "Description": "Delete not supported by this connector"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Contact deleted successfully"
-          },
-          "primaryKey": {
-            "ID": "C88DCA82-50E5-4DE4-B762-AB11386E584A"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.334Z",
-            "checksum": "742bbbe7103b0031aabe7e26d4545f36ca4b72da9324c0720d2a089ab2cee550"
           }
         },
         {
@@ -2051,6 +1802,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Contact email address"
+          },
+          "primaryKey": {
+            "ID": "92016167-F5D2-41BB-ADEC-9334D5BCD812"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.436Z",
+            "checksum": "292927dca2a9e51a0897aa6fe42064293f003de311375ab0bfbcbcd6baa06956"
           }
         },
         {
@@ -2062,6 +1820,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Contact first name"
+          },
+          "primaryKey": {
+            "ID": "2C6B86FC-A54D-4A31-8027-E57C7C3A59B0"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.438Z",
+            "checksum": "f151d1c4e48c65dee94a7fa9620cb5e56d1e5a34b53411aadc7544f1b6b8e3a2"
           }
         },
         {
@@ -2073,6 +1838,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Contact last name"
+          },
+          "primaryKey": {
+            "ID": "A0B52839-BEED-457A-A188-7BE13C7E7659"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.439Z",
+            "checksum": "21eac480d69d7bbdcf5a7dfe53f4e405c5df2eb26d2bdc9790b92ac83c0f878f"
           }
         },
         {
@@ -2106,6 +1878,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Associated company name"
+          },
+          "primaryKey": {
+            "ID": "A0447B7D-F78D-4F82-948D-578A339C8B03"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.441Z",
+            "checksum": "71193122495bd0865afe5481424e292f061cda1b8b192452b52cf6b06f96aeb8"
           }
         },
         {
@@ -2128,6 +1907,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Lifecycle stage (subscriber, lead, opportunity, customer, etc.)"
+          },
+          "primaryKey": {
+            "ID": "BF678642-1FF8-4E75-BD08-81071905DB9A"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.442Z",
+            "checksum": "4e81d095c0a9d00c61ab5e15e8fee600068234abf6b73e1f6f686970c09e4989"
           }
         },
         {
@@ -2326,6 +2112,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "38D3B3F0-A27E-4447-A9F1-33F591553819"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.448Z",
+            "checksum": "8ab9067f4810c12e01c69b9ba4e62b30324cd46e56a7d4905428fe71350aad96"
           }
         },
         {
@@ -2384,111 +2177,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Email",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Filter by email (partial match)",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "92016167-F5D2-41BB-ADEC-9334D5BCD812"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.436Z",
-            "checksum": "292927dca2a9e51a0897aa6fe42064293f003de311375ab0bfbcbcd6baa06956"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "FirstName",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Filter by first name",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "2C6B86FC-A54D-4A31-8027-E57C7C3A59B0"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.438Z",
-            "checksum": "f151d1c4e48c65dee94a7fa9620cb5e56d1e5a34b53411aadc7544f1b6b8e3a2"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "LastName",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Filter by last name",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "A0B52839-BEED-457A-A188-7BE13C7E7659"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.439Z",
-            "checksum": "21eac480d69d7bbdcf5a7dfe53f4e405c5df2eb26d2bdc9790b92ac83c0f878f"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Company",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Filter by company name",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "A0447B7D-F78D-4F82-948D-578A339C8B03"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.441Z",
-            "checksum": "71193122495bd0865afe5481424e292f061cda1b8b192452b52cf6b06f96aeb8"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "LifecycleStage",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Filter by lifecycle stage",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "BF678642-1FF8-4E75-BD08-81071905DB9A"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.442Z",
-            "checksum": "4e81d095c0a9d00c61ab5e15e8fee600068234abf6b73e1f6f686970c09e4989"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "MaxResults",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -2531,26 +2219,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "TotalCount",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Total number of matching contacts"
-          },
-          "primaryKey": {
-            "ID": "38D3B3F0-A27E-4447-A9F1-33F591553819"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.448Z",
-            "checksum": "8ab9067f4810c12e01c69b9ba4e62b30324cd46e56a7d4905428fe71350aad96"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "Summary",
             "Type": "Output",
             "ValueType": "Scalar",
@@ -2576,6 +2244,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "D500052D-43D4-4021-9E06-057035F225F2"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.451Z",
+            "checksum": "b8c1fdefffba42268ee879264759b542356a2fbf13a511075dc8f99baece2c5d"
           }
         },
         {
@@ -2584,24 +2259,6 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Search completed successfully"
-          },
-          "primaryKey": {
-            "ID": "D500052D-43D4-4021-9E06-057035F225F2"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.451Z",
-            "checksum": "b8c1fdefffba42268ee879264759b542356a2fbf13a511075dc8f99baece2c5d"
           }
         },
         {
@@ -2667,7 +2324,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -2694,17 +2351,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Company record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -3049,6 +2695,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "F2B55809-6CE3-4A2C-AB3F-878C376D23CC"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.464Z",
+            "checksum": "71b3b6325775a9f391ebbc38879632971457a11b9f72ae47acfef74115d445e9"
           }
         },
         {
@@ -3065,24 +2718,6 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Record not found"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Company retrieved successfully"
-          },
-          "primaryKey": {
-            "ID": "F2B55809-6CE3-4A2C-AB3F-878C376D23CC"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.464Z",
-            "checksum": "71b3b6325775a9f391ebbc38879632971457a11b9f72ae47acfef74115d445e9"
           }
         },
         {
@@ -3164,6 +2799,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "Company name"
+          },
+          "primaryKey": {
+            "ID": "77660AD3-24D3-489E-8A16-B70DC79743AE"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.781Z",
+            "checksum": "833ea653106a8d3dfe3f1aa89aa182597e09050ad56b253e7fb8cd6f1dd7c9a5"
           }
         },
         {
@@ -3175,6 +2817,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Company website domain"
+          },
+          "primaryKey": {
+            "ID": "A22598D0-7D3D-4429-A69C-6B5DB06EA549"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.782Z",
+            "checksum": "90d540ddc328c7a2405eb7ce4373f785d04658413ad5c8fb9e35a8e3adcce78d"
           }
         },
         {
@@ -3186,6 +2835,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Company industry"
+          },
+          "primaryKey": {
+            "ID": "6285F798-4F63-4B04-9DB2-3926D01D3AAA"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.783Z",
+            "checksum": "52cdf454838559bf14d9cf02bce9bfea78343036c2745311f3bad57959426fec"
           }
         },
         {
@@ -3296,6 +2952,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Number of employees"
+          },
+          "primaryKey": {
+            "ID": "9F5F9263-DB65-4827-B8DB-0F462289680F"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.786Z",
+            "checksum": "655fc542b6022e1d54f03313e7c4dc862d828aa16c9f9ce8e1363e3dbbda2c64"
           }
         },
         {
@@ -3307,6 +2970,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Annual revenue"
+          },
+          "primaryKey": {
+            "ID": "E0D6F2BE-8126-42EF-AE00-08EAEC48B802"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.787Z",
+            "checksum": "04ec3c4e7fa46e33191483449d3375ae37f36a118590dbea5dbccc6b0b327de0"
           }
         },
         {
@@ -3329,6 +2999,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Company type"
+          },
+          "primaryKey": {
+            "ID": "7F32C6F2-6E6D-439B-A758-21B57108FA31"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.785Z",
+            "checksum": "d247cfb31475beb1172c626094d739eeda28e21e26f8a5e60e5e995579e9648c"
           }
         },
         {
@@ -3388,132 +3065,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Name",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Company name (required)",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "77660AD3-24D3-489E-8A16-B70DC79743AE"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.781Z",
-            "checksum": "833ea653106a8d3dfe3f1aa89aa182597e09050ad56b253e7fb8cd6f1dd7c9a5"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Domain",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Company website domain",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "A22598D0-7D3D-4429-A69C-6B5DB06EA549"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.782Z",
-            "checksum": "90d540ddc328c7a2405eb7ce4373f785d04658413ad5c8fb9e35a8e3adcce78d"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Industry",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Industry type",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "6285F798-4F63-4B04-9DB2-3926D01D3AAA"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.783Z",
-            "checksum": "52cdf454838559bf14d9cf02bce9bfea78343036c2745311f3bad57959426fec"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Type",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Company type (prospect, partner, reseller, vendor, other)",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "7F32C6F2-6E6D-439B-A758-21B57108FA31"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.785Z",
-            "checksum": "d247cfb31475beb1172c626094d739eeda28e21e26f8a5e60e5e995579e9648c"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "NumberOfEmployees",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Number of employees",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "9F5F9263-DB65-4827-B8DB-0F462289680F"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.786Z",
-            "checksum": "655fc542b6022e1d54f03313e7c4dc862d828aa16c9f9ce8e1363e3dbbda2c64"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AnnualRevenue",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Annual revenue amount",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "E0D6F2BE-8126-42EF-AE00-08EAEC48B802"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.787Z",
-            "checksum": "04ec3c4e7fa46e33191483449d3375ae37f36a118590dbea5dbccc6b0b327de0"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "CompanyDetails",
             "Type": "Output",
             "ValueType": "Simple Object",
@@ -3559,6 +3110,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Create operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "A8079C9B-A09D-4F54-BFAE-10436CC17F77"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.870Z",
+            "checksum": "c1d3d14c8a5bcea523d15f6b200e8f41da953a8bb7506c88e58b571b6ab47997"
           }
         },
         {
@@ -3583,24 +3141,6 @@
             "ResultCode": "NOT_SUPPORTED",
             "IsSuccess": false,
             "Description": "Create not supported by this connector"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Company created successfully"
-          },
-          "primaryKey": {
-            "ID": "A8079C9B-A09D-4F54-BFAE-10436CC17F77"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.870Z",
-            "checksum": "c1d3d14c8a5bcea523d15f6b200e8f41da953a8bb7506c88e58b571b6ab47997"
           }
         },
         {
@@ -3684,7 +3224,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -3711,6 +3251,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Company name"
+          },
+          "primaryKey": {
+            "ID": "97E45AC7-EFC1-4281-A41E-AA346552551D"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.879Z",
+            "checksum": "16ad1f08d1c3f23552a4a7d848958a55f801a34f731abeb2a4b840c63c23f347"
           }
         },
         {
@@ -3722,6 +3269,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Company website domain"
+          },
+          "primaryKey": {
+            "ID": "9CCDF4DB-BF9D-4E3D-8DED-21F1F1BED3A1"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.881Z",
+            "checksum": "e506b3353bdf635bca7e9cad21f38a1e619445610094c72b1f2f274230a5950d"
           }
         },
         {
@@ -3733,6 +3287,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Company industry"
+          },
+          "primaryKey": {
+            "ID": "0EF5E16A-7D97-4182-A54F-B03FF66CBBDD"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.883Z",
+            "checksum": "192d58d8cc0f52fca2ba0910cdf19a242361eeaf0dc2533c271ad36191831b6e"
           }
         },
         {
@@ -3903,17 +3464,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the updated record"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "CompanyID",
             "Type": "Both",
             "ValueType": "Scalar",
@@ -3930,69 +3480,6 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:09.877Z",
             "checksum": "f7d7dc16190d77def37d0cca746337841708d07d5c53dca1aa177fa2b1d14102"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Name",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Updated company name",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "97E45AC7-EFC1-4281-A41E-AA346552551D"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.879Z",
-            "checksum": "16ad1f08d1c3f23552a4a7d848958a55f801a34f731abeb2a4b840c63c23f347"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Domain",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Updated website domain",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "9CCDF4DB-BF9D-4E3D-8DED-21F1F1BED3A1"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.881Z",
-            "checksum": "e506b3353bdf635bca7e9cad21f38a1e619445610094c72b1f2f274230a5950d"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Industry",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Updated industry",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "0EF5E16A-7D97-4182-A54F-B03FF66CBBDD"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.883Z",
-            "checksum": "192d58d8cc0f52fca2ba0910cdf19a242361eeaf0dc2533c271ad36191831b6e"
           }
         },
         {
@@ -4064,6 +3551,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Update operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "2717E0C0-0360-4360-A93F-A1B7F7E4850E"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.991Z",
+            "checksum": "5fd7ceed2289a63161d4bf3c5c3aaca8621570644a5e922ba2cd833293bce21d"
           }
         },
         {
@@ -4088,24 +3582,6 @@
             "ResultCode": "NOT_SUPPORTED",
             "IsSuccess": false,
             "Description": "Update not supported by this connector"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Company updated successfully"
-          },
-          "primaryKey": {
-            "ID": "2717E0C0-0360-4360-A93F-A1B7F7E4850E"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.991Z",
-            "checksum": "5fd7ceed2289a63161d4bf3c5c3aaca8621570644a5e922ba2cd833293bce21d"
           }
         },
         {
@@ -4220,6 +3696,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Company name"
+          },
+          "primaryKey": {
+            "ID": "3614F22D-9E4F-4C39-80EE-E1CFD2DEF2C1"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.607Z",
+            "checksum": "eb7e7bbf4878378b0ecfed603c4fbe875a6f4b4f812e827e35ebde0779dbf361"
           }
         },
         {
@@ -4231,6 +3714,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Company website domain"
+          },
+          "primaryKey": {
+            "ID": "237FEFBF-60FC-4850-90F0-D08432A60D4A"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.609Z",
+            "checksum": "5f3d743efe6045a612cd1359ca48dd4d519b88e32f81728dc351b52ddf488171"
           }
         },
         {
@@ -4242,6 +3732,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Company industry"
+          },
+          "primaryKey": {
+            "ID": "F1A192CF-7416-4AB6-9448-A0563B0AF399"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.731Z",
+            "checksum": "18b75454e6af835713937a8ae5992a88c79cfcc3560e8fb84b4d5ff1f367abfd"
           }
         },
         {
@@ -4451,6 +3948,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "FE8FE4D7-8F66-45E0-BD4B-1AB08FB14237"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.739Z",
+            "checksum": "19bb08c643855260c13093db9288f59697cbfa84bd95302bfa40f8b9d9fcc0a5"
           }
         },
         {
@@ -4509,69 +4013,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Name",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Filter by company name",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "3614F22D-9E4F-4C39-80EE-E1CFD2DEF2C1"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.607Z",
-            "checksum": "eb7e7bbf4878378b0ecfed603c4fbe875a6f4b4f812e827e35ebde0779dbf361"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Domain",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Filter by domain",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "237FEFBF-60FC-4850-90F0-D08432A60D4A"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.609Z",
-            "checksum": "5f3d743efe6045a612cd1359ca48dd4d519b88e32f81728dc351b52ddf488171"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Industry",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Filter by industry",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "F1A192CF-7416-4AB6-9448-A0563B0AF399"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.731Z",
-            "checksum": "18b75454e6af835713937a8ae5992a88c79cfcc3560e8fb84b4d5ff1f367abfd"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "MaxResults",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -4610,26 +4051,6 @@
             "lastModified": "2025-12-30T23:07:10.737Z",
             "checksum": "33168c3dd2bcaa7e5c2d4d42e354d54e3df5c2ebeb120b75c8afc36ce74d711e"
           }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "TotalCount",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Total matching companies"
-          },
-          "primaryKey": {
-            "ID": "FE8FE4D7-8F66-45E0-BD4B-1AB08FB14237"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.739Z",
-            "checksum": "19bb08c643855260c13093db9288f59697cbfa84bd95302bfa40f8b9d9fcc0a5"
-          }
         }
       ],
       "MJ: Action Result Codes": [
@@ -4639,6 +4060,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "B341D0B0-71C2-4702-8549-452DC5995E00"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.742Z",
+            "checksum": "b8c1fdefffba42268ee879264759b542356a2fbf13a511075dc8f99baece2c5d"
           }
         },
         {
@@ -4647,24 +4075,6 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Search completed successfully"
-          },
-          "primaryKey": {
-            "ID": "B341D0B0-71C2-4702-8549-452DC5995E00"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.742Z",
-            "checksum": "b8c1fdefffba42268ee879264759b542356a2fbf13a511075dc8f99baece2c5d"
           }
         },
         {
@@ -4730,7 +4140,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -4757,17 +4167,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Deal record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -5078,6 +4477,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "FEC2B8EF-A6C2-42B5-87ED-FBF98F9441D8"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.872Z",
+            "checksum": "4ff5388518dc8f51dea2c4d83935b30e8edee75c29258bc6f1a825403d2bf696"
           }
         },
         {
@@ -5094,24 +4500,6 @@
             "ResultCode": "NOT_FOUND",
             "IsSuccess": false,
             "Description": "Record not found"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Deal retrieved successfully"
-          },
-          "primaryKey": {
-            "ID": "FEC2B8EF-A6C2-42B5-87ED-FBF98F9441D8"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.872Z",
-            "checksum": "4ff5388518dc8f51dea2c4d83935b30e8edee75c29258bc6f1a825403d2bf696"
           }
         },
         {
@@ -5193,6 +4581,13 @@
             "IsArray": false,
             "IsRequired": true,
             "Description": "Name of the deal"
+          },
+          "primaryKey": {
+            "ID": "BDC9169A-7939-4E05-A616-3BBB8B8BF183"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:09.999Z",
+            "checksum": "670a815cf19564b2fc30fc256acbc60baaea4abfc3b4042426c0f7545910b899"
           }
         },
         {
@@ -5204,6 +4599,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Deal value/amount"
+          },
+          "primaryKey": {
+            "ID": "E6643AB0-2E18-460A-A9F6-6A836B0C3A7A"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.002Z",
+            "checksum": "6d07415bea72fbe531bec1cf44dd79d8599d13fa7265d1ac217f951dbeff7104"
           }
         },
         {
@@ -5237,6 +4639,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Expected close date"
+          },
+          "primaryKey": {
+            "ID": "C517F8E0-E4EA-4796-830B-F120C3833860"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.006Z",
+            "checksum": "89db79a910421d053504c9964dffb1e093ad584af9d5828af0c69034a8c5edf7"
           }
         },
         {
@@ -5318,48 +4727,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "DealName",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Name of the deal (required)",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "BDC9169A-7939-4E05-A616-3BBB8B8BF183"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:09.999Z",
-            "checksum": "670a815cf19564b2fc30fc256acbc60baaea4abfc3b4042426c0f7545910b899"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Amount",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Deal amount in currency",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "E6643AB0-2E18-460A-A9F6-6A836B0C3A7A"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.002Z",
-            "checksum": "6d07415bea72fbe531bec1cf44dd79d8599d13fa7265d1ac217f951dbeff7104"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "Stage",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -5376,27 +4743,6 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:10.004Z",
             "checksum": "b0e2bf74ec560ebed14d9739a0000b9104c88d885d4d806c03e889cd633df608"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "CloseDate",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Expected close date (YYYY-MM-DD)",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "C517F8E0-E4EA-4796-830B-F120C3833860"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.006Z",
-            "checksum": "89db79a910421d053504c9964dffb1e093ad584af9d5828af0c69034a8c5edf7"
           }
         },
         {
@@ -5489,6 +4835,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Create operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "0F290BFB-9A31-4672-9751-B17AE5E36AFC"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.129Z",
+            "checksum": "da1c8a22152c6d3b89c3ea84e20a001bb5c9dedf3c94e82a68d37a91f60b34c7"
           }
         },
         {
@@ -5513,24 +4866,6 @@
             "ResultCode": "NOT_SUPPORTED",
             "IsSuccess": false,
             "Description": "Create not supported by this connector"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Deal created successfully"
-          },
-          "primaryKey": {
-            "ID": "0F290BFB-9A31-4672-9751-B17AE5E36AFC"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.129Z",
-            "checksum": "da1c8a22152c6d3b89c3ea84e20a001bb5c9dedf3c94e82a68d37a91f60b34c7"
           }
         },
         {
@@ -5596,7 +4931,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -5623,6 +4958,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Name of the deal"
+          },
+          "primaryKey": {
+            "ID": "80A33D9F-B96F-4347-B5F6-2A0A5071A385"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.887Z",
+            "checksum": "7cc76519ee8438a851a5be507f1899b662a3c6bef1f0544230d286a3441f344a"
           }
         },
         {
@@ -5634,6 +4976,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Deal value/amount"
+          },
+          "primaryKey": {
+            "ID": "8B9C1949-13C2-4485-AE0D-2031712944D6"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.889Z",
+            "checksum": "a06513b2ee6fb64f0393d8fd03919fdae57cf01035aef700a216a57e0225d98a"
           }
         },
         {
@@ -5667,6 +5016,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Expected close date"
+          },
+          "primaryKey": {
+            "ID": "564D6617-0549-4609-A6FD-AD82C5BFBE1F"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.995Z",
+            "checksum": "809fb18d6320c8251eea9c1a1aa4d3f86fba4b3f59337063e1450487ab8e4fe9"
           }
         },
         {
@@ -5716,17 +5072,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the updated record"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "CompanyID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -5769,48 +5114,6 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "DealName",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Updated deal name",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "80A33D9F-B96F-4347-B5F6-2A0A5071A385"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.887Z",
-            "checksum": "7cc76519ee8438a851a5be507f1899b662a3c6bef1f0544230d286a3441f344a"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Amount",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Updated deal amount",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "8B9C1949-13C2-4485-AE0D-2031712944D6"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.889Z",
-            "checksum": "a06513b2ee6fb64f0393d8fd03919fdae57cf01035aef700a216a57e0225d98a"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "Stage",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -5827,27 +5130,6 @@
           "sync": {
             "lastModified": "2025-12-30T23:07:10.992Z",
             "checksum": "a112bf900f175ed10eb41f0a545cd833724c36353a956fa6aa30a16799609221"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "CloseDate",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Updated close date",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "564D6617-0549-4609-A6FD-AD82C5BFBE1F"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.995Z",
-            "checksum": "809fb18d6320c8251eea9c1a1aa4d3f86fba4b3f59337063e1450487ab8e4fe9"
           }
         },
         {
@@ -5919,6 +5201,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Update operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "D306FA12-8F86-49E8-B8D2-6CBF6966FEB6"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:11.004Z",
+            "checksum": "8f84603b5c0ea1b06f0f35ac49f330fcb9956be89e0463916236f04b5cce5acb"
           }
         },
         {
@@ -5943,24 +5232,6 @@
             "ResultCode": "NOT_SUPPORTED",
             "IsSuccess": false,
             "Description": "Update not supported by this connector"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Deal updated successfully"
-          },
-          "primaryKey": {
-            "ID": "D306FA12-8F86-49E8-B8D2-6CBF6966FEB6"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:11.004Z",
-            "checksum": "8f84603b5c0ea1b06f0f35ac49f330fcb9956be89e0463916236f04b5cce5acb"
           }
         },
         {
@@ -6251,6 +5522,13 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "41F8BBF3-18B9-4F73-8B9B-8243ADB09A05"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:11.248Z",
+            "checksum": "519b4db833458dffd82386ee4bc332e06ba0bb66b8e41c758e67527ea3b01dcc"
           }
         },
         {
@@ -6410,26 +5688,6 @@
             "lastModified": "2025-12-30T23:07:11.247Z",
             "checksum": "5ea1e5ea4fa7efaeaca421a093c492a4da08789b5ae174648325e1f4df9ab1f3"
           }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "TotalCount",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Total matching deals"
-          },
-          "primaryKey": {
-            "ID": "41F8BBF3-18B9-4F73-8B9B-8243ADB09A05"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:11.248Z",
-            "checksum": "519b4db833458dffd82386ee4bc332e06ba0bb66b8e41c758e67527ea3b01dcc"
-          }
         }
       ],
       "MJ: Action Result Codes": [
@@ -6439,6 +5697,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "1E4A76CA-9075-4E8F-90A8-79C205F6D35E"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:11.249Z",
+            "checksum": "b8c1fdefffba42268ee879264759b542356a2fbf13a511075dc8f99baece2c5d"
           }
         },
         {
@@ -6447,24 +5712,6 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Search completed successfully"
-          },
-          "primaryKey": {
-            "ID": "1E4A76CA-9075-4E8F-90A8-79C205F6D35E"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:11.249Z",
-            "checksum": "b8c1fdefffba42268ee879264759b542356a2fbf13a511075dc8f99baece2c5d"
           }
         },
         {
@@ -6811,6 +6058,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Create operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "09B058D3-1498-4D35-8E92-00B8F69A2F40"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:10.247Z",
+            "checksum": "a88a45a389e14d472332e36a7dd23fa6c899cf9eb130871ae789febd0f493bd5"
           }
         },
         {
@@ -6835,24 +6089,6 @@
             "ResultCode": "NOT_SUPPORTED",
             "IsSuccess": false,
             "Description": "Create not supported by this connector"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Task created successfully"
-          },
-          "primaryKey": {
-            "ID": "09B058D3-1498-4D35-8E92-00B8F69A2F40"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:10.247Z",
-            "checksum": "a88a45a389e14d472332e36a7dd23fa6c899cf9eb130871ae789febd0f493bd5"
           }
         },
         {
@@ -6918,7 +6154,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -7022,17 +6258,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "HubSpot owner user ID"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the updated record"
           }
         },
         {
@@ -7209,6 +6434,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Update operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "5B2C648B-CA2C-4F4B-BE86-ADDB04D19FDA"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:11.779Z",
+            "checksum": "30c008bd92e7225dd847187a87b7156a2d000f5c117d0c2b6454bfc1b0bc878d"
           }
         },
         {
@@ -7233,24 +6465,6 @@
             "ResultCode": "NOT_SUPPORTED",
             "IsSuccess": false,
             "Description": "Update not supported by this connector"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Task updated successfully"
-          },
-          "primaryKey": {
-            "ID": "5B2C648B-CA2C-4F4B-BE86-ADDB04D19FDA"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:11.779Z",
-            "checksum": "30c008bd92e7225dd847187a87b7156a2d000f5c117d0c2b6454bfc1b0bc878d"
           }
         },
         {
@@ -7686,6 +6900,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "D70155D4-EDF4-4E99-9930-ED516D52FF1C"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:11.369Z",
+            "checksum": "99e0f2a31e0f683912ccda6e247ac4f2eb289404af4fe31ba598cd407e5e51e1"
           }
         },
         {
@@ -7694,24 +6915,6 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Deals retrieved successfully"
-          },
-          "primaryKey": {
-            "ID": "D70155D4-EDF4-4E99-9930-ED516D52FF1C"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:11.369Z",
-            "checksum": "99e0f2a31e0f683912ccda6e247ac4f2eb289404af4fe31ba598cd407e5e51e1"
           }
         },
         {
@@ -8147,6 +7350,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "469480A7-86D6-4852-B9F6-87415C43CB64"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:11.507Z",
+            "checksum": "99e0f2a31e0f683912ccda6e247ac4f2eb289404af4fe31ba598cd407e5e51e1"
           }
         },
         {
@@ -8155,24 +7365,6 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Deals retrieved successfully"
-          },
-          "primaryKey": {
-            "ID": "469480A7-86D6-4852-B9F6-87415C43CB64"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:11.507Z",
-            "checksum": "99e0f2a31e0f683912ccda6e247ac4f2eb289404af4fe31ba598cd407e5e51e1"
           }
         },
         {
@@ -8608,6 +7800,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "DB2C7A91-1FB5-450E-83ED-91F817F3011B"
+          },
+          "sync": {
+            "lastModified": "2025-12-30T23:07:11.920Z",
+            "checksum": "fe096a72cf48294720afa65aef700a07fe272ad87733435e5ef93a3c49003afb"
           }
         },
         {
@@ -8616,24 +7815,6 @@
             "ResultCode": "EXECUTOR_ERROR",
             "IsSuccess": false,
             "Description": "Internal executor error"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "SUCCESS",
-            "IsSuccess": true,
-            "Description": "Tasks retrieved successfully"
-          },
-          "primaryKey": {
-            "ID": "DB2C7A91-1FB5-450E-83ED-91F817F3011B"
-          },
-          "deleteRecord": {
-            "delete": true
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:07:11.920Z",
-            "checksum": "fe096a72cf48294720afa65aef700a07fe272ad87733435e5ef93a3c49003afb"
           }
         },
         {
@@ -9209,7 +8390,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -9236,17 +8417,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Task record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -9621,7 +8791,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -9648,17 +8818,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Ticket record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -9999,7 +9158,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -10103,17 +9262,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "HubSpot owner user ID"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the updated record"
           }
         }
       ],
@@ -10596,7 +9744,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -10623,17 +9771,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "The retrieved Product record with all fields"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the retrieved record"
           }
         },
         {
@@ -10941,7 +10078,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "ExternalID",
-            "Type": "Input",
+            "Type": "Both",
             "ValueType": "Scalar",
             "IsArray": false,
             "IsRequired": true,
@@ -11034,17 +10171,6 @@
             "IsArray": false,
             "IsRequired": false,
             "Description": "Tax amount"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExternalID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "IsRequired": false,
-            "Description": "The external ID of the updated record"
           }
         }
       ],
