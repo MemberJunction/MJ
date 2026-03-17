@@ -1012,84 +1012,51 @@ All new integrations follow the connector-first pattern:
 | Phase | Ships In | Notes |
 |-------|----------|-------|
 | Phase 0 (DB migrations + CodeGen) | **v5.12** | COMPLETE — migration applied, CodeGen run |
-| Phase 0 (Foundation code) + Phase 1 (HubSpot) | **v5.13** | Current work — code only, metadata to `/metadata/` folder |
-| Phase 2-5 | **v5.14+** | Future work |
+| All phases | **v5.13** | COMPLETE |
 
-### Phase 0: Foundation
+### Phase 0: Foundation — COMPLETE
 
-**DB Migrations: COMPLETE (shipped in v5.12)**
+**DB Migrations (shipped in v5.12):** `Config` column on Action table, `WriteAPIPath`/`WriteMethod`/`DeleteMethod` on IntegrationObject.
 
-| Task | Status |
-|------|--------|
-| Migration: Add `Config` to Action table | DONE |
-| Migration: Add `WriteAPIPath`, `WriteMethod`, `DeleteMethod` to IntegrationObject | DONE |
-| Run CodeGen for new fields | DONE |
+**Code Implementation:**
+- CRUD types, `ListContext`/`ListResult`, `SupportsListing` getter — all in integration engine
+- `IntegrationActionExecutor` shared driver class — `packages/Actions/CoreActions/`
+- `ActionMetadataGenerator` generic generator — `packages/Integration/engine/`
+- Unit tests: 30 (generator) + 31 (executor)
 
-**Code Implementation (shipping in v5.13):**
+### Phase 1: HubSpot Pilot — COMPLETE
 
-| Task | Package | Status |
-|------|---------|--------|
-| Add CRUD types (`CRUDContext`, etc.) — already existed | `packages/Integration/engine/` | DONE (pre-existing) |
-| Add `ListContext`/`ListResult` types | `packages/Integration/engine/src/types.ts` | DONE |
-| Add `SupportsListing` getter + `ListRecords` to `BaseIntegrationConnector` | `packages/Integration/engine/` | DONE |
-| Export `ListContext`/`ListResult` from barrel | `packages/Integration/engine/src/index.ts` | DONE |
-| Build `IntegrationActionExecutor` class | `packages/Actions/CoreActions/src/custom/integration/` | DONE |
-| Build `ActionMetadataGenerator` class | `packages/Integration/engine/src/ActionMetadataGenerator.ts` | DONE |
-| Build HubSpot generation CLI script | `packages/Integration/engine/src/generate-hubspot-actions.ts` | DONE |
-| Use existing `HubSpot` category (under `Business Apps > CRM > HubSpot`) | `metadata/action-categories/` | DONE (pre-existing categories are sufficient) |
-| Unit tests for `ActionMetadataGenerator` (30 tests) | `packages/Integration/engine/` | DONE |
-| Unit tests for `IntegrationActionExecutor` (31 tests) | `packages/Actions/CoreActions/` | DONE |
+- Full CRUD on `HubSpotConnector` (Get/Create/Update/Delete/Search/List)
+- 38 generated actions (18 migrated with preserved DB IDs, 20 new)
+- 141 param + 59 result code delete markers for old BizApps params
+- Migration script: `scripts/migrate-hubspot-actions.mjs`
 
-### Phase 1: HubSpot Pilot (shipping in v5.13)
+### Phase 1b: Generic Architecture & Multi-Connector — COMPLETE
 
-| Task | Package | Status |
-|------|---------|--------|
-| Add CRUD overrides to `HubSpotConnector` (Get/Create/Update/Delete/Search/List) | `packages/Integration/connectors/` | DONE |
-| Override capability getters (`SupportsCreate/Update/Delete/Search/Listing`) | `packages/Integration/connectors/` | DONE |
-| Update `MakeHTTPRequest` + `FetchWithTimeout` to support request bodies | `packages/Integration/connectors/` | DONE |
-| Generate HubSpot action metadata (30 actions, 5 objects × 6 verbs) | CLI → `metadata/integration-actions-hubspot/` | DONE |
-| Build and verify compilation of all affected packages | all | DONE |
-| Map to existing Action IDs | CLI utility --update | DEFERRED to Phase 2+ |
+- Refactored away hard-coded generator scripts → single generic `generate-integration-actions.ts` in connectors package
+- Added `GetIntegrationObjects()`, `GetActionGeneratorConfig()`, `IntegrationName` to `BaseIntegrationConnector`
+- Added `IncludeInActionGeneration` flag to `IntegrationObjectInfo` for objects that shouldn't generate CRUD actions
+- `GetActionGeneratorConfig()` filters out `IncludeInActionGeneration: false` objects automatically
+- Rasa.io connector: `GetIntegrationObjects()` override, 12 read-only actions generated
+- YourMembership connector: `GetIntegrationObjects()` override, 27 read-only actions generated
+- Eliminated `HUBSPOT_PROPERTIES` duplication — `HUBSPOT_OBJECTS` is now single source of truth for both action generation and API property requests (13 objects, 7 ancillary excluded from action generation)
+- Slash command: `/generate-integration-actions [hubspot|rasa|ym|all]`
 
-### Phase 2: Remaining Providers (~2-3 weeks, parallelizable)
+### Total Generated Actions: 77
 
-Each provider can be done independently and in parallel:
+| Connector | Actions | Objects | Notes |
+|-----------|---------|---------|-------|
+| HubSpot | 38 | 6 CRM (+ 7 ancillary for property lookups) | Full CRUD, 18 migrated from BizApps |
+| Rasa.io | 12 | 4 | Read-only (Get, Search, List) |
+| YourMembership | 27 | 9 | Read-only (Get, Search, List) |
 
-| Provider | New Connector? | Existing Actions to Convert | Notes |
-|----------|---------------|---------------------------|-------|
-| QuickBooks | Yes (new) | 4 | Extract from QuickBooksBaseAction |
-| Business Central | Yes (new) | 4 | Extract from BusinessCentralBaseAction |
-| Typeform | Yes (new) | 6 | Extract from TypeformBaseAction |
-| JotForm | Yes (new) | 5 | Extract from JotFormBaseAction |
-| SurveyMonkey | Yes (new) | 5 | Extract from SurveyMonkeyBaseAction |
-| Google Forms | Yes (new) | 2 | Extract from GoogleFormsBaseAction |
-| LearnWorlds | Yes (new) | 10 | Extract from LearnWorldsBaseAction |
+### Future Work (separate projects)
 
-### Phase 3: YourMembership + Salesforce Expansion (~1 week)
-
-| Task | Notes |
-|------|-------|
-| Add CRUD methods to YourMembershipConnector | Connector already exists with 30+ objects |
-| Add CRUD methods to SalesforceConnector | Connector exists but is mock — needs real API implementation |
-| Generate actions for both | Expect ~180 YM actions, ~30+ Salesforce actions |
-
-### Phase 4: Schema Sync Automation (~1 week)
-
-| Task | Notes |
-|------|-------|
-| Build `ActionSyncService` | Diff engine for IntegrationObjectField → ActionParam sync |
-| Add entity save hooks on IntegrationObject/Field | Trigger sync on metadata changes |
-| Add debouncing (5-second batch window) | Prevent thrashing during DiscoverFields() |
-| Add sync audit logging | Track all auto-sync operations |
-
-### Phase 5: Taxonomy & Cleanup (~3 days)
-
-| Task | Notes |
-|------|-------|
-| Rename social media actions to `{Provider} - {Verb}` pattern | Metadata-only update |
-| Move auto-generated actions to `Integrations` category tree | Metadata-only update |
-| Remove deprecated BizApps action code (after validation) | Code cleanup |
-| Update documentation | CLAUDE.md, README updates |
+The following items from the original plan are being handled in other projects and are **out of scope** for this plan:
+- Phase 2 (QuickBooks, Business Central, Typeform, JotForm, SurveyMonkey, Google Forms, LearnWorlds connectors)
+- Phase 3 (YM/Salesforce CRUD expansion)
+- Phase 4 (Schema Sync Automation)
+- Phase 5 (Taxonomy & Cleanup)
 
 ---
 

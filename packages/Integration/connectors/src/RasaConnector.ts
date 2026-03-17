@@ -13,6 +13,7 @@ import {
     type FetchBatchResult,
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
+    type IntegrationObjectInfo,
 } from '@memberjunction/integration-engine';
 import type { MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 
@@ -75,6 +76,66 @@ const DEFAULT_PAGE_SIZE = 50;
  *
  * Response envelope: { code, metadata: { next_link, record_count }, results: [...] }
  */
+// ─── Action Metadata Objects ──────────────────────────────────────────
+
+const RASA_ACTION_OBJECTS: IntegrationObjectInfo[] = [
+    {
+        Name: 'persons', DisplayName: 'Person',
+        Description: 'A newsletter subscriber/contact in Rasa.io', SupportsWrite: false,
+        Fields: [
+            { Name: 'email', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Subscriber email address' },
+            { Name: 'first_name', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Subscriber first name' },
+            { Name: 'last_name', DisplayName: 'Last Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Subscriber last name' },
+            { Name: 'external_id', DisplayName: 'Source External ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'External ID from source system' },
+            { Name: 'is_active', DisplayName: 'Is Active', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether the subscriber is active' },
+            { Name: 'is_subscribed', DisplayName: 'Is Subscribed', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether the subscriber is subscribed' },
+            { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Rasa.io internal person ID' },
+            { Name: 'created', DisplayName: 'Created Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When the person was created' },
+            { Name: 'updated', DisplayName: 'Updated Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When last updated' },
+        ],
+    },
+    {
+        Name: 'posts', DisplayName: 'Post',
+        Description: 'A newsletter content article/post in Rasa.io', SupportsWrite: false,
+        Fields: [
+            { Name: 'title', DisplayName: 'Title', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Post title' },
+            { Name: 'description', DisplayName: 'Description', Type: 'text', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Post description/summary' },
+            { Name: 'url', DisplayName: 'URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Post URL' },
+            { Name: 'source_url', DisplayName: 'Source URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Original source URL' },
+            { Name: 'image_url', DisplayName: 'Image URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Post image URL' },
+            { Name: 'quality_score', DisplayName: 'Quality Score', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Content quality score' },
+            { Name: 'is_active', DisplayName: 'Is Active', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether the post is active' },
+            { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Rasa.io internal post ID' },
+            { Name: 'created', DisplayName: 'Created Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When the post was created' },
+            { Name: 'updated', DisplayName: 'Updated Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When last updated' },
+        ],
+    },
+    {
+        Name: 'insights-actions', DisplayName: 'Insight Action',
+        Description: 'User action/engagement events from Rasa.io analytics', SupportsWrite: false,
+        Fields: [
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Associated person ID' },
+            { Name: 'email', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person email' },
+            { Name: 'action_type', DisplayName: 'Action Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Type of action (click, open, etc.)' },
+            { Name: 'created', DisplayName: 'Created Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When the action occurred' },
+            { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Action event ID' },
+        ],
+    },
+    {
+        Name: 'insights-topics', DisplayName: 'Insight Topic',
+        Description: 'User topic interest data from Rasa.io analytics', SupportsWrite: false,
+        Fields: [
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Associated person ID' },
+            { Name: 'email', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person email' },
+            { Name: 'topic', DisplayName: 'Topic', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Topic name' },
+            { Name: 'weight', DisplayName: 'Weight', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Interest weight/score' },
+            { Name: 'first_click', DisplayName: 'First Click', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'First interaction with this topic' },
+            { Name: 'last_click', DisplayName: 'Last Click', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Most recent interaction' },
+            { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Topic interest ID' },
+        ],
+    },
+];
+
 @RegisterClass(BaseIntegrationConnector, 'RasaConnector')
 export class RasaConnector extends BaseRESTIntegrationConnector {
     /** Cached JWT token */
@@ -84,6 +145,22 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
 
     /** Timestamp of the last API request, used for throttling */
     private lastRequestTime = 0;
+
+    public override get IntegrationName(): string { return 'Rasa.io'; }
+
+    public override GetIntegrationObjects(): IntegrationObjectInfo[] {
+        return RASA_ACTION_OBJECTS;
+    }
+
+    public override GetActionGeneratorConfig() {
+        const config = super.GetActionGeneratorConfig();
+        if (!config) return null;
+        config.IconClass = 'fa-solid fa-envelope-open-text';
+        // Rasa.io is read-only but we still want Search/List actions for querying
+        config.IncludeSearch = true;
+        config.IncludeList = true;
+        return config;
+    }
 
     /** Running count of records fetched for the current object in this sync run */
     private _runningFetchTotal = 0;

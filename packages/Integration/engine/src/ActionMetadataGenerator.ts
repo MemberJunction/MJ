@@ -26,6 +26,12 @@ export interface IntegrationObjectInfo {
     SupportsWrite: boolean;
     /** Fields on this object */
     Fields: IntegrationFieldInfo[];
+    /**
+     * Whether to include this object in action generation. Defaults to true.
+     * Set to false for objects that should be available for API property lookups
+     * but don't suit generic CRUD action patterns (e.g., activity objects).
+     */
+    IncludeInActionGeneration?: boolean;
 }
 
 /** Simplified representation of an integration object field for generation */
