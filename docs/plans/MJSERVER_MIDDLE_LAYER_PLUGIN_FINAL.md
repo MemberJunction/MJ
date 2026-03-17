@@ -293,6 +293,21 @@ export abstract class BaseServerMiddleware {
      */
     GetSchemaTransformers(): ((schema: GraphQLSchema) => GraphQLSchema)[] { return []; }
 
+    // ─── Resolver Discovery ──────────────────────────────────────────
+
+    /**
+     * Additional TypeGraphQL resolver glob paths to include in the Apollo schema.
+     * Each path is resolved relative to the middleware package's dist/ directory.
+     * serve() collects these from all active middleware and adds them to the
+     * resolvers array passed to buildSchema().
+     *
+     * Use for: Open App resolvers, domain-specific GraphQL queries/mutations
+     * that live outside MJServer's built-in resolver set.
+     *
+     * Example: return [path.join(__dirname, 'resolvers', '*Resolver.{js,ts}')]
+     */
+    GetResolverPaths(): string[] { return []; }
+
     // ─── Data Hooks ───────────────────────────────────────────────────
     // Override any of these to intercept data operations.
     // Default implementations are pass-through (no-op).
@@ -434,6 +449,7 @@ const mwPostAuth: RequestHandler[] = [];
 const mwPostRoute: (RequestHandler | ErrorRequestHandler)[] = [];
 const mwApolloPlugins: ApolloServerPlugin[] = [];
 const mwSchemaTransformers: ((schema: GraphQLSchema) => GraphQLSchema)[] = [];
+const mwResolverPaths: string[] = [];
 
 for (const mw of middlewares) {
     mwPreAuth.push(...mw.GetPreAuthMiddleware());
@@ -441,6 +457,7 @@ for (const mw of middlewares) {
     mwPostRoute.push(...mw.GetPostRouteMiddleware());
     mwApolloPlugins.push(...mw.GetApolloPlugins());
     mwSchemaTransformers.push(...mw.GetSchemaTransformers());
+    mwResolverPaths.push(...mw.GetResolverPaths());
 
     // Express app configuration escape hatch
     if (mw.ConfigureExpressApp) {
@@ -461,6 +478,7 @@ for (const mw of middlewares) {
 // Post-route:  mwPostRoute
 // Apollo:      built-in plugins + mwApolloPlugins
 // Schema:      built-in transformers + mwSchemaTransformers
+// Resolvers:   built-in resolver globs + mwResolverPaths (passed to buildSchema({ resolvers }))
 ```
 
 ### 4d. How ProviderBase/BaseEntity consume hooks (minimal change)
@@ -543,6 +561,11 @@ export class BCSaaSMiddleware extends MJTenantFilterMiddleware {
         return [bcTenantContextMiddleware];
     }
 
+    // BCSaaS-specific resolvers (org switcher, tenant context, etc.)
+    GetResolverPaths(): string[] {
+        return [path.join(__dirname, 'resolvers', '*Resolver.{js,ts}')];
+    }
+
     PreRunView(params: RunViewParams, contextUser: UserInfo | undefined) {
         return createBCPreRunViewHook()(params, contextUser);
     }
@@ -553,7 +576,7 @@ export class BCSaaSMiddleware extends MJTenantFilterMiddleware {
 }
 ```
 
-`ClassFactory.GetRegistration(BaseServerMiddleware, 'mj:tenantFilter')` returns BCSaaS — it has higher ClassFactory priority (auto-incremented because it's registered after its parent). MJ's built-in middleware is never instantiated. **All-or-nothing replacement** — middleware, PreRunView, and PreSave all come from BCSaaS.
+`ClassFactory.GetRegistration(BaseServerMiddleware, 'mj:tenantFilter')` returns BCSaaS — it has higher ClassFactory priority (auto-incremented because it's registered after its parent). MJ's built-in middleware is never instantiated. **All-or-nothing replacement** — middleware, hooks, and resolver paths all come from BCSaaS.
 
 Benefits of subclassing:
 - **No explicit priority juggling** — ClassFactory auto-increment handles replacement
@@ -630,6 +653,7 @@ export function LoadBCSaaSServer(): DynamicPackageResult {
 ```typescript
 // packages/server/src/BCSaaSMiddleware.ts (BCSaaS)
 
+import path from 'path';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseServerMiddleware, MJTenantFilterMiddleware } from '@memberjunction/server';
 import { bcTenantContextMiddleware } from './bcTenantContextMiddleware.js';
@@ -644,6 +668,11 @@ export class BCSaaSMiddleware extends MJTenantFilterMiddleware {
 
     GetPostAuthMiddleware(): RequestHandler[] {
         return [bcTenantContextMiddleware];
+    }
+
+    // BCSaaS-specific GraphQL resolvers (org switcher, tenant context, etc.)
+    GetResolverPaths(): string[] {
+        return [path.join(__dirname, 'resolvers', '*Resolver.{js,ts}')];
     }
 
     PreRunView(params: RunViewParams, contextUser: UserInfo | undefined): RunViewParams | Promise<RunViewParams> {
@@ -942,6 +971,7 @@ REST API endpoints (read req.userPayload — no re-auth)
 GraphQL middleware (contextFunction reads req.userPayload — no re-auth)
   │  Apollo plugins: built-in + mw.GetApolloPlugins()  ← MIDDLEWARE SLOT
   │  Schema: built-in transformers + mw.GetSchemaTransformers()  ← MIDDLEWARE SLOT
+  │  Resolvers: built-in globs + mw.GetResolverPaths()  ← MIDDLEWARE SLOT
   │  Resolvers access hooks via GetDataHooks()
   │  PreRunView/PostRunView/PreSave hooks run at ProviderBase/BaseEntity level  ← MIDDLEWARE SLOT
     │

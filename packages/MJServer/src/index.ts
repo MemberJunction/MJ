@@ -440,6 +440,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   const mwPostRoute: (RequestHandler | ErrorRequestHandler)[] = [];
   const mwApolloPlugins: ApolloServerPlugin[] = [];
   const mwSchemaTransformers: ((schema: GraphQLSchema) => GraphQLSchema)[] = [];
+  const mwResolverPaths: string[] = [];
 
   for (const mw of middlewares) {
       mwPreAuth.push(...mw.GetPreAuthMiddleware());
@@ -447,6 +448,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       mwPostRoute.push(...mw.GetPostRouteMiddleware());
       mwApolloPlugins.push(...mw.GetApolloPlugins());
       mwSchemaTransformers.push(...mw.GetSchemaTransformers());
+      mwResolverPaths.push(...mw.GetResolverPaths());
 
       // Express app configuration escape hatch
       if (mw.ConfigureExpressApp) {
@@ -458,6 +460,30 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       RegisterDataHook('PreRunView', mw.PreRunView.bind(mw));
       RegisterDataHook('PostRunView', mw.PostRunView.bind(mw));
       RegisterDataHook('PreSave', mw.PreSave.bind(mw));
+  }
+
+  // ─── Resolve middleware-contributed resolver paths and merge into resolvers ───
+  let allResolvers = resolvers;
+  if (mwResolverPaths.length > 0) {
+      const mwGlobs = mwResolverPaths.flatMap((p) => (isWindows ? p.replace(/\\/g, '/') : p));
+      const mwResolverFiles = fg.globSync(mwGlobs);
+      if (mwResolverFiles.length > 0) {
+          const mwModules = await Promise.all(
+              mwResolverFiles.map((modulePath) => {
+                  try {
+                      return import(isWindows ? `file://${modulePath}` : modulePath);
+                  } catch (e) {
+                      console.error(`Error loading middleware resolver at '${modulePath}'`, e);
+                      throw e;
+                  }
+              })
+          );
+          const mwResolvers = mwModules.flatMap((module) =>
+              Object.values(module).filter((value) => typeof value === 'function')
+          );
+          allResolvers = [...resolvers, ...mwResolvers] as BuildSchemaOptions['resolvers'];
+          console.log(`  [Middleware Resolvers] Loaded ${mwResolverFiles.length} resolver file(s) from middleware`);
+      }
   }
 
   // Create an explicit PubSub instance so we can reference it outside of resolvers
@@ -494,7 +520,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   let schema = mergeSchemas({
     schemas: [
       buildSchemaSync({
-        resolvers,
+        resolvers: allResolvers,
         validate: false,
         scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
         emitSchemaFile: websiteRunFromPackage !== 1,

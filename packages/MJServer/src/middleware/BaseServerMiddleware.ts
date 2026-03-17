@@ -90,6 +90,27 @@ export abstract class BaseServerMiddleware {
      */
     GetSchemaTransformers(): ((schema: GraphQLSchema) => GraphQLSchema)[] { return []; }
 
+    // --- Resolver Discovery ---
+
+    /**
+     * Additional TypeGraphQL resolver glob paths to include in the Apollo schema.
+     * serve() collects these from all active middleware and adds them to the
+     * resolvers array passed to buildSchema().
+     *
+     * Return absolute glob paths (use `path.join(__dirname, ...)` or equivalent).
+     *
+     * Use for: Open App resolvers, domain-specific GraphQL queries/mutations
+     * that live outside MJServer's built-in resolver set.
+     *
+     * @example
+     * ```typescript
+     * GetResolverPaths(): string[] {
+     *     return [path.join(__dirname, 'resolvers', '*Resolver.{js,ts}')];
+     * }
+     * ```
+     */
+    GetResolverPaths(): string[] { return []; }
+
     // --- Data Hooks ---
     // Override any of these to intercept data operations.
     // Default implementations are pass-through (no-op).
