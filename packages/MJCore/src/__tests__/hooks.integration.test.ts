@@ -6,7 +6,7 @@
  * no database connection is required.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { HookRegistry, PreRunViewHook, PostRunViewHook, PreSaveHook } from '../generic/hookRegistry';
+import { RegisterDataHook, ClearAllDataHooks, PreRunViewHook, PostRunViewHook, PreSaveHook } from '../generic/dataHooks';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 import { ProviderConfigDataBase, RunViewResult } from '../generic/interfaces';
 import { RunViewParams } from '../views/runView';
@@ -143,7 +143,7 @@ describe('Hook Integration Tests', () => {
     let provider: TestMetadataProvider;
 
     beforeEach(async () => {
-        HookRegistry.ClearAll();
+        ClearAllDataHooks();
 
         provider = new TestMetadataProvider();
         provider.setMockDelay(0);
@@ -154,7 +154,7 @@ describe('Hook Integration Tests', () => {
     });
 
     afterEach(() => {
-        HookRegistry.ClearAll();
+        ClearAllDataHooks();
     });
 
     // ===================================================================
@@ -168,7 +168,7 @@ describe('Hook Integration Tests', () => {
             const hook: PreRunViewHook = (params) => {
                 return { ...params, ExtraFilter: `${params.ExtraFilter || ''} AND TenantID='t1'`.trim() };
             };
-            HookRegistry.Register('PreRunView', hook);
+            RegisterDataHook('PreRunView', hook);
 
             await provider.RunView({ EntityName: 'Customers', ExtraFilter: "Status='Active'" });
 
@@ -187,8 +187,8 @@ describe('Hook Integration Tests', () => {
             const hookB: PreRunViewHook = (params) => {
                 return { ...params, ExtraFilter: `${params.ExtraFilter || ''} AND B=2`.trim() };
             };
-            HookRegistry.Register('PreRunView', hookA);
-            HookRegistry.Register('PreRunView', hookB);
+            RegisterDataHook('PreRunView', hookA);
+            RegisterDataHook('PreRunView', hookB);
 
             await provider.RunView({ EntityName: 'Customers' });
 
@@ -208,7 +208,7 @@ describe('Hook Integration Tests', () => {
                 capturedUser = user;
                 return params;
             };
-            HookRegistry.Register('PreRunView', hook);
+            RegisterDataHook('PreRunView', hook);
 
             const user = makeUser('ctx-user');
             await provider.RunView({ EntityName: 'Customers' }, user);
@@ -236,7 +236,7 @@ describe('Hook Integration Tests', () => {
                 await new Promise(resolve => setTimeout(resolve, 5));
                 return { ...params, ExtraFilter: 'Injected=1' };
             };
-            HookRegistry.Register('PreRunView', hook);
+            RegisterDataHook('PreRunView', hook);
 
             await provider.RunView({ EntityName: 'Customers' });
 
@@ -261,7 +261,7 @@ describe('Hook Integration Tests', () => {
                     TotalRowCount: 1,
                 };
             };
-            HookRegistry.Register('PostRunView', hook);
+            RegisterDataHook('PostRunView', hook);
 
             const result = await provider.RunView({ EntityName: 'Customers' });
 
@@ -283,7 +283,7 @@ describe('Hook Integration Tests', () => {
                 capturedUser = user;
                 return results;
             };
-            HookRegistry.Register('PostRunView', hook);
+            RegisterDataHook('PostRunView', hook);
 
             const user = makeUser('post-user');
             await provider.RunView({ EntityName: 'Orders' }, user);
@@ -309,8 +309,8 @@ describe('Hook Integration Tests', () => {
                     Results: result.Results.map((r: Record<string, number>) => ({ ...r, val: r['val'] + 10 })),
                 };
             };
-            HookRegistry.Register('PostRunView', hookA);
-            HookRegistry.Register('PostRunView', hookB);
+            RegisterDataHook('PostRunView', hookA);
+            RegisterDataHook('PostRunView', hookB);
 
             const result = await provider.RunView({ EntityName: 'Customers' });
 
@@ -346,7 +346,7 @@ describe('Hook Integration Tests', () => {
                 callCount++;
                 return params;
             };
-            HookRegistry.Register('PreRunView', hook);
+            RegisterDataHook('PreRunView', hook);
 
             await provider.RunViews([
                 { EntityName: 'Customers' },
@@ -369,7 +369,7 @@ describe('Hook Integration Tests', () => {
                 capturedEntityNames.push(params.EntityName!);
                 return result;
             };
-            HookRegistry.Register('PostRunView', hook);
+            RegisterDataHook('PostRunView', hook);
 
             await provider.RunViews([
                 { EntityName: 'Orders' },
@@ -386,7 +386,7 @@ describe('Hook Integration Tests', () => {
             const hook: PreRunViewHook = (params) => {
                 return { ...params, ExtraFilter: `Entity='${params.EntityName}'` };
             };
-            HookRegistry.Register('PreRunView', hook);
+            RegisterDataHook('PreRunView', hook);
 
             await provider.RunViews([
                 { EntityName: 'Orders' },
@@ -445,7 +445,7 @@ describe('Hook Integration Tests', () => {
 
         it('should allow save when hook returns true', async () => {
             const hookFn = vi.fn<PreSaveHook>().mockReturnValue(true);
-            HookRegistry.Register('PreSave', hookFn);
+            RegisterDataHook('PreSave', hookFn);
 
             const entity = createSaveableEntity();
             const result = await entity.Save(saveOpts);
@@ -457,7 +457,7 @@ describe('Hook Integration Tests', () => {
 
         it('should block save when hook returns false', async () => {
             const hookFn = vi.fn<PreSaveHook>().mockReturnValue(false);
-            HookRegistry.Register('PreSave', hookFn);
+            RegisterDataHook('PreSave', hookFn);
 
             const entity = createSaveableEntity();
             const result = await entity.Save(saveOpts);
@@ -469,7 +469,7 @@ describe('Hook Integration Tests', () => {
         it('should block save when hook returns error string', async () => {
             const hookFn = vi.fn<PreSaveHook>()
                 .mockReturnValue('Tenant mismatch: record belongs to another tenant');
-            HookRegistry.Register('PreSave', hookFn);
+            RegisterDataHook('PreSave', hookFn);
 
             const entity = createSaveableEntity();
             const result = await entity.Save(saveOpts);
@@ -489,7 +489,7 @@ describe('Hook Integration Tests', () => {
                 capturedUser = user;
                 return true;
             };
-            HookRegistry.Register('PreSave', hookFn);
+            RegisterDataHook('PreSave', hookFn);
 
             const user = makeUser('save-user');
             const entity = createSaveableEntity(user);
@@ -504,9 +504,9 @@ describe('Hook Integration Tests', () => {
             const hookReject = vi.fn<PreSaveHook>().mockReturnValue(false);
             const hookNeverCalled = vi.fn<PreSaveHook>().mockReturnValue(true);
 
-            HookRegistry.Register('PreSave', hookAllow);
-            HookRegistry.Register('PreSave', hookReject);
-            HookRegistry.Register('PreSave', hookNeverCalled);
+            RegisterDataHook('PreSave', hookAllow);
+            RegisterDataHook('PreSave', hookReject);
+            RegisterDataHook('PreSave', hookNeverCalled);
 
             const entity = createSaveableEntity();
             const result = await entity.Save(saveOpts);
