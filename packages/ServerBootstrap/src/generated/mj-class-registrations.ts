@@ -888,9 +888,10 @@ import {
     MJScheduledJobEntityExtended,
 } from '@memberjunction/scheduling-engine-base';
 
-// @memberjunction/server (2 classes)
+// @memberjunction/server (3 classes)
 import {
     MJEntityPermissionEntityServer,
+    MJTenantFilterMiddleware,
     SkipProxyAgent,
 } from '@memberjunction/server';
 
@@ -1580,6 +1581,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     IntegrationSyncScheduledJobDriver,
     MJScheduledJobEntityExtended,
     MJEntityPermissionEntityServer,
+    MJTenantFilterMiddleware,
     SkipProxyAgent,
     AWSFileStorage,
     AzureFileStorage,

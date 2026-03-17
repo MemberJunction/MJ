@@ -1,5 +1,5 @@
 import { MJEventType, MJGlobal, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
-import { HookRegistry, PreSaveHook } from './hookRegistry';
+import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
@@ -2063,7 +2063,7 @@ export abstract class BaseEntity<T = unknown> {
      * (error message), the save is rejected by throwing an Error.
      */
     private async RunPreSaveHooks(): Promise<void> {
-        const preSaveHooks = HookRegistry.GetHooks<PreSaveHook>('PreSave');
+        const preSaveHooks = GetDataHooks<PreSaveHook>('PreSave');
         for (const hook of preSaveHooks) {
             const hookResult = await hook(this, this.ActiveUser);
             if (hookResult === false) {

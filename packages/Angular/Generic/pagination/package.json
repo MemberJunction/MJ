@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-pagination",
-  "version": "5.12.0",
+  "version": "5.13.0",
   "description": "MemberJunction: Reusable pagination component for server-side paged data with first/prev/next/last navigation",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",

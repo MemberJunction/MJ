@@ -1032,9 +1032,9 @@
             "Category": "Insights",
             "APIPath": "/insights/topics",
             "ResponseDataKey": "results",
-            "DefaultPageSize": null,
+            "DefaultPageSize": 100,
             "SupportsPagination": false,
-            "PaginationType": null,
+            "PaginationType": "None",
             "SupportsIncrementalSync": false,
             "SupportsWrite": false,
             "Sequence": 4,
@@ -1211,8 +1211,8 @@
             "ID": "C08330B0-A063-4406-AFF7-393A894EF736"
           },
           "sync": {
-            "lastModified": "2026-03-15T02:35:10.753Z",
-            "checksum": "d14d3605820cafc167da3e2f7d70831282015e05401da53a8bd60d12e929fb81"
+            "lastModified": "2026-03-17T00:57:12.892Z",
+            "checksum": "4f479b708642e62e25ec917087882bb980e1d48ce5b64f5cdea69e6750876e64"
           }
         }
       ]

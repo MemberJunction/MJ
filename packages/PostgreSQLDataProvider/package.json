@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/postgresql-dataprovider",
   "type": "module",
-  "version": "5.12.0",
+  "version": "5.13.0",
   "description": "MemberJunction: PostgreSQL Data Provider",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,11 +20,11 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "dependencies": {
-    "@memberjunction/core": "5.12.0",
-    "@memberjunction/generic-database-provider": "5.12.0",
-    "@memberjunction/global": "5.12.0",
-    "@memberjunction/query-processor": "5.12.0",
-    "@memberjunction/sql-dialect": "5.12.0",
+    "@memberjunction/core": "5.13.0",
+    "@memberjunction/generic-database-provider": "5.13.0",
+    "@memberjunction/global": "5.13.0",
+    "@memberjunction/query-processor": "5.13.0",
+    "@memberjunction/sql-dialect": "5.13.0",
     "pg": "^8.13.3"
   },
   "devDependencies": {
