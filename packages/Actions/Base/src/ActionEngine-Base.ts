@@ -35,6 +35,50 @@ export class GeneratedCode {
 }
 
 /**
+ * Represents a directive from an action to an AI agent. Unlike `Message` (which is informational
+ * and meant for display or logging), directives are structured instructions that the agent
+ * framework surfaces as explicit guidance the AI must consider.
+ *
+ * Actions return directives when they need to steer agent behavior — for example, telling the
+ * agent which action to call next, constraining it from taking a particular path, or providing
+ * critical context that should influence its decision.
+ *
+ * @example
+ * ```typescript
+ * return {
+ *     Success: true,
+ *     ResultCode: 'SUCCESS',
+ *     Message: 'Found 10 matching queries.',
+ *     AIDirectives: [
+ *         { message: 'Call "Run Stored Query" with QueryID "abc-123"', type: 'instruction', priority: 'high' },
+ *         { message: 'Do NOT write fresh SQL — use the stored query above', type: 'constraint', priority: 'critical' },
+ *         { message: 'The stored query provides columns: ID, Name, FieldCount', type: 'context', priority: 'medium' }
+ *     ]
+ * };
+ * ```
+ */
+export interface AIDirective {
+    /** The directive message text to surface to the AI agent */
+    Message: string;
+    /**
+     * The kind of directive:
+     * - `instruction`: Direct command to perform a specific action or follow a specific path
+     * - `constraint`: Restriction on what the AI must NOT do
+     * - `context`: Important background information that should influence the AI's decisions
+     * - `suggestion`: Optional recommendation the AI may choose to follow or ignore
+     */
+    Type: 'instruction' | 'constraint' | 'context' | 'suggestion';
+    /**
+     * How strongly the AI should follow this directive:
+     * - `low`: Nice to follow, can be ignored if the AI has a better approach
+     * - `medium`: Should follow unless there's a clear reason not to
+     * - `high`: Must follow in most cases
+     * - `critical`: Must always follow, no exceptions
+     */
+    Priority: 'low' | 'medium' | 'high' | 'critical';
+}
+
+/**
  * Class that has the result of the individual action execution and used by the engine or other caller
  */
 
@@ -60,13 +104,12 @@ export class ActionResultSimple {
    public Message?: string;
 
    /**
-    * Optional array of directive messages intended for the LLM agent.
+    * Optional array of structured directives for the AI agent.
     * Unlike Message (which is informational), directives are surfaced as
-    * explicit instructions the LLM should follow. Use this for steering
-    * agent behavior (e.g., "pick one of these options as your next step").
-    * Do NOT use for informational summaries or batch result logs.
+    * explicit guidance the AI must consider. Each directive has a type
+    * (instruction, constraint, context, suggestion) and priority level.
     */
-   public LLMDirectives?: string[];
+   public AIDirectives?: AIDirective[];
 }
 
 /**
@@ -104,10 +147,10 @@ export class ActionResult {
    public Params?: ActionParam[];
 
    /**
-    * Optional array of directive messages intended for the LLM agent.
-    * Propagated from ActionResultSimple.LLMDirectives returned by the action implementation.
+    * Optional array of structured directives for the AI agent.
+    * Propagated from ActionResultSimple.AIDirectives returned by the action implementation.
     */
-   public LLMDirectives?: string[];
+   public AIDirectives?: AIDirective[];
 }
 
 /**

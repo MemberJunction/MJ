@@ -23,7 +23,7 @@ export abstract class EntityActionInvocationBase {
         return {
             Success: result.Success,
             Message: result.Message,
-            LLMDirectives: result.LLMDirectives,
+            AIDirectives: result.AIDirectives,
             RunParams: result.RunParams,
             LogEntry: result.LogEntry
         }

@@ -1,4 +1,4 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionResultSimple, AIDirective, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -118,15 +118,15 @@ export class SearchQueryCatalogAction extends BaseAction {
                 Value: results.length
             });
 
-            // Build directive content — instructions the LLM should follow to pick the
+            // Build directive content — instructions the AI should follow to pick the
             // right query execution path (run stored vs compose ad-hoc SQL).
-            const { summary, directive } = this.buildDirectiveMessage(results);
+            const { summary, directives } = this.buildDirectiveMessage(results);
 
             return {
                 Success: true,
                 ResultCode: 'SUCCESS',
                 Message: summary,
-                LLMDirectives: directive ? [directive] : undefined
+                AIDirectives: directives.length > 0 ? directives : undefined
             };
 
         } catch (error) {
@@ -156,9 +156,9 @@ export class SearchQueryCatalogAction extends BaseAction {
 
     /**
      * Builds an informational summary and, when a high-confidence composable match
-     * exists, an LLM directive telling the agent which action to call next.
+     * exists, structured AI directives telling the agent which action to call next.
      */
-    private buildDirectiveMessage(results: Record<string, unknown>[]): { summary: string; directive: string | undefined } {
+    private buildDirectiveMessage(results: Record<string, unknown>[]): { summary: string; directives: AIDirective[] } {
         const bestOverall = results[0];
         const bestComposable = results.find(r =>
             (r.Similarity as number) >= 0.6 && !this.hasTemplateParams(r)
@@ -169,7 +169,7 @@ export class SearchQueryCatalogAction extends BaseAction {
         if (similarity < 0.6) {
             return {
                 summary: `Found ${results.length} queries but no high-confidence composable matches (best: ${Math.round(similarity * 100)}%). Proceed with schema exploration and fresh SQL.`,
-                directive: undefined
+                directives: []
             };
         }
 
@@ -195,30 +195,31 @@ export class SearchQueryCatalogAction extends BaseAction {
             summaryParts.push(`  - ${r.Name} (${r.Category}) — ${sim}%${paramFlag} — ${r.Description || r.Name}`);
         }
 
-        // LLM directive — surfaced as a separate instruction message by the agent framework
-        const directiveLines: string[] = [
-            'YOUR NEXT ACTION — pick one:',
-            '',
-            'Option A — Fully covers the request? Call "Run Stored Query":',
-            `  Action: "Run Stored Query"`,
-            `  Params: { QueryID: "${queryID}", DataFormat: "json" }`,
-            '',
-            'Option B — Partially covers? Call "Run Ad-hoc Query" with composition SQL:',
-            `  Action: "Run Ad-hoc Query"`,
-            `  Params: { Query: "SELECT base.*, <extra columns> FROM {{query:\\"${categoryPath}\\"}} base <extra JOINs> ORDER BY <column>", MaxRows: 100, DataFormat: "json" }`
+        // Structured AI directives — surfaced by the agent framework
+        const directives: AIDirective[] = [
+            {
+                Message: `YOUR NEXT ACTION — pick one:\n\nOption A — Fully covers the request? Call "Run Stored Query":\n  Action: "Run Stored Query"\n  Params: { QueryID: "${queryID}", DataFormat: "json" }\n\nOption B — Partially covers? Call "Run Ad-hoc Query" with composition SQL:\n  Action: "Run Ad-hoc Query"\n  Params: { Query: "SELECT base.*, <extra columns> FROM {{query:\\"${categoryPath}\\"}} base <extra JOINs> ORDER BY <column>", MaxRows: 100, DataFormat: "json" }`,
+                Type: 'instruction',
+                Priority: 'high'
+            },
+            {
+                Message: 'Do NOT call Get Entity Details or write fresh SQL — use one of the options above.',
+                Type: 'constraint',
+                Priority: 'critical'
+            }
         ];
+
         if (columns) {
-            directiveLines.push(`  The stored query provides these columns: ${columns}`);
+            directives.push({
+                Message: `The stored query provides these columns: ${columns}. Add only the columns/JOINs the user needs that aren't already in the stored query.`,
+                Type: 'context',
+                Priority: 'medium'
+            });
         }
-        directiveLines.push(
-            '  Add only the columns/JOINs the user needs that aren\'t already in the stored query.',
-            '',
-            'Do NOT call Get Entity Details or write fresh SQL — use one of the options above.'
-        );
 
         return {
             summary: summaryParts.join('\n'),
-            directive: directiveLines.join('\n')
+            directives
         };
     }
 

@@ -1,7 +1,7 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJActionExecutionLogEntity, MJActionResultCodeEntity, MJEntityActionFilterEntity, MJEntityActionInvocationEntity, MJEntityActionInvocationTypeEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
-import { ActionParam, RunActionParams } from "./ActionEngine-Base";
+import { ActionParam, AIDirective, RunActionParams } from "./ActionEngine-Base";
 import { MJEntityActionEntityExtended } from "./MJEntityActionEntityExtended";
 
 /**
@@ -74,10 +74,10 @@ export class EntityActionResult {
     public Params?: ActionParam[];
 
     /**
-     * Optional array of directive messages intended for the LLM agent.
-     * Propagated from ActionResult.LLMDirectives.
+     * Optional array of structured directives for the AI agent.
+     * Propagated from ActionResult.AIDirectives.
      */
-    public LLMDirectives?: string[];
+    public AIDirectives?: AIDirective[];
  }
 
 /**
