@@ -17,7 +17,7 @@ import { ExplorerNavigationItem } from "./explorerNavigationItem";
 import { Metadata } from "./metadata";
 import { RunView, RunViewParams } from "../views/runView";
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
-import { HookRegistry, PreRunViewHook, PostRunViewHook } from "./hookRegistry";
+import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
 
 
 
@@ -1576,7 +1576,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * returning the (possibly mutated) params.
      */
     private async RunPreRunViewHooks(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewParams> {
-        const hooks = HookRegistry.GetHooks<PreRunViewHook>('PreRunView');
+        const hooks = GetDataHooks<PreRunViewHook>('PreRunView');
         for (const hook of hooks) {
             params = await hook(params, contextUser);
         }
@@ -1588,7 +1588,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * returning the (possibly mutated) result.
      */
     private async RunPostRunViewHooks(params: RunViewParams, result: RunViewResult, contextUser?: UserInfo): Promise<RunViewResult> {
-        const hooks = HookRegistry.GetHooks<PostRunViewHook>('PostRunView');
+        const hooks = GetDataHooks<PostRunViewHook>('PostRunView');
         for (const hook of hooks) {
             result = await hook(params, result, contextUser);
         }

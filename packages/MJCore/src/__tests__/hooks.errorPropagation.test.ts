@@ -5,7 +5,7 @@
  * the ProviderBase.RunView and BaseEntity.Save pipelines.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { HookRegistry, PreRunViewHook, PostRunViewHook, PreSaveHook } from '../generic/hookRegistry';
+import { RegisterDataHook, ClearAllDataHooks, PreRunViewHook, PostRunViewHook, PreSaveHook } from '../generic/dataHooks';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 import { ProviderConfigDataBase, RunViewResult } from '../generic/interfaces';
 import { UserInfo, UserRoleInfo } from '../generic/securityInfo';
@@ -93,7 +93,7 @@ describe('Hook Error Propagation', () => {
   let provider: TestMetadataProvider;
 
   beforeEach(async () => {
-    HookRegistry.ClearAll();
+    ClearAllDataHooks();
     provider = new TestMetadataProvider();
     provider.setMockDelay(0);
     provider.setMockMetadata(MOCK_METADATA);
@@ -102,7 +102,7 @@ describe('Hook Error Propagation', () => {
   });
 
   afterEach(() => {
-    HookRegistry.ClearAll();
+    ClearAllDataHooks();
   });
 
   // ───────────────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ describe('Hook Error Propagation', () => {
 
   describe('PreRunView hook errors', () => {
     it('should propagate synchronous errors from PreRunView hook', async () => {
-      HookRegistry.Register('PreRunView', () => {
+      RegisterDataHook('PreRunView', () => {
         throw new Error('PreRunView hook exploded');
       });
 
@@ -126,7 +126,7 @@ describe('Hook Error Propagation', () => {
       const asyncHook: PreRunViewHook = async () => {
         throw new Error('Async PreRunView rejection');
       };
-      HookRegistry.Register('PreRunView', asyncHook);
+      RegisterDataHook('PreRunView', asyncHook);
 
       vi.spyOn(provider as never, 'InternalRunViews')
         .mockResolvedValue([makeRunViewResult([])]);
@@ -136,7 +136,7 @@ describe('Hook Error Propagation', () => {
     });
 
     it('should not call InternalRunView when PreRunView hook throws', async () => {
-      HookRegistry.Register('PreRunView', () => {
+      RegisterDataHook('PreRunView', () => {
         throw new Error('Abort');
       });
 
@@ -158,8 +158,8 @@ describe('Hook Error Propagation', () => {
       });
       const hookB = vi.fn<PreRunViewHook>((params) => params);
 
-      HookRegistry.Register('PreRunView', hookA);
-      HookRegistry.Register('PreRunView', hookB);
+      RegisterDataHook('PreRunView', hookA);
+      RegisterDataHook('PreRunView', hookB);
 
       vi.spyOn(provider as never, 'InternalRunViews')
         .mockResolvedValue([makeRunViewResult([])]);
@@ -184,7 +184,7 @@ describe('Hook Error Propagation', () => {
       vi.spyOn(provider as never, 'InternalRunViews')
         .mockResolvedValue([makeRunViewResult([{ id: 1 }])]);
 
-      HookRegistry.Register('PostRunView', () => {
+      RegisterDataHook('PostRunView', () => {
         throw new Error('PostRunView hook exploded');
       });
 
@@ -199,7 +199,7 @@ describe('Hook Error Propagation', () => {
       const asyncHook: PostRunViewHook = async () => {
         throw new Error('Async PostRunView rejection');
       };
-      HookRegistry.Register('PostRunView', asyncHook);
+      RegisterDataHook('PostRunView', asyncHook);
 
       await expect(provider.RunView({ EntityName: 'ErrorTest' }))
         .rejects.toThrow('Async PostRunView rejection');
@@ -236,7 +236,7 @@ describe('Hook Error Propagation', () => {
     }
 
     it('should handle hook that throws an error (save fails gracefully)', async () => {
-      HookRegistry.Register('PreSave', () => {
+      RegisterDataHook('PreSave', () => {
         throw new Error('PreSave hook exploded');
       });
 
@@ -252,7 +252,7 @@ describe('Hook Error Propagation', () => {
       const asyncHook: PreSaveHook = async () => {
         throw new Error('Async PreSave rejection');
       };
-      HookRegistry.Register('PreSave', asyncHook);
+      RegisterDataHook('PreSave', asyncHook);
 
       const entity = createSaveableEntity();
       const result = await entity.Save(saveOpts);
@@ -262,7 +262,7 @@ describe('Hook Error Propagation', () => {
     });
 
     it('should record error message in ResultHistory when hook throws', async () => {
-      HookRegistry.Register('PreSave', () => {
+      RegisterDataHook('PreSave', () => {
         throw new Error('Custom hook error message');
       });
 
@@ -276,7 +276,7 @@ describe('Hook Error Propagation', () => {
 
     it('should handle hook returning false (clean rejection, no exception)', async () => {
       const hookFn = vi.fn<PreSaveHook>().mockReturnValue(false);
-      HookRegistry.Register('PreSave', hookFn);
+      RegisterDataHook('PreSave', hookFn);
 
       const entity = createSaveableEntity();
       const result = await entity.Save(saveOpts);
@@ -287,7 +287,7 @@ describe('Hook Error Propagation', () => {
     });
 
     it('should handle hook returning error string (rejection with message)', async () => {
-      HookRegistry.Register('PreSave', () => 'Cross-tenant write not allowed');
+      RegisterDataHook('PreSave', () => 'Cross-tenant write not allowed');
 
       const entity = createSaveableEntity();
       const result = await entity.Save(saveOpts);
@@ -299,7 +299,7 @@ describe('Hook Error Propagation', () => {
 
     it('should handle hook returning unexpected type (treated as truthy = allow)', async () => {
       // A hook returning a number (truthy) should be treated as "allow"
-      HookRegistry.Register('PreSave', (() => 42) as unknown as PreSaveHook);
+      RegisterDataHook('PreSave', (() => 42) as unknown as PreSaveHook);
 
       const entity = createSaveableEntity();
       const result = await entity.Save(saveOpts);
