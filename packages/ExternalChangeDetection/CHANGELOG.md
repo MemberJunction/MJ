@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/external-change-detection
 
+## 5.13.0
+
+### Patch Changes
+
+- 9474e4a: Fix transaction race condition in ExternalChangeDetection concurrent replay by creating per-save provider instances with independent transaction state, sharing the singleton's connection pool
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/sqlserver-dataprovider@5.13.0
+  - @memberjunction/sql-dialect@5.13.0
+
 ## 5.12.0
 
 ### Patch Changes

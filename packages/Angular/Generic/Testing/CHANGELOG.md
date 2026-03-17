@@ -1,5 +1,22 @@
 # @memberjunction/ng-testing
 
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ng-shared@5.13.0
+  - @memberjunction/ng-base-types@5.13.0
+  - @memberjunction/ng-code-editor@5.13.0
+  - @memberjunction/ng-container-directives@5.13.0
+  - @memberjunction/ng-notifications@5.13.0
+  - @memberjunction/graphql-dataprovider@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/testing-engine-base@5.13.0
+
 ## 5.12.0
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/core
 
+## 5.13.0
+
+### Minor Changes
+
+- d0d9eba: Add metadata migration script for v5.13.0
+
+### Patch Changes
+
+- f72b538: Replace HookRegistry and DynamicPackageLoader with @RegisterClass + ClassFactory middleware pattern, and add GetResolverPaths() to BaseServerMiddleware for auto-discovery of middleware-contributed GraphQL resolvers
+- Updated dependencies [f72b538]
+  - @memberjunction/global@5.13.0
+
 ## 5.12.0
 
 ### Minor Changes

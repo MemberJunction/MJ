@@ -1,5 +1,13 @@
 # @memberjunction/ai-fireworks
 
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ai@5.13.0
+
 ## 5.12.0
 
 ### Patch Changes
