@@ -391,7 +391,7 @@ import {
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
-// @memberjunction/core-actions (103 classes)
+// @memberjunction/core-actions (104 classes)
 import {
     APIRateLimiterAction,
     AddRecordsToListAction,
@@ -454,6 +454,7 @@ import {
     GraphQLQueryAction,
     HTTPRequestAction,
     IPGeolocationAction,
+    IntegrationActionExecutor,
     JSONTransformAction,
     ListMCPToolsAction,
     ListObjectsAction,
@@ -1195,6 +1196,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     GraphQLQueryAction,
     HTTPRequestAction,
     IPGeolocationAction,
+    IntegrationActionExecutor,
     JSONTransformAction,
     ListMCPToolsAction,
     ListObjectsAction,

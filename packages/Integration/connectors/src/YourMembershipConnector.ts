@@ -14,6 +14,7 @@ import {
     type ExternalRecord,
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
+    type IntegrationObjectInfo,
 } from '@memberjunction/integration-engine';
 import type { MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 
@@ -110,6 +111,123 @@ const METADATA_KEYS = new Set([
  *   "EnrichTimeoutMs": 45000     // optional, default: 45000
  * }
  */
+// ─── Action Metadata Objects ──────────────────────────────────────────
+
+const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
+    {
+        Name: 'members', DisplayName: 'Member',
+        Description: 'An individual membership record in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'EmailAddr', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Member email address (key field)' },
+            { Name: 'FirstName', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Member first name' },
+            { Name: 'LastName', DisplayName: 'Last Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Member last name' },
+            { Name: 'Phone', DisplayName: 'Phone', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Member phone number' },
+            { Name: 'Organization', DisplayName: 'Company Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Member company/organization' },
+            { Name: 'MemberTypeCode', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Membership type code/status' },
+            { Name: 'ProfileID', DisplayName: 'Profile ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'YM profile identifier' },
+            { Name: 'Address1', DisplayName: 'Address Line 1', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Street address line 1' },
+            { Name: 'City', DisplayName: 'City', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'City' },
+            { Name: 'State', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'State/province' },
+            { Name: 'PostalCode', DisplayName: 'Postal Code', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Postal/zip code' },
+            { Name: 'Country', DisplayName: 'Country', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Country' },
+            { Name: 'ExpirationDate', DisplayName: 'Expiration Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Membership expiration date' },
+            { Name: 'LastUpdated', DisplayName: 'Last Updated', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When the member record was last updated' },
+        ],
+    },
+    {
+        Name: 'events', DisplayName: 'Event',
+        Description: 'An event or conference in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'EventId', DisplayName: 'Event ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Event identifier' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Event name' },
+            { Name: 'StartDate', DisplayName: 'Start Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Event start date' },
+            { Name: 'EndDate', DisplayName: 'End Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Event end date' },
+        ],
+    },
+    {
+        Name: 'event-registrations', DisplayName: 'Event Registration',
+        Description: 'A registration for an event in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Registration ID' },
+            { Name: 'EventId', DisplayName: 'Event ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Associated event ID' },
+            { Name: 'FirstName', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Registrant first name' },
+            { Name: 'LastName', DisplayName: 'Last Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Registrant last name' },
+            { Name: 'DisplayName', DisplayName: 'Display Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Registrant display name' },
+            { Name: 'DateRegistered', DisplayName: 'Date Registered', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When registration occurred' },
+            { Name: 'IsPrimary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether this is the primary registrant' },
+        ],
+    },
+    {
+        Name: 'event-sessions', DisplayName: 'Event Session',
+        Description: 'A session within an event in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'SessionId', DisplayName: 'Session ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Session identifier' },
+            { Name: 'EventId', DisplayName: 'Event ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Associated event ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Session name' },
+            { Name: 'Presenter', DisplayName: 'Presenter', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Session presenter' },
+            { Name: 'StartDate', DisplayName: 'Start Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Session start date/time' },
+            { Name: 'EndDate', DisplayName: 'End Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Session end date/time' },
+        ],
+    },
+    {
+        Name: 'groups', DisplayName: 'Group',
+        Description: 'A membership group in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'GroupId', DisplayName: 'Group ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Group identifier' },
+            { Name: 'GroupName', DisplayName: 'Group Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Group name' },
+            { Name: 'GroupTypeId', DisplayName: 'Group Type ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Associated group type ID' },
+            { Name: 'GroupTypeName', DisplayName: 'Group Type Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Group type name' },
+        ],
+    },
+    {
+        Name: 'invoice-items', DisplayName: 'Invoice Item',
+        Description: 'A line item from an invoice in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'LineItemID', DisplayName: 'Line Item ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Line item identifier' },
+            { Name: 'InvoiceNo', DisplayName: 'Invoice Number', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Invoice number' },
+            { Name: 'InvoiceType', DisplayName: 'Invoice Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Type of invoice' },
+            { Name: 'WebSiteMemberID', DisplayName: 'Member ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Website member ID' },
+            { Name: 'LineItemDescription', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Line item description' },
+            { Name: 'LineItemAmount', DisplayName: 'Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Line item amount' },
+            { Name: 'LineItemDate', DisplayName: 'Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Line item date' },
+        ],
+    },
+    {
+        Name: 'dues-transactions', DisplayName: 'Dues Transaction',
+        Description: 'A membership dues transaction in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'TransactionID', DisplayName: 'Transaction ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Transaction identifier' },
+            { Name: 'WebsiteMemberID', DisplayName: 'Member ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Website member ID' },
+            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Transaction status' },
+            { Name: 'Amount', DisplayName: 'Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Transaction amount' },
+            { Name: 'MembershipRequested', DisplayName: 'Membership Requested', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Membership type requested' },
+            { Name: 'DateSubmitted', DisplayName: 'Date Submitted', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When transaction was submitted' },
+        ],
+    },
+    {
+        Name: 'donation-history', DisplayName: 'Donation',
+        Description: 'A historical donation record in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'intDonationId', DisplayName: 'Donation ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Donation identifier' },
+            { Name: 'ProfileID', DisplayName: 'Profile ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Donor profile ID' },
+            { Name: 'dblDonation', DisplayName: 'Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Donation amount' },
+            { Name: 'strFundName', DisplayName: 'Fund Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Donation fund name' },
+            { Name: 'DatDonation', DisplayName: 'Donation Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When the donation was made' },
+            { Name: 'strStatus', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Donation status' },
+        ],
+    },
+    {
+        Name: 'career-openings', DisplayName: 'Career Opening',
+        Description: 'A job/career listing in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'CareerOpeningID', DisplayName: 'Career Opening ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Career opening identifier' },
+            { Name: 'Position', DisplayName: 'Position', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Job position/title' },
+            { Name: 'Organization', DisplayName: 'Organization', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Hiring organization' },
+            { Name: 'DatePosted', DisplayName: 'Date Posted', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When the listing was posted' },
+        ],
+    },
+];
+
 @RegisterClass(BaseIntegrationConnector, 'YourMembershipConnector')
 export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     /** Session cache keyed by ClientID */
@@ -117,6 +235,24 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
     /** Timestamp of the last API request, used for throttling */
     private lastRequestTime = 0;
+
+    public override get IntegrationName(): string { return 'YourMembership'; }
+
+    public override GetIntegrationObjects(): IntegrationObjectInfo[] {
+        return YM_ACTION_OBJECTS;
+    }
+
+    public override GetActionGeneratorConfig() {
+        const config = super.GetActionGeneratorConfig();
+        if (!config) return null;
+        config.IconClass = 'fa-solid fa-id-card';
+        config.CategoryDescription = 'YourMembership AMS integration for managing members, events, dues, and association data';
+        config.ParentCategoryName = 'Business Apps';
+        // YM is read-only but we still want Search/List for querying
+        config.IncludeSearch = true;
+        config.IncludeList = true;
+        return config;
+    }
 
     /** Resolved config (populated after first Authenticate call) */
     private _config: YMConnectionConfig | null = null;
@@ -356,10 +492,27 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             return pageResult;
         }
 
-        console.log(`[YM Members] Fetched ${pageResult.Records.length} member IDs, enriching...`);
+        // Client-side watermark filtering: YM's MemberList API returns all members
+        // every time (no server-side date filter), so we filter locally by LastUpdated.
+        const { changedRecords, newWatermark } = this.FilterByWatermark(
+            pageResult.Records, ctx.WatermarkValue, 'LastUpdated'
+        );
+
+        if (changedRecords.length === 0) {
+            return {
+                Records: [],
+                HasMore: pageResult.HasMore,
+                NextOffset: pageResult.NextOffset,
+                NextPage: pageResult.NextPage,
+                NextCursor: pageResult.NextCursor,
+                NewWatermarkValue: !pageResult.HasMore ? (newWatermark ?? pageResult.NewWatermarkValue) : undefined,
+            };
+        }
+
+        console.log(`[YM Members] Fetched ${pageResult.Records.length} member IDs, ${changedRecords.length} changed since watermark, enriching...`);
 
         const enriched = await this.EnrichMembersWithDetails(
-            ctx, pageResult.Records, ctx.CurrentOffset ?? 0, pageResult.Records.length
+            ctx, changedRecords, ctx.CurrentOffset ?? 0, changedRecords.length
         );
 
         return {
@@ -368,7 +521,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             NextOffset: pageResult.NextOffset,
             NextPage: pageResult.NextPage,
             NextCursor: pageResult.NextCursor,
-            NewWatermarkValue: !pageResult.HasMore ? pageResult.NewWatermarkValue : undefined,
+            NewWatermarkValue: !pageResult.HasMore ? (newWatermark ?? pageResult.NewWatermarkValue) : undefined,
         };
     }
 
