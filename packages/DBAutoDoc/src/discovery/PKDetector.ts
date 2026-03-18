@@ -11,11 +11,21 @@ import { RelationshipDiscoveryConfig } from '../types/config.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
 
 export class PKDetector {
+  private knownPKs: PKCandidate[] = [];
+
   constructor(
     private driver: BaseAutoDocDriver,
     private config: RelationshipDiscoveryConfig,
     private statsCache: ColumnStatsCache
   ) {}
+
+  /**
+   * Set the known PKs discovered so far from other tables.
+   * Used by detectFKPattern() for tier-2 FK detection.
+   */
+  public setKnownPKs(pks: PKCandidate[]): void {
+    this.knownPKs = pks;
+  }
 
   /**
    * Returns the list of PK-eligible column names for a table.
@@ -41,18 +51,30 @@ export class PKDetector {
     const candidates: PKCandidate[] = [];
 
     // Single-column PK detection
-    for (const column of table.columns) {
+    for (let colIdx = 0; colIdx < table.columns.length; colIdx++) {
+      const column = table.columns[colIdx];
       const candidate = await this.analyzeSingleColumnPK(
         schemaName,
         table.name,
         column,
-        iteration
+        iteration,
+        colIdx
       );
 
       if (candidate && candidate.confidence >= this.config.confidence.primaryKeyMinimum * 100) {
         candidates.push(candidate);
       }
     }
+
+    // 1A: Confidence-based secondary UUID elimination
+    // If there's a high-confidence PK candidate at an early ordinal position,
+    // demote other UUID-type columns that appear later
+    this.demoteSecondaryUUIDColumns(candidates, table);
+
+    // 1F: Table-name preference tiebreaker
+    // If multiple single-column candidates have confidence >= 70, boost the one
+    // whose name contains the table name (or vice versa) and demote others
+    this.applyTableNameTiebreaker(candidates, table.name);
 
     // **IMPORTANT**: Check if we have a high-quality surrogate key candidate
     // If we do, skip composite key detection entirely
@@ -118,13 +140,50 @@ export class PKDetector {
   }
 
   /**
+   * Demote secondary UUID/GUID columns when a high-confidence PK exists at an early position.
+   * If there's a candidate with score >= 80 at ordinal 0-2, other UUID-type columns
+   * at later ordinals get their score multiplied by 0.3.
+   */
+  private demoteSecondaryUUIDColumns(candidates: PKCandidate[], table: TableDefinition): void {
+    // Find the best early-position candidate
+    const earlyHighConfidence = candidates.find(c => {
+      if (c.columnNames.length !== 1 || c.confidence < 80) return false;
+      const colIdx = table.columns.findIndex(col => col.name === c.columnNames[0]);
+      return colIdx >= 0 && colIdx <= 2;
+    });
+
+    if (!earlyHighConfidence) return;
+
+    const uuidTypes = ['uniqueidentifier', 'uuid', 'guid'];
+
+    for (const candidate of candidates) {
+      if (candidate === earlyHighConfidence) continue;
+      if (candidate.columnNames.length !== 1) continue;
+
+      const col = table.columns.find(c => c.name === candidate.columnNames[0]);
+      if (!col) continue;
+
+      const colIdx = table.columns.indexOf(col);
+      if (colIdx <= 2) continue;
+
+      const isUUIDType = uuidTypes.some(t => col.dataType.toLowerCase().includes(t));
+      if (isUUIDType) {
+        const oldScore = candidate.confidence;
+        candidate.confidence = Math.round(candidate.confidence * 0.3);
+        console.log(`[PKDetector] Demote secondary UUID ${candidate.columnNames[0]}: ${oldScore} -> ${candidate.confidence} (high-confidence PK ${earlyHighConfidence.columnNames[0]} at early position)`);
+      }
+    }
+  }
+
+  /**
    * Analyze a single column as potential PK
    */
   private async analyzeSingleColumnPK(
     schemaName: string,
     tableName: string,
     column: ColumnDefinition,
-    iteration: number
+    iteration: number,
+    columnOrdinal: number = 0
   ): Promise<PKCandidate | null> {
     // Get or compute column statistics
     let cachedStats = this.statsCache.getColumnStats(schemaName, tableName, column.name);
@@ -213,7 +272,7 @@ export class PKDetector {
       namingScore,
       dataTypeScore,
       warnings: []
-    }, tableName, column.name);
+    }, tableName, column.name, columnOrdinal);
 
     // Build evidence
     const evidence: PKEvidence = {
@@ -385,7 +444,7 @@ export class PKDetector {
    * - Composite keys: 50-75
    * - Everything else: <50
    */
-  private calculatePKConfidence(evidence: PKEvidence, tableName: string, columnName: string): number {
+  private calculatePKConfidence(evidence: PKEvidence, tableName: string, columnName: string, columnOrdinal: number = 0): number {
     let score = 0;
 
     // **CRITICAL FIX**: Reject obvious non-PK columns immediately
@@ -441,6 +500,13 @@ export class PKDetector {
         console.log(`[PKDetector] REJECT ${columnName} - matches blacklist pattern ${pattern}`);
         return 0; // Immediate rejection
       }
+    }
+
+    // Column ordinal position boost — earlier columns are more likely PKs
+    if (columnOrdinal <= 1) {
+      score += 5;
+    } else if (columnOrdinal <= 3) {
+      score += 2;
     }
 
     // **SURROGATE KEY DETECTION**: Boost score for single-column surrogate keys
@@ -499,15 +565,18 @@ export class PKDetector {
   }
 
   /**
-   * Detect if a column name looks like a foreign key rather than a primary key
+   * Detect if a column name looks like a foreign key rather than a primary key.
+   * Uses three tiers:
+   *   Tier 1: prefix matches current table name → 0.1 (self-reference only)
+   *   Tier 2: prefix matches another table where it IS a PK in knownPKs → 0.3 (identifying relationship)
+   *   Tier 3: prefix doesn't match any known PK → 0.7 (generic FK pattern)
    * Returns a score from 0-1 (0 = not FK-like, 1 = very FK-like)
    */
   private detectFKPattern(tableName: string, columnName: string): number {
     const colLower = columnName.toLowerCase();
     const tableLower = tableName.toLowerCase();
 
-    // Pattern 1: Column ends with _id but doesn't start with table name
-    // e.g., cst_id in ord table (FK-like), vs cst_id in cst table (PK-like)
+    // Pattern 1: Column ends with _id or id suffix
     if (colLower.endsWith('_id') || colLower.endsWith('id')) {
       const prefix = colLower.replace(/_?id$/, '');
 
@@ -516,26 +585,86 @@ export class PKDetector {
         return 0;
       }
 
-      // If prefix matches table name, likely a PK
+      // Tier 1: prefix matches current table name (self-reference)
       if (tableLower.includes(prefix) || prefix.includes(tableLower)) {
-        return 0.1; // Slight FK likelihood (could be self-reference)
+        return 0.1;
       }
 
-      // If prefix doesn't match table name, very likely an FK
-      return 0.9;
+      // Tier 2: prefix matches another table where it IS a PK in knownPKs
+      if (this.knownPKs.length > 0) {
+        const matchesKnownPK = this.knownPKs.some(pk =>
+          pk.tableName.toLowerCase().includes(prefix) || prefix.includes(pk.tableName.toLowerCase())
+        );
+        if (matchesKnownPK) {
+          return 0.3; // Identifying relationship — FK to a known PK
+        }
+      }
+
+      // Tier 3: generic FK pattern, prefix doesn't match any known PK
+      return 0.7;
     }
 
     // Pattern 2: Column ends with _key or _fk
     if (colLower.endsWith('_key') || colLower.endsWith('_fk')) {
       const prefix = colLower.replace(/_(?:key|fk)$/, '');
+
+      // Tier 1: self-reference
       if (tableLower.includes(prefix) || prefix.includes(tableLower)) {
         return 0.2;
       }
-      return 0.95;
+
+      // Tier 2: matches known PK
+      if (this.knownPKs.length > 0) {
+        const matchesKnownPK = this.knownPKs.some(pk =>
+          pk.tableName.toLowerCase().includes(prefix) || prefix.includes(pk.tableName.toLowerCase())
+        );
+        if (matchesKnownPK) {
+          return 0.3;
+        }
+      }
+
+      // Tier 3: generic FK pattern
+      return 0.7;
     }
 
     // No FK pattern detected
     return 0;
+  }
+
+  /**
+   * Apply table-name preference tiebreaker.
+   * If multiple single-column candidates have confidence >= 70, boost the one
+   * whose name contains the table name (or vice versa) and demote others.
+   */
+  private applyTableNameTiebreaker(candidates: PKCandidate[], tableName: string): void {
+    const tableLower = tableName.toLowerCase();
+
+    // Only consider single-column candidates with confidence >= 70
+    const highConfidence = candidates.filter(c =>
+      c.columnNames.length === 1 && c.confidence >= 70
+    );
+
+    if (highConfidence.length < 2) return;
+
+    // Find the candidate whose column name contains the table name or vice versa
+    const tableNameMatch = highConfidence.find(c => {
+      const colLower = c.columnNames[0].toLowerCase().replace(/_?id$/i, '').replace(/_?key$/i, '');
+      return colLower === tableLower || tableLower.includes(colLower) || colLower.includes(tableLower);
+    });
+
+    if (!tableNameMatch) return;
+
+    console.log(`[PKDetector] Table-name tiebreaker: boosting ${tableNameMatch.columnNames[0]} for table ${tableName}`);
+
+    for (const candidate of highConfidence) {
+      if (candidate === tableNameMatch) {
+        candidate.confidence = Math.min(candidate.confidence + 15, 100);
+      } else {
+        const oldScore = candidate.confidence;
+        candidate.confidence = Math.round(candidate.confidence * 0.7);
+        console.log(`[PKDetector] Table-name tiebreaker: demote ${candidate.columnNames[0]}: ${oldScore} -> ${candidate.confidence}`);
+      }
+    }
   }
 
   /**
@@ -551,9 +680,25 @@ export class PKDetector {
     const candidates: PKCandidate[] = [];
 
     // Look for common composite key patterns — columns ending in "ID" or "KEY"
-    const idColumns = table.columns.filter(c =>
+    const idKeyColumns = table.columns.filter(c =>
       /id$/i.test(c.name) || /key$/i.test(c.name)
     );
+
+    // Also include non-ID columns that are PK-eligible (e.g., date columns),
+    // but only if there are already at least 2 ID/KEY columns to anchor the composite
+    let idColumns: ColumnDefinition[];
+    if (idKeyColumns.length >= 2) {
+      const additionalEligible = table.columns.filter(c => {
+        // Skip columns already in the ID/KEY set
+        if (idKeyColumns.includes(c)) return false;
+        // Must have PK-eligible stats in the cache
+        const stats = this.statsCache.getColumnStats(schemaName, table.name, c.name);
+        return stats != null && stats.pkEligible;
+      });
+      idColumns = [...idKeyColumns, ...additionalEligible];
+    } else {
+      idColumns = idKeyColumns;
+    }
 
     if (idColumns.length >= 2 && idColumns.length <= 4) {
       // Each column must be individually PK-eligible (no nulls, no blanks)

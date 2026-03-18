@@ -49,6 +49,12 @@ export class FKDetector {
 
     // For each column in source table
     for (const sourceColumn of sourceTable.columns) {
+      // 2D: Skip rowguid columns — SQL Server replication identifier, never a real FK
+      if (sourceColumn.name.toLowerCase() === 'rowguid') {
+        console.log(`[FKDetector]   Skip ${sourceColumn.name} - rowguid replication identifier`);
+        continue;
+      }
+
       // Tier 1: Skip non-key data types (dates, booleans, floats — never FK columns)
       if (this.isNonKeyDataType(sourceColumn.dataType)) {
         console.log(`[FKDetector]   Skip ${sourceColumn.name} - non-key data type (${sourceColumn.dataType})`);
@@ -56,16 +62,16 @@ export class FKDetector {
         continue;
       }
 
-      // Skip if column is a discovered PK
-      const isPK = discoveredPKs.some(pk =>
+      // 2A: Check if column is a discovered PK — still proceed with FK analysis
+      // (identifying relationships have PK columns that are also FKs)
+      const isPKColumn = discoveredPKs.some(pk =>
         pk.schemaName === sourceSchema &&
         pk.tableName === sourceTable.name &&
         pk.columnNames.includes(sourceColumn.name)
       );
 
-      if (isPK) {
-        console.log(`[FKDetector]   Skip ${sourceColumn.name} - is a PK`);
-        continue;
+      if (isPKColumn) {
+        console.log(`[FKDetector]   ${sourceColumn.name} is a PK, but proceeding with FK analysis (identifying relationship check)`);
       }
 
       // Tier 2: For string columns, sample values and check if they look like keys
@@ -104,16 +110,19 @@ export class FKDetector {
           target.tableName,
           target.columnName,
           target.isPK,
-          iteration
+          iteration,
+          target.targetPKColumnCount
         );
 
         if (candidate) {
           console.log(`[FKDetector]     Candidate confidence: ${candidate.confidence} (min: ${this.config.confidence.foreignKeyMinimum * 100})`);
         }
 
-        if (candidate && candidate.confidence >= this.config.confidence.foreignKeyMinimum * 100) {
+        // 2A: PK columns require higher confidence threshold (80) to be considered FK
+        const minConfidence = isPKColumn ? 80 : this.config.confidence.foreignKeyMinimum * 100;
+        if (candidate && candidate.confidence >= minConfidence) {
           candidates.push(candidate);
-          console.log(`[FKDetector]     ✓ Added FK candidate: ${sourceColumn.name} -> ${target.tableName}.${target.columnName}`);
+          console.log(`[FKDetector]     ✓ Added FK candidate: ${sourceColumn.name} -> ${target.tableName}.${target.columnName}${isPKColumn ? ' (identifying relationship)' : ''}`);
         }
       }
     }
@@ -128,14 +137,32 @@ export class FKDetector {
   /**
    * Find potential FK target tables/columns based on naming
    */
+  /**
+   * Look up how many columns are in the PK for a given table.
+   * Returns 0 if the table has no discovered PK, otherwise the column count.
+   */
+  private getTargetPKColumnCount(
+    discoveredPKs: PKCandidate[],
+    schemaName: string,
+    tableName: string,
+    columnName: string
+  ): number {
+    const pk = discoveredPKs.find(pk =>
+      pk.schemaName === schemaName &&
+      pk.tableName === tableName &&
+      pk.columnNames.includes(columnName)
+    );
+    return pk ? pk.columnNames.length : 0;
+  }
+
   private findPotentialTargets(
     schemas: SchemaDefinition[],
     sourceSchema: string,
     sourceTable: string,
     sourceColumn: ColumnDefinition,
     discoveredPKs: PKCandidate[]
-  ): Array<{ schemaName: string; tableName: string; columnName: string; isPK: boolean }> {
-    const targets: Array<{ schemaName: string; tableName: string; columnName: string; isPK: boolean }> = [];
+  ): Array<{ schemaName: string; tableName: string; columnName: string; isPK: boolean; targetPKColumnCount: number }> {
+    const targets: Array<{ schemaName: string; tableName: string; columnName: string; isPK: boolean; targetPKColumnCount: number }> = [];
 
     // Pattern 1: CustomerID -> Customer.ID (exact match on table name)
     const tableNamePattern = this.extractTableNameFromColumn(sourceColumn.name);
@@ -163,7 +190,8 @@ export class FKDetector {
               schemaName: schema.name,
               tableName: matchingTable.name,
               columnName: idColumn.name,
-              isPK
+              isPK,
+              targetPKColumnCount: this.getTargetPKColumnCount(discoveredPKs, schema.name, matchingTable.name, idColumn.name)
             });
           }
         }
@@ -185,7 +213,8 @@ export class FKDetector {
             schemaName: pk.schemaName,
             tableName: pk.tableName,
             columnName: pkColumnName,
-            isPK: true
+            isPK: true,
+            targetPKColumnCount: pk.columnNames.length
           });
         }
       }
@@ -214,14 +243,25 @@ export class FKDetector {
               schemaName: schema.name,
               tableName: table.name,
               columnName: matchingColumn.name,
-              isPK: true
+              isPK: true,
+              targetPKColumnCount: this.getTargetPKColumnCount(discoveredPKs, schema.name, table.name, matchingColumn.name)
             });
           }
         }
       }
     }
 
-    return targets;
+    // 2C: Deduplicate by (schemaName, tableName, columnName) — keep first occurrence
+    // (most specific pattern match)
+    const seen = new Set<string>();
+    const deduped = targets.filter(t => {
+      const key = `${t.schemaName}.${t.tableName}.${t.columnName}`.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return deduped;
   }
 
   /**
@@ -306,7 +346,8 @@ export class FKDetector {
     targetTable: string,
     targetColumn: string,
     targetIsPK: boolean,
-    iteration: number
+    iteration: number,
+    targetPKColumnCount: number = 0
   ): Promise<FKCandidate | null> {
     // Get target column info
     const targetColumnDef = await this.driver.getColumnInfo(targetSchema, targetTable, targetColumn);
@@ -385,7 +426,7 @@ export class FKDetector {
     }
 
     // Calculate confidence
-    const confidence = this.calculateFKConfidence(evidence, targetIsPK, sourceColumn.name);
+    const confidence = this.calculateFKConfidence(evidence, targetIsPK, sourceColumn.name, targetPKColumnCount);
 
     // Don't return if confidence too low
     if (confidence < 40) {
@@ -549,7 +590,7 @@ export class FKDetector {
    * Columns containing "ID" in the name get a 10% bonus as this is the most
    * common naming convention for foreign key columns across databases.
    */
-  private calculateFKConfidence(evidence: FKEvidence, targetIsPK: boolean, sourceColumnName: string): number {
+  private calculateFKConfidence(evidence: FKEvidence, targetIsPK: boolean, sourceColumnName: string, targetPKColumnCount: number = 0): number {
     let score = 0;
 
     // Value containment — source values must be contained within target values.
@@ -580,6 +621,15 @@ export class FKDetector {
       score += 15;
     }
 
+    // 2B: Single-column PK target bonus/penalty
+    // Single-column PKs are the most common FK targets; composite PKs are leaf nodes
+    if (targetPKColumnCount === 1) {
+      score += 15; // Single-column PK — most common FK target
+    } else if (targetPKColumnCount === 0) {
+      score -= 15; // Not a PK at all — unlikely FK target
+    }
+    // targetPKColumnCount > 1 (composite PK) — no change
+
     // Null handling (5% weight)
     // Some nulls are OK (optional FK), but too many is suspicious
     const nullScore = evidence.nullPercentage < 0.3 ? 5 :
@@ -594,7 +644,7 @@ export class FKDetector {
       score *= 0.5; // 50% penalty for type mismatch
     }
 
-    return Math.round(Math.min(score, 100));
+    return Math.round(Math.min(Math.max(score, 0), 100));
   }
 
   /**
