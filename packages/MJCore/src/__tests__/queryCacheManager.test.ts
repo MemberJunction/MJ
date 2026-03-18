@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 import { QueryCacheManager } from '../generic/QueryCacheManager';
 import { QueryInfo } from '../generic/queryInfo';
 
@@ -92,7 +93,14 @@ describe('QueryCacheManager', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        mgr = new QueryCacheManager('localhost');
+        // Reset singleton so each test gets a fresh instance
+        const g = GetGlobalObjectStore();
+        const key = '___SINGLETON__QueryCacheManager';
+        if (g && g[key]) {
+            delete g[key];
+        }
+        mgr = QueryCacheManager.Instance;
+        mgr.Init('localhost');
     });
 
     // Invalidation methods still call through to LCM even while caching is bypassed

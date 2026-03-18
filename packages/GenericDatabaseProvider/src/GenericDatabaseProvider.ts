@@ -1917,17 +1917,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     // InternalRunQuery — Shared Pipeline Implementation
     /**************************************************************************/
 
-    /**
-     * Query cache manager wrapping LocalCacheManager for query result caching.
-     * Per-instance because it needs the connection string for fingerprinting.
-     */
-    private _queryCacheManager: QueryCacheManager | null = null;
+    private _queryCacheInitialized: boolean = false;
 
     private get QueryCacheMgr(): QueryCacheManager {
-        if (!this._queryCacheManager) {
-            this._queryCacheManager = new QueryCacheManager(this.InstanceConnectionString);
+        if (!this._queryCacheInitialized) {
+            QueryCacheManager.Instance.Init(this.InstanceConnectionString);
+            this._queryCacheInitialized = true;
         }
-        return this._queryCacheManager;
+        return QueryCacheManager.Instance;
     }
 
     /**
