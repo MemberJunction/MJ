@@ -1,0 +1,1502 @@
+[
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 01 - Membership Composition",
+      "Description": "Conversation 1: Break down 15K member accounts into paying tiers vs staff vs non-members",
+      "InputDefinition": {
+        "userMessage": "I'm presenting to the board next week and I've been saying we have 15,000 members. But I know that includes staff accounts and non-members. Help me build an honest picture — break down our accounts into paying dealer memberships at each tier versus staff accounts, non-members, and partners. I need to know our real paying member count versus our total platform reach."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Response distinguishes between paying membership tiers (Bronze, Silver, Gold) and non-paying account types (staff, non-member)",
+          "Query uses YourMembership.Member table grouped by MemberTypeCode",
+          "Visualization shows the composition breakdown clearly",
+          "Response references the Membership table for tier pricing context"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Response distinguishes paying tiers from staff/non-member accounts",
+                "Includes counts per membership type",
+                "Provides a meaningful visualization of the composition"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F3D32104-9334-42FF-969B-458C95D68352"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.380Z",
+      "checksum": "b69874376f57eac74a94e251df7d3f196d3157447b4d9eb842ca256a8e57e475"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 02 - Non-Member Conversion Targets",
+      "Description": "Conversation 1: Identify top organizations with unconverted Retail Non-Members",
+      "InputDefinition": {
+        "userMessage": "Those 5,000+ Retail Non-Members — they're already on our platform but not paying. Analyze which organizations they come from and cross-reference with whether those orgs already have paying members. I want to see the conversion opportunity by organization size — who has the most untapped accounts?"
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Query filters for MemberTypeCode containing 'Non_Member' or similar",
+          "Results grouped by Organization showing non-member count",
+          "Cross-references with paying members in same organizations",
+          "Ranks organizations by conversion opportunity"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Identifies organizations with most non-member accounts",
+                "Shows whether those orgs also have paying members",
+                "Provides actionable conversion opportunity ranking"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "BA405745-C3EE-4BB1-8E4C-1AAF0F203F76"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.399Z",
+      "checksum": "124aee2e2a85950266898e207b13901c7f464f34cce024234e2592681e5b8286"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 03 - Expiration Data Quality",
+      "Description": "Conversation 1: Segment members by expiration status — real vs bogus legacy dates",
+      "InputDefinition": {
+        "userMessage": "Now help me understand retention. I see members with expiration dates all over the map — some from 2012, some next month. Segment the membership by expiration status: genuinely expiring soon, already lapsed but still Active, and those with clearly bogus legacy dates from the YourMembership migration. I need to know the data quality situation before I can trust any retention metrics."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Segments members into meaningful expiration buckets",
+          "Identifies bogus dates (e.g., before 2020 or year 0001)",
+          "Separates genuinely lapsed from data quality issues",
+          "Provides counts for each segment"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Correctly identifies bogus legacy expiration dates",
+                "Separates real expirations from data migration artifacts",
+                "Provides actionable data quality assessment"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "4B23076B-5419-487E-98F8-B62B5CAB3C1F"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.415Z",
+      "checksum": "2af3e826fb1d23eb98b182141effe3e957b34bd2629acd13f8ebeceaac642c51"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 04 - Renewal Priority List",
+      "Description": "Conversation 1: Members expiring in 90 days with revenue at risk by org",
+      "InputDefinition": {
+        "userMessage": "For the members genuinely expiring in the next 90 days, build me a renewal priority list. Show each member's organization, tier, state, and annual dues at risk. But also flag which organizations would lose ALL their paying members if these don't renew — those are the accounts where we'd lose the relationship entirely."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Filters members with valid expiration dates in next 90 days",
+          "Joins to Membership table for dues amounts",
+          "Identifies organizations at risk of losing all paying members",
+          "Sorts by revenue at risk"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Shows members expiring within 90 days with dues at risk",
+                "Joins Member to Membership for pricing",
+                "Flags organizations that would lose all paying members"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "08AB08A9-9A17-4628-8008-FD79D287CEDB"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.431Z",
+      "checksum": "bf7da627ad5c82a268690f1dc5f4c4e9aca0f185f3db549a20b6a1911f661827"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 05 - Geographic vs Association Alignment",
+      "Description": "Conversation 1: Compare dealer concentration by state against Marine Trade Association groups",
+      "InputDefinition": {
+        "userMessage": "One more for the board — show me where our paying dealers are concentrated versus where Marine Trade Associations exist in our group network. Are there states where we have a strong association relationship but few paying members, or states packed with dealers but no association partner? That alignment gap is where our growth opportunity sits."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Query uses Member table for geographic distribution by State",
+          "Query uses Group/GroupType tables for Marine Trade Associations",
+          "Cross-references geographic concentration with association presence",
+          "Identifies alignment gaps between member density and association coverage"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Queries both Member and Group/GroupType tables",
+                "Shows state-level comparison of members vs associations",
+                "Identifies growth opportunity gaps"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "6B014637-C084-4631-88D6-1EDC0CF0FAA2"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.446Z",
+      "checksum": "e76f840012d0ea273cf8b09566f69332d184ee1bacad8823852c7e84421067c0"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 06 - Complete Revenue Breakdown",
+      "Description": "Conversation 2: Gross vs net revenue across all streams with GL codes",
+      "InputDefinition": {
+        "userMessage": "Show me every revenue stream flowing through invoices: dues, store orders, donations, certifications. But I need the full picture — gross revenue AND net after discounts, credits, and refunds. Break it out by GL code so I can see which categories actually drive income versus which ones are mostly offsets."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Query uses InvoiceItem table with breakdowns by InvoiceType and LineItemType",
+          "Shows gross and net amounts accounting for discounts/credits/refunds",
+          "References GLCode data for category-level analysis",
+          "Includes donation fund context from DonationFund table"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Shows gross and net revenue by stream",
+                "Accounts for discounts, credits, and refunds",
+                "Uses GL code breakdown for category analysis"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "49EA2B5D-41D3-4CCD-9DD9-EA52E9F1AFB8"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.460Z",
+      "checksum": "d444f4b0eb54c8184f3e1ec17b0a485350e2ba7b98540f9bee277f38d9a661ef"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 07 - Dues Revenue Composition Trend",
+      "Description": "Conversation 2: Annual dues trend 2015-present broken down by membership type",
+      "InputDefinition": {
+        "userMessage": "Zoom into the dues trend from 2015 to today. We peaked at $1.3M in 2022. I don't just want the line — break it down by the membership types being purchased each year. Did the peak come from more members joining, members upgrading to higher tiers, or price increases? Show me the composition of revenue, not just the total."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Query uses DuesTransaction with year grouping and membership type breakdown",
+          "Shows revenue trend from 2015 onward",
+          "Breaks down by MembershipRequested or similar field",
+          "References Membership table for tier pricing context"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Shows yearly dues revenue trend",
+                "Breaks down by membership type purchased",
+                "Provides composition analysis not just totals"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B4725B2E-9B43-4F03-87E8-151866649C3C"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.477Z",
+      "checksum": "54947ca03be51109e4af73fd3df56d6dbedb4083a1d5c4e95ad3367eab824dd3"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 08 - Revenue Diversification Analysis",
+      "Description": "Conversation 2: Non-dues revenue trends by product category and GL code",
+      "InputDefinition": {
+        "userMessage": "The board keeps asking about revenue diversification. Show me how non-dues revenue streams have performed over time — store sales by product category, certification fees, conference tickets, donations by fund. Which categories are growing and which are flat? I want to see if we're actually diversifying or just talking about it."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Separates non-dues revenue from dues revenue",
+          "Uses InvoiceItem, GLCode, ProductCategory, and DonationFund tables",
+          "Shows trends over time for each non-dues category",
+          "Identifies growing vs flat revenue streams"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Analyzes non-dues revenue separately",
+                "Uses multiple tables for categorization",
+                "Shows trends and identifies growth patterns"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "845AD4FD-546F-4EC3-9912-6ABF9C464948"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.496Z",
+      "checksum": "d0fa328b6bbad0005940f660ff132080f4b2b668a20a62140cbdca5db09555a4"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 09 - Revenue Concentration Risk",
+      "Description": "Conversation 2: Top organizations by total spend with concentration curve",
+      "InputDefinition": {
+        "userMessage": "Revenue concentration — if our top 5 member organizations stopped paying tomorrow, what's the impact? Show me the top 20 organizations by total lifetime spend across ALL invoice types, and calculate each one's share of total revenue. I need to see the Pareto curve and know exactly how exposed we are."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Aggregates total spend by organization across all invoice types",
+          "Calculates percentage share of total revenue",
+          "Shows top 20 organizations ranked by spend",
+          "Presents concentration risk clearly"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Shows top organizations by total spend",
+                "Calculates revenue share percentages",
+                "Communicates concentration risk clearly"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E8A6BB7A-50D2-472D-9EC5-0A269E5D683F"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.520Z",
+      "checksum": "a1c7cb6198ddf2a5fdbef3914260e7dd69f4a7069ea5f22f64e7b4cb8b2563b8"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 10 - Pricing Integrity Check",
+      "Description": "Conversation 2: Compare published pricing across Membership, HubSpot Products, and actual collections",
+      "InputDefinition": {
+        "userMessage": "Pricing integrity check. Compare our published membership pricing in the Membership table and HubSpot product catalog against what we're actually collecting in dues transactions. Factor in promo code discounts and credits from our invoices. What's our effective price per tier after all adjustments? Are we holding our pricing or quietly eroding it?"
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries Membership table for published prices",
+          "Queries HubSpot Product table for CRM pricing",
+          "Calculates effective price from DuesTransaction and InvoiceItem adjustments",
+          "Compares all three pricing sources"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Compares pricing across multiple sources",
+                "Calculates effective price after adjustments",
+                "Cross-system query spanning YourMembership and HubSpot"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "1FBD4B8A-0126-4E3C-A45D-B5D52F4A2400"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.534Z",
+      "checksum": "d2bf748d08a7456135b1a7fc4d513abb59cbb498b34e70ca2cfca6bf4482753f"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 11 - Program Portfolio Overview",
+      "Description": "Conversation 3: Full view of certifications, product categories, tickets, donation funds",
+      "InputDefinition": {
+        "userMessage": "Show me MRAA's full program portfolio in one view — every certification with CEU requirements, all product categories we sell through the store, event ticket types with pricing, and donation funds. I want to see the breadth of what we offer and what each program costs a member. Are there pricing gaps or overlaps?"
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries Certification, ProductCategory, EventTicket, and DonationFund tables",
+          "Shows pricing for each program type",
+          "Presents a unified portfolio view",
+          "Identifies pricing relationships between programs"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Queries all four program-related tables",
+                "Shows pricing and requirements for each",
+                "Provides unified portfolio view"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F356BB0C-33C8-4F66-BF38-5D557B44FB73"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.595Z",
+      "checksum": "58dbef9c3560f635f4dfac52baf3cb101db2c6bf67d6793275b6f45f125be7d1"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 12 - Events Calendar with Traction",
+      "Description": "Conversation 3: Events with registration counts and registration form status",
+      "InputDefinition": {
+        "userMessage": "Now show me the events calendar — conferences, certification cohorts, everything. For each event, show dates, virtual versus in-person, whether a registration form is set up, and how many people registered. Help me spot the underperformers — which programs have zero traction despite having infrastructure in place?"
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries Event, EventRegistration, and EventRegistrationForm tables",
+          "Shows registration count per event",
+          "Identifies events with forms but zero registrations",
+          "Distinguishes virtual from in-person events"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Joins Event with EventRegistration and EventRegistrationForm",
+                "Shows registration counts and form availability",
+                "Identifies underperforming events"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D25264B5-C85D-4DEF-9EC9-1114A4133CF8"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.609Z",
+      "checksum": "8d862c210bef558a04273188eb5689b3de75f59179428829afd2b30153fc2a4a"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 13 - Summit Attendee Analysis",
+      "Description": "Conversation 3: Industry Summit registrants cross-referenced with membership tiers",
+      "InputDefinition": {
+        "userMessage": "For the upcoming MRAA Industry Summit — who's in the room? Show every registrant with their organization and registration date. Cross-reference with our membership data — what tier are they? Are we getting Gold dealers to the Summit or mostly non-members getting a free look? The composition tells me how we're positioning the event."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Filters EventRegistration for the Industry Summit event",
+          "Cross-references registrants with Member table for tier info",
+          "Shows membership tier distribution of attendees",
+          "Identifies non-member vs paying member composition"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Identifies Industry Summit registrants",
+                "Cross-references with membership data",
+                "Analyzes tier composition of attendees"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "7C071CDD-0B1B-4C41-809E-D7D2DC7F89D7"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.623Z",
+      "checksum": "8724b445db089ff48bc03ec062bab272a72724eae5eebb2d5283da239617e494"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 14 - HubSpot Product Catalog vs Deal Line Items",
+      "Description": "Conversation 3: Compare product list prices against actual deal line item amounts",
+      "InputDefinition": {
+        "userMessage": "Flip to what we're selling through HubSpot — partner memberships, booth packages, certifications, dealer scorecards. Show the product catalog alongside actual deal line items. Are we selling at list price or discounting? What products move fastest? Compare these prices to what we charge through YourMembership — I want to see if our two sales channels are aligned or contradicting each other."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries HubSpot Product, LineItem, and Deal tables",
+          "Compares list prices to actual line item amounts",
+          "Cross-references with YourMembership pricing (EventTicket or Membership)",
+          "Identifies discounting patterns and channel alignment"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Queries HubSpot Product and LineItem tables",
+                "Compares list vs actual prices",
+                "Cross-system pricing comparison"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "26B27F94-6EE5-4D7D-93FB-1790AF0F5C7C"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.636Z",
+      "checksum": "6cb2704c8148b32eb32ce7c5871f881390d9d4ea4afd114159eb002b46df2912"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 15 - Cross-Channel Pricing Drift",
+      "Description": "Conversation 3: Three-source pricing comparison for overlapping products",
+      "InputDefinition": {
+        "userMessage": "Connect the dots across all three pricing sources. Our certification tickets are $2,250 in YourMembership, our HubSpot products show different numbers, and our actual invoices show what we collected. Show me the pricing for every product that exists in more than one system — certifications, memberships, conferences — side by side. Where is there drift between what we publish, what we quote, and what we collect?"
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries EventTicket, HubSpot Product, InvoiceItem, Membership, and DuesTransaction",
+          "Identifies products that exist in multiple systems",
+          "Shows pricing side-by-side from each source",
+          "Identifies drift or inconsistencies"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Cross-system query spanning 3+ pricing sources",
+                "Identifies pricing inconsistencies",
+                "Compares published, quoted, and collected amounts"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "87C8F847-DE9A-4E71-B910-F075E0E09CC9"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.652Z",
+      "checksum": "65bba8b78d171b1050384f7cd4694e2d252bf56a8eebb64b048fbed9545283e5"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 16 - Deal Pipeline by Product Type",
+      "Description": "Conversation 4: Pipeline funnel categorized by what's being sold",
+      "InputDefinition": {
+        "userMessage": "Show me the HubSpot deal pipeline as a funnel — count and total dollar value at each stage. But categorize the deals by what they're selling: booth space, partner memberships, education sponsorships, scorecards. I want to see where the money sits by product type AND stage — are the big deals at the top of the funnel or near close?"
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries Deal table grouped by dealstage",
+          "Categorizes deals by product type from dealname or LineItem",
+          "Shows count and total value per stage",
+          "Presents as funnel visualization"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Shows deal pipeline by stage with dollar values",
+                "Categorizes deals by product type",
+                "Funnel or stage-based visualization"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "FFFF739D-C737-431B-9A23-2F958480A9CD"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.665Z",
+      "checksum": "8cdbd7cac1d4e81c14032bf787801a69bedcd052b85d45232289fee95327af46"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 17 - Sales Activity vs Deal Creation",
+      "Description": "Conversation 4: Activity trends (calls, meetings, tasks) correlated with new deals",
+      "InputDefinition": {
+        "userMessage": "Now the team's activity patterns. Show outbound versus inbound calls per month, meetings scheduled versus completed, tasks open versus done — all trending over time. Layer deal creation dates on top. I want to see if activity spikes correlate with new deals entering the pipeline, or if the team is busy but not productive."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries Call, Meeting, Task, and Deal tables",
+          "Shows monthly trends for each activity type",
+          "Distinguishes call direction (inbound vs outbound)",
+          "Overlays deal creation timeline for correlation analysis"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Shows activity trends across multiple HubSpot tables",
+                "Correlates activity with deal creation",
+                "Distinguishes productive vs unproductive activity"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "72EE0305-062D-4188-8CB0-98AE636F8401"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.678Z",
+      "checksum": "198fea01b05c102f9eba5c21f3f40babea36c7a2a2ea802863baff3bf4521eaa"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 18 - Sales Team Leaderboard",
+      "Description": "Conversation 4: Owner-level breakdown of calls, notes, meetings, tasks, and deals",
+      "InputDefinition": {
+        "userMessage": "Build me a team leaderboard. Calls logged, notes written, meetings held, tasks completed — by HubSpot owner. Show deals associated with each owner too. I want to see who's doing activity AND closing versus who's just logging touches. Pull the most recent notes from each person so I can gauge the quality of intelligence they're capturing."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Aggregates Call, Note, Meeting, Task by hubspot_owner_id",
+          "Includes Deal count/value per owner",
+          "Shows sample notes for quality assessment",
+          "Ranks owners by combined activity and results"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Aggregates multiple activity types by owner",
+                "Includes deal performance alongside activity",
+                "Provides note samples for quality context"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "AE5C1705-2D2F-4C84-BE79-468C2DFA6E24"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.691Z",
+      "checksum": "a16b641d5af12c53f20398fe09218bc2f3406463c8458e3245bce0c08634b65e"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 19 - Hot Prospects and Pipeline Leakage",
+      "Description": "Conversation 4: Customer/opportunity contacts with engagement and meetings without deals",
+      "InputDefinition": {
+        "userMessage": "Show me contacts in 'customer' and 'opportunity' lifecycle stages with their companies. When were they last contacted, what's the latest note, and do they have open deals? Flag anyone not touched in 30+ days — those are hot prospects we might be neglecting. Are there companies with meetings but no deal created? That's pipeline leakage."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Filters Contact by lifecyclestage for customer/opportunity",
+          "Joins to Company for org context",
+          "References Note for latest intelligence",
+          "Identifies contacts/companies with meetings but no deal"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Identifies hot prospects by lifecycle stage",
+                "Flags neglected contacts",
+                "Identifies pipeline leakage from meetings without deals"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "1E704A4E-E6D6-46D4-97FA-1A5F9852B6A0"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.704Z",
+      "checksum": "868e7daaff3626ee90c08551ab3d12037524e26946d662aa52b56802b83c7cf5"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 20 - Sales Intelligence from Notes",
+      "Description": "Conversation 4: Analyze HubSpot note content for recurring themes and market signals",
+      "InputDefinition": {
+        "userMessage": "Analyze the content of our recent HubSpot notes — meetings at ICAST, Dealer Week booth interest, partnership discussions. What topics keep coming up? What are prospects asking about? I want to know what the market is telling our sales team that might not be reaching leadership. Surface the patterns in what people are actually talking about."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries HubSpot Note table for recent entries",
+          "Analyzes note body content (hs_note_body or hs_body_preview)",
+          "Identifies recurring themes or topics",
+          "Surfaces market intelligence from sales conversations"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Analyzes note content for themes",
+                "Surfaces actionable market intelligence",
+                "Goes beyond simple aggregation to content analysis"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DB3B2FB5-783A-480B-B8FB-00524710A4DC"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.715Z",
+      "checksum": "19b6590474f22113946c8f31e62b84a40f8c4e74115cdf87ac55823c386e53c6"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 21 - CRM Coverage by Membership Tier",
+      "Description": "Conversation 5: Match members to HubSpot contacts by email, show coverage gaps by tier",
+      "InputDefinition": {
+        "userMessage": "Match our 15,000 MRAA members to HubSpot contacts by email. Show the coverage gap by membership tier — what percentage of Gold, Silver, and Bronze members are tracked in CRM versus invisible to the sales team? Then show how coverage varies by lifecycle stage — are our CRM-tracked members mostly 'leads' or actual 'customers'?"
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Joins YourMembership.Member to HubSpot.Contact on email",
+          "Groups by MemberTypeCode showing match vs no-match counts",
+          "Calculates coverage percentage per tier",
+          "Shows lifecycle stage distribution for matched contacts"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Cross-system JOIN between YourMembership and HubSpot on email",
+                "Shows CRM coverage gap by membership tier",
+                "Includes lifecycle stage analysis for matched contacts"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "543DEF70-E0B9-4C4D-A987-969315779CB4"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.781Z",
+      "checksum": "1c40c3cfc9fc3c3cc7ee8c67c6974227aa8c4ce248ad44205ccc61fde9616c06"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 22 - High-Value Members Missing from CRM",
+      "Description": "Conversation 5: Gold/Silver members with no HubSpot contact, check company-level presence",
+      "InputDefinition": {
+        "userMessage": "For every Gold and Silver member with NO HubSpot contact — list them with organization, state, and expiration date. Then check if their organization appears as a HubSpot company even though the individual is missing. Are we engaging the company but missing the key decision-makers? That's a different problem than having no relationship at all."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "LEFT JOIN Member to Contact filtering for NULL matches",
+          "Filters for Gold and Silver tier members",
+          "Cross-references Organization with HubSpot Company names",
+          "Distinguishes company-engaged vs completely unknown"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Identifies high-value members missing from CRM",
+                "Three-way cross-system query: Member, Contact, Company",
+                "Distinguishes missing-individual vs missing-relationship"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "0D5BE49A-5B2C-46EF-B786-DD1F3A25EBFC"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.796Z",
+      "checksum": "ca45aa326349f64ba5556c2b7a79e23f378beb204e6df0b5229ea849b57e6a47"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 23 - Expiring Members Segmented by CRM Status",
+      "Description": "Conversation 5: Members expiring in 90 days split by CRM engagement level",
+      "InputDefinition": {
+        "userMessage": "The retention play. Cross-reference members expiring in the next 90 days against HubSpot. Split them into three groups: those with an active deal (great — sales is engaged), those with a contact but no deal (known but not acted on), and those with zero CRM presence (completely off radar). Each group needs a different intervention strategy."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Filters Member for valid expirations in next 90 days",
+          "LEFT JOINs to Contact and Deal on email",
+          "Segments into three distinct groups based on CRM engagement",
+          "Provides counts and member details for each segment"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Segments expiring members by CRM engagement level",
+                "Three-tier segmentation: deal, contact-only, invisible",
+                "Cross-system query joining Member, Contact, Deal"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "381148F3-C4C7-4B8C-AA67-E1C8EFCE2D65"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.809Z",
+      "checksum": "b9bfa1c0d230686e6fe9385307cd517c1f90d6baf74c10be94b4c423543a282a"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 24 - Non-Member Warm Handoff Targets",
+      "Description": "Conversation 5: Retail Non-Members at orgs with active HubSpot deals",
+      "InputDefinition": {
+        "userMessage": "Flip the lens — show me Retail Non-Members whose organizations already have active HubSpot deals. These are people at companies where our sales team is already in conversation about partnerships or booth space, but the individuals haven't converted to paying members. That's a warm handoff the team should be making today."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Filters Member for Retail Non-Member type",
+          "Cross-references Organization with Deal company names",
+          "Identifies individuals at companies with active deals",
+          "Presents actionable conversion opportunity list"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Identifies non-members at organizations with active deals",
+                "Cross-system query joining Member data to HubSpot Deal data",
+                "Presents actionable warm handoff list"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "26F04764-A135-4FB9-92A3-E2A3EB13FF95"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.821Z",
+      "checksum": "445291e91cd373edac6242670503deba2878355c8024f9cb4026e97c04bda0ba"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 25 - Key Accounts Cross-System Dashboard",
+      "Description": "Conversation 5: Organizations in both systems ranked by combined relationship depth",
+      "InputDefinition": {
+        "userMessage": "Build me the ultimate key accounts view. Find organizations in BOTH systems. For each, show: total MRAA members by tier, total dues collected, HubSpot deal pipeline value, call and meeting count, and the latest note. Rank by combined relationship depth. These are our top partnerships across both platforms — I want to see the full picture in one dashboard I can check weekly."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries Member, DuesTransaction, Company, Deal, Call, Meeting, and Note tables",
+          "Matches organizations across both systems",
+          "Aggregates multiple metrics per organization",
+          "Ranks by combined relationship value"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Multi-table cross-system aggregation spanning 7+ tables",
+                "Shows combined relationship metrics per org",
+                "Ranks organizations by combined value"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "97A659F1-7E2F-4F7B-B412-1D483DF0FF2D"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.834Z",
+      "checksum": "267bf4a4c712b636aa9b61c0bc4279da4d044aa634a10b5a4bd901c9ceceb574"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 26 - Association Network vs Member Density",
+      "Description": "Conversation 6: Marine Trade Association coverage gaps against member geography",
+      "InputDefinition": {
+        "userMessage": "Show me our Marine Trade Association network alongside our member geographic footprint. Which state associations have lots of MRAA members in their territory, which have few, and which states have members but no association partner at all? The gaps between our association relationships and our member density are where we should be building new partnerships."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries Group and GroupType for Marine Trade Associations",
+          "Queries Member for state-level distribution",
+          "Joins Location data for geographic context",
+          "Identifies alignment gaps between associations and members"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Cross-references Group network with member geography",
+                "Identifies states with gaps in association coverage",
+                "Uses Group, GroupType, Member, and Location tables"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F5B09A46-81E7-413B-91AB-0F7368B08AD4"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.847Z",
+      "checksum": "38dd7184272e128db8fb599bd1f16fc0a59ff67855400666c53be62165cc59e6"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 27 - Sponsor vs Partner vs Deal Alignment",
+      "Description": "Conversation 6: Compare sponsor rotators against partner memberships and HubSpot deals",
+      "InputDefinition": {
+        "userMessage": "We feature sponsors on our platform. Show me who they are alongside our top partner members and HubSpot deal pipeline. Are our sponsors also our deepest paying relationships? Or are there partner members with significant dues who we haven't tapped for sponsorship? Show me the whitespace between sponsorship, membership, and deal revenue."
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries SponsorRotator for current sponsors",
+          "Queries Member for partner-tier memberships",
+          "Queries Deal for pipeline value",
+          "Identifies untapped sponsorship opportunities"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Queries SponsorRotator alongside membership and deal data",
+                "Identifies alignment between sponsors and paying partners",
+                "Surfaces whitespace opportunities"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "60FC680B-7293-460A-B0E8-3C5D8A2C5313"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.860Z",
+      "checksum": "40a16797362da3fe5b7101d78023b9ea80eaad2053ecfb026180056790967739"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 28 - Payment Infrastructure Analysis",
+      "Description": "Conversation 6: Payment processor utilization and member payment behavior patterns",
+      "InputDefinition": {
+        "userMessage": "Help me understand our payment infrastructure. Different processors handle dues, store orders, donations, and foundation contributions. Show me the volume and revenue flowing through each processor and payment method. Do high-tier members pay differently than Bronze members? Is there friction in our payment setup that might be costing us conversions?"
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries PaymentProcessor table for infrastructure overview",
+          "Analyzes InvoiceItem and DuesTransaction for payment method distribution",
+          "Cross-references payment behavior with Member tier",
+          "Identifies potential friction points"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Analyzes payment processor utilization",
+                "Shows payment method distribution by tier",
+                "Identifies infrastructure patterns and friction"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "ACDCC90C-98C8-4473-831C-FA3ECBD493C8"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.873Z",
+      "checksum": "9c8a2c8dc139346308d1d18b01d3ac5086ec775e4c21b70e80597564d5211f0a"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 29 - International Membership Analysis",
+      "Description": "Conversation 6: International member footprint with country breakdown and Canadian comparison",
+      "InputDefinition": {
+        "userMessage": "I want to understand our international footprint. We have members in 21 countries — show me the breakdown with member counts, tiers, and revenue per country. Cross-reference with our location and timezone data. For our Canadian members specifically — they're our biggest international segment — how do their membership tiers and dues compare to US members? Are we pricing appropriately for international markets?"
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries Member grouped by Country",
+          "References Country, Location, and TimeZone tables",
+          "Compares Canadian vs US member tier distribution and revenue",
+          "Analyzes international pricing appropriateness"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Shows international member distribution across countries",
+                "Uses Country, Location, and TimeZone tables",
+                "Compares Canadian vs US membership composition"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "C2C73B49-B3D2-4DAF-B731-8F618E86A30B"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.887Z",
+      "checksum": "85f714a890652134d9962424aea08dd1e515a537ed5af1c18b9075ccf9d7c281"
+    }
+  },
+  {
+    "fields": {
+      "TypeID": "@lookup:MJ: Test Types.Name=Agent Eval",
+      "Name": "MRAA Skip 30 - West Marine 360 View",
+      "Description": "Conversation 6: Complete cross-system 360 view of largest member organization",
+      "InputDefinition": {
+        "userMessage": "Build me a complete 360-degree view of West Marine — our largest member organization with nearly 200 accounts. Pull everything across both systems: all members by type, complete dues and invoice history, event registrations, matching HubSpot contacts with lifecycle stages, deals in pipeline, call logs, meeting history, notes, and open tasks. Then tell me — if I ran this template for every top-20 organization, what patterns should I be looking for?"
+      },
+      "ExpectedOutcomes": {
+        "judgeValidationCriteria": [
+          "Queries Member, DuesTransaction, InvoiceItem, EventRegistration for YourMembership data",
+          "Queries Contact, Company, Deal, Call, Meeting, Note, Task for HubSpot data",
+          "Filters all tables for West Marine organization",
+          "Provides comprehensive multi-tab or multi-section view spanning 10+ tables"
+        ]
+      },
+      "Configuration": {
+        "agentId": "@lookup:MJ: AI Agents.Name=Skip",
+        "oracles": [
+          {
+            "type": "trace-no-errors",
+            "weight": 0.15
+          },
+          {
+            "type": "schema-validate",
+            "weight": 0.15
+          },
+          {
+            "type": "llm-judge",
+            "weight": 0.7,
+            "config": {
+              "criteria": [
+                "Comprehensive cross-system query spanning 10+ tables",
+                "All data filtered for West Marine organization",
+                "Provides actionable 360-degree relationship view"
+              ]
+            }
+          }
+        ]
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "45A75B1C-04F5-4EA2-9713-DC02D24A745F"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T16:15:15.898Z",
+      "checksum": "28c2ca6e760acb1f1c9597fe3e917ccff69ca373b1814b4ba45e030d723bb289"
+    }
+  }
+]

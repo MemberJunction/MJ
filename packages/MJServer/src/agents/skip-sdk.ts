@@ -754,6 +754,16 @@ export class SkipSDK {
                 };
 
                 const req = requestFn(options, (res) => {
+                    LogStatus(`[SkipSDK] HTTP response status: ${res.statusCode}`);
+                    if (res.statusCode && res.statusCode >= 400) {
+                        let errorBody = '';
+                        res.on('data', (chunk: Buffer) => { errorBody += chunk.toString(); });
+                        res.on('end', () => {
+                            LogError(`[SkipSDK] HTTP ${res.statusCode} from ${url}: ${errorBody}`);
+                            reject(new Error(`Skip API returned HTTP ${res.statusCode}: ${errorBody}`));
+                        });
+                        return;
+                    }
                     const gunzip = createGunzip();
                     const stream = res.headers['content-encoding'] === 'gzip' ? res.pipe(gunzip) : res;
 

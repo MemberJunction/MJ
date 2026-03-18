@@ -1,0 +1,468 @@
+{
+  "fields": {
+    "Name": "MRAA Skip Query Evaluation Suite",
+    "Description": "30 association-focused conversational queries testing Skip's analytical capabilities across MRAA's YourMembership and HubSpot data. Organized as 6 themed conversations (Membership Intelligence, Revenue Deep Dive, Programs & Education, Sales Effectiveness, Cross-System Intelligence, Strategic Discovery) with 5 questions each, progressing from exploratory to multi-system analytical queries.",
+    "Status": "Active"
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 01 - Membership Composition",
+          "Sequence": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "E7513819-45F3-42CD-B783-F783F8B9B3D8"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.059Z",
+          "checksum": "c9ed1e8b2ae595dcfb1209036fc2e93bcce83c3303248331090b957e0f5f1edb"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 02 - Non-Member Conversion Targets",
+          "Sequence": 2,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "A97F7D36-CB77-4958-912E-9C2E061572B6"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.070Z",
+          "checksum": "c79145ebe5138496dfe37eba9079e0994549aa9d0b3a9e90835f212ea518dcb9"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 03 - Expiration Data Quality",
+          "Sequence": 3,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "3E2A4353-F539-4FB6-A9C2-72AAD6C6BBDD"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.082Z",
+          "checksum": "44e4fe73cd0060287c4d2560dc9e28adfe63bbb3c709a0eecebc3ffa643c2d41"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 04 - Renewal Priority List",
+          "Sequence": 4,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "FD0C38C0-AADE-41C9-A1BD-3473DAF2C0DD"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.093Z",
+          "checksum": "d2d524bf8f1011f8297c90567c838e40fbf0fc534e11259291c6a68f5262cd91"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 05 - Geographic vs Association Alignment",
+          "Sequence": 5,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "BF2213A9-9AB2-49A6-A8A6-FEA0C1CDBE4F"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.104Z",
+          "checksum": "4a8d54457f9ad0aa17a00b765ae6ac1b2146a33767d3ec97dd7dedb24f04cf9a"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 06 - Complete Revenue Breakdown",
+          "Sequence": 6,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "0EE38DBB-01E0-41C9-BE5A-D56A8B03341B"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.115Z",
+          "checksum": "926a0a09623af53094b3a56f9919b0e35f296b9ec05dc0ed17533a5b3455a1bc"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 07 - Dues Revenue Composition Trend",
+          "Sequence": 7,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9464698F-40A2-42F8-B720-A3E677C75E04"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.126Z",
+          "checksum": "570ca0ab351ad61b9b466180e4b31d7229ba39227558432821ad0264de421e7f"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 08 - Revenue Diversification Analysis",
+          "Sequence": 8,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "CF9B9DB5-D263-4EA9-A2B7-93F397D2054D"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.136Z",
+          "checksum": "f1c1f93c48d25414d913529d97793b2b3f8e49e21dad5c1655043bcc0510cae0"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 09 - Revenue Concentration Risk",
+          "Sequence": 9,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "05E6163F-F9D5-46D3-899C-0DFB48194F5E"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.147Z",
+          "checksum": "34a47cc16317068d550934eb054640994d187689ea675942fff87f10ba2ce3ea"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 10 - Pricing Integrity Check",
+          "Sequence": 10,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "99135CEF-37FC-47FC-95A7-4B2B7CB70478"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.157Z",
+          "checksum": "1e7392bcc5b9a3ae7dc3d66a6146360c27fe800e6e2fcabf5a5ca82f75c3f2e2"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 11 - Program Portfolio Overview",
+          "Sequence": 11,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "06838FEB-C85E-4462-BEE9-EBF7402012A3"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.232Z",
+          "checksum": "bc1847ae2ec5913f783e522ff4bdc1725be3945571eb9531bf5cffeecc29eb6a"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 12 - Events Calendar with Traction",
+          "Sequence": 12,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "5B8AC62D-33A4-400E-8F23-05168E27C7CD"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.242Z",
+          "checksum": "ae425575216984a4913c8aa5d0debbad0b5403da906ecbfa2b12012db160a485"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 13 - Summit Attendee Analysis",
+          "Sequence": 13,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "D490DA4F-8435-4951-B4C2-1DB5FCF7E07B"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.253Z",
+          "checksum": "3a71cd5d955feb2c7d8ce0d34059b296a5e551cf027d8c61224b398e80cb413e"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 14 - HubSpot Product Catalog vs Deal Line Items",
+          "Sequence": 14,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "04F185CD-DAE2-4ACB-A30F-051C04634B07"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.264Z",
+          "checksum": "7a915bb0e7196048da895f25a9ac68b2bd83a1f97dc2a40c540b3304a914e324"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 15 - Cross-Channel Pricing Drift",
+          "Sequence": 15,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1B4F276F-9400-4D36-A15A-C4E80CF6B57E"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.276Z",
+          "checksum": "7a8afa88096c737ddd40704c60a29e38146a088d0cddf7357faf31ba18e0dcc1"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 16 - Deal Pipeline by Product Type",
+          "Sequence": 16,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "71182927-D204-4CED-B97C-75494642A548"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.287Z",
+          "checksum": "4dfd90594f6f1cc802fe6ff8d88acbe11743eeca9c50cad11c347efa3d8d2322"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 17 - Sales Activity vs Deal Creation",
+          "Sequence": 17,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "369DD4C8-89E4-49D3-BA5F-894A64B0A26B"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.298Z",
+          "checksum": "09bbf40539f1b43800e757b6264ffe7faa3f90b937dcf718185843a521c8edaa"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 18 - Sales Team Leaderboard",
+          "Sequence": 18,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "67617409-7F55-4534-BF2D-385935FD9742"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.311Z",
+          "checksum": "8856117d16c99c1985d09c202e0330312e43f7f982b36620a91f6d6bfdb264dc"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 19 - Hot Prospects and Pipeline Leakage",
+          "Sequence": 19,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1AAEB3D6-E0D3-4538-8965-0464B8B34D2C"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.322Z",
+          "checksum": "3c0c569eed9a86c601ca7fa03282c99629f88b3b0dacda8649c13c375aa3d3da"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 20 - Sales Intelligence from Notes",
+          "Sequence": 20,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "CED09F39-2D9D-4669-9C6C-2B513CC9A9D9"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.332Z",
+          "checksum": "387097229a6eade2dd7a8fc7ec7fca73435c1f7429481489bd1552b6eda85c99"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 21 - CRM Coverage by Membership Tier",
+          "Sequence": 21,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "BEA19E6D-33EF-4561-AC84-ECFD5AD5A566"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.413Z",
+          "checksum": "29bf666b924f1d51acd5b25fa8fe711084b5c10eb91841044569bb54ffd247c0"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 22 - High-Value Members Missing from CRM",
+          "Sequence": 22,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "E57C96EB-3CA9-4726-88DD-E8F926F85C39"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.426Z",
+          "checksum": "ad00a1e691750f548063158fbd8f18cb734c706bcc0df6a2f78fbe41a7820d89"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 23 - Expiring Members Segmented by CRM Status",
+          "Sequence": 23,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B8CECB90-F696-49A6-A309-F030531E88BF"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.439Z",
+          "checksum": "a0671a9da6cd36023da13a9501c6b33f9dadfcb881c20fa3ff8aebf51d581595"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 24 - Non-Member Warm Handoff Targets",
+          "Sequence": 24,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "44E83D36-01CC-44B5-9FA3-3E2512BCCBAC"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.448Z",
+          "checksum": "1664ee6f04c4538447bbd93637506fac1d9944bd27496fd714a0ad9fe7d46880"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 25 - Key Accounts Cross-System Dashboard",
+          "Sequence": 25,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1E45DF70-EFD0-442F-A01E-6677B0B49CB5"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.462Z",
+          "checksum": "b6641839216e891b4e871b322ec7c7c43f0de1cc7112e4c31c04c12d10b6b1c5"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 26 - Association Network vs Member Density",
+          "Sequence": 26,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "4322F32C-08C1-43C7-8BE2-504C53541639"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.475Z",
+          "checksum": "71635c097b07cbf6d5ae45e8ca6e835a99d3a9a39b85c43c1f2b306869d4947d"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 27 - Sponsor vs Partner vs Deal Alignment",
+          "Sequence": 27,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "9BAABE1C-E89A-45A7-A73C-5D5C80B221C4"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.488Z",
+          "checksum": "8fe6ce13a5034a92c9bcfce7d10cd1979808c831fa07937dead83f1f65752360"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 28 - Payment Infrastructure Analysis",
+          "Sequence": 28,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "0C4B2C9C-DCA3-4D97-A054-6F3F0E7FC925"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.501Z",
+          "checksum": "555c55f1a7cf8a724ccc82d3cda20301cf05cebe55f7d7a79fa83921c382e282"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 29 - International Membership Analysis",
+          "Sequence": 29,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "0C09D84E-6803-48F4-9795-CFD63B0C84B5"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.513Z",
+          "checksum": "34639066f54b948a69e979ec221f755d9cc8c3a4fb8d00c4b8cb378d49a0d1fc"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=MRAA Skip 30 - West Marine 360 View",
+          "Sequence": 30,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "32668062-B47B-43E9-9DDA-6DE65A875585"
+        },
+        "sync": {
+          "lastModified": "2026-03-17T16:15:16.524Z",
+          "checksum": "707d0bb694a6911fca37793d9a6c65d429c6b77b6be4af858a071be2ebb35743"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "4D90841C-73FC-4B7A-9F1A-D1E956043F8A"
+  },
+  "sync": {
+    "lastModified": "2026-03-17T16:15:15.972Z",
+    "checksum": "99eea5846580de6184f0c6a2e176c6fce6ef1cc6b520ef9d7b4fced63d94845b"
+  }
+}

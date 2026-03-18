@@ -1,292 +1,2365 @@
 {
-    "wicket": [
+  "wicket": [
+    {
+      "TableName": "Person",
+      "PrimaryKey": [
         {
-            "TableName": "Person",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ]
-        },
-        {
-            "TableName": "Organization",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ]
-        },
-        {
-            "TableName": "Connection",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ],
-            "ForeignKeys": [
-                {
-                    "FieldName": "person_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Person",
-                    "RelatedField": "uuid"
-                },
-                {
-                    "FieldName": "organization_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Organization",
-                    "RelatedField": "uuid"
-                }
-            ]
-        },
-        {
-            "TableName": "WicketGroup",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ]
-        },
-        {
-            "TableName": "GroupMember",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ],
-            "ForeignKeys": [
-                {
-                    "FieldName": "group_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "WicketGroup",
-                    "RelatedField": "uuid"
-                },
-                {
-                    "FieldName": "person_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Person",
-                    "RelatedField": "uuid"
-                }
-            ]
-        },
-        {
-            "TableName": "Membership",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ]
-        },
-        {
-            "TableName": "PersonMembership",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ],
-            "ForeignKeys": [
-                {
-                    "FieldName": "person_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Person",
-                    "RelatedField": "uuid"
-                },
-                {
-                    "FieldName": "membership_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Membership",
-                    "RelatedField": "uuid"
-                },
-                {
-                    "FieldName": "organization_membership_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "OrganizationMembership",
-                    "RelatedField": "uuid"
-                }
-            ]
-        },
-        {
-            "TableName": "OrganizationMembership",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ],
-            "ForeignKeys": [
-                {
-                    "FieldName": "organization_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Organization",
-                    "RelatedField": "uuid"
-                },
-                {
-                    "FieldName": "membership_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Membership",
-                    "RelatedField": "uuid"
-                }
-            ]
-        },
-        {
-            "TableName": "PersonEmail",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ],
-            "ForeignKeys": [
-                {
-                    "FieldName": "person_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Person",
-                    "RelatedField": "uuid"
-                }
-            ]
-        },
-        {
-            "TableName": "PersonPhone",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ],
-            "ForeignKeys": [
-                {
-                    "FieldName": "person_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Person",
-                    "RelatedField": "uuid"
-                }
-            ]
-        },
-        {
-            "TableName": "PersonAddress",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ],
-            "ForeignKeys": [
-                {
-                    "FieldName": "person_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Person",
-                    "RelatedField": "uuid"
-                }
-            ]
-        },
-        {
-            "TableName": "OrganizationEmail",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ],
-            "ForeignKeys": [
-                {
-                    "FieldName": "organization_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Organization",
-                    "RelatedField": "uuid"
-                }
-            ]
-        },
-        {
-            "TableName": "OrganizationPhone",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ],
-            "ForeignKeys": [
-                {
-                    "FieldName": "organization_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Organization",
-                    "RelatedField": "uuid"
-                }
-            ]
-        },
-        {
-            "TableName": "OrganizationAddress",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ],
-            "ForeignKeys": [
-                {
-                    "FieldName": "organization_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Organization",
-                    "RelatedField": "uuid"
-                }
-            ]
-        },
-        {
-            "TableName": "Touchpoint",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ],
-            "ForeignKeys": [
-                {
-                    "FieldName": "person_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Person",
-                    "RelatedField": "uuid"
-                }
-            ]
-        },
-        {
-            "TableName": "Role",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ]
-        },
-        {
-            "TableName": "UserIdentity",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ],
-            "ForeignKeys": [
-                {
-                    "FieldName": "person_id",
-                    "SchemaName": "wicket",
-                    "RelatedTable": "Person",
-                    "RelatedField": "uuid"
-                }
-            ]
-        },
-        {
-            "TableName": "ResourceTag",
-            "PrimaryKey": [
-                {
-                    "FieldName": "uuid",
-                    "Description": "Primary key from source system"
-                }
-            ]
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
         }
-    ]
+      ]
+    },
+    {
+      "TableName": "Organization",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Connection",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "person_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Person",
+          "RelatedField": "uuid"
+        },
+        {
+          "FieldName": "organization_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Organization",
+          "RelatedField": "uuid"
+        }
+      ]
+    },
+    {
+      "TableName": "WicketGroup",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "GroupMember",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "group_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "WicketGroup",
+          "RelatedField": "uuid"
+        },
+        {
+          "FieldName": "person_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Person",
+          "RelatedField": "uuid"
+        }
+      ]
+    },
+    {
+      "TableName": "Membership",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "PersonMembership",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "person_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Person",
+          "RelatedField": "uuid"
+        },
+        {
+          "FieldName": "membership_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Membership",
+          "RelatedField": "uuid"
+        },
+        {
+          "FieldName": "organization_membership_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "OrganizationMembership",
+          "RelatedField": "uuid"
+        }
+      ]
+    },
+    {
+      "TableName": "OrganizationMembership",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "organization_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Organization",
+          "RelatedField": "uuid"
+        },
+        {
+          "FieldName": "membership_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Membership",
+          "RelatedField": "uuid"
+        }
+      ]
+    },
+    {
+      "TableName": "PersonEmail",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "person_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Person",
+          "RelatedField": "uuid"
+        }
+      ]
+    },
+    {
+      "TableName": "PersonPhone",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "person_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Person",
+          "RelatedField": "uuid"
+        }
+      ]
+    },
+    {
+      "TableName": "PersonAddress",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "person_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Person",
+          "RelatedField": "uuid"
+        }
+      ]
+    },
+    {
+      "TableName": "OrganizationEmail",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "organization_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Organization",
+          "RelatedField": "uuid"
+        }
+      ]
+    },
+    {
+      "TableName": "OrganizationPhone",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "organization_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Organization",
+          "RelatedField": "uuid"
+        }
+      ]
+    },
+    {
+      "TableName": "OrganizationAddress",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "organization_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Organization",
+          "RelatedField": "uuid"
+        }
+      ]
+    },
+    {
+      "TableName": "Touchpoint",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "person_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Person",
+          "RelatedField": "uuid"
+        }
+      ]
+    },
+    {
+      "TableName": "Role",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "UserIdentity",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "person_id",
+          "SchemaName": "wicket",
+          "RelatedTable": "Person",
+          "RelatedField": "uuid"
+        }
+      ]
+    },
+    {
+      "TableName": "ResourceTag",
+      "PrimaryKey": [
+        {
+          "FieldName": "uuid",
+          "Description": "Primary key from source system"
+        }
+      ]
+    }
+  ],
+  "YourMembership": [
+    {
+      "TableName": "Member",
+      "PrimaryKey": [
+        {
+          "FieldName": "ProfileID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "MemberTypeCode",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "MemberType",
+          "RelatedField": "TypeCode"
+        },
+        {
+          "FieldName": "Country",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Country",
+          "RelatedField": "countryId"
+        }
+      ]
+    },
+    {
+      "TableName": "Event",
+      "PrimaryKey": [
+        {
+          "FieldName": "EventId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberType",
+      "PrimaryKey": [
+        {
+          "FieldName": "TypeCode",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Membership",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Group",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "GroupTypeId",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "GroupType",
+          "RelatedField": "Id"
+        }
+      ]
+    },
+    {
+      "TableName": "Product",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "DonationFund",
+      "PrimaryKey": [
+        {
+          "FieldName": "fundId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Certification",
+      "PrimaryKey": [
+        {
+          "FieldName": "CertificationID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "InvoiceItem",
+      "PrimaryKey": [
+        {
+          "FieldName": "LineItemID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "WebSiteMemberID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "ProfileID"
+        },
+        {
+          "FieldName": "GLCodeItemName",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "GLCode",
+          "RelatedField": "GLCodeName"
+        },
+        {
+          "FieldName": "QBClassItemName",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "QBClass",
+          "RelatedField": "Id"
+        },
+        {
+          "FieldName": "InvoiceNo",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "StoreOrder",
+          "RelatedField": "OrderID"
+        },
+        {
+          "FieldName": "EmailAddress",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "email"
+        }
+      ]
+    },
+    {
+      "TableName": "DuesTransaction",
+      "PrimaryKey": [
+        {
+          "FieldName": "TransactionID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "WebsiteMemberID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "ProfileID"
+        },
+        {
+          "FieldName": "MemberType",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "MemberType",
+          "RelatedField": "TypeCode"
+        },
+        {
+          "FieldName": "Email",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "email"
+        },
+        {
+          "FieldName": "FirstName",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "firstname"
+        },
+        {
+          "FieldName": "LastName",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "lastname"
+        }
+      ]
+    },
+    {
+      "TableName": "EventRegistration",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "EventId",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Event",
+          "RelatedField": "EventId"
+        },
+        {
+          "FieldName": "FirstName",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "firstname"
+        },
+        {
+          "FieldName": "LastName",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "lastname"
+        }
+      ]
+    },
+    {
+      "TableName": "EventSession",
+      "PrimaryKey": [
+        {
+          "FieldName": "SessionId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "EventId",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Event",
+          "RelatedField": "EventId"
+        }
+      ]
+    },
+    {
+      "TableName": "EventTicket",
+      "PrimaryKey": [
+        {
+          "FieldName": "TicketId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "EventId",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Event",
+          "RelatedField": "EventId"
+        },
+        {
+          "FieldName": "Category",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "EventCategory",
+          "RelatedField": "Id"
+        }
+      ]
+    },
+    {
+      "TableName": "EventCategory",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberGroup",
+      "PrimaryKey": [
+        {
+          "FieldName": "MemberGroupId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ProfileID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "MemberProfile",
+          "RelatedField": "ProfileID"
+        },
+        {
+          "FieldName": "GroupId",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Group",
+          "RelatedField": "Id"
+        },
+        {
+          "FieldName": "GroupTypeId",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "GroupType",
+          "RelatedField": "Id"
+        }
+      ]
+    },
+    {
+      "TableName": "Connection",
+      "PrimaryKey": [
+        {
+          "FieldName": "ConnectionId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ProfileID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "MemberProfile",
+          "RelatedField": "ProfileID"
+        },
+        {
+          "FieldName": "Email",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "email"
+        },
+        {
+          "FieldName": "FirstName",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "firstname"
+        },
+        {
+          "FieldName": "LastName",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "lastname"
+        }
+      ]
+    },
+    {
+      "TableName": "DonationHistory",
+      "PrimaryKey": [
+        {
+          "FieldName": "intDonationId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ProfileID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "MemberProfile",
+          "RelatedField": "ProfileID"
+        },
+        {
+          "FieldName": "intDonationId",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "DonationTransaction",
+          "RelatedField": "TransactionID"
+        }
+      ]
+    },
+    {
+      "TableName": "EngagementScore",
+      "PrimaryKey": [
+        {
+          "FieldName": "ProfileID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ProfileID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "MemberProfile",
+          "RelatedField": "ProfileID"
+        }
+      ]
+    },
+    {
+      "TableName": "GroupType",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "DonationTransaction",
+      "PrimaryKey": [
+        {
+          "FieldName": "TransactionID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "WebsiteMemberID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "ProfileID"
+        },
+        {
+          "FieldName": "FundName",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "DonationFund",
+          "RelatedField": "fundName"
+        },
+        {
+          "FieldName": "FirstName",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "firstname"
+        },
+        {
+          "FieldName": "LastName",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "lastname"
+        }
+      ]
+    },
+    {
+      "TableName": "StoreOrder",
+      "PrimaryKey": [
+        {
+          "FieldName": "OrderID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "WebsiteMemberID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "ProfileID"
+        },
+        {
+          "FieldName": "ShippingMethod",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "ShippingMethod",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "StoreOrderDetail",
+      "PrimaryKey": [
+        {
+          "FieldName": "OrderDetailID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "OrderID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "StoreOrder",
+          "RelatedField": "OrderID"
+        },
+        {
+          "FieldName": "WebsiteMemberID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "ProfileID"
+        },
+        {
+          "FieldName": "ShippingMethod",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "ShippingMethod",
+          "RelatedField": "id"
+        }
+      ]
+    },
+    {
+      "TableName": "CertificationJournal",
+      "PrimaryKey": [
+        {
+          "FieldName": "EntryID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "WebsiteMemberID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "ProfileID"
+        }
+      ]
+    },
+    {
+      "TableName": "CertificationCreditType",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ProductCategory",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CareerOpening",
+      "PrimaryKey": [
+        {
+          "FieldName": "CareerOpeningID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Campaign",
+      "PrimaryKey": [
+        {
+          "FieldName": "CampaignId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "GLCode",
+      "PrimaryKey": [
+        {
+          "FieldName": "GLCodeId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberProfile",
+      "PrimaryKey": [
+        {
+          "FieldName": "ProfileID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "MemberTypeCode",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "MemberType",
+          "RelatedField": "TypeCode"
+        },
+        {
+          "FieldName": "EmailAddress",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "email"
+        },
+        {
+          "FieldName": "FirstName",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "firstname"
+        },
+        {
+          "FieldName": "LastName",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "lastname"
+        }
+      ]
+    },
+    {
+      "TableName": "PersonID",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "UserType",
+          "RelatedTable": "MemberType",
+          "RelatedField": "TypeCode"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberGroupBulk",
+      "PrimaryKey": [
+        {
+          "FieldName": "WebSiteMemberID",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "GroupID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "WebSiteMemberID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "ProfileID"
+        },
+        {
+          "FieldName": "GroupID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Group",
+          "RelatedField": "Id"
+        }
+      ]
+    },
+    {
+      "TableName": "FinanceBatch",
+      "PrimaryKey": [
+        {
+          "FieldName": "BatchID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "FinanceBatchDetail",
+      "PrimaryKey": [
+        {
+          "FieldName": "DetailID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "BatchID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "FinanceBatch",
+          "RelatedField": "BatchID"
+        }
+      ]
+    },
+    {
+      "TableName": "AllCampaign",
+      "PrimaryKey": [
+        {
+          "FieldName": "CampaignId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CampaignEmailList",
+      "PrimaryKey": [
+        {
+          "FieldName": "ListId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventAttendeeType",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "EventId",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Event",
+          "RelatedField": "EventId"
+        }
+      ]
+    },
+    {
+      "TableName": "EventSessionGroup",
+      "PrimaryKey": [
+        {
+          "FieldName": "SessionGroupId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "EventId",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Event",
+          "RelatedField": "EventId"
+        }
+      ]
+    },
+    {
+      "TableName": "EventCEUAward",
+      "PrimaryKey": [
+        {
+          "FieldName": "AwardID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "EventId",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Event",
+          "RelatedField": "EventId"
+        },
+        {
+          "FieldName": "CertificationID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Certification",
+          "RelatedField": "CertificationID"
+        },
+        {
+          "FieldName": "CreditTypeID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "CertificationCreditType",
+          "RelatedField": "ID"
+        }
+      ]
+    },
+    {
+      "TableName": "EventRegistrationForm",
+      "PrimaryKey": [
+        {
+          "FieldName": "FormId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EventID",
+      "PrimaryKey": [
+        {
+          "FieldName": "EventId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "EventId",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Event",
+          "RelatedField": "EventId"
+        }
+      ]
+    },
+    {
+      "TableName": "GroupMembershipLog",
+      "PrimaryKey": [
+        {
+          "FieldName": "ItemID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ProfileID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "MemberProfile",
+          "RelatedField": "ProfileID"
+        },
+        {
+          "FieldName": "FirstName",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "firstname"
+        },
+        {
+          "FieldName": "LastName",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "lastname"
+        }
+      ]
+    },
+    {
+      "TableName": "DuesRule",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberReferral",
+      "PrimaryKey": [
+        {
+          "FieldName": "ReferralId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ReferrerID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "ProfileID"
+        },
+        {
+          "FieldName": "ReferredID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "ProfileID"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberSubAccount",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "ProfileID"
+        },
+        {
+          "FieldName": "ParentID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "ProfileID"
+        }
+      ]
+    },
+    {
+      "TableName": "Country",
+      "PrimaryKey": [
+        {
+          "FieldName": "countryId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Location",
+      "PrimaryKey": [
+        {
+          "FieldName": "locationCode",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "countryId",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Country",
+          "RelatedField": "countryId"
+        }
+      ]
+    },
+    {
+      "TableName": "ShippingMethod",
+      "PrimaryKey": [
+        {
+          "FieldName": "id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "PaymentProcessor",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "CustomTaxLocation",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "QBClass",
+      "PrimaryKey": [
+        {
+          "FieldName": "Id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MembershipModifier",
+      "PrimaryKey": [
+        {
+          "FieldName": "ID",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "MembershipID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Membership",
+          "RelatedField": "Id"
+        }
+      ]
+    },
+    {
+      "TableName": "MembershipPromoCode",
+      "PrimaryKey": [
+        {
+          "FieldName": "PromoCodeId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "MembershipID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Membership",
+          "RelatedField": "Id"
+        }
+      ]
+    },
+    {
+      "TableName": "Announcement",
+      "PrimaryKey": [
+        {
+          "FieldName": "AnnouncementId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "EmailSuppressionList",
+      "PrimaryKey": [
+        {
+          "FieldName": "Email",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "Email",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "email"
+        }
+      ]
+    },
+    {
+      "TableName": "SponsorRotator",
+      "PrimaryKey": [
+        {
+          "FieldName": "RotatorId",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberNetwork",
+      "PrimaryKey": [
+        {
+          "FieldName": "NetworkId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ProfileID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "MemberProfile",
+          "RelatedField": "ProfileID"
+        }
+      ]
+    },
+    {
+      "TableName": "MemberFavorite",
+      "PrimaryKey": [
+        {
+          "FieldName": "FavoriteId",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ProfileID",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "MemberProfile",
+          "RelatedField": "ProfileID"
+        }
+      ]
+    },
+    {
+      "TableName": "TimeZone",
+      "PrimaryKey": [
+        {
+          "FieldName": "fullName",
+          "Description": "Primary key from source system"
+        }
+      ]
+    }
+  ],
+  "HubSpot": [
+    {
+      "TableName": "Contact",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "associatedcompanyid",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Company",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "email",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "EmailAddr"
+        },
+        {
+          "FieldName": "firstname",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "FirstName"
+        },
+        {
+          "FieldName": "lastname",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "LastName"
+        },
+        {
+          "FieldName": "city",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "City"
+        },
+        {
+          "FieldName": "state",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "State"
+        },
+        {
+          "FieldName": "country",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "Country"
+        },
+        {
+          "FieldName": "phone",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "Phone"
+        }
+      ]
+    },
+    {
+      "TableName": "Company",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "address",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "Address1"
+        },
+        {
+          "FieldName": "address2",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "Address2"
+        },
+        {
+          "FieldName": "city",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "City"
+        },
+        {
+          "FieldName": "state",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "State"
+        },
+        {
+          "FieldName": "country",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "Country"
+        },
+        {
+          "FieldName": "phone",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "Phone"
+        }
+      ]
+    },
+    {
+      "TableName": "Deal",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Ticket",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Product",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "LineItem",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "hs_product_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Product",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "Quote",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "hs_sender_email",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "EmailAddr"
+        }
+      ]
+    },
+    {
+      "TableName": "Call",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Email",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "hs_email_sender_email",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "EmailAddr"
+        },
+        {
+          "FieldName": "hs_email_to_email",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "EmailAddr"
+        },
+        {
+          "FieldName": "hs_email_sender_firstname",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "FirstName"
+        },
+        {
+          "FieldName": "hs_email_sender_lastname",
+          "SchemaName": "YourMembership",
+          "RelatedTable": "Member",
+          "RelatedField": "LastName"
+        }
+      ]
+    },
+    {
+      "TableName": "Note",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Task",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "Meeting",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "FeedbackSubmission",
+      "PrimaryKey": [
+        {
+          "FieldName": "hs_object_id",
+          "Description": "Primary key from source system"
+        }
+      ]
+    },
+    {
+      "TableName": "ContactCompany",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "contact_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "company_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Company",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "ContactDeal",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "contact_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "deal_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Deal",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "ContactTicket",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "contact_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "ticket_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Ticket",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "CompanyDeal",
+      "PrimaryKey": [
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "company_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Company",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "deal_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Deal",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "CompanyTicket",
+      "PrimaryKey": [
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "company_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Company",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "ticket_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Ticket",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "DealLineItem",
+      "PrimaryKey": [
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "line_item_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "deal_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Deal",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "line_item_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "LineItem",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "DealQuote",
+      "PrimaryKey": [
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "quote_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "deal_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Deal",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "quote_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Quote",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "QuoteContact",
+      "PrimaryKey": [
+        {
+          "FieldName": "quote_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "quote_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Quote",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "contact_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "QuoteLineItem",
+      "PrimaryKey": [
+        {
+          "FieldName": "quote_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "line_item_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "quote_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Quote",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "line_item_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "LineItem",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "ContactCall",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "call_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "contact_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "call_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Call",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "ContactEmail",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "email_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "contact_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "email_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Email",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "ContactNote",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "note_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "contact_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "note_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Note",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "ContactTask",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "task_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "contact_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "task_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Task",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "ContactMeeting",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "meeting_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "contact_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "meeting_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Meeting",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "CompanyCall",
+      "PrimaryKey": [
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "call_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "company_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Company",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "call_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Call",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "CompanyEmail",
+      "PrimaryKey": [
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "email_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "company_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Company",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "email_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Email",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "CompanyNote",
+      "PrimaryKey": [
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "note_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "company_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Company",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "note_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Note",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "CompanyTask",
+      "PrimaryKey": [
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "task_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "company_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Company",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "task_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Task",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "CompanyMeeting",
+      "PrimaryKey": [
+        {
+          "FieldName": "company_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "meeting_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "company_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Company",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "meeting_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Meeting",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "DealCall",
+      "PrimaryKey": [
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "call_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "deal_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Deal",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "call_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Call",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "DealEmail",
+      "PrimaryKey": [
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "email_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "deal_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Deal",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "email_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Email",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "DealNote",
+      "PrimaryKey": [
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "note_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "deal_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Deal",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "note_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Note",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "DealTask",
+      "PrimaryKey": [
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "task_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "deal_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Deal",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "task_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Task",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "DealMeeting",
+      "PrimaryKey": [
+        {
+          "FieldName": "deal_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "meeting_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "deal_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Deal",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "meeting_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Meeting",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "TicketCall",
+      "PrimaryKey": [
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "call_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ticket_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Ticket",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "call_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Call",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "TicketEmail",
+      "PrimaryKey": [
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "email_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ticket_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Ticket",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "email_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Email",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "TicketNote",
+      "PrimaryKey": [
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "note_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ticket_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Ticket",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "note_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Note",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "TicketTask",
+      "PrimaryKey": [
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "task_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ticket_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Ticket",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "task_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Task",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "TicketMeeting",
+      "PrimaryKey": [
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "meeting_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ticket_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Ticket",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "meeting_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Meeting",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "ContactFeedbackSubmission",
+      "PrimaryKey": [
+        {
+          "FieldName": "contact_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "feedback_submission_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "contact_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Contact",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "feedback_submission_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "FeedbackSubmission",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    },
+    {
+      "TableName": "TicketFeedbackSubmission",
+      "PrimaryKey": [
+        {
+          "FieldName": "ticket_id",
+          "Description": "Primary key from source system"
+        },
+        {
+          "FieldName": "feedback_submission_id",
+          "Description": "Primary key from source system"
+        }
+      ],
+      "ForeignKeys": [
+        {
+          "FieldName": "ticket_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "Ticket",
+          "RelatedField": "hs_object_id"
+        },
+        {
+          "FieldName": "feedback_submission_id",
+          "SchemaName": "HubSpot",
+          "RelatedTable": "FeedbackSubmission",
+          "RelatedField": "hs_object_id"
+        }
+      ]
+    }
+  ]
 }

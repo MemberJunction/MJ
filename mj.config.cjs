@@ -24,82 +24,96 @@ module.exports = {
 
   // Include __mj schema for MJ framework development
   // Default excludes __mj since end-users shouldn't modify core entities
-  excludeSchemas: ['sys', 'staging'],
+  excludeSchemas: ["sys", "staging"],
 
   settings: [
-    { name: 'mj_core_schema', value: '__mj' },
-    { name: 'skip_database_generation', value: false },
-    { name: 'recompile_mj_views', value: true },
-    { name: 'auto_index_foreign_keys', value: true },
+    { name: "mj_core_schema", value: "__mj" },
+    { name: "skip_database_generation", value: false },
+    { name: "recompile_mj_views", value: true },
+    { name: "auto_index_foreign_keys", value: true },
   ],
 
+  // Enable ALL AI-powered CodeGen features for detailed entity documentation
+  advancedGeneration: {
+    enableAdvancedGeneration: true,
+    features: [
+      { name: "EntityNames", enabled: true, description: "Use AI to generate better entity names when creating new entities" },
+      { name: "EntityDescriptions", enabled: true, description: "Use AI to generate brief, user-friendly descriptions for entities" },
+      { name: "EntityFieldDescriptions", enabled: true, description: "Use AI to generate descriptions for fields when new fields are detected" },
+      { name: "SmartFieldIdentification", enabled: true, description: "Use AI to determine Name Field, Default In View fields, and Searchable fields" },
+      { name: "DefaultInViewFields", enabled: true, description: "Use AI to determine which fields should be shown by default in User Views" },
+      { name: "FormLayoutGeneration", enabled: true, description: "Use AI to generate semantic field categories with icons for collapsible form sections" },
+      { name: "VirtualEntityFieldDecoration", enabled: true, description: "Use AI to analyze SQL views and identify PKs, FKs, field descriptions" },
+      { name: "ParseCheckConstraints", enabled: true, description: "Use AI to parse CHECK constraints and generate TypeScript validation methods" },
+      { name: "TransitiveJoinIntelligence", enabled: true, description: "Use AI to detect junction tables for many-to-many relationships" },
+    ],
+  },
 
   // Custom SQL scripts specific to this monorepo - NO LONGER INCLUDING MJ_BASE_BEFORE_SQL.sql as of 5.3.0!
-  customSQLScripts: [
-  ],
+  customSQLScripts: [],
 
   // Soft PK/FK configuration for tables without database constraints
-  additionalSchemaInfo: './metadata/integrations/additionalSchemaInfo.json',
+  additionalSchemaInfo: "./metadata/integrations/additionalSchemaInfo.json",
 
   // Output directories specific to monorepo structure
   output: [
-    { type: 'SQL', directory: './SQL Scripts/generated', appendOutputCode: true },
+    { type: "SQL", directory: "./SQL Scripts/generated", appendOutputCode: true },
     {
-      type: 'Angular',
-      directory: './packages/MJExplorer/src/app/generated',
-      options: [{ name: 'maxComponentsPerModule', value: 20 }],
+      type: "Angular",
+      directory: "./packages/MJExplorer/src/app/generated",
+      options: [{ name: "maxComponentsPerModule", value: 20 }],
     },
     {
-      type: 'AngularCoreEntities',
-      directory: './packages/Angular/Explorer/core-entity-forms/src/lib/generated',
-      options: [{ name: 'maxComponentsPerModule', value: 100 }],
+      type: "AngularCoreEntities",
+      directory: "./packages/Angular/Explorer/core-entity-forms/src/lib/generated",
+      options: [{ name: "maxComponentsPerModule", value: 100 }],
     },
-    { type: 'GraphQLServer', directory: './packages/MJAPI/src/generated' },
-    { type: 'GraphQLCoreEntityResolvers', directory: './packages/MJServer/src/generated' },
-    { type: 'CoreActionSubclasses', directory: './packages/Actions/CoreActions/src/generated' },
-    { type: 'ActionSubclasses', directory: './packages/GeneratedActions/src/generated' },
-    { type: 'CoreEntitySubclasses', directory: './packages/MJCoreEntities/src/generated' },
-    { type: 'EntitySubclasses', directory: './packages/GeneratedEntities/src/generated' },
-    { type: 'DBSchemaJSON', directory: './Schema Files' },
+    { type: "GraphQLServer", directory: "./packages/MJAPI/src/generated" },
+    { type: "GraphQLCoreEntityResolvers", directory: "./packages/MJServer/src/generated" },
+    { type: "CoreActionSubclasses", directory: "./packages/Actions/CoreActions/src/generated" },
+    { type: "ActionSubclasses", directory: "./packages/GeneratedActions/src/generated" },
+    { type: "CoreEntitySubclasses", directory: "./packages/MJCoreEntities/src/generated" },
+    { type: "EntitySubclasses", directory: "./packages/GeneratedEntities/src/generated" },
+    { type: "DBSchemaJSON", directory: "./Schema Files" },
   ],
 
   // Build commands for monorepo packages
   commands: [
     {
-      workingDirectory: './packages/MJCoreEntities',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
+      workingDirectory: "./packages/MJCoreEntities",
+      command: "npm",
+      args: ["run", "build"],
+      when: "after",
     },
     {
-      workingDirectory: './packages/Angular/Explorer/core-entity-forms',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
+      workingDirectory: "./packages/Angular/Explorer/core-entity-forms",
+      command: "npm",
+      args: ["run", "build"],
+      when: "after",
     },
     {
-      workingDirectory: './packages/Actions/CoreActions',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
+      workingDirectory: "./packages/Actions/CoreActions",
+      command: "npm",
+      args: ["run", "build"],
+      when: "after",
     },
     {
-      workingDirectory: './packages/GeneratedEntities',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
+      workingDirectory: "./packages/GeneratedEntities",
+      command: "npm",
+      args: ["run", "build"],
+      when: "after",
     },
     {
-      workingDirectory: './packages/GeneratedActions',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
+      workingDirectory: "./packages/GeneratedActions",
+      command: "npm",
+      args: ["run", "build"],
+      when: "after",
     },
     {
-      workingDirectory: './packages/MJServer',
-      command: 'npm',
-      args: ['run', 'build'],
-      when: 'after',
+      workingDirectory: "./packages/MJServer",
+      command: "npm",
+      args: ["run", "build"],
+      when: "after",
     },
     // {
     //   workingDirectory: './packages/MJAPI',
@@ -118,7 +132,7 @@ module.exports = {
   mcpServerSettings: {
     port: 3100,
     enableMCPServer: true,
-    systemApiKey: 'MY_API_KEY_FOR_MCP_SERVER',
+    systemApiKey: "MY_API_KEY_FOR_MCP_SERVER",
 
     // Authentication configuration
     // Supports: 'apiKey' (default), 'oauth', 'both', 'none'
@@ -126,7 +140,7 @@ module.exports = {
     // Token audience is derived from the provider's config (WEB_CLIENT_ID env var for Azure AD)
     // Scopes are auto-generated from auth providers (e.g., api://{clientId}/.default for Azure AD)
     auth: {
-      mode: 'both', // 'apiKey' | 'oauth' | 'both' | 'none'
+      mode: "both", // 'apiKey' | 'oauth' | 'both' | 'none'
       // resourceIdentifier: auto-generated as http://localhost:{port} for MCP client discovery
       // scopes: auto-generated from auth providers, or override with explicit array
 
@@ -136,7 +150,7 @@ module.exports = {
       // This allows MCP clients like Claude Code to authenticate without manual app registration
       proxy: {
         enabled: true, // Enable OAuth proxy for dynamic client registration
-        upstreamProvider: 'auth0', // Optional: specify provider by name (defaults to first)
+        upstreamProvider: "auth0", // Optional: specify provider by name (defaults to first)
         // clientTtlMs: 24 * 60 * 60 * 1000, // 24 hours (default)
         // stateTtlMs: 10 * 60 * 1000, // 10 minutes (default)
 
@@ -150,20 +164,20 @@ module.exports = {
         // If not set, tokens won't be signed and consent screen won't work!
         // REQUIRED for consent screen to function
         jwtSigningSecret: process.env.MCP_JWT_SECRET,
-        jwtExpiresIn: '1h', // Token expiration (default: 1h)
+        jwtExpiresIn: "1h", // Token expiration (default: 1h)
       },
     },
 
     actionTools: [
       {
-        actionName: 'NOT YET SUPPORTED',
-        actionCategory: '*',
+        actionName: "NOT YET SUPPORTED",
+        actionCategory: "*",
       },
     ],
     entityTools: [
       {
-        schemaName: '*',
-        entityName: '*',
+        schemaName: "*",
+        entityName: "*",
         get: true,
         create: true,
         update: true,
@@ -173,7 +187,7 @@ module.exports = {
     ],
     agentTools: [
       {
-        agentName: '*', // All agents (or specific name pattern)
+        agentName: "*", // All agents (or specific name pattern)
         execute: true,
         status: true,
         cancel: true,
@@ -191,8 +205,8 @@ module.exports = {
     enableA2AServer: true, // Override default (false)
     entityCapabilities: [
       {
-        schemaName: '*',
-        entityName: '*',
+        schemaName: "*",
+        entityName: "*",
         get: true,
         create: true,
         update: true,
