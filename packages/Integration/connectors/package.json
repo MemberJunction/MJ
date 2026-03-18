@@ -18,9 +18,11 @@
     "@memberjunction/core-entities": "5.13.0",
     "@memberjunction/global": "5.13.0",
     "@memberjunction/integration-engine": "5.13.0",
+    "jsonwebtoken": "9.0.3",
     "mssql": "^12.2.0"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
     "typescript": "^5.9.3",
     "tsc-alias": "^1.8.16",
     "vitest": "^4.0.18"
