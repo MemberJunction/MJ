@@ -20,46 +20,53 @@
 **Missed PKs by category:**
 - 14 BusinessEntityID-as-PK (identifying relationship pattern)
 - 17 composite PKs missed
-- 5 natural keys (CountryRegionCode, CurrencyCode, UnitMeasureCode, DocumentNode, SystemInformationID)
+- 5 natural keys (CountryRegionCode, CurrencyCode, etc.)
 
 **False positives by category:**
 - ~15 rowguid columns flagged as PK candidates
-- ~10 composite candidates that include rowguid (e.g., BusinessEntityID,LoginID,rowguid)
-- ~20 wrong single-column picks (Weight, Size, ProductModelID, PersonID in wrong table)
-- ~17 composite candidates missing columns or with extra columns vs ground truth
+- ~10 composite candidates that include rowguid
+- ~20 wrong single-column picks (Weight, Size, ProductModelID, etc.)
+- ~17 composite candidates with wrong columns vs ground truth
 
-### Proposed Algorithm Changes
+### Agreed Algorithm Changes
 
-#### 1A. Add rowguid/row_version to blacklist (PKDetector.ts line ~436)
-**Problem:** rowguid columns pass all statistical checks (unique, non-null, GUID type) but are never PKs - they are replication identifiers.
-**Fix:** Add patterns /^rowguid$/i, /^row_?guid$/i, /^row_?version$/i to the blacklist array.
-**Expected impact:** Eliminates ~15 single-column FPs and ~10 composite FPs that include rowguid. Net: -25 false positives.
+#### 1A. Column-Order + Confidence-Based Secondary UUID Elimination
+**File:** PKDetector.ts
+**Problem:** rowguid and other secondary UUID columns pass all statistical checks but are never PKs.
+**Approach:** Use column ordinal position as a scoring factor. When a table already has a high-confidence PK candidate (non-null, non-blank, 100% unique, early in column order), demote other UUID/GUID columns that appear later. Earlier columns get a mild boost since PKs are conventionally first. Handles rowguid naturally AND catches other spurious unique columns without name-based blacklisting.
+**Expected impact:** -25+ false positives.
 
-#### 1B. Reduce FK-pattern penalty for BusinessEntityID (PKDetector.ts line ~525)
-**Problem:** detectFKPattern() returns 0.9 for any *ID column whose prefix does not match the table name. BusinessEntityID in Employee table gets 0.9 FK score -> 54% penalty -> drops below threshold. But BusinessEntityID IS the PK in 14 tables (identifying relationship).
-**Fix:** Reduce the prefix-does-not-match-table return from 0.9 to 0.5. This still penalizes FK-like names but not enough to kill legitimate PK-as-FK candidates. The LLM sanity check can then validate.
-**Expected impact:** Recovers ~10-14 of the BusinessEntityID misses. Net: +10-14 recall.
+#### 1B. Three-Tier FK-Pattern Penalty
+**File:** PKDetector.ts
+**Problem:** detectFKPattern() gives 0.9 FK-likelihood for any *ID column whose prefix doesnt match the table name, killing legitimate PK-as-FK candidates like BusinessEntityID in Employee.
+**Approach:** Three-tier penalty:
+1. Column name matches current table name -> 0 penalty (clearly the PK)
+2. Column name matches another tables PK but not current table -> 0.3 penalty (identifying relationship)
+3. Column looks FK-ish with no PK evidence elsewhere -> 0.7 penalty
+**Expected impact:** Recovers ~10-14 BusinessEntityID-as-PK misses.
 
-#### 1C. Expand composite key detection to 6 columns (PKDetector.ts line ~573)
-**Problem:** Composite key limit is 4 columns. AdventureWorks has a 4-column composite PK (EmployeeDepartmentHistory: BusinessEntityID, StartDate, DepartmentID, ShiftID) that gets rejected when rowguid is also in the candidate set, making it 5 columns.
-**Fix:** Change idColumns.length <= 4 to idColumns.length <= 6.
-**Caveat:** More columns = more combinatorial noise. May need to pair with 1A (removing rowguid from candidates first).
-**Expected impact:** Recovers 2-3 composite PKs. Minor.
+#### 1C. Keep Composite Key Limit at 4 (No Change)
+Composites >4 columns are extremely rare. The 5+ column issue was caused by rowguid inflation, fixed by 1A.
 
-#### 1D. Composite key detection: include date columns (PKDetector.ts line ~569)
-**Problem:** Composite key detection only looks for columns ending in ID or KEY. But 6 AdventureWorks composite PKs include date columns (StartDate, RateChangeDate, QuotaDate) that do not match these patterns.
-**Fix:** Also include columns whose stats show them as PK-eligible (non-null, non-blank) AND that appear alongside ID columns. Instead of filtering by name pattern, use the pkEligible flag from stats cache.
+#### 1D. Date Columns in Composite Key Detection
+**File:** PKDetector.ts
+**Problem:** Composite detection only matches columns ending in ID or KEY. History tables use date columns in composite PKs.
+**Approach:** Include columns with pkEligible stats (non-null, non-blank) when they appear alongside existing ID-type candidates. Never hunts for date-only composites.
 **Expected impact:** Recovers 4-6 composite PKs with date components.
 
-#### 1E. Natural key recognition (PKDetector.ts)
-**Problem:** Columns like CountryRegionCode, CurrencyCode, UnitMeasureCode are natural PKs - short string codes that are unique. They get poor naming scores (0.0) and then a 50% penalty for unique but poor naming.
-**Fix:** Add a natural key pattern detector: if a column name ends in Code or Key (not ID), has varchar type, short avg length (<10 chars), and 100% unique, boost its score instead of penalizing.
-**Expected impact:** Recovers 3-5 natural key PKs.
+#### 1E. Natural Key Recognition - DROPPED
+Stats-based approach from 1A should catch natural keys without risky name patterns.
 
-#### 1F. Reduce false positives from non-PK unique columns
-**Problem:** Columns like Weight, Size, ProductModelID in Product table are unique but clearly not PKs. ProductModelID is flagged at confidence 100 because it passes all statistical checks and matches the *ID naming pattern.
-**Fix:** When multiple single-column PK candidates exist for a table, pick only the best one (highest confidence) and demote others. A table with both ProductID (conf 100) and ProductModelID (conf 100) should resolve to ProductID by preferring the one that matches the table name.
-**Expected impact:** Major FP reduction. Estimated -20 to -30 false positives.
+#### 1F. Table-Name Preference Tiebreaker
+**File:** PKDetector.ts
+**Problem:** Multiple single-column candidates pass all stats checks. Product.ProductID and Product.ProductModelID both score 100%.
+**Approach:** Prefer the candidate whose name contains the table name (or vice versa). ProductID matches Product -> wins.
+**Expected impact:** -20 to -30 false positives.
+
+#### 1G. LLM Reasoning Phase for Weak Candidates (NEW)
+**Problem:** Some borderline candidates cant be resolved by statistics alone.
+**Approach:** After scoring, send candidates below 70-80% confidence to LLM with full table context. LLM can reject weak candidates but never add new ones or reject high-confidence ones. Provides reasoning for each rejection.
+**Expected impact:** Catches remaining false positives that survive statistical filtering.
 
 ---
 
@@ -67,85 +74,67 @@
 
 ### Problem Breakdown (1 missed, 70 false positives)
 
-**Recall is 98.9% - nearly perfect.** The only missed FK is PersonCreditCard.BusinessEntityID -> Person.BusinessEntityID (PK-as-FK, skipped because BusinessEntityID is detected as PK in PersonCreditCard).
+Recall is 98.9% (near-perfect). Precision is 56.2% with 70 false positives.
 
-**Precision is 56.2%** - 70 false positives, mostly:
-- BusinessEntityID matching many tables (correct target + 5-10 wrong targets)
-- TerritoryID matching SalesOrderHeader, SalesPerson, SalesTerritoryHistory when only SalesTerritory is correct
-- rowguid cross-matches between tables
+### Agreed Algorithm Changes
 
-### Proposed Algorithm Changes
+#### 2A. Allow PK Columns as FK Candidates
+**File:** FKDetector.ts
+**Problem:** PK columns are entirely skipped for FK analysis, missing PK-as-FK identifying relationships.
+**Approach:** Remove hard skip. Analyze PK columns for FK relationships with higher containment bar (95% vs 90%).
+**Expected impact:** Recovers 1 missed FK.
 
-#### 2A. Allow PK columns as FK candidates (FKDetector.ts line ~59-69)
-**Problem:** If a column is detected as PK, it is skipped entirely for FK analysis. Misses PK-as-FK patterns.
-**Fix:** Remove the continue on line 68. Still note that it is a PK (for logging) but proceed with FK analysis.
-**Expected impact:** Recovers the 1 missed FK. Minimal.
+#### 2B. FK Target Ranking with Single-Column PK Bonus
+**File:** FKDetector.ts
+**Problem:** Multiple target tables match for common column names. All reported as FKs.
+**Approach:** Rank targets:
+- Single-column PK target matching our column -> +20% bonus (most common FK pattern)
+- Composite PK target including our column -> neutral (composite PKs are leaf nodes, rarely referenced)
+- Column exists in target but is not a PK -> -20% penalty
+**Expected impact:** -40 to -50 false positives.
 
-#### 2B. Prefer correct FK target when multiple match - target-is-PK priority
-**Problem:** BusinessEntityID appears in ~20 tables. When analyzing EmailAddress.BusinessEntityID, the detector finds 6+ targets (Person, BusinessEntity, Password, PersonPhone, etc.) and reports ALL of them. Only one is the true FK.
-**Fix:** When multiple targets match, apply a ranking heuristic:
-1. Target where column is the single-column PK -> highest priority
-2. Target table name is a prefix/suffix of the source column name -> high priority
-3. Target has fewest columns (lookup table) -> medium priority
-4. Discard targets where column is NOT a PK in the target table
-**Expected impact:** Major FP reduction. Could cut 40-50 false positives.
+#### 2C. Deduplicate FK Candidates
+**File:** FKDetector.ts
+**Problem:** Same target found by multiple pattern passes, creating duplicates.
+**Approach:** Deduplicate by (schema, table, column) before scoring.
+**Expected impact:** -5 duplicates.
 
-#### 2C. Deduplicate FK targets across schemas (FKDetector.ts line ~224)
-**Problem:** Same table appears in multiple schemas, generating duplicate FK candidates.
-**Fix:** Add deduplication by (schemaName, tableName, columnName) before returning targets.
-**Expected impact:** Minor - eliminates ~5 duplicates.
-
-#### 2D. Add rowguid exclusion to FK detection
-**Problem:** rowguid columns generate FK candidates like ProductSubcategory.rowguid -> SalesPerson.rowguid - nonsensical.
-**Fix:** Skip columns named rowguid in FK analysis (they are replication GUIDs, never real FKs).
-**Expected impact:** Eliminates 3-5 rowguid cross-match FPs.
+#### 2D. rowguid Exclusion from FK Analysis
+**File:** FKDetector.ts
+**Problem:** rowguid columns generate nonsensical FK matches.
+**Approach:** Skip exact-match rowguid columns from FK candidate generation.
+**Expected impact:** -3 to -5 false positives.
 
 ---
 
-## Phase 3: Instrumentation Overhaul
+## Phase 3: Instrumentation Overhaul (Future)
+- Per-iteration PK/FK count snapshots
+- Description change deltas per iteration
+- Token usage breakdown per phase/iteration
+- Convergence trajectory data
 
-### Problems with Current Instrumentation
-- Processing log only captures iteration 0, not subsequent iterations
-- No per-iteration PK/FK count snapshots
-- No change deltas between iterations (what actually changed?)
-- Column descriptions all show same depth regardless of actual refinement
-- Token usage not broken down per phase/iteration
-- state.json is 39MB for 71 tables - could be more efficient
+## Phase 4: LLM Integration Improvements (Future)
+- CleanAndParseJSON() in LLMSanityChecker
+- LLM-assisted PK/FK disambiguation (1G implementation)
 
-### Proposed Changes
-- Add per-iteration snapshot of PK/FK counts and confidence distributions
-- Track description change deltas (new, updated, unchanged per iteration)
-- Add token usage breakdown per phase and per iteration
-- Add convergence trajectory data (confidence over time)
-- Consider splitting large fields (sample values, processing log) into separate files
-- Fix processing log to record all iterations, not just the first
+## Phase 5: Additional Benchmark Databases (Future)
+Northwind, Chinook, WideWorldImporters, Spider/BIRD selections
 
 ---
 
-## Phase 4: LLM Integration Improvements
+## Implementation Order
 
-- Use CleanAndParseJSON() from @memberjunction/global in LLMSanityChecker (currently raw JSON.parse fails on markdown-wrapped responses)
-- Consider LLM-assisted PK disambiguation when multiple candidates tie
-- Improve FK target selection with LLM validation (ask LLM which of N candidate targets is most likely)
+1. 1A - Column order + confidence demotion (biggest FP reducer)
+2. 1B - Three-tier FK penalty (recovers BusinessEntityID PKs)
+3. 1F - Table-name tiebreaker (further FP reduction)
+4. 1D - Date columns in composites (recovers history table PKs)
+5. 2B - FK target ranking (biggest FK precision improvement)
+6. 2A, 2C, 2D - FK cleanup (quick wins)
+7. 1G - LLM reasoning phase (polish pass)
+8. Re-run benchmark and score
 
----
+## Run History
 
-## Phase 5: Additional Benchmark Databases
-
-| Database | Tables | Why |
-|----------|--------|-----|
-| Northwind | 13 | Simple baseline, easy to validate |
-| Chinook | 11 | Cross-platform, music domain |
-| WideWorldImporters | 30+ | Modern MS sample, temporal tables |
-| Spider/BIRD selections | varies | Academic benchmarks with ground truth |
-
----
-
-## Execution Order
-
-1. **Phase 1 (PK)** - most impactful, foundational for everything else
-2. **Phase 2 (FK)** - quick wins since recall is already 99%
-3. **Re-run benchmark** - validate improvements
-4. **Phase 3 (Instrumentation)** - better data for further iteration
-5. **Phase 4 (LLM)** - polish
-6. **Phase 5 (More databases)** - generalization testing
+| Run | Branch State | PK F1 | FK F1 | Desc% | Tokens | Notes |
+|-----|-------------|--------|--------|-------|--------|-------|
+| 001 | Baseline (next) | 48.0% | 71.7% | 99% | 6.3M | First clean run with working Gemini key |
