@@ -398,7 +398,7 @@ export class IntegrationActionExecutor extends BaseAction {
 
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         // 1. Parse Config from the action metadata
-        const config = JSON.parse(params.Action.Config || '{}') as IntegrationActionConfig;
+        const config = JSON.parse(params.Action.Config_ || '{}') as IntegrationActionConfig;
         if (!config.integrationName || !config.objectName || !config.verb) {
             return { Success: false, ResultCode: 'INVALID_CONFIG', Message: 'Action Config missing required fields' };
         }
@@ -1007,72 +1007,56 @@ All new integrations follow the connector-first pattern:
 
 ## 10. Implementation Phases
 
-### Phase 0: Foundation (Est. ~2-3 weeks)
+### Release Mapping
 
-| Task | Package | Depends On |
-|------|---------|-----------|
-| Migration: Add `Config` to Action table | migrations/ | — |
-| Migration: Add `WriteAPIPath`, `WriteMethod`, `DeleteMethod` to IntegrationObject | migrations/ | — |
-| Run CodeGen for new fields | — | Migrations applied |
-| Add CRUD types (`CRUDContext`, `IntegrationRecord`, etc.) | integration-engine | — |
-| Add CRUD methods to `BaseIntegrationConnector` | integration-engine | Types |
-| Add default CRUD implementations to `BaseRESTIntegrationConnector` | integration-engine | Base CRUD methods |
-| Build `IntegrationActionExecutor` class | integration-actions or core-actions | CRUD methods |
-| Build action generation CLI utility | integration-engine (or new package) | All of above |
-| Add `Integrations` category hierarchy | metadata/ | — |
-| Unit tests for executor and generator | — | All of above |
+| Phase | Ships In | Notes |
+|-------|----------|-------|
+| Phase 0 (DB migrations + CodeGen) | **v5.12** | COMPLETE — migration applied, CodeGen run |
+| All phases | **v5.13** | COMPLETE |
 
-### Phase 1: HubSpot Pilot (~1 week)
+### Phase 0: Foundation — COMPLETE
 
-| Task | Package | Depends On |
-|------|---------|-----------|
-| Add CRUD overrides to `HubSpotConnector` | integration-connectors | Phase 0 |
-| Set `SupportsWrite: true` on HubSpot objects | metadata/ | Phase 0 |
-| Set `IsReadOnly` on read-only HubSpot fields (e.g., ID, CreatedAt) | metadata/ | Phase 0 |
-| Generate HubSpot action metadata | CLI utility | HubSpot CRUD |
-| Map to existing Action IDs | CLI utility --update | Generated metadata |
-| Integration test: compare generated vs hand-written results | tests/ | All of above |
-| Flip existing HubSpot CRUD actions | metadata/ | Tests pass |
+**DB Migrations (shipped in v5.12):** `Config` column on Action table, `WriteAPIPath`/`WriteMethod`/`DeleteMethod` on IntegrationObject.
 
-### Phase 2: Remaining Providers (~2-3 weeks, parallelizable)
+**Code Implementation:**
+- CRUD types, `ListContext`/`ListResult`, `SupportsListing` getter — all in integration engine
+- `IntegrationActionExecutor` shared driver class — `packages/Actions/CoreActions/`
+- `ActionMetadataGenerator` generic generator — `packages/Integration/engine/`
+- Unit tests: 30 (generator) + 31 (executor)
 
-Each provider can be done independently and in parallel:
+### Phase 1: HubSpot Pilot — COMPLETE
 
-| Provider | New Connector? | Existing Actions to Convert | Notes |
-|----------|---------------|---------------------------|-------|
-| QuickBooks | Yes (new) | 4 | Extract from QuickBooksBaseAction |
-| Business Central | Yes (new) | 4 | Extract from BusinessCentralBaseAction |
-| Typeform | Yes (new) | 6 | Extract from TypeformBaseAction |
-| JotForm | Yes (new) | 5 | Extract from JotFormBaseAction |
-| SurveyMonkey | Yes (new) | 5 | Extract from SurveyMonkeyBaseAction |
-| Google Forms | Yes (new) | 2 | Extract from GoogleFormsBaseAction |
-| LearnWorlds | Yes (new) | 10 | Extract from LearnWorldsBaseAction |
+- Full CRUD on `HubSpotConnector` (Get/Create/Update/Delete/Search/List)
+- 38 generated actions (18 migrated with preserved DB IDs, 20 new)
+- 141 param + 59 result code delete markers for old BizApps params
+- Migration script: `scripts/migrate-hubspot-actions.mjs`
 
-### Phase 3: YourMembership + Salesforce Expansion (~1 week)
+### Phase 1b: Generic Architecture & Multi-Connector — COMPLETE
 
-| Task | Notes |
-|------|-------|
-| Add CRUD methods to YourMembershipConnector | Connector already exists with 30+ objects |
-| Add CRUD methods to SalesforceConnector | Connector exists but is mock — needs real API implementation |
-| Generate actions for both | Expect ~180 YM actions, ~30+ Salesforce actions |
+- Refactored away hard-coded generator scripts → single generic `generate-integration-actions.ts` in connectors package
+- Added `GetIntegrationObjects()`, `GetActionGeneratorConfig()`, `IntegrationName` to `BaseIntegrationConnector`
+- Added `IncludeInActionGeneration` flag to `IntegrationObjectInfo` for objects that shouldn't generate CRUD actions
+- `GetActionGeneratorConfig()` filters out `IncludeInActionGeneration: false` objects automatically
+- Rasa.io connector: `GetIntegrationObjects()` override, 12 read-only actions generated
+- YourMembership connector: `GetIntegrationObjects()` override, 27 read-only actions generated
+- Eliminated `HUBSPOT_PROPERTIES` duplication — `HUBSPOT_OBJECTS` is now single source of truth for both action generation and API property requests (13 objects, 7 ancillary excluded from action generation)
+- Slash command: `/generate-integration-actions [hubspot|rasa|ym|all]`
 
-### Phase 4: Schema Sync Automation (~1 week)
+### Total Generated Actions: 77
 
-| Task | Notes |
-|------|-------|
-| Build `ActionSyncService` | Diff engine for IntegrationObjectField → ActionParam sync |
-| Add entity save hooks on IntegrationObject/Field | Trigger sync on metadata changes |
-| Add debouncing (5-second batch window) | Prevent thrashing during DiscoverFields() |
-| Add sync audit logging | Track all auto-sync operations |
+| Connector | Actions | Objects | Notes |
+|-----------|---------|---------|-------|
+| HubSpot | 38 | 6 CRM (+ 7 ancillary for property lookups) | Full CRUD, 18 migrated from BizApps |
+| Rasa.io | 12 | 4 | Read-only (Get, Search, List) |
+| YourMembership | 27 | 9 | Read-only (Get, Search, List) |
 
-### Phase 5: Taxonomy & Cleanup (~3 days)
+### Future Work (separate projects)
 
-| Task | Notes |
-|------|-------|
-| Rename social media actions to `{Provider} - {Verb}` pattern | Metadata-only update |
-| Move auto-generated actions to `Integrations` category tree | Metadata-only update |
-| Remove deprecated BizApps action code (after validation) | Code cleanup |
-| Update documentation | CLAUDE.md, README updates |
+The following items from the original plan are being handled in other projects and are **out of scope** for this plan:
+- Phase 2 (QuickBooks, Business Central, Typeform, JotForm, SurveyMonkey, Google Forms, LearnWorlds connectors)
+- Phase 3 (YM/Salesforce CRUD expansion)
+- Phase 4 (Schema Sync Automation)
+- Phase 5 (Taxonomy & Cleanup)
 
 ---
 
@@ -1128,7 +1112,7 @@ When deciding whether a new external system should be an **integration connector
 ```typescript
 /**
  * JSON schema for the Config field on auto-generated integration actions.
- * Stored in Action.Config as a JSON string.
+ * Stored in Action.Config_ as a JSON string.
  */
 interface IntegrationActionConfig {
     /**
@@ -1172,7 +1156,119 @@ interface IntegrationActionConfig {
 }
 ```
 
-## Appendix C: Generated Action Example
+## Appendix C: Existing BizApps Actions — Database ID Preservation Map
+
+This appendix inventories all existing BizApps actions with their database primary keys. When migrating to `IntegrationActionExecutor`, we **preserve these IDs** — update `DriverClass` and populate `Config` on the existing records rather than creating new ones.
+
+### HubSpot — CRUD Actions (Migrate to IntegrationActionExecutor)
+
+| Action Name | Primary Key ID | Current DriverClass | New Verb | New ObjectName |
+|-------------|---------------|-------------------|----------|---------------|
+| HubSpot - Get Contact | A5C7433E-F36B-1410-8DB6-00021F8B792E | GetContactAction | Get | contacts |
+| HubSpot - Create Contact | 6CC7433E-F36B-1410-8DB6-00021F8B792E | CreateContactAction | Create | contacts |
+| HubSpot - Update Contact | 76C7433E-F36B-1410-8DB6-00021F8B792E | UpdateContactAction | Update | contacts |
+| HubSpot - Delete Contact | 80C7433E-F36B-1410-8DB6-00021F8B792E | DeleteContactAction | Delete | contacts |
+| HubSpot - Search Contacts | 8AC7433E-F36B-1410-8DB6-00021F8B792E | SearchContactsAction | Search | contacts |
+| HubSpot - Get Company | D5C7433E-F36B-1410-8DB6-00021F8B792E | GetCompanyAction | Get | companies |
+| HubSpot - Create Company | ADC7433E-F36B-1410-8DB6-00021F8B792E | CreateCompanyAction | Create | companies |
+| HubSpot - Update Company | B5C7433E-F36B-1410-8DB6-00021F8B792E | UpdateCompanyAction | Update | companies |
+| HubSpot - Search Companies | E8C7433E-F36B-1410-8DB6-00021F8B792E | SearchCompaniesAction | Search | companies |
+| HubSpot - Get Deal | F6C7433E-F36B-1410-8DB6-00021F8B792E | GetDealAction | Get | deals |
+| HubSpot - Create Deal | BDC7433E-F36B-1410-8DB6-00021F8B792E | CreateDealAction | Create | deals |
+| HubSpot - Update Deal | 04C8433E-F36B-1410-8DB6-00021F8B792E | UpdateDealAction | Update | deals |
+| HubSpot - Search Deals | 20C8433E-F36B-1410-8DB6-00021F8B792E | SearchDealsAction | Search | deals |
+| HubSpot - Create Task | C5C7433E-F36B-1410-8DB6-00021F8B792E | CreateTaskAction | Create | tasks |
+| HubSpot - Update Task | 58C8433E-F36B-1410-8DB6-00021F8B792E | UpdateTaskAction | Update | tasks |
+| HubSpot - Get Deals by Company | 2EC8433E-F36B-1410-8DB6-00021F8B792E | GetDealsByCompanyAction | Search | deals |
+| HubSpot - Get Deals by Contact | 3CC8433E-F36B-1410-8DB6-00021F8B792E | GetDealsByContactAction | Search | deals |
+| HubSpot - Get Upcoming Tasks | 60C8433E-F36B-1410-8DB6-00021F8B792E | GetUpcomingTasksAction | Search | tasks |
+
+### HubSpot — Keep as Custom (Platform-Specific)
+
+| Action Name | Primary Key ID | Reason |
+|-------------|---------------|--------|
+| HubSpot - Associate Contact to Company | CDC7433E-F36B-1410-8DB6-00021F8B792E | HubSpot-specific association API |
+| HubSpot - Merge Contacts | DDC7433E-F36B-1410-8DB6-00021F8B792E | Platform-specific merge semantics |
+| HubSpot - Log Activity | 12C8433E-F36B-1410-8DB6-00021F8B792E | HubSpot engagement abstraction |
+| HubSpot - Get Activities by Contact | 4AC8433E-F36B-1410-8DB6-00021F8B792E | HubSpot engagement timeline |
+
+### LearnWorlds — CRUD Actions (Migrate to IntegrationActionExecutor)
+
+| Action Name | Primary Key ID | Current DriverClass | New Verb | New ObjectName |
+|-------------|---------------|-------------------|----------|---------------|
+| LearnWorlds - Create User | 94C7433E-F36B-1410-8DB6-00021F8B792E | CreateUserAction | Create | users |
+| LearnWorlds - Update User | 3CDE4163-878C-4FE2-AF2C-8B51BDE4F651 | UpdateUserAction | Update | users |
+| LearnWorlds - Get User Details | 64C8433E-F36B-1410-8DB6-00021F8B792E | GetLearnWorldsUserDetailsAction | Get | users |
+| LearnWorlds - Get Users | 75C8433E-F36B-1410-8DB6-00021F8B792E | GetLearnWorldsUsersAction | List | users |
+| LearnWorlds - Enroll User | 62C8433E-F36B-1410-8DB6-00021F8B792E | EnrollUserAction | Create | enrollments |
+| LearnWorlds - Get User Enrollments | 66C8433E-F36B-1410-8DB6-00021F8B792E | GetUserEnrollmentsAction | List | enrollments |
+| LearnWorlds - Get Courses | 68C8433E-F36B-1410-8DB6-00021F8B792E | GetLearnWorldsCoursesAction | List | courses |
+| LearnWorlds - Get Course Details | 6AC8433E-F36B-1410-8DB6-00021F8B792E | GetLearnWorldsCourseDetailsAction | Get | courses |
+| LearnWorlds - Get Bundles | AD9E61C5-B22B-4A52-867E-8E0C017C065B | GetBundlesAction | List | bundles |
+| LearnWorlds - Get Certificates | 70C8433E-F36B-1410-8DB6-00021F8B792E | GetCertificatesAction | List | certificates |
+
+### LearnWorlds — Keep as Custom (Platform-Specific)
+
+| Action Name | Primary Key ID | Reason |
+|-------------|---------------|--------|
+| LearnWorlds - Get User Progress | 6CC8433E-F36B-1410-8DB6-00021F8B792E | Platform-specific progress tracking |
+| LearnWorlds - Update User Progress | 6EC8433E-F36B-1410-8DB6-00021F8B792E | Platform-specific progress mutation |
+| LearnWorlds - Get Course Analytics | 72C8433E-F36B-1410-8DB6-00021F8B792E | Platform-specific analytics |
+| LearnWorlds - Get Quiz Results | 79C8433E-F36B-1410-8DB6-00021F8B792E | Platform-specific assessment data |
+| LearnWorlds - Onboard Learner | FB7D4AD2-5D94-453C-99FC-35C08B386E66 | Multi-step workflow |
+| LearnWorlds - SSO Login | E0F498DA-D398-4CDE-B17A-1BA162EEA6D0 | Auth flow, not CRUD |
+| LearnWorlds - Attach Tags | DCE5945A-3108-43A6-B1F9-E9D69EF617C4 | Platform-specific tagging |
+| LearnWorlds - Detach Tags | 4652495C-D5C1-4725-AFE2-388454CE97A2 | Platform-specific tagging |
+| LearnWorlds - Get Bulk Data | D8DF07CA-BB03-4CD6-A5E1-A89961E57C21 | Platform-specific bulk export |
+
+### QuickBooks — CRUD Actions (Migrate to IntegrationActionExecutor)
+
+| Action Name | Primary Key ID | Current DriverClass | New Verb | New ObjectName |
+|-------------|---------------|-------------------|----------|---------------|
+| QuickBooks - Get GL Codes | 7DC8433E-F36B-1410-8DB6-00021F8B792E | GetGLCodesAction | List | gl_codes |
+| QuickBooks - Get Account Balances | 81C8433E-F36B-1410-8DB6-00021F8B792E | GetAccountBalancesAction | List | account_balances |
+| QuickBooks - Get Transactions | 85C8433E-F36B-1410-8DB6-00021F8B792E | GetTransactionsAction | List | transactions |
+| QuickBooks - Create Journal Entry | 9DC7433E-F36B-1410-8DB6-00021F8B792E | CreateJournalEntryAction | Create | journal_entries |
+
+### Business Central — CRUD Actions (Migrate to IntegrationActionExecutor)
+
+| Action Name | Primary Key ID | Current DriverClass | New Verb | New ObjectName |
+|-------------|---------------|-------------------|----------|---------------|
+| Business Central - Get Customers | 89C8433E-F36B-1410-8DB6-00021F8B792E | GetCustomersAction | List | customers |
+| Business Central - Get General Ledger Entries | 8DC8433E-F36B-1410-8DB6-00021F8B792E | GetGeneralLedgerEntriesAction | List | general_ledger_entries |
+| Business Central - Get GL Accounts | 91C8433E-F36B-1410-8DB6-00021F8B792E | GetGLAccountsAction | List | gl_accounts |
+| Business Central - Get Sales Invoices | 95C8433E-F36B-1410-8DB6-00021F8B792E | GetSalesInvoicesAction | List | sales_invoices |
+
+### Migration Procedure (Per Action)
+
+To migrate an existing action to `IntegrationActionExecutor` while preserving its database ID:
+
+1. **Update the action record** in the metadata JSON file:
+   - Change `DriverClass` from current class name to `IntegrationActionExecutor`
+   - Add `Config` field with `{"IntegrationName":"...", "ObjectName":"...", "Verb":"..."}`
+   - Keep `primaryKey.ID` unchanged
+
+2. **Update ActionParams** to match the new executor's expected parameter names:
+   - `ExternalID` (Input, required for Get/Update/Delete)
+   - `CompanyIntegrationID` (Input, optional)
+   - Per-field params matching connector's object fields
+   - Standard output params: `Record`, `ExternalID`, `Records`, `TotalCount`, `HasMore`, `NextCursor`
+
+3. **Push via mj-sync**: `npx mj sync push --dir=metadata --include="actions"`
+
+4. **Verify**: The action ID remains the same, so all agent references, execution logs, and history are preserved.
+
+### Summary
+
+| Provider | Migrate to Connector | Keep as Custom | Total |
+|----------|---------------------|---------------|-------|
+| HubSpot | 18 | 4 | 22 |
+| LearnWorlds | 10 | 9 | 19 |
+| QuickBooks | 4 | 0 | 4 |
+| Business Central | 4 | 0 | 4 |
+| **Total** | **36** | **13** | **49** |
+
+## Appendix D: Generated Action Example (HubSpot - Create Contact)
 
 Here's what the generation utility would produce for "HubSpot - Create Contact":
 

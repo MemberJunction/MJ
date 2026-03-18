@@ -1,4 +1,4 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionResultSimple, AIDirective, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -116,16 +116,15 @@ export class SearchQueryCatalogAction extends BaseAction {
                 Value: results.length
             });
 
-            // Build a plain-text directive — the agent framework wraps action results in
-            // JSON.stringify, so plain text avoids double-encoding that buries instructions.
-            // Prefer non-parameterized queries for composition (parameterized ones require
-            // runtime params and can't be directly composed for aggregate use cases).
-            const message = this.buildDirectiveMessage(results);
+            // Build the full message (preserved for backward compatibility) and
+            // structured AI directives for the agent framework.
+            const { message, directives } = this.buildDirectiveMessage(results);
 
             return {
                 Success: true,
                 ResultCode: 'SUCCESS',
-                Message: message
+                Message: message,
+                AIDirectives: directives.length > 0 ? directives : undefined
             };
 
         } catch (error) {
@@ -154,11 +153,10 @@ export class SearchQueryCatalogAction extends BaseAction {
     }
 
     /**
-     * Builds the plain-text directive message from search results.
-     * If a composable match >= 0.6 exists, returns Option A/B instructions.
-     * Otherwise, tells the LLM to proceed with fresh SQL.
+     * Builds the original full-text message (preserved for backward compatibility)
+     * and structured AI directives for the agent framework.
      */
-    private buildDirectiveMessage(results: Record<string, unknown>[]): string {
+    private buildDirectiveMessage(results: Record<string, unknown>[]): { message: string; directives: AIDirective[] } {
         const bestOverall = results[0];
         const bestComposable = results.find(r =>
             (r.Similarity as number) >= 0.6 && !this.hasTemplateParams(r)
@@ -167,7 +165,10 @@ export class SearchQueryCatalogAction extends BaseAction {
         const similarity = recommend.Similarity as number;
 
         if (similarity < 0.6) {
-            return `Found ${results.length} queries but no high-confidence composable matches (best: ${Math.round(similarity * 100)}%). Proceed with schema exploration and fresh SQL.`;
+            return {
+                message: `Found ${results.length} queries but no high-confidence composable matches (best: ${Math.round(similarity * 100)}%). Proceed with schema exploration and fresh SQL.`,
+                directives: []
+            };
         }
 
         const name = recommend.Name as string;
@@ -177,6 +178,7 @@ export class SearchQueryCatalogAction extends BaseAction {
         const sql = recommend.SQL as string | undefined;
         const columns = sql ? this.extractSelectColumns(sql) : '';
 
+        // Build the full message matching the original format
         const lines: string[] = [`Found ${results.length} matching queries.`];
 
         if (bestComposable && bestComposable !== bestOverall) {
@@ -214,7 +216,32 @@ export class SearchQueryCatalogAction extends BaseAction {
             lines.push(`  - ${r.Name} (${r.Category}) — ${sim}%${paramFlag} — ${r.Description || r.Name}`);
         }
 
-        return lines.join('\n');
+        // Structured AI directives — surfaced by the agent framework
+        const directives: AIDirective[] = [
+            {
+                Message: `YOUR NEXT ACTION — pick one:\n\nOption A — Fully covers the request? Call "Run Stored Query":\n  Action: "Run Stored Query"\n  Params: { QueryID: "${queryID}", DataFormat: "json" }\n\nOption B — Partially covers? Call "Run Ad-hoc Query" with composition SQL:\n  Action: "Run Ad-hoc Query"\n  Params: { Query: "SELECT base.*, <extra columns> FROM {{query:\\"${categoryPath}\\"}} base <extra JOINs> ORDER BY <column>", MaxRows: 100, DataFormat: "json" }`,
+                Type: 'instruction',
+                Priority: 'high'
+            },
+            {
+                Message: 'Do NOT call Get Entity Details or write fresh SQL — use one of the options above.',
+                Type: 'constraint',
+                Priority: 'critical'
+            }
+        ];
+
+        if (columns) {
+            directives.push({
+                Message: `The stored query provides these columns: ${columns}. Add only the columns/JOINs the user needs that aren't already in the stored query.`,
+                Type: 'context',
+                Priority: 'medium'
+            });
+        }
+
+        return {
+            message: lines.join('\n'),
+            directives
+        };
     }
 
     /** Extracts column aliases from the SELECT portion of SQL (before FROM). */

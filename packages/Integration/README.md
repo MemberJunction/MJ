@@ -67,6 +67,12 @@ The integration engine reads from and writes to these MJ entities:
 
 **Notifications** — After a sync completes or fails, the orchestrator emits a `SyncNotification` with a pre-formatted subject and body suitable for email delivery.
 
+## Integration Actions (Auto-Generated CRUD)
+
+Each connector can automatically generate a full set of **Get, Create, Update, Delete, Search, and List** actions for every object it supports. These actions are discoverable by AI agents, workflows, and low-code tools through the standard MJ Actions API.
+
+See **[INTEGRATION_ACTIONS.md](INTEGRATION_ACTIONS.md)** for the complete architecture guide, current connector inventory, and instructions for adding new connectors.
+
 ## Packages
 
 - **[engine/README.md](engine/README.md)** — Engine API and orchestration details
