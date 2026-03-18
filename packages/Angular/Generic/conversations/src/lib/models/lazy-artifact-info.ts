@@ -24,7 +24,7 @@ export class LazyArtifactInfo {
   public readonly versionDescription: string | null;
   public readonly versionCreatedAt: Date;
   public readonly artifactId: string;
-  public readonly artifactName: string;
+  public artifactName: string;
   public readonly artifactType: string;
   public readonly artifactDescription: string;
   public readonly visibility: string;

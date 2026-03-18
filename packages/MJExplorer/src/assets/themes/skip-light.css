@@ -2,10 +2,7 @@
     --mj-brand-primary: #147F9D;
     --mj-brand-primary-hover: #0F6A84;
     --mj-brand-primary-active: #0B5A70;
-    --mj-logo-mark: url('/assets/themes/skip/skip-mark.svg');
-    --mj-logo-mark-inverse: url('/assets/themes/skip/skip-mark-white.svg');
-    --mj-logo-wordmark: url('/assets/themes/skip/skip-logo.svg');
-    --mj-logo-color: #147F9D;
+    --mj-brand-secondary: #0B4F61;
     --mj-text-link: #147F9D;
     --mj-border-focus: #147F9D;
 }

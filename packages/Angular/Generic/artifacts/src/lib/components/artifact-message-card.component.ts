@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges } from '@angular/core';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
@@ -179,7 +179,7 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
     }
   `]
 })
-export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
+export class ArtifactMessageCardComponent implements OnInit, OnDestroy, OnChanges {
   @Input() artifactId!: string;
   @Input() versionNumber?: number;
   @Input() currentUser!: UserInfo;
@@ -205,6 +205,16 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
     } else {
       // Otherwise load from database
       await this.loadArtifact();
+    }
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    // Keep internal refs in sync when parent passes updated entities
+    if (changes['artifact'] && this.artifact) {
+      this._artifact = this.artifact;
+    }
+    if (changes['artifactVersion'] && this.artifactVersion) {
+      this._currentVersion = this.artifactVersion;
     }
   }
 
@@ -286,7 +296,11 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
   /**
    * Get the display name - prefer version-specific name if available, otherwise use artifact name
    */
+  /** Allow parent to override displayed name (e.g. after rename) */
+  @Input() NameOverride?: string;
+
   public get displayName(): string {
+    if (this.NameOverride) return this.NameOverride;
     if (this._currentVersion?.Name) {
       return this._currentVersion.Name;
     }

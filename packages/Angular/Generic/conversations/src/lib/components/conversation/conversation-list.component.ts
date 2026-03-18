@@ -32,6 +32,10 @@ import { UUIDsEqual } from '@memberjunction/global';
                     <i class="fas fa-sync-alt" [class.fa-spin]="isRefreshing"></i>
                     <span>{{ isRefreshing ? 'Refreshing...' : 'Refresh' }}</span>
                   </button>
+                  <button class="dropdown-item" (click)="ToggleSort($event)">
+                    <i class="fas" [class.fa-clock]="sortBy === 'name'" [class.fa-arrow-down-a-z]="sortBy === 'date'"></i>
+                    <span>Sort by {{ sortBy === 'date' ? 'Name' : 'Date' }}</span>
+                  </button>
                   <button class="dropdown-item" (click)="onSelectConversationsClick($event)">
                     <i class="fas fa-check-square"></i>
                     <span>Select Conversations</span>
@@ -87,7 +91,10 @@ import { UUIDsEqual } from '@memberjunction/global';
                     </div>
                   </div>
                   <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
-                    <div class="conversation-name">{{ conversation.Name }}</div>
+                    <div class="conversation-name-row">
+                      <div class="conversation-name">{{ conversation.Name }}</div>
+                      <span class="conversation-time">{{ FormatRelativeTime(conversation.__mj_UpdatedAt) }}</span>
+                    </div>
                     <div class="conversation-preview">{{ conversation.Description }}</div>
                   </div>
                   @if (!isSelectionMode) {
@@ -310,7 +317,10 @@ import { UUIDsEqual } from '@memberjunction/global';
     .conversation-icon.has-tasks { color: var(--mj-status-warning); }
     .badge-overlay { position: absolute; top: -4px; right: -4px; }
     .conversation-info { flex: 1; min-width: 0; }
-    .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conversation-name-row { display: flex; align-items: baseline; gap: 6px; }
+    .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+    .conversation-time { font-size: 11px; color: rgba(255,255,255,0.4); white-space: nowrap; flex-shrink: 0; }
+    .conversation-item.active .conversation-time { color: rgba(255,255,255,0.7); }
     .conversation-preview { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .conversation-item.active .conversation-preview { color: rgba(255,255,255,0.8); }
     .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -741,6 +751,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   public searchQuery: string = '';
   public isHeaderMenuOpen: boolean = false;
   public isRefreshing: boolean = false;
+  public sortBy: 'date' | 'name' = 'date';
 
   private destroy$ = new Subject<void>();
 
@@ -764,11 +775,23 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   }
 
   get pinnedConversations() {
-    return this.filteredConversations.filter(c => c.IsPinned);
+    return this.SortConversations(this.filteredConversations.filter(c => c.IsPinned));
   }
 
   get unpinnedConversations() {
-    return this.filteredConversations.filter(c => !c.IsPinned);
+    return this.SortConversations(this.filteredConversations.filter(c => !c.IsPinned));
+  }
+
+  private SortConversations(conversations: MJConversationEntity[]): MJConversationEntity[] {
+    return [...conversations].sort((a, b) => {
+      if (this.sortBy === 'name') {
+        return (a.Name || '').localeCompare(b.Name || '');
+      }
+      // Default: most recently updated first
+      const aTime = new Date(a.__mj_UpdatedAt).getTime();
+      const bTime = new Date(b.__mj_UpdatedAt).getTime();
+      return bTime - aTime;
+    });
   }
 
   ngOnInit() {
@@ -954,8 +977,31 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     }
   }
 
+  ToggleSort(event: Event): void {
+    event.stopPropagation();
+    this.sortBy = this.sortBy === 'date' ? 'name' : 'date';
+    this.isHeaderMenuOpen = false;
+  }
+
   hasActiveTasks(conversationId: string): boolean {
     return this.conversationIdsWithTasks.has(conversationId);
+  }
+
+  FormatRelativeTime(date: Date): string {
+    if (!date) return '';
+    const now = new Date();
+    const diff = now.getTime() - new Date(date).getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (minutes < 1) return 'now';
+    if (minutes < 60) return `${minutes}m`;
+    if (hours < 24) return `${hours}h`;
+    if (days < 7) return `${days}d`;
+
+    // Older than a week — show short date
+    return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
 
   toggleSelectionMode(): void {

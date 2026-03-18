@@ -14,6 +14,7 @@ import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON, RatingJSON } from '../../models/conversation-complete-query.model';
 import { MessageInputComponent } from '../message/message-input.component';
+import { MessageListComponent } from '../message/message-list.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
@@ -132,6 +133,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
+  @ViewChild(MessageListComponent) private messageListComponent?: MessageListComponent;
   @ViewChild(ConversationEmptyStateComponent) private emptyStateComponent?: ConversationEmptyStateComponent;
 
   public messages: MJConversationDetailEntity[] = [];
@@ -2071,6 +2073,22 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   /**
    * Handle share request from artifact viewer
    */
+  OnArtifactRenamed(event: { artifactId: string; newName: string }): void {
+    // Update cached artifact names in the artifacts maps so the modal links reflect the new name
+    for (const artifactList of this.effectiveArtifactsMap.values()) {
+      for (const info of artifactList) {
+        if (info.artifactId === event.artifactId) {
+          info.artifactName = event.newName;
+        }
+      }
+    }
+    this._combinedArtifactsMap = null; // Clear cache so groupedArtifacts rebuilds
+
+    // Directly update artifact name on rendered message cards
+    this.messageListComponent?.UpdateArtifactName(event.artifactId, event.newName);
+    this.cdr.detectChanges();
+  }
+
   async onArtifactShareRequested(artifactId: string): Promise<void> {
     // Load the artifact entity to pass to the modal
     const md = new Metadata();

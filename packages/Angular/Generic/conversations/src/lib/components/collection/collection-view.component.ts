@@ -66,10 +66,12 @@ type SortBy = 'name' | 'date' | 'type';
           <mj-collection-artifact-card
             [artifact]="item.artifact"
             [version]="item.version"
+            [currentUser]="currentUser"
             (selected)="onArtifactSelected(item)"
             (viewed)="onViewArtifact(item)"
             (edited)="onEditArtifact(item)"
-            (removed)="onRemoveArtifact(item)">
+            (removed)="onRemoveArtifact(item)"
+            (renamed)="onRenameArtifact($event)">
           </mj-collection-artifact-card>
         }
       </div>
@@ -256,6 +258,18 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
 
   onEditArtifact(_item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
     // TODO: Open artifact editor
+  }
+
+  async onRenameArtifact(event: { artifact: MJArtifactEntity; newName: string }): Promise<void> {
+    try {
+      event.artifact.Name = event.newName;
+      const saved = await event.artifact.Save();
+      if (!saved) {
+        console.error('Failed to save artifact rename');
+      }
+    } catch (error) {
+      console.error('Error renaming artifact:', error);
+    }
   }
 
   async onRemoveArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): Promise<void> {

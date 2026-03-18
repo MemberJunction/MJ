@@ -460,13 +460,8 @@ export class BrandedChatResource extends BaseResourceComponent implements OnDest
       this.ensureThemeRegistered(darkThemeId, 'dark');
     }
 
-    const appliedTheme = this.themeService.AppliedTheme;
-    const themeDef = this.themeService.GetThemeDefinition(appliedTheme);
-    const isDark = themeDef?.BaseTheme === 'dark';
-
-    const targetThemeId = isDark && darkThemeId ? darkThemeId : themeId;
-    if (targetThemeId) {
-      await this.themeService.ApplyThemeTemporary(targetThemeId);
+    if (themeId) {
+      await this.themeService.ApplyThemeTemporary(themeId, darkThemeId);
     }
   }
 

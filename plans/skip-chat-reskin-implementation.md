@@ -744,7 +744,39 @@ Phase 8 (Integration Test) ─── after all above
 1. **Betty app metadata** — same pattern as Skip, create when Betty is ready
 2. **Shared sidebar layout component** — extract sidebar+main layout from ChatConversationsResource and BrandedChatResource into a reusable component to eliminate template duplication
 3. **End-to-end agent test** — requires Skip API credentials
-4. **Future Mark Patterson UX items** — role-based experience, admin page, analytics, horizontal split-screen, conversation panel enhancements (see original plan doc)
+4. **Skip replaces Chat when installed** — Mark Patterson's doc suggests "If Skip is installed, it would replace the functionality of Chat." However, Amith's architectural direction was for Skip to be a separate branded app alongside Chat. Currently both coexist side by side. Needs alignment on which approach to take.
+5. **Role-appropriate experience (Admin vs User modes)** — hide technical details (ERDs, table names, JSON, error messages) from non-technical users. Each primary app designates features per user level.
+6. **Skip admin page** — group Skip-relevant admin functions (AI configs, permissions, database tools) within the Skip app so users don't need to leave it.
+7. **Horizontal split-screen mode** — chat on top, component display on bottom (like Outlook reading pane). Sidebar remains on left, hideable.
+8. **Analytics page** — Skip usage stats and costs, similar to Izzy's analytics.
+9. **Conversation panel enhancements**:
+   - ~~Show time/date on each conversation~~ — **DONE** (relative timestamps using `__mj_UpdatedAt`)
+   - ~~Add sorting option (by date/time or title)~~ — **DONE** (toggle in header menu, default sort by date)
+   - Enable conversation title editing — **ALREADY EXISTS** (Rename in context menu edits Name + Description)
+   - Replace small context menu actions with always-visible icons — **SKIPPED**: the original concern was about Refresh/Select/Hide, which were already moved to the header menu. The per-conversation three-dot menu (pin/rename/delete) follows standard chat app patterns (Slack, Discord, ChatGPT) and works well as-is.
+10. **Collection enhancements**:
+    - ~~Allow component/artifact name to be edited~~ — **DONE** (double-click to rename inline, saves via `MJArtifactEntity.Save()`, permission-gated)
+    - Retain original conversation with component (currently only via Links tab, which is hidden and one-way)
+11. **Reconcile Chat/Conversations/Messages terminology** — determine if all three terms are needed
+12. **Home screen filtering** — show only primary apps (Skip, Izzy, Developer, Admin) based on permissions/purchase, not all apps
+
+Source: `Skip User Experience Ideas.docx` (Mark Patterson)
+
+---
+
+## Bug Fix: Temporary Theme Lost on Light/Dark Switch
+
+**Bug**: When a temporary theme is active (e.g., `skip-light` while in the Skip app) and the user switches between light and dark mode, the Skip theme overlay is stripped and the colors revert to default MJ branding.
+
+**Root cause**: `ThemeService.SetTheme()` and `onSystemThemeChange()` did not account for temporary themes. When the user changed their preference (or the OS theme changed), the service resolved the preference to a built-in theme (`light` or `dark`), which called `applyTheme()` → removed `data-theme-overlay` → disabled custom CSS. The temporary theme was silently overwritten.
+
+**Fix** (included in this branch, `theme.service.ts`):
+1. `ApplyThemeTemporary()` now accepts both a light and dark variant ID: `ApplyThemeTemporary(lightThemeId, darkThemeId?)`. The service stores both and uses `resolveTemporaryTheme()` to pick the correct one based on the user's current preference.
+2. `SetTheme()` — when `_temporaryThemeId` is set, re-resolves and applies the correct temporary variant instead of applying the raw built-in theme.
+3. `onSystemThemeChange()` — same behavior: re-resolves the temporary variant when the OS theme changes, instead of ignoring the change entirely (which also prevented dark→light switching from working).
+4. `BrandedChatResource` — simplified to pass both variants in one call: `ApplyThemeTemporary(themeId, darkThemeId)`.
+
+**Impact**: Affects all branded apps using temporary themes (Skip, future Betty, etc.). Without this fix, any theme switch while in a branded app breaks the branding until the user navigates away and back.
 
 ---
 

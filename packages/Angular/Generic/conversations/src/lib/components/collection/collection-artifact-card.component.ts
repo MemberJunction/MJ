@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
@@ -14,7 +14,16 @@ import { ArtifactIconService } from '@memberjunction/ng-artifacts';
       </div>
       <div class="card-content">
         <div class="card-header">
-          <h4 class="artifact-name">{{ artifact.Name }}</h4>
+          @if (IsRenaming) {
+            <input class="rename-input"
+              [value]="artifact.Name"
+              (keydown.enter)="ConfirmRename($event)"
+              (keydown.escape)="CancelRename()"
+              (blur)="ConfirmRename($event)"
+              #renameInput />
+          } @else {
+            <h4 class="artifact-name" (dblclick)="StartRename($event)">{{ artifact.Name }}</h4>
+          }
           @if (version) {
             <span class="version-badge">v{{ version.VersionNumber }}</span>
           }
@@ -63,7 +72,8 @@ import { ArtifactIconService } from '@memberjunction/ng-artifacts';
 
     .card-content { flex: 1; min-width: 0; }
     .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
-    .artifact-name { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .artifact-name { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+    .rename-input { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; padding: 2px 6px; border: 1px solid var(--mj-brand-primary); border-radius: 4px; background: var(--mj-bg-surface); color: var(--mj-text-primary); outline: none; }
     .version-badge { padding: 2px 8px; background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface)); color: var(--mj-status-warning); border-radius: 3px; font-size: 11px; font-weight: 600; font-family: monospace; }
     .artifact-type { padding: 2px 8px; background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); border-radius: 3px; font-size: 11px; font-weight: 500; text-transform: uppercase; }
 
@@ -88,9 +98,13 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
   @Output() shared = new EventEmitter<any>();
   @Output() edited = new EventEmitter<any>();
   @Output() removed = new EventEmitter<any>();
+  @Output() renamed = new EventEmitter<{artifact: MJArtifactEntity; newName: string}>();
+
+  @ViewChild('renameInput') renameInput?: ElementRef<HTMLInputElement>;
 
   canShare: boolean = false;
   canEdit: boolean = false;
+  IsRenaming: boolean = false;
 
   constructor(
     private artifactPermissionService: ArtifactPermissionService,
@@ -138,6 +152,33 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
    */
   getIconClass(): string {
     return this.artifactIconService.getArtifactIcon(this.artifact);
+  }
+
+  StartRename(event: Event): void {
+    event.stopPropagation();
+    if (!this.canEdit) return;
+    this.IsRenaming = true;
+    this.cdr.detectChanges();
+    // Focus and select text after the input renders
+    setTimeout(() => {
+      if (this.renameInput) {
+        this.renameInput.nativeElement.focus();
+        this.renameInput.nativeElement.select();
+      }
+    });
+  }
+
+  ConfirmRename(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const newName = input.value.trim();
+    this.IsRenaming = false;
+    if (newName && newName !== this.artifact.Name) {
+      this.renamed.emit({ artifact: this.artifact, newName });
+    }
+  }
+
+  CancelRename(): void {
+    this.IsRenaming = false;
   }
 
   onSelect(): void {

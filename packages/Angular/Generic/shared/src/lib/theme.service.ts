@@ -89,6 +89,10 @@ export class ThemeService {
 
     /** When non-null, a temporary theme is applied that overrides the persisted preference */
     private _temporaryThemeId: string | null = null;
+    /** Light variant of the temporary theme (used when user preference is light/system-light) */
+    private _temporaryLightThemeId: string | null = null;
+    /** Dark variant of the temporary theme (used when user preference is dark/system-dark) */
+    private _temporaryDarkThemeId: string | null = null;
 
     /**
      * Observable for user's theme preference (theme ID or 'system')
@@ -172,20 +176,40 @@ export class ThemeService {
     // TEMPORARY THEME
     // ========================================
 
-    public async ApplyThemeTemporary(themeId: string): Promise<void> {
-        this._temporaryThemeId = themeId;
-        await this.applyTheme(themeId);
+    /**
+     * Apply a temporary theme that overrides the user's persisted preference.
+     * Provide both light and dark variants so the correct one is used when
+     * the user switches between light/dark mode while the temporary theme is active.
+     * @param lightThemeId Theme ID to use when user preference resolves to light
+     * @param darkThemeId Theme ID to use when user preference resolves to dark (defaults to lightThemeId)
+     */
+    public async ApplyThemeTemporary(lightThemeId: string, darkThemeId?: string): Promise<void> {
+        this._temporaryLightThemeId = lightThemeId;
+        this._temporaryDarkThemeId = darkThemeId || lightThemeId;
+        this._temporaryThemeId = this.resolveTemporaryTheme();
+        await this.applyTheme(this._temporaryThemeId);
     }
 
     public async RestorePersistedTheme(): Promise<void> {
         if (this._temporaryThemeId === null) return;
         this._temporaryThemeId = null;
+        this._temporaryLightThemeId = null;
+        this._temporaryDarkThemeId = null;
         const resolvedThemeId = this.resolveTheme(this._preference$.value);
         await this.applyTheme(resolvedThemeId);
     }
 
     public get IsTemporaryThemeActive(): boolean {
         return this._temporaryThemeId !== null;
+    }
+
+    /**
+     * Resolve which temporary theme variant to use based on the user's current preference.
+     */
+    private resolveTemporaryTheme(): string {
+        const prefersDark = this._preference$.value === 'dark' ||
+            (this._preference$.value === 'system' && this.getSystemTheme() === 'dark');
+        return prefersDark ? this._temporaryDarkThemeId! : this._temporaryLightThemeId!;
     }
 
     // ========================================
@@ -223,8 +247,15 @@ export class ThemeService {
 
         this._preference$.next(preference);
 
-        const resolvedThemeId = this.resolveTheme(preference);
-        await this.applyTheme(resolvedThemeId);
+        // If a temporary theme is active, switch to the correct variant
+        // instead of applying the raw preference (which would strip the overlay)
+        if (this._temporaryThemeId) {
+            this._temporaryThemeId = this.resolveTemporaryTheme();
+            await this.applyTheme(this._temporaryThemeId);
+        } else {
+            const resolvedThemeId = this.resolveTheme(preference);
+            await this.applyTheme(resolvedThemeId);
+        }
 
         await this.saveSetting(preference);
     }
@@ -411,8 +442,13 @@ export class ThemeService {
      * Handle system theme change (only applies if in 'system' mode)
      */
     private async onSystemThemeChange(): Promise<void> {
-        if (this._temporaryThemeId) return;
-        if (this._preference$.value === 'system') {
+        if (this._preference$.value !== 'system') return;
+
+        // If a temporary theme is active, switch to the correct variant
+        if (this._temporaryThemeId) {
+            this._temporaryThemeId = this.resolveTemporaryTheme();
+            await this.applyTheme(this._temporaryThemeId);
+        } else {
             const newThemeId = this.getSystemTheme();
             await this.applyTheme(newThemeId);
         }

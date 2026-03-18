@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef, ElementRef } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, LogError, CompositeKey } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions , UUIDsEqual } from '@memberjunction/global';
@@ -41,13 +41,16 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
   @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() artifactRenamed = new EventEmitter<{artifactId: string; newName: string}>();
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
+  @ViewChild('renameInput') renameInputEl?: ElementRef<HTMLInputElement>;
 
   private destroy$ = new Subject<void>();
 
   public artifact: MJArtifactEntity | null = null;
+  public IsRenaming = false;
   public artifactVersion: MJArtifactVersionEntity | null = null;
   public allVersions: MJArtifactVersionEntity[] = [];
   public selectedVersionNumber: number = 1;
@@ -411,6 +414,63 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       return this.artifactVersion.Name;
     }
     return this.artifact?.Name || 'Artifact';
+  }
+
+  StartRename(event: Event): void {
+    event.stopPropagation();
+    this.IsRenaming = true;
+    this.cdr.detectChanges();
+    setTimeout(() => {
+      if (this.renameInputEl) {
+        this.renameInputEl.nativeElement.focus();
+        this.renameInputEl.nativeElement.select();
+      }
+    });
+  }
+
+  private renameSaving = false;
+
+  OnRenameKeydown(event: Event): void {
+    event.preventDefault();
+    const input = event.target as HTMLInputElement;
+    this.saveRename(input.value);
+  }
+
+  OnRenameBlur(event: Event): void {
+    if (this.renameSaving) return; // Already saving from Enter key
+    const input = event.target as HTMLInputElement;
+    this.saveRename(input.value);
+  }
+
+  private async saveRename(value: string): Promise<void> {
+    if (this.renameSaving || !this.IsRenaming) return;
+    this.renameSaving = true;
+    this.IsRenaming = false;
+    const newName = value.trim();
+    const currentDisplay = this.displayName;
+    if (newName && newName !== currentDisplay) {
+      try {
+        // Update both artifact and current version name so displayName reflects the change
+        if (this.artifact) {
+          this.artifact.Name = newName;
+          await this.artifact.Save();
+        }
+        if (this.artifactVersion) {
+          this.artifactVersion.Name = newName;
+          await this.artifactVersion.Save();
+        }
+        this.artifactRenamed.emit({ artifactId: this.artifactId, newName });
+      } catch (error) {
+        console.error('Error renaming artifact:', error);
+      }
+    }
+    this.renameSaving = false;
+    this.cdr.detectChanges();
+  }
+
+  CancelRename(): void {
+    this.IsRenaming = false;
+    this.cdr.detectChanges();
   }
 
   get displayDescription(): string | null {

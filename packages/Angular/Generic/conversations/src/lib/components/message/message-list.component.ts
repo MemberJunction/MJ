@@ -64,6 +64,23 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   private _shouldScrollToBottom = false;
   private _previousMessageCount = 0; // Track previous count to detect new messages
 
+  /**
+   * Update the displayed artifact name on all rendered message items that show this artifact.
+   * Called by parent after an artifact rename so the inline cards reflect the new name immediately.
+   */
+  public UpdateArtifactName(artifactId: string, newName: string): void {
+    for (const entry of this._renderedMessages.values()) {
+      const instance = entry.instance as MessageItemComponent;
+      if (instance.artifact?.ID === artifactId) {
+        instance.artifact.Name = newName;
+        if (instance.artifactVersion) {
+          instance.artifactVersion.Name = newName;
+        }
+        entry.changeDetectorRef.detectChanges();
+      }
+    }
+  }
+
   public currentDateDisplay: string = 'Today';
   public showDateNav: boolean = false;
   public shouldShowDateFilter: boolean = false;

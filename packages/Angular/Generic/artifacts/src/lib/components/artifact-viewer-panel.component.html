@@ -4,7 +4,19 @@
       <div class="panel-header-left">
         <h3>
           <i class="fas" [ngClass]="getArtifactIcon()"></i>
-          {{ displayName }}
+          @if (IsRenaming) {
+            <input class="rename-input"
+              [value]="displayName"
+              (keydown.enter)="OnRenameKeydown($event)"
+              (keydown.escape)="CancelRename()"
+              (blur)="OnRenameBlur($event)"
+              #renameInput />
+          } @else {
+            <span class="artifact-title">{{ displayName }}</span>
+            <button class="rename-btn" (click)="StartRename($event)" title="Rename">
+              <i class="fas fa-pencil"></i>
+            </button>
+          }
         </h3>
         @if (displayDescription) {
           <p class="header-description">{{ displayDescription }}</p>
