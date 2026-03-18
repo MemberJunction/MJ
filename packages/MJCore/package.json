@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@memberjunction/global": "5.13.0",
+    "@memberjunction/sql-dialect": "5.13.0",
     "rxjs": "^7.8.2",
     "zod": "~3.24.4",
     "debug": "^4.4.3"
