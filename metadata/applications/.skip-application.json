@@ -2,7 +2,8 @@
   "fields": {
     "Name": "Skip",
     "Description": "Skip AI Assistant",
-    "Icon": "fa-solid fa-bolt",
+    "Icon": "skip-app-icon",
+    "Color": "#147F9D",
     "DefaultForNewUser": false,
     "Status": "Active",
     "NavigationStyle": "Both",
@@ -21,7 +22,7 @@
           ],
           "defaultAgentName": "Skip",
           "welcomeTitle": "Welcome to Skip",
-          "welcomeIcon": "fa-solid fa-bolt fa-3x",
+          "welcomeIcon": "skip-welcome-logo",
           "inputPlaceholder": "Ask Skip anything...",
           "suggestedPrompts": [
             {

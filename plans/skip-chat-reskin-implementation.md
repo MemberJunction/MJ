@@ -372,7 +372,8 @@ interface BrandedChatConfig {
   "fields": {
     "Name": "Skip",
     "Description": "Skip AI Assistant",
-    "Icon": "fa-solid fa-bolt",
+    "Icon": "skip-app-icon",
+    "Color": "#147F9D",
     "DefaultForNewUser": false,
     "Status": "Active",
     "NavigationStyle": "Both",
@@ -389,7 +390,7 @@ interface BrandedChatConfig {
           "availableAgentNames": ["Skip"],
           "defaultAgentName": "Skip",
           "welcomeTitle": "Welcome to Skip",
-          "welcomeIcon": "fa-solid fa-bolt fa-3x",
+          "welcomeIcon": "skip-welcome-logo",
           "inputPlaceholder": "Ask Skip anything...",
           "suggestedPrompts": [
             {"icon": "fa-chart-line", "title": "Data insights", "prompt": "Show me key trends in my data"},
@@ -423,13 +424,27 @@ interface BrandedChatConfig {
 
 ## Phase 6: Branding Assets — COMPLETE
 
-- Skip logo SVGs in `packages/MJExplorer/src/assets/themes/skip/`:
-  - `skip-mark.svg` (square logo mark, ~272 bytes)
-  - `skip-mark-white.svg` (inverse for dark backgrounds, ~272 bytes)
-  - `skip-logo.svg` (full wordmark, ~208 bytes)
-  - `skip-logo-white.svg` (full wordmark inverse, ~206 bytes)
-- Referenced by `skip-light.css` and `skip-dark.css` from Phase 3
-- No angular.json changes needed — `src/assets` is already included in the build
+### Skip Mascot SVGs
+All SVGs derived from the original `assets/skip-icon.svg` mascot (character with eyes, smile, crown):
+
+- `skip-mark.svg` — full-color mascot (teal body, white face details)
+- `skip-mark-white.svg` — inverse variant (white body, teal face details) for dark backgrounds
+- `skip-logo.svg` — full-color mascot (same as mark; wordmark can be added later)
+- `skip-logo-white.svg` — inverse variant
+- `skip-glyph.svg` — outer silhouette only (white fill, for CSS mask use cases)
+
+Located in `packages/MJExplorer/src/assets/themes/skip/`. Referenced by `skip-light.css` and `skip-dark.css` from Phase 3.
+
+### App Icon CSS Classes
+Defined in `packages/MJExplorer/src/styles.scss`. Same pattern as `.mj-logo` — `background-image` SVG with `[data-theme="dark"]` variant:
+
+- `.skip-app-icon` — renders full-color mascot at `1em` size (scales with `font-size`). Auto-switches to white variant in dark mode. Used as the Application `Icon` field value — works in all existing `<i [class]="app.Icon">` locations (Home cards, app switcher, nav bar, command palette) with zero template changes.
+- `.skip-welcome-logo` — renders full-color mascot at `4rem` for the welcome/empty state screen. Auto-switches to white variant in dark mode.
+
+### Empty State Template Change
+`conversation-empty-state.component.html` changed from `class="fa-solid {{ WelcomeIcon }}"` (which prepended FA class) to `[class]="WelcomeIcon || 'fa-solid fa-comments fa-3x'"` so branded icons have full control over their CSS class.
+
+No angular.json changes needed — `src/assets` is already included in the build.
 
 ---
 
@@ -475,7 +490,7 @@ The Skip feature uses **metadata-driven configuration only** — no SQL schema m
 | `ID` | uniqueidentifier | NO | newsequentialid() | Auto-generated |
 | `Name` | nvarchar(100) | NO | — | `'Skip'` |
 | `Description` | nvarchar(MAX) | YES | NULL | `'Skip AI Assistant'` |
-| `Icon` | nvarchar(500) | YES | NULL | `'fa-solid fa-bolt'` |
+| `Icon` | nvarchar(500) | YES | NULL | `'skip-app-icon'` |
 | `DefaultForNewUser` | bit | NO | 1 | `0` (false — assigned per-user) |
 | `Status` | nvarchar(20) | NO | `'Active'` | `'Active'` |
 | `NavigationStyle` | nvarchar(20) | NO | `'App Switcher'` | `'Both'` |
@@ -484,7 +499,7 @@ The Skip feature uses **metadata-driven configuration only** — no SQL schema m
 | `Path` | nvarchar(100) | NO | — | Auto-generated from Name: `'skip'` |
 | `AutoUpdatePath` | bit | NO | 1 | `1` (default) |
 | `SchemaAutoAddNewEntities` | nvarchar(MAX) | YES | NULL | NULL |
-| `Color` | nvarchar(20) | YES | NULL | NULL |
+| `Color` | nvarchar(20) | YES | NULL | `'#147F9D'` |
 | `ClassName` | nvarchar(255) | YES | NULL | NULL |
 | `TopNavLocation` | nvarchar(30) | YES | NULL | NULL |
 | `HideNavBarIconWhenActive` | bit | NO | 0 | `0` (default) |
@@ -510,7 +525,7 @@ The Skip feature uses **metadata-driven configuration only** — no SQL schema m
       "availableAgentNames": ["Skip"],
       "defaultAgentName": "Skip",
       "welcomeTitle": "Welcome to Skip",
-      "welcomeIcon": "fa-solid fa-bolt fa-3x",
+      "welcomeIcon": "skip-welcome-logo",
       "inputPlaceholder": "Ask Skip anything...",
       "suggestedPrompts": [
         {"icon": "fa-chart-line", "title": "Data insights", "prompt": "Show me key trends in my data"},
@@ -559,18 +574,19 @@ rm -rf metadata/skip-app
 **Option B — direct SQL INSERT** (if mj-sync is not available on staging):
 ```sql
 INSERT INTO __mj.Application (
-    Name, Description, Icon, DefaultForNewUser, Status,
+    Name, Description, Icon, Color, DefaultForNewUser, Status,
     NavigationStyle, DefaultNavItems
 )
 VALUES (
     'Skip',
     'Skip AI Assistant',
-    'fa-solid fa-bolt',
+    'skip-app-icon',
+    '#147F9D',
     0,  -- Not default for new users
     'Active',
     'Both',
     -- DefaultNavItems JSON (minified):
-    '[{"Label":"Chat","Icon":"fa-solid fa-comments","ResourceType":"Custom","DriverClass":"BrandedChatResource","isDefault":true,"Configuration":{"themeId":"skip-light","darkThemeId":"skip-dark","availableAgentNames":["Skip"],"defaultAgentName":"Skip","welcomeTitle":"Welcome to Skip","welcomeIcon":"fa-solid fa-bolt fa-3x","inputPlaceholder":"Ask Skip anything...","suggestedPrompts":[{"icon":"fa-chart-line","title":"Data insights","prompt":"Show me key trends in my data"},{"icon":"fa-magnifying-glass","title":"Find records","prompt":"Help me find specific records"},{"icon":"fa-file-chart-column","title":"Create report","prompt":"Build a report from my data"},{"icon":"fa-robot","title":"Automate task","prompt":"Help me automate a repetitive task"}],"tabLabelOverrides":{"Display":"Report","Functional":"Design","Spec":"Design"},"artifactLabel":"Report","saveToCollectionLabel":"Save to Library","collectionLabel":"Library","collectionsLabel":"Libraries"}}]'
+    '[{"Label":"Chat","Icon":"fa-solid fa-comments","ResourceType":"Custom","DriverClass":"BrandedChatResource","isDefault":true,"Configuration":{"themeId":"skip-light","darkThemeId":"skip-dark","availableAgentNames":["Skip"],"defaultAgentName":"Skip","welcomeTitle":"Welcome to Skip","welcomeIcon":"skip-welcome-logo","inputPlaceholder":"Ask Skip anything...","suggestedPrompts":[{"icon":"fa-chart-line","title":"Data insights","prompt":"Show me key trends in my data"},{"icon":"fa-magnifying-glass","title":"Find records","prompt":"Help me find specific records"},{"icon":"fa-file-chart-column","title":"Create report","prompt":"Build a report from my data"},{"icon":"fa-robot","title":"Automate task","prompt":"Help me automate a repetitive task"}],"tabLabelOverrides":{"Display":"Report","Functional":"Design","Spec":"Design"},"artifactLabel":"Report","saveToCollectionLabel":"Save to Library","collectionLabel":"Library","collectionsLabel":"Libraries"}}]'
 );
 ```
 

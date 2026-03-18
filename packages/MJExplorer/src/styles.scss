@@ -94,3 +94,31 @@ kendo-drawer-container {
     .cm-punctuation { color: var(--mj-text-secondary) !important; }
 }
 
+/* ========================================
+   Brand App Icons
+   Same pattern as .mj-logo: background-image SVG with light/dark variants.
+   ======================================== */
+.skip-app-icon {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    background: url('/assets/themes/skip/skip-mark.svg') center / contain no-repeat;
+    vertical-align: -0.125em;
+}
+
+[data-theme="dark"] .skip-app-icon {
+    background-image: url('/assets/themes/skip/skip-mark-white.svg');
+}
+
+/* Larger variant for welcome screens */
+.skip-welcome-logo {
+    display: inline-block;
+    width: 4rem;
+    height: 4rem;
+    background: url('/assets/themes/skip/skip-mark.svg') center / contain no-repeat;
+}
+
+[data-theme="dark"] .skip-welcome-logo {
+    background-image: url('/assets/themes/skip/skip-mark-white.svg');
+}
+
