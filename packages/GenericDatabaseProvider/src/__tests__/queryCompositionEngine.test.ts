@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { QueryCompositionEngine, CompositionResult } from '../generic/queryCompositionEngine';
-import { QueryInfo } from '../generic/queryInfo';
-import { Metadata } from '../generic/metadata';
-import { UserInfo } from '../generic/securityInfo';
+import { QueryCompositionEngine, CompositionResult } from '../queryCompositionEngine';
+import { QueryInfo, Metadata, UserInfo } from '@memberjunction/core';
 
 // ---- Helpers for building mock QueryInfo objects ----
 

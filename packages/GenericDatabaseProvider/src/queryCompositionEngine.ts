@@ -1,9 +1,6 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDialect, PostgreSQLDialect, type SQLDialect } from "@memberjunction/sql-dialect";
-import { Metadata } from "./metadata";
-import { QueryInfo } from "./queryInfo";
-import { DatabasePlatform } from "./platformSQL";
-import { UserInfo } from "./securityInfo";
+import { Metadata, QueryInfo, DatabasePlatform, UserInfo } from "@memberjunction/core";
 
 /**
  * Maximum depth for recursive query composition resolution.

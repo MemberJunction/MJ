@@ -1,4 +1,5 @@
-import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryCompositionEngine, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult, SQLDialectInfo, TypeScriptTypeFromSQLType } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult, SQLDialectInfo, TypeScriptTypeFromSQLType } from "@memberjunction/core";
+import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
 import { MJQueryEntity, MJQueryParameterEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQuerySQLEntity, MJQueryDependencyEntity } from "@memberjunction/core-entities";
 import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
