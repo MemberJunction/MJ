@@ -760,6 +760,8 @@ Phase 8 (Integration Test) ─── after all above
 11. **Reconcile Chat/Conversations/Messages terminology** — determine if all three terms are needed
 12. **Home screen filtering** — show only primary apps (Skip, Izzy, Developer, Admin) based on permissions/purchase, not all apps
 
+13. **Separate conversation history per app** — Add nullable `ApplicationID` FK on `__mj.Conversation` to tag conversations with the app they were created in. Filter conversation list by app. Requires migration + CodeGen + service wiring. Open question: what does Chat show — all conversations, only untagged, or everything except branded apps?
+
 Source: `Skip User Experience Ideas.docx` (Mark Patterson)
 
 ---
