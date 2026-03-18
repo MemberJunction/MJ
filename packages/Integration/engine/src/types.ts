@@ -379,6 +379,30 @@ export interface SearchResult {
     HasMore: boolean;
 }
 
+/** Context for listing records from an external system with pagination */
+export interface ListContext extends CRUDContext {
+    /** Maximum records to return per page */
+    PageSize?: number;
+    /** Opaque cursor for cursor-based pagination (returned from previous ListResult) */
+    Cursor?: string;
+    /** Sort expression (connector-specific format) */
+    Sort?: string;
+    /** Optional filter expression (connector-specific, e.g., for filtered list variants like "Deals by Company") */
+    Filter?: Record<string, string>;
+}
+
+/** Result of a list operation */
+export interface ListResult {
+    /** Records in this page */
+    Records: ExternalRecord[];
+    /** Whether more pages exist */
+    HasMore: boolean;
+    /** Opaque cursor for fetching the next page */
+    NextCursor?: string;
+    /** Total number of matching records, if known */
+    TotalCount?: number;
+}
+
 /** A default field mapping returned by a connector's discovery */
 export interface DefaultFieldMapping {
     /** Field name in the external system */

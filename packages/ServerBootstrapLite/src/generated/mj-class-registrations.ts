@@ -42,30 +42,12 @@ import {
     GetQuickBooksTransactionsAction,
 } from '@memberjunction/actions-bizapps-accounting';
 
-// @memberjunction/actions-bizapps-crm (22 classes)
+// @memberjunction/actions-bizapps-crm (4 classes)
 import {
     AssociateContactToCompanyAction,
-    CreateCompanyAction,
-    CreateContactAction,
-    CreateDealAction,
-    CreateTaskAction,
-    DeleteContactAction,
     GetActivitiesByContactAction,
-    GetCompanyAction,
-    GetContactAction,
-    GetDealAction,
-    GetDealsByCompanyAction,
-    GetDealsByContactAction,
-    GetUpcomingTasksAction,
     LogActivityAction,
     MergeContactsAction,
-    SearchCompaniesAction,
-    SearchContactsAction,
-    SearchDealsAction,
-    UpdateCompanyAction,
-    UpdateContactAction,
-    UpdateDealAction,
-    UpdateTaskAction,
 } from '@memberjunction/actions-bizapps-crm';
 
 // @memberjunction/actions-bizapps-formbuilders (30 classes)
@@ -362,7 +344,7 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/core-actions (103 classes)
+// @memberjunction/core-actions (104 classes)
 import {
     APIRateLimiterAction,
     AddRecordsToListAction,
@@ -425,6 +407,7 @@ import {
     GraphQLQueryAction,
     HTTPRequestAction,
     IPGeolocationAction,
+    IntegrationActionExecutor,
     JSONTransformAction,
     ListMCPToolsAction,
     ListObjectsAction,
@@ -865,27 +848,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     GetQuickBooksGLCodesAction,
     GetQuickBooksTransactionsAction,
     AssociateContactToCompanyAction,
-    CreateCompanyAction,
-    CreateContactAction,
-    CreateDealAction,
-    CreateTaskAction,
-    DeleteContactAction,
     GetActivitiesByContactAction,
-    GetCompanyAction,
-    GetContactAction,
-    GetDealAction,
-    GetDealsByCompanyAction,
-    GetDealsByContactAction,
-    GetUpcomingTasksAction,
     LogActivityAction,
     MergeContactsAction,
-    SearchCompaniesAction,
-    SearchContactsAction,
-    SearchDealsAction,
-    UpdateCompanyAction,
-    UpdateContactAction,
-    UpdateDealAction,
-    UpdateTaskAction,
     CreateJotFormAction,
     CreateSurveyMonkeyAction,
     CreateTypeformAction,
@@ -1113,6 +1078,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     GraphQLQueryAction,
     HTTPRequestAction,
     IPGeolocationAction,
+    IntegrationActionExecutor,
     JSONTransformAction,
     ListMCPToolsAction,
     ListObjectsAction,
@@ -1495,7 +1461,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 640;
+export const CLASS_REGISTRATIONS_COUNT = 641;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
