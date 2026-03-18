@@ -1,0 +1,120 @@
+{
+  "version": "1.0.0",
+  "database": {
+    "provider": "sqlserver",
+    "server": "sql-claude",
+    "port": 1433,
+    "database": "AW_Stripped",
+    "user": "sa",
+    "password": "Claude2Sql99",
+    "encrypt": true,
+    "trustServerCertificate": true,
+    "connectionTimeout": 30000
+  },
+  "ai": {
+    "provider": "gemini",
+    "model": "gemini-3-flash-preview",
+    "apiKey": "AIzaSyCorKuddzLUfld9uiBe7KSQaYnqzfJcDd8",
+    "temperature": 0.1,
+    "maxTokens": 8000
+  },
+  "analysis": {
+    "cardinalityThreshold": 20,
+    "sampleSize": 10,
+    "includeStatistics": true,
+    "includePatternAnalysis": true,
+    "convergence": {
+      "maxIterations": 3,
+      "stabilityWindow": 2,
+      "confidenceThreshold": 0.85
+    },
+    "backpropagation": {
+      "enabled": true,
+      "maxDepth": 3
+    },
+    "sanityChecks": {
+      "dependencyLevel": true,
+      "schemaLevel": true,
+      "crossSchema": true
+    },
+    "guardrails": {
+      "enabled": true,
+      "stopOnExceeded": true,
+      "maxTokensPerRun": 500000,
+      "maxDurationSeconds": 3600,
+      "maxCostDollars": 20,
+      "maxTokensPerPhase": {
+        "discovery": 200000,
+        "analysis": 250000,
+        "sanityChecks": 100000
+      },
+      "maxTokensPerIteration": 100000,
+      "maxIterationDurationSeconds": 600,
+      "warnThresholds": {
+        "tokenPercentage": 80,
+        "durationPercentage": 80,
+        "costPercentage": 80,
+        "iterationTokenPercentage": 85,
+        "phaseTokenPercentage": 85
+      }
+    },
+    "relationshipDiscovery": {
+      "enabled": true,
+      "triggers": {
+        "runOnMissingPKs": true,
+        "runOnInsufficientFKs": true,
+        "fkDeficitThreshold": 0.4
+      },
+      "tokenBudget": {
+        "ratioOfTotal": 0.4
+      },
+      "confidence": {
+        "primaryKeyMinimum": 0.7,
+        "foreignKeyMinimum": 0.6,
+        "llmValidationThreshold": 0.8
+      },
+      "sampling": {
+        "maxRowsPerTable": 1000,
+        "valueOverlapSampleSize": 100,
+        "statisticalSignificance": 100,
+        "compositeKeyMaxColumns": 3
+      },
+      "patterns": {
+        "primaryKeyNames": [
+          "^id$",
+          ".*_id$",
+          "^pk_.*",
+          ".*_key$"
+        ],
+        "foreignKeyNames": [
+          ".*_id$",
+          ".*_fk$",
+          "^fk_.*"
+        ]
+      },
+      "llmValidation": {
+        "enabled": true,
+        "batchSize": 10
+      },
+      "backpropagation": {
+        "enabled": true,
+        "maxIterations": 5
+      }
+    },
+    "sampleQueryGeneration": {
+      "enabled": false
+    }
+  },
+  "output": {
+    "stateFile": "/workspace/benchmark/autodoc-output/db-doc-state.json",
+    "outputDir": "/workspace/benchmark/autodoc-output",
+    "sqlFile": "/workspace/benchmark/autodoc-output/add-descriptions.sql",
+    "markdownFile": "/workspace/benchmark/autodoc-output/database-documentation.md"
+  },
+  "schemas": {
+    "exclude": ["sys", "INFORMATION_SCHEMA"]
+  },
+  "tables": {
+    "exclude": ["sysdiagrams"]
+  }
+}
