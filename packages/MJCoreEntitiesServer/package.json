@@ -28,6 +28,7 @@
     "@memberjunction/ai-prompts": "5.13.0",
     "@memberjunction/ai-provider-bundle": "5.13.0",
     "@memberjunction/ai-vector-dupe": "5.13.0",
+    "@memberjunction/ai-vectors-memory": "5.13.0",
     "@memberjunction/aiengine": "5.13.0",
     "@memberjunction/core": "5.13.0",
     "@memberjunction/core-entities": "5.13.0",
@@ -38,6 +39,7 @@
     "@memberjunction/sqlserver-dataprovider": "5.13.0",
     "node-sql-parser": "^5.4.0",
     "nunjucks": "^3.2.4",
+    "rxjs": "~7.8.1",
     "zod": "~3.24.4"
   },
   "repository": {
