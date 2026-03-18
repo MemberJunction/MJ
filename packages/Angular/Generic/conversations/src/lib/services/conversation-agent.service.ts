@@ -123,7 +123,8 @@ export class ConversationAgentService {
     message: MJConversationDetailEntity,
     conversationHistory: MJConversationDetailEntity[],
     conversationDetailId: string,
-    onProgress?: AgentExecutionProgressCallback
+    onProgress?: AgentExecutionProgressCallback,
+    constrainedAgents?: { ID: string; Name: string }[]
   ): Promise<ExecuteAgentResult | null> {
     // Don't process if user is tagging someone else (future enhancement)
     // For now, we'll always send to the ambient agent
@@ -162,11 +163,18 @@ export class ConversationAgentService {
       );
 
       // Filter by user permissions if user context available
-      const availAgents = currentUser
+      let availAgents = currentUser
         ? await this.filterAgentsByPermissions(candidateAgents, currentUser)
         : candidateAgents;
 
-      console.log(`📋 Available agents for Sage: ${availAgents.length} (filtered from ${candidateAgents.length} candidates)`);
+      // Apply constrained agents filter if provided (from agent routing configuration)
+      if (constrainedAgents && constrainedAgents.length > 0) {
+        const constrainedIds = new Set(constrainedAgents.map(a => a.ID));
+        availAgents = availAgents.filter(a => constrainedIds.has(a.ID));
+        console.log(`📋 Available agents for Sage: ${availAgents.length} (constrained from ${candidateAgents.length} candidates by routing config)`);
+      } else {
+        console.log(`📋 Available agents for Sage: ${availAgents.length} (filtered from ${candidateAgents.length} candidates)`);
+      }
 
       // Use optimized mutation that loads conversation history server-side
       // This avoids sending large attachment data from client to server

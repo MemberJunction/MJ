@@ -25,7 +25,7 @@ import { UUIDsEqual } from '@memberjunction/global';
         <div class="collections-breadcrumb">
           <div class="breadcrumb-item">
             <i class="fas fa-home"></i>
-            <a class="breadcrumb-link" (click)="navigateToRoot()">Collections</a>
+            <a class="breadcrumb-link" (click)="navigateToRoot()">{{ CollectionsLabel }}</a>
           </div>
           @if (breadcrumbs.length > 0) {
             <span class="breadcrumb-path">
@@ -149,7 +149,7 @@ import { UUIDsEqual } from '@memberjunction/global';
                 <div class="dropdown-menu dropdown-menu-right">
                   <button class="dropdown-item" (click)="createCollection()">
                     <i class="fas fa-folder-plus"></i>
-                    <span>New Collection</span>
+                    <span>New {{ CollectionLabel }}</span>
                   </button>
                   <button class="dropdown-item"
                     (click)="addArtifact()"
@@ -193,7 +193,7 @@ import { UUIDsEqual } from '@memberjunction/global';
         <!-- Loading state -->
         @if (isLoading) {
           <div class="loading-state">
-            <mj-loading text="Loading collections..." size="large"></mj-loading>
+            <mj-loading [text]="'Loading ' + CollectionsLabel.toLowerCase() + '...'" size="large"></mj-loading>
           </div>
         }
     
@@ -208,21 +208,21 @@ import { UUIDsEqual } from '@memberjunction/global';
             }
             <!-- Empty root level -->
             @if (!searchQuery && !currentCollectionId) {
-              <h3>No collections yet</h3>
-              <p>Create your first collection to get started</p>
+              <h3>No {{ CollectionsLabel.toLowerCase() }} yet</h3>
+              <p>Create your first {{ CollectionLabel.toLowerCase() }} to get started</p>
               @if (canEditCurrent()) {
                 <button class="btn-primary empty-state-cta"
                   (click)="createCollection()"
                   >
                   <i class="fas fa-plus"></i>
-                  Create Collection
+                  Create {{ CollectionLabel }}
                 </button>
               }
             }
             <!-- Empty collection (has parent) -->
             @if (!searchQuery && currentCollectionId) {
-              <h3>This collection is empty</h3>
-              <p>Use the <strong>New</strong> button above to add collections or artifacts</p>
+              <h3>This {{ CollectionLabel.toLowerCase() }} is empty</h3>
+              <p>Use the <strong>New</strong> button above to add {{ CollectionsLabel.toLowerCase() }} or artifacts</p>
             }
           </div>
         }
@@ -464,7 +464,7 @@ import { UUIDsEqual } from '@memberjunction/global';
             <div class="context-menu-divider"></div>
             <button class="context-menu-item context-menu-danger" (click)="onContextMenuAction('remove')">
               <i class="fas fa-times-circle"></i>
-              <span>Remove from Collection</span>
+              <span>Remove from {{ CollectionLabel }}</span>
             </button>
           }
         }
@@ -1300,6 +1300,8 @@ import { UUIDsEqual } from '@memberjunction/global';
 export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
+  @Input() CollectionLabel: string = 'Collection';
+  @Input() CollectionsLabel: string = 'Collections';
   @Output() collectionNavigated = new EventEmitter<{
     collectionId: string | null;
     versionId?: string | null;
@@ -1722,8 +1724,8 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     if (!canDelete) return;
 
     const confirmed = await this.dialogService.confirm({
-      title: 'Delete Collection',
-      message: `Are you sure you want to delete "${collection.Name}"? This will also delete all child collections and remove all artifacts. This action cannot be undone.`,
+      title: `Delete ${this.CollectionLabel}`,
+      message: `Are you sure you want to delete "${collection.Name}"? This will also delete all child ${this.CollectionsLabel.toLowerCase()} and remove all artifacts. This action cannot be undone.`,
       okText: 'Delete',
       cancelText: 'Cancel',
       dangerous: true
@@ -1738,7 +1740,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         await this.loadCollections();
       } catch (error) {
         console.error('Error deleting collection:', error);
-        await this.dialogService.alert('Error', `An error occurred while deleting the collection: ${error}`);
+        await this.dialogService.alert('Error', `An error occurred while deleting the ${this.CollectionLabel.toLowerCase()}: ${error}`);
       }
     }
   }
@@ -1843,7 +1845,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     const versionLabel = `"${item.artifact.Name}" v${item.version.VersionNumber}`;
     const confirmed = await this.dialogService.confirm({
       title: 'Remove Artifact Version',
-      message: `Remove ${versionLabel} from this collection?`,
+      message: `Remove ${versionLabel} from this ${this.CollectionLabel.toLowerCase()}?`,
       okText: 'Remove',
       cancelText: 'Cancel'
     });
@@ -1908,7 +1910,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       const permissionName = requiredPermission.charAt(0).toUpperCase() + requiredPermission.slice(1);
       await this.dialogService.alert(
         'Permission Denied',
-        `You do not have ${permissionName} permission for this collection.`
+        `You do not have ${permissionName} permission for this ${this.CollectionLabel.toLowerCase()}.`
       );
       return false;
     }

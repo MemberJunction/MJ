@@ -1,6 +1,8 @@
 import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 import { PendingAttachment } from '../mention/mention-editor.component';
+import { AgentRoutingConfig } from '../../models/agent-routing-config.model';
+import { BrandingLabels } from '../../models/branding-labels.model';
 import { MessageInputComponent } from '../message/message-input.component';
 
 @Component({
@@ -13,6 +15,16 @@ export class ConversationEmptyStateComponent {
   @Input() currentUser!: UserInfo;
   @Input() disabled: boolean = false;
   @Input() showSidebarToggle: boolean = false;
+  @Input() AgentRouting: AgentRoutingConfig | null = null;
+
+  private _brandingLabels: BrandingLabels | null = null;
+
+  @Input()
+  set BrandingLabels(value: BrandingLabels | null) {
+    this._brandingLabels = value;
+    this.refreshPrompts();
+  }
+  get BrandingLabels(): BrandingLabels | null { return this._brandingLabels; }
 
   @ViewChild(MessageInputComponent) private messageInput?: MessageInputComponent;
 
@@ -134,13 +146,19 @@ export class ConversationEmptyStateComponent {
   public suggestedPrompts: Array<{icon: string; title: string; prompt: string}> = [];
 
   constructor() {
-    // Select 4 random prompts on initialization
-    this.suggestedPrompts = this.selectRandomPrompts(4);
+    this.refreshPrompts();
   }
 
-  /**
-   * Select random prompts from the full list
-   */
+  private refreshPrompts(): void {
+    if (this._brandingLabels?.SuggestedPrompts && this._brandingLabels.SuggestedPrompts.length > 0) {
+      const count = this._brandingLabels.SuggestedPromptCount ?? this._brandingLabels.SuggestedPrompts.length;
+      this.suggestedPrompts = this._brandingLabels.SuggestedPrompts.slice(0, count);
+    } else {
+      const count = this._brandingLabels?.SuggestedPromptCount ?? 4;
+      this.suggestedPrompts = this.selectRandomPrompts(count);
+    }
+  }
+
   private selectRandomPrompts(count: number): Array<{icon: string; title: string; prompt: string}> {
     const shuffled = [...this.allSuggestedPrompts].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, count);

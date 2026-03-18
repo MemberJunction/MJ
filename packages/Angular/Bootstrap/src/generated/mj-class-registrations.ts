@@ -446,9 +446,10 @@ import {
     VersionHistoryRestoreResourceComponent,
 } from '@memberjunction/ng-dashboards';
 
-// @memberjunction/ng-explorer-core (8 classes)
+// @memberjunction/ng-explorer-core (9 classes)
 import {
     ArtifactResource,
+    BrandedChatResource,
     ChatConversationsResource,
     DashboardResource,
     EntityRecordResource,
@@ -871,6 +872,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
     ArtifactResource,
+    BrandedChatResource,
     ChatConversationsResource,
     DashboardResource,
     EntityRecordResource,
@@ -891,7 +893,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 406;
+export const CLASS_REGISTRATIONS_COUNT = 407;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

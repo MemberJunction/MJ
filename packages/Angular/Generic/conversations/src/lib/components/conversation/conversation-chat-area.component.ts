@@ -17,6 +17,8 @@ import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
+import { AgentRoutingConfig } from '../../models/agent-routing-config.model';
+import { BrandingLabels } from '../../models/branding-labels.model';
 import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
@@ -99,6 +101,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   // Sidebar toggle - when true, shows toggle button in header to expand sidebar
   @Input() showSidebarToggle: boolean = false;
+
+  // Agent routing configuration - constrains which agents are available and sets a default agent
+  @Input() AgentRouting: AgentRoutingConfig | null = null;
+
+  // Branding labels for customizing terminology
+  @Input() BrandingLabels: BrandingLabels | null = null;
 
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();

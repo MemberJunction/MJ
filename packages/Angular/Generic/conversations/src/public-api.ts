@@ -11,6 +11,8 @@ export * from './lib/models/notification.model';
 export * from './lib/models/lazy-artifact-info';
 export * from './lib/models/conversation-complete-query.model';
 export * from './lib/models/navigation-request.model';
+export * from './lib/models/agent-routing-config.model';
+export * from './lib/models/branding-labels.model';
 
 // Services - State
 export * from './lib/services/data-cache.service';

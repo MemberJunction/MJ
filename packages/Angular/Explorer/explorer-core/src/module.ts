@@ -70,6 +70,7 @@ import { ChatCollectionsResource } from './lib/resource-wrappers/chat-collection
 import { ChatTasksResource } from './lib/resource-wrappers/chat-tasks-resource.component';
 import { ArtifactResource } from './lib/resource-wrappers/artifact-resource.component';
 import { NotificationsResource } from './lib/resource-wrappers/notifications-resource.component';
+import { BrandedChatResource } from './lib/resource-wrappers/branded-chat-resource.component';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
 
 @NgModule({
@@ -98,6 +99,7 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     ChatTasksResource,
     ArtifactResource,
     NotificationsResource,
+    BrandedChatResource,
     DashboardPreferencesDialogComponent,
   ],
   imports: [

@@ -76,6 +76,8 @@
           [currentUser]="currentUser"
           [disabled]="isProcessing"
           [showSidebarToggle]="showSidebarToggle"
+          [AgentRouting]="AgentRouting"
+          [BrandingLabels]="BrandingLabels"
           (sidebarToggleClicked)="sidebarToggleClicked.emit()"
           (messageSent)="onEmptyStateMessageSent($event)">
         </mj-conversation-empty-state>
@@ -153,6 +155,7 @@
                     [acceptedFileTypes]="acceptedFileTypes"
                     [initialMessage]="inputRef.conversationId === conversationId ? pendingMessage : null"
                     [initialAttachments]="inputRef.conversationId === conversationId ? pendingAttachments : null"
+                    [AgentRouting]="AgentRouting"
                     (messageSent)="onMessageSent($event)"
                     (agentResponse)="onAgentResponse($event)"
                     (agentRunDetected)="onAgentRunDetected($event)"
@@ -190,6 +193,8 @@
           [canEdit]="canEditSelectedArtifact"
           [isMaximized]="isArtifactPaneMaximized"
           [refreshTrigger]="artifactViewerRefresh$"
+          [TabLabelOverrides]="BrandingLabels?.TabLabelOverrides || null"
+          [SaveToCollectionLabel]="BrandingLabels?.SaveToCollectionLabel || 'Save to Collection'"
           (closed)="onCloseArtifactPanel()"
           (saveToCollectionRequested)="onSaveToCollectionRequested($event)"
           (navigateToLink)="onArtifactLinkNavigation($event)"

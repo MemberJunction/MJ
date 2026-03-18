@@ -19,11 +19,11 @@
     <!-- Greeting Header -->
     <div class="greeting-section">
       <div class="greeting-icon">
-        <i class="fa-solid fa-comments fa-3x"></i>
+        <i class="fa-solid {{ BrandingLabels?.WelcomeIcon || 'fa-comments' }} fa-3x"></i>
       </div>
-      <h1 class="greeting-title">Welcome to Conversations</h1>
+      <h1 class="greeting-title">{{ BrandingLabels?.WelcomeTitle || 'Welcome to Conversations' }}</h1>
       <p class="greeting-subtitle">
-        Start a new conversation by typing a message below, or choose a suggested prompt to get started.
+        {{ BrandingLabels?.WelcomeSubtitle || 'Start a new conversation by typing a message below, or choose a suggested prompt to get started.' }}
       </p>
     </div>
 
@@ -51,11 +51,12 @@
     <!-- Message Input (using full mj-message-input in empty state mode) -->
     <div class="message-input-wrapper">
       <mj-message-input
-        [placeholder]="'Type your message to start a new conversation...'"
+        [placeholder]="BrandingLabels?.InputPlaceholder || 'Type your message to start a new conversation...'"
         [disabled]="disabled"
         [currentUser]="currentUser"
         [emptyStateMode]="true"
         [enableAttachments]="true"
+        [AgentRouting]="AgentRouting"
         (emptyStateSubmit)="onEmptyStateSubmit($event)">
       </mj-message-input>
     </div>

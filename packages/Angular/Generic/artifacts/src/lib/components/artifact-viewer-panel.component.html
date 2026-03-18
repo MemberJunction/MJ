@@ -39,7 +39,7 @@
           <button class="save-to-collection-btn"
                   [class.in-collection]="isInCollection"
                   (click)="onSaveToLibrary()"
-                  [title]="isInCollection ? 'Current version saved to ' + currentVersionCollections.length + ' collection(s)' : 'Save to Collection'">
+                  [title]="isInCollection ? 'Current version saved to ' + currentVersionCollections.length + ' collection(s)' : SaveToCollectionLabel">
             <i [class]="isInCollection ? 'fas fa-bookmark' : 'far fa-bookmark'"></i>
           </button>
         }
@@ -93,7 +93,7 @@
                 @if (GetTabIcon(tab)) {
                   <i [class]="GetTabIcon(tab)!"></i>
                 }
-                {{ tab }}
+                {{ TabLabelOverrides?.[tab] || tab }}
               </button>
             }
           </div>

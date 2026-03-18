@@ -1,0 +1,11 @@
+[data-theme-overlay="skip-dark"] {
+    --mj-brand-primary: #1A9DBF;
+    --mj-brand-primary-hover: #21B5DB;
+    --mj-brand-primary-active: #147F9D;
+    --mj-logo-mark: url('/assets/themes/skip/skip-mark-white.svg');
+    --mj-logo-mark-inverse: url('/assets/themes/skip/skip-mark-white.svg');
+    --mj-logo-wordmark: url('/assets/themes/skip/skip-logo-white.svg');
+    --mj-logo-color: #1A9DBF;
+    --mj-text-link: #1A9DBF;
+    --mj-border-focus: #1A9DBF;
+}

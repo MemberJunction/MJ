@@ -22,6 +22,8 @@ export interface ThemeDefinition {
     Description?: string;
     /** Optional preview swatch colors for a future theme picker UI */
     PreviewColors?: string[];
+    /** If true, this theme is hidden from AvailableThemes but still usable programmatically */
+    Hidden?: boolean;
 }
 
 /**
@@ -85,6 +87,9 @@ export class ThemeService {
     /** Cache of loaded <link> elements by theme ID to avoid re-downloading */
     private loadedCssLinks = new Map<string, HTMLLinkElement>();
 
+    /** When non-null, a temporary theme is applied that overrides the persisted preference */
+    private _temporaryThemeId: string | null = null;
+
     /**
      * Observable for user's theme preference (theme ID or 'system')
      */
@@ -121,9 +126,16 @@ export class ThemeService {
     }
 
     /**
-     * All registered themes, for UI consumption (e.g. theme picker menus)
+     * Registered themes that are not hidden, for UI consumption (e.g. theme picker menus)
      */
     public get AvailableThemes(): ThemeDefinition[] {
+        return Array.from(this.themeRegistry.values()).filter(t => !t.Hidden);
+    }
+
+    /**
+     * All registered themes including hidden ones
+     */
+    public get AllThemes(): ThemeDefinition[] {
         return Array.from(this.themeRegistry.values());
     }
 
@@ -154,6 +166,26 @@ export class ThemeService {
         for (const theme of themes) {
             this.RegisterTheme(theme);
         }
+    }
+
+    // ========================================
+    // TEMPORARY THEME
+    // ========================================
+
+    public async ApplyThemeTemporary(themeId: string): Promise<void> {
+        this._temporaryThemeId = themeId;
+        await this.applyTheme(themeId);
+    }
+
+    public async RestorePersistedTheme(): Promise<void> {
+        if (this._temporaryThemeId === null) return;
+        this._temporaryThemeId = null;
+        const resolvedThemeId = this.resolveTheme(this._preference$.value);
+        await this.applyTheme(resolvedThemeId);
+    }
+
+    public get IsTemporaryThemeActive(): boolean {
+        return this._temporaryThemeId !== null;
     }
 
     // ========================================
@@ -379,6 +411,7 @@ export class ThemeService {
      * Handle system theme change (only applies if in 'system' mode)
      */
     private async onSystemThemeChange(): Promise<void> {
+        if (this._temporaryThemeId) return;
         if (this._preference$.value === 'system') {
             const newThemeId = this.getSystemTheme();
             await this.applyTheme(newThemeId);

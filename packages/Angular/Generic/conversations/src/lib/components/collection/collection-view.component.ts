@@ -12,7 +12,7 @@ type SortBy = 'name' | 'date' | 'type';
   template: `
     <div class="collection-view">
       <div class="view-header">
-        <h2>{{ collection.Name || 'Collection' }}</h2>
+        <h2>{{ collection.Name || CollectionLabel }}</h2>
         <div class="header-actions">
           <div class="view-mode-toggle">
             <button
@@ -53,7 +53,7 @@ type SortBy = 'name' | 'date' | 'type';
         @if (artifactVersions.length === 0) {
           <div class="empty-state">
             <i class="fas fa-folder-open"></i>
-            <p>This collection is empty</p>
+            <p>This {{ CollectionLabel.toLowerCase() }} is empty</p>
             @if (canEdit) {
               <button class="btn-add-primary" (click)="onAddArtifact()">
                 <i class="fas fa-plus"></i> Add Artifact
@@ -128,6 +128,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
   @Input() currentUser!: UserInfo;
   @Input() environmentId!: string;
   @Input() canEdit: boolean = true;
+  @Input() CollectionLabel: string = 'Collection';
 
   // Store versions with parent artifact info for display
   public artifactVersions: Array<{
@@ -170,7 +171,6 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
 
     try {
       const rv = new RunView();
-      const md = new Metadata();
 
       // Load ALL VERSIONS in this collection (no DISTINCT - each version is separate)
       const versionResult = await rv.RunView<MJArtifactVersionEntity>({
@@ -236,7 +236,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
     this.loadArtifacts();
   }
 
-  onArtifactSelected(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
+  onArtifactSelected(_item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
     // TODO: Emit event or navigate to artifact detail view
   }
 
@@ -254,7 +254,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
     this.selectedVersionNumber = undefined;
   }
 
-  onEditArtifact(item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
+  onEditArtifact(_item: { version: MJArtifactVersionEntity; artifact: MJArtifactEntity }): void {
     // TODO: Open artifact editor
   }
 

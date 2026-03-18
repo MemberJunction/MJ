@@ -1,0 +1,71 @@
+{
+  "fields": {
+    "Name": "Skip",
+    "Description": "Skip AI Assistant",
+    "Icon": "fa-solid fa-bolt",
+    "DefaultForNewUser": false,
+    "Status": "Active",
+    "NavigationStyle": "Both",
+    "DefaultNavItems": [
+      {
+        "Label": "Chat",
+        "Icon": "fa-solid fa-comments",
+        "ResourceType": "Custom",
+        "DriverClass": "BrandedChatResource",
+        "isDefault": true,
+        "Configuration": {
+          "themeId": "skip-light",
+          "darkThemeId": "skip-dark",
+          "availableAgentNames": [
+            "Skip"
+          ],
+          "defaultAgentName": "Skip",
+          "welcomeTitle": "Welcome to Skip",
+          "welcomeIcon": "fa-solid fa-bolt fa-3x",
+          "inputPlaceholder": "Ask Skip anything...",
+          "suggestedPrompts": [
+            {
+              "icon": "fa-chart-line",
+              "title": "Data insights",
+              "prompt": "Show me key trends in my data"
+            },
+            {
+              "icon": "fa-magnifying-glass",
+              "title": "Find records",
+              "prompt": "Help me find specific records"
+            },
+            {
+              "icon": "fa-file-chart-column",
+              "title": "Create report",
+              "prompt": "Build a report from my data"
+            },
+            {
+              "icon": "fa-robot",
+              "title": "Automate task",
+              "prompt": "Help me automate a repetitive task"
+            }
+          ],
+          "tabLabelOverrides": {
+            "Display": "Report",
+            "Functional": "Design",
+            "Spec": "Design"
+          },
+          "artifactLabel": "Report",
+          "saveToCollectionLabel": "Save to Library",
+          "collectionLabel": "Library",
+          "collectionsLabel": "Libraries"
+        }
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "7C04A81D-E682-4F36-AE90-7AEEB59F7155"
+  },
+  "sync": {
+    "lastModified": "2026-03-16T21:31:36.809Z",
+    "checksum": "eb845958f36a2db57691303ae169dce9e63062c320d4468c41ef6ad1474c7a77"
+  }
+}

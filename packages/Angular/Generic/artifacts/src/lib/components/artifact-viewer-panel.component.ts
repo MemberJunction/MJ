@@ -33,6 +33,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() canShare?: boolean; // Whether user can share this artifact
   @Input() canEdit?: boolean; // Whether user can edit this artifact
   @Input() isMaximized: boolean = false; // Whether the panel is currently maximized
+  @Input() TabLabelOverrides: Record<string, string> | null = null;
+  @Input() SaveToCollectionLabel: string = 'Save to Collection';
   @Output() closed = new EventEmitter<void>();
   @Output() saveToCollectionRequested = new EventEmitter<{artifactId: string; excludedCollectionIds: string[]}>();
   @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}>();

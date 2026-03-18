@@ -18,6 +18,7 @@ import { ConversationAttachmentService } from '../../services/conversation-attac
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
+import { AgentRoutingConfig } from '../../models/agent-routing-config.model';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
@@ -47,6 +48,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, MJAIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
   @Input() emptyStateMode: boolean = false; // When true, emits emptyStateSubmit instead of creating messages directly
+  @Input() AgentRouting: AgentRoutingConfig | null = null;
 
   // Initial message to send automatically - using getter/setter for precise control
   private _initialMessage: string | null = null;
@@ -566,8 +568,28 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   }
 
   /**
+   * Returns the effective list of agents based on agentRouting configuration.
+   * If agentRouting.AvailableAgents is set, filters the full agent list to only
+   * include agents that appear in both the permitted list and the constrained list.
+   * Otherwise returns all available agents.
+   */
+  private getEffectiveAgents(): MJAIAgentEntityExtended[] {
+    const allAgents = this.mentionAutocomplete.getAvailableAgents();
+    if (this.AgentRouting?.AvailableAgents?.length) {
+      const permittedIds = new Set(allAgents.map(a => a.ID));
+      const constrainedIds = new Set(
+        this.AgentRouting.AvailableAgents
+          .filter(a => permittedIds.has(a.ID))
+          .map(a => a.ID)
+      );
+      return allAgents.filter(a => constrainedIds.has(a.ID));
+    }
+    return allAgents;
+  }
+
+  /**
    * Routes the message to the appropriate agent or Sage based on context
-   * Priority: @mention > intent check > Sage
+   * Priority: @mention > intent check > default agent (from routing config) > single constrained agent > Sage
    */
   private async routeMessage(
     messageDetail: MJConversationDetailEntity,
@@ -614,7 +636,39 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       }
     }
 
-    // Priority 4: No context - use Sage with default config
+    // Priority 4: Agent routing - default agent bypasses Sage
+    if (this.AgentRouting?.DefaultAgent) {
+      const defaultMention: Mention = {
+        id: this.AgentRouting.DefaultAgent.ID,
+        name: this.AgentRouting.DefaultAgent.Name,
+        type: 'agent'
+      };
+      await this.executeRouteWithNaming(
+        () => this.invokeAgentDirectly(messageDetail, defaultMention, this.conversationId),
+        messageDetail.Message,
+        isFirstMessage
+      );
+      return;
+    }
+
+    // Priority 5: Single constrained agent - invoke directly (no Sage needed)
+    const effectiveAgents = this.getEffectiveAgents();
+    if (effectiveAgents.length === 1) {
+      const singleAgent = effectiveAgents[0];
+      const singleMention: Mention = {
+        id: singleAgent.ID,
+        name: singleAgent.Name || 'Agent',
+        type: 'agent'
+      };
+      await this.executeRouteWithNaming(
+        () => this.invokeAgentDirectly(messageDetail, singleMention, this.conversationId),
+        messageDetail.Message,
+        isFirstMessage
+      );
+      return;
+    }
+
+    // Priority 6: No context - use Sage with default config, passing constrained agents if configured
     await this.handleNoAgentContext(messageDetail, mentionResult, isFirstMessage);
   }
 
@@ -928,12 +982,18 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         conversationName: this.conversationName
       });
 
+      // Pass constrained agents if agent routing is configured
+      const constrainedAgents = this.AgentRouting?.AvailableAgents?.length
+        ? this.AgentRouting.AvailableAgents
+        : undefined;
+
       const result = await this.agentService.processMessage(
         conversationId,
         userMessage,
         this.conversationHistory,
         conversationManagerMessage.ID,
-        this.createProgressCallback(conversationManagerMessage, 'Sage')
+        this.createProgressCallback(conversationManagerMessage, 'Sage'),
+        constrainedAgents
       );
 
       // Task will be removed automatically in markMessageComplete()
