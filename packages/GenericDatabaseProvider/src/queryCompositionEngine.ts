@@ -215,6 +215,13 @@ export class QueryCompositionEngine {
             finalSQL = this.assembleCTEs(cteEntries, resolvedSQL, platform);
         }
 
+        // If any dependency uses templates, Nunjucks will run on the resolved SQL.
+        // Neutralize any {{ }} patterns inside SQL comments so Nunjucks doesn't
+        // try to parse them as template expressions (e.g. -- Demonstrates {{query:"..."}}).
+        if (templateFlag.value) {
+            finalSQL = this.escapeTemplateTokensInComments(finalSQL);
+        }
+
         return {
             ResolvedSQL: finalSQL,
             CTEs: cteEntries.map(e => e.Info),
@@ -755,6 +762,66 @@ export class QueryCompositionEngine {
                     }
                     i++;
                 }
+            }
+            // Normal character
+            else {
+                result += sql[i++];
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Escapes {{ and }} inside SQL comments so that Nunjucks doesn't try to parse them.
+     * This is needed because dependency queries may carry comments containing
+     * {{query:"..."}} examples or documentation that would otherwise cause
+     * Nunjucks "expected variable end" errors.
+     *
+     * Only modifies content inside -- single-line and block comments.
+     * Leaves string literals and normal SQL untouched.
+     */
+    private escapeTemplateTokensInComments(sql: string): string {
+        let result = '';
+        let i = 0;
+
+        while (i < sql.length) {
+            // Single-quoted string literal — preserve as-is
+            if (sql[i] === "'") {
+                result += sql[i++];
+                while (i < sql.length) {
+                    if (sql[i] === "'" && i + 1 < sql.length && sql[i + 1] === "'") {
+                        result += "''";
+                        i += 2;
+                    } else if (sql[i] === "'") {
+                        result += sql[i++];
+                        break;
+                    } else {
+                        result += sql[i++];
+                    }
+                }
+            }
+            // Single-line comment: -- to end of line — escape {{ and }} inside
+            else if (sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
+                let comment = '';
+                while (i < sql.length && sql[i] !== '\n') {
+                    comment += sql[i++];
+                }
+                result += comment.replace(/\{\{/g, '{ {').replace(/\}\}/g, '} }');
+            }
+            // Block comment: /* ... */ — escape {{ and }} inside
+            else if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
+                let comment = '/*';
+                i += 2;
+                while (i < sql.length) {
+                    if (sql[i] === '*' && i + 1 < sql.length && sql[i + 1] === '/') {
+                        comment += '*/';
+                        i += 2;
+                        break;
+                    }
+                    comment += sql[i++];
+                }
+                result += comment.replace(/\{\{/g, '{ {').replace(/\}\}/g, '} }');
             }
             // Normal character
             else {
