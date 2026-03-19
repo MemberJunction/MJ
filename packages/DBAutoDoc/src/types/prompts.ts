@@ -31,6 +31,8 @@ export interface ForeignKeyPromptResult {
   referencesTable: string;
   referencesColumn: string;
   confidence: number;
+  /** LLM verdict: "confirm" to keep, "reject" to discard. Only candidates from discovery are accepted. */
+  verdict?: 'confirm' | 'reject';
 }
 
 export interface ParentTableInsight {

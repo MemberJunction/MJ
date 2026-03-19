@@ -83,6 +83,15 @@ The database owner has provided the following authoritative documentation. Your 
 {% if seedContext.customInstructions %}- **Special Instructions**: {{ seedContext.customInstructions }}{% endif %}
 {% endif %}
 
+{% if fkCandidates and fkCandidates.length > 0 %}
+## FK Candidates from Statistical Analysis
+**IMPORTANT**: The following foreign key candidates were identified by statistical analysis (value overlap, naming patterns, cardinality). Your job is to **confirm or reject** each one based on semantic plausibility. Do NOT add new FK relationships — only evaluate the candidates below.
+
+{% for fk in fkCandidates %}
+- **{{ fk.sourceColumn }}** → {{ fk.targetSchema }}.{{ fk.targetTable }}.{{ fk.targetColumn }} (statistical confidence: {{ (fk.confidence * 100) | round(0) }}%, value overlap: {{ (fk.valueOverlap * 100) | round(1) }}%)
+{% endfor %}
+{% endif %}
+
 {% if allTables %}
 ## All Database Tables
 **IMPORTANT**: When referring to foreign key relationships, you MUST use one of these exact table names:
@@ -117,7 +126,8 @@ Based on the evidence above, generate a JSON response with this exact structure:
       "referencesSchema": "inv",
       "referencesTable": "prd",
       "referencesColumn": "prd_id",
-      "confidence": 0.95
+      "confidence": 0.95,
+      "verdict": "confirm"
     }
   ],
   "inferredBusinessDomain": "Sales",
@@ -136,12 +146,13 @@ Based on the evidence above, generate a JSON response with this exact structure:
 2. **Reasoning**: Reference specific evidence (column names, FK relationships, sample values, cardinality patterns)
 3. **Confidence**: 0-1 scale. Be conservative. Use < 0.7 if ambiguous.
 4. **Column Descriptions**: Every column should be described. Explain its role and meaning.
-5. **Foreign Keys**: **CRITICAL** - Use structured format for ALL foreign key relationships:
-   - Include EVERY column that references another table
-   - Use EXACT schema and table names from the "All Database Tables" list above
-   - Specify confidence (0-1 scale) based on evidence strength
-   - Example: If `prd_id` exists, add: `{"columnName": "prd_id", "referencesSchema": "inv", "referencesTable": "prd", "referencesColumn": "prd_id", "confidence": 0.95}`
-   - **Leave empty array if no foreign keys detected**
+5. **Foreign Keys**: **CRITICAL** - You may ONLY evaluate the FK candidates listed in the "FK Candidates from Statistical Analysis" section below (if present). You must NOT invent new foreign key relationships.
+   - For each candidate, set `"verdict"` to `"confirm"` or `"reject"` based on whether the relationship makes semantic sense
+   - Adjust `"confidence"` (0-1 scale) up or down based on your assessment
+   - Use the column names, sample values, table context, and parent descriptions to judge each candidate
+   - **Omit candidates you reject** from the array (or include with `"verdict": "reject"`)
+   - **If no FK candidates were provided, return an empty array** — do NOT suggest new FKs
+   - You must use EXACT schema and table names from the "All Database Tables" list
 6. **Business Domain**: Infer from table name and purpose (e.g., "Sales", "HR", "Inventory", "Billing", "Security")
 7. **Parent Table Insights**: If analyzing this child table reveals new information about parent tables, include it. Examples:
    - Discovering enum values in the parent (e.g., "Member table has a 'Type' column with values: Individual, Corporate, Student")

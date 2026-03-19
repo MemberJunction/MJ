@@ -62,16 +62,24 @@ export class FKDetector {
         continue;
       }
 
-      // 2A: Check if column is a discovered PK — still proceed with FK analysis
-      // (identifying relationships have PK columns that are also FKs)
-      const isPKColumn = discoveredPKs.some(pk =>
+      // 2A (tightened): PK columns may also be FKs (identifying relationships),
+      // but ONLY when the source is a single-column PK. Composite PK members
+      // as FK sources create too many false positives (reverse/transitive matches).
+      const sourcePK = discoveredPKs.find(pk =>
         pk.schemaName === sourceSchema &&
         pk.tableName === sourceTable.name &&
         pk.columnNames.includes(sourceColumn.name)
       );
+      const isPKColumn = !!sourcePK;
+      const isSingleColumnPK = isPKColumn && sourcePK!.columnNames.length === 1;
 
-      if (isPKColumn) {
-        console.log(`[FKDetector]   ${sourceColumn.name} is a PK, but proceeding with FK analysis (identifying relationship check)`);
+      if (isPKColumn && !isSingleColumnPK) {
+        // Composite PK member — skip as FK candidate (original behavior)
+        console.log(`[FKDetector]   Skip ${sourceColumn.name} - composite PK member, not eligible as FK source`);
+        continue;
+      }
+      if (isSingleColumnPK) {
+        console.log(`[FKDetector]   ${sourceColumn.name} is a single-column PK, proceeding with FK analysis (identifying relationship check)`);
       }
 
       // Tier 2: For string columns, sample values and check if they look like keys
@@ -118,11 +126,27 @@ export class FKDetector {
           console.log(`[FKDetector]     Candidate confidence: ${candidate.confidence} (min: ${this.config.confidence.foreignKeyMinimum * 100})`);
         }
 
-        // 2A: PK columns require higher confidence threshold (80) to be considered FK
-        const minConfidence = isPKColumn ? 80 : this.config.confidence.foreignKeyMinimum * 100;
-        if (candidate && candidate.confidence >= minConfidence) {
+        // 2A (tightened): PK-as-FK requires BOTH source AND target to be single-column PKs,
+        // plus a higher 80% confidence threshold. This preserves identifying relationships
+        // (e.g., Employee.BusinessEntityID → Person.BusinessEntityID) while blocking
+        // reverse-direction and transitive false positives.
+        if (isSingleColumnPK) {
+          if (target.targetPKColumnCount !== 1) {
+            // Target is not a single-column PK — skip this pairing
+            console.log(`[FKDetector]     Skip PK-as-FK: target ${target.tableName}.${target.columnName} is not a single-column PK (count: ${target.targetPKColumnCount})`);
+            continue;
+          }
+          if (!candidate || candidate.confidence < 80) {
+            continue; // Higher threshold for identifying relationships
+          }
           candidates.push(candidate);
-          console.log(`[FKDetector]     ✓ Added FK candidate: ${sourceColumn.name} -> ${target.tableName}.${target.columnName}${isPKColumn ? ' (identifying relationship)' : ''}`);
+          console.log(`[FKDetector]     ✓ Added FK candidate (identifying relationship): ${sourceColumn.name} -> ${target.tableName}.${target.columnName} (conf: ${candidate.confidence})`);
+        } else {
+          const minConfidence = this.config.confidence.foreignKeyMinimum * 100;
+          if (candidate && candidate.confidence >= minConfidence) {
+            candidates.push(candidate);
+            console.log(`[FKDetector]     ✓ Added FK candidate: ${sourceColumn.name} -> ${target.tableName}.${target.columnName} (conf: ${candidate.confidence})`);
+          }
         }
       }
     }
