@@ -375,29 +375,39 @@ describe('stripOrderByForCTE', () => {
     // 10. UNION / EXCEPT / INTERSECT
     // ================================================================
     describe('set operations', () => {
-        it('should safely handle UNION ALL with trailing ORDER BY (does not corrupt)', () => {
-            // Known limitation: node-sql-parser places orderby on the _next union branch,
-            // and the regex fallback sees ORDER BY at paren depth 0 but after a UNION.
-            // The safe behavior is to not incorrectly mangle the SQL.
+        it('should strip trailing ORDER BY from UNION ALL query (AST walks _next chain)', () => {
             const sql = 'SELECT ID, Name FROM Users UNION ALL SELECT ID, Name FROM Admins ORDER BY Name';
             const result = stripOrderByForCTE(sql, sqlServer);
+            expect(result).not.toMatch(/ORDER\s+BY/i);
             expect(result).toMatch(/UNION\s+ALL/i);
             expect(result).toContain('Users');
             expect(result).toContain('Admins');
         });
 
-        it('should safely handle UNION with trailing ORDER BY (does not corrupt)', () => {
+        it('should strip trailing ORDER BY from UNION query', () => {
             const sql = 'SELECT ID FROM Users UNION SELECT ID FROM Admins ORDER BY ID';
             const result = stripOrderByForCTE(sql, sqlServer);
+            expect(result).not.toMatch(/ORDER\s+BY/i);
             expect(result).toContain('Users');
             expect(result).toContain('Admins');
         });
 
-        it('should safely handle EXCEPT with trailing ORDER BY (does not corrupt)', () => {
+        it('should strip trailing ORDER BY from EXCEPT query', () => {
             const sql = 'SELECT ID FROM AllUsers EXCEPT SELECT ID FROM BannedUsers ORDER BY ID';
             const result = stripOrderByForCTE(sql, sqlServer);
+            expect(result).not.toMatch(/ORDER\s+BY/i);
             expect(result).toContain('AllUsers');
             expect(result).toContain('BannedUsers');
+        });
+
+        it('should strip UNION ORDER BY even when TOP is on first SELECT (TOP applies to first SELECT only)', () => {
+            const sql = 'SELECT TOP 10 ID FROM Users UNION ALL SELECT ID FROM Admins ORDER BY ID';
+            const result = stripOrderByForCTE(sql, sqlServer);
+            // TOP on the first SELECT doesn't make the UNION's trailing ORDER BY legal in a CTE.
+            // SQL Server's rule: ORDER BY on a UNION in a CTE needs TOP/OFFSET on the UNION result,
+            // not on an individual branch. The AST correctly strips it.
+            expect(result).not.toMatch(/\bORDER\s+BY\b/i);
+            expect(result).toContain('TOP 10');
         });
     });
 
@@ -439,9 +449,9 @@ describe('stripOrderByForCTE', () => {
     });
 
     // ================================================================
-    // 13. NUNJUCKS TEMPLATE SQL (regex fallback path)
+    // 13. NUNJUCKS TEMPLATE SQL (AST-guided with Nunjucks preprocessing)
     // ================================================================
-    describe('Nunjucks template fallback', () => {
+    describe('Nunjucks template handling', () => {
         it('should strip ORDER BY from SQL with simple Nunjucks if/endif', () => {
             const sql = `SELECT m.ID, m.Name FROM Members m
 {% if Region %}
@@ -498,6 +508,32 @@ ORDER BY JoinYear, JoinMonth`;
             expect(result).toContain('GROUP BY');
         });
 
+        it('should strip trailing ORDER BY from Nunjucks SQL with window function via AST-guided path', () => {
+            // The Nunjucks-aware AST path should preprocess templates, detect the top-level ORDER BY
+            // via AST analysis, and use the position-aware scanner to strip only the trailing one.
+            const sql = `SELECT ID, ROW_NUMBER() OVER (ORDER BY Score DESC) AS Rank
+FROM Users
+{% if Active %}WHERE Active = 1{% endif %}
+ORDER BY Name`;
+            const result = stripOrderByForCTE(sql, sqlServer);
+            // Trailing ORDER BY Name should be stripped
+            expect(result).not.toMatch(/ORDER\s+BY\s+Name/i);
+            // Window function ORDER BY Score should be preserved
+            expect(result).toMatch(/OVER\s*\(\s*ORDER\s+BY\s+Score/i);
+            // Nunjucks tokens preserved
+            expect(result).toContain('{%');
+        });
+
+        it('should preserve ORDER BY in Nunjucks SQL with TOP', () => {
+            const sql = `SELECT TOP 10 ID, Name FROM Users
+{% if Status %}WHERE Status = {{ Status | sqlString }}{% endif %}
+ORDER BY CreatedAt DESC`;
+            const result = stripOrderByForCTE(sql, sqlServer);
+            // TOP makes ORDER BY legal — should be preserved
+            expect(result).toMatch(/ORDER\s+BY/i);
+            expect(result).toContain('{%');
+        });
+
         it('should not strip ORDER BY from Nunjucks SQL inside subquery (paren depth > 0)', () => {
             const sql = `SELECT * FROM (
     SELECT TOP 10 ID FROM Users
@@ -537,10 +573,9 @@ ORDER BY AgentID, StartedAt DESC`;
         });
 
         it('should handle Membership Growth pattern (window function + Nunjucks)', () => {
-            // This is the hardest edge case: Nunjucks templates force the regex fallback,
-            // but the regex can't distinguish the window function ORDER BY from the trailing one.
-            // The OVER(...ORDER BY...) is inside parens so paren depth at the trailing ORDER BY
-            // depends on whether the greedy regex matches from the first or last ORDER BY.
+            // Hardest edge case: Nunjucks templates + window function ORDER BY + trailing ORDER BY.
+            // The Nunjucks-aware AST path preprocesses templates, confirms there IS a top-level
+            // ORDER BY via AST, then uses the position-aware scanner to strip only the trailing one.
             const sql = `SELECT
     YEAR(m.JoinDate) AS JoinYear,
     MONTH(m.JoinDate) AS JoinMonth,
@@ -556,8 +591,11 @@ WHERE m.JoinDate >= {{ StartDate | sqlDate }}
 GROUP BY YEAR(m.JoinDate), MONTH(m.JoinDate), FORMAT(m.JoinDate, 'yyyy-MM')
 ORDER BY JoinYear, JoinMonth`;
             const result = stripOrderByForCTE(sql, sqlServer);
-            // Should not corrupt the SQL
-            expect(result).toContain('YEAR(m.JoinDate)');
+            // Trailing ORDER BY JoinYear, JoinMonth should be stripped
+            expect(result).not.toMatch(/ORDER\s+BY\s+JoinYear/i);
+            // Window function ORDER BY inside OVER() should be preserved
+            expect(result).toMatch(/OVER\s*\(\s*\n?\s*ORDER\s+BY/i);
+            // Nunjucks tokens should survive
             expect(result).toContain('{%');
             expect(result).toContain('GROUP BY');
         });
