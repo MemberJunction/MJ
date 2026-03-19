@@ -91,7 +91,8 @@ export class QueryParameterProcessor {
      */
     public static validateParameters(
         parameters: Record<string, unknown> | undefined,
-        parameterDefinitions: QueryParameterInfo[]
+        parameterDefinitions: QueryParameterInfo[],
+        skipUnknownParameterCheck?: boolean
     ): ParameterValidationResult {
         const errors: string[] = [];
         const validatedParams: Record<string, unknown> = {};
@@ -208,8 +209,9 @@ export class QueryParameterProcessor {
             }
         }
 
-        // Check for unknown parameters
-        if (parameters) {
+        // Check for unknown parameters (skipped for transitive template processing
+        // where the outer query doesn't define the dependency's parameters)
+        if (parameters && !skipUnknownParameterCheck) {
             const definedParamNames = new Set(parameterDefinitions.map(p => p.Name));
             for (const key of Object.keys(parameters)) {
                 if (!definedParamNames.has(key)) {
@@ -230,17 +232,21 @@ export class QueryParameterProcessor {
      * @param query The query info containing template SQL and parameter definitions
      * @param parameters User-provided parameter values
      * @param sqlOverride Optional SQL to use instead of query.SQL (e.g., platform-resolved SQL)
+     * @param forceTemplateProcessing When true, processes Nunjucks templates even if the query's
+     *        own UsesTemplate is false. Used for transitive template resolution when a composed
+     *        dependency uses templates but the outer query does not.
      */
     public static processQueryTemplate(
         query: QueryInfo,
         parameters: Record<string, unknown> | undefined,
-        sqlOverride?: string
+        sqlOverride?: string,
+        forceTemplateProcessing?: boolean
     ): QueryProcessingResult {
         try {
             const sql = sqlOverride ?? query.SQL;
 
-            // If query doesn't use templates, return the SQL as-is
-            if (!query.UsesTemplate) {
+            // If query doesn't use templates (and no dependency does either), return the SQL as-is
+            if (!query.UsesTemplate && !forceTemplateProcessing) {
                 return {
                     success: true,
                     processedSQL: sql,
@@ -248,8 +254,10 @@ export class QueryParameterProcessor {
                 };
             }
 
-            // Validate parameters
-            const validation = this.validateParameters(parameters, query.Parameters);
+            // Validate parameters against known definitions.
+            // When force-processing for transitive templates, the outer query may not define
+            // all parameters used by dependencies, so we skip the "unknown parameter" check.
+            const validation = this.validateParameters(parameters, query.Parameters, forceTemplateProcessing);
             if (!validation.success) {
                 return {
                     success: false,
@@ -259,17 +267,28 @@ export class QueryParameterProcessor {
                 };
             }
 
+            // When force-processing, merge any provided parameters that weren't in query.Parameters
+            // so Nunjucks can resolve dependency template tokens
+            const renderParams = { ...validation.validatedParameters };
+            if (forceTemplateProcessing && parameters) {
+                for (const [key, value] of Object.entries(parameters)) {
+                    if (!(key in renderParams)) {
+                        renderParams[key] = value;
+                    }
+                }
+            }
+
             // Process the template
             try {
                 const processedSQL = this.nunjucksEnv.renderString(
                     sql,
-                    validation.validatedParameters
+                    renderParams
                 );
 
                 return {
                     success: true,
                     processedSQL,
-                    appliedParameters: validation.validatedParameters
+                    appliedParameters: renderParams
                 };
             } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e);
@@ -277,7 +296,7 @@ export class QueryParameterProcessor {
                     success: false,
                     processedSQL: '',
                     error: `Template processing failed: ${msg}`,
-                    appliedParameters: validation.validatedParameters
+                    appliedParameters: renderParams
                 };
             }
         } catch (e: unknown) {

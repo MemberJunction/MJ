@@ -353,6 +353,102 @@ describe('GenericDatabaseProvider Query Pipeline', () => {
             expect(finalSQL).toContain('SELECT ID FROM Users WHERE Active = 1');
             expect(finalSQL).not.toContain('{{query:');
         });
+
+        it('should resolve dependency Nunjucks templates when outer query has UsesTemplate=false', () => {
+            // Dependency uses Nunjucks templates
+            const depQuery = makeQueryInfo({
+                ID: 'dep-1',
+                Name: 'Membership Growth By Period',
+                CategoryPath: '/Reports/',
+                SQL: `SELECT YEAR(m.JoinDate) AS JoinYear, COUNT(*) AS MemberCount
+FROM Members m
+{% if StartDate %}
+WHERE m.JoinDate >= '{{ StartDate }}'
+{% endif %}
+GROUP BY YEAR(m.JoinDate)
+ORDER BY JoinYear`,
+                Reusable: true,
+                UsesTemplate: true,
+            });
+
+            // Outer query does NOT use templates itself, only references the dependency
+            const outerQuery = makeQueryInfo({
+                ID: 'outer-1',
+                Name: 'Growth Report',
+                SQL: 'WITH mg AS (SELECT * FROM {{query:"Reports/Membership Growth By Period"}}) SELECT * FROM mg',
+                UsesTemplate: false,
+            });
+            outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [depQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            // Pass StartDate parameter — should be resolved in the dependency's Nunjucks templates
+            const { finalSQL } = provider.testProcessQueryParameters(
+                outerQuery,
+                { StartDate: '2024-01-01' },
+                mockUser
+            );
+
+            // Nunjucks {% if StartDate %} block should be resolved (not raw template syntax)
+            expect(finalSQL).not.toContain('{%');
+            expect(finalSQL).not.toContain('{{');
+            expect(finalSQL).toContain("'2024-01-01'");
+            // ORDER BY should be stripped from the CTE body
+            expect(finalSQL).toContain('WITH');
+            expect(finalSQL).toContain('MemberCount');
+        });
+
+        it('should handle dependency templates with no parameters provided (falsy branch)', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'dep-2',
+                Name: 'All Members',
+                CategoryPath: '/Reports/',
+                SQL: `SELECT m.ID, m.Name
+FROM Members m
+{% if Region %}
+WHERE m.Region = '{{ Region }}'
+{% endif %}`,
+                Reusable: true,
+                UsesTemplate: true,
+            });
+
+            const outerQuery = makeQueryInfo({
+                ID: 'outer-2',
+                Name: 'Member List',
+                SQL: 'SELECT * FROM {{query:"Reports/All Members"}}',
+                UsesTemplate: false,
+            });
+            outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [depQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            // No parameters provided — {% if Region %} should evaluate to false
+            const { finalSQL } = provider.testProcessQueryParameters(outerQuery, undefined, mockUser);
+
+            expect(finalSQL).not.toContain('{%');
+            expect(finalSQL).not.toContain('{{ Region }}');
+            // The WHERE clause should NOT be present since Region is not provided
+            expect(finalSQL).not.toContain('WHERE');
+            expect(finalSQL).toContain('SELECT m.ID, m.Name');
+        });
     });
 
     // ================================================================

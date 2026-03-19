@@ -2,7 +2,7 @@ import { ActionResultSimple, AIDirective, RunActionParams } from "@memberjunctio
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { AIEngine } from "@memberjunction/aiengine";
-import { QueryEmbeddingService } from "@memberjunction/aiengine";
+import { QueryEngineServer, QueryEmbeddingMetadata } from "@memberjunction/core-entities-server";
 import { LogError } from "@memberjunction/core";
 
 /**
@@ -59,25 +59,23 @@ export class SearchQueryCatalogAction extends BaseAction {
             // Ensure AIEngine is loaded for embedding generation
             await AIEngine.Instance.Config(false, params.ContextUser);
 
-            // Build SQL filter for query loading
-            const filters: string[] = [];
-            if (approvedOnly) filters.push("Status = 'Approved'");
-            if (reusableOnly) filters.push("Reusable = 1");
-            const filter = filters.length > 0 ? filters.join(' AND ') : undefined;
+            // Ensure QueryEngineServer is loaded (uses cached queries, no DB call if already loaded)
+            await QueryEngineServer.Instance.Config(false, params.ContextUser);
 
-            // Load pre-computed embeddings from DB
-            const vectorService = await QueryEmbeddingService.LoadQueryEmbeddings(
-                params.ContextUser,
-                filter
-            );
+            // Build metadata filter from action params
+            const metadataFilter = (meta: QueryEmbeddingMetadata): boolean => {
+                if (approvedOnly && meta.status !== 'Approved') return false;
+                if (reusableOnly && !meta.reusable) return false;
+                return true;
+            };
 
-            // Search for similar queries
-            const matches = await QueryEmbeddingService.FindSimilarQueries(
-                vectorService,
+            // Search using the persistent vector index
+            const matches = await QueryEngineServer.Instance.FindSimilarQueries(
                 searchText,
-                (text) => AIEngine.Instance.EmbedTextLocal(text),
+                (text: string) => AIEngine.Instance.EmbedTextLocal(text),
                 topK,
-                minSimilarity
+                minSimilarity,
+                metadataFilter
             );
 
             if (matches.length === 0) {

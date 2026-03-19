@@ -1917,17 +1917,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     // InternalRunQuery — Shared Pipeline Implementation
     /**************************************************************************/
 
-    /**
-     * Query cache manager wrapping LocalCacheManager for query result caching.
-     * Per-instance because it needs the connection string for fingerprinting.
-     */
-    private _queryCacheManager: QueryCacheManager | null = null;
+    private _queryCacheInitialized: boolean = false;
 
     private get QueryCacheMgr(): QueryCacheManager {
-        if (!this._queryCacheManager) {
-            this._queryCacheManager = new QueryCacheManager(this.InstanceConnectionString);
+        if (!this._queryCacheInitialized) {
+            QueryCacheManager.Instance.Init(this.InstanceConnectionString);
+            this._queryCacheInitialized = true;
         }
-        return this._queryCacheManager;
+        return QueryCacheManager.Instance;
     }
 
     /**
@@ -2184,11 +2181,21 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let appliedParameters: Record<string, string> = {};
 
         // Step 1: Resolve {{query:"..."}} composition tokens BEFORE Nunjucks processing
-        finalSQL = this.ResolveQueryComposition(finalSQL, contextUser, parameters);
+        const compositionResult = this.ResolveQueryComposition(finalSQL, contextUser, parameters);
+        finalSQL = compositionResult.ResolvedSQL;
 
-        // Step 2: Process Nunjucks template parameters
-        if (query.UsesTemplate) {
-            const processingResult = QueryParameterProcessor.processQueryTemplate(query, parameters, finalSQL);
+        // Step 2: Process Nunjucks template parameters.
+        // UsesTemplate is transitive: if ANY dependency uses templates, we must run Nunjucks
+        // even if the outer query itself has UsesTemplate = false.
+        const needsTemplateProcessing = query.UsesTemplate || compositionResult.AnyDependencyUsesTemplates;
+
+        if (needsTemplateProcessing) {
+            const processingResult = QueryParameterProcessor.processQueryTemplate(
+                query,
+                parameters,
+                finalSQL,
+                compositionResult.AnyDependencyUsesTemplates
+            );
 
             if (!processingResult.success) {
                 throw new Error(processingResult.error);
