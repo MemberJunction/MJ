@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity, MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -11,6 +11,8 @@ import {
     type ConnectionTestResult,
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
+    type FetchContext,
+    type FetchBatchResult,
     type ExternalRecord,
     type CRUDResult,
     type CreateRecordContext,
@@ -1008,10 +1010,12 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const properties = record['properties'] as Record<string, string | null> | undefined;
         const result: Record<string, unknown> = {};
 
-        // Add flattened properties first
+        // Add flattened properties — HubSpot uses '' to mean "no value" for all
+        // property types, which causes SQL errors on datetime/numeric columns.
+        // Normalize empty strings to null so nullable DB columns receive NULL.
         if (properties) {
             for (const [key, value] of Object.entries(properties)) {
-                result[key] = value;
+                result[key] = value === '' ? null : value;
             }
         }
 
@@ -1022,6 +1026,184 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         result['archived'] = record['archived'];
 
         return result;
+    }
+
+    // ─── Association fetch (v4 API) ───────────────────────────────────
+
+    /**
+     * Overrides FetchChanges to intercept association objects (Category === 'Association')
+     * and route them through the v4 per-object associations endpoint instead of the
+     * non-existent flat list endpoint stored in APIPath.
+     */
+    public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
+        const obj = this.GetCachedObject(ctx.CompanyIntegration.IntegrationID, ctx.ObjectName);
+        if (obj.Category === 'Association') {
+            return this.FetchAssociationChanges(ctx, obj);
+        }
+        return super.FetchChanges(ctx);
+    }
+
+    /**
+     * Fetches association records in batches by iterating over synced parent (from-side)
+     * objects and calling HubSpot's v4 per-object associations endpoint.
+     *
+     * Uses ctx.CurrentOffset to track parent position across batch calls, so the engine
+     * can page through all parents without truncating records.
+     */
+    private async FetchAssociationChanges(
+        ctx: FetchContext,
+        obj: MJIntegrationObjectEntity
+    ): Promise<FetchBatchResult> {
+        const parsed = this.ParseAssociationPath(obj.APIPath);
+        if (!parsed) {
+            console.warn(`[HubSpot] Cannot parse association path: ${obj.APIPath}`);
+            return { Records: [], HasMore: false };
+        }
+        const { fromType, toType } = parsed;
+
+        const fields = this.GetCachedFields(obj.ID);
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
+        const baseURL = this.GetBaseURL(ctx.CompanyIntegration, auth);
+
+        // Association objects have two PK fields: left (from-side) and right (to-side)
+        const pkFields = fields.filter(f => f.IsPrimaryKey).sort((a, b) => a.Sequence - b.Sequence);
+        const leftFieldName = pkFields[0]?.Name ?? `${fromType.replace(/s$/, '')}_id`;
+        const rightFieldName = pkFields[1]?.Name ?? `${toType.replace(/s$/, '')}_id`;
+
+        const parentIDs = await this.LoadAssociationParentIDs(fromType, ctx);
+        const parentOffset = ctx.CurrentOffset ?? 0;
+
+        if (parentOffset === 0) {
+            console.log(`[HubSpot] Fetching ${obj.Name}: ${parentIDs.length} parent ${fromType} to iterate`);
+        }
+
+        const batchSize = Math.min(ctx.BatchSize ?? 200, 200);
+        const batchRecords: ExternalRecord[] = [];
+        let parentIndex = parentOffset;
+
+        while (parentIndex < parentIDs.length && batchRecords.length < batchSize) {
+            const parentID = parentIDs[parentIndex];
+            const basePath = `${baseURL}/crm/v4/objects/${fromType}/${parentID}/associations/${toType}`;
+            const rawRecords = await this.FetchAllAssociationPages(auth, basePath, obj.DefaultPageSize ?? 500);
+            let addedAll = true;
+            for (const record of rawRecords) {
+                if (batchRecords.length >= batchSize) {
+                    addedAll = false;
+                    break;
+                }
+                const flat = this.FlattenAssociationRecord(record, leftFieldName, parentID, rightFieldName);
+                batchRecords.push({
+                    ExternalID: `${flat[leftFieldName]}|${flat[rightFieldName]}`,
+                    ObjectType: ctx.ObjectName,
+                    Fields: flat,
+                });
+            }
+            if (addedAll) {
+                parentIndex++;
+            } else {
+                // Don't advance — next batch re-fetches this parent so no records are lost
+                break;
+            }
+        }
+
+        const hasMore = parentIndex < parentIDs.length;
+        console.log(`[HubSpot] ${obj.Name}: fetched ${batchRecords.length} association records (parents ${parentOffset}-${parentIndex - 1} of ${parentIDs.length})`);
+        return { Records: batchRecords, HasMore: hasMore, NextOffset: hasMore ? parentIndex : undefined };
+    }
+
+    /**
+     * Paginates through all pages of a HubSpot v4 per-object association endpoint,
+     * returning the raw result items (each with toObjectId + associationTypes).
+     */
+    private async FetchAllAssociationPages(
+        auth: RESTAuthContext,
+        basePath: string,
+        pageSize: number
+    ): Promise<Record<string, unknown>[]> {
+        const headers = this.BuildHeaders(auth);
+        const allRecords: Record<string, unknown>[] = [];
+        let cursor: string | undefined;
+
+        do {
+            const url = cursor
+                ? `${basePath}?limit=${pageSize}&after=${encodeURIComponent(cursor)}`
+                : `${basePath}?limit=${pageSize}`;
+
+            const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+            if (response.Status < 200 || response.Status >= 300) break;
+
+            const body = response.Body as Record<string, unknown>;
+            const results = body['results'];
+            if (!results || !Array.isArray(results) || results.length === 0) break;
+
+            allRecords.push(...(results as Record<string, unknown>[]));
+
+            const paging = body['paging'] as { next?: { after?: string } } | undefined;
+            cursor = paging?.next?.after;
+        } while (cursor);
+
+        return allRecords;
+    }
+
+    /**
+     * Converts a HubSpot v4 association result item into a flat record suitable for storage.
+     * v4 format: { toObjectId: number, associationTypes: [{ label, typeId, category }] }
+     */
+    private FlattenAssociationRecord(
+        record: Record<string, unknown>,
+        leftFieldName: string,
+        leftValue: string,
+        rightFieldName: string
+    ): Record<string, unknown> {
+        const assocTypes = record['associationTypes'] as Array<{ label?: string }> | undefined;
+        return {
+            [leftFieldName]: leftValue,
+            [rightFieldName]: String(record['toObjectId']),
+            association_type: assocTypes?.[0]?.label ?? null,
+        };
+    }
+
+    /**
+     * Parses a v4 associations APIPath to extract from/to object type names.
+     * E.g., "/crm/v4/associations/contacts/companies" → { fromType: "contacts", toType: "companies" }
+     */
+    private ParseAssociationPath(apiPath: string): { fromType: string; toType: string } | null {
+        const match = /\/crm\/v4\/associations\/([^/?]+)\/([^/?]+)/.exec(apiPath);
+        if (!match) return null;
+        return { fromType: match[1], toType: match[2] };
+    }
+
+    /**
+     * Loads hs_object_id values for all synced records of a given HubSpot object type
+     * by finding its entity map and querying the local MJ entity.
+     */
+    private async LoadAssociationParentIDs(fromType: string, ctx: FetchContext): Promise<string[]> {
+        const rv = new RunView();
+
+        const entityMapResult = await rv.RunView<{ Entity: string }>({
+            EntityName: 'MJ: Company Integration Entity Maps',
+            ExtraFilter: `ExternalObjectName='${fromType}' AND SyncEnabled=1 AND CompanyIntegrationID='${ctx.CompanyIntegration.ID}'`,
+            Fields: ['Entity'],
+            MaxRows: 1,
+            ResultType: 'simple',
+        }, ctx.ContextUser);
+
+        if (!entityMapResult.Success || entityMapResult.Results.length === 0) {
+            console.warn(`[HubSpot] No entity map found for ${fromType} — skipping association fetch`);
+            return [];
+        }
+
+        const entityName = entityMapResult.Results[0].Entity;
+        const idsResult = await rv.RunView<{ hs_object_id: string }>({
+            EntityName: entityName,
+            Fields: ['hs_object_id'],
+            ResultType: 'simple',
+        }, ctx.ContextUser);
+
+        if (!idsResult.Success) return [];
+        return idsResult.Results
+            .map(r => String(r['hs_object_id']))
+            .filter(id => id && id !== 'undefined' && id !== 'null');
     }
 
     // ─── URL helpers ─────────────────────────────────────────────────

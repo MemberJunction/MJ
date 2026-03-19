@@ -626,7 +626,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * Gets an IntegrationObject from the engine's cache by integration ID and object name.
      * Throws if not found.
      */
-    private GetCachedObject(integrationID: string, objectName: string): MJIntegrationObjectEntity {
+    protected GetCachedObject(integrationID: string, objectName: string): MJIntegrationObjectEntity {
         const obj = IntegrationEngineBase.Instance.GetIntegrationObject(integrationID, objectName);
         if (!obj) {
             throw new Error(`IntegrationObject not found: "${objectName}" for integration ${integrationID}`);
@@ -638,7 +638,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
      * Gets IntegrationObjectField records from the engine's cache for a given object ID.
      * Returns only active fields sorted by Sequence.
      */
-    private GetCachedFields(objectID: string): MJIntegrationObjectFieldEntity[] {
+    protected GetCachedFields(objectID: string): MJIntegrationObjectFieldEntity[] {
         return IntegrationEngineBase.Instance.GetIntegrationObjectFields(objectID)
             .filter(f => f.Status === 'Active')
             .sort((a, b) => a.Sequence - b.Sequence);
