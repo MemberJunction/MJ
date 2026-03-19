@@ -15,7 +15,7 @@
 import { DataContext } from '@memberjunction/data-context';
 import type { SkipMessage } from './conversation-types';
 import type { SkipEntityInfo } from './entity-metadata-types';
-import type { SkipQueryInfo } from './query-types';
+import type { SkipQueryInfo, SkipQueryCatalogEntry } from './query-types';
 import type { SkipAPIRequestAPIKey } from './auth-types';
 import type { SkipAPIArtifact } from './artifact-types';
 import type { SkipAPIAgentNote, SkipAPIAgentNoteType } from './agent-types';
@@ -145,6 +145,13 @@ export class SkipAPIRequest {
      * Stored queries in the MJ metadata that Skip can use and learn from
      */
     queries: SkipQueryInfo[];
+
+    /**
+     * Lightweight catalog of ALL approved query names and category paths.
+     * Always populated regardless of the includeQueries flag, enabling accurate
+     * collision detection without the overhead of full query metadata.
+     */
+    queryCatalog?: SkipQueryCatalogEntry[];
 
     /**
      * The conversation ID
