@@ -788,11 +788,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // ── Field selection ──
             const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
 
+            // ── Resolve effective view name/schema (alternate view support) ──
+            let effectiveViewName = entityInfo.BaseView;
+            let effectiveSchemaName = entityInfo.SchemaName;
+            if (params.AlternateViewName && params.AlternateViewName.trim().length > 0) {
+                const altView = entityInfo.GetAdditionalBaseView(params.AlternateViewName);
+                if (altView) {
+                    effectiveViewName = altView.Name;
+                    effectiveSchemaName = altView.SchemaName || entityInfo.SchemaName;
+                }
+            }
+
             // ── Build SELECT and COUNT SQL ──
             const topFragment = topSQL ? topSQL + ' ' : '';
-            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
+            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(effectiveSchemaName, effectiveViewName)}`;
             let countSQL: string | null = (usingPagination || (topSQL && topSQL.length > 0))
-                ? `SELECT COUNT(*) AS TotalRowCount FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`
+                ? `SELECT COUNT(*) AS TotalRowCount FROM ${this.QuoteSchemaAndView(effectiveSchemaName, effectiveViewName)}`
                 : null;
 
             // ── WHERE clause assembly ──
@@ -895,7 +906,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             let aggregateValidationErrors: AggregateResult[] = [];
             if (params.Aggregates && params.Aggregates.length > 0) {
                 const aggregateBuild = this.BuildAggregateSQL(
-                    params.Aggregates, entityInfo, entityInfo.SchemaName, entityInfo.BaseView, whereSQL,
+                    params.Aggregates, entityInfo, effectiveSchemaName, effectiveViewName, whereSQL,
                 );
                 aggregateSQL = aggregateBuild.aggregateSQL;
                 aggregateValidationErrors = aggregateBuild.validationErrors;

@@ -90,8 +90,17 @@ export const loadModule = () => {
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
+        // JSONType override: if the field has JSONType metadata, use it for the type
+        const hasJSONType = e.JSONType && e.JSONType.trim().length > 0;
         let typeString: string = TypeScriptTypeFromSQLType(e.Type) + (e.AllowsNull ? ' | null' : '');
-        if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
+        if (hasJSONType) {
+          const jsonTypeName = e.JSONType.trim();
+          const isArray = e.JSONTypeIsArray === true;
+          typeString = isArray ? `${jsonTypeName}[]` : jsonTypeName;
+          if (e.AllowsNull) {
+            typeString += ' | null';
+          }
+        } else if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
@@ -117,18 +126,33 @@ export const loadModule = () => {
             ? `\n    * * IS-A Source: Inherited from ${this.getISAFieldSourceEntity(entity, e)}`
             : '';
 
+        const jsonTypeComment = hasJSONType
+            ? `\n    * * JSON Type: ${e.JSONType.trim()}${e.JSONTypeIsArray ? '[]' : ''}`
+            : '';
+
+        let getterBody: string;
+        let setterBody: string;
+        if (hasJSONType) {
+          // JSONType fields: parse JSON from raw string on get, stringify on set
+          getterBody = `return this.Get('${e.Name}') ? JSON.parse(this.Get('${e.Name}')) : null;`;
+          setterBody = `this.Set('${e.Name}', value ? JSON.stringify(value) : null);`;
+        } else {
+          getterBody = `return this.Get('${e.Name}');`;
+          setterBody = `this.Set('${e.Name}', value);`;
+        }
+
         let sRet: string = `    /**
     * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
-    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(e.Description) : ''}${isaSourceComment}
+    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${jsonTypeComment}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(e.Description) : ''}${isaSourceComment}
     */
     get ${e.CodeName}(): ${typeString} {
-        return this.Get('${e.Name}');
+        ${getterBody}
     }`;
         if (!e.ReadOnly || (e.IsPrimaryKey && !e.AutoIncrement) || isISAParentField) {
           // Generate setter for non-readonly fields, non-auto-increment PKs, or IS-A parent fields
           sRet += `
     set ${e.CodeName}(value: ${typeString}) {
-        this.Set('${e.Name}', value);
+        ${setterBody}
     }`;
         }
         return sRet;
@@ -231,8 +255,19 @@ export const loadModule = () => {
         `\n * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
     const disabledFlag: string = status === 'disabled' ? 
         `\n * @disabled This entity is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
-      let sRet: string = `
+      // Collect and deduplicate JSONTypeDefinitions for this entity
+      const jsonTypeDefinitions = new Set<string>();
+      for (const field of sortedFields) {
+          if (field.JSONTypeDefinition && field.JSONTypeDefinition.trim().length > 0) {
+              jsonTypeDefinitions.add(field.JSONTypeDefinition.trim());
+          }
+      }
+      const jsonTypeBlock = jsonTypeDefinitions.size > 0
+          ? '\n' + Array.from(jsonTypeDefinitions).join('\n\n') + '\n'
+          : '';
 
+      let sRet: string = `
+${jsonTypeBlock}
 /**
  * ${entity.Name} - strongly typed entity sub-class
  * * Schema: ${entity.SchemaName}
@@ -425,8 +460,12 @@ ${validationFunctions}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
+        const hasJSONType = e.JSONType && e.JSONType.trim().length > 0;
         let typeString: string = `${TypeScriptTypeFromSQLType(e.Type).toLowerCase()}()` + (e.AllowsNull ? '.nullable()' : '');
-        if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
+        if (hasJSONType) {
+          // JSONType fields: use z.any() for now (full Zod schema generation is a future phase)
+          typeString = `any()${e.AllowsNull ? '.nullable()' : ''}`;
+        } else if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
@@ -476,7 +515,10 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
     }
 
     result += `        * * Field Name: ${entityField.Name}${entityField.DisplayName && entityField.DisplayName.length > 0 ? '\n        * * Display Name: ' + entityField.DisplayName : ''}\n`;
-    result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' + entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n        * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(entityField.Description) : ''}`;
+    const jsonTypeAnnotation = entityField.JSONType && entityField.JSONType.trim().length > 0
+        ? `\n        * * JSON Type: ${entityField.JSONType.trim()}${entityField.JSONTypeIsArray ? '[]' : ''}`
+        : '';
+    result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' + entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${jsonTypeAnnotation}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n        * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(entityField.Description) : ''}`;
     return result;
   }
 }

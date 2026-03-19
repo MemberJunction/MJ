@@ -876,6 +876,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 throw new Error(`Entity ${params.EntityName} not found in metadata`);
             params.Fields = entity.Fields.map(f => f.Name);
         }
+
+        // Validate AlternateViewName if provided
+        if (params.AlternateViewName && params.AlternateViewName.trim().length > 0) {
+            const entityForViewCheck = this.Entities.find(e => e.Name.trim().toLowerCase() === params.EntityName?.trim().toLowerCase());
+            if (entityForViewCheck && !entityForViewCheck.IsValidAdditionalBaseView(params.AlternateViewName)) {
+                throw new Error(
+                    `View '${params.AlternateViewName}' is not registered in AdditionalBaseViews ` +
+                    `for entity '${entityForViewCheck.Name}'. Available views: ${
+                        entityForViewCheck.AdditionalBaseViewsParsed?.map(v => v.Name).join(', ') || '(none)'
+                    }`
+                );
+            }
+        }
+
         const entityLookupTime = performance.now() - entityLookupStart;
 
         // Check local cache if enabled
