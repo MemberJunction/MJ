@@ -147,9 +147,11 @@ export class SkipAPIRequest {
     queries: SkipQueryInfo[];
 
     /**
-     * Lightweight catalog of ALL approved query names and category paths.
+     * Lightweight catalog of ALL query names and category paths (regardless of status).
      * Always populated regardless of the includeQueries flag, enabling accurate
      * collision detection without the overhead of full query metadata.
+     * Includes all statuses because the database enforces name+category uniqueness
+     * across all queries, not just approved ones.
      */
     queryCatalog?: SkipQueryCatalogEntry[];
 
