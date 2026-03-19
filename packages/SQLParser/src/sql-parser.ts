@@ -3,6 +3,12 @@ const { Parser } = NodeSqlParser;
 import * as nunjucks from 'nunjucks';
 
 /**
+ * Supported SQL dialects for AST parsing.
+ * Maps to node-sql-parser's database option.
+ */
+export type SQLDialectName = 'TransactSQL' | 'PostgresQL';
+
+/**
  * A single table/view reference extracted from SQL.
  */
 export interface SQLTableReference {
@@ -46,14 +52,16 @@ export interface SQLParseResult {
 export class SQLParser {
     /**
      * Parse a plain SQL statement and extract all table and column references.
-     * Uses AST parsing with TransactSQL dialect, falls back to regex on failure.
+     * Uses AST parsing with the specified dialect, falls back to regex on failure.
+     * @param sql The SQL statement to parse
+     * @param dialect The SQL dialect to use for AST parsing (default: 'TransactSQL')
      */
-    public static Parse(sql: string): SQLParseResult {
+    public static Parse(sql: string, dialect: SQLDialectName = 'TransactSQL'): SQLParseResult {
         if (!sql || sql.trim().length === 0) {
             return { Tables: [], Columns: [], UsedASTParsing: false };
         }
 
-        const astResult = SQLParser.ParseViaAST(sql);
+        const astResult = SQLParser.ParseViaAST(sql, dialect);
         if (astResult) {
             return astResult;
         }
@@ -64,24 +72,26 @@ export class SQLParser {
     /**
      * Parse a SQL statement that may contain Nunjucks template syntax.
      * Pre-processes templates into valid SQL before parsing.
+     * @param sql The SQL statement to parse
+     * @param dialect The SQL dialect to use for AST parsing (default: 'TransactSQL')
      */
-    public static ParseWithTemplatePreprocessing(sql: string): SQLParseResult {
+    public static ParseWithTemplatePreprocessing(sql: string, dialect: SQLDialectName = 'TransactSQL'): SQLParseResult {
         if (!sql || sql.trim().length === 0) {
             return { Tables: [], Columns: [], UsedASTParsing: false };
         }
 
         const processedSQL = SQLParser.PreProcessNunjucksForParsing(sql);
-        return SQLParser.Parse(processedSQL);
+        return SQLParser.Parse(processedSQL, dialect);
     }
 
     /**
      * Attempt to parse SQL via node-sql-parser AST.
      * Returns null if parsing fails (caller should fall back to regex).
      */
-    private static ParseViaAST(sql: string): SQLParseResult | null {
+    private static ParseViaAST(sql: string, dialect: SQLDialectName): SQLParseResult | null {
         try {
             const parser = new Parser();
-            const ast = parser.astify(sql, { database: 'TransactSQL' });
+            const ast = parser.astify(sql, { database: dialect });
 
             const tableAliasMap = new Map<string, { schemaName: string; tableName: string }>();
             const columnRefs = new Set<string>();
