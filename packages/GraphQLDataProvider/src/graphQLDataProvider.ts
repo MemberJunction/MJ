@@ -12,7 +12,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
-         RunQueryParams, BaseEntityResult,
+         RunQueryParams, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
@@ -162,6 +162,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      */
     public get DatabaseConnection(): any {
         throw new Error("DatabaseConnection not implemented for the GraphQLDataProvider");
+    }
+
+    /**
+     * Spec-based query execution is not supported by this provider.
+     */
+    protected async InternalExecuteQueryFromSpec(_spec: QueryExecutionSpec, _contextUser?: UserInfo): Promise<RunQueryResult> {
+        throw new Error('ExecuteQueryFromSpec is not supported by this provider.');
     }
 
     /**

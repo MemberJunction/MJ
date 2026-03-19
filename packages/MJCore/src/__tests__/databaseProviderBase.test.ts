@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DatabaseProviderBase, SaveSQLResult, DeleteSQLResult, ExecuteSQLOptions } from '../generic/databaseProviderBase';
-import { EntityInfo, EntityFieldInfo, EntityPermissionType, UserInfo, CompositeKey, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionType, UserInfo, CompositeKey, BaseEntity, EntitySaveOptions, EntityDeleteOptions, RunQueryResult, QueryExecutionSpec } from '@memberjunction/core';
 
 /**
  * Minimal concrete subclass for testing abstract DatabaseProviderBase.
@@ -26,6 +26,9 @@ class TestSQLServerProvider extends DatabaseProviderBase {
     async BeginTransaction(): Promise<void> {}
     async CommitTransaction(): Promise<void> {}
     async RollbackTransaction(): Promise<void> {}
+    protected async InternalExecuteQueryFromSpec(_spec: QueryExecutionSpec, _contextUser?: UserInfo): Promise<RunQueryResult> {
+        throw new Error('Not supported.');
+    }
 
     // RLS test hooks
     public checkRecordRLSResult = true;
@@ -68,6 +71,9 @@ class TestPostgreSQLProvider extends DatabaseProviderBase {
     async BeginTransaction(): Promise<void> {}
     async CommitTransaction(): Promise<void> {}
     async RollbackTransaction(): Promise<void> {}
+    protected async InternalExecuteQueryFromSpec(_spec: QueryExecutionSpec, _contextUser?: UserInfo): Promise<RunQueryResult> {
+        throw new Error('Not supported.');
+    }
 }
 
 describe('DatabaseProviderBase', () => {

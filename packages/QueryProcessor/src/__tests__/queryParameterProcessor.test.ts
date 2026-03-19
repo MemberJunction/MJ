@@ -331,3 +331,168 @@ describe('QueryParameterProcessor.processQueryTemplate', () => {
     expect(result.processedSQL).toBe('SELECT 2 -- override');
   });
 });
+
+// =====================================================================
+// Tests for skipUnknownParameterCheck
+// =====================================================================
+describe('QueryParameterProcessor.validateParameters skipUnknownParameterCheck', () => {
+  beforeEach(() => {
+    RunQuerySQLFilterManager.Instance.SetPlatform('sqlserver');
+  });
+
+  it('should reject unknown params when skipUnknownParameterCheck is false', () => {
+    const defs = [makeParamDef({ Name: 'known', Type: 'string' })];
+    const result = QueryParameterProcessor.validateParameters(
+      { known: 'ok', extra: 'oops' },
+      defs as never[],
+      false
+    );
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain("Unknown parameter: 'extra'");
+  });
+
+  it('should accept unknown params when skipUnknownParameterCheck is true', () => {
+    const defs = [makeParamDef({ Name: 'known', Type: 'string' })];
+    const result = QueryParameterProcessor.validateParameters(
+      { known: 'ok', extra: 'fine' },
+      defs as never[],
+      true
+    );
+    expect(result.success).toBe(true);
+    // The extra param is not validated/converted, but no error is raised
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('should still validate known params even with skipUnknownParameterCheck', () => {
+    const defs = [makeParamDef({ Name: 'count', Type: 'number', IsRequired: true })];
+    const result = QueryParameterProcessor.validateParameters(
+      { count: 'not-a-number', extra: 'ignored' },
+      defs as never[],
+      true
+    );
+    expect(result.success).toBe(false);
+    expect(result.errors).toContain("Parameter 'count' must be a number");
+    // But the unknown param should not appear in errors
+    expect(result.errors).not.toContain("Unknown parameter: 'extra'");
+  });
+});
+
+// =====================================================================
+// Tests for forceTemplateProcessing
+// =====================================================================
+describe('QueryParameterProcessor.processQueryTemplate forceTemplateProcessing', () => {
+  beforeEach(() => {
+    RunQuerySQLFilterManager.Instance.SetPlatform('sqlserver');
+  });
+
+  it('should skip templates when UsesTemplate=false and forceTemplateProcessing=false', () => {
+    const query = {
+      SQL: "SELECT * FROM T {% if x %}WHERE x = '{{ x }}'{% endif %}",
+      UsesTemplate: false,
+      Parameters: [],
+    };
+    const result = QueryParameterProcessor.processQueryTemplate(
+      query as never,
+      { x: 'val' },
+      undefined,
+      false
+    );
+    // Templates NOT processed — raw Nunjucks syntax returned
+    expect(result.success).toBe(true);
+    expect(result.processedSQL).toContain('{%');
+  });
+
+  it('should process templates when forceTemplateProcessing=true even with UsesTemplate=false', () => {
+    const query = {
+      SQL: "SELECT * FROM T {% if x %}WHERE x = '{{ x }}'{% endif %}",
+      UsesTemplate: false,
+      Parameters: [],
+    };
+    const result = QueryParameterProcessor.processQueryTemplate(
+      query as never,
+      { x: 'val' },
+      undefined,
+      true
+    );
+    expect(result.success).toBe(true);
+    expect(result.processedSQL).not.toContain('{%');
+    expect(result.processedSQL).toContain("'val'");
+  });
+
+  it('should remove falsy Nunjucks blocks when forceTemplateProcessing=true and no params', () => {
+    const query = {
+      SQL: "SELECT * FROM T {% if Region %}WHERE Region = '{{ Region }}'{% endif %}",
+      UsesTemplate: false,
+      Parameters: [],
+    };
+    const result = QueryParameterProcessor.processQueryTemplate(
+      query as never,
+      undefined,
+      undefined,
+      true
+    );
+    expect(result.success).toBe(true);
+    expect(result.processedSQL).not.toContain('{%');
+    expect(result.processedSQL).not.toContain('WHERE');
+    expect(result.processedSQL).toContain('SELECT * FROM T');
+  });
+
+  it('should merge extra params not in query.Parameters into render context', () => {
+    // The query defines no parameters, but the caller provides one that
+    // exists as a Nunjucks token from a dependency
+    const query = {
+      SQL: "SELECT * FROM T {% if Region %}WHERE Region = '{{ Region }}'{% endif %}",
+      UsesTemplate: false,
+      Parameters: [],
+    };
+    const result = QueryParameterProcessor.processQueryTemplate(
+      query as never,
+      { Region: 'East' },
+      undefined,
+      true
+    );
+    expect(result.success).toBe(true);
+    expect(result.processedSQL).toContain("'East'");
+    expect(result.processedSQL).not.toContain('{%');
+    // The merged param should appear in appliedParameters
+    expect(result.appliedParameters).toHaveProperty('Region', 'East');
+  });
+
+  it('should not reject unknown params when forceTemplateProcessing=true', () => {
+    const query = {
+      SQL: 'SELECT 1',
+      UsesTemplate: false,
+      Parameters: [makeParamDef({ Name: 'known', Type: 'string' })],
+    };
+    // Pass an extra param that's not in query.Parameters
+    const result = QueryParameterProcessor.processQueryTemplate(
+      query as never,
+      { known: 'ok', depParam: 'from-dependency' },
+      undefined,
+      true
+    );
+    expect(result.success).toBe(true);
+    // Both params should be in appliedParameters
+    expect(result.appliedParameters).toHaveProperty('known', 'ok');
+    expect(result.appliedParameters).toHaveProperty('depParam', 'from-dependency');
+  });
+
+  it('should prioritize validated params over raw params in merge', () => {
+    // When a param is in both query.Parameters definitions and in raw params,
+    // the validated (type-converted) version should win
+    const query = {
+      SQL: "SELECT * FROM T WHERE count > {{ count }}",
+      UsesTemplate: false,
+      Parameters: [makeParamDef({ Name: 'count', Type: 'number' })],
+    };
+    const result = QueryParameterProcessor.processQueryTemplate(
+      query as never,
+      { count: '42' },
+      undefined,
+      true
+    );
+    expect(result.success).toBe(true);
+    // The validated value should be the number 42, not the string '42'
+    expect(result.appliedParameters).toHaveProperty('count', 42);
+  });
+});

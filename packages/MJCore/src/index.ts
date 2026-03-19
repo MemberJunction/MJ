@@ -21,7 +21,7 @@ export * from "./generic/util";
 export * from "./generic/logging";
 export * from "./generic/queryInfo";
 export * from "./generic/queryInfoInterfaces";
-export * from "./generic/queryCompositionEngine";
+export * from "./generic/queryExecutionSpec";
 export * from "./generic/queryPagingEngine";
 export * from "./generic/querySQLFilters";
 export * from "./generic/runQuerySQLFilterImplementations";
