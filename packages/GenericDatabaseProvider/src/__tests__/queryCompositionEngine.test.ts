@@ -758,5 +758,205 @@ SELECT 1 AS Val`;
 
             expect(result.CTEs[0].CTEName).not.toBe(result.CTEs[1].CTEName);
         });
+
+        it('should use brackets for SQL Server CTE names', () => {
+            const baseQuery = makeQueryInfo({
+                ID: 'plat-1',
+                Name: 'Platform Test',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT 1'
+            });
+
+            mockMetadataQueries([baseQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Platform Test"}} p';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.CTEs[0].CTEName).toMatch(/^\[.*\]$/);
+        });
+
+        it('should use double quotes for PostgreSQL CTE names', () => {
+            const baseQuery = makeQueryInfo({
+                ID: 'plat-2',
+                Name: 'PG Test',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT 1'
+            });
+
+            mockMetadataQueries([baseQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/PG Test"}} p';
+            const result = engine.ResolveComposition(sql, 'postgresql', mockUser);
+
+            expect(result.CTEs[0].CTEName).toMatch(/^".*"$/);
+        });
+    });
+
+    // ================================================================
+    // ORDER BY Stripping in CTEs
+    // ================================================================
+    describe('ORDER BY Stripping', () => {
+        it('should strip trailing ORDER BY from composed query SQL in the final output', () => {
+            const baseQuery = makeQueryInfo({
+                ID: 'ord-1',
+                Name: 'Ordered',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT ID, Name FROM Users WHERE Active = 1 ORDER BY Name ASC'
+            });
+
+            mockMetadataQueries([baseQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Ordered"}} o';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // The CTE body in the final assembled SQL should have ORDER BY stripped.
+            // ResolvedSQL on the CTE info stores the pre-assembly SQL, but the
+            // final result.ResolvedSQL contains the WITH clause with ORDER BY removed.
+            const withClause = result.ResolvedSQL.split(/\)\s*SELECT/i)[0];
+            expect(withClause).not.toContain('ORDER BY');
+        });
+
+        it('should preserve ORDER BY when TOP is present', () => {
+            const baseQuery = makeQueryInfo({
+                ID: 'top-1',
+                Name: 'Top Query',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT TOP 10 ID, Name FROM Users ORDER BY Name ASC'
+            });
+
+            mockMetadataQueries([baseQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Top Query"}} t';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.CTEs[0].ResolvedSQL).toContain('ORDER BY');
+        });
+
+        it('should preserve ORDER BY when OFFSET is present', () => {
+            const baseQuery = makeQueryInfo({
+                ID: 'off-1',
+                Name: 'Offset Query',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT ID FROM Users ORDER BY ID OFFSET 10 ROWS FETCH NEXT 20 ROWS ONLY'
+            });
+
+            mockMetadataQueries([baseQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Offset Query"}} o';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.CTEs[0].ResolvedSQL).toContain('ORDER BY');
+        });
+
+        it('should preserve ORDER BY when FOR XML is present', () => {
+            const baseQuery = makeQueryInfo({
+                ID: 'xml-1',
+                Name: 'XML Query',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT ID, Name FROM Users ORDER BY Name FOR XML PATH'
+            });
+
+            mockMetadataQueries([baseQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/XML Query"}} x';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.CTEs[0].ResolvedSQL).toContain('ORDER BY');
+        });
+
+        it('should not strip ORDER BY inside a subquery', () => {
+            const baseQuery = makeQueryInfo({
+                ID: 'sub-1',
+                Name: 'Subquery',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT * FROM (SELECT TOP 5 ID FROM Users ORDER BY ID) sub'
+            });
+
+            mockMetadataQueries([baseQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Subquery"}} s';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // ORDER BY is inside parens (subquery), should be preserved
+            expect(result.CTEs[0].ResolvedSQL).toContain('ORDER BY');
+        });
+    });
+
+    // ================================================================
+    // Max Depth
+    // ================================================================
+    describe('Max Depth', () => {
+        it('should throw when composition depth exceeds maximum', () => {
+            // Create a chain of 12 queries, each referencing the next
+            const queries: QueryInfo[] = [];
+            for (let i = 0; i < 12; i++) {
+                const nextRef = i < 11
+                    ? `SELECT * FROM {{query:"Test/Q${i + 1}"}} q`
+                    : 'SELECT 1';
+                queries.push(makeQueryInfo({
+                    ID: `q${i}`,
+                    Name: `Q${i}`,
+                    CategoryPath: '/Test/',
+                    SQL: nextRef
+                }));
+            }
+
+            mockMetadataQueries(queries);
+
+            const sql = 'SELECT * FROM {{query:"Test/Q0"}} q';
+            expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser))
+                .toThrow(/depth exceeds maximum/);
+        });
+    });
+
+    // ================================================================
+    // SQL Comment Stripping
+    // ================================================================
+    describe('SQL Comment Stripping', () => {
+        it('should handle nested block comment markers gracefully', () => {
+            // SQL doesn't support nested block comments, so /* inside /* ... */ is just text
+            const sql = `/* outer {{query:"Test/X"}} */ SELECT 1`;
+            const tokens = engine.ParseCompositionTokens(sql);
+            expect(tokens).toHaveLength(0);
+        });
+
+        it('should preserve tokens in string literals that look like comments', () => {
+            // A single-quoted string containing -- should not start a comment
+            const sql = `SELECT '--not a comment' AS Val, * FROM {{query:"Test/Real"}} r`;
+
+            const realQuery = makeQueryInfo({
+                ID: 'real-1',
+                Name: 'Real',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT 1'
+            });
+            mockMetadataQueries([realQuery]);
+
+            const tokens = engine.ParseCompositionTokens(sql);
+            expect(tokens).toHaveLength(1);
+            expect(tokens[0].QueryName).toBe('Real');
+        });
+
+        it('should handle escaped quotes inside string literals', () => {
+            const sql = `SELECT 'it''s a test' AS Val FROM {{query:"Test/Q"}} q`;
+
+            const q = makeQueryInfo({
+                ID: 'q-1', Name: 'Q', CategoryPath: '/Test/', SQL: 'SELECT 1'
+            });
+            mockMetadataQueries([q]);
+
+            const tokens = engine.ParseCompositionTokens(sql);
+            expect(tokens).toHaveLength(1);
+        });
+
+        it('should handle multiple comment types in the same SQL', () => {
+            const sql = `-- line comment with {{query:"Test/A"}}
+/* block comment with {{query:"Test/B"}} */
+SELECT * FROM {{query:"Test/C"}} c`;
+
+            const tokens = engine.ParseCompositionTokens(sql);
+            expect(tokens).toHaveLength(1);
+            expect(tokens[0].QueryName).toBe('C');
+        });
     });
 });

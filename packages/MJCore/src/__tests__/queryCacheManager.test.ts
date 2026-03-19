@@ -85,8 +85,8 @@ function makeQuery(overrides: Partial<{
  * Caching is intentionally BYPASSED in QueryCacheManager right now (all Get/Set
  * methods short-circuit) to guarantee fresh data. See class-level comment for rationale.
  *
- * The tests below cover the caching logic and should be uncommented when the bypass
- * is removed and caching is re-enabled.
+ * The "Bypassed behavior" section tests the current no-op state.
+ * The commented-out section tests the full caching logic for when caching is re-enabled.
  */
 describe('QueryCacheManager', () => {
     let mgr: QueryCacheManager;
@@ -103,12 +103,95 @@ describe('QueryCacheManager', () => {
         mgr.Init('localhost');
     });
 
-    // Invalidation methods still call through to LCM even while caching is bypassed
+    // ================================================================
+    // Constructor and Instance Isolation
+    // ================================================================
+    describe('Constructor', () => {
+        it('should create independent instances with different connection prefixes', () => {
+            const mgr1 = new QueryCacheManager('server-a');
+            const mgr2 = new QueryCacheManager('server-b');
 
+            // Both should exist independently (no shared singleton state)
+            expect(mgr1).not.toBe(mgr2);
+        });
+
+        it('should accept an empty connection prefix', () => {
+            const emptyMgr = new QueryCacheManager('');
+            expect(emptyMgr).toBeDefined();
+        });
+    });
+
+    // ================================================================
+    // Bypassed Behavior (current state — all Get/Set return null/void)
+    // ================================================================
+    describe('Bypassed Get/Set behavior', () => {
+        it('Get should always return null', async () => {
+            const query = makeQuery();
+            const result = await mgr.Get(query, { filter: 'active' });
+            expect(result).toBeNull();
+            // Should NOT call LCM at all since it short-circuits
+            expect(mockGetRunQueryResult).not.toHaveBeenCalled();
+        });
+
+        it('Set should be a no-op (no LCM calls)', async () => {
+            const query = makeQuery();
+            await mgr.Set(query, {}, [{ id: 1 }, { id: 2 }]);
+            expect(mockSetRunQueryResult).not.toHaveBeenCalled();
+        });
+
+        it('GetPaged should always return null', async () => {
+            const query = makeQuery();
+            const result = await mgr.GetPaged(query, {}, 0, 50);
+            expect(result).toBeNull();
+            expect(mockGetRunQueryResult).not.toHaveBeenCalled();
+        });
+
+        it('SetPaged should be a no-op', async () => {
+            const query = makeQuery();
+            await mgr.SetPaged(query, {}, 0, 50, [{ row: 1 }]);
+            expect(mockSetRunQueryResult).not.toHaveBeenCalled();
+        });
+
+        it('GetTotalRowCount should always return null', async () => {
+            const query = makeQuery();
+            const count = await mgr.GetTotalRowCount(query, {});
+            expect(count).toBeNull();
+            expect(mockGetRunQueryResult).not.toHaveBeenCalled();
+        });
+
+        it('SetTotalRowCount should be a no-op', async () => {
+            const query = makeQuery();
+            await mgr.SetTotalRowCount(query, {}, 42);
+            expect(mockSetRunQueryResult).not.toHaveBeenCalled();
+        });
+
+        it('GetAdhoc should always return null', async () => {
+            const result = await mgr.GetAdhoc('SELECT 1', 60);
+            expect(result).toBeNull();
+            expect(mockGetRunQueryResult).not.toHaveBeenCalled();
+        });
+
+        it('SetAdhoc should be a no-op', async () => {
+            await mgr.SetAdhoc('SELECT 1', 60, [{ val: 1 }]);
+            expect(mockSetRunQueryResult).not.toHaveBeenCalled();
+        });
+    });
+
+    // ================================================================
+    // Invalidation (still active even while caching is bypassed)
+    // ================================================================
     describe('InvalidateQuery', () => {
         it('should delegate to InvalidateQueryCaches', async () => {
             await mgr.InvalidateQuery('My Query');
             expect(mockInvalidateQueryCaches).toHaveBeenCalledWith('My Query');
+        });
+
+        it('should pass through different query names', async () => {
+            await mgr.InvalidateQuery('Query A');
+            await mgr.InvalidateQuery('Query B');
+            expect(mockInvalidateQueryCaches).toHaveBeenCalledTimes(2);
+            expect(mockInvalidateQueryCaches).toHaveBeenCalledWith('Query A');
+            expect(mockInvalidateQueryCaches).toHaveBeenCalledWith('Query B');
         });
     });
 
@@ -117,6 +200,33 @@ describe('QueryCacheManager', () => {
             const q1 = makeQuery({ ID: 'q1', Name: 'Q1', dependents: [{ QueryID: 'q1' }] });
             await mgr.InvalidateWithDependents(q1);
             expect(mockInvalidateQueryCaches).toHaveBeenCalledTimes(1);
+        });
+
+        it('should invalidate the query itself', async () => {
+            const q1 = makeQuery({ ID: 'q1', Name: 'Solo' });
+            await mgr.InvalidateWithDependents(q1);
+            expect(mockInvalidateQueryCaches).toHaveBeenCalledWith('Solo');
+        });
+    });
+
+    // ================================================================
+    // HandleEntityChange (no-op while bypassed since reverse index is empty)
+    // ================================================================
+    describe('HandleEntityChange', () => {
+        it('should do nothing when no queries are cached for the entity', async () => {
+            await mgr.HandleEntityChange('Users');
+            expect(mockInvalidateRunQueryResult).not.toHaveBeenCalled();
+        });
+
+        it('should handle whitespace in entity names', async () => {
+            await mgr.HandleEntityChange('  Users  ');
+            // Should normalize and not crash
+            expect(mockInvalidateRunQueryResult).not.toHaveBeenCalled();
+        });
+
+        it('should handle empty entity name without crashing', async () => {
+            await mgr.HandleEntityChange('');
+            expect(mockInvalidateRunQueryResult).not.toHaveBeenCalled();
         });
     });
 
