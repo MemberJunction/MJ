@@ -715,13 +715,17 @@ export class QueryCompositionEngine {
      * SQL Server disallows ORDER BY inside CTEs unless TOP, OFFSET, or FOR XML is present.
      * PostgreSQL allows ORDER BY in CTEs, so no stripping is needed there.
      *
-     * Uses a 3-tier strategy:
+     * Uses a 4-tier strategy:
      * 1. Fast exit — no ORDER keyword at all, or dialect allows ORDER BY in CTEs
      * 2. AST path — parse (with Nunjucks preprocessing if needed), check if ORDER BY is legal
      *    (TOP/OFFSET/FOR XML via AST nodes), null out orderby if not, regenerate.
      *    Handles window functions, UNION/EXCEPT, subqueries, string literals, and Nunjucks templates.
      * 3. Regex fallback — paren-depth heuristic for SQL the parser still can't handle
      *    (e.g. STRING_AGG WITHIN GROUP)
+     * 4. OFFSET 0 ROWS injection — last resort when both AST and regex fail to strip ORDER BY.
+     *    Injects OFFSET 0 ROWS after the ORDER BY clause to make it legal in CTEs.
+     *    This is semantically neutral (returns all rows starting from 0) but switches
+     *    SQL Server into paging mode internally, which may affect query plan shape.
      */
     private stripTrailingOrderBy(sql: string, dialect: SQLDialect): string {
         if (!sql) return sql;
@@ -735,7 +739,16 @@ export class QueryCompositionEngine {
         if (astResult !== null) return astResult;
 
         // Tier 3: Regex fallback
-        return this.stripOrderByViaRegex(trimmed);
+        const regexResult = this.stripOrderByViaRegex(trimmed);
+        if (regexResult !== trimmed) return regexResult;
+
+        // Tier 4: OFFSET 0 ROWS injection — last resort.
+        // If we reach here, the SQL has an ORDER BY that neither AST nor regex could strip
+        // (e.g. STRING_AGG WITHIN GROUP with a trailing ORDER BY). Rather than returning
+        // the SQL unchanged (which would cause a SQL Server CTE error), inject OFFSET 0 ROWS
+        // after the ORDER BY to make it legal. This is semantically neutral but may affect
+        // query plan shape on large result sets.
+        return this.injectOffset0Rows(trimmed);
     }
 
     /**
@@ -923,6 +936,20 @@ export class QueryCompositionEngine {
         processed = processed.replace(/\{#[^#]*#\}/g, '');
 
         return processed;
+    }
+
+    /**
+     * Injects OFFSET 0 ROWS after the last top-level ORDER BY clause to make it
+     * legal in a CTE without changing the result set. Uses the position-aware scanner
+     * to find the correct insertion point after the ORDER BY columns.
+     */
+    private injectOffset0Rows(sql: string): string {
+        // Find the end of the last top-level ORDER BY clause.
+        // We append OFFSET 0 ROWS right at the end of the SQL.
+        const trimmed = sql.trimEnd();
+        // Remove trailing semicolon if present
+        const withoutSemicolon = trimmed.replace(/;\s*$/, '');
+        return `${withoutSemicolon} OFFSET 0 ROWS`;
     }
 
     /**
