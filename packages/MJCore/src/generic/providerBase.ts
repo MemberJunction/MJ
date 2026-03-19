@@ -10,7 +10,7 @@ import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
-import { QueryCompositionEngine } from "./queryCompositionEngine";
+import { QueryCompositionEngine, CompositionResult } from "./queryCompositionEngine";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
@@ -1328,26 +1328,30 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Resolves {{query:"..."}} composition tokens in SQL, converting referenced
      * queries into CTEs. Call this BEFORE Nunjucks template processing.
      *
-     * If the SQL contains no composition tokens, returns it unchanged.
+     * If the SQL contains no composition tokens, returns a no-op CompositionResult.
      *
      * @param sql - The SQL that may contain composition tokens
      * @param contextUser - User context for permission checks on referenced queries
      * @param parameters - Optional parameter values from the outer query (for pass-through resolution)
-     * @returns The SQL with composition tokens resolved to CTEs
+     * @returns Full CompositionResult including transitive UsesTemplate flag
      */
-    protected ResolveQueryComposition(sql: string, contextUser?: UserInfo, parameters?: Record<string, string>): string {
+    protected ResolveQueryComposition(sql: string, contextUser?: UserInfo, parameters?: Record<string, string>): CompositionResult {
         if (!this._compositionEngine.HasCompositionTokens(sql)) {
-            return sql;
+            return {
+                ResolvedSQL: sql,
+                CTEs: [],
+                DependencyGraph: new Map(),
+                HasCompositions: false,
+                AnyDependencyUsesTemplates: false
+            };
         }
 
-        const result = this._compositionEngine.ResolveComposition(
+        return this._compositionEngine.ResolveComposition(
             sql,
             this.PlatformKey,
             contextUser,
             parameters
         );
-
-        return result.ResolvedSQL;
     }
 
     protected async PreRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<typeof this._preRunQueryResultType> {

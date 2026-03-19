@@ -60,6 +60,8 @@ export interface CompositionResult {
     DependencyGraph: Map<string, string[]>;
     /** Whether any composition tokens were found and resolved */
     HasCompositions: boolean;
+    /** True if any resolved dependency query has UsesTemplate = true (depth-first, transitive) */
+    AnyDependencyUsesTemplates: boolean;
 }
 
 /**
@@ -174,6 +176,8 @@ export class QueryCompositionEngine {
         const cteEntries: CTEEntry[] = [];
         const dependencyGraph = new Map<string, string[]>();
         const inProgressSet = new Set<string>();
+        // Mutable flag passed by reference through recursion — short-circuits once true
+        const templateFlag = { value: false };
 
         const resolvedSQL = this.resolveTokensRecursive(
             sql,
@@ -183,6 +187,7 @@ export class QueryCompositionEngine {
             cteEntries,
             dependencyGraph,
             inProgressSet,
+            templateFlag,
             0
         );
 
@@ -197,7 +202,8 @@ export class QueryCompositionEngine {
             ResolvedSQL: finalSQL,
             CTEs: cteEntries.map(e => e.Info),
             DependencyGraph: dependencyGraph,
-            HasCompositions: hasCompositions
+            HasCompositions: hasCompositions,
+            AnyDependencyUsesTemplates: templateFlag.value
         };
     }
 
@@ -212,6 +218,7 @@ export class QueryCompositionEngine {
         cteEntries: CTEEntry[],
         dependencyGraph: Map<string, string[]>,
         inProgressSet: Set<string>,
+        templateFlag: { value: boolean },
         depth: number
     ): string {
         if (depth > MAX_COMPOSITION_DEPTH) {
@@ -229,6 +236,11 @@ export class QueryCompositionEngine {
         for (const token of tokens) {
             const referencedQuery = this.lookupQuery(token);
             this.validateQueryComposable(referencedQuery, token, contextUser);
+
+            // Depth-first transitive UsesTemplate check — short-circuit once true
+            if (!templateFlag.value && referencedQuery.UsesTemplate) {
+                templateFlag.value = true;
+            }
 
             // Cycle detection
             if (inProgressSet.has(referencedQuery.ID)) {
@@ -270,6 +282,7 @@ export class QueryCompositionEngine {
                 cteEntries,
                 dependencyGraph,
                 inProgressSet,
+                templateFlag,
                 depth + 1
             );
 
