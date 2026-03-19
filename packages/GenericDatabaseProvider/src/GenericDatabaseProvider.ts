@@ -2289,11 +2289,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 UsesTemplate: spec.UsesTemplate ?? false,
                 Parameters: spec.ParameterDefinitions ?? [],
             };
+            // Skip unknown-parameter validation when a dependency uses templates (existing behavior)
+            // OR when no formal ParameterDefinitions were provided (transient specs from TestQuerySQL
+            // don't have definitions — parameters should pass through to Nunjucks without validation).
+            const skipUnknownParamCheck = compositionResult.AnyDependencyUsesTemplates || !spec.ParameterDefinitions;
             const processingResult = QueryParameterProcessor.processQueryTemplate(
                 templateInput,
                 spec.Parameters,
                 finalSQL,
-                compositionResult.AnyDependencyUsesTemplates
+                skipUnknownParamCheck
             );
             if (!processingResult.success) {
                 throw new Error(processingResult.error);
