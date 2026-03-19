@@ -1172,6 +1172,63 @@ export class GraphQLSystemUserClient {
     }
 
     /**
+     * Tests transient (unsaved) SQL with full composition + Nunjucks template processing.
+     * Calls the TestQuerySQL resolver which uses a read-only connection and enforces MaxRows limits.
+     *
+     * This enables external systems to test query SQL before saving to the database,
+     * including inline dependency resolution and parameter substitution.
+     *
+     * @param input - The transient query spec including SQL, parameters, dependencies, and MaxRows
+     * @returns Promise containing execution results with parsed data rows
+     */
+    public async TestQuerySQL(input: TestQuerySQLClientInput): Promise<TestQuerySQLClientResult> {
+        try {
+            const query = `query TestQuerySQL($input: TestQuerySQLInput!) {
+                TestQuerySQL(input: $input) {
+                    Success
+                    Results
+                    RowCount
+                    ExecutionTime
+                    ErrorMessage
+                    AppliedParameters
+                }
+            }`;
+
+            const result = await this.Client.request(query, { input }) as { TestQuerySQL: TestQuerySQLRawResult };
+
+            if (result && result.TestQuerySQL) {
+                return {
+                    Success: result.TestQuerySQL.Success,
+                    Results: result.TestQuerySQL.Results ? SafeJSONParse(result.TestQuerySQL.Results) : null,
+                    RowCount: result.TestQuerySQL.RowCount,
+                    ExecutionTime: result.TestQuerySQL.ExecutionTime,
+                    ErrorMessage: result.TestQuerySQL.ErrorMessage,
+                    AppliedParameters: result.TestQuerySQL.AppliedParameters
+                        ? SafeJSONParse(result.TestQuerySQL.AppliedParameters) as Record<string, string>
+                        : undefined,
+                };
+            } else {
+                return {
+                    Success: false,
+                    Results: null,
+                    RowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: 'TestQuerySQL execution failed',
+                };
+            }
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::TestQuerySQL - Error testing query SQL - ${e}`);
+            return {
+                Success: false,
+                Results: null,
+                RowCount: 0,
+                ExecutionTime: 0,
+                ErrorMessage: e instanceof Error ? e.message : String(e),
+            };
+        }
+    }
+
+    /**
      * Execute a simple prompt without requiring a stored AI Prompt entity.
      * This method allows system-level execution of simple prompts.
      * 
@@ -2292,4 +2349,70 @@ export interface DeleteQueryResult {
     Name?: string;
 }
 
- 
+/**
+ * Input type for inline dependency queries used in TestQuerySQL.
+ * Self-referencing to support recursive dependency trees.
+ */
+export interface QueryDependencySpecClientInput {
+    /** Query name as referenced in the composition token */
+    Name: string;
+    /** Category path as referenced in the composition token (e.g., "/Analytics/Sales/") */
+    CategoryPath: string;
+    /** The raw SQL for this dependency */
+    SQL: string;
+    /** Whether this dependency uses Nunjucks template syntax */
+    UsesTemplate?: boolean;
+    /** Parameters for this dependency's Nunjucks templates */
+    Parameters?: Record<string, string>;
+    /** Nested dependencies (recursive) */
+    Dependencies?: QueryDependencySpecClientInput[];
+}
+
+/**
+ * Input type for TestQuerySQL method calls — tests transient SQL with full
+ * composition + Nunjucks template processing without requiring a saved query.
+ */
+export interface TestQuerySQLClientInput {
+    /** The raw SQL — may contain {{query:"..."}} and {{ param }} tokens */
+    SQL: string;
+    /** Parameter values for Nunjucks template substitution */
+    Parameters?: Record<string, string>;
+    /** Whether this query uses Nunjucks template syntax */
+    UsesTemplate?: boolean;
+    /** Inline dependency queries for composition resolution */
+    Dependencies?: QueryDependencySpecClientInput[];
+    /** Max rows to return (default: 100) */
+    MaxRows?: number;
+}
+
+/**
+ * Raw result type from the GraphQL TestQuerySQL resolver (before JSON parsing).
+ * Results and AppliedParameters are JSON strings on the wire.
+ */
+interface TestQuerySQLRawResult {
+    Success: boolean;
+    Results?: string;
+    RowCount: number;
+    ExecutionTime: number;
+    ErrorMessage?: string;
+    AppliedParameters?: string;
+}
+
+/**
+ * Parsed result type for TestQuerySQL method calls — Results and AppliedParameters
+ * are deserialized from JSON strings into their native types.
+ */
+export interface TestQuerySQLClientResult {
+    /** Whether the query executed successfully */
+    Success: boolean;
+    /** Parsed result rows, or null if execution failed */
+    Results: unknown[] | null;
+    /** Number of rows returned */
+    RowCount: number;
+    /** Execution time in milliseconds */
+    ExecutionTime: number;
+    /** Error message if execution failed */
+    ErrorMessage?: string;
+    /** Parsed applied parameters including defaults */
+    AppliedParameters?: Record<string, string>;
+}
