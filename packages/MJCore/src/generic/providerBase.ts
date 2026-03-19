@@ -10,7 +10,7 @@ import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
-
+import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
@@ -668,6 +668,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         return result;
     }
+
+    /**
+     * Executes a query from a `QueryExecutionSpec` — the lower-layer interface-based entry point.
+     * Runs the full pipeline: composition resolution → Nunjucks template processing → SQL execution.
+     * Subclasses (GenericDatabaseProvider) provide the concrete implementation via `InternalExecuteQueryFromSpec`.
+     * @param spec - The execution spec describing the query, parameters, and inline dependencies
+     * @param contextUser - Optional user context for permissions (required server-side)
+     * @returns Query results including data rows and execution metadata
+     */
+    public async ExecuteQueryFromSpec(spec: QueryExecutionSpec, contextUser?: UserInfo): Promise<RunQueryResult> {
+        return this.InternalExecuteQueryFromSpec(spec, contextUser);
+    }
+
+    /**
+     * Internal implementation for spec-based query execution.
+     * Subclasses must provide the concrete pipeline (composition → templates → execute).
+     */
+    protected abstract InternalExecuteQueryFromSpec(spec: QueryExecutionSpec, contextUser?: UserInfo): Promise<RunQueryResult>;
 
     /**
      * Runs multiple queries based on the provided parameters.

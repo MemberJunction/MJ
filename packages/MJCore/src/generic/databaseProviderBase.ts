@@ -6,7 +6,8 @@ import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDu
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
 import { LogError } from "./logging";
-import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunReportResult } from "./interfaces";
+import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunReportResult, RunQueryResult } from "./interfaces";
+import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { RunReportParams } from "./runReport";
 import { SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
 
@@ -92,6 +93,12 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * Rolls back the current transaction.
      */
     abstract RollbackTransaction(): Promise<void>;
+
+    /**
+     * Internal implementation for spec-based query execution.
+     * Subclasses must provide the concrete pipeline (composition → templates → execute).
+     */
+    protected abstract InternalExecuteQueryFromSpec(spec: QueryExecutionSpec, contextUser?: UserInfo): Promise<RunQueryResult>;
 
     /**
      * Returns the database platform key for this provider.

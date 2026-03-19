@@ -1,6 +1,6 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDialect, PostgreSQLDialect, type SQLDialect } from "@memberjunction/sql-dialect";
-import { Metadata, QueryInfo, DatabasePlatform, UserInfo } from "@memberjunction/core";
+import { Metadata, QueryInfo, DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
 
 /**
  * Maximum depth for recursive query composition resolution.
@@ -58,6 +58,8 @@ export interface CompositionResult {
     DependencyGraph: Map<string, string[]>;
     /** Whether any composition tokens were found and resolved */
     HasCompositions: boolean;
+    /** True if any resolved dependency query has UsesTemplate = true (depth-first, transitive) */
+    AnyDependencyUsesTemplates: boolean;
 }
 
 /**
@@ -86,6 +88,19 @@ interface ParsedParameter {
     StaticValue: string | null;
     /** If bare name: the pass-through parameter name from the outer query. Otherwise null. */
     PassThroughName: string | null;
+}
+
+/**
+ * Result of looking up a query reference — either from inline dependencies or from metadata.
+ * The `IsInline` flag tells callers whether to skip governance validation.
+ */
+interface QueryLookupResult {
+    /** The resolved QueryInfo (real or synthetic for inline deps) */
+    Query: QueryInfo;
+    /** True if this query was resolved from inline dependencies (skip validation) */
+    IsInline: boolean;
+    /** For inline deps, the nested dependencies for recursive resolution */
+    NestedDependencies?: QueryDependencySpec[];
 }
 
 /**
@@ -160,6 +175,9 @@ export class QueryCompositionEngine {
      * @param platform - Target database platform for SQL resolution
      * @param contextUser - User context for permission checks on referenced queries
      * @param outerParams - Parameter values from the outer/parent query (for pass-through resolution)
+     * @param inlineDependencies - Optional inline dependency specs for transient query testing.
+     *        When provided, these are checked first before falling back to Metadata.Provider.Queries.
+     *        Inline dependencies skip governance validation (Reusable, IsApproved, UserCanRun).
      * @returns CompositionResult with fully resolved SQL and provenance metadata
      * @throws Error if a referenced query is not found, not composable, or creates a cycle
      */
@@ -167,11 +185,14 @@ export class QueryCompositionEngine {
         sql: string,
         platform: DatabasePlatform,
         contextUser: UserInfo,
-        outerParams?: Record<string, string>
+        outerParams?: Record<string, string>,
+        inlineDependencies?: QueryDependencySpec[]
     ): CompositionResult {
         const cteEntries: CTEEntry[] = [];
         const dependencyGraph = new Map<string, string[]>();
         const inProgressSet = new Set<string>();
+        // Mutable flag passed by reference through recursion — short-circuits once true
+        const templateFlag = { value: false };
 
         const resolvedSQL = this.resolveTokensRecursive(
             sql,
@@ -181,7 +202,9 @@ export class QueryCompositionEngine {
             cteEntries,
             dependencyGraph,
             inProgressSet,
-            0
+            templateFlag,
+            0,
+            inlineDependencies
         );
 
         const hasCompositions = cteEntries.length > 0;
@@ -195,7 +218,8 @@ export class QueryCompositionEngine {
             ResolvedSQL: finalSQL,
             CTEs: cteEntries.map(e => e.Info),
             DependencyGraph: dependencyGraph,
-            HasCompositions: hasCompositions
+            HasCompositions: hasCompositions,
+            AnyDependencyUsesTemplates: templateFlag.value
         };
     }
 
@@ -210,7 +234,9 @@ export class QueryCompositionEngine {
         cteEntries: CTEEntry[],
         dependencyGraph: Map<string, string[]>,
         inProgressSet: Set<string>,
-        depth: number
+        templateFlag: { value: boolean },
+        depth: number,
+        inlineDependencies?: QueryDependencySpec[]
     ): string {
         if (depth > MAX_COMPOSITION_DEPTH) {
             throw new Error(
@@ -225,8 +251,19 @@ export class QueryCompositionEngine {
         let resolvedSQL = sql;
 
         for (const token of tokens) {
-            const referencedQuery = this.lookupQuery(token);
-            this.validateQueryComposable(referencedQuery, token, contextUser);
+            const lookupResult = this.lookupQueryWithInline(token, inlineDependencies);
+            const referencedQuery = lookupResult.Query;
+
+            // Only validate governance (Reusable, IsApproved, permissions) for metadata-backed queries.
+            // Inline dependencies are inherently authorized by the caller.
+            if (!lookupResult.IsInline) {
+                this.validateQueryComposable(referencedQuery, token, contextUser);
+            }
+
+            // Depth-first transitive UsesTemplate check — short-circuit once true
+            if (!templateFlag.value && referencedQuery.UsesTemplate) {
+                templateFlag.value = true;
+            }
 
             // Cycle detection
             if (inProgressSet.has(referencedQuery.ID)) {
@@ -259,6 +296,12 @@ export class QueryCompositionEngine {
             // Track in-progress for cycle detection
             inProgressSet.add(referencedQuery.ID);
 
+            // For inline deps, pass their nested dependencies into the recursive call.
+            // For metadata deps, pass the parent's inline deps so sibling references work.
+            const nestedInlineDeps = lookupResult.IsInline
+                ? lookupResult.NestedDependencies
+                : inlineDependencies;
+
             // Recursively resolve any nested composition tokens in the referenced query
             const nestedResolvedSQL = this.resolveTokensRecursive(
                 paramSubstitutedSQL,
@@ -268,7 +311,9 @@ export class QueryCompositionEngine {
                 cteEntries,
                 dependencyGraph,
                 inProgressSet,
-                depth + 1
+                templateFlag,
+                depth + 1,
+                nestedInlineDeps
             );
 
             inProgressSet.delete(referencedQuery.ID);
@@ -381,6 +426,85 @@ export class QueryCompositionEngine {
      * Looks up a query by category path + name in the metadata provider.
      */
     private lookupQuery(token: ParsedCompositionToken): QueryInfo {
+        const result = this.lookupQueryWithInline(token);
+        return result.Query;
+    }
+
+    /**
+     * Looks up a query by category path + name, checking inline dependencies first,
+     * then falling back to the metadata provider.
+     *
+     * For inline dependencies, creates a synthetic QueryInfo with the SQL and flags set
+     * appropriately. Inline queries skip governance validation (Reusable, IsApproved, etc.)
+     * since they are inherently authorized by the caller.
+     */
+    private lookupQueryWithInline(
+        token: ParsedCompositionToken,
+        inlineDependencies?: QueryDependencySpec[]
+    ): QueryLookupResult {
+        // Check inline dependencies first
+        if (inlineDependencies && inlineDependencies.length > 0) {
+            const inlineMatch = this.findInlineDependency(token, inlineDependencies);
+            if (inlineMatch) {
+                const syntheticQuery = this.buildSyntheticQueryInfo(inlineMatch);
+                return {
+                    Query: syntheticQuery,
+                    IsInline: true,
+                    NestedDependencies: inlineMatch.Dependencies,
+                };
+            }
+        }
+
+        // Fall back to metadata provider
+        return {
+            Query: this.lookupQueryFromMetadata(token),
+            IsInline: false,
+        };
+    }
+
+    /**
+     * Finds a matching inline dependency spec for the given token.
+     */
+    private findInlineDependency(
+        token: ParsedCompositionToken,
+        inlineDependencies: QueryDependencySpec[]
+    ): QueryDependencySpec | undefined {
+        const queryName = token.QueryName.toLowerCase();
+
+        // Try category path + name match first
+        if (token.CategorySegments.length > 0) {
+            const expectedPath = `/${token.CategorySegments.join('/')}/`;
+            const match = inlineDependencies.find(d =>
+                d.Name.toLowerCase() === queryName &&
+                d.CategoryPath.toLowerCase() === expectedPath.toLowerCase()
+            );
+            if (match) return match;
+        }
+
+        // Fall back to name-only match
+        return inlineDependencies.find(d => d.Name.toLowerCase() === queryName);
+    }
+
+    /**
+     * Builds a synthetic QueryInfo from an inline dependency spec.
+     * Sets flags so that GetPlatformSQL returns the inline SQL directly.
+     */
+    private buildSyntheticQueryInfo(dep: QueryDependencySpec): QueryInfo {
+        const synthetic = new QueryInfo();
+        // Use a deterministic synthetic ID based on name+path to support cycle detection and deduplication
+        synthetic.ID = `__inline__${dep.CategoryPath}${dep.Name}`.toLowerCase();
+        synthetic.Name = dep.Name;
+        synthetic.SQL = dep.SQL;
+        synthetic.UsesTemplate = dep.UsesTemplate ?? false;
+        synthetic.Reusable = true;
+        synthetic.Status = 'Approved';
+        return synthetic;
+    }
+
+    /**
+     * Looks up a query by category path + name from the metadata provider only.
+     */
+    private lookupQueryFromMetadata(token: ParsedCompositionToken): QueryInfo {
         const allQueries = Metadata.Provider.Queries;
         const queryName = token.QueryName.toLowerCase();
 
