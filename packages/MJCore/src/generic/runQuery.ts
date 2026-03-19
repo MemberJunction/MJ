@@ -145,7 +145,7 @@ export class RunQuery  {
     /**
      * Executes a query from a `QueryExecutionSpec` — the lower-layer interface-based entry point.
      * Runs the full pipeline: composition resolution → Nunjucks template processing → SQL execution.
-     * Supports both saved queries (via BuildSpecFromQueryInfo) and transient test queries.
+     * Supports both saved queries (via QueryExecutionSpec.FromQueryInfo) and transient test queries.
      * @param spec - The execution spec describing the query, parameters, and inline dependencies
      * @param contextUser - Optional user context for permissions (mainly used server-side)
      * @returns Query results including data rows and execution metadata

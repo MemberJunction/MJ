@@ -684,12 +684,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Internal implementation for spec-based query execution.
-     * Overridden by GenericDatabaseProvider to provide the actual pipeline.
-     * Default implementation throws — subclasses must override.
+     * Subclasses must provide the concrete pipeline (composition → templates → execute).
      */
-    protected async InternalExecuteQueryFromSpec(_spec: QueryExecutionSpec, _contextUser?: UserInfo): Promise<RunQueryResult> {
-        throw new Error('ExecuteQueryFromSpec is not implemented by this provider. Use a GenericDatabaseProvider subclass.');
-    }
+    protected abstract InternalExecuteQueryFromSpec(spec: QueryExecutionSpec, contextUser?: UserInfo): Promise<RunQueryResult>;
 
     /**
      * Runs multiple queries based on the provided parameters.

@@ -2236,7 +2236,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return {
                 Success: true,
                 QueryID: '',
-                QueryName: 'Transient Query',
+                QueryName: '',
                 Results: result ?? [],
                 RowCount: result?.length ?? 0,
                 TotalRowCount: result?.length ?? 0,
@@ -2250,7 +2250,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return {
                 Success: false,
                 QueryID: '',
-                QueryName: 'Transient Query',
+                QueryName: '',
                 Results: [],
                 RowCount: 0,
                 TotalRowCount: 0,

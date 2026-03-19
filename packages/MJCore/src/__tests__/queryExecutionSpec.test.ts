@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { BuildSpecFromQueryInfo, QueryExecutionSpec, QueryDependencySpec } from '../generic/queryExecutionSpec';
+import { QueryExecutionSpec, QueryDependencySpec } from '../generic/queryExecutionSpec';
 import { QueryInfo } from '../generic/queryInfo';
 import { Metadata } from '../generic/metadata';
 
@@ -51,13 +51,11 @@ describe('QueryExecutionSpec', () => {
     });
 
     // ================================================================
-    // Interface shape validation
+    // Constructor and class shape
     // ================================================================
-    describe('interface shape', () => {
-        it('should allow a minimal spec with just SQL', () => {
-            const spec: QueryExecutionSpec = {
-                SQL: 'SELECT 1',
-            };
+    describe('constructor', () => {
+        it('should create a minimal spec with just SQL', () => {
+            const spec = new QueryExecutionSpec({ SQL: 'SELECT 1' });
             expect(spec.SQL).toBe('SELECT 1');
             expect(spec.Parameters).toBeUndefined();
             expect(spec.UsesTemplate).toBeUndefined();
@@ -66,8 +64,13 @@ describe('QueryExecutionSpec', () => {
             expect(spec.MaxRows).toBeUndefined();
         });
 
-        it('should allow a fully populated spec', () => {
-            const spec: QueryExecutionSpec = {
+        it('should default SQL to empty string when no init provided', () => {
+            const spec = new QueryExecutionSpec();
+            expect(spec.SQL).toBe('');
+        });
+
+        it('should create a fully populated spec', () => {
+            const spec = new QueryExecutionSpec({
                 SQL: 'SELECT * FROM Users WHERE Region = {{ region }}',
                 Parameters: { region: 'Northeast' },
                 UsesTemplate: true,
@@ -80,7 +83,7 @@ describe('QueryExecutionSpec', () => {
                     },
                 ],
                 MaxRows: 500,
-            };
+            });
 
             expect(spec.SQL).toContain('{{ region }}');
             expect(spec.Parameters).toEqual({ region: 'Northeast' });
@@ -167,9 +170,9 @@ describe('QueryExecutionSpec', () => {
     });
 
     // ================================================================
-    // BuildSpecFromQueryInfo
+    // FromQueryInfo (static factory)
     // ================================================================
-    describe('BuildSpecFromQueryInfo', () => {
+    describe('FromQueryInfo', () => {
         it('should build a spec from a basic QueryInfo', () => {
             const query = makeQueryInfo({
                 ID: 'q-build-1',
@@ -180,8 +183,9 @@ describe('QueryExecutionSpec', () => {
             // Need to mock Metadata.Provider for Parameters getter
             mockProvider({ QueryParameters: [] });
 
-            const spec = BuildSpecFromQueryInfo(query, 'sqlserver');
+            const spec = QueryExecutionSpec.FromQueryInfo(query, 'sqlserver');
 
+            expect(spec).toBeInstanceOf(QueryExecutionSpec);
             expect(spec.SQL).toBe('SELECT TOP 10 * FROM Users');
             expect(spec.Parameters).toBeUndefined();
             expect(spec.UsesTemplate).toBe(false);
@@ -198,7 +202,7 @@ describe('QueryExecutionSpec', () => {
             mockProvider({ QueryParameters: [] });
 
             const params = { region: 'Northeast', year: '2024' };
-            const spec = BuildSpecFromQueryInfo(query, 'sqlserver', params);
+            const spec = QueryExecutionSpec.FromQueryInfo(query, 'sqlserver', params);
 
             expect(spec.Parameters).toEqual(params);
             expect(spec.UsesTemplate).toBe(true);
@@ -208,7 +212,7 @@ describe('QueryExecutionSpec', () => {
             const query = makeQueryInfo({ SQL: 'SELECT 1' });
             mockProvider({ QueryParameters: [] });
 
-            BuildSpecFromQueryInfo(query, 'postgresql');
+            QueryExecutionSpec.FromQueryInfo(query, 'postgresql');
 
             expect(query.GetPlatformSQL).toHaveBeenCalledWith('postgresql');
         });
@@ -217,7 +221,7 @@ describe('QueryExecutionSpec', () => {
             const query = makeQueryInfo({ SQL: 'SELECT * FROM {{query:"Test/Dep"}} d' });
             mockProvider({ QueryParameters: [] });
 
-            const spec = BuildSpecFromQueryInfo(query, 'sqlserver');
+            const spec = QueryExecutionSpec.FromQueryInfo(query, 'sqlserver');
 
             // Saved queries resolve dependencies from Metadata.Provider.Queries at runtime,
             // not from inline specs
@@ -236,7 +240,7 @@ describe('QueryExecutionSpec', () => {
             ];
             mockProvider({ QueryParameters: mockParamDefs });
 
-            const spec = BuildSpecFromQueryInfo(query, 'sqlserver');
+            const spec = QueryExecutionSpec.FromQueryInfo(query, 'sqlserver');
 
             // Parameters should be populated from QueryInfo.Parameters getter
             expect(spec.ParameterDefinitions).toBeDefined();
@@ -248,8 +252,8 @@ describe('QueryExecutionSpec', () => {
 
             mockProvider({ QueryParameters: [] });
 
-            expect(BuildSpecFromQueryInfo(templateQuery, 'sqlserver').UsesTemplate).toBe(true);
-            expect(BuildSpecFromQueryInfo(plainQuery, 'sqlserver').UsesTemplate).toBe(false);
+            expect(QueryExecutionSpec.FromQueryInfo(templateQuery, 'sqlserver').UsesTemplate).toBe(true);
+            expect(QueryExecutionSpec.FromQueryInfo(plainQuery, 'sqlserver').UsesTemplate).toBe(false);
         });
     });
 });

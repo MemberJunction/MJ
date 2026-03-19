@@ -11,7 +11,7 @@ import { DatabasePlatform } from './platformSQL';
  * - Upper layer (TestQuerySQL): caller provides spec directly, calls lower layer
  * - Lower layer: accepts this spec and runs composition → Nunjucks → execute
  */
-export interface QueryExecutionSpec {
+export class QueryExecutionSpec {
     /** The raw SQL — may contain {{query:"..."}} and {{ param }} tokens */
     SQL: string;
 
@@ -38,6 +38,39 @@ export interface QueryExecutionSpec {
 
     /** Max rows to return. Default: unlimited for saved queries, 100 for test queries. */
     MaxRows?: number;
+
+    constructor(init?: Partial<QueryExecutionSpec>) {
+        this.SQL = init?.SQL ?? '';
+        if (init?.Parameters !== undefined) this.Parameters = init.Parameters;
+        if (init?.UsesTemplate !== undefined) this.UsesTemplate = init.UsesTemplate;
+        if (init?.ParameterDefinitions !== undefined) this.ParameterDefinitions = init.ParameterDefinitions;
+        if (init?.Dependencies !== undefined) this.Dependencies = init.Dependencies;
+        if (init?.MaxRows !== undefined) this.MaxRows = init.MaxRows;
+    }
+
+    /**
+     * Creates a QueryExecutionSpec from a persisted QueryInfo object.
+     * This is the bridge between the upper layer (saved queries) and the lower layer (spec execution).
+     *
+     * @param query - The saved query metadata
+     * @param platform - Target database platform for SQL resolution
+     * @param parameters - Optional parameter values for Nunjucks template substitution
+     * @returns A fully populated QueryExecutionSpec ready for the lower-layer pipeline
+     */
+    public static FromQueryInfo(
+        query: QueryInfo,
+        platform: DatabasePlatform,
+        parameters?: Record<string, string>
+    ): QueryExecutionSpec {
+        return new QueryExecutionSpec({
+            SQL: query.GetPlatformSQL(platform),
+            Parameters: parameters,
+            UsesTemplate: query.UsesTemplate,
+            ParameterDefinitions: query.Parameters,
+            // Saved queries resolve deps from Metadata.Provider.Queries, not inline
+            Dependencies: undefined,
+        });
+    }
 }
 
 /**
@@ -66,28 +99,4 @@ export interface QueryDependencySpec {
 
     /** Nested dependencies (recursive) */
     Dependencies?: QueryDependencySpec[];
-}
-
-/**
- * Builds a QueryExecutionSpec from a persisted QueryInfo object.
- * This is the bridge between the upper layer (saved queries) and the lower layer (spec execution).
- *
- * @param query - The saved query metadata
- * @param platform - Target database platform for SQL resolution
- * @param parameters - Optional parameter values for Nunjucks template substitution
- * @returns A fully populated QueryExecutionSpec ready for the lower-layer pipeline
- */
-export function BuildSpecFromQueryInfo(
-    query: QueryInfo,
-    platform: DatabasePlatform,
-    parameters?: Record<string, string>
-): QueryExecutionSpec {
-    return {
-        SQL: query.GetPlatformSQL(platform),
-        Parameters: parameters,
-        UsesTemplate: query.UsesTemplate,
-        ParameterDefinitions: query.Parameters,
-        // Saved queries resolve deps from Metadata.Provider.Queries, not inline
-        Dependencies: undefined,
-    };
 }
