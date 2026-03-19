@@ -35,6 +35,14 @@ export interface ForeignKeyPromptResult {
   verdict?: 'confirm' | 'reject';
 }
 
+/** Result from the dedicated FK evaluation prompt (one-shot, higher-end model) */
+export interface FKEvaluationResult {
+  index: number;
+  verdict: 'confirm';
+  confidence: number;
+  reasoning: string;
+}
+
 export interface ParentTableInsight {
   parentTable: string;  // "schema.table" format
   insight: string;

@@ -76,6 +76,132 @@ export class AnalysisEngine {
   }
 
   /**
+   * One-shot FK evaluation using a potentially stronger model.
+   * Runs after discovery, before the main iteration loop.
+   * Presents ALL FK candidates to the LLM at once so it can reason about
+   * directionality, transitive hops, and the full relationship graph.
+   */
+  public async evaluateFKCandidates(
+    state: DatabaseDocumentation,
+    run: AnalysisRun
+  ): Promise<void> {
+    const discoveryPhase = state.phases.keyDetection;
+    if (!discoveryPhase) return;
+
+    const allCandidates = discoveryPhase.discovered.foreignKeys.filter(fk => fk.status !== 'rejected');
+    if (allCandidates.length === 0) return;
+
+    // Resolve model override for FK evaluation
+    const override = this.config.ai.modelOverrides?.['fkEvaluation'];
+    const effectiveModel = override?.model ?? this.config.ai.model;
+
+    this.onProgress('Evaluating FK candidates with LLM', {
+      candidates: allCandidates.length,
+      model: effectiveModel
+    });
+
+    // Build table info for context
+    const allTables = state.schemas.flatMap(s =>
+      s.tables.map(t => {
+        const pk = discoveryPhase.discovered.primaryKeys.find(
+          pk => pk.schemaName === s.name && pk.tableName === t.name
+        );
+        return {
+          schema: s.name,
+          name: t.name,
+          description: t.description || '',
+          pk: pk ? pk.columnNames.join(', ') : ''
+        };
+      })
+    );
+
+    // Build candidate list for prompt
+    const candidates = allCandidates.map(fk => ({
+      sourceSchema: fk.schemaName,
+      sourceTable: fk.sourceTable,
+      sourceColumn: fk.sourceColumn,
+      targetSchema: fk.targetSchema,
+      targetTable: fk.targetTable,
+      targetColumn: fk.targetColumn,
+      confidence: fk.confidence,
+      valueOverlap: fk.evidence.valueOverlap,
+      nullPercentage: fk.evidence.nullPercentage,
+      cardinalityRatio: fk.evidence.cardinalityRatio
+    }));
+
+    const context = {
+      allTables,
+      candidates,
+      seedContext: state.seedContext ?? this.config.seedContext
+    };
+
+    const result = await this.promptEngine.executePrompt<import('../types/prompts.js').FKEvaluationResult[]>(
+      'fk-evaluation',
+      context,
+      {
+        responseFormat: 'JSON',
+        temperature: override?.temperature ?? 0.05,
+        maxTokens: override?.maxTokens ?? this.config.ai.maxTokens,
+        modelOverride: override?.model,
+        effortLevelOverride: override?.effortLevel
+      }
+    );
+
+    if (!result.success || !result.result) {
+      console.log(`[AnalysisEngine] FK evaluation failed: ${result.errorMessage}`);
+      return;
+    }
+
+    // Build set of confirmed indices
+    const confirmedIndices = new Set<number>();
+    for (const evaluation of result.result) {
+      if (evaluation.verdict === 'confirm') {
+        confirmedIndices.add(evaluation.index);
+      }
+    }
+
+    // Apply results: confirm matched candidates, reject everything else
+    let confirmed = 0;
+    let rejected = 0;
+    for (let i = 0; i < allCandidates.length; i++) {
+      const fk = allCandidates[i];
+      if (confirmedIndices.has(i + 1)) { // 1-based index in prompt
+        fk.status = 'confirmed';
+        fk.validatedByLLM = true;
+        confirmed++;
+      } else {
+        fk.status = 'rejected';
+        fk.validatedByLLM = true;
+        rejected++;
+      }
+    }
+
+    console.log(`[AnalysisEngine] FK evaluation complete: ${confirmed} confirmed, ${rejected} rejected (model: ${effectiveModel})`);
+    this.onProgress('FK evaluation complete', { confirmed, rejected, model: effectiveModel });
+
+    // Update column-level FK flags based on confirmed FKs
+    for (const fk of allCandidates) {
+      if (fk.status === 'confirmed') {
+        const column = this.findColumnInState(state, fk.schemaName, fk.sourceTable, fk.sourceColumn);
+        if (column) {
+          column.isForeignKey = true;
+          column.foreignKeyReferences = {
+            schema: fk.targetSchema,
+            table: fk.targetTable,
+            column: fk.targetColumn,
+            referencedColumn: fk.targetColumn
+          };
+        }
+        this.updateTableDependencies(state, fk.schemaName, fk.sourceTable, fk.targetSchema, fk.targetTable, fk.sourceColumn, fk.targetColumn);
+      }
+    }
+
+    // Save state
+    this.stateManager.updateSummary(state);
+    await this.stateManager.save(state);
+  }
+
+  /**
    * Process a single dependency level
    */
   public async processLevel(
@@ -222,15 +348,8 @@ export class AnalysisEngine {
         }
       }
 
-      // Process structured FK insights from LLM and feed back to discovery phase
-      if (state.phases.keyDetection && result.result.foreignKeys) {
-        this.processFKInsightsFromLLM(
-          state,
-          tableNode.schema,
-          tableNode.table,
-          result.result.foreignKeys
-        );
-      }
+      // FK evaluation is now handled by the dedicated one-shot evaluateFKCandidates()
+      // method that runs before the iteration loop, using a potentially stronger model.
 
       // Update inferred business domain
       if (result.result.inferredBusinessDomain) {
