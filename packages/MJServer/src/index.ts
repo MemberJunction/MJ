@@ -106,7 +106,7 @@ export * from './resolvers/SyncDataResolver.js';
 export * from './resolvers/GetDataResolver.js';
 export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
-export * from './resolvers/CreateQueryResolver.js';
+export * from './resolvers/QuerySystemUserResolver.js';
 export * from './resolvers/TelemetryResolver.js';
 export * from './resolvers/APIKeyResolver.js';
 export * from './resolvers/MCPResolver.js';
