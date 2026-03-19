@@ -1,7 +1,8 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDialect, PostgreSQLDialect, type SQLDialect } from "@memberjunction/sql-dialect";
 import { Metadata, QueryInfo, DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
-import { stripOrderByForCTE } from "@memberjunction/sql-parser";
+import NodeSqlParser from 'node-sql-parser';
+const { Parser: SqlParser } = NodeSqlParser;
 
 /**
  * Maximum depth for recursive query composition resolution.
@@ -710,12 +711,238 @@ export class QueryCompositionEngine {
 
     /**
      * Strips a trailing ORDER BY clause from SQL that will be wrapped in a CTE.
-     * Delegates to the AST-based implementation in @memberjunction/sql-parser,
-     * which handles window functions, STRING_AGG WITHIN GROUP, and string literals
-     * correctly, with a regex fallback for SQL the parser can't handle.
+     *
+     * SQL Server disallows ORDER BY inside CTEs unless TOP, OFFSET, or FOR XML is present.
+     * PostgreSQL allows ORDER BY in CTEs, so no stripping is needed there.
+     *
+     * Uses a 3-tier strategy:
+     * 1. Fast exit — no ORDER keyword at all, or dialect allows ORDER BY in CTEs
+     * 2. AST path — parse (with Nunjucks preprocessing if needed), check if ORDER BY is legal
+     *    (TOP/OFFSET/FOR XML via AST nodes), null out orderby if not, regenerate.
+     *    Handles window functions, UNION/EXCEPT, subqueries, string literals, and Nunjucks templates.
+     * 3. Regex fallback — paren-depth heuristic for SQL the parser still can't handle
+     *    (e.g. STRING_AGG WITHIN GROUP)
      */
     private stripTrailingOrderBy(sql: string, dialect: SQLDialect): string {
-        return stripOrderByForCTE(sql, dialect);
+        if (!sql) return sql;
+
+        const trimmed = sql.trimEnd();
+        if (!/ORDER/i.test(trimmed)) return sql;
+        if (dialect.AllowsOrderByInCTE) return sql;
+
+        // Tier 2: AST-based stripping
+        const astResult = this.stripOrderByViaAST(trimmed);
+        if (astResult !== null) return astResult;
+
+        // Tier 3: Regex fallback
+        return this.stripOrderByViaRegex(trimmed);
+    }
+
+    /**
+     * Attempts to strip the top-level ORDER BY clause using AST parsing.
+     * Tries direct parsing first, then Nunjucks-preprocessed parsing if the SQL
+     * contains template syntax. Handles UNION/EXCEPT by walking the _next chain.
+     */
+    private stripOrderByViaAST(sql: string): string | null {
+        const directResult = this.tryASTStrip(sql);
+        if (directResult !== null) return directResult;
+
+        if (/\{[%{#]/.test(sql)) {
+            return this.tryNunjucksAwareStrip(sql);
+        }
+
+        return null;
+    }
+
+    /**
+     * Core AST stripping: parse, analyze, and regenerate SQL without ORDER BY.
+     */
+    private tryASTStrip(sql: string): string | null {
+        try {
+            const parser = new SqlParser();
+            const ast = parser.astify(sql, { database: 'TransactSQL' });
+            const stmt = Array.isArray(ast) ? ast[0] : ast;
+            if (!stmt) return sql;
+
+            const stmtRecord = stmt as unknown as Record<string, unknown>;
+            const orderByStmt = this.findOrderByStatement(stmtRecord);
+            if (!orderByStmt) return sql;
+            if (this.isOrderByLegalInCTE(orderByStmt)) return sql;
+
+            orderByStmt.orderby = null;
+            return parser.sqlify(Array.isArray(ast) ? ast : [stmt], { database: 'TransactSQL' });
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Walks the _next chain (UNION/EXCEPT/INTERSECT) to find the statement
+     * that carries the ORDER BY clause.
+     */
+    private findOrderByStatement(stmt: Record<string, unknown>): Record<string, unknown> | null {
+        if (stmt.orderby) return stmt;
+        if (stmt._next) return this.findOrderByStatement(stmt._next as Record<string, unknown>);
+        return null;
+    }
+
+    /**
+     * Nunjucks-aware ORDER BY stripping: preprocess templates into placeholder SQL,
+     * parse with AST to confirm top-level ORDER BY exists, then use the position-aware
+     * scanner on the original SQL to strip only the last top-level ORDER BY.
+     */
+    private tryNunjucksAwareStrip(sql: string): string | null {
+        const preprocessed = this.preprocessNunjucks(sql);
+
+        try {
+            const parser = new SqlParser();
+            const ast = parser.astify(preprocessed, { database: 'TransactSQL' });
+            const stmt = Array.isArray(ast) ? ast[0] : ast;
+            if (!stmt) return sql;
+
+            const stmtRecord = stmt as unknown as Record<string, unknown>;
+            const orderByStmt = this.findOrderByStatement(stmtRecord);
+            if (!orderByStmt) return sql;
+            if (this.isOrderByLegalInCTE(orderByStmt)) return sql;
+
+            return this.stripLastTopLevelOrderBy(sql);
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Checks AST properties to determine if ORDER BY is legal in a CTE context.
+     */
+    private isOrderByLegalInCTE(stmt: Record<string, unknown>): boolean {
+        if (stmt.top) return true;
+        if (stmt.limit) return true;
+
+        const forClause = stmt.for as Record<string, unknown> | null | undefined;
+        if (forClause && typeof forClause === 'object' && forClause.type &&
+            String(forClause.type).toLowerCase().includes('xml')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Strips the last top-level ORDER BY clause using position-aware scanning.
+     * Skips strings, comments, Nunjucks tags, and tracks paren depth.
+     */
+    private stripLastTopLevelOrderBy(sql: string): string {
+        const positions = this.findTopLevelOrderByPositions(sql);
+        if (positions.length === 0) return sql;
+
+        const lastPos = positions[positions.length - 1];
+        return sql.substring(0, lastPos).trimEnd();
+    }
+
+    /**
+     * Finds character positions of all ORDER BY keywords at the outermost level
+     * (paren depth 0, not inside strings, comments, or Nunjucks tags).
+     */
+    private findTopLevelOrderByPositions(sql: string): number[] {
+        const positions: number[] = [];
+        let i = 0;
+        let parenDepth = 0;
+
+        while (i < sql.length) {
+            if (sql[i] === "'") {
+                i++;
+                while (i < sql.length) {
+                    if (sql[i] === "'" && i + 1 < sql.length && sql[i + 1] === "'") { i += 2; }
+                    else if (sql[i] === "'") { i++; break; }
+                    else { i++; }
+                }
+                continue;
+            }
+            if (sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
+                while (i < sql.length && sql[i] !== '\n') i++;
+                continue;
+            }
+            if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
+                i += 2;
+                while (i < sql.length) {
+                    if (sql[i] === '*' && i + 1 < sql.length && sql[i + 1] === '/') { i += 2; break; }
+                    i++;
+                }
+                continue;
+            }
+            if (sql[i] === '{' && i + 1 < sql.length && sql[i + 1] === '%') {
+                i += 2;
+                while (i < sql.length) {
+                    if (sql[i] === '%' && i + 1 < sql.length && sql[i + 1] === '}') { i += 2; break; }
+                    i++;
+                }
+                continue;
+            }
+            if (sql[i] === '{' && i + 1 < sql.length && sql[i + 1] === '{') {
+                i += 2;
+                while (i < sql.length) {
+                    if (sql[i] === '}' && i + 1 < sql.length && sql[i + 1] === '}') { i += 2; break; }
+                    i++;
+                }
+                continue;
+            }
+            if (sql[i] === '(') { parenDepth++; i++; continue; }
+            if (sql[i] === ')') { parenDepth--; i++; continue; }
+
+            if (parenDepth === 0 && /^ORDER\s+BY\b/i.test(sql.substring(i))) {
+                if (i === 0 || /[\s,;()\n]/.test(sql[i - 1])) {
+                    positions.push(i);
+                }
+            }
+            i++;
+        }
+
+        return positions;
+    }
+
+    /**
+     * Preprocesses Nunjucks templates into valid SQL for AST parsing.
+     */
+    private preprocessNunjucks(sql: string): string {
+        let processed = sql;
+
+        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlString\s*\}\}/g, "'placeholder'");
+        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlNumber\s*\}\}/g, '0');
+        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlDate\s*\}\}/g, "'2000-01-01'");
+        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlIn\s*\}\}/g, "('placeholder')");
+        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlIdentifier\s*\}\}/g, 'placeholder');
+        processed = processed.replace(/\{\{\s*[\w.]+\s*(?:\|[^}]*)?\}\}/g, "'placeholder'");
+
+        processed = processed.replace(/\{%[-\s]*if\s+[^%]*[-\s]*%\}/g, '');
+        processed = processed.replace(/\{%[-\s]*endif[-\s]*%\}/g, '');
+        processed = processed.replace(/\{%[-\s]*else[-\s]*%\}/g, '');
+        processed = processed.replace(/\{%[-\s]*elif\s+[^%]*[-\s]*%\}/g, '');
+        processed = processed.replace(/\{%[-\s]*for\s+[^%]*[-\s]*%\}/g, '');
+        processed = processed.replace(/\{%[-\s]*endfor[-\s]*%\}/g, '');
+        processed = processed.replace(/\{%[-\s]*set\s+[^%]*[-\s]*%\}/g, '');
+        processed = processed.replace(/\{#[^#]*#\}/g, '');
+
+        return processed;
+    }
+
+    /**
+     * Regex-based fallback for stripping trailing ORDER BY.
+     * Uses parenthesis depth counting to avoid stripping ORDER BY inside subqueries.
+     */
+    private stripOrderByViaRegex(sql: string): string {
+        const orderByMatch = sql.match(/\bORDER\s+BY\s+[\s\S]+$/i);
+        if (!orderByMatch) return sql;
+
+        const beforeOrderBy = sql.substring(0, orderByMatch.index);
+        let parenDepth = 0;
+        for (const ch of beforeOrderBy) {
+            if (ch === '(') parenDepth++;
+            else if (ch === ')') parenDepth--;
+        }
+
+        if (parenDepth !== 0) return sql;
+
+        return sql.substring(0, orderByMatch.index).trimEnd();
     }
 
     /**
