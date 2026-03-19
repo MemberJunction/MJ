@@ -405,6 +405,124 @@ ORDER BY JoinYear`,
             // ORDER BY should be stripped from the CTE body
             expect(finalSQL).toContain('WITH');
             expect(finalSQL).toContain('MemberCount');
+            expect(finalSQL).not.toMatch(/ORDER\s+BY/i);
+        });
+
+        it('should strip ORDER BY from dependency CTE body', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'dep-order',
+                Name: 'Sorted Members',
+                CategoryPath: '/Reports/',
+                SQL: `SELECT m.ID, m.Name FROM Members m ORDER BY m.Name ASC`,
+                Reusable: true,
+            });
+
+            const outerQuery = makeQueryInfo({
+                ID: 'outer-order',
+                Name: 'Member Count',
+                SQL: 'SELECT COUNT(*) AS Total FROM {{query:"Reports/Sorted Members"}}',
+                UsesTemplate: false,
+            });
+            outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [depQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(outerQuery, undefined, mockUser);
+
+            // CTE body must not contain ORDER BY (SQL Server disallows it)
+            expect(finalSQL).toContain('WITH');
+            expect(finalSQL).toContain('SELECT m.ID, m.Name FROM Members m');
+            expect(finalSQL).not.toMatch(/ORDER\s+BY/i);
+        });
+
+        it('should preserve ORDER BY in dependency CTE when TOP is present', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'dep-top',
+                Name: 'Top Members',
+                CategoryPath: '/Reports/',
+                SQL: `SELECT TOP 10 m.ID, m.Name FROM Members m ORDER BY m.Score DESC`,
+                Reusable: true,
+            });
+
+            const outerQuery = makeQueryInfo({
+                ID: 'outer-top',
+                Name: 'Top Report',
+                SQL: 'SELECT * FROM {{query:"Reports/Top Members"}}',
+                UsesTemplate: false,
+            });
+            outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [depQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(outerQuery, undefined, mockUser);
+
+            // ORDER BY is valid in CTE when TOP is present
+            expect(finalSQL).toContain('WITH');
+            expect(finalSQL).toMatch(/ORDER\s+BY/i);
+            expect(finalSQL).toContain('TOP 10');
+        });
+
+        it('should process templates when both outer and dependency use templates', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'dep-both',
+                Name: 'Filtered Members',
+                CategoryPath: '/Reports/',
+                SQL: `SELECT m.ID, m.Name FROM Members m
+{% if Region %}
+WHERE m.Region = '{{ Region }}'
+{% endif %}`,
+                Reusable: true,
+                UsesTemplate: true,
+            });
+
+            const outerQuery = makeQueryInfo({
+                ID: 'outer-both',
+                Name: 'Member Summary',
+                SQL: 'SELECT COUNT(*) AS Total FROM {{query:"Reports/Filtered Members"}} {% if Limit %}LIMIT {{ Limit }}{% endif %}',
+                UsesTemplate: true,
+            });
+            outerQuery.GetPlatformSQL = vi.fn().mockReturnValue(outerQuery.SQL);
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: [depQuery],
+                QueryDependencies: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryParameters: [],
+                QueryPermissions: [],
+                SQLDialects: [],
+                QuerySQLs: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const { finalSQL } = provider.testProcessQueryParameters(
+                outerQuery,
+                { Region: 'West', Limit: '100' },
+                mockUser
+            );
+
+            // Both dependency and outer templates should be resolved
+            expect(finalSQL).not.toContain('{%');
+            expect(finalSQL).not.toContain('{{');
+            expect(finalSQL).toContain("'West'");
+            expect(finalSQL).toContain('100');
         });
 
         it('should handle dependency templates with no parameters provided (falsy branch)', () => {

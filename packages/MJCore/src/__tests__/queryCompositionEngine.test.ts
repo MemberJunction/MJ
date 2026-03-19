@@ -14,6 +14,7 @@ function makeQueryInfo(overrides: Partial<{
     Reusable: boolean;
     Status: string;
     UserCanRun: boolean;
+    UsesTemplate: boolean;
 }>): QueryInfo {
     const q = new QueryInfo();
     q.ID = overrides.ID ?? 'query-1';
@@ -21,6 +22,7 @@ function makeQueryInfo(overrides: Partial<{
     q.SQL = overrides.SQL ?? 'SELECT 1';
     q.Reusable = overrides.Reusable ?? true;
     q.Status = (overrides.Status ?? 'Approved') as QueryInfo['Status'];
+    q.UsesTemplate = overrides.UsesTemplate ?? false;
 
     // Mock CategoryPath (normally computed from category hierarchy)
     Object.defineProperty(q, 'CategoryPath', {
@@ -759,6 +761,231 @@ SELECT 1 AS Val`;
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
 
             expect(result.CTEs[0].CTEName).not.toBe(result.CTEs[1].CTEName);
+        });
+    });
+
+    // ================================================================
+    // AnyDependencyUsesTemplates (transitive UsesTemplate flag)
+    // ================================================================
+    describe('AnyDependencyUsesTemplates', () => {
+        it('should be false when no dependencies use templates', () => {
+            const baseQuery = makeQueryInfo({
+                ID: 'no-tpl',
+                Name: 'Plain Query',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT 1',
+                UsesTemplate: false,
+            });
+
+            mockMetadataQueries([baseQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Plain Query"}} q';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.AnyDependencyUsesTemplates).toBe(false);
+        });
+
+        it('should be true when a direct dependency uses templates', () => {
+            const templateQuery = makeQueryInfo({
+                ID: 'tpl-1',
+                Name: 'Template Query',
+                CategoryPath: '/Test/',
+                SQL: "SELECT * FROM Users {% if Active %}WHERE Active = 1{% endif %}",
+                UsesTemplate: true,
+            });
+
+            mockMetadataQueries([templateQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Template Query"}} q';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+        });
+
+        it('should be true transitively when only a nested dependency uses templates', () => {
+            // Leaf uses templates, middle does not
+            const leaf = makeQueryInfo({
+                ID: 'leaf-tpl',
+                Name: 'Leaf With Template',
+                CategoryPath: '/Test/',
+                SQL: "SELECT * FROM Data {% if Filter %}WHERE x = '{{ Filter }}'{% endif %}",
+                UsesTemplate: true,
+            });
+
+            const middle = makeQueryInfo({
+                ID: 'mid-no-tpl',
+                Name: 'Middle No Template',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT * FROM {{query:"Test/Leaf With Template"}} lq',
+                UsesTemplate: false,
+            });
+
+            mockMetadataQueries([leaf, middle]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Middle No Template"}} mq';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+            expect(result.CTEs).toHaveLength(2);
+        });
+
+        it('should be false when SQL has no composition tokens', () => {
+            const sql = 'SELECT * FROM Users';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.AnyDependencyUsesTemplates).toBe(false);
+            expect(result.HasCompositions).toBe(false);
+        });
+
+        it('should short-circuit after first template match with multiple deps', () => {
+            const dep1 = makeQueryInfo({
+                ID: 'd1', Name: 'Dep1', CategoryPath: '/Test/',
+                SQL: 'SELECT 1', UsesTemplate: true,
+            });
+            const dep2 = makeQueryInfo({
+                ID: 'd2', Name: 'Dep2', CategoryPath: '/Test/',
+                SQL: 'SELECT 2', UsesTemplate: false,
+            });
+
+            mockMetadataQueries([dep1, dep2]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Dep1"}} a JOIN {{query:"Test/Dep2"}} b ON 1=1';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Flag should be true from dep1, regardless of dep2
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+        });
+    });
+
+    // ================================================================
+    // ORDER BY stripping in CTE bodies
+    // ================================================================
+    describe('ORDER BY stripping in CTEs', () => {
+        it('should strip trailing ORDER BY from CTE body', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'ord-1',
+                Name: 'Ordered Query',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT ID, Name FROM Users ORDER BY Name ASC',
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Ordered Query"}} oq';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.ResolvedSQL).toContain('SELECT ID, Name FROM Users');
+            expect(result.ResolvedSQL).not.toMatch(/ORDER\s+BY/i);
+        });
+
+        it('should strip ORDER BY with multiple columns and ASC/DESC', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'ord-multi',
+                Name: 'Multi Order',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT * FROM Sales ORDER BY Region ASC, Amount DESC, Date',
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Multi Order"}} mo';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.ResolvedSQL).toContain('SELECT * FROM Sales');
+            expect(result.ResolvedSQL).not.toMatch(/ORDER\s+BY/i);
+        });
+
+        it('should preserve ORDER BY when TOP is present', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'ord-top',
+                Name: 'Top Query',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT TOP 5 ID, Name FROM Users ORDER BY Score DESC',
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Top Query"}} tq';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.ResolvedSQL).toMatch(/ORDER\s+BY/i);
+            expect(result.ResolvedSQL).toContain('TOP 5');
+        });
+
+        it('should preserve ORDER BY when OFFSET is present', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'ord-offset',
+                Name: 'Offset Query',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT ID FROM Users ORDER BY ID OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY',
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Offset Query"}} oq';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.ResolvedSQL).toMatch(/ORDER\s+BY/i);
+            expect(result.ResolvedSQL).toMatch(/OFFSET\s+10/i);
+        });
+
+        it('should preserve ORDER BY when FOR XML is present', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'ord-xml',
+                Name: 'XML Query',
+                CategoryPath: '/Test/',
+                SQL: "SELECT ID, Name FROM Users ORDER BY Name FOR XML PATH('User')",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/XML Query"}} xq';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.ResolvedSQL).toMatch(/ORDER\s+BY/i);
+            expect(result.ResolvedSQL).toMatch(/FOR\s+XML/i);
+        });
+
+        it('should not strip ORDER BY inside a subquery (paren depth > 0)', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'ord-sub',
+                Name: 'Subquery Order',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT * FROM (SELECT TOP 10 ID FROM Users ORDER BY Score DESC) sub',
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Subquery Order"}} so';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // ORDER BY is inside a subquery with TOP — should be preserved
+            expect(result.ResolvedSQL).toMatch(/ORDER\s+BY/i);
+        });
+
+        it('should strip ORDER BY from dependency SQL that also has Nunjucks tokens', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'ord-nj',
+                Name: 'Nunjucks Ordered',
+                CategoryPath: '/Test/',
+                SQL: `SELECT m.ID, m.Name FROM Members m
+{% if Region %}
+WHERE m.Region = '{{ Region }}'
+{% endif %}
+ORDER BY m.Name`,
+                UsesTemplate: true,
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Nunjucks Ordered"}} no';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // ORDER BY should be stripped even though Nunjucks tokens are present
+            expect(result.ResolvedSQL).not.toMatch(/ORDER\s+BY/i);
+            // Nunjucks tokens should still be present (they get processed later)
+            expect(result.ResolvedSQL).toContain('{%');
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
         });
     });
 });
