@@ -1,6 +1,7 @@
 import { MJGlobal } from '@memberjunction/global';
 import { IRunQueryProvider, RunQueryResult } from './interfaces';
 import { UserInfo } from './securityInfo';
+import { QueryExecutionSpec } from './queryExecutionSpec';
 
 /**
  * Parameters for running a query, must provide either QueryID or QueryName. If both are provided QueryName is ignored.
@@ -139,6 +140,18 @@ export class RunQuery  {
     public async RunQueries(params: RunQueryParams[], contextUser?: UserInfo): Promise<RunQueryResult[]> {
         // Simple proxy to the provider - telemetry is handled by ProviderBase Pre/Post hooks
         return this.ProviderToUse.RunQueries(params, contextUser);
+    }
+
+    /**
+     * Executes a query from a `QueryExecutionSpec` — the lower-layer interface-based entry point.
+     * Runs the full pipeline: composition resolution → Nunjucks template processing → SQL execution.
+     * Supports both saved queries (via BuildSpecFromQueryInfo) and transient test queries.
+     * @param spec - The execution spec describing the query, parameters, and inline dependencies
+     * @param contextUser - Optional user context for permissions (mainly used server-side)
+     * @returns Query results including data rows and execution metadata
+     */
+    public async ExecuteFromSpec(spec: QueryExecutionSpec, contextUser?: UserInfo): Promise<RunQueryResult> {
+        return this.ProviderToUse.ExecuteQueryFromSpec(spec, contextUser);
     }
 
     private static _globalProviderKey: string = 'MJ_RunQueryProvider';

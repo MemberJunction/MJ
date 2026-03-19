@@ -11,6 +11,7 @@ import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { QueryCompositionEngine, CompositionResult } from "./queryCompositionEngine";
+import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
@@ -667,6 +668,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         await this.PostRunQuery(result, params, preResult, contextUser);
 
         return result;
+    }
+
+    /**
+     * Executes a query from a `QueryExecutionSpec` — the lower-layer interface-based entry point.
+     * Runs the full pipeline: composition resolution → Nunjucks template processing → SQL execution.
+     * Subclasses (GenericDatabaseProvider) provide the concrete implementation via `InternalExecuteQueryFromSpec`.
+     * @param spec - The execution spec describing the query, parameters, and inline dependencies
+     * @param contextUser - Optional user context for permissions (required server-side)
+     * @returns Query results including data rows and execution metadata
+     */
+    public async ExecuteQueryFromSpec(spec: QueryExecutionSpec, contextUser?: UserInfo): Promise<RunQueryResult> {
+        return this.InternalExecuteQueryFromSpec(spec, contextUser);
+    }
+
+    /**
+     * Internal implementation for spec-based query execution.
+     * Overridden by GenericDatabaseProvider to provide the actual pipeline.
+     * Default implementation throws — subclasses must override.
+     */
+    protected async InternalExecuteQueryFromSpec(_spec: QueryExecutionSpec, _contextUser?: UserInfo): Promise<RunQueryResult> {
+        throw new Error('ExecuteQueryFromSpec is not implemented by this provider. Use a GenericDatabaseProvider subclass.');
     }
 
     /**
@@ -1335,7 +1357,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param parameters - Optional parameter values from the outer query (for pass-through resolution)
      * @returns Full CompositionResult including transitive UsesTemplate flag
      */
-    protected ResolveQueryComposition(sql: string, contextUser?: UserInfo, parameters?: Record<string, string>): CompositionResult {
+    protected ResolveQueryComposition(
+        sql: string,
+        contextUser?: UserInfo,
+        parameters?: Record<string, string>,
+        inlineDependencies?: import('./queryExecutionSpec').QueryDependencySpec[]
+    ): CompositionResult {
         if (!this._compositionEngine.HasCompositionTokens(sql)) {
             return {
                 ResolvedSQL: sql,
@@ -1350,7 +1377,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             sql,
             this.PlatformKey,
             contextUser,
-            parameters
+            parameters,
+            inlineDependencies
         );
     }
 

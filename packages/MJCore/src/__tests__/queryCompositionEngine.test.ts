@@ -3,6 +3,7 @@ import { QueryCompositionEngine, CompositionResult } from '../generic/queryCompo
 import { QueryInfo } from '../generic/queryInfo';
 import { Metadata } from '../generic/metadata';
 import { UserInfo } from '../generic/securityInfo';
+import { QueryDependencySpec } from '../generic/queryExecutionSpec';
 
 // ---- Helpers for building mock QueryInfo objects ----
 
@@ -986,6 +987,325 @@ ORDER BY m.Name`,
             // Nunjucks tokens should still be present (they get processed later)
             expect(result.ResolvedSQL).toContain('{%');
             expect(result.AnyDependencyUsesTemplates).toBe(true);
+        });
+    });
+
+    // ================================================================
+    // Inline Dependency Resolution (QueryDependencySpec)
+    // ================================================================
+    describe('Inline Dependency Resolution', () => {
+        it('should resolve an inline dependency instead of looking up metadata', () => {
+            // No metadata queries registered — should not throw "Referenced query not found"
+            mockMetadataQueries([]);
+
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'Active Users',
+                    CategoryPath: '/Demos/',
+                    SQL: 'SELECT ID, Name FROM Users WHERE Active = 1',
+                },
+            ];
+
+            const sql = 'SELECT * FROM {{query:"Demos/Active Users"}} au WHERE au.Name IS NOT NULL';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(1);
+            expect(result.CTEs[0].QueryName).toBe('Active Users');
+            expect(result.CTEs[0].ResolvedSQL).toContain('SELECT ID, Name FROM Users WHERE Active = 1');
+            expect(result.ResolvedSQL).not.toContain('{{query:');
+        });
+
+        it('should skip governance validation for inline dependencies', () => {
+            // Inline dep with Reusable=false and Status=Pending — should NOT throw
+            mockMetadataQueries([]);
+
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'Test Query',
+                    CategoryPath: '/Test/',
+                    SQL: 'SELECT 1 AS Val',
+                    // Note: no Reusable or Status flags — inline deps skip validation
+                },
+            ];
+
+            const sql = 'SELECT * FROM {{query:"Test/Test Query"}} tq';
+            // Should not throw about Reusable or Approved
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(1);
+        });
+
+        it('should fall back to metadata when inline dep does not match', () => {
+            const metadataQuery = makeQueryInfo({
+                ID: 'meta-1',
+                Name: 'Metadata Query',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT ID FROM MetadataTable',
+            });
+            mockMetadataQueries([metadataQuery]);
+
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'Different Query',
+                    CategoryPath: '/Other/',
+                    SQL: 'SELECT 1',
+                },
+            ];
+
+            // This token references "Metadata Query" which is NOT in inline deps
+            const sql = 'SELECT * FROM {{query:"Test/Metadata Query"}} mq';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+
+            expect(result.CTEs).toHaveLength(1);
+            expect(result.CTEs[0].QueryID).toBe('meta-1');
+        });
+
+        it('should match inline deps by name only when no category segments in token', () => {
+            mockMetadataQueries([]);
+
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'Simple Query',
+                    CategoryPath: '/Whatever/',
+                    SQL: 'SELECT 42 AS Answer',
+                },
+            ];
+
+            // Token has no category path — name-only lookup
+            const sql = 'SELECT * FROM {{query:"Simple Query"}} sq';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+
+            expect(result.CTEs).toHaveLength(1);
+            expect(result.CTEs[0].QueryName).toBe('Simple Query');
+        });
+
+        it('should match inline deps case-insensitively', () => {
+            mockMetadataQueries([]);
+
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'Active Users',
+                    CategoryPath: '/demos/',
+                    SQL: 'SELECT 1',
+                },
+            ];
+
+            // Token uses different casing
+            const sql = 'SELECT * FROM {{query:"Demos/Active Users"}} au';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+
+            expect(result.CTEs).toHaveLength(1);
+        });
+
+        it('should resolve nested inline dependencies recursively', () => {
+            mockMetadataQueries([]);
+
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'Outer',
+                    CategoryPath: '/Test/',
+                    SQL: 'SELECT * FROM {{query:"Test/Inner"}} i',
+                    Dependencies: [
+                        {
+                            Name: 'Inner',
+                            CategoryPath: '/Test/',
+                            SQL: 'SELECT ID FROM BaseTable',
+                        },
+                    ],
+                },
+            ];
+
+            const sql = 'SELECT * FROM {{query:"Test/Outer"}} o';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+
+            // Should have 2 CTEs: Inner (resolved first, depth-first) then Outer
+            expect(result.CTEs).toHaveLength(2);
+            expect(result.CTEs[0].QueryName).toBe('Inner');
+            expect(result.CTEs[1].QueryName).toBe('Outer');
+        });
+
+        it('should detect cycles in inline dependencies', () => {
+            mockMetadataQueries([]);
+
+            // Outer references Inner, Inner references Outer — cycle
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'Cycle A',
+                    CategoryPath: '/Test/',
+                    SQL: 'SELECT * FROM {{query:"Test/Cycle B"}} b',
+                    Dependencies: [
+                        {
+                            Name: 'Cycle B',
+                            CategoryPath: '/Test/',
+                            SQL: 'SELECT * FROM {{query:"Test/Cycle A"}} a',
+                            Dependencies: [
+                                {
+                                    Name: 'Cycle A',
+                                    CategoryPath: '/Test/',
+                                    SQL: 'SELECT 1',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ];
+
+            const sql = 'SELECT * FROM {{query:"Test/Cycle A"}} ca';
+            expect(() => engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps))
+                .toThrow(/Circular query dependency/);
+        });
+
+        it('should propagate UsesTemplate flag from inline dependencies', () => {
+            mockMetadataQueries([]);
+
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'Template Dep',
+                    CategoryPath: '/Test/',
+                    SQL: "SELECT * FROM Users {% if Active %}WHERE Active = 1{% endif %}",
+                    UsesTemplate: true,
+                },
+            ];
+
+            const sql = 'SELECT * FROM {{query:"Test/Template Dep"}} td';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+        });
+
+        it('should handle mixed inline and metadata dependencies', () => {
+            // One dep resolved from inline, another from metadata
+            const metadataQuery = makeQueryInfo({
+                ID: 'meta-q',
+                Name: 'Meta Query',
+                CategoryPath: '/Sales/',
+                SQL: 'SELECT ID FROM SalesData',
+            });
+            mockMetadataQueries([metadataQuery]);
+
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'Inline Query',
+                    CategoryPath: '/Test/',
+                    SQL: 'SELECT 1 AS Val',
+                },
+            ];
+
+            const sql = `
+                SELECT a.*, b.*
+                FROM {{query:"Test/Inline Query"}} a
+                JOIN {{query:"Sales/Meta Query"}} b ON a.Val = b.ID
+            `;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+
+            expect(result.CTEs).toHaveLength(2);
+            // Inline query CTE
+            const inlineCTE = result.CTEs.find(c => c.QueryName === 'Inline Query');
+            expect(inlineCTE).toBeDefined();
+            // Metadata query CTE
+            const metaCTE = result.CTEs.find(c => c.QueryName === 'Meta Query');
+            expect(metaCTE).toBeDefined();
+            expect(metaCTE!.QueryID).toBe('meta-q');
+        });
+
+        it('should generate deterministic synthetic IDs for inline deps', () => {
+            mockMetadataQueries([]);
+
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'Dep A',
+                    CategoryPath: '/Test/',
+                    SQL: 'SELECT 1',
+                },
+            ];
+
+            // Resolve twice — the synthetic ID and CTE name should be the same
+            const sql = 'SELECT * FROM {{query:"Test/Dep A"}} da';
+            const result1 = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+
+            const engine2 = new QueryCompositionEngine();
+            const result2 = engine2.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+
+            expect(result1.CTEs[0].CTEName).toBe(result2.CTEs[0].CTEName);
+        });
+
+        it('should deduplicate same inline dependency referenced twice', () => {
+            mockMetadataQueries([]);
+
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'Shared',
+                    CategoryPath: '/Test/',
+                    SQL: 'SELECT ID FROM SharedTable',
+                },
+            ];
+
+            const sql = `
+                SELECT a.ID, b.ID
+                FROM {{query:"Test/Shared"}} a
+                JOIN {{query:"Test/Shared"}} b ON a.ID = b.ID
+            `;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+
+            // Should only generate one CTE despite two references
+            expect(result.CTEs).toHaveLength(1);
+        });
+
+        it('should resolve inline dependency with static parameters', () => {
+            mockMetadataQueries([]);
+
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'By Region',
+                    CategoryPath: '/Sales/',
+                    SQL: "SELECT * FROM Customers WHERE Region = {{region}}",
+                },
+            ];
+
+            const sql = `SELECT * FROM {{query:"Sales/By Region(region='West')"}} c`;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, inlineDeps);
+
+            expect(result.CTEs).toHaveLength(1);
+            expect(result.CTEs[0].ResolvedSQL).toContain("'West'");
+            expect(result.CTEs[0].Parameters).toEqual({ region: 'West' });
+        });
+
+        it('should pass empty inlineDependencies without error', () => {
+            const metadataQuery = makeQueryInfo({
+                ID: 'meta-1',
+                Name: 'Q',
+                CategoryPath: '/T/',
+                SQL: 'SELECT 1',
+            });
+            mockMetadataQueries([metadataQuery]);
+
+            // Empty array — should fall back to metadata
+            const sql = 'SELECT * FROM {{query:"T/Q"}} q';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser, {}, []);
+
+            expect(result.CTEs).toHaveLength(1);
+            expect(result.CTEs[0].QueryID).toBe('meta-1');
+        });
+
+        it('should resolve inline deps for PostgreSQL platform', () => {
+            mockMetadataQueries([]);
+
+            const inlineDeps: QueryDependencySpec[] = [
+                {
+                    Name: 'PG Query',
+                    CategoryPath: '/Test/',
+                    SQL: 'SELECT id, name FROM users WHERE active = true',
+                },
+            ];
+
+            const sql = 'SELECT * FROM {{query:"Test/PG Query"}} pq';
+            const result = engine.ResolveComposition(sql, 'postgresql', mockUser, {}, inlineDeps);
+
+            expect(result.HasCompositions).toBe(true);
+            // PostgreSQL CTE names use double quotes instead of brackets
+            expect(result.CTEs[0].CTEName).toMatch(/^"/);
         });
     });
 });

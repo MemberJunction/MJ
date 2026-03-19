@@ -59,6 +59,7 @@ import {
     QueryCacheManager,
     QueryPagingEngine,
     DatabasePlatform,
+    QueryExecutionSpec,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
@@ -2208,6 +2209,133 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         return { finalSQL, appliedParameters };
+    }
+
+    /**
+     * Lower-layer execution: resolves composition, processes templates, executes SQL.
+     * This is the single execution pathway used by both saved queries (via RunQuery upper layer)
+     * and transient test queries (via TestQuerySQL resolver).
+     *
+     * Processing order:
+     * 1. Resolve {{query:"..."}} composition tokens → CTEs (inline deps checked first, then Metadata)
+     * 2. Process {{ param }} Nunjucks templates (if UsesTemplate or any dependency uses templates)
+     * 3. Apply MaxRows safety limit (wrap with TOP/LIMIT if specified)
+     * 4. Execute the fully resolved SQL
+     * 5. Return results with execution metadata
+     */
+    protected override async InternalExecuteQueryFromSpec(
+        spec: QueryExecutionSpec,
+        contextUser?: UserInfo,
+    ): Promise<RunQueryResult> {
+        try {
+            const { finalSQL, appliedParameters } = this.resolveSpecParameters(spec, contextUser);
+
+            // Execute
+            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
+
+            return {
+                Success: true,
+                QueryID: '',
+                QueryName: 'Transient Query',
+                Results: result ?? [],
+                RowCount: result?.length ?? 0,
+                TotalRowCount: result?.length ?? 0,
+                ExecutionTime: executionTime,
+                ErrorMessage: '',
+                AppliedParameters: appliedParameters,
+            };
+        } catch (e) {
+            LogError(e);
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            return {
+                Success: false,
+                QueryID: '',
+                QueryName: 'Transient Query',
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 0,
+                ErrorMessage: errorMessage,
+            };
+        }
+    }
+
+    /**
+     * Resolves composition tokens and Nunjucks templates for a QueryExecutionSpec.
+     * Shared logic used by both `InternalExecuteQueryFromSpec` and can be reused
+     * if `processQueryParameters` is refactored in the future.
+     */
+    private resolveSpecParameters(
+        spec: QueryExecutionSpec,
+        contextUser?: UserInfo,
+    ): { finalSQL: string; appliedParameters: Record<string, string> } {
+        let finalSQL = spec.SQL;
+        let appliedParameters: Record<string, string> = {};
+
+        // Step 1: Resolve {{query:"..."}} composition tokens (with inline deps support)
+        const compositionResult = this.ResolveQueryComposition(
+            finalSQL,
+            contextUser,
+            spec.Parameters,
+            spec.Dependencies
+        );
+        finalSQL = compositionResult.ResolvedSQL;
+
+        // Step 2: Process Nunjucks templates
+        const needsTemplateProcessing = spec.UsesTemplate || compositionResult.AnyDependencyUsesTemplates;
+        if (needsTemplateProcessing) {
+            const templateInput = {
+                SQL: spec.SQL,
+                UsesTemplate: spec.UsesTemplate ?? false,
+                Parameters: spec.ParameterDefinitions ?? [],
+            };
+            const processingResult = QueryParameterProcessor.processQueryTemplate(
+                templateInput,
+                spec.Parameters,
+                finalSQL,
+                compositionResult.AnyDependencyUsesTemplates
+            );
+            if (!processingResult.success) {
+                throw new Error(processingResult.error);
+            }
+            finalSQL = processingResult.processedSQL;
+            appliedParameters = (processingResult.appliedParameters || {}) as Record<string, string>;
+        } else if (spec.Parameters && Object.keys(spec.Parameters).length > 0) {
+            LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
+        }
+
+        // Step 3: Apply MaxRows safety limit
+        if (spec.MaxRows != null && spec.MaxRows > 0) {
+            finalSQL = this.wrapWithMaxRows(finalSQL, spec.MaxRows);
+        }
+
+        return { finalSQL, appliedParameters };
+    }
+
+    /**
+     * Wraps SQL with a row limit for safety when testing transient queries.
+     * Uses platform-aware syntax: TOP N for SQL Server, LIMIT N for PostgreSQL.
+     */
+    private wrapWithMaxRows(sql: string, maxRows: number): string {
+        const platform = this.PlatformKey as DatabasePlatform;
+        const trimmed = sql.trim();
+
+        // Don't wrap if already has a TOP or LIMIT clause
+        if (/\bTOP\s+\d/i.test(trimmed) || /\bLIMIT\s+\d/i.test(trimmed)) {
+            return sql;
+        }
+
+        if (platform === 'postgresql') {
+            // Append LIMIT N — handle trailing semicolons
+            const withoutSemicolon = trimmed.replace(/;\s*$/, '');
+            return `${withoutSemicolon}\nLIMIT ${maxRows}`;
+        }
+
+        // SQL Server: inject TOP N after SELECT (handling SELECT DISTINCT)
+        return trimmed.replace(
+            /^(SELECT\s+(?:DISTINCT\s+)?)/i,
+            `$1TOP ${maxRows} `
+        );
     }
 
     /**
