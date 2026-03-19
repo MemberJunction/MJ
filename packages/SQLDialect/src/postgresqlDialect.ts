@@ -293,6 +293,10 @@ export class PostgreSQLDialect extends SQLDialect {
         return 'WITH RECURSIVE';
     }
 
+    get AllowsOrderByInCTE(): boolean {
+        return true;
+    }
+
     // ─── Data Types ──────────────────────────────────────────────────
 
     get TypeMap(): DataTypeMap {

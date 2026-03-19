@@ -1072,7 +1072,8 @@ SELECT * FROM {{query:"Test/C"}} c`;
             const sql = 'SELECT * FROM {{query:"Test/Ordered Query"}} oq';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
 
-            expect(result.ResolvedSQL).toContain('SELECT ID, Name FROM Users');
+            // AST sqlify() adds [bracket] quoting — check semantic content
+            expect(result.ResolvedSQL).toMatch(/SELECT\s+\[?ID\]?,\s*\[?Name\]?\s+FROM\s+\[?Users\]?/i);
             expect(result.ResolvedSQL).not.toMatch(/ORDER\s+BY/i);
         });
 
@@ -1089,7 +1090,8 @@ SELECT * FROM {{query:"Test/C"}} c`;
             const sql = 'SELECT * FROM {{query:"Test/Multi Order"}} mo';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
 
-            expect(result.ResolvedSQL).toContain('SELECT * FROM Sales');
+            // AST sqlify() adds [bracket] quoting
+            expect(result.ResolvedSQL).toMatch(/SELECT\s+\*\s+FROM\s+\[?Sales\]?/i);
             expect(result.ResolvedSQL).not.toMatch(/ORDER\s+BY/i);
         });
 
@@ -1184,6 +1186,42 @@ ORDER BY m.Name`,
             // Nunjucks tokens should still be present (they get processed later)
             expect(result.ResolvedSQL).toContain('{%');
             expect(result.AnyDependencyUsesTemplates).toBe(true);
+        });
+
+        it('should strip trailing ORDER BY but preserve window function ORDER BY (AST path)', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'ord-window',
+                Name: 'Window Query',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT ID, ROW_NUMBER() OVER (ORDER BY Score DESC) AS RowNum FROM Users ORDER BY Name',
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Window Query"}} wq';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Trailing ORDER BY Name should be stripped
+            expect(result.ResolvedSQL).not.toMatch(/ORDER\s+BY\s+\[?Name\]?\s/i);
+            // Window function ORDER BY Score should be preserved
+            expect(result.ResolvedSQL).toMatch(/OVER\s*\(\s*ORDER\s+BY\s+\[?Score\]?/i);
+        });
+
+        it('should NOT strip ORDER BY for PostgreSQL (ORDER BY legal in CTEs)', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'ord-pg',
+                Name: 'PG Query',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT ID, Name FROM Users ORDER BY Name ASC',
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/PG Query"}} pq';
+            const result = engine.ResolveComposition(sql, 'postgresql', mockUser);
+
+            // PostgreSQL allows ORDER BY in CTEs — should be preserved
+            expect(result.ResolvedSQL).toMatch(/ORDER\s+BY/i);
         });
     });
 

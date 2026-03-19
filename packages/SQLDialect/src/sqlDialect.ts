@@ -234,6 +234,14 @@ export abstract class SQLDialect {
      */
     abstract RecursiveCTESyntax(): string;
 
+    /**
+     * Whether the platform allows ORDER BY inside CTE definitions without
+     * TOP, OFFSET, or FOR XML.
+     * SQL Server: false (ORDER BY in CTEs is illegal without TOP/OFFSET/FOR XML)
+     * PostgreSQL: true (ORDER BY in CTEs is always legal)
+     */
+    abstract get AllowsOrderByInCTE(): boolean;
+
     // ─── Data Types ──────────────────────────────────────────────────
 
     /**

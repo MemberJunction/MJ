@@ -1,0 +1,33 @@
+{
+  "name": "@memberjunction/sql-parser",
+  "type": "module",
+  "version": "5.13.0",
+  "description": "MemberJunction: SQL parsing utilities — table/column extraction and CTE ORDER BY stripping",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/sql-dialect": "5.13.0",
+    "node-sql-parser": "^5.4.0",
+    "nunjucks": "^3.2.4"
+  },
+  "devDependencies": {
+    "@types/nunjucks": "^3.2.6",
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

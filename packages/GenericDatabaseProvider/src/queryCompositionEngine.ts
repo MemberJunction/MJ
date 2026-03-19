@@ -1,6 +1,7 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDialect, PostgreSQLDialect, type SQLDialect } from "@memberjunction/sql-dialect";
 import { Metadata, QueryInfo, DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
+import { stripOrderByForCTE } from "@memberjunction/sql-parser";
 
 /**
  * Maximum depth for recursive query composition resolution.
@@ -211,7 +212,7 @@ export class QueryCompositionEngine {
         let finalSQL = resolvedSQL;
 
         if (hasCompositions) {
-            finalSQL = this.assembleCTEs(cteEntries, resolvedSQL);
+            finalSQL = this.assembleCTEs(cteEntries, resolvedSQL, platform);
         }
 
         return {
@@ -678,15 +679,16 @@ export class QueryCompositionEngine {
     /**
      * Assembles CTE entries into a WITH clause prepended to the main SQL.
      */
-    private assembleCTEs(cteEntries: CTEEntry[], mainSQL: string): string {
+    private assembleCTEs(cteEntries: CTEEntry[], mainSQL: string, platform: DatabasePlatform): string {
         if (cteEntries.length === 0) return mainSQL;
 
         // Check if the main SQL already starts with a WITH clause
         const trimmedMain = mainSQL.trimStart();
         const startsWithWith = /^WITH\s/i.test(trimmedMain);
 
+        const dialect = this.getDialect(platform);
         const cteDefinitions = cteEntries.map(entry =>
-            `${entry.CTEName} AS (\n${this.stripTrailingOrderBy(entry.SQL)}\n)`
+            `${entry.CTEName} AS (\n${this.stripTrailingOrderBy(entry.SQL, dialect)}\n)`
         );
 
         if (startsWithWith) {
@@ -701,39 +703,12 @@ export class QueryCompositionEngine {
 
     /**
      * Strips a trailing ORDER BY clause from SQL that will be wrapped in a CTE.
-     * SQL Server (and the SQL standard) disallows ORDER BY inside CTEs unless
-     * TOP, OFFSET, or FOR XML is also present. Since reusable queries often
-     * include ORDER BY for standalone use, we must remove it when composing.
+     * Delegates to the AST-based implementation in @memberjunction/sql-parser,
+     * which handles window functions, STRING_AGG WITHIN GROUP, and string literals
+     * correctly, with a regex fallback for SQL the parser can't handle.
      */
-    private stripTrailingOrderBy(sql: string): string {
-        // Match a trailing ORDER BY clause (possibly with ASC/DESC, multiple columns)
-        // that is NOT accompanied by TOP, OFFSET, or FOR XML.
-        // We only strip if there's no TOP in the SELECT and no OFFSET after ORDER BY.
-        const trimmed = sql.trimEnd();
-
-        // Check if the query uses TOP or OFFSET — if so, ORDER BY is valid in CTEs
-        if (/\bTOP\s+\d/i.test(trimmed) || /\bOFFSET\s+\d/i.test(trimmed) || /\bFOR\s+XML\b/i.test(trimmed)) {
-            return sql;
-        }
-
-        // Strip the trailing ORDER BY clause
-        // Match ORDER BY followed by column references, ASC/DESC, NULLS FIRST/LAST, commas
-        const orderByMatch = trimmed.match(/\bORDER\s+BY\s+[\s\S]+$/i);
-        if (!orderByMatch) return sql;
-
-        // Make sure we're not stripping ORDER BY from a subquery — check that this ORDER BY
-        // is at the outermost level by counting unmatched parentheses before it
-        const beforeOrderBy = trimmed.substring(0, orderByMatch.index);
-        let parenDepth = 0;
-        for (const ch of beforeOrderBy) {
-            if (ch === '(') parenDepth++;
-            else if (ch === ')') parenDepth--;
-        }
-
-        // Only strip if we're at the top level (not inside a subquery)
-        if (parenDepth !== 0) return sql;
-
-        return trimmed.substring(0, orderByMatch.index).trimEnd();
+    private stripTrailingOrderBy(sql: string, dialect: SQLDialect): string {
+        return stripOrderByForCTE(sql, dialect);
     }
 
     /**

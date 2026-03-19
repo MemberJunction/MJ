@@ -243,6 +243,10 @@ export class SQLServerDialect extends SQLDialect {
         return 'WITH';
     }
 
+    get AllowsOrderByInCTE(): boolean {
+        return false;
+    }
+
     // ─── Data Types ──────────────────────────────────────────────────
 
     get TypeMap(): DataTypeMap {
