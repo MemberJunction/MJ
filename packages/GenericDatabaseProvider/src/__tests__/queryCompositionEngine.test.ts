@@ -1072,7 +1072,8 @@ SELECT * FROM {{query:"Test/C"}} c`;
             const sql = 'SELECT * FROM {{query:"Test/Ordered Query"}} oq';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
 
-            expect(result.ResolvedSQL).toContain('SELECT ID, Name FROM Users');
+            // AST sqlify() adds [bracket] quoting — check semantic content
+            expect(result.ResolvedSQL).toMatch(/SELECT\s+\[?ID\]?,\s*\[?Name\]?\s+FROM\s+\[?Users\]?/i);
             expect(result.ResolvedSQL).not.toMatch(/ORDER\s+BY/i);
         });
 
@@ -1089,7 +1090,8 @@ SELECT * FROM {{query:"Test/C"}} c`;
             const sql = 'SELECT * FROM {{query:"Test/Multi Order"}} mo';
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
 
-            expect(result.ResolvedSQL).toContain('SELECT * FROM Sales');
+            // AST sqlify() adds [bracket] quoting
+            expect(result.ResolvedSQL).toMatch(/SELECT\s+\*\s+FROM\s+\[?Sales\]?/i);
             expect(result.ResolvedSQL).not.toMatch(/ORDER\s+BY/i);
         });
 
@@ -1184,6 +1186,131 @@ ORDER BY m.Name`,
             // Nunjucks tokens should still be present (they get processed later)
             expect(result.ResolvedSQL).toContain('{%');
             expect(result.AnyDependencyUsesTemplates).toBe(true);
+        });
+
+        it('should strip trailing ORDER BY but preserve window function ORDER BY (AST path)', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'ord-window',
+                Name: 'Window Query',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT ID, ROW_NUMBER() OVER (ORDER BY Score DESC) AS RowNum FROM Users ORDER BY Name',
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Window Query"}} wq';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Trailing ORDER BY Name should be stripped
+            expect(result.ResolvedSQL).not.toMatch(/ORDER\s+BY\s+\[?Name\]?\s/i);
+            // Window function ORDER BY Score should be preserved
+            expect(result.ResolvedSQL).toMatch(/OVER\s*\(\s*ORDER\s+BY\s+\[?Score\]?/i);
+        });
+
+        it('should NOT strip ORDER BY for PostgreSQL (ORDER BY legal in CTEs)', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'ord-pg',
+                Name: 'PG Query',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT ID, Name FROM Users ORDER BY Name ASC',
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/PG Query"}} pq';
+            const result = engine.ResolveComposition(sql, 'postgresql', mockUser);
+
+            // PostgreSQL allows ORDER BY in CTEs — should be preserved
+            expect(result.ResolvedSQL).toMatch(/ORDER\s+BY/i);
+        });
+    });
+
+    // ================================================================
+    // Template token escaping in SQL comments
+    // ================================================================
+    describe('Template token escaping in comments', () => {
+        it('should escape {{ }} in single-line comments when AnyDependencyUsesTemplates is true', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'esc-1',
+                Name: 'Template Dep',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT ID FROM Users WHERE CreatedAt > DATEADD(DAY, -{{days}}, GETUTCDATE())',
+                UsesTemplate: true,
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            // Outer query has a comment containing {{query:"..."}} documentation
+            const sql = `-- This query uses {{query:"..."}} composition syntax
+SELECT * FROM {{query:"Test/Template Dep(days='7')"}} td`;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+            // The comment's {{ should be escaped so Nunjucks won't choke
+            expect(result.ResolvedSQL).not.toMatch(/\{\{query:/);
+            // But the CTE should be present
+            expect(result.ResolvedSQL).toMatch(/WITH/i);
+        });
+
+        it('should escape {{ }} in block comments when AnyDependencyUsesTemplates is true', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'esc-2',
+                Name: 'Block Comment Dep',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT 1 AS Val',
+                UsesTemplate: true,
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = `/* References: {{query:"..."}} */
+SELECT * FROM {{query:"Test/Block Comment Dep"}} bcd`;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.ResolvedSQL).not.toMatch(/\{\{query:/);
+        });
+
+        it('should NOT escape {{ }} in comments when no dependency uses templates', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'esc-3',
+                Name: 'No Template Dep',
+                CategoryPath: '/Test/',
+                SQL: 'SELECT 1 AS Val',
+                UsesTemplate: false,
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = `-- Contains {{query:"..."}} in comment
+SELECT * FROM {{query:"Test/No Template Dep"}} ntd`;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.AnyDependencyUsesTemplates).toBe(false);
+            // When no templates involved, Nunjucks won't run, so escaping is unnecessary
+            // The comment {{ should remain as-is
+            expect(result.ResolvedSQL).toContain('{{query:"..."}}');
+        });
+
+        it('should escape {{ }} in dependency SQL comments carried into CTEs', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'esc-4',
+                Name: 'Commented Dep',
+                CategoryPath: '/Test/',
+                SQL: `-- Parameterized by {{lookbackDays}}
+SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDATE())`,
+                UsesTemplate: true,
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = `SELECT * FROM {{query:"Test/Commented Dep(lookbackDays='30')"}} cd`;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // The dependency comment had {{lookbackDays}} — but static param substitution
+            // should have replaced the real one. The comment one should be escaped.
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+            // No unescaped {{ should remain in comments
+            expect(result.ResolvedSQL).not.toMatch(/--.*\{\{/);
         });
     });
 

@@ -440,7 +440,8 @@ ORDER BY JoinYear`,
 
             // CTE body must not contain ORDER BY (SQL Server disallows it)
             expect(finalSQL).toContain('WITH');
-            expect(finalSQL).toContain('SELECT m.ID, m.Name FROM Members m');
+            // AST sqlify() adds [bracket] quoting — check semantic content
+            expect(finalSQL).toMatch(/SELECT\s+\[?m\]?\.?\[?ID\]?,\s*\[?m\]?\.?\[?Name\]?\s+FROM\s+\[?Members\]?/i);
             expect(finalSQL).not.toMatch(/ORDER\s+BY/i);
         });
 

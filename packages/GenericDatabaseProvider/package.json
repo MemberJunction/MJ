@@ -31,6 +31,7 @@
     "@memberjunction/global": "5.13.0",
     "@memberjunction/query-processor": "5.13.0",
     "@memberjunction/sql-dialect": "5.13.0",
+    "node-sql-parser": "^5.4.0",
     "@memberjunction/queue": "5.13.0",
     "sql-formatter": "^15.7.0",
     "uuid": "^13.0.0"

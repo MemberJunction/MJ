@@ -21,7 +21,7 @@ import {
     removeCollate,
 } from "@memberjunction/sql-converter";
 import { EmbedTextLocalHelper } from "./util";
-import { SQLParser } from "./sql-parser";
+import { SQLParser } from "@memberjunction/sql-parser";
 
 interface ExtractedParameter {
     name: string;
