@@ -130,7 +130,46 @@ export class MJAuth0Provider extends MJAuthBase {
   }
 
   async logout(): Promise<void> {
-    this.auth.logout({ logoutParams: { returnTo: document.location.origin } });
+    await this.clearClientCaches();
+
+    // Subscribe to the Observable so Auth0 Angular SDK v2's authState.refresh() fires.
+    try {
+      await firstValueFrom(
+        this.auth.logout({ logoutParams: { returnTo: document.location.origin } })
+      );
+    } catch {
+      // Expected when Auth0 redirects the browser before the Observable completes.
+    }
+  }
+
+  /**
+   * Clears MJ client-side caches (IndexedDB + localStorage) before logout so that
+   * a subsequent login as a different user does not see the previous user's data.
+   *
+   * localStorage keys listed in PRESERVED_LOCALSTORAGE_KEYS are kept (e.g. theme).
+   */
+  private static readonly PRESERVED_LOCALSTORAGE_KEYS = new Set([
+    'mj-login-theme',
+  ]);
+
+  private async clearClientCaches(): Promise<void> {
+    // Clear all user-specific localStorage (Auth0 tokens, MJ sessionId, etc.)
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && !MJAuth0Provider.PRESERVED_LOCALSTORAGE_KEYS.has(key)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+
+    // Delete the MJ IndexedDB metadata cache (the main culprit for stale data)
+    await new Promise<void>((resolve) => {
+      const req = indexedDB.deleteDatabase('MJ_Metadata');
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+      req.onblocked = () => resolve();
+    });
   }
 
   async handleCallback(): Promise<void> {
