@@ -1,9 +1,6 @@
 import { UUIDsEqual } from "@memberjunction/global";
-import { Metadata } from "./metadata";
-import { QueryInfo } from "./queryInfo";
-import { DatabasePlatform } from "./platformSQL";
-import { UserInfo } from "./securityInfo";
-import { QueryDependencySpec } from "./queryExecutionSpec";
+import { SQLServerDialect, PostgreSQLDialect, type SQLDialect } from "@memberjunction/sql-dialect";
+import { Metadata, QueryInfo, DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
 
 /**
  * Maximum depth for recursive query composition resolution.
@@ -651,7 +648,18 @@ export class QueryCompositionEngine {
         const hash = this.simpleHash(hashInput);
 
         const identifier = `__cte_${sanitized}_${hash}`;
-        return platform === 'postgresql' ? `"${identifier}"` : `[${identifier}]`;
+        return this.getDialect(platform).QuoteIdentifier(identifier);
+    }
+
+    /**
+     * Resolves a DatabasePlatform string to the corresponding SQLDialect instance.
+     */
+    private getDialect(platform: DatabasePlatform): SQLDialect {
+        switch (platform) {
+            case 'postgresql': return new PostgreSQLDialect();
+            case 'sqlserver': return new SQLServerDialect();
+            default: throw new Error(`Unsupported database platform: ${platform}`);
+        }
     }
 
     /**

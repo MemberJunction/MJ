@@ -10,7 +10,6 @@ import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
-import { QueryCompositionEngine, CompositionResult } from "./queryCompositionEngine";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
@@ -1336,49 +1335,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param contextUser - Optional user context
      * @returns Pre-processing result with cache status and optional cached result
      */
-    /**
-     * Shared composition engine instance for resolving {{query:"..."}} tokens.
-     * Available to all provider subclasses so composition works identically
-     * across SQL Server, PostgreSQL, and any future database providers.
-     */
-    private _compositionEngine = new QueryCompositionEngine();
-
-    /**
-     * Resolves {{query:"..."}} composition tokens in SQL, converting referenced
-     * queries into CTEs. Call this BEFORE Nunjucks template processing.
-     *
-     * If the SQL contains no composition tokens, returns a no-op CompositionResult.
-     *
-     * @param sql - The SQL that may contain composition tokens
-     * @param contextUser - User context for permission checks on referenced queries
-     * @param parameters - Optional parameter values from the outer query (for pass-through resolution)
-     * @returns Full CompositionResult including transitive UsesTemplate flag
-     */
-    protected ResolveQueryComposition(
-        sql: string,
-        contextUser?: UserInfo,
-        parameters?: Record<string, string>,
-        inlineDependencies?: import('./queryExecutionSpec').QueryDependencySpec[]
-    ): CompositionResult {
-        if (!this._compositionEngine.HasCompositionTokens(sql)) {
-            return {
-                ResolvedSQL: sql,
-                CTEs: [],
-                DependencyGraph: new Map(),
-                HasCompositions: false,
-                AnyDependencyUsesTemplates: false
-            };
-        }
-
-        return this._compositionEngine.ResolveComposition(
-            sql,
-            this.PlatformKey,
-            contextUser,
-            parameters,
-            inlineDependencies
-        );
-    }
-
     protected async PreRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<typeof this._preRunQueryResultType> {
         // Start telemetry tracking
         const telemetryEventId = TelemetryManager.Instance.StartEvent(

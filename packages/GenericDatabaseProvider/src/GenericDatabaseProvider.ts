@@ -67,6 +67,7 @@ import { QueryParameterProcessor } from '@memberjunction/query-processor';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
+import { QueryCompositionEngine } from './queryCompositionEngine.js';
 
 import {
     MJEntityAIActionEntity,
@@ -103,6 +104,7 @@ export interface ExecuteSQLBatchOptions {
  * to inherit these shared behaviors.
  */
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
+    private _compositionEngine = new QueryCompositionEngine();
 
     /**************************************************************************/
     // Local Storage Provider — Server-Side Cache Backend
@@ -2182,7 +2184,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let appliedParameters: Record<string, string> = {};
 
         // Step 1: Resolve {{query:"..."}} composition tokens BEFORE Nunjucks processing
-        const compositionResult = this.ResolveQueryComposition(finalSQL, contextUser, parameters);
+        const compositionResult = this._compositionEngine.HasCompositionTokens(finalSQL) && contextUser
+            ? this._compositionEngine.ResolveComposition(finalSQL, this.PlatformKey, contextUser, parameters)
+            : { ResolvedSQL: finalSQL, CTEs: [], DependencyGraph: new Map<string, string[]>(), HasCompositions: false, AnyDependencyUsesTemplates: false };
         finalSQL = compositionResult.ResolvedSQL;
 
         // Step 2: Process Nunjucks template parameters.
@@ -2273,12 +2277,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let appliedParameters: Record<string, string> = {};
 
         // Step 1: Resolve {{query:"..."}} composition tokens (with inline deps support)
-        const compositionResult = this.ResolveQueryComposition(
-            finalSQL,
-            contextUser,
-            spec.Parameters,
-            spec.Dependencies
-        );
+        const compositionResult = this._compositionEngine.HasCompositionTokens(finalSQL) && contextUser
+            ? this._compositionEngine.ResolveComposition(finalSQL, this.PlatformKey, contextUser, spec.Parameters, spec.Dependencies)
+            : { ResolvedSQL: finalSQL, CTEs: [], DependencyGraph: new Map<string, string[]>(), HasCompositions: false, AnyDependencyUsesTemplates: false };
         finalSQL = compositionResult.ResolvedSQL;
 
         // Step 2: Process Nunjucks templates
