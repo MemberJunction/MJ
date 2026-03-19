@@ -3,12 +3,6 @@ const { Parser } = NodeSqlParser;
 import * as nunjucks from 'nunjucks';
 
 /**
- * Supported SQL dialects for AST parsing.
- * Maps to node-sql-parser's database option.
- */
-export type SQLDialectName = 'TransactSQL' | 'PostgresQL';
-
-/**
  * A single table/view reference extracted from SQL.
  */
 export interface SQLTableReference {
@@ -56,7 +50,7 @@ export class SQLParser {
      * @param sql The SQL statement to parse
      * @param dialect The SQL dialect to use for AST parsing (default: 'TransactSQL')
      */
-    public static Parse(sql: string, dialect: SQLDialectName = 'TransactSQL'): SQLParseResult {
+    public static Parse(sql: string, dialect: string = 'TransactSQL'): SQLParseResult {
         if (!sql || sql.trim().length === 0) {
             return { Tables: [], Columns: [], UsedASTParsing: false };
         }
@@ -75,7 +69,7 @@ export class SQLParser {
      * @param sql The SQL statement to parse
      * @param dialect The SQL dialect to use for AST parsing (default: 'TransactSQL')
      */
-    public static ParseWithTemplatePreprocessing(sql: string, dialect: SQLDialectName = 'TransactSQL'): SQLParseResult {
+    public static ParseWithTemplatePreprocessing(sql: string, dialect: string = 'TransactSQL'): SQLParseResult {
         if (!sql || sql.trim().length === 0) {
             return { Tables: [], Columns: [], UsedASTParsing: false };
         }
@@ -88,7 +82,7 @@ export class SQLParser {
      * Attempt to parse SQL via node-sql-parser AST.
      * Returns null if parsing fails (caller should fall back to regex).
      */
-    private static ParseViaAST(sql: string, dialect: SQLDialectName): SQLParseResult | null {
+    private static ParseViaAST(sql: string, dialect: string): SQLParseResult | null {
         try {
             const parser = new Parser();
             const ast = parser.astify(sql, { database: dialect });

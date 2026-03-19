@@ -151,6 +151,10 @@ export class PostgreSQLDialect extends SQLDialect {
         return 'postgresql';
     }
 
+    get ParserDialect(): string {
+        return 'PostgresQL';
+    }
+
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {

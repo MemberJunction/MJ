@@ -124,6 +124,10 @@ export class SQLServerDialect extends SQLDialect {
         return 'sqlserver';
     }
 
+    get ParserDialect(): string {
+        return 'TransactSQL';
+    }
+
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {

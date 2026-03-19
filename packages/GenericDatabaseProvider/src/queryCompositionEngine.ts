@@ -735,7 +735,7 @@ export class QueryCompositionEngine {
         if (dialect.AllowsOrderByInCTE) return sql;
 
         // Tier 2: AST-based stripping
-        const astResult = this.stripOrderByViaAST(trimmed);
+        const astResult = this.stripOrderByViaAST(trimmed, dialect.ParserDialect);
         if (astResult !== null) return astResult;
 
         // Tier 3: Regex fallback
@@ -756,12 +756,12 @@ export class QueryCompositionEngine {
      * Tries direct parsing first, then Nunjucks-preprocessed parsing if the SQL
      * contains template syntax. Handles UNION/EXCEPT by walking the _next chain.
      */
-    private stripOrderByViaAST(sql: string): string | null {
-        const directResult = this.tryASTStrip(sql);
+    private stripOrderByViaAST(sql: string, parserDialect: string): string | null {
+        const directResult = this.tryASTStrip(sql, parserDialect);
         if (directResult !== null) return directResult;
 
         if (/\{[%{#]/.test(sql)) {
-            return this.tryNunjucksAwareStrip(sql);
+            return this.tryNunjucksAwareStrip(sql, parserDialect);
         }
 
         return null;
@@ -770,10 +770,10 @@ export class QueryCompositionEngine {
     /**
      * Core AST stripping: parse, analyze, and regenerate SQL without ORDER BY.
      */
-    private tryASTStrip(sql: string): string | null {
+    private tryASTStrip(sql: string, parserDialect: string): string | null {
         try {
             const parser = new SqlParser();
-            const ast = parser.astify(sql, { database: 'TransactSQL' });
+            const ast = parser.astify(sql, { database: parserDialect });
             const stmt = Array.isArray(ast) ? ast[0] : ast;
             if (!stmt) return sql;
 
@@ -783,7 +783,7 @@ export class QueryCompositionEngine {
             if (this.isOrderByLegalInCTE(orderByStmt)) return sql;
 
             orderByStmt.orderby = null;
-            return parser.sqlify(Array.isArray(ast) ? ast : [stmt], { database: 'TransactSQL' });
+            return parser.sqlify(Array.isArray(ast) ? ast : [stmt], { database: parserDialect });
         } catch {
             return null;
         }
@@ -804,12 +804,12 @@ export class QueryCompositionEngine {
      * parse with AST to confirm top-level ORDER BY exists, then use the position-aware
      * scanner on the original SQL to strip only the last top-level ORDER BY.
      */
-    private tryNunjucksAwareStrip(sql: string): string | null {
+    private tryNunjucksAwareStrip(sql: string, parserDialect: string): string | null {
         const preprocessed = this.preprocessNunjucks(sql);
 
         try {
             const parser = new SqlParser();
-            const ast = parser.astify(preprocessed, { database: 'TransactSQL' });
+            const ast = parser.astify(preprocessed, { database: parserDialect });
             const stmt = Array.isArray(ast) ? ast[0] : ast;
             if (!stmt) return sql;
 

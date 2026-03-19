@@ -93,6 +93,12 @@ export abstract class SQLDialect {
      */
     abstract get PlatformKey(): DatabasePlatform;
 
+    /**
+     * Returns the dialect name used by node-sql-parser for AST parsing.
+     * SQL Server: 'TransactSQL', PostgreSQL: 'PostgresQL', etc.
+     */
+    abstract get ParserDialect(): string;
+
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     /**
