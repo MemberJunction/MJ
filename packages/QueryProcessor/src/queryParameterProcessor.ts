@@ -1,5 +1,19 @@
-import { QueryInfo, QueryParameterInfo, RunQuerySQLFilterManager, DatabasePlatform } from '@memberjunction/core';
+import { QueryParameterInfo, RunQuerySQLFilterManager, DatabasePlatform } from '@memberjunction/core';
 import nunjucks from 'nunjucks';
+
+/**
+ * Minimal interface for the query metadata needed by processQueryTemplate.
+ * Both `QueryInfo` (saved queries) and plain objects (transient specs) satisfy this shape.
+ * This decouples template processing from requiring a full database-backed QueryInfo.
+ */
+export interface QueryTemplateInput {
+    /** The SQL query text (used as fallback if no sqlOverride is provided) */
+    SQL: string;
+    /** Whether this query uses Nunjucks template syntax */
+    UsesTemplate: boolean;
+    /** Parameter definitions for validation and type conversion */
+    Parameters: QueryParameterInfo[];
+}
 
 /**
  * Result of parameter validation
@@ -229,7 +243,9 @@ export class QueryParameterProcessor {
 
     /**
      * Processes a query template with the provided parameters.
-     * @param query The query info containing template SQL and parameter definitions
+     * Accepts either a full `QueryInfo` (saved queries) or a minimal `QueryTemplateInput`
+     * (transient specs) — only `SQL`, `UsesTemplate`, and `Parameters` are used.
+     * @param query The query info or template input containing SQL and parameter definitions
      * @param parameters User-provided parameter values
      * @param sqlOverride Optional SQL to use instead of query.SQL (e.g., platform-resolved SQL)
      * @param forceTemplateProcessing When true, processes Nunjucks templates even if the query's
@@ -237,7 +253,7 @@ export class QueryParameterProcessor {
      *        dependency uses templates but the outer query does not.
      */
     public static processQueryTemplate(
-        query: QueryInfo,
+        query: QueryTemplateInput,
         parameters: Record<string, unknown> | undefined,
         sqlOverride?: string,
         forceTemplateProcessing?: boolean
