@@ -76,10 +76,10 @@ export class AnalysisEngine {
   }
 
   /**
-   * One-shot FK evaluation using a potentially stronger model.
+   * Per-table FK evaluation using a potentially stronger model.
    * Runs after discovery, before the main iteration loop.
-   * Presents ALL FK candidates to the LLM at once so it can reason about
-   * directionality, transitive hops, and the full relationship graph.
+   * Evaluates each table's FK candidates independently so the LLM gets
+   * focused context per table rather than a mega-prompt with all 200+ candidates.
    */
   public async evaluateFKCandidates(
     state: DatabaseDocumentation,
@@ -95,16 +95,28 @@ export class AnalysisEngine {
     const override = this.config.ai.modelOverrides?.['fkEvaluation'];
     const effectiveModel = override?.model ?? this.config.ai.model;
 
-    this.onProgress('Evaluating FK candidates with LLM', {
-      candidates: allCandidates.length,
+    // Group candidates by source table
+    const candidatesByTable = new Map<string, typeof allCandidates>();
+    for (const fk of allCandidates) {
+      const key = `${fk.schemaName}.${fk.sourceTable}`;
+      if (!candidatesByTable.has(key)) {
+        candidatesByTable.set(key, []);
+      }
+      candidatesByTable.get(key)!.push(fk);
+    }
+
+    const tableCount = candidatesByTable.size;
+    this.onProgress('Evaluating FK candidates per table', {
+      tables: tableCount,
+      totalCandidates: allCandidates.length,
       model: effectiveModel
     });
 
-    // Build table info for context
+    // Build table info for context (shared across all calls)
     const allTables = state.schemas.flatMap(s =>
       s.tables.map(t => {
         const pk = discoveryPhase.discovered.primaryKeys.find(
-          pk => pk.schemaName === s.name && pk.tableName === t.name
+          p => p.schemaName === s.name && p.tableName === t.name
         );
         return {
           schema: s.name,
@@ -115,69 +127,79 @@ export class AnalysisEngine {
       })
     );
 
-    // Build candidate list for prompt
-    const candidates = allCandidates.map(fk => ({
-      sourceSchema: fk.schemaName,
-      sourceTable: fk.sourceTable,
-      sourceColumn: fk.sourceColumn,
-      targetSchema: fk.targetSchema,
-      targetTable: fk.targetTable,
-      targetColumn: fk.targetColumn,
-      confidence: fk.confidence,
-      valueOverlap: fk.evidence.valueOverlap,
-      nullPercentage: fk.evidence.nullPercentage,
-      cardinalityRatio: fk.evidence.cardinalityRatio
-    }));
+    let totalConfirmed = 0;
+    let totalRejected = 0;
+    let tableIndex = 0;
 
-    const context = {
-      allTables,
-      candidates,
-      seedContext: state.seedContext ?? this.config.seedContext
-    };
-
-    const result = await this.promptEngine.executePrompt<import('../types/prompts.js').FKEvaluationResult[]>(
-      'fk-evaluation',
-      context,
-      {
-        responseFormat: 'JSON',
-        temperature: override?.temperature ?? 0.05,
-        maxTokens: override?.maxTokens ?? this.config.ai.maxTokens,
-        modelOverride: override?.model,
-        effortLevelOverride: override?.effortLevel
+    for (const [tableKey, tableCandidates] of candidatesByTable.entries()) {
+      tableIndex++;
+      if (tableIndex % 5 === 1 || tableIndex === tableCount) {
+        this.onProgress(`FK evaluation: table ${tableIndex}/${tableCount} (${tableKey})`);
       }
-    );
 
-    if (!result.success || !result.result) {
-      console.log(`[AnalysisEngine] FK evaluation failed: ${result.errorMessage}`);
-      return;
+      const candidates = tableCandidates.map(fk => ({
+        sourceSchema: fk.schemaName,
+        sourceTable: fk.sourceTable,
+        sourceColumn: fk.sourceColumn,
+        targetSchema: fk.targetSchema,
+        targetTable: fk.targetTable,
+        targetColumn: fk.targetColumn,
+        confidence: fk.confidence,
+        valueOverlap: fk.evidence.valueOverlap,
+        nullPercentage: fk.evidence.nullPercentage,
+        cardinalityRatio: fk.evidence.cardinalityRatio
+      }));
+
+      const context = {
+        allTables,
+        candidates,
+        seedContext: state.seedContext ?? this.config.seedContext
+      };
+
+      const result = await this.promptEngine.executePrompt<import('../types/prompts.js').FKEvaluationResult[]>(
+        'fk-evaluation',
+        context,
+        {
+          responseFormat: 'JSON',
+          temperature: override?.temperature ?? 0.05,
+          maxTokens: override?.maxTokens ?? this.config.ai.maxTokens,
+          modelOverride: override?.model,
+          effortLevelOverride: override?.effortLevel
+        }
+      );
+
+      if (!result.success || !result.result) {
+        console.log(`[AnalysisEngine] FK evaluation failed for ${tableKey}: ${result.errorMessage}`);
+        continue;
+      }
+
+      // Build set of confirmed indices (1-based from prompt)
+      const confirmedIndices = new Set<number>();
+      for (const evaluation of result.result) {
+        if (evaluation.verdict === 'confirm') {
+          confirmedIndices.add(evaluation.index);
+        }
+      }
+
+      // Apply results to this table's candidates
+      for (let i = 0; i < tableCandidates.length; i++) {
+        const fk = tableCandidates[i];
+        if (confirmedIndices.has(i + 1)) {
+          fk.status = 'confirmed';
+          fk.validatedByLLM = true;
+          totalConfirmed++;
+        } else {
+          fk.status = 'rejected';
+          fk.validatedByLLM = true;
+          totalRejected++;
+        }
+      }
+
+      console.log(`[AnalysisEngine] FK eval ${tableKey}: ${confirmedIndices.size} confirmed, ${tableCandidates.length - confirmedIndices.size} rejected`);
     }
 
-    // Build set of confirmed indices
-    const confirmedIndices = new Set<number>();
-    for (const evaluation of result.result) {
-      if (evaluation.verdict === 'confirm') {
-        confirmedIndices.add(evaluation.index);
-      }
-    }
-
-    // Apply results: confirm matched candidates, reject everything else
-    let confirmed = 0;
-    let rejected = 0;
-    for (let i = 0; i < allCandidates.length; i++) {
-      const fk = allCandidates[i];
-      if (confirmedIndices.has(i + 1)) { // 1-based index in prompt
-        fk.status = 'confirmed';
-        fk.validatedByLLM = true;
-        confirmed++;
-      } else {
-        fk.status = 'rejected';
-        fk.validatedByLLM = true;
-        rejected++;
-      }
-    }
-
-    console.log(`[AnalysisEngine] FK evaluation complete: ${confirmed} confirmed, ${rejected} rejected (model: ${effectiveModel})`);
-    this.onProgress('FK evaluation complete', { confirmed, rejected, model: effectiveModel });
+    console.log(`[AnalysisEngine] FK evaluation complete: ${totalConfirmed} confirmed, ${totalRejected} rejected (model: ${effectiveModel})`);
+    this.onProgress('FK evaluation complete', { confirmed: totalConfirmed, rejected: totalRejected, model: effectiveModel });
 
     // Update column-level FK flags based on confirmed FKs
     for (const fk of allCandidates) {
