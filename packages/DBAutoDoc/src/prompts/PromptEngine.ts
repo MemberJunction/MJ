@@ -132,6 +132,10 @@ export class PromptEngine {
       temperature?: number;
       maxTokens?: number;
       responseFormat?: 'JSON' | 'Text';
+      /** Override the model for this specific call (e.g., use a stronger model for FK pruning) */
+      modelOverride?: string;
+      /** Override effort level for this specific call */
+      effortLevelOverride?: number;
     }
   ): Promise<PromptExecutionResult<T>> {
     try {
@@ -168,14 +172,16 @@ export class PromptEngine {
         content: renderedPrompt
       });
 
+      const effectiveModel = options?.modelOverride ?? this.config.model;
+      const effectiveEffortLevel = options?.effortLevelOverride ?? this.config.effortLevel;
       const params: ChatParams = {
-        model: this.config.model,
+        model: effectiveModel,
         messages,
         maxOutputTokens: options?.maxTokens ?? this.config.maxTokens,
         responseFormat: options?.responseFormat ?? 'JSON',
         ...(options?.temperature != null && { temperature: options.temperature }),
         ...(this.config.temperature != null && options?.temperature == null && { temperature: this.config.temperature }),
-        ...(this.config.effortLevel != null && { effortLevel: this.config.effortLevel.toString() }) // Optional 1-100, BaseLLM drivers handle if supported
+        ...(effectiveEffortLevel != null && { effortLevel: effectiveEffortLevel.toString() }) // Optional 1-100, BaseLLM drivers handle if supported
       };
 
       // 3. Execute with AI/Core (follows RunView pattern - doesn't throw)

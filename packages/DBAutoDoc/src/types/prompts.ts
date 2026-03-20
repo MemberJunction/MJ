@@ -33,6 +33,20 @@ export interface ForeignKeyPromptResult {
   confidence: number;
 }
 
+/** Result from per-table FK pruning pass — proposes which FKs to remove */
+export interface FKPruningProposal {
+  index: number;
+  action: 'remove';
+  reasoning: string;
+}
+
+/** Result from holistic FK pruning pass — final decision on proposed removals */
+export interface FKPruningFinalDecision {
+  index: number;
+  action: 'remove' | 'keep';
+  reasoning: string;
+}
+
 export interface ParentTableInsight {
   parentTable: string;  // "schema.table" format
   insight: string;

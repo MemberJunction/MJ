@@ -76,6 +76,230 @@ export class AnalysisEngine {
   }
 
   /**
+   * Lock interim ground truth: FKs with confidence ≥ threshold become immutable.
+   * Call this AFTER the iterative analysis completes but BEFORE the pruning pass.
+   */
+  public lockInterimGroundTruth(
+    state: DatabaseDocumentation,
+    confidenceThreshold: number = 90
+  ): { locked: number; unlocked: number } {
+    const discoveryPhase = state.phases.keyDetection;
+    if (!discoveryPhase) return { locked: 0, unlocked: 0 };
+
+    let locked = 0;
+    let unlocked = 0;
+    for (const fk of discoveryPhase.discovered.foreignKeys) {
+      if (fk.status === 'rejected') continue;
+      if (fk.confidence >= confidenceThreshold) {
+        fk.status = 'confirmed';
+        locked++;
+      } else {
+        unlocked++;
+      }
+    }
+
+    console.log(`[AnalysisEngine] Interim ground truth locked: ${locked} FKs at ≥${confidenceThreshold}% confidence, ${unlocked} unlocked for pruning`);
+    this.onProgress('Interim ground truth locked', { locked, unlocked, threshold: confidenceThreshold });
+    return { locked, unlocked };
+  }
+
+  /**
+   * Two-pass FK pruning using a potentially stronger model.
+   * Pass 1: Per-table — evaluate each table's unlocked FKs, propose removals.
+   * Pass 2: Holistic — review all proposed removals at once for final decision.
+   * Locked FKs (interim ground truth) are never touched.
+   */
+  public async pruneForeignKeys(
+    state: DatabaseDocumentation,
+    run: AnalysisRun
+  ): Promise<{ removed: number; kept: number }> {
+    const discoveryPhase = state.phases.keyDetection;
+    if (!discoveryPhase) return { removed: 0, kept: 0 };
+
+    const override = this.config.ai.modelOverrides?.['fkPruning'];
+    const effectiveModel = override?.model ?? this.config.ai.model;
+
+    // Build table info for context
+    const allTables = state.schemas.flatMap(s =>
+      s.tables.map(t => {
+        const pk = discoveryPhase.discovered.primaryKeys.find(
+          p => p.schemaName === s.name && p.tableName === t.name
+        );
+        return {
+          schema: s.name,
+          name: t.name,
+          description: t.description || '',
+          pk: pk ? pk.columnNames.join(', ') : ''
+        };
+      })
+    );
+
+    // Group non-rejected FKs by source table
+    const allFKs = discoveryPhase.discovered.foreignKeys.filter(fk => fk.status !== 'rejected');
+    const fksByTable = new Map<string, typeof allFKs>();
+    for (const fk of allFKs) {
+      const key = `${fk.schemaName}.${fk.sourceTable}`;
+      if (!fksByTable.has(key)) fksByTable.set(key, []);
+      fksByTable.get(key)!.push(fk);
+    }
+
+    // ==================== PASS 1: Per-table pruning proposals ====================
+    this.onProgress('FK pruning pass 1: per-table analysis', { tables: fksByTable.size, model: effectiveModel });
+
+    interface ProposedRemoval {
+      fk: typeof allFKs[0];
+      reasoning: string;
+      sourceSchema: string;
+      sourceTable: string;
+      sourceColumn: string;
+      targetSchema: string;
+      targetTable: string;
+      targetColumn: string;
+      confidence: number;
+    }
+    const allProposals: ProposedRemoval[] = [];
+    let tableIdx = 0;
+
+    for (const [tableKey, tableFKs] of fksByTable.entries()) {
+      tableIdx++;
+      // Skip tables where ALL FKs are locked
+      const hasUnlocked = tableFKs.some(fk => fk.status !== 'confirmed');
+      if (!hasUnlocked) continue;
+
+      if (tableIdx % 10 === 1) {
+        this.onProgress(`FK pruning: table ${tableIdx}/${fksByTable.size}`);
+      }
+
+      const [schemaName, tableName] = tableKey.split('.');
+      const table = this.stateManager.findTable(state, schemaName, tableName);
+
+      const candidates = tableFKs.map(fk => ({
+        sourceColumn: fk.sourceColumn,
+        targetSchema: fk.targetSchema,
+        targetTable: fk.targetTable,
+        targetColumn: fk.targetColumn,
+        confidence: fk.confidence,
+        locked: fk.status === 'confirmed'
+      }));
+
+      const context = {
+        sourceSchema: schemaName,
+        sourceTable: tableName,
+        tableDescription: table?.description || '',
+        allTables,
+        candidates,
+        seedContext: state.seedContext ?? this.config.seedContext
+      };
+
+      const result = await this.promptEngine.executePrompt<import('../types/prompts.js').FKPruningProposal[]>(
+        'fk-pruning-table',
+        context,
+        {
+          responseFormat: 'JSON',
+          temperature: override?.temperature ?? 0.05,
+          maxTokens: override?.maxTokens ?? this.config.ai.maxTokens,
+          modelOverride: override?.model,
+          effortLevelOverride: override?.effortLevel
+        }
+      );
+
+      if (!result.success || !result.result) {
+        console.log(`[AnalysisEngine] FK pruning failed for ${tableKey}: ${result.errorMessage}`);
+        continue;
+      }
+
+      for (const proposal of result.result) {
+        if (proposal.action === 'remove' && proposal.index >= 1 && proposal.index <= tableFKs.length) {
+          const fk = tableFKs[proposal.index - 1];
+          if (fk.status === 'confirmed') {
+            console.log(`[AnalysisEngine] BLOCKED removal of locked FK: ${tableKey}.${fk.sourceColumn} -> ${fk.targetTable}.${fk.targetColumn}`);
+            continue;
+          }
+          allProposals.push({
+            fk,
+            reasoning: proposal.reasoning,
+            sourceSchema: fk.schemaName,
+            sourceTable: fk.sourceTable,
+            sourceColumn: fk.sourceColumn,
+            targetSchema: fk.targetSchema,
+            targetTable: fk.targetTable,
+            targetColumn: fk.targetColumn,
+            confidence: fk.confidence
+          });
+        }
+      }
+
+      console.log(`[AnalysisEngine] FK pruning ${tableKey}: ${result.result.length} removals proposed`);
+    }
+
+    console.log(`[AnalysisEngine] Pass 1 complete: ${allProposals.length} total removals proposed`);
+    this.onProgress('FK pruning pass 1 complete', { proposals: allProposals.length });
+
+    if (allProposals.length === 0) {
+      return { removed: 0, kept: allFKs.length };
+    }
+
+    // ==================== PASS 2: Holistic review of all proposals ====================
+    this.onProgress('FK pruning pass 2: holistic review', { proposals: allProposals.length, model: effectiveModel });
+
+    const holisticContext = {
+      allTables,
+      proposals: allProposals.map(p => ({
+        sourceSchema: p.sourceSchema,
+        sourceTable: p.sourceTable,
+        sourceColumn: p.sourceColumn,
+        targetSchema: p.targetSchema,
+        targetTable: p.targetTable,
+        targetColumn: p.targetColumn,
+        confidence: p.confidence,
+        reasoning: p.reasoning
+      })),
+      seedContext: state.seedContext ?? this.config.seedContext
+    };
+
+    const holisticResult = await this.promptEngine.executePrompt<import('../types/prompts.js').FKPruningFinalDecision[]>(
+      'fk-pruning-holistic',
+      holisticContext,
+      {
+        responseFormat: 'JSON',
+        temperature: override?.temperature ?? 0.05,
+        maxTokens: override?.maxTokens ?? this.config.ai.maxTokens,
+        modelOverride: override?.model,
+        effortLevelOverride: override?.effortLevel
+      }
+    );
+
+    let removed = 0;
+    if (holisticResult.success && holisticResult.result) {
+      for (const decision of holisticResult.result) {
+        if (decision.action === 'remove' && decision.index >= 1 && decision.index <= allProposals.length) {
+          const proposal = allProposals[decision.index - 1];
+          proposal.fk.status = 'rejected';
+          removed++;
+          console.log(`[AnalysisEngine] Pruned FK: ${proposal.sourceSchema}.${proposal.sourceTable}.${proposal.sourceColumn} -> ${proposal.targetSchema}.${proposal.targetTable}.${proposal.targetColumn} — ${decision.reasoning}`);
+        }
+      }
+    } else {
+      console.log(`[AnalysisEngine] Holistic pruning failed: ${holisticResult.errorMessage}. Falling back to pass 1 proposals.`);
+      // Fallback: apply all pass 1 proposals directly
+      for (const proposal of allProposals) {
+        proposal.fk.status = 'rejected';
+        removed++;
+      }
+    }
+
+    const kept = allFKs.length - removed;
+    console.log(`[AnalysisEngine] FK pruning complete: ${removed} removed, ${kept} kept (model: ${effectiveModel})`);
+    this.onProgress('FK pruning complete', { removed, kept, model: effectiveModel });
+
+    // Save state
+    this.stateManager.updateSummary(state);
+    await this.stateManager.save(state);
+
+    return { removed, kept };
+  }
+
+  /**
    * Process a single dependency level
    */
   public async processLevel(

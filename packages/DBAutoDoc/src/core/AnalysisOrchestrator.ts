@@ -354,6 +354,17 @@ export class AnalysisOrchestrator {
         await analysisEngine.performCrossSchemaSanityCheck(state, run);
       }
 
+      // FK pruning: lock high-confidence FKs as interim ground truth, then prune the rest
+      if (state.phases.keyDetection && this.config.ai.modelOverrides?.['fkPruning']) {
+        const { locked, unlocked } = analysisEngine.lockInterimGroundTruth(state);
+        if (unlocked > 0) {
+          const { removed, kept } = await analysisEngine.pruneForeignKeys(state, run);
+          this.onProgress('FK pruning results', { locked, removed, kept });
+        }
+        stateManager.updateSummary(state);
+        await stateManager.save(state);
+      }
+
       // Complete run
       if (!converged) {
         const reason = guardrailExceeded

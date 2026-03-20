@@ -85,6 +85,23 @@ export interface AIConfig {
   requestsPerMinute?: number;
   effortLevel?: number; // Optional effort level 1-100 (1=lowest, 100=highest). Not all models support this.
   pricing?: TokenPricingConfig;
+  /**
+   * Per-purpose model overrides. Keys are purpose names (e.g., "fkPruning").
+   * Each override can specify a different model, temperature, maxTokens, and effortLevel.
+   * If a purpose is not listed, the default model/settings from the parent AIConfig are used.
+   */
+  modelOverrides?: Record<string, ModelOverride>;
+}
+
+/**
+ * Override settings for a specific purpose (e.g., FK pruning with a stronger model).
+ * Only the fields specified here will override the defaults from AIConfig.
+ */
+export interface ModelOverride {
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  effortLevel?: number;
 }
 
 /**
