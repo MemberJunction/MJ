@@ -83,8 +83,58 @@ Run each gate individually to measure per-gate impact:
 - Stats false positives eliminated (target: 61 → <15)
 - Overall FK precision improvement
 
+### Gate 5: Fan-Out Limiter (HARD GATE)
+
+**Rule**: When a source column has more than 3 FK candidate targets, sort by confidence descending and keep only the top 3. Drop the rest.
+
+**Rationale**: When `BusinessEntityID` exists in 9 tables, the stats phase generates 9 candidates. In AdventureWorks data, the correct FK is always ranked 1st, 2nd, or 3rd by confidence. The remaining targets are siblings or cousins that happen to share the column name.
+
+**Location**: `FKDetector.detectFKCandidates()` — after collecting per-column candidates, before adding to the main list.
+
+**Expected Impact**: Eliminates ~17 false positives. Zero true positive harm verified — all correct FKs rank in top 3 for their source column.
+
+### Gate 6: Value Overlap Floor at 75% (HARD GATE — supersedes Gate 2)
+
+**Rule**: If less than 75% of source column values exist in the target column, reject the candidate. Replaces the earlier Gate 2 (0% floor).
+
+**Rationale**: A real FK should have near-perfect value containment. Orphaned records occur in databases without enforced referential integrity, so 100% is too strict, but 75% provides generous headroom. False positives in the 0.4%-7% overlap range are coincidental matches from unrelated columns.
+
+**Location**: `FKDetector.analyzeFKCandidate()` — early return after value overlap computation.
+
+**Expected Impact**: Eliminates ~8 false positives. Zero true positive harm — all correct stats FKs have 100% overlap in AdventureWorks.
+
+### Gate 7: Sibling Deduplication — DEFERRED
+
+**Rule**: When multiple targets for the same source column share CARD~1 and high overlap, keep only the one with the highest target distinct count (likely the root table).
+
+**Status**: Deferred. Analysis showed it would lose 1 correct FK (`emailaddress.businessentityid → person.businessentityid`) because `BusinessEntity` has more distinct values than `Person` (inheritance pattern). The LLM handles this semantic distinction well during iterative analysis.
+
+### Gate 8: Source Column is Discovered PK — Skip FK Generation (HARD GATE)
+
+**Rule**: If the source column is a confirmed PK of the source table, do not generate FK candidates for it. PK-as-FK (identifying relationships) are rare and require semantic reasoning, so the LLM handles these during table analysis iterations.
+
+**Location**: `FKDetector.detectFKCandidates()` — early continue in the column loop.
+
+**Expected Impact**: Zero impact on AdventureWorks (existing gates already eliminated these), but provides a safety net for other databases where PK columns might otherwise generate reverse-direction false positives.
+
+## Cumulative Impact (AdventureWorks2022)
+
+| Gate | FPs Eliminated | Correct FKs Lost | Status |
+|------|---------------|-------------------|--------|
+| G1: Target PK-eligible | ~47 | 0 | Implemented |
+| G2: Zero overlap (superseded by G6) | 3 | 0 | Superseded |
+| G3: Rowguid target filter | ~3 | 0 | Implemented |
+| G4: Row-count ratio multiplier | ~10-20 | 0 | Implemented |
+| G5: Fan-out top-3 | ~17 | 0 | Implemented |
+| G6: Overlap floor 75% | ~8 | 0 | Implemented |
+| G7: Sibling dedup | ~13 | 1 | Deferred |
+| G8: Source-is-PK skip | 0 (AW) | 0 | Implemented |
+
+**Net result**: Stats false positives reduced from 61 → ~15 (75% reduction) with zero correct FK loss.
+
 ## Future Considerations
 
 - These gates operate on the statistical discovery phase only. The LLM's ability to create FKs during table analysis is unaffected.
 - Gate 1 depends on the quality of column statistics. If `ColumnStatsCache` doesn't have stats for a target column, the gate should be skipped (fail-open) rather than blocking the candidate.
 - Gate 4 multipliers may need tuning on different databases. The 0.1/0.5/2.0/5.0 thresholds are based on AdventureWorks patterns and should be validated on MSTA and other databases.
+- Gate 6 threshold (75%) provides generous headroom for messy databases. Could be tuned per-database if needed, though 75% should be universally safe.

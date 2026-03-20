@@ -63,8 +63,11 @@ export class FKDetector {
         pk.columnNames.includes(sourceColumn.name)
       );
 
+      // GATE 8: Source column is a discovered PK — skip FK candidate generation.
+      // PK-as-FK (identifying relationships) are rare and require semantic reasoning,
+      // so we leave those for the LLM to propose during table analysis iterations.
       if (isPK) {
-        console.log(`[FKDetector]   Skip ${sourceColumn.name} - is a PK`);
+        console.log(`[FKDetector] GATE8 skip: ${sourceColumn.name} - source is a discovered PK (LLM can propose if identifying relationship)`);
         continue;
       }
 
@@ -94,7 +97,8 @@ export class FKDetector {
         console.log(`[FKDetector]     Targets: ${potentialTargets.map(t => `${t.schemaName}.${t.tableName}.${t.columnName}`).join(', ')}`);
       }
 
-      // Analyze each potential target
+      // Analyze each potential target, collect per-column candidates
+      const columnCandidates: FKCandidate[] = [];
       for (const target of potentialTargets) {
         const candidate = await this.analyzeFKCandidate(
           sourceSchema,
@@ -112,10 +116,23 @@ export class FKDetector {
         }
 
         if (candidate && candidate.confidence >= this.config.confidence.foreignKeyMinimum * 100) {
-          candidates.push(candidate);
+          columnCandidates.push(candidate);
           console.log(`[FKDetector]     ✓ Added FK candidate: ${sourceColumn.name} -> ${target.tableName}.${target.columnName}`);
         }
       }
+
+      // GATE 5: Fan-out limiter — keep only top 3 candidates per source column
+      // When a column matches many targets (e.g., BusinessEntityID in 9 tables),
+      // the correct FK is almost always among the top 3 by confidence.
+      const MAX_TARGETS_PER_COLUMN = 3;
+      if (columnCandidates.length > MAX_TARGETS_PER_COLUMN) {
+        columnCandidates.sort((a, b) => b.confidence - a.confidence);
+        const cut = columnCandidates.length - MAX_TARGETS_PER_COLUMN;
+        console.log(`[FKDetector] GATE5: ${sourceColumn.name} has ${columnCandidates.length} targets, keeping top ${MAX_TARGETS_PER_COLUMN}, cutting ${cut}`);
+        columnCandidates.length = MAX_TARGETS_PER_COLUMN;
+      }
+
+      candidates.push(...columnCandidates);
     }
 
     const elapsed = ((Date.now() - tableStartTime) / 1000).toFixed(1);
@@ -366,9 +383,13 @@ export class FKDetector {
       this.config.sampling.valueOverlapSampleSize
     );
 
-    // GATE 2: Zero value overlap = guaranteed not an FK
-    if (overlapResult === 0) {
-      console.log(`[FKDetector] GATE2 reject: ${sourceColumn.name} -> ${targetSchema}.${targetTable}.${targetColumn} (zero value overlap)`);
+    // GATE 6 (supersedes GATE 2): Value overlap must be >= 75%
+    // A real FK should have near-perfect containment — source values must exist in target.
+    // Allows some orphaned records (common in DBs without enforced referential integrity)
+    // but rejects coincidental overlap from unrelated columns.
+    const MIN_VALUE_OVERLAP = 0.75;
+    if (overlapResult < MIN_VALUE_OVERLAP) {
+      console.log(`[FKDetector] GATE6 reject: ${sourceColumn.name} -> ${targetSchema}.${targetTable}.${targetColumn} (value overlap ${(overlapResult * 100).toFixed(1)}% < ${MIN_VALUE_OVERLAP * 100}% minimum)`);
       return null;
     }
 
