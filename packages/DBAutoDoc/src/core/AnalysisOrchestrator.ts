@@ -297,12 +297,6 @@ export class AnalysisOrchestrator {
       // Start analysis
       analysisEngine.startAnalysis(run);
 
-      // One-shot FK evaluation — uses potentially stronger model to confirm/reject
-      // discovery candidates before the main description iteration loop
-      if (state.phases.keyDetection) {
-        await analysisEngine.evaluateFKCandidates(state, run);
-      }
-
       // Main iteration loop
       const maxIterations = this.maxIterationsOverride ?? this.config.analysis.convergence.maxIterations;
       let converged = false;

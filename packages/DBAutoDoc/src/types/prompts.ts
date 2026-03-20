@@ -31,16 +31,6 @@ export interface ForeignKeyPromptResult {
   referencesTable: string;
   referencesColumn: string;
   confidence: number;
-  /** LLM verdict: "confirm" to keep, "reject" to discard. Only candidates from discovery are accepted. */
-  verdict?: 'confirm' | 'reject';
-}
-
-/** Result from the dedicated FK evaluation prompt (one-shot, higher-end model) */
-export interface FKEvaluationResult {
-  index: number;
-  verdict: 'confirm';
-  confidence: number;
-  reasoning: string;
 }
 
 export interface ParentTableInsight {

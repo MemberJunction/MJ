@@ -369,30 +369,11 @@ Processing in this order allows child tables to benefit from parent table contex
 
 ### Relationship Discovery
 
-For legacy databases missing primary/foreign key constraints, DBAutoDoc uses a sophisticated
-multi-stage algorithm to discover PKs and FKs. See [RELATIONSHIP_DISCOVERY_ALGORITHM.md](./docs/RELATIONSHIP_DISCOVERY_ALGORITHM.md) for the full technical reference.
-
-**Primary Key Detection Pipeline:**
-1. **Eligibility Gate** -- Hard rejection of columns with nulls, blanks, or non-unique values
-2. **Statistical Scoring** -- Weighted model: uniqueness (50%), naming (20%), data type (15%), pattern (15%)
-3. **Column-Order Demotion** -- Secondary UUID columns (e.g., rowguid) appearing after a strong PK candidate are demoted
-4. **FK-Pattern Penalty** -- Three-tier penalty distinguishes PK-as-FK identifying relationships from true FKs
-5. **Table-Name Tiebreaker** -- When multiple candidates tie, prefer the one matching the table name
-6. **Composite Detection** -- ID/KEY columns plus date columns (for history tables) tested for combined uniqueness
-7. **LLM Validation** -- Optional reasoning phase for borderline candidates
-
-**Foreign Key Detection Pipeline:**
-1. **Column Pre-filtering** -- Type-based rejection (dates, booleans, floats) and value sampling (emails, URLs, long text)
-2. **Target Discovery** -- Three pattern passes: column-name-to-table, PK name similarity, same-column-name matching
-3. **Deduplication** -- Remove duplicate targets from multiple pattern passes
-4. **Containment Analysis** -- Steep curve requiring near-perfect value containment (>90% minimum)
-5. **Target Ranking** -- Single-column PK targets get +15 bonus; non-PK targets get -15 penalty
-6. **LLM Validation** -- Optional verification that relationships make business sense
-
-**Key Features:**
-- **PK-as-FK Support** -- Detects identifying relationships where a column is both PK and FK
-- **Backpropagation** -- Refines parent table analysis based on child relationships
-- **Configurable Confidence Thresholds** -- Separate minimums for PK (70%) and FK (60%) candidates
+For legacy databases missing primary/foreign key constraints, DBAutoDoc can:
+- **Detect Primary Keys** using statistical analysis (uniqueness, nullability, cardinality)
+- **Find Foreign Keys** using value overlap analysis and naming patterns
+- **LLM Validation** to verify discovered relationships make business sense
+- **Backpropagation** to refine parent table analysis based on child relationships
 
 Triggered automatically when:
 - Tables lack primary key constraints
@@ -1178,7 +1159,6 @@ Comprehensive documentation is available in the `docs/` folder:
 - **[ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - Technical architecture and design
 - **[API_USAGE.md](./docs/API_USAGE.md)** - Programmatic API examples
 - **[GUARDRAILS.md](./docs/GUARDRAILS.md)** - Guardrails system documentation
-- **[RELATIONSHIP_DISCOVERY_ALGORITHM.md](./docs/RELATIONSHIP_DISCOVERY_ALGORITHM.md)** - PK/FK detection algorithm technical reference
 - **[CHANGES.md](./docs/CHANGES.md)** - Recent changes and enhancements
 
 ## Architecture

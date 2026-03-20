@@ -46,16 +46,6 @@ export interface AnalysisMetrics {
   iterationCount: number;
 }
 
-/** FK candidate passed to the prompt for LLM evaluation (confirm/reject only) */
-export interface FKCandidateForPrompt {
-  sourceColumn: string;
-  targetSchema: string;
-  targetTable: string;
-  targetColumn: string;
-  confidence: number;
-  valueOverlap: number;
-}
-
 export interface TableAnalysisContext {
   schema: string;
   table: string;
@@ -70,8 +60,6 @@ export interface TableAnalysisContext {
   allTables?: Array<{ schema: string; name: string }>;
   /** Ground truth for this table from config — AI must align with this */
   groundTruth?: TableGroundTruthContext;
-  /** FK candidates from statistical discovery — LLM may only confirm or reject these */
-  fkCandidates?: FKCandidateForPrompt[];
 }
 
 export interface TableGroundTruthContext {

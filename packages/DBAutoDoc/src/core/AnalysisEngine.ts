@@ -4,7 +4,7 @@
  */
 
 import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
-import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext, FKCandidateForPrompt } from '../types/analysis.js';
+import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext } from '../types/analysis.js';
 import {
   TableAnalysisPromptResult,
   SchemaSanityCheckPromptResult,
@@ -73,184 +73,6 @@ export class AnalysisEngine {
     this.startTime = Date.now();
     this.currentRun = run;
     this.guardrailsManager.startPhase('analysis');
-  }
-
-  /**
-   * Per-table FK evaluation using a potentially stronger model.
-   * Runs after discovery, before the main iteration loop.
-   * Evaluates each table's FK candidates independently so the LLM gets
-   * focused context per table rather than a mega-prompt with all 200+ candidates.
-   */
-  public async evaluateFKCandidates(
-    state: DatabaseDocumentation,
-    run: AnalysisRun
-  ): Promise<void> {
-    const discoveryPhase = state.phases.keyDetection;
-    if (!discoveryPhase) return;
-
-    const allCandidates = discoveryPhase.discovered.foreignKeys.filter(fk => fk.status !== 'rejected');
-    if (allCandidates.length === 0) return;
-
-    // Resolve model override for FK evaluation
-    const override = this.config.ai.modelOverrides?.['fkEvaluation'];
-    const effectiveModel = override?.model ?? this.config.ai.model;
-
-    // Phase 1: Auto-confirm high-overlap candidates, auto-reject low-overlap ones.
-    // Only send borderline candidates (50-90% overlap) to the LLM for evaluation.
-    const HIGH_OVERLAP_THRESHOLD = 0.90;
-    const LOW_OVERLAP_THRESHOLD = 0.50;
-    let autoConfirmed = 0;
-    let autoRejected = 0;
-    const borderlineCandidates: typeof allCandidates = [];
-
-    for (const fk of allCandidates) {
-      const overlap = fk.evidence.valueOverlap;
-      if (overlap >= HIGH_OVERLAP_THRESHOLD) {
-        fk.status = 'confirmed';
-        fk.validatedByLLM = false;
-        autoConfirmed++;
-        console.log(`[AnalysisEngine] Auto-confirmed FK (overlap ${(overlap * 100).toFixed(1)}%): ${fk.schemaName}.${fk.sourceTable}.${fk.sourceColumn} -> ${fk.targetSchema}.${fk.targetTable}.${fk.targetColumn}`);
-      } else if (overlap < LOW_OVERLAP_THRESHOLD) {
-        fk.status = 'rejected';
-        fk.validatedByLLM = false;
-        autoRejected++;
-      } else {
-        borderlineCandidates.push(fk);
-      }
-    }
-
-    console.log(`[AnalysisEngine] FK triage: ${autoConfirmed} auto-confirmed (≥${HIGH_OVERLAP_THRESHOLD * 100}%), ${autoRejected} auto-rejected (<${LOW_OVERLAP_THRESHOLD * 100}%), ${borderlineCandidates.length} borderline → LLM`);
-    this.onProgress('FK triage complete', { autoConfirmed, autoRejected, borderline: borderlineCandidates.length });
-
-    // Phase 2: Send borderline candidates to LLM for per-table evaluation
-    // Group borderline candidates by source table
-    const candidatesByTable = new Map<string, typeof borderlineCandidates>();
-    for (const fk of borderlineCandidates) {
-      const key = `${fk.schemaName}.${fk.sourceTable}`;
-      if (!candidatesByTable.has(key)) {
-        candidatesByTable.set(key, []);
-      }
-      candidatesByTable.get(key)!.push(fk);
-    }
-
-    const tableCount = candidatesByTable.size;
-    this.onProgress('Evaluating borderline FK candidates per table', {
-      tables: tableCount,
-      borderlineCandidates: borderlineCandidates.length,
-      model: effectiveModel
-    });
-
-    // Build table info for context (shared across all calls)
-    const allTables = state.schemas.flatMap(s =>
-      s.tables.map(t => {
-        const pk = discoveryPhase.discovered.primaryKeys.find(
-          p => p.schemaName === s.name && p.tableName === t.name
-        );
-        return {
-          schema: s.name,
-          name: t.name,
-          description: t.description || '',
-          pk: pk ? pk.columnNames.join(', ') : ''
-        };
-      })
-    );
-
-    let totalConfirmed = 0;
-    let totalRejected = 0;
-    let tableIndex = 0;
-
-    for (const [tableKey, tableCandidates] of candidatesByTable.entries()) {
-      tableIndex++;
-      if (tableIndex % 5 === 1 || tableIndex === tableCount) {
-        this.onProgress(`FK evaluation: table ${tableIndex}/${tableCount} (${tableKey})`);
-      }
-
-      const candidates = tableCandidates.map(fk => ({
-        sourceSchema: fk.schemaName,
-        sourceTable: fk.sourceTable,
-        sourceColumn: fk.sourceColumn,
-        targetSchema: fk.targetSchema,
-        targetTable: fk.targetTable,
-        targetColumn: fk.targetColumn,
-        confidence: fk.confidence,
-        valueOverlap: fk.evidence.valueOverlap,
-        nullPercentage: fk.evidence.nullPercentage,
-        cardinalityRatio: fk.evidence.cardinalityRatio
-      }));
-
-      const context = {
-        allTables,
-        candidates,
-        seedContext: state.seedContext ?? this.config.seedContext
-      };
-
-      const result = await this.promptEngine.executePrompt<import('../types/prompts.js').FKEvaluationResult[]>(
-        'fk-evaluation',
-        context,
-        {
-          responseFormat: 'JSON',
-          temperature: override?.temperature ?? 0.05,
-          maxTokens: override?.maxTokens ?? this.config.ai.maxTokens,
-          modelOverride: override?.model,
-          effortLevelOverride: override?.effortLevel
-        }
-      );
-
-      if (!result.success || !result.result) {
-        console.log(`[AnalysisEngine] FK evaluation failed for ${tableKey}: ${result.errorMessage}`);
-        continue;
-      }
-
-      // Build set of confirmed indices (1-based from prompt)
-      const confirmedIndices = new Set<number>();
-      for (const evaluation of result.result) {
-        if (evaluation.verdict === 'confirm') {
-          confirmedIndices.add(evaluation.index);
-        }
-      }
-
-      // Apply results to this table's candidates
-      for (let i = 0; i < tableCandidates.length; i++) {
-        const fk = tableCandidates[i];
-        if (confirmedIndices.has(i + 1)) {
-          fk.status = 'confirmed';
-          fk.validatedByLLM = true;
-          totalConfirmed++;
-        } else {
-          fk.status = 'rejected';
-          fk.validatedByLLM = true;
-          totalRejected++;
-        }
-      }
-
-      console.log(`[AnalysisEngine] FK eval ${tableKey}: ${confirmedIndices.size} confirmed, ${tableCandidates.length - confirmedIndices.size} rejected`);
-    }
-
-    const grandConfirmed = autoConfirmed + totalConfirmed;
-    const grandRejected = autoRejected + totalRejected;
-    console.log(`[AnalysisEngine] FK evaluation complete: ${grandConfirmed} confirmed (${autoConfirmed} auto + ${totalConfirmed} LLM), ${grandRejected} rejected (${autoRejected} auto + ${totalRejected} LLM)`);
-    this.onProgress('FK evaluation complete', { confirmed: grandConfirmed, rejected: grandRejected, autoConfirmed, llmConfirmed: totalConfirmed, model: effectiveModel });
-
-    // Update column-level FK flags based on confirmed FKs
-    for (const fk of allCandidates) {
-      if (fk.status === 'confirmed') {
-        const column = this.findColumnInState(state, fk.schemaName, fk.sourceTable, fk.sourceColumn);
-        if (column) {
-          column.isForeignKey = true;
-          column.foreignKeyReferences = {
-            schema: fk.targetSchema,
-            table: fk.targetTable,
-            column: fk.targetColumn,
-            referencedColumn: fk.targetColumn
-          };
-        }
-        this.updateTableDependencies(state, fk.schemaName, fk.sourceTable, fk.targetSchema, fk.targetTable, fk.sourceColumn, fk.targetColumn);
-      }
-    }
-
-    // Save state
-    this.stateManager.updateSummary(state);
-    await this.stateManager.save(state);
   }
 
   /**
@@ -400,8 +222,15 @@ export class AnalysisEngine {
         }
       }
 
-      // FK evaluation is now handled by the dedicated one-shot evaluateFKCandidates()
-      // method that runs before the iteration loop, using a potentially stronger model.
+      // Process structured FK insights from LLM and feed back to discovery phase
+      if (state.phases.keyDetection && result.result.foreignKeys) {
+        this.processFKInsightsFromLLM(
+          state,
+          tableNode.schema,
+          tableNode.table,
+          result.result.foreignKeys
+        );
+      }
 
       // Update inferred business domain
       if (result.result.inferredBusinessDomain) {
@@ -489,9 +318,6 @@ export class AnalysisEngine {
     // Build ground truth context if available
     const groundTruthContext = this.buildGroundTruthContext(tableNode.schema, tableNode.table);
 
-    // Build FK candidates from discovery phase for LLM evaluation (confirm/reject only)
-    const fkCandidates = this.buildFKCandidatesForPrompt(state, tableNode.schema, tableNode.table);
-
     return {
       schema: tableNode.schema,
       table: tableNode.table,
@@ -515,37 +341,8 @@ export class AnalysisEngine {
       userNotes: table.userNotes,
       seedContext: state.seedContext ?? this.config.seedContext,
       allTables,
-      groundTruth: groundTruthContext,
-      fkCandidates
+      groundTruth: groundTruthContext
     };
-  }
-
-  /**
-   * Build FK candidates for the prompt from the discovery phase.
-   * Only candidates for this specific table are included so the LLM can confirm or reject them.
-   */
-  private buildFKCandidatesForPrompt(
-    state: DatabaseDocumentation,
-    schemaName: string,
-    tableName: string
-  ): FKCandidateForPrompt[] {
-    const discoveryPhase = state.phases.keyDetection;
-    if (!discoveryPhase) return [];
-
-    const candidates = discoveryPhase.discovered.foreignKeys.filter(fk =>
-      fk.schemaName === schemaName &&
-      fk.sourceTable === tableName &&
-      fk.status !== 'rejected'
-    );
-
-    return candidates.map(fk => ({
-      sourceColumn: fk.sourceColumn,
-      targetSchema: fk.targetSchema,
-      targetTable: fk.targetTable,
-      targetColumn: fk.targetColumn,
-      confidence: fk.confidence / 100,
-      valueOverlap: fk.evidence.valueOverlap
-    }));
   }
 
   /**
@@ -1019,31 +816,14 @@ export class AnalysisEngine {
         referencesTable = parts[parts.length - 1];
       }
 
-      // If LLM explicitly rejected this candidate, demote it in the discovery set
-      if (fk.verdict === 'reject') {
-        const rejectedFK = discoveryPhase.discovered.foreignKeys.find(existing =>
-          existing.schemaName === schemaName &&
-          existing.sourceTable === tableName &&
-          existing.sourceColumn === columnName &&
-          existing.targetTable === referencesTable &&
-          existing.targetColumn === referencesColumn
-        );
-        if (rejectedFK) {
-          rejectedFK.status = 'rejected';
-          rejectedFK.validatedByLLM = true;
-          console.log(`[AnalysisEngine] LLM rejected FK: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn}`);
-        }
-        continue;
-      }
-
       // Create feedback for this FK
       const feedback: import('../types/discovery.js').AnalysisToDiscoveryFeedback = {
-        type: 'confidence_change',
-        evidence: `LLM-evaluated FK: ${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn} (confidence: ${confidence})`,
+        type: 'new_relationship',
+        evidence: `LLM-identified FK: ${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn} (confidence: ${confidence})`,
         tableName,
         columnName,
         affectedCandidates: [],
-        recommendation: 'upgrade_confidence',
+        recommendation: 'add_new',
         newRelationship: {
           targetTable: `${referencesSchema}.${referencesTable}`,
           targetColumn: referencesColumn
@@ -1076,19 +856,14 @@ export class AnalysisEngine {
         console.log(`[AnalysisEngine] FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}, rejecting unconfirmed PK`);
       }
 
-      // ARCHITECTURAL RULE: LLM may only confirm/reject existing FK candidates from
-      // statistical discovery. It may NOT create new FKs. The discovery phase defines
-      // the full universe of candidates; the LLM narrows it.
+      // Check if we already have this FK - boost confidence
       const existingFK = discoveryPhase.discovered.foreignKeys.find(fk =>
         fk.schemaName === schemaName &&
         fk.sourceTable === tableName &&
-        fk.sourceColumn === columnName &&
-        fk.targetTable === referencesTable &&
-        fk.targetColumn === referencesColumn
+        fk.sourceColumn === columnName
       );
 
-      if (existingFK) {
-        // LLM confirms an existing candidate — boost confidence and promote to confirmed
+      if (existingFK && existingFK.status === 'candidate') {
         existingFK.validatedByLLM = true;
         existingFK.status = 'confirmed';
         existingFK.confidence = Math.min(existingFK.confidence + 20, 100);
@@ -1112,10 +887,49 @@ export class AnalysisEngine {
 
         console.log(`[AnalysisEngine] Confirmed FK: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn}, confidence: ${existingFK.confidence}`);
       } else {
-        // LLM suggested an FK that was NOT in the discovery set — hard reject.
-        // The discovery phase already tested all statistically plausible candidates.
-        console.log(`[AnalysisEngine] BLOCKED new FK from LLM (not in discovery set): ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn}`);
-        continue;
+        // Create new FK from LLM insight
+        const newFK: import('../types/discovery.js').FKCandidate = {
+          schemaName,
+          sourceTable: tableName,
+          sourceColumn: columnName,
+          targetSchema: referencesSchema,
+          targetTable: referencesTable,
+          targetColumn: referencesColumn,
+          confidence: Math.round(confidence * 100),
+          evidence: {
+            namingMatch: 0.9,
+            valueOverlap: 0,
+            cardinalityRatio: 0,
+            dataTypeMatch: true,
+            nullPercentage: 0,
+            sampleSize: 0,
+            orphanCount: 0,
+            warnings: ['Created from structured LLM output']
+          },
+          discoveredInIteration: 1,
+          validatedByLLM: true,
+          status: 'confirmed'
+        };
+
+        discoveryPhase.discovered.foreignKeys.push(newFK);
+        feedback.newConfidence = newFK.confidence;
+        feedback.affectedCandidates.push(`FK:${schemaName}.${tableName}.${columnName}`);
+
+        const column = this.findColumnInState(state, schemaName, tableName, columnName);
+        if (column) {
+          column.isForeignKey = true;
+          column.foreignKeyReferences = {
+            schema: referencesSchema,
+            table: referencesTable,
+            column: referencesColumn,
+            referencedColumn: referencesColumn
+          };
+        }
+
+        // Update table-level dependsOn and dependents arrays for ERD generation
+        this.updateTableDependencies(state, schemaName, tableName, referencesSchema, referencesTable, columnName, referencesColumn);
+
+        console.log(`[AnalysisEngine] Created FK from LLM: ${schemaName}.${tableName}.${columnName} -> ${referencesSchema}.${referencesTable}.${referencesColumn}`);
       }
 
       discoveryPhase.feedbackFromAnalysis.push(feedback);
