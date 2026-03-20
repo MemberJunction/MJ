@@ -95,9 +95,37 @@ export class AnalysisEngine {
     const override = this.config.ai.modelOverrides?.['fkEvaluation'];
     const effectiveModel = override?.model ?? this.config.ai.model;
 
-    // Group candidates by source table
-    const candidatesByTable = new Map<string, typeof allCandidates>();
+    // Phase 1: Auto-confirm high-overlap candidates, auto-reject low-overlap ones.
+    // Only send borderline candidates (50-90% overlap) to the LLM for evaluation.
+    const HIGH_OVERLAP_THRESHOLD = 0.90;
+    const LOW_OVERLAP_THRESHOLD = 0.50;
+    let autoConfirmed = 0;
+    let autoRejected = 0;
+    const borderlineCandidates: typeof allCandidates = [];
+
     for (const fk of allCandidates) {
+      const overlap = fk.evidence.valueOverlap;
+      if (overlap >= HIGH_OVERLAP_THRESHOLD) {
+        fk.status = 'confirmed';
+        fk.validatedByLLM = false;
+        autoConfirmed++;
+        console.log(`[AnalysisEngine] Auto-confirmed FK (overlap ${(overlap * 100).toFixed(1)}%): ${fk.schemaName}.${fk.sourceTable}.${fk.sourceColumn} -> ${fk.targetSchema}.${fk.targetTable}.${fk.targetColumn}`);
+      } else if (overlap < LOW_OVERLAP_THRESHOLD) {
+        fk.status = 'rejected';
+        fk.validatedByLLM = false;
+        autoRejected++;
+      } else {
+        borderlineCandidates.push(fk);
+      }
+    }
+
+    console.log(`[AnalysisEngine] FK triage: ${autoConfirmed} auto-confirmed (≥${HIGH_OVERLAP_THRESHOLD * 100}%), ${autoRejected} auto-rejected (<${LOW_OVERLAP_THRESHOLD * 100}%), ${borderlineCandidates.length} borderline → LLM`);
+    this.onProgress('FK triage complete', { autoConfirmed, autoRejected, borderline: borderlineCandidates.length });
+
+    // Phase 2: Send borderline candidates to LLM for per-table evaluation
+    // Group borderline candidates by source table
+    const candidatesByTable = new Map<string, typeof borderlineCandidates>();
+    for (const fk of borderlineCandidates) {
       const key = `${fk.schemaName}.${fk.sourceTable}`;
       if (!candidatesByTable.has(key)) {
         candidatesByTable.set(key, []);
@@ -106,9 +134,9 @@ export class AnalysisEngine {
     }
 
     const tableCount = candidatesByTable.size;
-    this.onProgress('Evaluating FK candidates per table', {
+    this.onProgress('Evaluating borderline FK candidates per table', {
       tables: tableCount,
-      totalCandidates: allCandidates.length,
+      borderlineCandidates: borderlineCandidates.length,
       model: effectiveModel
     });
 
@@ -198,8 +226,10 @@ export class AnalysisEngine {
       console.log(`[AnalysisEngine] FK eval ${tableKey}: ${confirmedIndices.size} confirmed, ${tableCandidates.length - confirmedIndices.size} rejected`);
     }
 
-    console.log(`[AnalysisEngine] FK evaluation complete: ${totalConfirmed} confirmed, ${totalRejected} rejected (model: ${effectiveModel})`);
-    this.onProgress('FK evaluation complete', { confirmed: totalConfirmed, rejected: totalRejected, model: effectiveModel });
+    const grandConfirmed = autoConfirmed + totalConfirmed;
+    const grandRejected = autoRejected + totalRejected;
+    console.log(`[AnalysisEngine] FK evaluation complete: ${grandConfirmed} confirmed (${autoConfirmed} auto + ${totalConfirmed} LLM), ${grandRejected} rejected (${autoRejected} auto + ${totalRejected} LLM)`);
+    this.onProgress('FK evaluation complete', { confirmed: grandConfirmed, rejected: grandRejected, autoConfirmed, llmConfirmed: totalConfirmed, model: effectiveModel });
 
     // Update column-level FK flags based on confirmed FKs
     for (const fk of allCandidates) {
