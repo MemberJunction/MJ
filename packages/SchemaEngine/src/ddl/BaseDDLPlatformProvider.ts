@@ -1,6 +1,10 @@
 /**
  * BaseDDLPlatformProvider — abstract base class for platform-specific DDL generation.
  *
+ * Subclasses may optionally hold a reference to the corresponding SQLDialect
+ * from @memberjunction/sql-dialect and delegate shared operations (quoting,
+ * comments, batch separators) rather than reimplementing them.
+ *
  * To add support for a new database platform (e.g., MySQL):
  *   1. Create a new file (e.g., MySqlDDLProvider.ts)
  *   2. Extend BaseDDLPlatformProvider
@@ -12,8 +16,16 @@
  * in DDLGenerator itself when adding new platforms.
  */
 import type { ColumnDefinition, ColumnModification } from '../interfaces.js';
+import type { SQLDialect } from '@memberjunction/sql-dialect';
 
 export abstract class BaseDDLPlatformProvider {
+  /**
+   * Optional reference to the SQLDialect for this platform.
+   * When set, shared operations (QuoteIdentifier, DescribeTable, DescribeColumn)
+   * delegate to it, ensuring consistency with the rest of MJ's SQL generation.
+   */
+  protected Dialect: SQLDialect | null = null;
+
   /** Quote an identifier for this platform (e.g., [name] or "name"). */
   abstract QuoteIdentifier(name: string): string;
 
@@ -49,6 +61,14 @@ export abstract class BaseDDLPlatformProvider {
    * Subclasses return only their platform's system prefixes.
    */
   abstract PlatformReservedPrefixes(): string[];
+
+  /**
+   * Returns the batch separator for this platform.
+   * Delegates to SQLDialect if available; subclasses can override.
+   */
+  BatchSeparator(): string {
+    return this.Dialect?.BatchSeparator() ?? '';
+  }
 
   /**
    * All reserved name prefixes — MJ common + platform-specific.

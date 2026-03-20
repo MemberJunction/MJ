@@ -1,6 +1,15 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType } from "type-graphql";
-import { BaseEntity, CompositeKey, Metadata, RunView, UserInfo, LogError } from "@memberjunction/core";
-import { MJCompanyIntegrationEntity, MJIntegrationEntity } from "@memberjunction/core-entities";
+import { CompositeKey, Metadata, RunView, UserInfo, LogError } from "@memberjunction/core";
+import {
+    MJCompanyIntegrationEntity,
+    MJIntegrationEntity,
+    MJCredentialEntity,
+    MJCompanyIntegrationEntityMapEntity,
+    MJCompanyIntegrationFieldMapEntity,
+    MJCompanyIntegrationRunEntity,
+    MJScheduledJobEntity,
+    MJScheduledJobTypeEntity
+} from "@memberjunction/core-entities";
 import {
     BaseIntegrationConnector,
     ConnectorFactory,
@@ -646,28 +655,28 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const md = new Metadata();
 
             // 1. Create Credential record with encrypted values
-            const credential = await md.GetEntityObject<BaseEntity>('MJ: Credentials', user);
+            const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
             credential.NewRecord();
-            credential.Set('CredentialTypeID', input.CredentialTypeID);
-            credential.Set('Name', input.CredentialName);
-            credential.Set('Values', input.CredentialValues);
-            credential.Set('IsActive', true);
+            credential.CredentialTypeID = input.CredentialTypeID;
+            credential.Name = input.CredentialName;
+            credential.Values = input.CredentialValues;
+            credential.IsActive = true;
 
             const credSaved = await credential.Save();
             if (!credSaved) {
                 return { Success: false, Message: 'Failed to create Credential record' };
             }
-            const credentialID = credential.Get('ID') as string;
+            const credentialID = credential.ID;
 
             // 2. Create CompanyIntegration linked to the Credential
-            const ci = await md.GetEntityObject<BaseEntity>('MJ: Company Integrations', user);
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             ci.NewRecord();
-            ci.Set('IntegrationID', input.IntegrationID);
-            ci.Set('CompanyID', input.CompanyID);
-            ci.Set('CredentialID', credentialID);
-            ci.Set('IsActive', true);
-            if (input.ExternalSystemID) ci.Set('ExternalSystemID', input.ExternalSystemID);
-            if (input.Configuration) ci.Set('Configuration', input.Configuration);
+            ci.IntegrationID = input.IntegrationID;
+            ci.CompanyID = input.CompanyID;
+            ci.CredentialID = credentialID;
+            ci.IsActive = true;
+            if (input.ExternalSystemID) ci.ExternalSystemID = input.ExternalSystemID;
+            if (input.Configuration) ci.Configuration = input.Configuration;
 
             const saved = await ci.Save();
             if (!saved) return { Success: false, Message: 'Failed to save CompanyIntegration' };
@@ -675,7 +684,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             return {
                 Success: true,
                 Message: 'Connection created',
-                CompanyIntegrationID: ci.Get('ID') as string,
+                CompanyIntegrationID: ci.ID,
                 CredentialID: credentialID
             };
         } catch (e) {
@@ -699,26 +708,26 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const md = new Metadata();
-            const ci = await md.GetEntityObject<BaseEntity>('MJ: Company Integrations', user);
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             const loaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
             if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
 
             // Update linked Credential values if provided
             if (credentialValues) {
-                const credentialID = ci.Get('CredentialID') as string | null;
+                const credentialID = ci.CredentialID;
                 if (!credentialID) {
                     return { Success: false, Message: 'No linked Credential — use IntegrationCreateConnection first' };
                 }
-                const credential = await md.GetEntityObject<BaseEntity>('MJ: Credentials', user);
+                const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
                 const credLoaded = await credential.InnerLoad(CompositeKey.FromID(credentialID));
                 if (!credLoaded) return { Success: false, Message: 'Linked Credential not found' };
-                credential.Set('Values', credentialValues);
+                credential.Values = credentialValues;
                 if (!await credential.Save()) return { Success: false, Message: 'Failed to update Credential' };
             }
 
             let dirty = false;
-            if (configuration !== undefined && configuration !== null) { ci.Set('Configuration', configuration); dirty = true; }
-            if (externalSystemID !== undefined && externalSystemID !== null) { ci.Set('ExternalSystemID', externalSystemID); dirty = true; }
+            if (configuration !== undefined && configuration !== null) { ci.Configuration = configuration; dirty = true; }
+            if (externalSystemID !== undefined && externalSystemID !== null) { ci.ExternalSystemID = externalSystemID; dirty = true; }
 
             if (dirty && !await ci.Save()) return { Success: false, Message: 'Failed to save CompanyIntegration' };
             return { Success: true, Message: 'Updated' };
@@ -740,10 +749,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const md = new Metadata();
-            const ci = await md.GetEntityObject<BaseEntity>('MJ: Company Integrations', user);
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             const loaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
             if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
-            ci.Set('IsActive', false);
+            ci.IsActive = false;
             if (!await ci.Save()) return { Success: false, Message: 'Failed to deactivate' };
             return { Success: true, Message: 'Deactivated' };
         } catch (e) {
@@ -768,25 +777,17 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const md = new Metadata();
-            const rv = new RunView();
 
-            // Batch resolve entity names → IDs
+            // Batch resolve entity names → IDs using cached Metadata
             const namesToResolve = entityMaps.filter(m => m.EntityName && !m.EntityID).map(m => m.EntityName as string);
             const nameToID = new Map<string, string>();
 
             if (namesToResolve.length > 0) {
                 const uniqueNames = [...new Set(namesToResolve)];
-                const nameFilter = uniqueNames.map(n => `Name='${n.replace(/'/g, "''")}'`).join(' OR ');
-                const lookupResult = await rv.RunView({
-                    EntityName: 'MJ: Entities',
-                    ExtraFilter: nameFilter,
-                    Fields: ['ID', 'Name'],
-                    ResultType: 'simple'
-                }, user);
-
-                if (lookupResult.Success) {
-                    for (const row of lookupResult.Results as Array<{ ID: string; Name: string }>) {
-                        nameToID.set(row.Name, row.ID);
+                for (const name of uniqueNames) {
+                    const entity = md.EntityByName(name);
+                    if (entity) {
+                        nameToID.set(name, entity.ID);
                     }
                 }
                 const unresolved = uniqueNames.filter(n => !nameToID.has(n));
@@ -805,31 +806,31 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     return { Success: false, Message: `No EntityID or EntityName for "${mapDef.ExternalObjectName}"`, Created: created };
                 }
 
-                const em = await md.GetEntityObject<BaseEntity>('MJ: Company Integration Entity Maps', user);
+                const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
                 em.NewRecord();
-                em.Set('CompanyIntegrationID', companyIntegrationID);
-                em.Set('ExternalObjectName', mapDef.ExternalObjectName);
-                em.Set('EntityID', entityID);
-                em.Set('SyncDirection', mapDef.SyncDirection || 'Pull');
-                em.Set('Priority', mapDef.Priority || 0);
-                em.Set('Status', 'Active');
+                em.CompanyIntegrationID = companyIntegrationID;
+                em.ExternalObjectName = mapDef.ExternalObjectName;
+                em.EntityID = entityID;
+                em.SyncDirection = (mapDef.SyncDirection as 'Bidirectional' | 'Pull' | 'Push') || 'Pull';
+                em.Priority = mapDef.Priority || 0;
+                em.Status = 'Active';
 
                 if (!await em.Save()) {
                     return { Success: false, Message: `Failed to create map for ${mapDef.ExternalObjectName}`, Created: created };
                 }
-                const entityMapID = em.Get('ID') as string;
+                const entityMapID = em.ID;
 
                 // Create field maps if provided
                 if (mapDef.FieldMaps) {
                     for (const fmDef of mapDef.FieldMaps) {
-                        const fm = await md.GetEntityObject<BaseEntity>('MJ: Company Integration Field Maps', user);
+                        const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps', user);
                         fm.NewRecord();
-                        fm.Set('EntityMapID', entityMapID);
-                        fm.Set('SourceFieldName', fmDef.SourceFieldName);
-                        fm.Set('DestinationFieldName', fmDef.DestinationFieldName);
-                        fm.Set('IsKeyField', fmDef.IsKeyField || false);
-                        fm.Set('IsRequired', fmDef.IsRequired || false);
-                        fm.Set('Status', 'Active');
+                        fm.EntityMapID = entityMapID;
+                        fm.SourceFieldName = fmDef.SourceFieldName;
+                        fm.DestinationFieldName = fmDef.DestinationFieldName;
+                        fm.IsKeyField = fmDef.IsKeyField || false;
+                        fm.IsRequired = fmDef.IsRequired || false;
+                        fm.Status = 'Active';
                         await fm.Save();
                     }
                 }
@@ -980,7 +981,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             await new Promise(resolve => setTimeout(resolve, 200));
 
             const rv = new RunView();
-            const runResult = await rv.RunView({
+            const runResult = await rv.RunView<MJCompanyIntegrationRunEntity>({
                 EntityName: 'MJ: Company Integration Runs',
                 ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND Status='In Progress'`,
                 OrderBy: '__mj_CreatedAt DESC',
@@ -989,12 +990,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Fields: ['ID', 'Status', 'StartedAt']
             }, user);
 
-            const run = runResult.Success && runResult.Results.length > 0 ? runResult.Results[0] as Record<string, unknown> : null;
+            const run = runResult.Success && runResult.Results.length > 0 ? runResult.Results[0] : null;
 
             return {
                 Success: true,
                 Message: 'Sync started',
-                RunID: run?.ID as string | undefined
+                RunID: run?.ID
             };
         } catch (e) {
             LogError(`IntegrationStartSync error: ${e}`);
@@ -1014,15 +1015,17 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const md = new Metadata();
-            const run = await md.GetEntityObject<BaseEntity>('MJ: Company Integration Runs', user);
+            const run = await md.GetEntityObject<MJCompanyIntegrationRunEntity>('MJ: Company Integration Runs', user);
             const loaded = await run.InnerLoad(CompositeKey.FromID(runID));
             if (!loaded) return { Success: false, Message: 'Run not found' };
 
-            if (run.Get('Status') !== 'In Progress') {
-                return { Success: false, Message: `Cannot cancel run with status '${run.Get('Status')}'` };
+            if (run.Status !== 'In Progress') {
+                return { Success: false, Message: `Cannot cancel run with status '${run.Status}'` };
             }
+            // TODO: 'Cancelled' is not in the Status value list ('Failed' | 'In Progress' | 'Pending' | 'Success').
+            // A migration should add 'Cancelled' to the allowed values. Using Set() until the type is updated.
             run.Set('Status', 'Cancelled');
-            run.Set('EndedAt', new Date());
+            run.EndedAt = new Date();
             if (!await run.Save()) return { Success: false, Message: 'Failed to cancel' };
             return { Success: true, Message: 'Cancelled' };
         } catch (e) {
@@ -1045,7 +1048,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const rv = new RunView();
 
             // Find IntegrationSync job type
-            const jobTypeResult = await rv.RunView({
+            const jobTypeResult = await rv.RunView<MJScheduledJobTypeEntity>({
                 EntityName: 'MJ: Scheduled Job Types',
                 ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
                 MaxRows: 1,
@@ -1055,33 +1058,33 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (!jobTypeResult.Success || jobTypeResult.Results.length === 0) {
                 return { Success: false, Message: 'IntegrationSync scheduled job type not found' };
             }
-            const jobTypeID = (jobTypeResult.Results[0] as Record<string, unknown>).ID as string;
+            const jobTypeID = jobTypeResult.Results[0].ID;
 
-            const job = await md.GetEntityObject<BaseEntity>('MJ: Scheduled Jobs', user);
+            const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
             job.NewRecord();
-            job.Set('JobTypeID', jobTypeID);
-            job.Set('Name', input.Name);
-            if (input.Description) job.Set('Description', input.Description);
-            job.Set('CronExpression', input.CronExpression);
-            job.Set('Timezone', input.Timezone || 'UTC');
-            job.Set('Status', 'Active');
-            job.Set('OwnerUserID', user.ID);
-            job.Set('Configuration', JSON.stringify({ CompanyIntegrationID: input.CompanyIntegrationID }));
+            job.JobTypeID = jobTypeID;
+            job.Name = input.Name;
+            if (input.Description) job.Description = input.Description;
+            job.CronExpression = input.CronExpression;
+            job.Timezone = input.Timezone || 'UTC';
+            job.Status = 'Active';
+            job.OwnerUserID = user.ID;
+            job.Configuration = JSON.stringify({ CompanyIntegrationID: input.CompanyIntegrationID });
 
             if (!await job.Save()) return { Success: false, Message: 'Failed to create schedule' };
 
             // Link to CompanyIntegration
-            const ci = await md.GetEntityObject<BaseEntity>('MJ: Company Integrations', user);
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             const ciLoaded = await ci.InnerLoad(CompositeKey.FromID(input.CompanyIntegrationID));
             if (ciLoaded) {
-                ci.Set('ScheduledJobID', job.Get('ID'));
-                ci.Set('ScheduleEnabled', true);
-                ci.Set('ScheduleType', 'Cron');
-                ci.Set('CronExpression', input.CronExpression);
+                ci.ScheduledJobID = job.ID;
+                ci.ScheduleEnabled = true;
+                ci.ScheduleType = 'Cron';
+                ci.CronExpression = input.CronExpression;
                 await ci.Save();
             }
 
-            return { Success: true, Message: 'Schedule created', ScheduledJobID: job.Get('ID') as string };
+            return { Success: true, Message: 'Schedule created', ScheduledJobID: job.ID };
         } catch (e) {
             LogError(`IntegrationCreateSchedule error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
@@ -1100,13 +1103,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const md = new Metadata();
-            const job = await md.GetEntityObject<BaseEntity>('MJ: Scheduled Jobs', user);
+            const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
             const loaded = await job.InnerLoad(CompositeKey.FromID(scheduledJobID));
             if (!loaded) return { Success: false, Message: 'ScheduledJob not found' };
 
-            if (cronExpression) job.Set('CronExpression', cronExpression);
-            if (timezone) job.Set('Timezone', timezone);
-            if (name) job.Set('Name', name);
+            if (cronExpression) job.CronExpression = cronExpression;
+            if (timezone) job.Timezone = timezone;
+            if (name) job.Name = name;
 
             if (!await job.Save()) return { Success: false, Message: 'Failed to update' };
             return { Success: true, Message: 'Updated' };
@@ -1126,10 +1129,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const md = new Metadata();
-            const job = await md.GetEntityObject<BaseEntity>('MJ: Scheduled Jobs', user);
+            const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
             const loaded = await job.InnerLoad(CompositeKey.FromID(scheduledJobID));
             if (!loaded) return { Success: false, Message: 'ScheduledJob not found' };
-            job.Set('Status', enabled ? 'Active' : 'Paused');
+            job.Status = enabled ? 'Active' : 'Paused';
             if (!await job.Save()) return { Success: false, Message: 'Failed to toggle' };
             return { Success: true, Message: enabled ? 'Activated' : 'Paused' };
         } catch (e) {
@@ -1151,17 +1154,17 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             // Unlink from CI if provided
             if (companyIntegrationID) {
-                const ci = await md.GetEntityObject<BaseEntity>('MJ: Company Integrations', user);
+                const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
                 const ciLoaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
                 if (ciLoaded) {
-                    ci.Set('ScheduledJobID', null);
-                    ci.Set('ScheduleEnabled', false);
-                    ci.Set('CronExpression', null);
+                    ci.ScheduledJobID = null;
+                    ci.ScheduleEnabled = false;
+                    ci.CronExpression = null;
                     await ci.Save();
                 }
             }
 
-            const job = await md.GetEntityObject<BaseEntity>('MJ: Scheduled Jobs', user);
+            const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
             const loaded = await job.InnerLoad(CompositeKey.FromID(scheduledJobID));
             if (!loaded) return { Success: false, Message: 'ScheduledJob not found' };
             if (!await job.Delete()) return { Success: false, Message: 'Failed to delete' };
@@ -1183,7 +1186,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const rv = new RunView();
-            const result = await rv.RunView({
+            const result = await rv.RunView<MJCompanyIntegrationEntityMapEntity>({
                 EntityName: 'MJ: Company Integration Entity Maps',
                 ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
                 OrderBy: 'Priority ASC',
@@ -1215,13 +1218,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const errors: string[] = [];
 
             for (const update of updates) {
-                const em = await md.GetEntityObject<BaseEntity>('MJ: Company Integration Entity Maps', user);
+                const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
                 const loaded = await em.InnerLoad(CompositeKey.FromID(update.EntityMapID));
                 if (!loaded) { errors.push(`${update.EntityMapID}: not found`); continue; }
 
-                if (update.SyncDirection != null) em.Set('SyncDirection', update.SyncDirection);
-                if (update.Priority != null) em.Set('Priority', update.Priority);
-                if (update.Status != null) em.Set('Status', update.Status);
+                if (update.SyncDirection != null) em.SyncDirection = update.SyncDirection as 'Bidirectional' | 'Pull' | 'Push';
+                if (update.Priority != null) em.Priority = update.Priority;
+                if (update.Status != null) em.Status = update.Status as 'Active' | 'Inactive';
 
                 if (!await em.Save()) errors.push(`${update.EntityMapID}: failed to save`);
             }
@@ -1247,19 +1250,19 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const errors: string[] = [];
 
             for (const entityMapID of entityMapIDs) {
-                const em = await md.GetEntityObject<BaseEntity>('MJ: Company Integration Entity Maps', user);
+                const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
                 const loaded = await em.InnerLoad(CompositeKey.FromID(entityMapID));
                 if (!loaded) { errors.push(`${entityMapID}: not found`); continue; }
 
                 // Delete associated field maps first
-                const fieldMapsResult = await rv.RunView({
+                const fieldMapsResult = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
                     EntityName: 'MJ: Company Integration Field Maps',
                     ExtraFilter: `EntityMapID='${entityMapID}'`,
                     ResultType: 'entity_object'
                 }, user);
 
                 if (fieldMapsResult.Success) {
-                    for (const fm of fieldMapsResult.Results as BaseEntity[]) {
+                    for (const fm of fieldMapsResult.Results) {
                         await fm.Delete();
                     }
                 }
@@ -1286,7 +1289,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const md = new Metadata();
-            const ci = await md.GetEntityObject<BaseEntity>('MJ: Company Integrations', user);
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             const loaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
             if (!loaded) return { Success: false, Message: 'Not found' };
 
@@ -1308,20 +1311,22 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             ], user);
 
-            const maps = mapsResult.Success ? mapsResult.Results as Array<Record<string, unknown>> : [];
-            const lastRun = runsResult.Success && runsResult.Results.length > 0 ? runsResult.Results[0] as Record<string, unknown> : null;
+            const maps = mapsResult.Success ? mapsResult.Results as Array<{ ID: string; Status: string }> : [];
+            const lastRun = runsResult.Success && runsResult.Results.length > 0
+                ? runsResult.Results[0] as { ID: string; Status: string; StartedAt: string; EndedAt: string; TotalRecords: number }
+                : null;
 
             return {
                 Success: true,
                 Message: 'OK',
-                IsActive: ci.Get('IsActive') as boolean,
-                IntegrationName: ci.Get('Integration') as string,
+                IsActive: ci.IsActive ?? false,
+                IntegrationName: ci.Integration,
                 TotalEntityMaps: maps.length,
                 ActiveEntityMaps: maps.filter(m => m.Status === 'Active').length,
-                LastRunStatus: lastRun?.Status as string | undefined,
-                LastRunStartedAt: lastRun?.StartedAt as string | undefined,
-                LastRunEndedAt: lastRun?.EndedAt as string | undefined,
-                ScheduleEnabled: ci.Get('ScheduleEnabled') as boolean
+                LastRunStatus: lastRun?.Status,
+                LastRunStartedAt: lastRun?.StartedAt,
+                LastRunEndedAt: lastRun?.EndedAt,
+                ScheduleEnabled: ci.ScheduleEnabled
             };
         } catch (e) {
             LogError(`IntegrationGetStatus error: ${e}`);
@@ -1339,7 +1344,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const rv = new RunView();
-            const result = await rv.RunView({
+            const result = await rv.RunView<MJCompanyIntegrationRunEntity>({
                 EntityName: 'MJ: Company Integration Runs',
                 ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
                 OrderBy: 'StartedAt DESC',

@@ -872,7 +872,7 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
     try {
       const result = await this.dataService.RunSchemaPipeline(
         this.EditorCard.IntegrationID,
-        this.EditorEntityMap.ID
+        this.EditorEntityMap
       );
       this.PipelineResultSuccess = result.Success;
       this.PipelineResultMessage = result.Success

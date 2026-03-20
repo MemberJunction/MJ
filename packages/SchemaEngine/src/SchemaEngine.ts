@@ -1,7 +1,7 @@
 /**
  * SchemaEngine — main orchestrator for generic, platform-aware DDL generation.
  * Composes DDLGenerator, MigrationFileWriter, SchemaEvolution, and SchemaValidator.
- * Any MJ consumer (integrations, UDTs, AI agents, developers) uses this class.
+ * Any MJ consumer (integrations, AI agents, developers) uses this class.
  */
 import type {
     DatabasePlatform,
@@ -33,7 +33,7 @@ export class SchemaEngine {
      * @param platform   - Target database platform.
      * @param mjVersion  - MJ version string (e.g. "5.10") embedded in file name.
      * @param migrationsDir - Directory prefix for the migration file name.
-     * @param consumer   - Identifies the calling subsystem (e.g. "Integration", "UDT").
+     * @param consumer   - Identifies the calling subsystem (e.g. "Integration", "Agent").
      * @throws Error if the table definition is invalid.
      */
     GenerateMigration(

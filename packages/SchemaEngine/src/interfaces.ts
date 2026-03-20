@@ -2,7 +2,7 @@
  * @memberjunction/schema-engine — Shared Interfaces
  *
  * Generic, platform-agnostic types for DDL generation.
- * Any MJ consumer (integrations, UDTs, AI agents, developers) can use these
+ * Any MJ consumer (integrations, AI agents, developers) can use these
  * to describe tables and let SchemaEngine produce platform-correct SQL.
  */
 
@@ -196,7 +196,7 @@ export interface MigrationOutput {
 
 /** Metadata embedded in the migration file header comment. */
 export interface MigrationMetadata {
-    /** Consumer name (e.g., "Integration", "UserDefinedTable", "Agent"). */
+    /** Consumer name (e.g., "Integration", "Agent", "Custom"). */
     SourceType: string;
     /** Object being created/modified (e.g., table name). */
     ObjectName: string;

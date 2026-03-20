@@ -600,18 +600,24 @@ export class IntegrationDataService {
   /** Execute the full RSU pipeline for an integration entity map */
   async RunSchemaPipeline(
     companyIntegrationID: string,
-    entityMapID: string
+    entityMap: EntityMapRow
   ): Promise<{ Success: boolean; Message?: string }> {
-    const provider = Metadata.Provider as GraphQLDataProvider;
-    const gql = `mutation RunIntegrationSchemaPipeline($companyIntegrationID: String!, $entityMapID: String!) {
-      RunIntegrationSchemaPipeline(companyIntegrationID: $companyIntegrationID, entityMapID: $entityMapID) {
-        Success
-        Message
-      }
-    }`;
-    const result = await provider.ExecuteGQL(gql, { companyIntegrationID, entityMapID });
-    const data = result?.RunIntegrationSchemaPipeline as { Success: boolean; Message?: string } | undefined;
-    return data ?? { Success: false, Message: 'No response from server' };
+    const md = new Metadata();
+    const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityMap.EntityID));
+    if (!entityInfo) {
+      return { Success: false, Message: `Entity not found for ID ${entityMap.EntityID}` };
+    }
+
+    const objects: SchemaPreviewObjectInput[] = [{
+      SourceObjectName: entityMap.ExternalObjectName,
+      SchemaName: entityInfo.SchemaName,
+      TableName: entityInfo.BaseTable,
+      EntityName: entityInfo.Name
+    }];
+
+    const client = this.getIntegrationClient();
+    const result = await client.ApplySchema(companyIntegrationID, objects);
+    return { Success: result.Success, Message: result.Message };
   }
 
   /** Get the connector's default configuration for quick setup */

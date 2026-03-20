@@ -1,11 +1,16 @@
 /**
  * SqlServerDDLProvider — SQL Server implementation of DDL platform provider.
  * Registered as 'sqlserver' in MJ's ClassFactory.
+ *
+ * Delegates identifier quoting and table description generation to SQLDialect
+ * from @memberjunction/sql-dialect, ensuring consistency with the rest
+ * of MJ's SQL generation pipeline.
  */
 import { RegisterClass } from '@memberjunction/global';
 import type { ColumnDefinition, ColumnModification } from '../interfaces.js';
 import { BaseDDLPlatformProvider } from './BaseDDLPlatformProvider.js';
 import { EscapeSqlString, ApplyStringLength, ApplyDecimalPrecision } from './utils.js';
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
 
 const TYPE_MAP: Record<string, string> = {
   string: 'NVARCHAR',
@@ -24,12 +29,19 @@ const TYPE_MAP: Record<string, string> = {
 
 @RegisterClass(BaseDDLPlatformProvider, 'sqlserver')
 export class SqlServerDDLProvider extends BaseDDLPlatformProvider {
+  constructor() {
+    super();
+    this.Dialect = new SQLServerDialect();
+  }
+
   QuoteIdentifier(name: string): string {
-    return `[${name}]`;
+    // Delegate to SQLDialect for consistent quoting across MJ
+    return this.Dialect!.QuoteIdentifier(name);
   }
 
   CreateSchema(schemaName: string): string {
-    return `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '${schemaName}')\n` + `    EXEC('CREATE SCHEMA [${schemaName}]');\nGO`;
+    return `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '${schemaName}')\n` +
+      `    EXEC('CREATE SCHEMA [${schemaName}]');\n${this.Dialect!.BatchSeparator()}`;
   }
 
   AddColumnClause(quotedColName: string, colBody: string): string {
@@ -42,17 +54,13 @@ export class SqlServerDDLProvider extends BaseDDLPlatformProvider {
   }
 
   DescribeTable(schemaName: string, tableName: string, description: string): string {
-    const escaped = EscapeSqlString(description);
-    return (
-      `EXEC sp_addextendedproperty\n` +
-      `    @name = N'MS_Description',\n` +
-      `    @value = N'${escaped}',\n` +
-      `    @level0type = N'SCHEMA', @level0name = '${schemaName}',\n` +
-      `    @level1type = N'TABLE', @level1name = '${tableName}';`
-    );
+    // Delegate to SQLDialect.CommentOnObject for consistent sp_addextendedproperty generation
+    return this.Dialect!.CommentOnObject('TABLE', schemaName, tableName, description) + ';';
   }
 
   DescribeColumn(schemaName: string, tableName: string, columnName: string, description: string): string {
+    // SQLDialect.CommentOnObject only supports level0+level1 (schema+table).
+    // Column descriptions need level2 (@level2type = 'COLUMN'), so we generate directly.
     const escaped = EscapeSqlString(description);
     return (
       `EXEC sp_addextendedproperty\n` +
