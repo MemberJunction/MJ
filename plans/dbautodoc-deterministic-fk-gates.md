@@ -132,9 +132,70 @@ Run each gate individually to measure per-gate impact:
 
 **Net result**: Stats false positives reduced from 61 → ~15 (75% reduction) with zero correct FK loss.
 
+## Performance Optimization Opportunities (Future)
+
+The following parallelization and batching optimizations can reduce analysis time by an estimated **60%** with zero impact on accuracy. All parallelize independent operations. Concurrency levels should be **configurable** since users may have TPM/RPM API rate limits.
+
+### Priority 1: Parallel Per-Table Discovery (25-40% speedup)
+
+PK and FK detection for each table are independent. Currently processed sequentially in `DiscoveryEngine.ts:536-570` (PK) and `610-659` (FK). Running N tables concurrently via a configurable worker pool would dramatically reduce discovery time.
+
+**Config**: `analysis.parallelism.discoveryWorkers: 4` (default 4, set to 1 for serial)
+
+**Example**: 71 tables × 5s each = 355s serial → ~90s with 4 workers
+
+### Priority 2: Parallel Value Overlap + Batch Column Statistics (20-30% speedup)
+
+FKDetector issues serial DB queries per FK candidate pair: `testValueOverlap()` + 2× `getColumnStatisticsForDiscovery()`. These are independent queries that can be parallelized per-table, and column stats can be batched into a single query per table instead of per-column.
+
+**Config**: `analysis.parallelism.dbQueryWorkers: 6` (default 6)
+
+**Location**: `FKDetector.ts:378-410` — refactor to batch-fetch stats, then parallel overlap queries
+
+### Priority 3: Parallel LLM Calls Within Dependency Level (15-25% speedup)
+
+Tables at the same dependency level are independent — their LLM analysis prompts don't depend on each other's results. Currently processed one-at-a-time in `AnalysisEngine.ts:305-340`. Could process N tables concurrently.
+
+**Config**: `analysis.parallelism.llmWorkers: 3` (default 3, respects TPM/RPM limits)
+
+**Caution**: Must respect LLM provider rate limits. Config should support:
+- `analysis.parallelism.llmWorkers`: max concurrent LLM calls
+- `analysis.parallelism.llmRequestsPerMinute`: RPM cap (optional, overrides provider default)
+- `analysis.parallelism.llmTokensPerMinute`: TPM cap (optional)
+
+### Priority 4: Parallel Sanity Checks (5-10% speedup)
+
+Schema-level sanity checks are independent across schemas. Currently serial in `AnalysisOrchestrator.ts:344-355`. Simple `Promise.all` pattern.
+
+### Priority 5: Early Termination for High-Confidence Candidates (10-15% speedup)
+
+Skip LLM validation for FK candidates already above 85% confidence in `DiscoveryEngine.ts:441-476`. Statistical evidence is strong enough; LLM adds minimal value for high-confidence candidates.
+
+### Priority 6: Value Overlap Cache (5-10% speedup)
+
+Add a `Map<string, number>` cache to `ColumnStatsCache` for value overlap results. Cross-iteration reuse avoids re-querying the same column pairs.
+
+### Combined Impact Estimate
+
+| Phase | Before | After (est.) | Speedup |
+|-------|--------|-------------|---------|
+| Discovery (PK+FK) | ~8 min | ~2.5 min | 3.2× |
+| Analysis Iterations | ~40 min | ~25 min | 1.6× |
+| Sanity Checks | ~3 min | ~1.5 min | 2× |
+| **Total (100-table DB)** | **~51 min** | **~29 min** | **1.8×** |
+
+### Implementation Notes
+
+- All concurrency settings should be in the config under `analysis.parallelism`
+- Default values should be conservative (4 DB workers, 3 LLM workers)
+- Setting any worker count to 1 disables parallelism for that phase (useful for debugging)
+- LLM rate limiting should integrate with existing guardrails system
+- Progress reporting must be thread-safe when parallel
+
 ## Future Considerations
 
 - These gates operate on the statistical discovery phase only. The LLM's ability to create FKs during table analysis is unaffected.
 - Gate 1 depends on the quality of column statistics. If `ColumnStatsCache` doesn't have stats for a target column, the gate should be skipped (fail-open) rather than blocking the candidate.
 - Gate 4 multipliers may need tuning on different databases. The 0.1/0.5/2.0/5.0 thresholds are based on AdventureWorks patterns and should be validated on MSTA and other databases.
+- Gate 6 threshold (75%) provides generous headroom for messy databases. Could be tuned per-database if needed, though 75% should be universally safe.
 - Gate 6 threshold (75%) provides generous headroom for messy databases. Could be tuned per-database if needed, though 75% should be universally safe.
