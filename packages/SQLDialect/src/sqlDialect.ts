@@ -7,6 +7,29 @@ import { DataTypeMap, MappedType } from './dataTypeMap.js';
 export type DatabasePlatform = 'sqlserver' | 'postgresql';
 
 /**
+ * Abstract field type used by SchemaEngine to describe columns
+ * in a platform-agnostic way before DDL generation.
+ */
+export type SchemaFieldType =
+    | 'string' | 'text' | 'integer' | 'bigint' | 'decimal'
+    | 'boolean' | 'datetime' | 'date' | 'uuid' | 'json'
+    | 'float' | 'time';
+
+/**
+ * Options for resolving an abstract schema type to a concrete SQL type.
+ */
+export interface ResolveTypeOptions {
+    /** Abstract type (e.g., 'string', 'integer', 'boolean'). */
+    type: SchemaFieldType;
+    /** Max length for string types. */
+    maxLength?: number;
+    /** Precision for decimal types. */
+    precision?: number;
+    /** Scale for decimal types. */
+    scale?: number;
+}
+
+/**
  * Result from limitClause() — SQL Server uses a prefix (TOP n) while
  * PostgreSQL uses a suffix (LIMIT n OFFSET m).
  */
@@ -34,6 +57,32 @@ export interface SchemaIntrospectionSQL {
     listIndexes: string;
     /** Template for checking if a database object exists */
     objectExists: string;
+}
+
+/**
+ * Options for generating a column definition in DDL.
+ */
+export interface ColumnDDLOptions {
+    /** Column name (unquoted — the dialect will quote it). */
+    name: string;
+    /** Full SQL type string (e.g., "NVARCHAR(255)", "INTEGER", "TIMESTAMPTZ"). */
+    sqlType: string;
+    /** Whether the column allows NULL values. */
+    nullable: boolean;
+    /** Optional default value expression (e.g., "'Active'", "GETUTCDATE()"). */
+    defaultValue?: string;
+}
+
+/**
+ * Options for ALTER TABLE column modification.
+ */
+export interface AlterColumnOptions {
+    /** Column name (unquoted). */
+    columnName: string;
+    /** New SQL type string. */
+    newType: string;
+    /** New nullability. */
+    newNullable: boolean;
 }
 
 /**
@@ -294,7 +343,55 @@ export abstract class SQLDialect {
      */
     abstract ProcedureCallSyntax(schema: string, name: string, params: string[]): string;
 
-    // ─── DDL Generation ──────────────────────────────────────────────
+    // ─── DDL Generation (Schema/Table) ──────────────────────────────
+
+    /**
+     * Returns CREATE SCHEMA IF NOT EXISTS SQL.
+     * SQL Server: IF NOT EXISTS (...) EXEC('CREATE SCHEMA [name]'); GO
+     * PostgreSQL: CREATE SCHEMA IF NOT EXISTS "name";
+     */
+    abstract CreateSchemaDDL(schemaName: string): string;
+
+    /**
+     * Returns the ADD COLUMN clause for ALTER TABLE.
+     * SQL Server: ADD [colName] type NULL DEFAULT ...
+     * PostgreSQL: ADD COLUMN "colName" type NULL DEFAULT ...
+     */
+    abstract AddColumnClause(col: ColumnDDLOptions): string;
+
+    /**
+     * Returns ALTER COLUMN clause(s) for type/nullability changes.
+     * SQL Server: ALTER TABLE t ALTER COLUMN [col] newType NULL/NOT NULL;
+     * PostgreSQL: ALTER TABLE t ALTER COLUMN "col" TYPE newType, ALTER COLUMN "col" SET/DROP NOT NULL;
+     */
+    abstract AlterColumnDDL(quotedTable: string, options: AlterColumnOptions): string;
+
+    /**
+     * Returns description metadata SQL for a column.
+     * SQL Server: EXEC sp_addextendedproperty with @level2type = 'COLUMN'
+     * PostgreSQL: COMMENT ON COLUMN schema."table"."column" IS '...';
+     *
+     * This extends CommentOnObject to support the 3-part column reference
+     * that CommentOnObject doesn't handle.
+     */
+    abstract CommentOnColumn(schema: string, table: string, column: string, comment: string): string;
+
+    /**
+     * Returns the platform's fallback type for unknown/unmapped abstract types.
+     * SQL Server: NVARCHAR(MAX)
+     * PostgreSQL: TEXT
+     */
+    abstract FallbackType(): string;
+
+    /**
+     * Resolves an abstract schema field type to a concrete SQL type string.
+     * Used by SchemaEngine for DDL generation from platform-agnostic definitions.
+     * SQL Server: 'string' -> 'NVARCHAR(255)', 'boolean' -> 'BIT'
+     * PostgreSQL: 'string' -> 'VARCHAR(255)', 'boolean' -> 'BOOLEAN'
+     */
+    abstract ResolveAbstractType(options: ResolveTypeOptions): string;
+
+    // ─── DDL Generation (Triggers/Indexes) ──────────────────────────
 
     /**
      * Generates trigger DDL for the platform.

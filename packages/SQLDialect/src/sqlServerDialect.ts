@@ -6,6 +6,9 @@ import {
     SchemaIntrospectionSQL,
     TriggerOptions,
     IndexOptions,
+    ColumnDDLOptions,
+    AlterColumnOptions,
+    ResolveTypeOptions,
 } from './sqlDialect.js';
 
 /**
@@ -276,7 +279,40 @@ export class SQLServerDialect extends SQLDialect {
         return `EXEC [${schema}].[${name}] ${paramList}`;
     }
 
-    // ─── DDL Generation ──────────────────────────────────────────────
+    // ─── DDL Generation (Schema/Table) ──────────────────────────────
+
+    CreateSchemaDDL(schemaName: string): string {
+        return `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '${schemaName}')\n    EXEC('CREATE SCHEMA [${schemaName}]');\nGO`;
+    }
+
+    AddColumnClause(col: ColumnDDLOptions): string {
+        const nullable = col.nullable ? 'NULL' : 'NOT NULL';
+        const defaultExpr = col.defaultValue != null ? ` DEFAULT ${col.defaultValue}` : '';
+        return `ADD [${col.name}] ${col.sqlType} ${nullable}${defaultExpr}`;
+    }
+
+    AlterColumnDDL(quotedTable: string, options: AlterColumnOptions): string {
+        const nullable = options.newNullable ? 'NULL' : 'NOT NULL';
+        return `ALTER TABLE ${quotedTable}\n    ALTER COLUMN [${options.columnName}] ${options.newType} ${nullable};`;
+    }
+
+    CommentOnColumn(schema: string, table: string, column: string, comment: string): string {
+        const escaped = comment.replace(/'/g, "''");
+        return [
+            `EXEC sp_addextendedproperty`,
+            `    @name = N'MS_Description',`,
+            `    @value = N'${escaped}',`,
+            `    @level0type = N'SCHEMA', @level0name = '${schema}',`,
+            `    @level1type = N'TABLE', @level1name = '${table}',`,
+            `    @level2type = N'COLUMN', @level2name = '${column}';`,
+        ].join('\n');
+    }
+
+    FallbackType(): string {
+        return 'NVARCHAR(MAX)';
+    }
+
+    // ─── DDL Generation (Triggers/Indexes) ──────────────────────────
 
     TriggerDDL(options: TriggerOptions): string {
         const events = options.events.join(', ');
@@ -375,6 +411,47 @@ export class SQLServerDialect extends SQLDialect {
 
     IIF(condition: string, trueVal: string, falseVal: string): string {
         return `IIF(${condition}, ${trueVal}, ${falseVal})`;
+    }
+
+    // ─── Abstract Type Resolution ─────────────────────────────────────
+
+    ResolveAbstractType(options: ResolveTypeOptions): string {
+        switch (options.type) {
+            case 'string':
+                return this.resolveStringType(options.maxLength);
+            case 'text':
+                return 'NVARCHAR(MAX)';
+            case 'integer':
+                return 'INT';
+            case 'bigint':
+                return 'BIGINT';
+            case 'decimal':
+                return `DECIMAL(${options.precision ?? 18},${options.scale ?? 2})`;
+            case 'boolean':
+                return 'BIT';
+            case 'datetime':
+                return 'DATETIMEOFFSET';
+            case 'date':
+                return 'DATE';
+            case 'uuid':
+                return 'UNIQUEIDENTIFIER';
+            case 'json':
+                return 'NVARCHAR(MAX)';
+            case 'float':
+                return 'FLOAT';
+            case 'time':
+                return 'TIME';
+            default:
+                return this.FallbackType();
+        }
+    }
+
+    private resolveStringType(maxLength?: number): string {
+        if (maxLength != null && maxLength > 0) {
+            if (maxLength > 4000) return 'NVARCHAR(MAX)';
+            return `NVARCHAR(${maxLength})`;
+        }
+        return 'NVARCHAR(255)';
     }
 
     // ─── Private Helpers ─────────────────────────────────────────────

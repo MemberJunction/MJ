@@ -6,6 +6,9 @@ import {
     SchemaIntrospectionSQL,
     TriggerOptions,
     IndexOptions,
+    ColumnDDLOptions,
+    AlterColumnOptions,
+    ResolveTypeOptions,
 } from './sqlDialect.js';
 
 /**
@@ -327,7 +330,36 @@ export class PostgreSQLDialect extends SQLDialect {
         return `SELECT * FROM ${schema}."${name}"(${paramList})`;
     }
 
-    // ─── DDL Generation ──────────────────────────────────────────────
+    // ─── DDL Generation (Schema/Table) ──────────────────────────────
+
+    CreateSchemaDDL(schemaName: string): string {
+        return `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`;
+    }
+
+    AddColumnClause(col: ColumnDDLOptions): string {
+        const nullable = col.nullable ? 'NULL' : 'NOT NULL';
+        const defaultExpr = col.defaultValue != null ? ` DEFAULT ${col.defaultValue}` : '';
+        return `ADD COLUMN "${col.name}" ${col.sqlType} ${nullable}${defaultExpr}`;
+    }
+
+    AlterColumnDDL(quotedTable: string, options: AlterColumnOptions): string {
+        return (
+            `ALTER TABLE ${quotedTable}\n` +
+            `    ALTER COLUMN "${options.columnName}" TYPE ${options.newType},\n` +
+            `    ALTER COLUMN "${options.columnName}" ${options.newNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`
+        );
+    }
+
+    CommentOnColumn(schema: string, table: string, column: string, comment: string): string {
+        const escaped = comment.replace(/'/g, "''");
+        return `COMMENT ON COLUMN "${schema}"."${table}"."${column}" IS '${escaped}';`;
+    }
+
+    FallbackType(): string {
+        return 'TEXT';
+    }
+
+    // ─── DDL Generation (Triggers/Indexes) ──────────────────────────
 
     TriggerDDL(options: TriggerOptions): string {
         const events = options.events.join(' OR ');
@@ -444,6 +476,46 @@ export class PostgreSQLDialect extends SQLDialect {
 
     IIF(condition: string, trueVal: string, falseVal: string): string {
         return `CASE WHEN ${condition} THEN ${trueVal} ELSE ${falseVal} END`;
+    }
+
+    // ─── Abstract Type Resolution ─────────────────────────────────────
+
+    ResolveAbstractType(options: ResolveTypeOptions): string {
+        switch (options.type) {
+            case 'string':
+                return this.resolveStringType(options.maxLength);
+            case 'text':
+                return 'TEXT';
+            case 'integer':
+                return 'INTEGER';
+            case 'bigint':
+                return 'BIGINT';
+            case 'decimal':
+                return `NUMERIC(${options.precision ?? 18},${options.scale ?? 2})`;
+            case 'boolean':
+                return 'BOOLEAN';
+            case 'datetime':
+                return 'TIMESTAMPTZ';
+            case 'date':
+                return 'DATE';
+            case 'uuid':
+                return 'UUID';
+            case 'json':
+                return 'JSONB';
+            case 'float':
+                return 'DOUBLE PRECISION';
+            case 'time':
+                return 'TIME';
+            default:
+                return this.FallbackType();
+        }
+    }
+
+    private resolveStringType(maxLength?: number): string {
+        if (maxLength != null && maxLength > 0) {
+            return `VARCHAR(${maxLength})`;
+        }
+        return 'VARCHAR(255)';
     }
 
     // ─── Private Helpers ─────────────────────────────────────────────
