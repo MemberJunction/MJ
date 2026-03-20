@@ -153,6 +153,18 @@ export class FKDetector {
           );
 
           if (idColumn) {
+            // GATE 1: Target column must be PK-eligible (zero nulls, zero blanks, 100% unique)
+            if (!this.isTargetPKEligible(schema.name, matchingTable.name, idColumn.name)) {
+              console.log(`[FKDetector] GATE1 reject: ${sourceColumn.name} -> ${schema.name}.${matchingTable.name}.${idColumn.name} (target not PK-eligible)`);
+              continue;
+            }
+
+            // GATE 3: Skip rowguid target columns
+            if (idColumn.name.toLowerCase() === 'rowguid') {
+              console.log(`[FKDetector] GATE3 reject: ${sourceColumn.name} -> ${schema.name}.${matchingTable.name}.${idColumn.name} (rowguid target)`);
+              continue;
+            }
+
             const isPK = discoveredPKs.some(pk =>
               pk.schemaName === schema.name &&
               pk.tableName === matchingTable.name &&
@@ -171,6 +183,7 @@ export class FKDetector {
     }
 
     // Pattern 2: Check all discovered PKs with similar names
+    // (PKs are already PK-eligible by definition, no Gate 1 check needed)
     for (const pk of discoveredPKs) {
       const pkSchema = schemas.find(s => s.name === pk.schemaName);
       if (!pkSchema) continue;
@@ -179,6 +192,9 @@ export class FKDetector {
       if (!pkTable || pkTable.name === sourceTable) continue;
 
       for (const pkColumnName of pk.columnNames) {
+        // GATE 3: Skip rowguid target columns
+        if (pkColumnName.toLowerCase() === 'rowguid') continue;
+
         const similarity = this.calculateNameSimilarity(sourceColumn.name, pkColumnName);
         if (similarity > 0.6) {
           targets.push({
@@ -202,6 +218,15 @@ export class FKDetector {
         );
 
         if (matchingColumn) {
+          // GATE 3: Skip rowguid target columns
+          if (matchingColumn.name.toLowerCase() === 'rowguid') continue;
+
+          // GATE 1: Target column must be PK-eligible
+          if (!this.isTargetPKEligible(schema.name, table.name, matchingColumn.name)) {
+            console.log(`[FKDetector] GATE1 reject: ${sourceColumn.name} -> ${schema.name}.${table.name}.${matchingColumn.name} (target not PK-eligible)`);
+            continue;
+          }
+
           const isPK = discoveredPKs.some(pk =>
             pk.schemaName === schema.name &&
             pk.tableName === table.name &&
@@ -296,6 +321,18 @@ export class FKDetector {
   }
 
   /**
+   * GATE 1 helper: Check if a target column is PK-eligible using cached stats.
+   * A column is PK-eligible if it has zero nulls, zero blanks, and 100% unique values.
+   * If no stats are available, returns true (fail-open to avoid blocking valid candidates).
+   */
+  private isTargetPKEligible(schemaName: string, tableName: string, columnName: string): boolean {
+    if (!this.statsCache) return true; // No cache = fail-open
+    const stats = this.statsCache.getColumnStats(schemaName, tableName, columnName);
+    if (!stats) return true; // No stats for this column = fail-open
+    return stats.pkEligible;
+  }
+
+  /**
    * Analyze a specific FK candidate
    */
   private async analyzeFKCandidate(
@@ -328,6 +365,12 @@ export class FKDetector {
       targetColumn,
       this.config.sampling.valueOverlapSampleSize
     );
+
+    // GATE 2: Zero value overlap = guaranteed not an FK
+    if (overlapResult === 0) {
+      console.log(`[FKDetector] GATE2 reject: ${sourceColumn.name} -> ${targetSchema}.${targetTable}.${targetColumn} (zero value overlap)`);
+      return null;
+    }
 
     // Get column statistics for cardinality analysis
     const sourceStats = await this.driver.getColumnStatisticsForDiscovery(
@@ -594,7 +637,26 @@ export class FKDetector {
       score *= 0.5; // 50% penalty for type mismatch
     }
 
-    return Math.round(Math.min(score, 100));
+    // GATE 4: Row-count ratio confidence multiplier
+    // When source has far fewer distinct values than target, the direction is likely wrong
+    // (tiny table pointing at huge table = probable reverse/sibling relationship)
+    if (evidence.cardinalityRatio > 0) {
+      let ratioMultiplier = 1.0;
+      if (evidence.cardinalityRatio < 0.1) {
+        ratioMultiplier = 0.5;  // Severe penalty: source has <10% of target's distinct values
+      } else if (evidence.cardinalityRatio < 0.5) {
+        ratioMultiplier = 0.7;  // Moderate penalty: suspicious direction
+      } else if (evidence.cardinalityRatio > 5.0) {
+        ratioMultiplier = 1.2;  // Boost: strong child→parent signal
+      }
+      if (ratioMultiplier !== 1.0) {
+        const beforeGate4 = score;
+        score *= ratioMultiplier;
+        console.log(`[FKDetector] GATE4: cardRatio=${evidence.cardinalityRatio.toFixed(2)}, multiplier=${ratioMultiplier}, score ${beforeGate4.toFixed(0)} -> ${score.toFixed(0)}`);
+      }
+    }
+
+    return Math.round(Math.min(Math.max(score, 0), 100));
   }
 
   /**

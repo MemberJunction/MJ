@@ -542,6 +542,9 @@ export class AnalysisEngine {
     // Build ground truth context if available
     const groundTruthContext = this.buildGroundTruthContext(tableNode.schema, tableNode.table);
 
+    // Build FK candidate stats from discovery phase for LLM context
+    const fkCandidateStats = this.buildFKCandidateStats(state, tableNode.schema, tableNode.table);
+
     return {
       schema: tableNode.schema,
       table: tableNode.table,
@@ -565,8 +568,39 @@ export class AnalysisEngine {
       userNotes: table.userNotes,
       seedContext: state.seedContext ?? this.config.seedContext,
       allTables,
-      groundTruth: groundTruthContext
+      groundTruth: groundTruthContext,
+      fkCandidateStats
     };
+  }
+
+  /**
+   * Build FK candidate stats from the discovery phase for this table.
+   * Provides the LLM with cross-table relationship evidence (value overlap,
+   * cardinality ratio) to make better FK decisions.
+   */
+  private buildFKCandidateStats(
+    state: DatabaseDocumentation,
+    schemaName: string,
+    tableName: string
+  ): Array<{ sourceColumn: string; targetSchema: string; targetTable: string; targetColumn: string; valueOverlap: number; cardinalityRatio: number; confidence: number }> {
+    const discoveryPhase = state.phases.keyDetection;
+    if (!discoveryPhase) return [];
+
+    return discoveryPhase.discovered.foreignKeys
+      .filter(fk =>
+        fk.schemaName === schemaName &&
+        fk.sourceTable === tableName &&
+        fk.status !== 'rejected'
+      )
+      .map(fk => ({
+        sourceColumn: fk.sourceColumn,
+        targetSchema: fk.targetSchema,
+        targetTable: fk.targetTable,
+        targetColumn: fk.targetColumn,
+        valueOverlap: fk.evidence.valueOverlap,
+        cardinalityRatio: fk.evidence.cardinalityRatio,
+        confidence: fk.confidence
+      }));
   }
 
   /**

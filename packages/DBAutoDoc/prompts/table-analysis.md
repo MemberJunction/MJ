@@ -83,6 +83,17 @@ The database owner has provided the following authoritative documentation. Your 
 {% if seedContext.customInstructions %}- **Special Instructions**: {{ seedContext.customInstructions }}{% endif %}
 {% endif %}
 
+{% if fkCandidateStats and fkCandidateStats.length > 0 %}
+## FK Evidence from Statistical Analysis
+The following columns in this table were identified as potential foreign keys by statistical analysis. Use this evidence to inform (but not limit) your FK assessment — you may identify additional FKs not listed here.
+
+{% for fk in fkCandidateStats %}
+- **{{ fk.sourceColumn }}** → {{ fk.targetSchema }}.{{ fk.targetTable }}.{{ fk.targetColumn }} (value overlap: {{ (fk.valueOverlap * 100) | round(1) }}%, cardinality ratio: {{ fk.cardinalityRatio | round(2) }}, confidence: {{ fk.confidence }}%)
+{% endfor %}
+
+*Value overlap = % of source values that exist in the target column. 100% = strong FK evidence. Cardinality ratio = source distinct / target distinct — values > 1 suggest child→parent direction.*
+{% endif %}
+
 {% if allTables %}
 ## All Database Tables
 **IMPORTANT**: When referring to foreign key relationships, you MUST use one of these exact table names:
