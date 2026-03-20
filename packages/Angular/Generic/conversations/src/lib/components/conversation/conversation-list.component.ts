@@ -127,12 +127,12 @@ import { UUIDsEqual } from '@memberjunction/global';
           </div>
         }
 
-        <!-- Messages Section -->
+        <!-- Conversations Section -->
         <div class="sidebar-section">
           <div class="section-header" [class.expanded]="directMessagesExpanded" (click)="toggleDirectMessages()">
             <div class="section-title">
               <i class="fas fa-chevron-right"></i>
-              <span>Messages</span>
+              <span>Conversations</span>
             </div>
           </div>
           <div class="chat-list" [class.expanded]="directMessagesExpanded">

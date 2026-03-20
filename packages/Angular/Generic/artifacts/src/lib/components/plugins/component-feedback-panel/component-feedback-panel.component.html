@@ -4,7 +4,7 @@
     <div class="panel-header">
       <div class="panel-title">
         <i class="fa-solid fa-comment-dots"></i>
-        <span>Component Feedback</span>
+        <span>Plan Feedback</span>
       </div>
       <button class="close-button" (click)="ClosePanel()">
         <i class="fa-solid fa-times"></i>
@@ -17,7 +17,7 @@
       <div class="tree-section">
         <div class="section-header">
           <i class="fa-solid fa-sitemap"></i>
-          <span>Select Component</span>
+          <span>Select Plan</span>
         </div>
 
         @if (ComponentSpec) {
@@ -56,7 +56,7 @@
         } @else {
           <div class="empty-state">
             <i class="fa-solid fa-info-circle"></i>
-            <span>No component hierarchy available</span>
+            <span>No plan hierarchy available</span>
           </div>
         }
       </div>
@@ -106,7 +106,7 @@
               <textarea
                 class="comment-input"
                 [(ngModel)]="FeedbackComments"
-                placeholder="Share your thoughts about this component..."
+                placeholder="Share your thoughts about this plan..."
                 rows="4"
                 maxlength="1000">
               </textarea>
@@ -148,7 +148,7 @@
         } @else {
           <div class="no-selection-message">
             <i class="fa-solid fa-hand-pointer"></i>
-            <p>Select a component from the tree to provide feedback</p>
+            <p>Select a plan from the tree to provide feedback</p>
           </div>
         }
       </div>

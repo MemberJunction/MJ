@@ -618,8 +618,8 @@ export class AgentRunner {
                     );
 
                     const agentName = agent?.Name || 'Agent';
-                    artifact.Name = `${agentName} Payload - ${new Date().toLocaleString()}`;
-                    artifact.Description = `Payload returned by ${agentName}`;
+                    artifact.Name = `${agentName} Result - ${new Date().toLocaleString()}`;
+                    artifact.Description = `Result returned by ${agentName}`;
 
                     // Use agent's DefaultArtifactTypeID if available
                     const defaultArtifactTypeId = (agent as any)?.DefaultArtifactTypeID;
