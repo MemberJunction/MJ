@@ -1,5 +1,6 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDialect, PostgreSQLDialect, type SQLDialect } from "@memberjunction/sql-dialect";
+import { SQLParser } from "@memberjunction/sql-parser";
 import { Metadata, QueryInfo, DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
 import NodeSqlParser from 'node-sql-parser';
 const { Parser: SqlParser } = NodeSqlParser;
@@ -686,6 +687,10 @@ export class QueryCompositionEngine {
 
     /**
      * Assembles CTE entries into a WITH clause prepended to the main SQL.
+     *
+     * Handles the case where a dependency query's SQL itself contains a WITH clause
+     * (inner CTEs). SQL does not allow nested WITH clauses, so inner CTEs are "hoisted"
+     * out as sibling CTE definitions preceding the dependency's own CTE.
      */
     private assembleCTEs(cteEntries: CTEEntry[], mainSQL: string, platform: DatabasePlatform): string {
         if (cteEntries.length === 0) return mainSQL;
@@ -695,9 +700,22 @@ export class QueryCompositionEngine {
         const startsWithWith = /^WITH\s/i.test(trimmedMain);
 
         const dialect = this.getDialect(platform);
-        const cteDefinitions = cteEntries.map(entry =>
-            `${entry.CTEName} AS (\n${this.stripTrailingOrderBy(entry.SQL, dialect)}\n)`
-        );
+
+        // Build CTE definitions, hoisting any inner WITH clauses from dependency SQL
+        const cteDefinitions: string[] = [];
+        for (const entry of cteEntries) {
+            const strippedSQL = this.stripTrailingOrderBy(entry.SQL, dialect);
+            const trimmedSQL = strippedSQL.trimStart();
+
+            if (/^WITH\s/i.test(trimmedSQL)) {
+                // Dependency SQL has its own WITH clause — hoist inner CTEs as siblings
+                const { innerCTEDefinitions, mainSelect } = this.hoistInnerCTEs(trimmedSQL, platform);
+                cteDefinitions.push(...innerCTEDefinitions);
+                cteDefinitions.push(`${entry.CTEName} AS (\n${mainSelect}\n)`);
+            } else {
+                cteDefinitions.push(`${entry.CTEName} AS (\n${strippedSQL}\n)`);
+            }
+        }
 
         if (startsWithWith) {
             // Main SQL has its own WITH — merge by removing the leading WITH
@@ -707,6 +725,32 @@ export class QueryCompositionEngine {
         }
 
         return `WITH ${cteDefinitions.join(',\n')}\n${mainSQL}`;
+    }
+
+    /**
+     * Extracts inner CTE definitions from SQL that starts with a WITH clause.
+     *
+     * Delegates to {@link SQLParser.ExtractCTEs} which uses AST parsing first
+     * (via node-sql-parser), falling back to a paren-depth regex approach when
+     * AST parsing fails (e.g. SQL contains Nunjucks template tokens).
+     *
+     * @param sql SQL starting with a WITH clause
+     * @param platform Database platform, used to select the AST dialect
+     */
+    private hoistInnerCTEs(sql: string, platform: DatabasePlatform): { innerCTEDefinitions: string[]; mainSelect: string } {
+        const dialect = platform === 'postgresql' ? 'PostgresQL' : 'TransactSQL';
+        const extraction = SQLParser.ExtractCTEs(sql, dialect);
+
+        if (!extraction) {
+            // Should not happen since caller already verified WITH prefix,
+            // but handle gracefully by treating the whole SQL as the main select
+            return { innerCTEDefinitions: [], mainSelect: sql };
+        }
+
+        return {
+            innerCTEDefinitions: extraction.CTEDefinitions,
+            mainSelect: extraction.MainStatement,
+        };
     }
 
     /**

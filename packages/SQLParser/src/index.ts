@@ -1,1 +1,1 @@
-export { SQLParser, SQLTableReference, SQLColumnReference, SQLParseResult } from './sql-parser.js';
+export { SQLParser, SQLTableReference, SQLColumnReference, SQLParseResult, SQLCTEExtraction } from './sql-parser.js';
