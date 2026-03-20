@@ -328,8 +328,14 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
    *
    * MSAL 5.x Best Practices:
    * - Pass account parameter for reliable silent acquisition
-   * - Use CacheLookupPolicy.Default for efficient cache → refresh token → iframe chain
+   * - Use forceRefresh: true to bypass cache and get fresh tokens from Azure AD
    * - Handle MSAL 5.x specific error codes (timed_out, no_tokens_found, etc.)
+   *
+   * IMPORTANT: This method is called when the server has already rejected the current
+   * token as expired (JWT_EXPIRED). Using CacheLookupPolicy.Default here can return a
+   * cached ID token that is still expired (e.g. when the access token has a longer
+   * lifetime than the ID token). forceRefresh: true ensures a network round-trip to
+   * Azure AD so both the access token and ID token are genuinely refreshed.
    */
   protected async refreshTokenInternal(): Promise<TokenRefreshResult> {
     try {
@@ -348,11 +354,14 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       }
 
       // MSAL 5.x: Pass account for reliable silent acquisition
-      // Use Default policy for efficient cache → refresh token → iframe chain
+      // Use forceRefresh to bypass cache and ensure a network round-trip.
+      // This is critical because this method is called after the server rejected
+      // the current token — returning a cached (potentially stale) ID token would
+      // cause the retry to fail with the same JWT_EXPIRED error.
       const response = await this.auth.instance.acquireTokenSilent({
         scopes: ['User.Read', 'email', 'profile'],
         account: account,
-        cacheLookupPolicy: CacheLookupPolicy.Default
+        forceRefresh: true
       });
 
       if (!response.idToken) {
@@ -362,6 +371,21 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
             type: AuthErrorType.NO_ACTIVE_SESSION,
             message: 'Token refresh succeeded but no ID token returned',
             userMessage: 'Session refresh failed. Please log in again.'
+          }
+        };
+      }
+
+      // Safety net: verify the refreshed token is actually valid.
+      // This should always pass after a forced refresh, but guards against
+      // edge cases like severe clock skew between client and Azure AD.
+      if (!this.isTokenValid(response.idToken)) {
+        console.warn('[MSAL] Forced refresh returned an expired ID token — requesting interaction');
+        return {
+          success: false,
+          error: {
+            type: AuthErrorType.INTERACTION_REQUIRED,
+            message: 'Token refresh returned an expired ID token',
+            userMessage: 'Your session has expired. Redirecting to login...'
           }
         };
       }

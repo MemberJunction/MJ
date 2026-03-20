@@ -11,7 +11,8 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
-    "test": "echo \"No tests configured yet\""
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -45,7 +46,9 @@
     "@memberjunction/core-entities-server": "5.13.0",
     "@memberjunction/export-engine": "5.13.0",
     "@memberjunction/external-change-detection": "5.13.0",
+    "@memberjunction/generic-database-provider": "5.13.0",
     "@memberjunction/global": "5.13.0",
+    "@memberjunction/integration-engine": "5.13.0",
     "@memberjunction/sqlserver-dataprovider": "5.13.0",
     "@memberjunction/storage": "5.13.0",
     "@types/d3-cloud": "^1.2.9",

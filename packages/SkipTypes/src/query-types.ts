@@ -285,6 +285,24 @@ export class SkipQueryInfo implements IQueryInfoBase {
 }
 
 /**
+ * Lightweight catalog entry for query name/path collision detection.
+ * Unlike SkipQueryInfo which carries full SQL, fields, parameters, and embeddings,
+ * this type only contains the fields needed to uniquely identify a query:
+ * its Name and CategoryPath. This keeps the payload small so it can always
+ * be included in every SkipAPIRequest regardless of the includeQueries flag.
+ */
+export class SkipQueryCatalogEntry {
+    /**
+     * Name of the query
+     */
+    Name: string;
+    /**
+     * Full hierarchical category path (e.g., "Skip/Sales/Reports")
+     */
+    CategoryPath: string;
+}
+
+/**
  * Represents a change to a query during the learning cycle process, allowing Skip
  * to add new queries, update existing ones, or mark queries for deletion based on
  * its analysis of conversation patterns and user needs.

@@ -189,6 +189,7 @@ export class PushService {
             description: 'MetadataSync push operation',
             statementTypes: "mutations",
             prettyPrint: true,
+            batchSeparator: 'GO',
             filterPatterns: this.syncConfig?.sqlLogging?.filterPatterns,
             filterType: this.syncConfig?.sqlLogging?.filterType,
             verboseOutput: this.syncConfig?.sqlLogging?.verboseOutput || false,
