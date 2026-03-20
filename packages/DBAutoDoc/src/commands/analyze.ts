@@ -13,20 +13,36 @@ export default class Analyze extends Command {
 
   static examples = [
     '$ db-auto-doc analyze',
-    '$ db-auto-doc analyze --resume ./output/run-6/state.json',
-    '$ db-auto-doc analyze --config ./my-config.json'
+    '$ db-auto-doc analyze --config ./my-config.json',
+    '$ db-auto-doc analyze --resume ./output/run-6/run-1/state.json',
+    '$ db-auto-doc analyze --resume ./output/run-6/run-1/state.json --max-iterations 3',
+    '$ db-auto-doc analyze --resume ./output/run-6/run-1/state.json --reanalyze-below 0.7',
+    '$ db-auto-doc analyze --resume ./output/run-6/run-1/state.json --pruning-only'
   ];
 
   static flags = {
     resume: Flags.string({
       char: 'r',
-      description: 'Resume from an existing state file',
+      description: 'Resume from an existing state file. Skips schema introspection and discovery if state already has data.',
       required: false
     }),
     config: Flags.string({
       char: 'c',
       description: 'Path to config file',
       default: './config.json'
+    }),
+    'max-iterations': Flags.integer({
+      char: 'n',
+      description: 'Override max iterations from config for this run',
+      required: false
+    }),
+    'reanalyze-below': Flags.string({
+      description: 'Only re-analyze tables with confidence below this threshold (0-1). Use with --resume to refine low-confidence results.',
+      required: false
+    }),
+    'pruning-only': Flags.boolean({
+      description: 'Skip discovery and analysis iterations. Only run the FK pruning pass on an existing state file. Requires --resume.',
+      default: false
     })
   };
 
@@ -36,16 +52,33 @@ export default class Analyze extends Command {
     const { flags } = await this.parse(Analyze);
     const spinner = ora();
 
+    // Validate flag combinations
+    if (flags['pruning-only'] && !flags.resume) {
+      this.error('--pruning-only requires --resume pointing to an existing state file');
+    }
+
     try {
       // Load configuration
       spinner.start('Loading configuration');
       const config = await ConfigLoader.load(flags.config);
       spinner.succeed('Configuration loaded');
 
+      // Parse reanalyze-below as number if provided
+      const reanalyzeBelowConfidence = flags['reanalyze-below'] != null
+        ? parseFloat(flags['reanalyze-below'])
+        : undefined;
+
+      // For pruning-only, set max iterations to 0 so iteration loop is skipped
+      const maxIterations = flags['pruning-only']
+        ? 0
+        : flags['max-iterations'];
+
       // Create orchestrator
       const orchestrator = new AnalysisOrchestrator({
         config,
         resumeFromState: flags.resume,
+        reanalyzeBelowConfidence,
+        maxIterations,
         onProgress: (message, data) => {
           if (data) {
             spinner.succeed(`${message}: ${JSON.stringify(data)}`);

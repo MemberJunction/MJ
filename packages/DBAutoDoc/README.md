@@ -498,14 +498,44 @@ Tables and columns marked `userApproved: true` (via ground truth or manual appro
 Resume analysis with fine-grained control:
 
 ```bash
+# Resume from a previous run's state file
+db-auto-doc analyze --resume ./output/run-1/state.json
+
 # Resume and re-analyze tables with confidence below 70%
-db-auto-doc analyze --resume ./state.json --reanalyze-below-confidence 0.7
+db-auto-doc analyze --resume ./state.json --reanalyze-below 0.7
 
 # Resume with a different iteration limit
 db-auto-doc analyze --resume ./state.json --max-iterations 20
+
+# Resume with additional iterations (e.g., ran 5 originally, now want 3 more)
+db-auto-doc analyze --resume ./state.json --max-iterations 3
 ```
 
-The `--reanalyze-below-confidence` flag clears `userApproved` on non-ground-truth tables whose latest confidence is below the threshold, allowing them to be re-analyzed while protecting authoritative descriptions.
+The `--reanalyze-below` flag clears `userApproved` on non-ground-truth tables whose latest confidence is below the threshold, allowing them to be re-analyzed while protecting authoritative descriptions.
+
+### Pruning-Only Mode
+
+Run just the FK pruning pass on an existing state file, skipping discovery and analysis iterations. Useful when you want to apply a stronger model to clean up FK false positives without re-running the full analysis:
+
+```bash
+# Run only the FK pruning pass on an existing state
+db-auto-doc analyze --resume ./output/run-1/state.json --pruning-only
+
+# Combine with a config that specifies a stronger pruning model
+db-auto-doc analyze --resume ./output/run-1/state.json --pruning-only --config ./config-with-pro-pruning.json
+```
+
+Requires `--resume` pointing to a state file that has already completed discovery and at least one analysis iteration. The pruning pass uses the `ai.modelOverrides.fkPruning` config to select a potentially stronger model (e.g., Gemini Pro, Claude Opus) for the precision-critical FK filtering.
+
+### CLI Flags Reference
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--config` | `-c` | Path to config file (default: `./config.json`) |
+| `--resume` | `-r` | Resume from an existing state file |
+| `--max-iterations` | `-n` | Override max iterations from config |
+| `--reanalyze-below` | | Re-analyze tables with confidence below threshold (0-1) |
+| `--pruning-only` | | Skip discovery/iterations, run only FK pruning (requires `--resume`) |
 
 ### CodeGen Integration (Additional Schema Info)
 
