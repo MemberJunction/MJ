@@ -25,6 +25,24 @@ import {
     type ListResult,
     type IntegrationObjectInfo,
     type ActionGeneratorConfig,
+    type ExternalObjectSchema,
+    type SourceObjectInfo,
+    type SourceFieldInfo,
+    type SourceRelationshipInfo,
+    // Strategy types
+    type TransformPipeline,
+    type PaginationStrategy as IPaginationStrategy,
+    type BatchingStrategy,
+    type RateLimitStrategy,
+    type EndpointTraversal,
+    type IncrementalSyncStrategy,
+    // Strategy implementations
+    DefaultTransformPipeline,
+    EmptyStringToNullRule,
+    CursorPagination,
+    SimpleBatching,
+    ExponentialBackoff,
+    TimestampWatermark,
 } from '@memberjunction/integration-engine';
 
 // ─── Types ────────────────────────────────────────────────────────────
@@ -417,6 +435,198 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     public override get SupportsListing(): boolean { return true; }
 
     public override get IntegrationName(): string { return 'HubSpot'; }
+
+    // ── Strategy Declarations ───────────────────────────────────────
+    // Declares which reusable strategies this connector uses.
+    // The base class calls these during the sync pipeline.
+
+    public override GetTransformPipeline(): TransformPipeline {
+        return new DefaultTransformPipeline([
+            new EmptyStringToNullRule(),
+            // HubSpot-specific FlattenPropertiesEnvelope is still handled in FlattenHubSpotRecord()
+            // until the full migration extracts it into a dedicated TransformRule.
+        ]);
+    }
+
+    public override GetPaginationStrategy(_objectName: string): IPaginationStrategy {
+        return new CursorPagination('after', 'paging.next.after');
+    }
+
+    public override GetBatchingStrategy(): BatchingStrategy {
+        return new SimpleBatching(100);
+    }
+
+    public override GetRateLimitStrategy(): RateLimitStrategy {
+        return new ExponentialBackoff(
+            this.effectiveMinRequestIntervalMs,
+            this.effectiveMaxRetries
+        );
+    }
+
+    public override GetEndpointTraversal(objectName: string): EndpointTraversal {
+        // Check if this is an association object
+        const obj = HUBSPOT_OBJECTS.find(o => o.Name === objectName);
+        if (obj && 'Category' in obj && (obj as Record<string, unknown>)['Category'] === 'Association') {
+            return { Type: 'Association', Description: 'HubSpot v4 association endpoint' };
+        }
+        return { Type: 'Paginated', Description: 'HubSpot cursor-paginated CRM endpoint' };
+    }
+
+    public override GetIncrementalStrategy(_objectName: string): IncrementalSyncStrategy {
+        return new TimestampWatermark('hs_lastmodifieddate');
+    }
+
+    public override get SupportsCustomObjects(): boolean { return true; }
+
+    /**
+     * Discovers custom objects defined in HubSpot via GET /crm/v3/schemas.
+     * Excludes objects already defined in HUBSPOT_OBJECTS (the known/standard set)
+     * and returns only customer-defined custom object schemas.
+     */
+    public override async DiscoverCustomObjects(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<ExternalObjectSchema[]> {
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const url = `${HUBSPOT_API_BASE}/crm/v3/schemas`;
+
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status < 200 || response.Status >= 300) {
+            console.warn(`[HubSpot] DiscoverCustomObjects failed: HTTP ${response.Status}`);
+            return [];
+        }
+
+        const body = response.Body as { results?: Array<Record<string, unknown>> };
+        const schemas = body?.results ?? [];
+
+        // Exclude objects already in our known metadata — anything NOT in this set is custom
+        const knownObjectNames = new Set(HUBSPOT_OBJECTS.map(o => o.Name.toLowerCase()));
+
+        const customObjects: ExternalObjectSchema[] = [];
+        for (const schema of schemas) {
+            const name = String(schema['name'] ?? '');
+            const labels = schema['labels'] as Record<string, string> | undefined;
+
+            if (knownObjectNames.has(name.toLowerCase())) continue;
+
+            customObjects.push({
+                Name: name,
+                Label: labels?.['singular'] ?? name,
+                Description: `HubSpot custom object: ${labels?.['plural'] ?? name}`,
+                SupportsIncrementalSync: true,
+                SupportsWrite: true,
+            });
+        }
+
+        console.log(`[HubSpot] Discovered ${customObjects.length} custom objects: [${customObjects.map(o => o.Name).join(', ')}]`);
+        return customObjects;
+    }
+
+    /**
+     * Discovers custom objects with FULL schema detail — fields, PKs, and association-based FKs.
+     * Extracts field definitions from the HubSpot schema `properties` array and relationships
+     * from the `associations` array, feeding all of this into SchemaBuilder for proper
+     * soft PK/FK generation.
+     */
+    public override async DiscoverCustomObjectSchemas(
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
+    ): Promise<SourceObjectInfo[]> {
+        const auth = await this.Authenticate(companyIntegration, contextUser);
+        const headers = this.BuildHeaders(auth);
+        const url = `${HUBSPOT_API_BASE}/crm/v3/schemas`;
+
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status < 200 || response.Status >= 300) {
+            console.warn(`[HubSpot] DiscoverCustomObjectSchemas failed: HTTP ${response.Status}`);
+            return [];
+        }
+
+        const body = response.Body as { results?: Array<Record<string, unknown>> };
+        const schemas = body?.results ?? [];
+        const knownObjectNames = new Set(HUBSPOT_OBJECTS.map(o => o.Name.toLowerCase()));
+        const result: SourceObjectInfo[] = [];
+
+        for (const schema of schemas) {
+            const name = String(schema['name'] ?? '');
+            if (knownObjectNames.has(name.toLowerCase())) continue;
+
+            const labels = schema['labels'] as Record<string, string> | undefined;
+            const properties = (schema['properties'] ?? []) as Array<Record<string, unknown>>;
+            const associations = (schema['associations'] ?? []) as Array<Record<string, unknown>>;
+            const primaryDisplayProp = String(schema['primaryDisplayProperty'] ?? '');
+            const requiredProps = (schema['requiredProperties'] ?? []) as string[];
+
+            // Map HubSpot property definitions to SourceFieldInfo
+            const fields: SourceFieldInfo[] = properties.map(prop => {
+                const propName = String(prop['name'] ?? '');
+                const propType = String(prop['type'] ?? 'string');
+                return {
+                    Name: propName,
+                    Label: String(prop['label'] ?? propName),
+                    Description: String(prop['description'] ?? ''),
+                    SourceType: this.MapHubSpotPropertyType(propType),
+                    IsRequired: requiredProps.includes(propName),
+                    MaxLength: null,
+                    Precision: null,
+                    Scale: null,
+                    DefaultValue: null,
+                    IsPrimaryKey: propName === primaryDisplayProp || propName === 'hs_object_id',
+                    IsForeignKey: false,
+                    ForeignKeyTarget: null,
+                };
+            });
+
+            // Always include hs_object_id as PK if not already in properties
+            if (!fields.some(f => f.Name === 'hs_object_id')) {
+                fields.unshift({
+                    Name: 'hs_object_id', Label: 'Object ID', Description: 'HubSpot system ID',
+                    SourceType: 'string', IsRequired: true, MaxLength: null, Precision: null,
+                    Scale: null, DefaultValue: null, IsPrimaryKey: true, IsForeignKey: false, ForeignKeyTarget: null,
+                });
+            }
+
+            // Extract FK relationships from associations
+            const relationships: SourceRelationshipInfo[] = associations.map(assoc => {
+                const toObjectType = String(assoc['toObjectTypeId'] ?? assoc['toObject'] ?? '');
+                const fromFieldName = `${toObjectType}_id`;
+                return {
+                    FieldName: fromFieldName,
+                    TargetObject: toObjectType,
+                    TargetField: 'hs_object_id',
+                };
+            });
+
+            const pkFields = fields.filter(f => f.IsPrimaryKey).map(f => f.Name);
+
+            result.push({
+                ExternalName: name,
+                ExternalLabel: labels?.['singular'] ?? name,
+                Description: `HubSpot custom object: ${labels?.['plural'] ?? name}`,
+                Fields: fields,
+                PrimaryKeyFields: pkFields.length > 0 ? pkFields : ['hs_object_id'],
+                Relationships: relationships,
+            });
+        }
+
+        console.log(`[HubSpot] Discovered ${result.length} custom object schemas with fields and associations`);
+        return result;
+    }
+
+    /**
+     * Maps HubSpot property type strings to generic source types for SchemaBuilder.
+     */
+    private MapHubSpotPropertyType(hubspotType: string): string {
+        switch (hubspotType.toLowerCase()) {
+            case 'string': case 'phonenumber': case 'enumeration': return 'string';
+            case 'number': return 'decimal';
+            case 'date': return 'date';
+            case 'datetime': return 'datetime';
+            case 'bool': case 'boolean': return 'boolean';
+            default: return 'string';
+        }
+    }
 
     // ─── Action Metadata ─────────────────────────────────────────────────
 

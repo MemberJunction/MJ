@@ -22,6 +22,16 @@ import {
     type CRUDResult,
     type SearchContext,
     type SearchResult,
+    type TransformPipeline,
+    type PaginationStrategy as IPaginationStrategy,
+    type RateLimitStrategy,
+    type IncrementalSyncStrategy,
+    type EndpointTraversal,
+    DefaultTransformPipeline,
+    EmptyStringToNullRule,
+    PageNumberPagination,
+    ExponentialBackoff,
+    TimestampWatermark,
 } from '@memberjunction/integration-engine';
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -243,6 +253,32 @@ export class WicketConnector extends BaseRESTIntegrationConnector {
     public override get SupportsUpdate(): boolean { return true; }
     public override get SupportsDelete(): boolean { return true; }
     public override get SupportsSearch(): boolean { return true; }
+
+    // ── Strategy Declarations ───────────────────────────────────────
+
+    public override GetTransformPipeline(): TransformPipeline {
+        return new DefaultTransformPipeline([
+            new EmptyStringToNullRule(),
+            // Wicket-specific FlattenJsonApi, ExtractRelationshipIds, StripSystemFields
+            // still handled in existing methods until full migration.
+        ]);
+    }
+
+    public override GetPaginationStrategy(_objectName: string): IPaginationStrategy {
+        return new PageNumberPagination('page[number]', 'page[size]');
+    }
+
+    public override GetRateLimitStrategy(): RateLimitStrategy {
+        return new ExponentialBackoff(100, 3);
+    }
+
+    public override GetIncrementalStrategy(_objectName: string): IncrementalSyncStrategy {
+        return new TimestampWatermark('updated_at', 'filter[updated_at_gte]');
+    }
+
+    public override GetEndpointTraversal(_objectName: string): EndpointTraversal {
+        return { Type: 'Paginated', Description: 'Wicket JSON:API paginated endpoint' };
+    }
 
     // ─── BaseRESTIntegrationConnector abstract implementations ───────
 

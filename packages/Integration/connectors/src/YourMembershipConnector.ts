@@ -15,6 +15,17 @@ import {
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
     type IntegrationObjectInfo,
+    type TransformPipeline,
+    type PaginationStrategy as IPaginationStrategy,
+    type RateLimitStrategy,
+    type IncrementalSyncStrategy,
+    type EndpointTraversal,
+    DefaultTransformPipeline,
+    EmptyStringToNullRule,
+    PageNumberPagination,
+    ExponentialBackoff,
+    TimestampWatermark,
+    NoIncrementalSync,
 } from '@memberjunction/integration-engine';
 import type { MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 
@@ -240,6 +251,43 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
     public override GetIntegrationObjects(): IntegrationObjectInfo[] {
         return YM_ACTION_OBJECTS;
+    }
+
+    // ── Strategy Declarations ───────────────────────────────────────
+
+    public override GetTransformPipeline(): TransformPipeline {
+        return new DefaultTransformPipeline([
+            new EmptyStringToNullRule(),
+            // YM-specific StripMetadataKeys, NormalizeMemberDetail, FlattenGroupRecords
+            // still handled in existing methods until full migration.
+        ]);
+    }
+
+    public override GetPaginationStrategy(_objectName: string): IPaginationStrategy {
+        return new PageNumberPagination('page', 'pageSize');
+    }
+
+    public override GetRateLimitStrategy(): RateLimitStrategy {
+        return new ExponentialBackoff(200, 5);
+    }
+
+    public override GetIncrementalStrategy(objectName: string): IncrementalSyncStrategy {
+        const lowerName = objectName.toLowerCase();
+        if (lowerName === 'members' || lowerName.includes('member')) {
+            return new TimestampWatermark('LastUpdated', 'modifiedSince');
+        }
+        return new NoIncrementalSync();
+    }
+
+    public override GetEndpointTraversal(objectName: string): EndpointTraversal {
+        const lowerName = objectName.toLowerCase();
+        if (lowerName === 'members' || lowerName.includes('member')) {
+            return { Type: 'Enrichment', Description: 'YM member list + detail enrichment per record' };
+        }
+        if (lowerName.includes('registration') || lowerName.includes('session')) {
+            return { Type: 'Templated', Description: 'Per-event child records' };
+        }
+        return { Type: 'Paginated', Description: 'YM paginated endpoint' };
     }
 
     public override GetActionGeneratorConfig() {

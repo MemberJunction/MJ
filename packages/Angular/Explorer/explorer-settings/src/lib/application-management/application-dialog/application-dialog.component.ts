@@ -20,6 +20,12 @@ interface ApplicationEntityConfig {
   hasChanges: boolean;
 }
 
+interface IntegrationOption {
+  ID: string;
+  Name: string;
+  Icon: string | null;
+}
+
 export interface ApplicationDialogResult {
   action: 'save' | 'cancel';
   application?: MJApplicationEntity;
@@ -50,6 +56,11 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
   public availableEntities: MJEntityEntity[] = [];
   public allEntities: MJEntityEntity[] = [];
 
+  // Integration import
+  public Integrations: IntegrationOption[] = [];
+  public SelectedIntegrationId: string | null = null;
+  public isLoadingIntegrations = false;
+
   // Search filter for available entities
   public entitySearchTerm = '';
 
@@ -63,10 +74,20 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
   // Fullscreen state
   public isFullscreen = false;
 
+  public get CurrentIconClass(): string {
+    return this.applicationForm.get('icon')?.value || 'fa-solid fa-cube';
+  }
+
+  public get CurrentColor(): string {
+    return this.applicationForm.get('color')?.value || '';
+  }
+
   constructor() {
     this.applicationForm = this.fb.group({
       name: ['', [Validators.required, Validators.maxLength(100)]],
-      description: ['']
+      description: [''],
+      icon: ['', [Validators.maxLength(500)]],
+      color: ['', [Validators.maxLength(20)]]
     });
   }
 
@@ -86,14 +107,17 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
 
   private async initializeDialog(): Promise<void> {
     if (!this.visible) return;
-    
+
     try {
       this.isLoading = true;
       this.error = null;
-      
-      // Load all entities first
-      await this.loadAllEntities();
-      
+
+      // Load all entities and integrations in parallel
+      await Promise.all([
+        this.loadAllEntities(),
+        this.loadIntegrations()
+      ]);
+
       if (this.data?.application && this.isEditMode) {
         await this.loadApplicationData();
       } else {
@@ -120,18 +144,47 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
       ResultType: 'entity_object',
       OrderBy: 'Name ASC'
     });
-    
+
     this.allEntities = result.Success ? result.Results : [];
+  }
+
+  private async loadIntegrations(): Promise<void> {
+    try {
+      this.isLoadingIntegrations = true;
+      const rv = new RunView();
+      const result = await rv.RunView<{ ID: string; Name: string; Icon: string | null }>({
+        EntityName: 'MJ: Integrations',
+        Fields: ['ID', 'Name', 'Icon'],
+        ResultType: 'simple',
+        OrderBy: 'Name ASC'
+      });
+
+      if (result.Success) {
+        this.Integrations = result.Results.map(r => ({
+          ID: r.ID,
+          Name: r.Name,
+          Icon: r.Icon ?? null
+        }));
+      }
+    } catch (error) {
+      console.warn('Failed to load integrations:', error);
+      this.Integrations = [];
+    } finally {
+      this.isLoadingIntegrations = false;
+    }
   }
 
   private resetForm(): void {
     this.applicationForm.reset({
       name: '',
-      description: ''
+      description: '',
+      icon: '',
+      color: ''
     });
     this.applicationEntities = [];
     this.availableEntities = [...this.allEntities];
     this.entitySearchTerm = '';
+    this.SelectedIntegrationId = null;
     this.error = null;
   }
 
@@ -156,7 +209,9 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
     const app = this.data.application;
     this.applicationForm.patchValue({
       name: app.Name,
-      description: app.Description
+      description: app.Description,
+      icon: app.Icon || '',
+      color: app.Color || ''
     });
 
     // Load existing MJApplicationEntity records
@@ -330,6 +385,8 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
       const formValue = this.applicationForm.value;
       application.Name = formValue.name;
       application.Description = formValue.description || null;
+      application.Icon = formValue.icon || null;
+      application.Color = formValue.color || null;
 
       // Save application
       const saveResult = await application.Save();
@@ -386,6 +443,21 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
         }
       }
     }
+  }
+
+  public OnIntegrationSelected(integrationId: string | null): void {
+    this.SelectedIntegrationId = integrationId;
+    if (!integrationId) return;
+
+    const integration = this.Integrations.find(i => i.ID === integrationId);
+    if (integration?.Icon) {
+      this.applicationForm.patchValue({ icon: integration.Icon });
+    }
+  }
+
+  public OnColorPickerChange(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.applicationForm.patchValue({ color: value });
   }
 
   public onCancel(): void {

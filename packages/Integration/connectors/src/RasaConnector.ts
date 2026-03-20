@@ -14,6 +14,18 @@ import {
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
     type IntegrationObjectInfo,
+    type TransformPipeline,
+    type PaginationStrategy as IPaginationStrategy,
+    type RateLimitStrategy,
+    type IncrementalSyncStrategy,
+    type EndpointTraversal,
+    DefaultTransformPipeline,
+    EmptyStringToNullRule,
+    OffsetPagination,
+    CursorPagination,
+    FixedInterval,
+    TimestampWatermark,
+    NoIncrementalSync,
 } from '@memberjunction/integration-engine';
 import type { MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 
@@ -150,6 +162,45 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
 
     public override GetIntegrationObjects(): IntegrationObjectInfo[] {
         return RASA_ACTION_OBJECTS;
+    }
+
+    // ── Strategy Declarations ───────────────────────────────────────
+
+    public override GetTransformPipeline(): TransformPipeline {
+        return new DefaultTransformPipeline([
+            new EmptyStringToNullRule(),
+            // Rasa-specific UnwrapDataEnvelope and ExplodeTopicsArray still handled
+            // in NormalizeResponse() and FlattenInsightsTopics() until full migration.
+        ]);
+    }
+
+    public override GetPaginationStrategy(objectName: string): IPaginationStrategy {
+        // Rasa uses offset for persons/posts, cursor for insights
+        const lowerName = objectName.toLowerCase();
+        if (lowerName.includes('insight') || lowerName.includes('action')) {
+            return new CursorPagination('skip', 'next');
+        }
+        return new OffsetPagination('skip', 'limit');
+    }
+
+    public override GetRateLimitStrategy(): RateLimitStrategy {
+        return new FixedInterval(100, 3);
+    }
+
+    public override GetIncrementalStrategy(objectName: string): IncrementalSyncStrategy {
+        const lowerName = objectName.toLowerCase();
+        if (lowerName === 'persons' || lowerName.includes('person')) {
+            return new TimestampWatermark('updated_since', 'updated_since');
+        }
+        return new NoIncrementalSync();
+    }
+
+    public override GetEndpointTraversal(objectName: string): EndpointTraversal {
+        const lowerName = objectName.toLowerCase();
+        if (lowerName.includes('topic')) {
+            return { Type: 'Templated', Description: 'Per-person topic data explosion' };
+        }
+        return { Type: 'Paginated', Description: 'Rasa offset/cursor paginated endpoint' };
     }
 
     public override GetActionGeneratorConfig() {

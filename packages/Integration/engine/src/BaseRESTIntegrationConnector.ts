@@ -10,6 +10,7 @@ import {
     type FetchBatchResult,
 } from './BaseIntegrationConnector.js';
 import type { ExternalRecord, SourceSchemaInfo, SourceObjectInfo, SourceRelationshipInfo } from './types.js';
+import type { TargetDatabasePlatform } from './strategies/TransformStrategy.js';
 
 // ─── REST-specific types ─────────────────────────────────────────────
 
@@ -206,22 +207,74 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
     }
 
     /**
+     * The target database platform for transform rule filtering.
+     * Override in subclasses or set dynamically from CompanyIntegration config.
+     * Defaults to 'sqlserver' — connectors targeting PostgreSQL should override.
+     */
+    protected get TargetPlatform(): TargetDatabasePlatform {
+        return 'sqlserver';
+    }
+
+    /**
      * Fetches records from the external REST API using metadata-driven configuration.
      * Handles both flat endpoints and template-variable (per-parent) endpoints.
+     * Applies the connector's TransformPipeline to all fetched records.
      */
     public async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
+        const logger = this.GetLogger();
         const obj = this.GetCachedObject(ctx.CompanyIntegration.IntegrationID, ctx.ObjectName);
         const fields = this.GetCachedFields(obj.ID);
-        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
-        const baseURL = this.GetBaseURL(ctx.CompanyIntegration, auth);
 
+        logger.StartPhase('Auth', ctx.ObjectName);
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
+        logger.EndPhase('Auth', ctx.ObjectName, 'success');
+
+        const baseURL = this.GetBaseURL(ctx.CompanyIntegration, auth);
         const templateVars = this.DetectTemplateVars(obj.APIPath);
 
+        logger.StartPhase('Fetch', ctx.ObjectName);
+        let result: FetchBatchResult;
         if (templateVars.length > 0) {
-            return this.FetchWithTemplateVars(auth, baseURL, obj, fields, templateVars, ctx);
+            result = await this.FetchWithTemplateVars(auth, baseURL, obj, fields, templateVars, ctx);
+        } else {
+            result = await this.FetchFlat(auth, baseURL, obj, fields, ctx);
+        }
+        logger.EndPhase('Fetch', ctx.ObjectName, 'success');
+        logger.Progress(ctx.ObjectName, result.Records.length);
+
+        // Apply transform pipeline to all fetched records
+        result.Records = this.ApplyTransforms(result.Records, fields);
+
+        return result;
+    }
+
+    /**
+     * Applies the connector's TransformPipeline to an array of ExternalRecords.
+     * Builds a fieldTypes map from IntegrationObjectField metadata for type-aware transforms.
+     */
+    protected ApplyTransforms(
+        records: ExternalRecord[],
+        fields: MJIntegrationObjectFieldEntity[]
+    ): ExternalRecord[] {
+        const pipeline = this.GetTransformPipeline();
+        if (pipeline.Rules.length === 0) return records;
+
+        const logger = this.GetLogger();
+        logger.StartPhase('Transform', records.length > 0 ? records[0].ObjectType : 'unknown');
+
+        // Build field name → SQL type map for type-aware transforms
+        const fieldTypes = new Map<string, string>();
+        for (const f of fields) {
+            fieldTypes.set(f.Name, f.Type);
         }
 
-        return this.FetchFlat(auth, baseURL, obj, fields, ctx);
+        const transformed = records.map(record => ({
+            ...record,
+            Fields: pipeline.Execute(record.Fields, fieldTypes, this.TargetPlatform),
+        }));
+
+        logger.EndPhase('Transform', records.length > 0 ? records[0].ObjectType : 'unknown', 'success');
+        return transformed;
     }
 
     // ── Flat fetch (no template variables) ───────────────────────────

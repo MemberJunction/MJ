@@ -115,6 +115,63 @@ export type {
     GeneratedActionMetadata,
 } from './ActionMetadataGenerator.js';
 
+// Strategy Interfaces
+export type {
+    TargetDatabasePlatform,
+    TransformRule,
+    TransformPipeline,
+} from './strategies/index.js';
+export type {
+    PaginationType as StrategyPaginationType,
+    PaginationState as StrategyPaginationState,
+    PaginationStrategy,
+} from './strategies/index.js';
+export type {
+    BatchOperationType,
+    BatchingStrategy,
+} from './strategies/index.js';
+export type {
+    AuthType,
+    AuthContext,
+    AuthStrategy,
+} from './strategies/index.js';
+export type { RateLimitStrategy } from './strategies/index.js';
+export type { WritebackStrategy } from './strategies/index.js';
+export type {
+    TraversalType,
+    EndpointTraversal,
+} from './strategies/index.js';
+export type {
+    IncrementalWatermarkType,
+    IncrementalSyncStrategy,
+} from './strategies/index.js';
+export type {
+    BatchApplyResult,
+    IntegrationLogger,
+    TransactionLogger,
+} from './strategies/index.js';
+
+// Built-in Strategy Implementations
+export { DefaultTransformPipeline } from './strategies/builtin/transforms/DefaultTransformPipeline.js';
+export { EmptyStringToNullRule } from './strategies/builtin/transforms/shared/EmptyStringToNull.js';
+export { TrimWhitespaceRule } from './strategies/builtin/transforms/shared/TrimWhitespace.js';
+export { NormalizeUUIDUppercaseRule } from './strategies/builtin/transforms/sqlserver/NormalizeUUIDUppercase.js';
+export { NormalizeUUIDLowercaseRule } from './strategies/builtin/transforms/postgresql/NormalizeUUIDLowercase.js';
+export { ValidateJsonbRule } from './strategies/builtin/transforms/postgresql/ValidateJsonb.js';
+export { CoerceBooleanStringsRule } from './strategies/builtin/transforms/postgresql/CoerceBooleanStrings.js';
+export { CoerceTimestamptzRule } from './strategies/builtin/transforms/postgresql/CoerceTimestamptz.js';
+export { CursorPagination } from './strategies/builtin/pagination/CursorPagination.js';
+export { OffsetPagination } from './strategies/builtin/pagination/OffsetPagination.js';
+export { PageNumberPagination } from './strategies/builtin/pagination/PageNumberPagination.js';
+export { NoPagination } from './strategies/builtin/pagination/NoPagination.js';
+export { SimpleBatching } from './strategies/builtin/batching/SimpleBatching.js';
+export { NoBatching } from './strategies/builtin/batching/NoBatching.js';
+export { ExponentialBackoff } from './strategies/builtin/ratelimit/ExponentialBackoff.js';
+export { FixedInterval } from './strategies/builtin/ratelimit/FixedInterval.js';
+export { NoRateLimit } from './strategies/builtin/ratelimit/NoRateLimit.js';
+export { TimestampWatermark } from './strategies/builtin/incremental/TimestampWatermark.js';
+export { NoIncrementalSync } from './strategies/builtin/incremental/NoIncrementalSync.js';
+
 // Integration Engine (server-side, wraps IntegrationEngineBase via composition)
 // NOTE: For IntegrationEngineBase (client-safe metadata), import from @memberjunction/integration-engine-base
 export { IntegrationEngine } from './IntegrationEngine.js';

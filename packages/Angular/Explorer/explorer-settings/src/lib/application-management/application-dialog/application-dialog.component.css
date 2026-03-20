@@ -376,6 +376,87 @@
 }
 
 /* -----------------------------------------------------------------------------
+   Icon Input Group
+   ----------------------------------------------------------------------------- */
+.icon-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.icon-input-group .field-input {
+  flex: 1;
+}
+
+.icon-preview {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mj-brand-accent-subtle);
+  border-radius: var(--mj-radius-md);
+  font-size: 1.25rem;
+  color: var(--mj-brand-primary);
+  flex-shrink: 0;
+  border: 1px solid var(--mj-border-default);
+}
+
+/* -----------------------------------------------------------------------------
+   Color Input Group
+   ----------------------------------------------------------------------------- */
+.color-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.color-input-group .field-input {
+  flex: 1;
+}
+
+.color-swatch {
+  width: 44px;
+  height: 44px;
+  padding: 2px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md);
+  cursor: pointer;
+  background: var(--mj-bg-page);
+  flex-shrink: 0;
+}
+
+.color-swatch:hover {
+  border-color: var(--mj-brand-primary);
+}
+
+.color-swatch:focus-visible {
+  outline: 2px solid var(--mj-brand-primary);
+  outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+   Integration Import Group
+   ----------------------------------------------------------------------------- */
+.integration-import-group {
+  position: relative;
+}
+
+.integration-import-group .field-select {
+  width: 100%;
+  appearance: auto;
+}
+
+.integration-spinner {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--mj-text-secondary);
+  font-size: 0.875rem;
+}
+
+/* -----------------------------------------------------------------------------
    Alert Messages
    ----------------------------------------------------------------------------- */
 .alert {

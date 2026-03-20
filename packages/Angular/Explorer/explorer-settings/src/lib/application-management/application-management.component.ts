@@ -292,55 +292,57 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   }
   
   public getAppIcon(app: MJApplicationEntity): string {
-    // Map application names to appropriate icons based on their purpose
+    // If the application has a custom icon set, use it directly
+    if (app.Icon) return app.Icon;
+
+    // Fallback: map application names to appropriate icons based on their purpose
     const name = (app.Name || '').toLowerCase();
 
-    // Common application type mappings
     if (name.includes('admin') || name.includes('management')) {
-      return 'fa-cog';
+      return 'fa-solid fa-cog';
     }
     if (name.includes('report') || name.includes('analytics') || name.includes('dashboard')) {
-      return 'fa-chart-line';
+      return 'fa-solid fa-chart-line';
     }
     if (name.includes('user') || name.includes('people') || name.includes('employee')) {
-      return 'fa-users';
+      return 'fa-solid fa-users';
     }
     if (name.includes('settings') || name.includes('config')) {
-      return 'fa-sliders';
+      return 'fa-solid fa-sliders';
     }
     if (name.includes('data') || name.includes('database')) {
-      return 'fa-database';
+      return 'fa-solid fa-database';
     }
     if (name.includes('file') || name.includes('document')) {
-      return 'fa-file-alt';
+      return 'fa-solid fa-file-alt';
     }
     if (name.includes('mail') || name.includes('email') || name.includes('message')) {
-      return 'fa-envelope';
+      return 'fa-solid fa-envelope';
     }
     if (name.includes('search') || name.includes('explorer')) {
-      return 'fa-search';
+      return 'fa-solid fa-search';
     }
     if (name.includes('calendar') || name.includes('schedule') || name.includes('event')) {
-      return 'fa-calendar';
+      return 'fa-solid fa-calendar';
     }
     if (name.includes('security') || name.includes('auth') || name.includes('permission')) {
-      return 'fa-shield-alt';
+      return 'fa-solid fa-shield-alt';
     }
     if (name.includes('integration') || name.includes('api') || name.includes('connect')) {
-      return 'fa-plug';
+      return 'fa-solid fa-plug';
     }
     if (name.includes('workflow') || name.includes('process') || name.includes('automation')) {
-      return 'fa-project-diagram';
+      return 'fa-solid fa-project-diagram';
     }
     if (name.includes('ai') || name.includes('intelligence') || name.includes('machine')) {
-      return 'fa-brain';
+      return 'fa-solid fa-brain';
     }
     if (name.includes('home') || name.includes('main') || name.includes('default')) {
-      return 'fa-home';
+      return 'fa-solid fa-home';
     }
 
     // Default icon for applications
-    return 'fa-grid-2';
+    return 'fa-solid fa-grid-2';
   }
   
   public getAppStatusClass(app: MJApplicationEntity): string {

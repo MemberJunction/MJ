@@ -4,6 +4,15 @@ import {
     type FetchContext,
     type FetchBatchResult,
     type DefaultFieldMapping,
+    type TransformPipeline,
+    type PaginationStrategy as IPaginationStrategy,
+    type RateLimitStrategy,
+    type IncrementalSyncStrategy,
+    DefaultTransformPipeline,
+    EmptyStringToNullRule,
+    CursorPagination,
+    ExponentialBackoff,
+    TimestampWatermark,
 } from '@memberjunction/integration-engine';
 import { RelationalDBConnector } from './RelationalDBConnector.js';
 
@@ -62,6 +71,30 @@ export class SalesforceConnector extends RelationalDBConnector {
             { SourceFieldName: 'Department', DestinationFieldName: 'Department' },
         ];
     }
+
+    // ── Strategy Declarations ───────────────────────────────────────
+    // Salesforce strategy declarations reflect the platform's capabilities.
+    // Full implementation pending — current connector delegates to RelationalDBConnector.
+
+    public override GetTransformPipeline(): TransformPipeline {
+        return new DefaultTransformPipeline([
+            new EmptyStringToNullRule(),
+        ]);
+    }
+
+    public override GetPaginationStrategy(_objectName: string): IPaginationStrategy {
+        return new CursorPagination('nextRecordsUrl', 'nextRecordsUrl');
+    }
+
+    public override GetRateLimitStrategy(): RateLimitStrategy {
+        return new ExponentialBackoff(100, 5);
+    }
+
+    public override GetIncrementalStrategy(_objectName: string): IncrementalSyncStrategy {
+        return new TimestampWatermark('SystemModStamp', 'SystemModStamp');
+    }
+
+    public override get SupportsCustomObjects(): boolean { return true; }
 
     /** Default field mappings: sf_Account -> Companies */
     private getAccountMappings(): DefaultFieldMapping[] {

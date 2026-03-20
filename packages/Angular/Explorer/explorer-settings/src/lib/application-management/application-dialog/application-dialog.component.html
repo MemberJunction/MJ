@@ -110,6 +110,70 @@
                   Provide a clear description of what this application does and its main features.
                 </div>
               </div>
+
+              <!-- Icon and Color Row -->
+              <div class="form-row">
+                <div class="form-field">
+                  <label class="field-label" for="app-icon">Icon</label>
+                  <div class="icon-input-group">
+                    <div class="icon-preview" [style.color]="CurrentColor || null">
+                      <i [class]="CurrentIconClass" aria-hidden="true"></i>
+                    </div>
+                    <input
+                      id="app-icon"
+                      type="text"
+                      class="field-input"
+                      formControlName="icon"
+                      placeholder="fa-solid fa-cube"
+                    />
+                  </div>
+                  <div class="field-hint">Font Awesome CSS class (e.g. fa-solid fa-cube)</div>
+                </div>
+
+                <div class="form-field">
+                  <label class="field-label" for="app-color">Color</label>
+                  <div class="color-input-group">
+                    <input
+                      type="color"
+                      class="color-swatch"
+                      [value]="CurrentColor || '#000000'"
+                      (input)="OnColorPickerChange($event)"
+                      aria-label="Pick a color"
+                    />
+                    <input
+                      id="app-color"
+                      type="text"
+                      class="field-input"
+                      formControlName="color"
+                      placeholder="#4caf50"
+                    />
+                  </div>
+                  <div class="field-hint">Hex color for visual theming</div>
+                </div>
+              </div>
+
+              <!-- Import from Integration -->
+              <div class="form-field">
+                <label class="field-label" for="app-integration">Import from Integration</label>
+                <div class="integration-import-group">
+                  <select
+                    id="app-integration"
+                    class="field-select"
+                    [ngModel]="SelectedIntegrationId"
+                    [ngModelOptions]="{standalone: true}"
+                    (ngModelChange)="OnIntegrationSelected($event)"
+                  >
+                    <option [ngValue]="null">-- None --</option>
+                    @for (integration of Integrations; track integration.ID) {
+                      <option [ngValue]="integration.ID">{{ integration.Name }}</option>
+                    }
+                  </select>
+                  @if (isLoadingIntegrations) {
+                    <i class="fa-solid fa-spinner fa-spin integration-spinner" aria-hidden="true"></i>
+                  }
+                </div>
+                <div class="field-hint">Optionally copy an integration's icon into this application.</div>
+              </div>
             </div>
               </div>
             }

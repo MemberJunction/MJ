@@ -143,7 +143,7 @@
             <div class="app-header" (click)="toggleAppExpansion(app.ID)" role="button" [attr.aria-expanded]="isAppExpanded(app.ID)">
               <div class="app-info">
                 <div class="app-icon-wrapper">
-                  <i [class]="'fa-solid ' + getAppIcon(app)" aria-hidden="true"></i>
+                  <i [class]="getAppIcon(app)" [style.color]="app.Color || null" aria-hidden="true"></i>
                 </div>
                 <div class="app-details">
                   <h3 class="app-name">{{ app.Name }}</h3>
