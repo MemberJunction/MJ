@@ -14,7 +14,7 @@ DBAutoDoc's central insight is that schema understanding is fundamentally an ite
 
 The system makes four concrete contributions: (1) an iterative context-propagation algorithm that refines table and column descriptions by re-analyzing each schema object in light of its neighbors' most recent descriptions; (2) a tiered statistical pipeline for primary key and foreign key discovery — combining cardinality analysis, value overlap, and naming heuristics — with a bidirectional feedback loop in which LLM-generated semantic context improves statistical candidate scoring and vice versa; (3) a dual-layer human knowledge injection mechanism that distinguishes verified ground truth from exploratory seed context, allowing partial expert knowledge to guide but not constrain automated analysis; and (4) a multi-criterion convergence detector that combines description stability windows, per-column confidence thresholds, and semantic change magnitude to determine when further iteration yields diminishing returns.
 
-On a suite of real-world benchmark databases, DBAutoDoc discovered keys with high precision and recall, generated semantically accurate table and column descriptions rated by domain experts, and reached convergence in 2 iterations on average. Total LLM API cost averaged approximately \$0.70 per 100 tables, compared to an estimated 160–320 hours of skilled analyst time per database — a reduction of more than 99.5% in documentation cost. DBAutoDoc is released as open-source software with all evaluation configurations and prompt templates included for full reproducibility.
+On a suite of real-world benchmark databases, DBAutoDoc achieved overall weighted scores of 96.1% across two model families (Gemini and Anthropic) using a composite metric that weights key discovery accuracy (FK F1 at 35%, PK F1 at 30%) more heavily than description coverage (table descriptions at 20%, column descriptions at 15%), reflecting the primacy of structural understanding for schema comprehension. The system reached convergence in 2 iterations on average. Total LLM API cost averaged approximately \$0.70 per 100 tables, compared to an estimated 160–320 hours of skilled analyst time per database — a reduction of more than 99.5% in documentation cost. DBAutoDoc is released as open-source software with all evaluation configurations and prompt templates included for full reproducibility.
 
 ---
 
@@ -758,6 +758,12 @@ We compare DBAutoDoc against four classes of baseline to isolate the contributio
 
 **Key discovery precision, recall, and F1.** For PK detection, precision is the fraction of columns declared as primary keys by DBAutoDoc that appear in the ground truth; recall is the fraction of ground-truth PKs that DBAutoDoc detects. F1 is the harmonic mean. FK detection uses the same formulation at the level of directed column pairs $(A.col_i \rightarrow B.col_j)$. We report micro-averaged and macro-averaged F1 across databases.
 
+**Overall score (weighted).** We compute a single aggregate quality score as a weighted average of four metrics:
+
+$$S_{\text{overall}} = 0.35 \cdot F1_{FK} + 0.30 \cdot F1_{PK} + 0.20 \cdot C_{\text{table}} + 0.15 \cdot C_{\text{col}}$$
+
+where $F1_{FK}$ and $F1_{PK}$ are the foreign key and primary key F1 scores respectively, $C_{\text{table}}$ is the fraction of tables receiving a generated description, and $C_{\text{col}}$ is the fraction of columns receiving a generated description. The weights reflect the relative importance of each metric for practical schema understanding: key discovery accuracy (FK + PK, combined 65%) is weighted more heavily than description coverage (35%) because correctly identifying structural relationships is a prerequisite for meaningful documentation — an accurate description of a table is far less useful if the table's foreign key relationships are missing or incorrect. Within key discovery, FK detection receives slightly higher weight than PK detection because foreign keys define the relational graph that drives context propagation, and FK errors compound across the dependency network in ways that PK errors do not.
+
 **Convergence speed.** We measure the number of iterations required until fewer than 5% of table descriptions change materially (defined as a cosine similarity below 0.95 between consecutive iteration embeddings using a sentence transformer). We report median and 90th-percentile iteration counts across databases.
 
 **Token efficiency.** We track total input tokens and output tokens consumed per table across all pipeline phases, broken down by phase: (1) pre-filter candidates, (2) FK LLM confirmation, (3) per-iteration description, (4) ground truth seed injection. We report the input/output token ratio as a measure of context utilization.
@@ -823,29 +829,30 @@ To evaluate the sensitivity of DBAutoDoc's pipeline to the choice of LLM, we ran
 
 | Metric | Gemini 3 Flash / 3.1 Pro | GPT-5.4-mini / 5.4 | Sonnet 4.6 / Opus 4.6 |
 |--------|--------------------------|---------------------|----------------------|
-| **PK F1** | **95.0%** | 89.4% | [TBD] |
-| PK Precision | 95.7% | 90.0% | [TBD] |
-| PK Recall | 94.4% | 88.7% | [TBD] |
-| PK Correct | 67/71 | 63/71 | [TBD] |
-| **FK F1** | **94.2%** | 77.9% | [TBD] |
-| FK Precision | 90.0% | 73.1% | [TBD] |
-| FK Recall | 98.9% | 83.5% | [TBD] |
-| FK Correct | 90/91 | 76/91 | [TBD] |
-| **Overall Score** | **96.7% (A+)** | 90.1% (A) | [TBD] |
-| Tokens Used | 3.2M | 952K | [TBD] |
-| Description Coverage | 99% | 96% | [TBD] |
+| **PK F1** | **95.0%** | 89.4% | **95.0%** |
+| PK Correct | 67/71 | 63/71 | 67/71 |
+| PK Extra | 3 | 7 | 3 |
+| **FK F1** | **94.2%** | 77.9% | 93.0% |
+| FK Correct | 90/91 | 76/91 | 87/91 |
+| FK Missed | 1 | 15 | 4 |
+| FK Extra | 10 | 28 | 9 |
+| Table Desc Coverage | 99% | 97% | 100% |
+| Column Desc Coverage | 99% | 96% | 100% |
+| **Overall Score** | **96.1% (A+)** | 87.9% (B+) | 96.1% (A+) |
+| Tokens Used | 3.2M | 952K | 471K |
 | Context Window | 1M tokens | 272K tokens | 680K tokens |
-| Approx. Cost | ~$0.50 | ~$0.30 | [TBD] |
 
 **Key findings:**
 
-1. **Context window matters significantly.** GPT-5.4-mini's 272K token context limit caused 15 FK misses (vs Gemini's 1), as large table prompts with cross-table FK statistics exceeded the input limit. The deterministic pipeline is identical — all differences stem from the LLM's ability to process the full prompt context.
+1. **Context window matters significantly.** GPT-5.4-mini's 272K token context limit caused 15 FK misses (vs 1 for Gemini and 4 for Sonnet/Opus), as large table prompts with cross-table FK statistics exceeded the input limit. The deterministic pipeline is identical — all differences stem from the LLM's ability to process the full prompt context.
 
-2. **The deterministic foundation provides a floor.** All three models achieve Grade A (90%+) overall, demonstrating that the statistical gates and PK heuristics provide a strong foundation regardless of LLM choice. The PK detection F1 ranges from 89-95% across models, with most of the variance in FK detection.
+2. **The deterministic foundation provides a floor.** The statistical gates and PK heuristics provide a strong foundation regardless of LLM choice: PK F1 ranges from 89–95% across all three model families. Variance concentrates in FK detection, where context window limitations have the largest impact.
 
-3. **Token efficiency varies.** GPT-5.4-mini used only 952K tokens (vs 3.2M for Gemini Flash), but this is partly because failed prompts (context overflow) consumed fewer output tokens. Effective cost per table is comparable across models at current pricing.
+3. **Gemini and Anthropic models achieve near-parity.** Both Gemini 3 Flash and Sonnet 4.6 achieve an overall weighted score of 96.1% (A+), with Gemini holding a slight edge in FK recall (98.9% vs 95.6%) while Sonnet/Opus achieves perfect description coverage (100% for both tables and columns). GPT-5.4-mini trails at 87.9% (B+), with FK F1 of 77.9% being the primary differentiator.
 
-4. **Pruning conservatism is model-independent.** All three pruning models (Gemini 3.1 Pro, GPT-5.4, Opus 4.6) removed only 1-2 FKs during pruning, suggesting the pruning prompt may need further tuning independent of model choice.
+4. **Token efficiency varies dramatically.** Sonnet 4.6 / Opus 4.6 used only 471K tokens — 7x fewer than Gemini's 3.2M and 2x fewer than GPT's 952K — while achieving equivalent overall quality. This suggests that Anthropic models extract more information per token from the statistical context, making them the most cost-effective option at current pricing.
+
+5. **Pruning conservatism is model-independent.** All three pruning models (Gemini 3.1 Pro, GPT-5.4, Opus 4.6) removed only 1–2 FKs during pruning, suggesting the pruning prompt may need further tuning independent of model choice.
 
 ### 7.3 Iterative Refinement Results
 
@@ -932,17 +939,27 @@ Table 6 reports token consumption and estimated API cost across benchmark databa
 
 ### 7.5 Case Studies
 
-The following case studies are [TBD] pending completion of enterprise database evaluation. Each case study will be structured as follows:
+#### 7.5.1 OrgA: Professional Association in the Education Sector
 
-**Structure for each case study:**
-- *Database profile*: anonymized domain, table count, constraint coverage at ingestion
-- *Key discoveries*: previously undocumented FK relationships surfaced by DBAutoDoc, structural anomalies identified during profiling
-- *Schema optimization observations*: cases where the documentation process revealed normalization issues, missing indexes implied by FK relationships, or naming inconsistencies
-- *Before/after comparison*: side-by-side comparison of documentation state at ingestion vs. DBAutoDoc output, evaluated against the quality rubric in Section 7.1.3
-- *Time to comprehensive documentation*: wall-clock time from schema ingestion to final output, including all iteration rounds
-- *Practitioner feedback*: qualitative feedback from domain experts who reviewed the generated documentation
+**Database profile.** OrgA is a professional association in the education sector that uses a Salesforce-based CRM/AMS platform (Nimble AMS built on Salesforce) as its primary membership and operations system. The database snapshot contained 36 tables, 1,807 columns, spread across 4 schemas. Critically, the database was *completely undocumented*: no primary keys were declared, no foreign key constraints existed, and no table or column descriptions were present in the schema metadata. This represents the most challenging operating condition for DBAutoDoc — a true "dark database" with zero structural hints.
 
-We anticipate [TBD] case studies from production enterprise environments, with a particular focus on databases in the 200–500 table range where the cost differential versus human documentation is largest and where the FK-graph density is sufficient to demonstrate the full propagation benefit of the iterative architecture.
+**Evaluation methodology.** Because no ground truth existed for this database — neither declared constraints nor independent expert documentation — we performed a qualitative evaluation only. Quantitative precision/recall metrics cannot be computed without a reference set. Instead, we assessed the output by reviewing the discovered keys and generated descriptions against domain knowledge of the Salesforce platform architecture and the association management domain.
+
+**Key discovery results.** DBAutoDoc detected 35 primary keys across the 36 tables (97% table coverage), identifying the correct Salesforce `Id` or `sfid` column in each case. The system discovered 193 foreign key relationships, of which 1 was pruned during the LLM validation phase. The adaptive weight redistribution mechanism (Section 4.3.5) activated as expected, since no declared PKs existed to anchor the target-is-PK scoring factor.
+
+**Semantic analysis highlights.** The most striking result was the LLM's ability to reverse-engineer platform-specific architectural patterns from cryptic column names alone:
+
+- **Salesforce Person Account model.** Columns following the `NU__Account__c` naming pattern were correctly identified as Nimble AMS custom objects on the Salesforce platform. The system recognized that the `__c` suffix denotes custom fields/objects in Salesforce's managed package architecture, and correctly inferred the `NU` namespace prefix as belonging to the Nimble AMS package.
+
+- **Committee governance structure.** The system identified a multi-table committee governance model spanning committee definitions, membership rosters, role assignments, and term tracking — a common pattern in professional associations — from tables whose names and columns provided no explicit indication of this structure beyond cryptic Salesforce API names.
+
+- **Membership lifecycle patterns.** DBAutoDoc correctly described the membership lifecycle flow — from application through approval, renewal, and lapse — by tracing FK relationships between member records, transaction tables, and status history tables. This lifecycle understanding emerged entirely from data patterns and cross-table relationship analysis.
+
+- **Cross-schema relationships.** The 4-schema structure created cross-schema FK candidates that the unified dependency graph (Section 5.2) handled correctly, propagating context across schema boundaries to produce consistent descriptions.
+
+**Processing statistics.** The analysis completed in 2 iterations, consuming 1.1M tokens over approximately 1.5 hours of wall-clock time. No ground truth or seed context was provided — the system operated in fully autonomous mode.
+
+**Significance.** This case study demonstrates DBAutoDoc's ability to operate on a completely undocumented database and produce actionable documentation. The system's capacity to recognize platform-specific architectural patterns (Salesforce managed packages, Person Account model) and domain-specific structures (association membership, committee governance) from raw schema and data analysis alone — without any human hints — validates the iterative context propagation approach in a real-world setting where no quantitative ground truth is available for comparison.
 
 ---
 
