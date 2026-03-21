@@ -67,6 +67,7 @@ import { QueryParameterProcessor } from '@memberjunction/query-processor';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
+import { SQLDialect } from '@memberjunction/sql-dialect';
 import { QueryCompositionEngine } from './queryCompositionEngine.js';
 
 import {
@@ -217,8 +218,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const session = new SqlLoggingSessionImpl(sessionId, filePath,
             {
                 defaultSchemaName: mjCoreSchema,
-                ...options // if defaultSchemaName is not provided, it will use the MJCoreSchemaName, otherwise
-                // the caller's defaultSchemaName will be used
+                // Inject the platform's batch separator as the default so callers don't need to
+                // hardcode 'GO'. Callers can still override by passing batchSeparator explicitly.
+                batchSeparator: this.PlatformBatchSeparator || undefined,
+                ...options
             });
 
         // Initialize the session (create file, write header)
@@ -678,6 +681,26 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
     // InternalRunView — Shared View Execution Engine
     /**************************************************************************/
+
+    /**
+     * Returns the SQLDialect instance for this provider's platform.
+     * Subclasses override to return the appropriate dialect (e.g. SQLServerDialect, PostgreSQLDialect).
+     * Used by `PlatformBatchSeparator` to retrieve the correct batch separator token via
+     * `@memberjunction/sql-dialect` rather than hardcoding platform strings.
+     */
+    protected getDialect(): SQLDialect | null {
+        return null;
+    }
+
+    /**
+     * Returns the batch separator token for the underlying database platform by delegating to
+     * the SQLDialect instance returned by `getDialect()`.
+     * SQL Server → `'GO'`, PostgreSQL → `''` (no separator needed).
+     * Auto-injected as the default `batchSeparator` in `CreateSqlLogger`.
+     */
+    protected get PlatformBatchSeparator(): string {
+        return this.getDialect()?.BatchSeparator() ?? '';
+    }
 
     /**
      * Builds a platform-specific pagination clause.

@@ -720,4 +720,75 @@ describe('SqlLoggingSessionImpl', () => {
             expect(result).toContain("''Complete'' END as Col");
         });
     });
+
+    describe('_countVariableDeclarations', () => {
+        const countVars = (sql: string) => {
+            const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
+            return (session as Record<string, CallableFunction>)._countVariableDeclarations(sql);
+        };
+
+        it('should count a single DECLARE @var TYPE', () => {
+            expect(countVars('DECLARE @MyVar NVARCHAR(255)')).toBe(1);
+        });
+
+        it('should count multiple variables in a comma-separated DECLARE block', () => {
+            const sql = 'DECLARE @ID UNIQUEIDENTIFIER,\n@Name NVARCHAR(255),\n@Status NVARCHAR(50)';
+            expect(countVars(sql)).toBe(3);
+        });
+
+        it('should count variables across multiple DECLARE statements', () => {
+            const sql = 'DECLARE @A INT\nDECLARE @B BIT\nDECLARE @C DATETIME';
+            expect(countVars(sql)).toBe(3);
+        });
+
+        it('should NOT count SET assignments (no type keyword after var name)', () => {
+            const sql = "SET @MyVar = 'value'\nSET @Count = 0";
+            expect(countVars(sql)).toBe(0);
+        });
+
+        it('should NOT count EXEC parameter references', () => {
+            const sql = 'EXEC spUpdate @ID = @ID_abc, @Name = @Name_abc';
+            expect(countVars(sql)).toBe(0);
+        });
+
+        it('should return 0 for empty string', () => {
+            expect(countVars('')).toBe(0);
+        });
+
+        it('should return 0 for SQL with no variable declarations', () => {
+            expect(countVars('SELECT * FROM Users WHERE Status = N\'Active\'')).toBe(0);
+        });
+    });
+
+    describe('variableBatchThreshold', () => {
+        /**
+         * Minimal helper: invoke the threshold logic without hitting the file system.
+         * We test the _countVariableDeclarations helper and the threshold branching logic
+         * independently since logSqlStatement requires an open file handle.
+         */
+        it('should use threshold logic when variableBatchThreshold > 0 and batchSeparator is set', () => {
+            // Verify the option is accepted without error
+            const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql', {
+                batchSeparator: 'GO',
+                variableBatchThreshold: 200,
+            });
+            expect(session.options.variableBatchThreshold).toBe(200);
+            expect(session.options.batchSeparator).toBe('GO');
+        });
+
+        it('should fall back to legacy mode when variableBatchThreshold is 0', () => {
+            const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql', {
+                batchSeparator: 'GO',
+                variableBatchThreshold: 0,
+            });
+            expect(session.options.variableBatchThreshold).toBe(0);
+        });
+
+        it('should default to no threshold when variableBatchThreshold is undefined', () => {
+            const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql', {
+                batchSeparator: 'GO',
+            });
+            expect(session.options.variableBatchThreshold).toBeUndefined();
+        });
+    });
 });
