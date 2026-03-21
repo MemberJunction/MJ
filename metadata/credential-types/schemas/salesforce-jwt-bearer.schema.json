@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "description": "Salesforce OAuth 2.0 JWT Bearer Token flow credentials for server-to-server integration",
+  "properties": {
+    "loginUrl": {
+      "type": "string",
+      "title": "Login URL",
+      "description": "Salesforce login endpoint (login.salesforce.com for production, test.salesforce.com for sandboxes)",
+      "default": "https://login.salesforce.com",
+      "enum": ["https://login.salesforce.com", "https://test.salesforce.com"],
+      "isSecret": false,
+      "order": 0
+    },
+    "clientId": {
+      "type": "string",
+      "title": "Consumer Key",
+      "description": "Connected App Consumer Key from Salesforce Setup",
+      "isSecret": false,
+      "order": 1
+    },
+    "username": {
+      "type": "string",
+      "title": "Integration User",
+      "description": "Email address of the Salesforce integration user",
+      "isSecret": false,
+      "order": 2
+    },
+    "privateKey": {
+      "type": "string",
+      "title": "Private Key (PEM)",
+      "description": "PEM-encoded RSA private key for JWT signing. The corresponding X.509 certificate must be uploaded to the Connected App in Salesforce.",
+      "format": "multiline",
+      "isSecret": true,
+      "order": 3
+    },
+    "apiVersion": {
+      "type": "string",
+      "title": "API Version",
+      "description": "Salesforce REST API version",
+      "default": "61.0",
+      "isSecret": false,
+      "order": 4
+    }
+  },
+  "required": ["loginUrl", "clientId", "username", "privateKey"]
+}

@@ -1,0 +1,683 @@
+[
+  {
+    "fields": {
+      "Name": "Salesforce",
+      "Description": "Salesforce CRM integration for syncing contacts, accounts, opportunities, and custom objects via REST API v61.0",
+      "ClassName": "SalesforceConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": "https://login.salesforce.com",
+      "BatchMaxRequestCount": 200,
+      "BatchRequestWaitTime": 100,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Salesforce JWT Bearer",
+      "Icon": "fa-brands fa-salesforce"
+    },
+    "primaryKey": {
+      "ID": "3EF73582-BC71-4189-9DF9-867F0D4B074B"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Account",
+            "DisplayName": "Account",
+            "Description": "A company, organization, or consumer in Salesforce CRM",
+            "Category": "Core",
+            "APIPath": "/services/data/v61.0/sobjects/Account",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Account ID",
+                  "Type": "nvarchar",
+                  "Length": 18,
+                  "IsPrimaryKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Name",
+                  "DisplayName": "Account Name",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Industry",
+                  "DisplayName": "Industry",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Phone",
+                  "DisplayName": "Phone",
+                  "Type": "nvarchar",
+                  "Length": 40,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Website",
+                  "DisplayName": "Website",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "BillingStreet",
+                  "DisplayName": "Billing Street",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "BillingCity",
+                  "DisplayName": "Billing City",
+                  "Type": "nvarchar",
+                  "Length": 40,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "BillingState",
+                  "DisplayName": "Billing State",
+                  "Type": "nvarchar",
+                  "Length": 80,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "BillingPostalCode",
+                  "DisplayName": "Billing Postal Code",
+                  "Type": "nvarchar",
+                  "Length": 20,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "BillingCountry",
+                  "DisplayName": "Billing Country",
+                  "Type": "nvarchar",
+                  "Length": 80,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 10,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Description",
+                  "DisplayName": "Description",
+                  "Type": "nvarchar",
+                  "Length": 32000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 11,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Type",
+                  "DisplayName": "Type",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 12,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "AnnualRevenue",
+                  "DisplayName": "Annual Revenue",
+                  "Type": "decimal",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 13,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NumberOfEmployees",
+                  "DisplayName": "Employees",
+                  "Type": "int",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 14,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Contact",
+            "DisplayName": "Contact",
+            "Description": "A person associated with an account in Salesforce CRM",
+            "Category": "Core",
+            "APIPath": "/services/data/v61.0/sobjects/Contact",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Contact ID",
+                  "Type": "nvarchar",
+                  "Length": 18,
+                  "IsPrimaryKey": true,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Email",
+                  "DisplayName": "Email",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "FirstName",
+                  "DisplayName": "First Name",
+                  "Type": "nvarchar",
+                  "Length": 40,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "LastName",
+                  "DisplayName": "Last Name",
+                  "Type": "nvarchar",
+                  "Length": 80,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Phone",
+                  "DisplayName": "Phone",
+                  "Type": "nvarchar",
+                  "Length": 40,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "MobilePhone",
+                  "DisplayName": "Mobile Phone",
+                  "Type": "nvarchar",
+                  "Length": 40,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Title",
+                  "DisplayName": "Title",
+                  "Type": "nvarchar",
+                  "Length": 128,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Department",
+                  "DisplayName": "Department",
+                  "Type": "nvarchar",
+                  "Length": 80,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "MailingStreet",
+                  "DisplayName": "Mailing Street",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "MailingCity",
+                  "DisplayName": "Mailing City",
+                  "Type": "nvarchar",
+                  "Length": 40,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 10,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "MailingState",
+                  "DisplayName": "Mailing State",
+                  "Type": "nvarchar",
+                  "Length": 80,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 11,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "MailingPostalCode",
+                  "DisplayName": "Mailing Postal Code",
+                  "Type": "nvarchar",
+                  "Length": 20,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 12,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "MailingCountry",
+                  "DisplayName": "Mailing Country",
+                  "Type": "nvarchar",
+                  "Length": 80,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 13,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "AccountId",
+                  "DisplayName": "Account ID",
+                  "Type": "nvarchar",
+                  "Length": 18,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 14,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Lead",
+            "DisplayName": "Lead",
+            "Description": "A prospective customer/lead in Salesforce CRM",
+            "Category": "Core",
+            "APIPath": "/services/data/v61.0/sobjects/Lead",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "Lead ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": true, "IsRequired": false, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Email", "DisplayName": "Email", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "FirstName", "DisplayName": "First Name", "Type": "nvarchar", "Length": 40, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastName", "DisplayName": "Last Name", "Type": "nvarchar", "Length": 80, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Company", "DisplayName": "Company", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Phone", "DisplayName": "Phone", "Type": "nvarchar", "Length": 40, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Title", "DisplayName": "Title", "Type": "nvarchar", "Length": 128, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 7, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Status", "DisplayName": "Status", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 8, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Opportunity",
+            "DisplayName": "Opportunity",
+            "Description": "A sales opportunity in Salesforce CRM",
+            "Category": "Sales",
+            "APIPath": "/services/data/v61.0/sobjects/Opportunity",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "Opportunity ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": true, "IsRequired": false, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Name", "DisplayName": "Opportunity Name", "Type": "nvarchar", "Length": 120, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Amount", "DisplayName": "Amount", "Type": "decimal", "Length": null, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "StageName", "DisplayName": "Stage", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "CloseDate", "DisplayName": "Close Date", "Type": "date", "Length": null, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "AccountId", "DisplayName": "Account ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Description", "DisplayName": "Description", "Type": "nvarchar", "Length": 32000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Task",
+            "DisplayName": "Task",
+            "Description": "A task or to-do item in Salesforce",
+            "Category": "Activity",
+            "APIPath": "/services/data/v61.0/sobjects/Task",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "Task ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": true, "IsRequired": false, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Subject", "DisplayName": "Subject", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Status", "DisplayName": "Status", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Priority", "DisplayName": "Priority", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "WhoId", "DisplayName": "Who ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "WhatId", "DisplayName": "What ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Event",
+            "DisplayName": "Event",
+            "Description": "A calendar event in Salesforce",
+            "Category": "Activity",
+            "APIPath": "/services/data/v61.0/sobjects/Event",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "Event ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": true, "IsRequired": false, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Subject", "DisplayName": "Subject", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "StartDateTime", "DisplayName": "Start", "Type": "datetime", "Length": null, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "EndDateTime", "DisplayName": "End", "Type": "datetime", "Length": null, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "WhoId", "DisplayName": "Who ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Case",
+            "DisplayName": "Case",
+            "Description": "A support case in Salesforce",
+            "Category": "Service",
+            "APIPath": "/services/data/v61.0/sobjects/Case",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "Case ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": true, "IsRequired": false, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Subject", "DisplayName": "Subject", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Status", "DisplayName": "Status", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Priority", "DisplayName": "Priority", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "AccountId", "DisplayName": "Account ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "ContactId", "DisplayName": "Contact ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Description", "DisplayName": "Description", "Type": "nvarchar", "Length": 32000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Campaign",
+            "DisplayName": "Campaign",
+            "Description": "A marketing campaign in Salesforce",
+            "Category": "Marketing",
+            "APIPath": "/services/data/v61.0/sobjects/Campaign",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "Campaign ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": true, "IsRequired": false, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Name", "DisplayName": "Campaign Name", "Type": "nvarchar", "Length": 80, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Status", "DisplayName": "Status", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Type", "DisplayName": "Type", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "StartDate", "DisplayName": "Start Date", "Type": "date", "Length": null, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "EndDate", "DisplayName": "End Date", "Type": "date", "Length": null, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "User",
+            "DisplayName": "User",
+            "Description": "A Salesforce user (reference only, not writable)",
+            "Category": "System",
+            "APIPath": "/services/data/v61.0/sobjects/User",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "User ID", "Type": "nvarchar", "Length": 18, "IsPrimaryKey": true, "IsRequired": false, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Username", "DisplayName": "Username", "Type": "nvarchar", "Length": 80, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Name", "DisplayName": "Full Name", "Type": "nvarchar", "Length": 121, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Email", "DisplayName": "Email", "Type": "nvarchar", "Length": 128, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]
