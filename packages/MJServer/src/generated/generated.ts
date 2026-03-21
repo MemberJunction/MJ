@@ -10241,7 +10241,7 @@ export class MJAICredentialBinding_ {
     AIVendor?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     AIModelVendor?: string;
         
     @Field({nullable: true}) 
@@ -13982,6 +13982,9 @@ export class MJAIPromptRun_ {
     @MaxLength(36)
     TestRunID?: string;
         
+    @Field({nullable: true, description: `The assistant prefill text that was used during this prompt execution. Records whether native prefill or fallback was applied. NULL means no prefill was used.`}) 
+    AssistantPrefill?: string;
+        
     @Field() 
     @MaxLength(255)
     Prompt: string;
@@ -14302,6 +14305,9 @@ export class CreateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     TestRunID: string | null;
+
+    @Field({ nullable: true })
+    AssistantPrefill: string | null;
 }
     
 
@@ -14555,6 +14561,9 @@ export class UpdateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     TestRunID?: string | null;
+
+    @Field({ nullable: true })
+    AssistantPrefill?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

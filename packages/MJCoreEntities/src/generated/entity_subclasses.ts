@@ -3932,7 +3932,7 @@ export const MJAICredentialBindingSchema = z.object({
         * * Default Value: newsequentialid()`),
     CredentialID: z.string().describe(`
         * * Field Name: CredentialID
-        * * Display Name: Credential ID
+        * * Display Name: Credential
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
         * * Description: Reference to the credential being bound.`),
@@ -3948,19 +3948,19 @@ export const MJAICredentialBindingSchema = z.object({
         * * Description: The type of AI entity this credential is bound to: Vendor (broadest), ModelVendor (model+vendor specific), or PromptModel (most specific). Resolution follows prompt → model → vendor hierarchy.`),
     AIVendorID: z.string().nullable().describe(`
         * * Field Name: AIVendorID
-        * * Display Name: AI Vendor ID
+        * * Display Name: AI Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
         * * Description: Reference to AIVendor when BindingType is Vendor. NULL otherwise.`),
     AIModelVendorID: z.string().nullable().describe(`
         * * Field Name: AIModelVendorID
-        * * Display Name: AI Model Vendor ID
+        * * Display Name: AI Model Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Vendors (vwAIModelVendors.ID)
         * * Description: Reference to AIModelVendor when BindingType is ModelVendor. NULL otherwise.`),
     AIPromptModelID: z.string().nullable().describe(`
         * * Field Name: AIPromptModelID
-        * * Display Name: AI Prompt Model ID
+        * * Display Name: AI Prompt Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Models (vwAIPromptModels.ID)
         * * Description: Reference to AIPromptModel when BindingType is PromptModel. NULL otherwise.`),
@@ -3972,7 +3972,7 @@ export const MJAICredentialBindingSchema = z.object({
         * * Description: Priority for credential selection when multiple bindings exist at the same level. Lower values have higher priority (0 is highest). Enables failover when primary credentials are unavailable.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When false, this binding is ignored during credential resolution. Allows temporary disabling without deletion.`),
@@ -3988,19 +3988,19 @@ export const MJAICredentialBindingSchema = z.object({
         * * Default Value: getutcdate()`),
     Credential: z.string().describe(`
         * * Field Name: Credential
-        * * Display Name: Credential
+        * * Display Name: Credential Name
         * * SQL Data Type: nvarchar(200)`),
     AIVendor: z.string().nullable().describe(`
         * * Field Name: AIVendor
-        * * Display Name: AI Vendor
+        * * Display Name: Vendor Name
         * * SQL Data Type: nvarchar(50)`),
     AIModelVendor: z.string().nullable().describe(`
         * * Field Name: AIModelVendor
-        * * Display Name: AI Model Vendor
-        * * SQL Data Type: nvarchar(50)`),
+        * * Display Name: Model Vendor Name
+        * * SQL Data Type: nvarchar(100)`),
     AIPromptModel: z.string().nullable().describe(`
         * * Field Name: AIPromptModel
-        * * Display Name: AI Prompt Model
+        * * Display Name: Prompt Model Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -5085,17 +5085,17 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The output result from the model.`),
     TokensUsed: z.number().nullable().describe(`
         * * Field Name: TokensUsed
-        * * Display Name: Tokens Used
+        * * Display Name: Total Tokens Used
         * * SQL Data Type: int
         * * Description: Total number of tokens used (prompt + completion).`),
     TokensPrompt: z.number().nullable().describe(`
         * * Field Name: TokensPrompt
-        * * Display Name: Tokens Prompt
+        * * Display Name: Prompt Tokens
         * * SQL Data Type: int
         * * Description: Number of tokens in the prompt.`),
     TokensCompletion: z.number().nullable().describe(`
         * * Field Name: TokensCompletion
-        * * Display Name: Tokens Completion
+        * * Display Name: Completion Tokens
         * * SQL Data Type: int
         * * Description: Number of tokens in the completion/result.`),
     TotalCost: z.number().nullable().describe(`
@@ -5126,7 +5126,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Default Value: getutcdate()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.`),
@@ -5149,7 +5149,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.`),
     AgentRunID: z.string().nullable().describe(`
         * * Field Name: AgentRunID
-        * * Display Name: Agent Run ID
+        * * Display Name: Agent Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.`),
@@ -5165,17 +5165,17 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.`),
     TokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TokensUsedRollup
-        * * Display Name: Tokens Used Rollup
+        * * Display Name: Total Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.`),
     TokensPromptRollup: z.number().nullable().describe(`
         * * Field Name: TokensPromptRollup
-        * * Display Name: Tokens Prompt Rollup
+        * * Display Name: Prompt Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.`),
     TokensCompletionRollup: z.number().nullable().describe(`
         * * Field Name: TokensCompletionRollup
-        * * Display Name: Tokens Completion Rollup
+        * * Display Name: Completion Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`),
     Temperature: z.number().nullable().describe(`
@@ -5225,12 +5225,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The response format requested for this run (e.g., 'JSON', 'Text', 'Markdown')`),
     LogProbs: z.boolean().nullable().describe(`
         * * Field Name: LogProbs
-        * * Display Name: Log Probs
+        * * Display Name: Log Probabilities
         * * SQL Data Type: bit
         * * Description: Whether log probabilities were requested for this run`),
     TopLogProbs: z.number().nullable().describe(`
         * * Field Name: TopLogProbs
-        * * Display Name: Top Log Probs
+        * * Display Name: Top Log Probabilities
         * * SQL Data Type: int
         * * Description: Number of top log probabilities requested per token (if LogProbs is true)`),
     DescendantCost: z.number().nullable().describe(`
@@ -5326,7 +5326,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: JSON array of duration in milliseconds for each failover attempt`),
     OriginalModelID: z.string().nullable().describe(`
         * * Field Name: OriginalModelID
-        * * Display Name: Original Model ID
+        * * Display Name: Original Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: The AI Model ID that was originally attempted before any failovers`),
@@ -5337,12 +5337,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Timestamp when the original request started, before any failovers`),
     TotalFailoverDuration: z.number().nullable().describe(`
         * * Field Name: TotalFailoverDuration
-        * * Display Name: Total Failover Duration
+        * * Display Name: Total Failover Duration (ms)
         * * SQL Data Type: int
         * * Description: Total time spent in failover attempts in milliseconds`),
     RerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RerunFromPromptRunID
-        * * Display Name: Rerun From Prompt Run ID
+        * * Display Name: Rerun From
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID`),
@@ -5403,7 +5403,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Unique key used for caching this prompt result, typically a hash of the prompt and parameters`),
     JudgeID: z.string().nullable().describe(`
         * * Field Name: JudgeID
-        * * Display Name: Judge ID
+        * * Display Name: Judge
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results`),
@@ -5426,7 +5426,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Indicates whether streaming was enabled for this prompt execution`),
     FirstTokenTime: z.number().nullable().describe(`
         * * Field Name: FirstTokenTime
-        * * Display Name: First Token Time
+        * * Display Name: First Token Time (ms)
         * * SQL Data Type: int
         * * Description: Time in milliseconds from request initiation to receiving the first token from the model`),
     ErrorDetails: z.string().nullable().describe(`
@@ -5436,23 +5436,23 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes`),
     ChildPromptID: z.string().nullable().describe(`
         * * Field Name: ChildPromptID
-        * * Display Name: Child Prompt ID
+        * * Display Name: Child Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.`),
     QueueTime: z.number().nullable().describe(`
         * * Field Name: QueueTime
-        * * Display Name: Queue Time
+        * * Display Name: Queue Time (ms)
         * * SQL Data Type: int
         * * Description: Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.`),
     PromptTime: z.number().nullable().describe(`
         * * Field Name: PromptTime
-        * * Display Name: Prompt Time
+        * * Display Name: Prompt Time (ms)
         * * SQL Data Type: int
         * * Description: Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.`),
     CompletionTime: z.number().nullable().describe(`
         * * Field Name: CompletionTime
-        * * Display Name: Completion Time
+        * * Display Name: Completion Time (ms)
         * * SQL Data Type: int
         * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`),
     ModelSpecificResponseDetails: z.string().nullable().describe(`
@@ -5477,10 +5477,15 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Human-readable notes and comments about this prompt run`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run ID
+        * * Display Name: Test Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this prompt run to a test run if this prompt execution was part of a test. Enables testing individual prompts for quality and consistency before agent integration.`),
+    AssistantPrefill: z.string().nullable().describe(`
+        * * Field Name: AssistantPrefill
+        * * Display Name: Assistant Prefill
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The assistant prefill text that was used during this prompt execution. Records whether native prefill or fallback was applied. NULL means no prefill was used.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -5515,7 +5520,7 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     RerunFromPromptRun: z.string().nullable().describe(`
         * * Field Name: RerunFromPromptRun
-        * * Display Name: Rerun From Prompt Run
+        * * Display Name: Rerun From
         * * SQL Data Type: nvarchar(255)`),
     Judge: z.string().nullable().describe(`
         * * Field Name: Judge
@@ -5531,11 +5536,11 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
     RootRerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RootRerunFromPromptRunID
-        * * Display Name: Root Rerun From Prompt Run ID
+        * * Display Name: Root Rerun From
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -33829,7 +33834,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: CredentialID
-    * * Display Name: Credential ID
+    * * Display Name: Credential
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
     * * Description: Reference to the credential being bound.
@@ -33861,7 +33866,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: AIVendorID
-    * * Display Name: AI Vendor ID
+    * * Display Name: AI Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     * * Description: Reference to AIVendor when BindingType is Vendor. NULL otherwise.
@@ -33875,7 +33880,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: AIModelVendorID
-    * * Display Name: AI Model Vendor ID
+    * * Display Name: AI Model Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Vendors (vwAIModelVendors.ID)
     * * Description: Reference to AIModelVendor when BindingType is ModelVendor. NULL otherwise.
@@ -33889,7 +33894,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: AIPromptModelID
-    * * Display Name: AI Prompt Model ID
+    * * Display Name: AI Prompt Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Models (vwAIPromptModels.ID)
     * * Description: Reference to AIPromptModel when BindingType is PromptModel. NULL otherwise.
@@ -33917,7 +33922,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When false, this binding is ignored during credential resolution. Allows temporary disabling without deletion.
@@ -33951,7 +33956,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: Credential
-    * * Display Name: Credential
+    * * Display Name: Credential Name
     * * SQL Data Type: nvarchar(200)
     */
     get Credential(): string {
@@ -33960,7 +33965,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: AIVendor
-    * * Display Name: AI Vendor
+    * * Display Name: Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
     get AIVendor(): string | null {
@@ -33969,8 +33974,8 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: AIModelVendor
-    * * Display Name: AI Model Vendor
-    * * SQL Data Type: nvarchar(50)
+    * * Display Name: Model Vendor Name
+    * * SQL Data Type: nvarchar(100)
     */
     get AIModelVendor(): string | null {
         return this.Get('AIModelVendor');
@@ -33978,7 +33983,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: AIPromptModel
-    * * Display Name: AI Prompt Model
+    * * Display Name: Prompt Model Name
     * * SQL Data Type: nvarchar(255)
     */
     get AIPromptModel(): string | null {
@@ -37237,7 +37242,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensUsed
-    * * Display Name: Tokens Used
+    * * Display Name: Total Tokens Used
     * * SQL Data Type: int
     * * Description: Total number of tokens used (prompt + completion).
     */
@@ -37250,7 +37255,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPrompt
-    * * Display Name: Tokens Prompt
+    * * Display Name: Prompt Tokens
     * * SQL Data Type: int
     * * Description: Number of tokens in the prompt.
     */
@@ -37263,7 +37268,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletion
-    * * Display Name: Tokens Completion
+    * * Display Name: Completion Tokens
     * * SQL Data Type: int
     * * Description: Number of tokens in the completion/result.
     */
@@ -37336,7 +37341,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
     * * Description: References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.
@@ -37383,7 +37388,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: AgentRunID
-    * * Display Name: Agent Run ID
+    * * Display Name: Agent Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.
@@ -37423,7 +37428,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensUsedRollup
-    * * Display Name: Tokens Used Rollup
+    * * Display Name: Total Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.
     */
@@ -37436,7 +37441,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPromptRollup
-    * * Display Name: Tokens Prompt Rollup
+    * * Display Name: Prompt Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.
     */
@@ -37449,7 +37454,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletionRollup
-    * * Display Name: Tokens Completion Rollup
+    * * Display Name: Completion Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.
     */
@@ -37579,7 +37584,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: LogProbs
-    * * Display Name: Log Probs
+    * * Display Name: Log Probabilities
     * * SQL Data Type: bit
     * * Description: Whether log probabilities were requested for this run
     */
@@ -37592,7 +37597,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TopLogProbs
-    * * Display Name: Top Log Probs
+    * * Display Name: Top Log Probabilities
     * * SQL Data Type: int
     * * Description: Number of top log probabilities requested per token (if LogProbs is true)
     */
@@ -37840,7 +37845,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: OriginalModelID
-    * * Display Name: Original Model ID
+    * * Display Name: Original Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: The AI Model ID that was originally attempted before any failovers
@@ -37867,7 +37872,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TotalFailoverDuration
-    * * Display Name: Total Failover Duration
+    * * Display Name: Total Failover Duration (ms)
     * * SQL Data Type: int
     * * Description: Total time spent in failover attempts in milliseconds
     */
@@ -37880,7 +37885,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RerunFromPromptRunID
-    * * Display Name: Rerun From Prompt Run ID
+    * * Display Name: Rerun From
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
     * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID
@@ -38013,7 +38018,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: JudgeID
-    * * Display Name: Judge ID
+    * * Display Name: Judge
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results
@@ -38068,7 +38073,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: FirstTokenTime
-    * * Display Name: First Token Time
+    * * Display Name: First Token Time (ms)
     * * SQL Data Type: int
     * * Description: Time in milliseconds from request initiation to receiving the first token from the model
     */
@@ -38094,7 +38099,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ChildPromptID
-    * * Display Name: Child Prompt ID
+    * * Display Name: Child Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.
@@ -38108,7 +38113,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: QueueTime
-    * * Display Name: Queue Time
+    * * Display Name: Queue Time (ms)
     * * SQL Data Type: int
     * * Description: Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.
     */
@@ -38121,7 +38126,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: PromptTime
-    * * Display Name: Prompt Time
+    * * Display Name: Prompt Time (ms)
     * * SQL Data Type: int
     * * Description: Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.
     */
@@ -38134,7 +38139,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: CompletionTime
-    * * Display Name: Completion Time
+    * * Display Name: Completion Time (ms)
     * * SQL Data Type: int
     * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.
     */
@@ -38199,7 +38204,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run ID
+    * * Display Name: Test Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this prompt run to a test run if this prompt execution was part of a test. Enables testing individual prompts for quality and consistency before agent integration.
@@ -38209,6 +38214,19 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
     set TestRunID(value: string | null) {
         this.Set('TestRunID', value);
+    }
+
+    /**
+    * * Field Name: AssistantPrefill
+    * * Display Name: Assistant Prefill
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The assistant prefill text that was used during this prompt execution. Records whether native prefill or fallback was applied. NULL means no prefill was used.
+    */
+    get AssistantPrefill(): string | null {
+        return this.Get('AssistantPrefill');
+    }
+    set AssistantPrefill(value: string | null) {
+        this.Set('AssistantPrefill', value);
     }
 
     /**
@@ -38285,7 +38303,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RerunFromPromptRun
-    * * Display Name: Rerun From Prompt Run
+    * * Display Name: Rerun From
     * * SQL Data Type: nvarchar(255)
     */
     get RerunFromPromptRun(): string | null {
@@ -38321,7 +38339,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -38330,7 +38348,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RootRerunFromPromptRunID
-    * * Display Name: Root Rerun From Prompt Run ID
+    * * Display Name: Root Rerun From
     * * SQL Data Type: uniqueidentifier
     */
     get RootRerunFromPromptRunID(): string | null {
