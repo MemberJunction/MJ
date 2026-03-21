@@ -11883,6 +11883,12 @@ export class MJAIModelType_ {
     @MaxLength(36)
     DefaultOutputModalityID: string;
         
+    @Field(() => Boolean, {description: `Whether models of this type generally support assistant prefill. This is a default value that individual AI Model Vendor records can override. For LLM types, many providers support prefill; for image/audio types, this is typically false.`}) 
+    SupportsPrefill: boolean;
+        
+    @Field({nullable: true, description: `Default fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Use {{prefill}} as a placeholder for the actual prefill text. Example: "IMPORTANT: You must begin your response with exactly: {{prefill}}". Individual AI Model Vendor records can override this. If null, a generic fallback is used.`}) 
+    PrefillFallbackText?: string;
+        
     @Field() 
     @MaxLength(50)
     DefaultInputModality: string;
@@ -11918,6 +11924,12 @@ export class CreateMJAIModelTypeInput {
 
     @Field({ nullable: true })
     DefaultOutputModalityID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPrefill?: boolean;
+
+    @Field({ nullable: true })
+    PrefillFallbackText: string | null;
 }
     
 
@@ -11940,6 +11952,12 @@ export class UpdateMJAIModelTypeInput {
 
     @Field({ nullable: true })
     DefaultOutputModalityID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPrefill?: boolean;
+
+    @Field({ nullable: true })
+    PrefillFallbackText?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12123,6 +12141,12 @@ export class MJAIModelVendor_ {
     @MaxLength(36)
     TypeID: string;
         
+    @Field(() => Boolean, {nullable: true, description: `Whether this specific model-vendor implementation supports assistant prefill. Overrides the AI Model Type default when set. NULL means inherit from the AI Model Type. For example, Claude via Anthropic supports prefill (true), but GPT-4 via OpenAI does not (false).`}) 
+    SupportsPrefill?: boolean;
+        
+    @Field({nullable: true, description: `Model-specific fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default. Use {{prefill}} as a placeholder. Allows tuning the fallback instruction per model since different models respond better to different phrasing.`}) 
+    PrefillFallbackText?: string;
+        
     @Field() 
     @MaxLength(50)
     Model: string;
@@ -12186,6 +12210,12 @@ export class CreateMJAIModelVendorInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPrefill: boolean | null;
+
+    @Field({ nullable: true })
+    PrefillFallbackText: string | null;
 }
     
 
@@ -12235,6 +12265,12 @@ export class UpdateMJAIModelVendorInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPrefill?: boolean | null;
+
+    @Field({ nullable: true })
+    PrefillFallbackText?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12384,6 +12420,12 @@ export class MJAIModel_ {
     @MaxLength(36)
     PriorVersionID?: string;
         
+    @Field(() => Boolean, {nullable: true, description: `Whether this model supports assistant prefill. Overrides the AI Model Type default when set. NULL means inherit from the AI Model Type. Can be further overridden per-vendor in AI Model Vendor.`}) 
+    SupportsPrefill?: boolean;
+        
+    @Field({nullable: true, description: `Model-level fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default, can be further overridden per-vendor in AI Model Vendor. Use {{prefill}} as a placeholder.`}) 
+    PrefillFallbackText?: string;
+        
     @Field() 
     @MaxLength(50)
     AIModelType: string;
@@ -12517,6 +12559,12 @@ export class CreateMJAIModelInput {
     @Field({ nullable: true })
     PriorVersionID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    SupportsPrefill: boolean | null;
+
+    @Field({ nullable: true })
+    PrefillFallbackText: string | null;
+
     @Field({ nullable: true })
     Vendor: string | null;
 
@@ -12577,6 +12625,12 @@ export class UpdateMJAIModelInput {
 
     @Field({ nullable: true })
     PriorVersionID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPrefill?: boolean | null;
+
+    @Field({ nullable: true })
+    PrefillFallbackText?: string | null;
 
     @Field({ nullable: true })
     Vendor?: string | null;
@@ -14970,6 +15024,13 @@ export class MJAIPrompt_ {
     @Field(() => Int, {nullable: true, description: `Effort level for this specific prompt (1-100, where 1=minimal effort, 100=maximum effort). Higher values request more thorough reasoning and analysis. Can be overridden by agent DefaultPromptEffortLevel or runtime parameters.`}) 
     EffortLevel?: number;
         
+    @Field({nullable: true, description: `Optional text to prefill the assistant response. The model will continue generating from where this text ends. Used with StopSequences for structured output extraction (e.g., prefill with \`\`\`json to get raw JSON). Only effective with providers that support prefill natively; see PrefillFallbackMode for non-supporting providers.`}) 
+    AssistantPrefill?: string;
+        
+    @Field({description: `Controls behavior when the selected provider does not support native assistant prefill. Ignore = silently skip prefill, SystemInstruction = inject a system message instructing the model to start its response with the prefill text (uses fallback text from AI Model Vendor or AI Model Type), None = no fallback (prefill only works with supported providers).`}) 
+    @MaxLength(20)
+    PrefillFallbackMode: string;
+        
     @Field() 
     @MaxLength(255)
     Template: string;
@@ -15189,6 +15250,12 @@ export class CreateMJAIPromptInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel: number | null;
+
+    @Field({ nullable: true })
+    AssistantPrefill: string | null;
+
+    @Field({ nullable: true })
+    PrefillFallbackMode?: string;
 }
     
 
@@ -15343,6 +15410,12 @@ export class UpdateMJAIPromptInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel?: number | null;
+
+    @Field({ nullable: true })
+    AssistantPrefill?: string | null;
+
+    @Field({ nullable: true })
+    PrefillFallbackMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23861,6 +23934,10 @@ export class MJCompanyIntegrationRun_ {
     @Field({nullable: true, description: `Optional configuration data in JSON format for the request that started the integration run for audit purposes.`}) 
     ConfigData?: string;
         
+    @Field({nullable: true, description: `Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.`}) 
+    @MaxLength(36)
+    ScheduledJobRunID?: string;
+        
     @Field() 
     @MaxLength(100)
     Integration: string;
@@ -23918,6 +23995,9 @@ export class CreateMJCompanyIntegrationRunInput {
 
     @Field({ nullable: true })
     ConfigData: string | null;
+
+    @Field({ nullable: true })
+    ScheduledJobRunID: string | null;
 }
     
 
@@ -23955,6 +24035,9 @@ export class UpdateMJCompanyIntegrationRunInput {
 
     @Field({ nullable: true })
     ConfigData?: string | null;
+
+    @Field({ nullable: true })
+    ScheduledJobRunID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -24370,6 +24453,10 @@ export class MJCompanyIntegration_ {
     @Field({nullable: true, description: `When the lock should be considered stale and eligible for cleanup`}) 
     LockExpiresAt?: Date;
         
+    @Field({nullable: true, description: `Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.`}) 
+    @MaxLength(36)
+    ScheduledJobID?: string;
+        
     @Field() 
     @MaxLength(50)
     Company: string;
@@ -24498,6 +24585,9 @@ export class CreateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     LockExpiresAt: Date | null;
+
+    @Field({ nullable: true })
+    ScheduledJobID: string | null;
 }
     
 
@@ -24586,6 +24676,9 @@ export class UpdateMJCompanyIntegrationInput {
 
     @Field({ nullable: true })
     LockExpiresAt?: Date | null;
+
+    @Field({ nullable: true })
+    ScheduledJobID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -57162,6 +57255,9 @@ export class MJScheduledJobRun_ {
     @Field(() => [MJAIAgentRun_])
     MJAIAgentRuns_ScheduledJobRunIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
+    @Field(() => [MJCompanyIntegrationRun_])
+    MJCompanyIntegrationRuns_ScheduledJobRunIDArray: MJCompanyIntegrationRun_[]; // Link to MJCompanyIntegrationRuns
+    
 }
 
 //****************************************************************************
@@ -57304,6 +57400,16 @@ export class MJScheduledJobRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentRuns')} WHERE ${provider.QuoteIdentifier('ScheduledJobRunID')}='${mjscheduledjobrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJCompanyIntegrationRun_])
+    async MJCompanyIntegrationRuns_ScheduledJobRunIDArray(@Root() mjscheduledjobrun_: MJScheduledJobRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Company Integration Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrationRuns')} WHERE ${provider.QuoteIdentifier('ScheduledJobRunID')}='${mjscheduledjobrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integration Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -57647,6 +57753,9 @@ export class MJScheduledJob_ {
     @Field(() => [MJScheduledJobRun_])
     MJScheduledJobRuns_ScheduledJobIDArray: MJScheduledJobRun_[]; // Link to MJScheduledJobRuns
     
+    @Field(() => [MJCompanyIntegration_])
+    MJCompanyIntegrations_ScheduledJobIDArray: MJCompanyIntegration_[]; // Link to MJCompanyIntegrations
+    
 }
 
 //****************************************************************************
@@ -57885,6 +57994,16 @@ export class MJScheduledJobResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwScheduledJobRuns')} WHERE ${provider.QuoteIdentifier('ScheduledJobID')}='${mjscheduledjob_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Job Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJCompanyIntegration_])
+    async MJCompanyIntegrations_ScheduledJobIDArray(@Root() mjscheduledjob_: MJScheduledJob_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Company Integrations', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrations')} WHERE ${provider.QuoteIdentifier('ScheduledJobID')}='${mjscheduledjob_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integrations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

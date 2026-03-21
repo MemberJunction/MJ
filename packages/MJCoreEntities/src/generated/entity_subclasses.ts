@@ -4494,13 +4494,24 @@ export const MJAIModelTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
         * * Description: Default output modality for this model type. Models of this type inherit this as their primary output modality unless overridden.`),
+    SupportsPrefill: z.boolean().describe(`
+        * * Field Name: SupportsPrefill
+        * * Display Name: Supports Prefill
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether models of this type generally support assistant prefill. This is a default value that individual AI Model Vendor records can override. For LLM types, many providers support prefill; for image/audio types, this is typically false.`),
+    PrefillFallbackText: z.string().nullable().describe(`
+        * * Field Name: PrefillFallbackText
+        * * Display Name: Prefill Fallback Text
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Default fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Use {{prefill}} as a placeholder for the actual prefill text. Example: "IMPORTANT: You must begin your response with exactly: {{prefill}}". Individual AI Model Vendor records can override this. If null, a generic fallback is used.`),
     DefaultInputModality: z.string().describe(`
         * * Field Name: DefaultInputModality
-        * * Display Name: Default Input Modality
+        * * Display Name: Default Input Modality Name
         * * SQL Data Type: nvarchar(50)`),
     DefaultOutputModality: z.string().describe(`
         * * Field Name: DefaultOutputModality
-        * * Display Name: Default Output Modality
+        * * Display Name: Default Output Modality Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -4517,12 +4528,12 @@ export const MJAIModelVendorSchema = z.object({
         * * Default Value: newsequentialid()`),
     ModelID: z.string().describe(`
         * * Field Name: ModelID
-        * * Display Name: Model ID
+        * * Display Name: Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
     VendorID: z.string().describe(`
         * * Field Name: VendorID
-        * * Display Name: Vendor ID
+        * * Display Name: Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
     Priority: z.number().describe(`
@@ -4598,21 +4609,31 @@ export const MJAIModelVendorSchema = z.object({
         * * Default Value: getutcdate()`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
         * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)`),
+    SupportsPrefill: z.boolean().nullable().describe(`
+        * * Field Name: SupportsPrefill
+        * * Display Name: Supports Prefill
+        * * SQL Data Type: bit
+        * * Description: Whether this specific model-vendor implementation supports assistant prefill. Overrides the AI Model Type default when set. NULL means inherit from the AI Model Type. For example, Claude via Anthropic supports prefill (true), but GPT-4 via OpenAI does not (false).`),
+    PrefillFallbackText: z.string().nullable().describe(`
+        * * Field Name: PrefillFallbackText
+        * * Display Name: Prefill Fallback Text
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Model-specific fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default. Use {{prefill}} as a placeholder. Allows tuning the fallback instruction per model since different models respond better to different phrasing.`),
     Model: z.string().describe(`
         * * Field Name: Model
-        * * Display Name: Model
+        * * Display Name: Model Name
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().describe(`
         * * Field Name: Vendor
-        * * Display Name: Vendor
+        * * Display Name: Vendor Name
         * * SQL Data Type: nvarchar(50)`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Type Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -4691,9 +4712,19 @@ export const MJAIModelSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: Reference to the previous version of this model, creating a version lineage chain. For example, GPT-4 Turbo might reference GPT-4 as its prior version.`),
+    SupportsPrefill: z.boolean().nullable().describe(`
+        * * Field Name: SupportsPrefill
+        * * Display Name: Supports Prefill
+        * * SQL Data Type: bit
+        * * Description: Whether this model supports assistant prefill. Overrides the AI Model Type default when set. NULL means inherit from the AI Model Type. Can be further overridden per-vendor in AI Model Vendor.`),
+    PrefillFallbackText: z.string().nullable().describe(`
+        * * Field Name: PrefillFallbackText
+        * * Display Name: Prefill Fallback Text
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Model-level fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default, can be further overridden per-vendor in AI Model Vendor. Use {{prefill}} as a placeholder.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
-        * * Display Name: AI Model Type
+        * * Display Name: Model Type Name
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
@@ -5560,19 +5591,19 @@ export const MJAIPromptSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     TemplateID: z.string().describe(`
         * * Field Name: TemplateID
-        * * Display Name: Template ID
+        * * Display Name: Template
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Templates (vwTemplates.ID)
         * * Description: Reference to the template used for the prompt.`),
     CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
-        * * Display Name: Category ID
+        * * Display Name: Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Categories (vwAIPromptCategories.ID)
         * * Description: Reference to the category the prompt belongs to.`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Types (vwAIPromptTypes.ID)
         * * Description: Reference to the type of the prompt.`),
@@ -5615,13 +5646,13 @@ export const MJAIPromptSchema = z.object({
         * * Description: A JSON-formatted string containing model-specific response format instructions. This will be parsed and provided as a JSON object to the model.`),
     AIModelTypeID: z.string().nullable().describe(`
         * * Field Name: AIModelTypeID
-        * * Display Name: AI Model Type ID
+        * * Display Name: AI Model Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Types (vwAIModelTypes.ID)
         * * Description: References the type of AI model this prompt is designed for (LLM, Image, Audio, etc.).`),
     MinPowerRank: z.number().nullable().describe(`
         * * Field Name: MinPowerRank
-        * * Display Name: Min Power Rank
+        * * Display Name: Minimum Power Rank
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: The minimum power rank required for models to be considered for this prompt.`),
@@ -5666,7 +5697,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: When ParallelizationMode is StaticCount, specifies the number of parallel executions.`),
     ParallelConfigParam: z.string().nullable().describe(`
         * * Field Name: ParallelConfigParam
-        * * Display Name: Parallel Config Param
+        * * Display Name: Parallel Config Parameter
         * * SQL Data Type: nvarchar(100)
         * * Description: When ParallelizationMode is ConfigParam, specifies the name of the configuration parameter that contains the parallel count.`),
     OutputType: z.union([z.literal('boolean'), z.literal('date'), z.literal('number'), z.literal('object'), z.literal('string')]).describe(`
@@ -5706,7 +5737,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Maximum number of retry attempts for API failures.`),
     RetryDelayMS: z.number().describe(`
         * * Field Name: RetryDelayMS
-        * * Display Name: Retry Delay MS
+        * * Display Name: Retry Delay (ms)
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Delay between retry attempts in milliseconds.`),
@@ -5723,7 +5754,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Strategy for calculating retry delays: Fixed (same delay each time), Exponential (doubling delay), or Linear (linearly increasing delay).`),
     ResultSelectorPromptID: z.string().nullable().describe(`
         * * Field Name: ResultSelectorPromptID
-        * * Display Name: Result Selector Prompt ID
+        * * Display Name: Result Selector Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: References another prompt that selects the best result from multiple parallel executions.`),
@@ -5735,7 +5766,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: When true, results from this prompt will be cached for potential reuse.`),
     CacheTTLSeconds: z.number().nullable().describe(`
         * * Field Name: CacheTTLSeconds
-        * * Display Name: Cache TTL Seconds
+        * * Display Name: Cache TTL (Seconds)
         * * SQL Data Type: int
         * * Description: Time-to-live in seconds for cached results. NULL means results never expire.`),
     CacheMatchType: z.union([z.literal('Exact'), z.literal('Vector')]).describe(`
@@ -5773,7 +5804,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: When true, the agent context must match for a cache hit. When false, agent-specific and non-agent results can be used interchangeably.`),
     CacheMustMatchConfig: z.boolean().describe(`
         * * Field Name: CacheMustMatchConfig
-        * * Display Name: Cache Must Match Config
+        * * Display Name: Cache Must Match Configuration
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.`),
@@ -5841,13 +5872,13 @@ export const MJAIPromptSchema = z.object({
         * * Description: Default stop sequences for this prompt. Comma-delimited list of sequences that will stop generation when encountered. Can be overridden at runtime.`),
     IncludeLogProbs: z.boolean().nullable().describe(`
         * * Field Name: IncludeLogProbs
-        * * Display Name: Include Log Probs
+        * * Display Name: Include Log Probabilities
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Default setting for including log probabilities in the response. Can be overridden at runtime.`),
     TopLogProbs: z.number().nullable().describe(`
         * * Field Name: TopLogProbs
-        * * Display Name: Top Log Probs
+        * * Display Name: Top Log Probabilities
         * * SQL Data Type: int
         * * Description: Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.`),
     FailoverStrategy: z.union([z.literal('NextBestModel'), z.literal('NextBestModel'), z.literal('None'), z.literal('None'), z.literal('PowerRank'), z.literal('PowerRank'), z.literal('SameModelDifferentVendor'), z.literal('SameModelDifferentVendor')]).describe(`
@@ -5874,7 +5905,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Maximum number of failover attempts before giving up`),
     FailoverDelaySeconds: z.number().nullable().describe(`
         * * Field Name: FailoverDelaySeconds
-        * * Display Name: Failover Delay Seconds
+        * * Display Name: Failover Delay (seconds)
         * * SQL Data Type: int
         * * Default Value: 5
         * * Description: Initial delay in seconds between failover attempts`),
@@ -5913,29 +5944,45 @@ export const MJAIPromptSchema = z.object({
         * * Display Name: Effort Level
         * * SQL Data Type: int
         * * Description: Effort level for this specific prompt (1-100, where 1=minimal effort, 100=maximum effort). Higher values request more thorough reasoning and analysis. Can be overridden by agent DefaultPromptEffortLevel or runtime parameters.`),
+    AssistantPrefill: z.string().nullable().describe(`
+        * * Field Name: AssistantPrefill
+        * * Display Name: Assistant Prefill
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional text to prefill the assistant response. The model will continue generating from where this text ends. Used with StopSequences for structured output extraction (e.g., prefill with \`\`\`json to get raw JSON). Only effective with providers that support prefill natively; see PrefillFallbackMode for non-supporting providers.`),
+    PrefillFallbackMode: z.union([z.literal('Ignore'), z.literal('None'), z.literal('SystemInstruction')]).describe(`
+        * * Field Name: PrefillFallbackMode
+        * * Display Name: Prefill Fallback Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Ignore
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Ignore
+    *   * None
+    *   * SystemInstruction
+        * * Description: Controls behavior when the selected provider does not support native assistant prefill. Ignore = silently skip prefill, SystemInstruction = inject a system message instructing the model to start its response with the prefill text (uses fallback text from AI Model Vendor or AI Model Type), None = no fallback (prefill only works with supported providers).`),
     Template: z.string().describe(`
         * * Field Name: Template
-        * * Display Name: Template
+        * * Display Name: Template Text
         * * SQL Data Type: nvarchar(255)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Type Name
         * * SQL Data Type: nvarchar(255)`),
     AIModelType: z.string().nullable().describe(`
         * * Field Name: AIModelType
-        * * Display Name: AI Model Type
+        * * Display Name: AI Model Type Name
         * * SQL Data Type: nvarchar(50)`),
     ResultSelectorPrompt: z.string().nullable().describe(`
         * * Field Name: ResultSelectorPrompt
-        * * Display Name: Result Selector Prompt
+        * * Display Name: Result Selector Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     RootResultSelectorPromptID: z.string().nullable().describe(`
         * * Field Name: RootResultSelectorPromptID
-        * * Display Name: Root Result Selector Prompt ID
+        * * Display Name: Root Result Selector Prompt
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -8559,7 +8606,7 @@ export const MJCompanyIntegrationRunSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)`),
     RunByUserID: z.string().describe(`
         * * Field Name: RunByUserID
-        * * Display Name: Run By User
+        * * Display Name: Run By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     StartedAt: z.date().nullable().describe(`
@@ -8608,9 +8655,15 @@ export const MJCompanyIntegrationRunSchema = z.object({
         * * Description: Optional error log information for the integration run.`),
     ConfigData: z.string().nullable().describe(`
         * * Field Name: ConfigData
-        * * Display Name: Config Data
+        * * Display Name: Configuration Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional configuration data in JSON format for the request that started the integration run for audit purposes.`),
+    ScheduledJobRunID: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRunID
+        * * Display Name: Scheduled Job Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+        * * Description: Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
@@ -8748,7 +8801,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Description: The company's identifier in the external system, used for API calls.`),
     IsExternalSystemReadOnly: z.boolean().describe(`
         * * Field Name: IsExternalSystemReadOnly
-        * * Display Name: External System Read Only
+        * * Display Name: Is Read Only
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if data can only be read from the external system, not written back.`),
@@ -8857,13 +8910,19 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Display Name: Lock Expires At
         * * SQL Data Type: datetimeoffset
         * * Description: When the lock should be considered stale and eligible for cleanup`),
+    ScheduledJobID: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobID
+        * * Display Name: Scheduled Job
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
+        * * Description: Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.`),
     Company: z.string().describe(`
         * * Field Name: Company
-        * * Display Name: Company
+        * * Display Name: Company Name
         * * SQL Data Type: nvarchar(50)`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration
+        * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(100)`),
     DriverClassName: z.string().nullable().describe(`
         * * Field Name: DriverClassName
@@ -8875,7 +8934,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
-        * * Display Name: Last Run ID
+        * * Display Name: Last Run
         * * SQL Data Type: uniqueidentifier`),
     LastRunStartedAt: z.date().nullable().describe(`
         * * Field Name: LastRunStartedAt
@@ -35373,8 +35432,35 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
     }
 
     /**
+    * * Field Name: SupportsPrefill
+    * * Display Name: Supports Prefill
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether models of this type generally support assistant prefill. This is a default value that individual AI Model Vendor records can override. For LLM types, many providers support prefill; for image/audio types, this is typically false.
+    */
+    get SupportsPrefill(): boolean {
+        return this.Get('SupportsPrefill');
+    }
+    set SupportsPrefill(value: boolean) {
+        this.Set('SupportsPrefill', value);
+    }
+
+    /**
+    * * Field Name: PrefillFallbackText
+    * * Display Name: Prefill Fallback Text
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Default fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Use {{prefill}} as a placeholder for the actual prefill text. Example: "IMPORTANT: You must begin your response with exactly: {{prefill}}". Individual AI Model Vendor records can override this. If null, a generic fallback is used.
+    */
+    get PrefillFallbackText(): string | null {
+        return this.Get('PrefillFallbackText');
+    }
+    set PrefillFallbackText(value: string | null) {
+        this.Set('PrefillFallbackText', value);
+    }
+
+    /**
     * * Field Name: DefaultInputModality
-    * * Display Name: Default Input Modality
+    * * Display Name: Default Input Modality Name
     * * SQL Data Type: nvarchar(50)
     */
     get DefaultInputModality(): string {
@@ -35383,7 +35469,7 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
 
     /**
     * * Field Name: DefaultOutputModality
-    * * Display Name: Default Output Modality
+    * * Display Name: Default Output Modality Name
     * * SQL Data Type: nvarchar(50)
     */
     get DefaultOutputModality(): string {
@@ -35492,7 +35578,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: ModelID
-    * * Display Name: Model ID
+    * * Display Name: Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
@@ -35505,7 +35591,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: VendorID
-    * * Display Name: Vendor ID
+    * * Display Name: Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     */
@@ -35679,7 +35765,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
     * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)
@@ -35692,8 +35778,34 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
     }
 
     /**
+    * * Field Name: SupportsPrefill
+    * * Display Name: Supports Prefill
+    * * SQL Data Type: bit
+    * * Description: Whether this specific model-vendor implementation supports assistant prefill. Overrides the AI Model Type default when set. NULL means inherit from the AI Model Type. For example, Claude via Anthropic supports prefill (true), but GPT-4 via OpenAI does not (false).
+    */
+    get SupportsPrefill(): boolean | null {
+        return this.Get('SupportsPrefill');
+    }
+    set SupportsPrefill(value: boolean | null) {
+        this.Set('SupportsPrefill', value);
+    }
+
+    /**
+    * * Field Name: PrefillFallbackText
+    * * Display Name: Prefill Fallback Text
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Model-specific fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default. Use {{prefill}} as a placeholder. Allows tuning the fallback instruction per model since different models respond better to different phrasing.
+    */
+    get PrefillFallbackText(): string | null {
+        return this.Get('PrefillFallbackText');
+    }
+    set PrefillFallbackText(value: string | null) {
+        this.Set('PrefillFallbackText', value);
+    }
+
+    /**
     * * Field Name: Model
-    * * Display Name: Model
+    * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get Model(): string {
@@ -35702,7 +35814,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: Vendor
-    * * Display Name: Vendor
+    * * Display Name: Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
     get Vendor(): string {
@@ -35711,7 +35823,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Type Name
     * * SQL Data Type: nvarchar(50)
     */
     get Type(): string {
@@ -35973,8 +36085,34 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     }
 
     /**
+    * * Field Name: SupportsPrefill
+    * * Display Name: Supports Prefill
+    * * SQL Data Type: bit
+    * * Description: Whether this model supports assistant prefill. Overrides the AI Model Type default when set. NULL means inherit from the AI Model Type. Can be further overridden per-vendor in AI Model Vendor.
+    */
+    get SupportsPrefill(): boolean | null {
+        return this.Get('SupportsPrefill');
+    }
+    set SupportsPrefill(value: boolean | null) {
+        this.Set('SupportsPrefill', value);
+    }
+
+    /**
+    * * Field Name: PrefillFallbackText
+    * * Display Name: Prefill Fallback Text
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Model-level fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default, can be further overridden per-vendor in AI Model Vendor. Use {{prefill}} as a placeholder.
+    */
+    get PrefillFallbackText(): string | null {
+        return this.Get('PrefillFallbackText');
+    }
+    set PrefillFallbackText(value: string | null) {
+        this.Set('PrefillFallbackText', value);
+    }
+
+    /**
     * * Field Name: AIModelType
-    * * Display Name: AI Model Type
+    * * Display Name: Model Type Name
     * * SQL Data Type: nvarchar(50)
     */
     get AIModelType(): string {
@@ -38519,7 +38657,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: TemplateID
-    * * Display Name: Template ID
+    * * Display Name: Template
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Templates (vwTemplates.ID)
     * * Description: Reference to the template used for the prompt.
@@ -38533,7 +38671,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: CategoryID
-    * * Display Name: Category ID
+    * * Display Name: Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Categories (vwAIPromptCategories.ID)
     * * Description: Reference to the category the prompt belongs to.
@@ -38547,7 +38685,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Types (vwAIPromptTypes.ID)
     * * Description: Reference to the type of the prompt.
@@ -38632,7 +38770,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: AIModelTypeID
-    * * Display Name: AI Model Type ID
+    * * Display Name: AI Model Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Types (vwAIModelTypes.ID)
     * * Description: References the type of AI model this prompt is designed for (LLM, Image, Audio, etc.).
@@ -38646,7 +38784,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: MinPowerRank
-    * * Display Name: Min Power Rank
+    * * Display Name: Minimum Power Rank
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: The minimum power rank required for models to be considered for this prompt.
@@ -38731,7 +38869,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: ParallelConfigParam
-    * * Display Name: Parallel Config Param
+    * * Display Name: Parallel Config Parameter
     * * SQL Data Type: nvarchar(100)
     * * Description: When ParallelizationMode is ConfigParam, specifies the name of the configuration parameter that contains the parallel count.
     */
@@ -38811,7 +38949,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: RetryDelayMS
-    * * Display Name: Retry Delay MS
+    * * Display Name: Retry Delay (ms)
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Delay between retry attempts in milliseconds.
@@ -38844,7 +38982,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: ResultSelectorPromptID
-    * * Display Name: Result Selector Prompt ID
+    * * Display Name: Result Selector Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     * * Description: References another prompt that selects the best result from multiple parallel executions.
@@ -38872,7 +39010,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: CacheTTLSeconds
-    * * Display Name: Cache TTL Seconds
+    * * Display Name: Cache TTL (Seconds)
     * * SQL Data Type: int
     * * Description: Time-to-live in seconds for cached results. NULL means results never expire.
     */
@@ -38958,7 +39096,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: CacheMustMatchConfig
-    * * Display Name: Cache Must Match Config
+    * * Display Name: Cache Must Match Configuration
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.
@@ -39114,7 +39252,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: IncludeLogProbs
-    * * Display Name: Include Log Probs
+    * * Display Name: Include Log Probabilities
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Default setting for including log probabilities in the response. Can be overridden at runtime.
@@ -39128,7 +39266,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: TopLogProbs
-    * * Display Name: Top Log Probs
+    * * Display Name: Top Log Probabilities
     * * SQL Data Type: int
     * * Description: Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.
     */
@@ -39179,7 +39317,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: FailoverDelaySeconds
-    * * Display Name: Failover Delay Seconds
+    * * Display Name: Failover Delay (seconds)
     * * SQL Data Type: int
     * * Default Value: 5
     * * Description: Initial delay in seconds between failover attempts
@@ -39251,8 +39389,40 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
 
     /**
+    * * Field Name: AssistantPrefill
+    * * Display Name: Assistant Prefill
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional text to prefill the assistant response. The model will continue generating from where this text ends. Used with StopSequences for structured output extraction (e.g., prefill with \`\`\`json to get raw JSON). Only effective with providers that support prefill natively; see PrefillFallbackMode for non-supporting providers.
+    */
+    get AssistantPrefill(): string | null {
+        return this.Get('AssistantPrefill');
+    }
+    set AssistantPrefill(value: string | null) {
+        this.Set('AssistantPrefill', value);
+    }
+
+    /**
+    * * Field Name: PrefillFallbackMode
+    * * Display Name: Prefill Fallback Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Ignore
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Ignore
+    *   * None
+    *   * SystemInstruction
+    * * Description: Controls behavior when the selected provider does not support native assistant prefill. Ignore = silently skip prefill, SystemInstruction = inject a system message instructing the model to start its response with the prefill text (uses fallback text from AI Model Vendor or AI Model Type), None = no fallback (prefill only works with supported providers).
+    */
+    get PrefillFallbackMode(): 'Ignore' | 'None' | 'SystemInstruction' {
+        return this.Get('PrefillFallbackMode');
+    }
+    set PrefillFallbackMode(value: 'Ignore' | 'None' | 'SystemInstruction') {
+        this.Set('PrefillFallbackMode', value);
+    }
+
+    /**
     * * Field Name: Template
-    * * Display Name: Template
+    * * Display Name: Template Text
     * * SQL Data Type: nvarchar(255)
     */
     get Template(): string {
@@ -39261,7 +39431,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(255)
     */
     get Category(): string | null {
@@ -39270,7 +39440,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get Type(): string {
@@ -39279,7 +39449,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: AIModelType
-    * * Display Name: AI Model Type
+    * * Display Name: AI Model Type Name
     * * SQL Data Type: nvarchar(50)
     */
     get AIModelType(): string | null {
@@ -39288,7 +39458,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: ResultSelectorPrompt
-    * * Display Name: Result Selector Prompt
+    * * Display Name: Result Selector Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get ResultSelectorPrompt(): string | null {
@@ -39297,7 +39467,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: RootResultSelectorPromptID
-    * * Display Name: Root Result Selector Prompt ID
+    * * Display Name: Root Result Selector Prompt
     * * SQL Data Type: uniqueidentifier
     */
     get RootResultSelectorPromptID(): string | null {
@@ -45972,7 +46142,7 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
 
     /**
     * * Field Name: RunByUserID
-    * * Display Name: Run By User
+    * * Display Name: Run By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -46087,7 +46257,7 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
 
     /**
     * * Field Name: ConfigData
-    * * Display Name: Config Data
+    * * Display Name: Configuration Data
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional configuration data in JSON format for the request that started the integration run for audit purposes.
     */
@@ -46096,6 +46266,20 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
     }
     set ConfigData(value: string | null) {
         this.Set('ConfigData', value);
+    }
+
+    /**
+    * * Field Name: ScheduledJobRunID
+    * * Display Name: Scheduled Job Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+    * * Description: Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.
+    */
+    get ScheduledJobRunID(): string | null {
+        return this.Get('ScheduledJobRunID');
+    }
+    set ScheduledJobRunID(value: string | null) {
+        this.Set('ScheduledJobRunID', value);
     }
 
     /**
@@ -46441,7 +46625,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: IsExternalSystemReadOnly
-    * * Display Name: External System Read Only
+    * * Display Name: Is Read Only
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if data can only be read from the external system, not written back.
@@ -46705,8 +46889,22 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
     }
 
     /**
+    * * Field Name: ScheduledJobID
+    * * Display Name: Scheduled Job
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
+    * * Description: Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.
+    */
+    get ScheduledJobID(): string | null {
+        return this.Get('ScheduledJobID');
+    }
+    set ScheduledJobID(value: string | null) {
+        this.Set('ScheduledJobID', value);
+    }
+
+    /**
     * * Field Name: Company
-    * * Display Name: Company
+    * * Display Name: Company Name
     * * SQL Data Type: nvarchar(50)
     */
     get Company(): string {
@@ -46715,7 +46913,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration
+    * * Display Name: Integration Name
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {
@@ -46742,7 +46940,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: LastRunID
-    * * Display Name: Last Run ID
+    * * Display Name: Last Run
     * * SQL Data Type: uniqueidentifier
     */
     get LastRunID(): string | null {

@@ -128,6 +128,22 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="SupportsPrefill"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="PrefillFallbackText"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="DriverClass"
             Type="textbox"
             [EditMode]="EditMode"
