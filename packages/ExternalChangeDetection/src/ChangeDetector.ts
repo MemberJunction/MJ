@@ -8,7 +8,31 @@ import { PostgreSQLDialect, SQLDialect, SQLServerDialect } from "@memberjunction
  * Maximum number of rows per detection query page. Caps memory usage so that
  * even million-row ETL imports are processed in bounded chunks.
  */
-const DETECTION_PAGE_SIZE = 5000;
+const DETECTION_PAGE_SIZE = 2500;
+
+/**
+ * Abort the entire run if this percentage of entities fail detection.
+ * Prevents hammering a database that's clearly under pressure.
+ */
+const FAILURE_ABORT_THRESHOLD = 0.5;
+
+/**
+ * Number of consecutive entity failures that triggers a cooldown pause.
+ * After this many failures in a row, the engine pauses before continuing
+ * to let the database recover.
+ */
+const CONSECUTIVE_FAILURE_COOLDOWN_THRESHOLD = 5;
+
+/**
+ * Milliseconds to pause after hitting the consecutive failure threshold.
+ */
+const COOLDOWN_PAUSE_MS = 30_000;
+
+/**
+ * Maximum percentage of Node.js heap that can be used before the engine
+ * skips remaining entities to prevent OOM crashes.
+ */
+const HEAP_USAGE_LIMIT_PERCENT = 0.85;
 
 
 /**
@@ -230,6 +254,10 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      * Runs a detection query in pages of DETECTION_PAGE_SIZE, calling the
      * provided handler for each result row. Stops when a page returns fewer
      * rows than the page size.
+     *
+     * If a page query fails (timeout, connection error, etc.), logs the error
+     * and stops pagination for this entity rather than retrying or crashing.
+     * The caller's try/catch in DetectChangesForEntity will report partial results.
      */
     private async detectPages(
         rq: RunQuery,
@@ -238,9 +266,8 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         handleRow: (row: Record<string, unknown>) => Promise<void>
     ): Promise<void> {
         let startRow = 0;
-        let hasMore = true;
 
-        while (hasMore) {
+        for (;;) {
             const result = await rq.RunQuery({
                 QueryName: queryName,
                 Parameters: parameters,
@@ -248,14 +275,24 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 StartRow: startRow
             }, this.ContextUser);
 
-            if (!result?.Success || result.Results.length === 0)
+            if (!result?.Success) {
+                // Query failed (timeout, connection error, etc.) — stop paginating
+                // this entity. Don't throw — let the caller report partial results.
+                LogError(`Detection query ${queryName} failed at offset ${startRow}: ${result?.ErrorMessage || 'unknown error'}`);
+                break;
+            }
+
+            if (result.Results.length === 0)
                 break;
 
             for (const row of result.Results) {
                 await handleRow(row);
             }
 
-            hasMore = result.Results.length >= DETECTION_PAGE_SIZE;
+            // If we got fewer rows than requested, this was the last page
+            if (result.Results.length < DETECTION_PAGE_SIZE)
+                break;
+
             startRow += DETECTION_PAGE_SIZE;
         }
     }
@@ -440,23 +477,31 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     /**
      * Row count thresholds for dynamic concurrency. Entities are sorted smallest-first
      * and processed with a concurrency level appropriate to their size.
+     * Conservative values to avoid overwhelming production databases where
+     * detection queries use string-concat PK joins that force full table scans.
      */
     private static readonly CONCURRENCY_TIERS = [
-        { maxRows: 10_000,    concurrency: 10 }, // small tables — run many in parallel
-        { maxRows: 100_000,   concurrency: 5 },  // medium tables
-        { maxRows: 1_000_000, concurrency: 2 },  // large tables
-        { maxRows: Infinity,  concurrency: 1 },  // very large tables — one at a time
+        { maxRows: 1_000,     concurrency: 5 },  // tiny tables
+        { maxRows: 10_000,    concurrency: 3 },  // small tables
+        { maxRows: 50_000,    concurrency: 2 },  // medium tables
+        { maxRows: Infinity,  concurrency: 1 },  // large tables — one at a time
     ];
 
     /**
      * Detects changes across all of the entities specified. Entity concurrency is
      * dynamically determined from approximate row counts (via sys.partitions) so
      * that small tables run in parallel while large tables don't overwhelm the DB.
+     *
+     * Includes production safety mechanisms:
+     * - **Circuit breaker**: Aborts if >50% of entities fail (database under pressure)
+     * - **Cooldown**: Pauses 30s after 5 consecutive failures to let the DB recover
+     * - **Heap guard**: Skips remaining entities if heap usage exceeds 85%
+     *
      * @param entities Array of entities to process
      * @param maxConcurrency Optional maximum concurrency cap. Dynamic sizing will
-     *        still apply but never exceed this value. Defaults to 10.
+     *        still apply but never exceed this value. Defaults to 5.
      */
-    public async DetectChangesForEntities(entities: EntityInfo[], maxConcurrency: number = 10): Promise<ChangeDetectionResult>  {
+    public async DetectChangesForEntities(entities: EntityInfo[], maxConcurrency: number = 5): Promise<ChangeDetectionResult>  {
         try {
             if (!entities)
                 throw new Error("entities parameter is required");
@@ -477,9 +522,26 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             LogStatus(`Detecting changes for ${sortedEntities.length} entities with dynamic concurrency (max ${maxConcurrency})`);
 
             let processed = 0;
+            let failureCount = 0;
+            let consecutiveFailures = 0;
             let i = 0;
 
             while (i < sortedEntities.length) {
+                // Heap guard — check before starting each batch
+                if (this.isHeapPressureHigh()) {
+                    LogStatus(`   ⚠ Heap usage exceeds ${Math.round(HEAP_USAGE_LIMIT_PERCENT * 100)}%, stopping detection to prevent OOM (${processed}/${sortedEntities.length} entities processed)`);
+                    result.ErrorMessage = (result.ErrorMessage || '') + `\nAborted: heap pressure too high after ${processed} entities`;
+                    break;
+                }
+
+                // Circuit breaker — abort if too many entities are failing
+                if (processed > 0 && failureCount / processed > FAILURE_ABORT_THRESHOLD && processed >= 10) {
+                    LogStatus(`   ⚠ Circuit breaker: ${failureCount}/${processed} entities failed (>${Math.round(FAILURE_ABORT_THRESHOLD * 100)}%), aborting remaining entities`);
+                    result.Success = false;
+                    result.ErrorMessage = (result.ErrorMessage || '') + `\nAborted: failure rate exceeded ${Math.round(FAILURE_ABORT_THRESHOLD * 100)}% threshold`;
+                    break;
+                }
+
                 const dynamicSize = this.getConcurrencyForEntity(sortedEntities[i], rowCounts);
                 const concurrency = Math.min(dynamicSize, maxConcurrency);
                 const batch = sortedEntities.slice(i, i + concurrency);
@@ -499,8 +561,11 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                     processed++;
                     if (r.Success) {
                         result.Changes.push(...r.Changes);
+                        consecutiveFailures = 0;
                     }
                     else {
+                        failureCount++;
+                        consecutiveFailures++;
                         result.Success = false;
                         result.ErrorMessage = (result.ErrorMessage ? result.ErrorMessage + "\n" : "") + `Error detecting changes for ${e.Name}: ` + r.ErrorMessage;
                     }
@@ -508,8 +573,16 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 }
 
                 i += batch.length;
+
+                // Cooldown — pause after too many consecutive failures to let the DB recover
+                if (consecutiveFailures >= CONSECUTIVE_FAILURE_COOLDOWN_THRESHOLD && i < sortedEntities.length) {
+                    LogStatus(`   ⏸ ${consecutiveFailures} consecutive failures, pausing ${COOLDOWN_PAUSE_MS / 1000}s to let the database recover...`);
+                    await new Promise(resolve => setTimeout(resolve, COOLDOWN_PAUSE_MS));
+                    consecutiveFailures = 0; // reset after cooldown
+                }
             }
 
+            LogStatus(`Detection complete: ${processed} entities processed, ${failureCount} failed, ${result.Changes.length} changes found`);
             return result;
         }
         catch (e) {
@@ -520,6 +593,18 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 Changes: []
             }
         }
+    }
+
+    /**
+     * Checks whether Node.js heap usage is approaching the limit.
+     * Returns true if used heap exceeds HEAP_USAGE_LIMIT_PERCENT of the total available.
+     */
+    private isHeapPressureHigh(): boolean {
+        const mem = process.memoryUsage();
+        // v8 heap limit isn't directly exposed, but rss vs heapTotal gives a reasonable signal.
+        // heapUsed / heapTotal is the most reliable in-process metric.
+        const heapRatio = mem.heapUsed / mem.heapTotal;
+        return heapRatio > HEAP_USAGE_LIMIT_PERCENT;
     }
 
     /**
@@ -562,7 +647,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      */
     private getConcurrencyForEntity(entity: EntityInfo, rowCounts: Map<string, number> | null): number {
         if (!rowCounts || rowCounts.size === 0)
-            return 5; // safe default if row counts unavailable
+            return 2; // conservative default if row counts unavailable
 
         const rows = rowCounts.get(entity.ID) ?? 0;
         for (const tier of ExternalChangeDetectorEngine.CONCURRENCY_TIERS) {
