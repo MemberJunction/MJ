@@ -4,6 +4,7 @@
  */
 
 import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
+import { ensureArray } from "../utils/ensureArray.js";
 import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext } from '../types/analysis.js';
 import {
   TableAnalysisPromptResult,
@@ -181,13 +182,14 @@ export class AnalysisEngine {
 
       if (!result.success || !result.result) { console.log(`[AnalysisEngine] PK pruning failed for ${tableKey}: ${result.errorMessage}`); continue; }
 
-      for (const proposal of result.result) {
+      try { for (const proposal of ensureArray(result.result, "PK pruning per-table")) {
         if (proposal.action === 'remove' && proposal.index >= 1 && proposal.index <= tablePKs.length) {
           const pk = tablePKs[proposal.index - 1];
           if (pk.status === 'confirmed') { console.log(`[AnalysisEngine] BLOCKED removal of locked PK: ${tableKey} [${pk.columnNames.join(', ')}]`); continue; }
           allProposals.push({ pk, reasoning: proposal.reasoning, sourceSchema: pk.schemaName, sourceTable: pk.tableName, columns: pk.columnNames, confidence: pk.confidence });
         }
       }
+      } catch (pruneErr) { console.log(`[AnalysisEngine] PK pruning error for ${tableKey}: ${(pruneErr as Error).message}`); }
     }
 
     this.onProgress('PK pruning pass 1 complete', { proposals: allProposals.length });
@@ -203,7 +205,7 @@ export class AnalysisEngine {
 
     let removed = 0;
     if (holisticResult.success && holisticResult.result) {
-      for (const decision of holisticResult.result) {
+      for (const decision of ensureArray(holisticResult.result, "holistic pruning")) {
         if (decision.action === 'remove' && decision.index >= 1 && decision.index <= allProposals.length) {
           const proposal = allProposals[decision.index - 1];
           proposal.pk.status = 'rejected';
@@ -329,7 +331,7 @@ export class AnalysisEngine {
         continue;
       }
 
-      for (const proposal of result.result) {
+      try { for (const proposal of ensureArray(result.result, "FK pruning per-table")) {
         if (proposal.action === 'remove' && proposal.index >= 1 && proposal.index <= tableFKs.length) {
           const fk = tableFKs[proposal.index - 1];
           if (fk.status === 'confirmed') {
@@ -349,6 +351,7 @@ export class AnalysisEngine {
           });
         }
       }
+      } catch (pruneErr) { console.log(`[AnalysisEngine] FK pruning error for ${tableKey}: ${(pruneErr as Error).message}`); }
 
       console.log(`[AnalysisEngine] FK pruning ${tableKey}: ${result.result.length} removals proposed`);
     }
@@ -392,7 +395,7 @@ export class AnalysisEngine {
 
     let removed = 0;
     if (holisticResult.success && holisticResult.result) {
-      for (const decision of holisticResult.result) {
+      for (const decision of ensureArray(holisticResult.result, "holistic pruning")) {
         if (decision.action === 'remove' && decision.index >= 1 && decision.index <= allProposals.length) {
           const proposal = allProposals[decision.index - 1];
           proposal.fk.status = 'rejected';
