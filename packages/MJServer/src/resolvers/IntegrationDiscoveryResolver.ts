@@ -642,6 +642,55 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     // ── CONNECTION LIFECYCLE ─────────────────────────────────────────────
 
     /**
+     * Lists all CompanyIntegrations (optionally filtered by active status).
+     * Returns key fields for dashboard display without requiring a raw RunView call.
+     */
+    @RequireSystemUser()
+    @Query(() => ListConnectionsOutput)
+    async IntegrationListConnections(
+        @Arg("activeOnly", { defaultValue: true }) activeOnly: boolean,
+        @Ctx() ctx: AppContext
+    ): Promise<ListConnectionsOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const rv = new RunView();
+            const filter = activeOnly ? `IsActive=1` : '';
+            const result = await rv.RunView<MJCompanyIntegrationEntity>({
+                EntityName: 'MJ: Company Integrations',
+                ExtraFilter: filter,
+                OrderBy: 'Integration ASC',
+                ResultType: 'simple',
+                Fields: [
+                    'ID', 'Integration', 'IntegrationID', 'CompanyID', 'Company',
+                    'IsActive', 'ScheduleEnabled', 'CronExpression',
+                    'ExternalSystemID', '__mj_CreatedAt'
+                ]
+            }, user);
+
+            if (!result.Success) return { Success: false, Message: result.ErrorMessage || 'Query failed' };
+
+            return {
+                Success: true,
+                Message: `${result.Results.length} connections`,
+                Connections: result.Results.map(ci => ({
+                    ID: ci.ID,
+                    IntegrationName: ci.Integration,
+                    IntegrationID: ci.IntegrationID,
+                    CompanyID: ci.CompanyID,
+                    Company: ci.Company,
+                    IsActive: ci.IsActive,
+                    ScheduleEnabled: ci.ScheduleEnabled ?? false,
+                    CronExpression: ci.CronExpression ?? undefined,
+                    CreatedAt: ci.__mj_CreatedAt?.toISOString() ?? '',
+                }))
+            };
+        } catch (e) {
+            LogError(`IntegrationListConnections error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /**
      * Creates a CompanyIntegration with a linked Credential entity for encrypted credential storage.
      */
     @RequireSystemUser()
@@ -1531,4 +1580,24 @@ class SyncHistoryOutput {
     @Field() Success: boolean;
     @Field() Message: string;
     @Field({ nullable: true }) Runs?: string; // JSON-serialized array of run records
+}
+
+@ObjectType()
+class ConnectionSummaryOutput {
+    @Field() ID: string;
+    @Field() IntegrationName: string;
+    @Field() IntegrationID: string;
+    @Field() CompanyID: string;
+    @Field({ nullable: true }) Company?: string;
+    @Field() IsActive: boolean;
+    @Field() ScheduleEnabled: boolean;
+    @Field({ nullable: true }) CronExpression?: string;
+    @Field() CreatedAt: string;
+}
+
+@ObjectType()
+class ListConnectionsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [ConnectionSummaryOutput], { nullable: true }) Connections?: ConnectionSummaryOutput[];
 }

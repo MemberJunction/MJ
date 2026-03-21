@@ -302,25 +302,36 @@ describe('RuntimeSchemaManager', () => {
     });
 
     describe('Concurrency', () => {
-        it('should prevent concurrent pipeline runs', async () => {
+        it('should queue concurrent requests instead of rejecting', async () => {
             process.env.ALLOW_RUNTIME_SCHEMA_UPDATE = '1';
             const rsm = RuntimeSchemaManager.Instance;
 
             // Simulate a running pipeline by setting _isRunning
             (rsm as unknown as Record<string, boolean>)['_isRunning'] = true;
 
-            const result = await rsm.RunPipeline({
+            // The second request should wait (not throw) — verify it's pending
+            let resolved = false;
+            const pendingPromise = rsm.RunPipeline({
                 MigrationSQL: 'CREATE TABLE [custom].[ConcTest] (ID INT NOT NULL);',
                 Description: 'concurrent test',
                 AffectedTables: ['custom.ConcTest'],
-            });
+            }).then(r => { resolved = true; return r; });
 
-            expect(result.Success).toBe(false);
-            expect(result.ErrorStep).toBe('AcquireLock');
-            expect(result.Steps.find(s => s.Name === 'AcquireLock')?.Message).toContain('already running');
+            // Give the event loop a tick — the promise should NOT have resolved
+            await new Promise(resolve => setTimeout(resolve, 50));
+            expect(resolved).toBe(false);
 
-            // Clean up
+            // Release the lock — the waiter should be notified
             (rsm as unknown as Record<string, boolean>)['_isRunning'] = false;
+            const rsmInternal = rsm as unknown as { _lockWaiters: Array<() => void> };
+            const waiters = rsmInternal._lockWaiters;
+            const next = waiters.shift();
+            if (next) next();
+
+            // Now the pending pipeline should proceed (and fail at SQL execution since no DB)
+            const result = await pendingPromise;
+            // It will fail at ExecuteMigration (no real DB) but it DID get past AcquireLock
+            expect(result.Steps.find(s => s.Name === 'AcquireLock')?.Status).toBe('success');
         });
     });
 

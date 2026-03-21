@@ -336,6 +336,44 @@ export class PostgreSQLDialect extends SQLDialect {
         return `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`;
     }
 
+    // ─── DDL Generation (Conditional/Procedural) ────────────────────
+
+    DateAddExpression(unit: 'MINUTE' | 'HOUR' | 'DAY', amount: number, baseExpr: string): string {
+        const pgUnit = unit.toLowerCase() + 's'; // MINUTE -> minutes, HOUR -> hours, DAY -> days
+        return `${baseExpr} + INTERVAL '${amount} ${pgUnit}'`;
+    }
+
+    CreateTableIfNotExistsDDL(schema: string, tableName: string, columnsDDL: string): string {
+        const quotedTable = this.QuoteSchema(schema, tableName);
+        return [
+            `CREATE TABLE IF NOT EXISTS ${quotedTable} (`,
+            columnsDDL,
+            `);`,
+        ].join('\n');
+    }
+
+    ConditionalBlock(condition: string, thenSQL: string, elseSQL?: string): string {
+        const lines = [
+            `DO $$`,
+            `BEGIN`,
+            `  IF ${condition} THEN`,
+            `    ${thenSQL};`,
+        ];
+        if (elseSQL) {
+            lines.push(`  ELSE`);
+            lines.push(`    ${elseSQL};`);
+        }
+        lines.push(`  END IF;`);
+        lines.push(`END $$;`);
+        return lines.join('\n');
+    }
+
+    RaiseSignalSQL(message: string): string {
+        return `RAISE NOTICE '${message}'`;
+    }
+
+    // ─── DDL Generation (Schema/Table continued) ────────────────────
+
     AddColumnClause(col: ColumnDDLOptions): string {
         const nullable = col.nullable ? 'NULL' : 'NOT NULL';
         const defaultExpr = col.defaultValue != null ? ` DEFAULT ${col.defaultValue}` : '';

@@ -391,6 +391,53 @@ export abstract class SQLDialect {
      */
     abstract ResolveAbstractType(options: ResolveTypeOptions): string;
 
+    // ─── DDL Generation (Conditional/Procedural) ────────────────────
+
+    /**
+     * Returns a date/time arithmetic expression.
+     * SQL Server: DATEADD(MINUTE, 30, GETUTCDATE())
+     * PostgreSQL: (NOW() AT TIME ZONE 'UTC') + INTERVAL '30 minutes'
+     *
+     * @param unit - Time unit
+     * @param amount - Number of units to add (can be negative)
+     * @param baseExpr - Base timestamp expression (e.g., from CurrentTimestampUTC())
+     */
+    abstract DateAddExpression(unit: 'MINUTE' | 'HOUR' | 'DAY', amount: number, baseExpr: string): string;
+
+    /**
+     * Returns a full CREATE TABLE wrapped in a "create if not exists" guard.
+     * SQL Server: IF NOT EXISTS (sys.tables check) BEGIN CREATE TABLE ... END;
+     * PostgreSQL: CREATE TABLE IF NOT EXISTS ...;
+     *
+     * @param schema - Schema name
+     * @param tableName - Table name
+     * @param columnsDDL - The column definitions (everything between the parentheses)
+     */
+    abstract CreateTableIfNotExistsDDL(schema: string, tableName: string, columnsDDL: string): string;
+
+    /**
+     * Returns a conditional IF/ELSE block in platform-appropriate procedural SQL.
+     * SQL Server: IF (condition) BEGIN thenSQL END ELSE BEGIN elseSQL END
+     * PostgreSQL: DO $$ BEGIN IF condition THEN thenSQL; ELSE elseSQL; END IF; END $$;
+     *
+     * @param condition - SQL boolean condition
+     * @param thenSQL - SQL to execute when condition is true
+     * @param elseSQL - Optional SQL to execute when condition is false
+     */
+    abstract ConditionalBlock(condition: string, thenSQL: string, elseSQL?: string): string;
+
+    /**
+     * Returns a non-fatal signal/notice statement detectable in CLI output.
+     * Used for signaling conditions (e.g., "lock held") without aborting the script.
+     * SQL Server: RAISERROR('message', 16, 1) — appears in sqlcmd stdout
+     * PostgreSQL: RAISE NOTICE 'message' — appears in psql stderr
+     *
+     * Note: For PostgreSQL, this must be used inside a ConditionalBlock (DO $$ context).
+     *
+     * @param message - Signal message to emit (used for detection in CLI output)
+     */
+    abstract RaiseSignalSQL(message: string): string;
+
     // ─── DDL Generation (Triggers/Indexes) ──────────────────────────
 
     /**

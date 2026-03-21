@@ -37,7 +37,15 @@ export { SchemaEvolution } from './SchemaEvolution.js';
 
 // ─── Runtime Schema Manager ─────────────────────────────────────────
 export { RuntimeSchemaManager, ValidateMigrationSQL, RSUError } from './RuntimeSchemaManager.js';
-export type { RSUPipelineInput, RSUPipelineResult, RSUPipelineStep, RSUPreviewResult, RSUStatus, SQLValidationResult } from './RuntimeSchemaManager.js';
+export type {
+  RSUPipelineBatchResult,
+  RSUPipelineInput,
+  RSUPipelineResult,
+  RSUPipelineStep,
+  RSUPreviewResult,
+  RSUStatus,
+  SQLValidationResult,
+} from './RuntimeSchemaManager.js';
 
 // ─── Metrics & Observability ────────────────────────────────────────
 export { RSUMetrics } from './RSUMetrics.js';

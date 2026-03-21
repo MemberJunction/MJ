@@ -285,6 +285,46 @@ export class SQLServerDialect extends SQLDialect {
         return `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '${schemaName}')\n    EXEC('CREATE SCHEMA [${schemaName}]');\nGO`;
     }
 
+    // ─── DDL Generation (Conditional/Procedural) ────────────────────
+
+    DateAddExpression(unit: 'MINUTE' | 'HOUR' | 'DAY', amount: number, baseExpr: string): string {
+        return `DATEADD(${unit}, ${amount}, ${baseExpr})`;
+    }
+
+    CreateTableIfNotExistsDDL(schema: string, tableName: string, columnsDDL: string): string {
+        const quotedTable = this.QuoteSchema(schema, tableName);
+        return [
+            `IF NOT EXISTS (SELECT * FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name='${schema}' AND t.name='${tableName}')`,
+            `BEGIN`,
+            `  CREATE TABLE ${quotedTable} (`,
+            columnsDDL,
+            `  );`,
+            `END;`,
+        ].join('\n');
+    }
+
+    ConditionalBlock(condition: string, thenSQL: string, elseSQL?: string): string {
+        const lines = [
+            `IF ${condition}`,
+            `BEGIN`,
+            `  ${thenSQL}`,
+            `END`,
+        ];
+        if (elseSQL) {
+            lines.push(`ELSE`);
+            lines.push(`BEGIN`);
+            lines.push(`  ${elseSQL}`);
+            lines.push(`END`);
+        }
+        return lines.join('\n');
+    }
+
+    RaiseSignalSQL(message: string): string {
+        return `RAISERROR('${message}', 16, 1)`;
+    }
+
+    // ─── DDL Generation (Schema/Table continued) ────────────────────
+
     AddColumnClause(col: ColumnDDLOptions): string {
         const nullable = col.nullable ? 'NULL' : 'NOT NULL';
         const defaultExpr = col.defaultValue != null ? ` DEFAULT ${col.defaultValue}` : '';

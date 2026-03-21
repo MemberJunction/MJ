@@ -109,6 +109,21 @@ export class RSUPipelineResultGQL {
 }
 
 @ObjectType()
+export class RSUPipelineBatchResultGQL {
+    @Field(() => [RSUPipelineResultGQL])
+    Results: RSUPipelineResultGQL[];
+
+    @Field(() => Int)
+    SuccessCount: number;
+
+    @Field(() => Int)
+    FailureCount: number;
+
+    @Field(() => Int)
+    TotalCount: number;
+}
+
+@ObjectType()
 export class RSUPreviewResultGQL {
     @Field(() => String)
     MigrationSQL: string;
@@ -144,6 +159,15 @@ export class RSUStatusGQL {
     LastRunResult?: string | null;
 }
 
+@ObjectType()
+export class RSUQueueStatusGQL {
+    @Field(() => Int)
+    PendingCount: number;
+
+    @Field(() => Boolean)
+    IsCycleRunning: boolean;
+}
+
 // ─── Resolver ────────────────────────────────────────────────────────
 
 @Resolver()
@@ -163,6 +187,19 @@ export class RSUResolver {
             OutOfSyncSince: status.OutOfSyncSince,
             LastRunAt: status.LastRunAt,
             LastRunResult: status.LastRunResult,
+        };
+    }
+
+    /**
+     * Query: Get RSU CodeGen queue status.
+     * Shows how many requests are pending and whether a cycle is running.
+     */
+    @Query(() => RSUQueueStatusGQL, { description: 'Returns the RSU pipeline status' })
+    RuntimeSchemaUpdateQueueStatus(): RSUQueueStatusGQL {
+        const rsm = RuntimeSchemaManager.Instance;
+        return {
+            PendingCount: 0, // Batching is explicit via RunPipelineBatch — no implicit queue
+            IsCycleRunning: rsm.IsRunning,
         };
     }
 
@@ -207,6 +244,56 @@ export class RSUResolver {
             })),
             ErrorMessage: result.ErrorMessage,
             ErrorStep: result.ErrorStep,
+        };
+    }
+
+    /**
+     * Mutation: Execute the RSU pipeline for a batch of inputs.
+     * All migrations execute under one lock, then one CodeGen/compile/restart/git.
+     * Per-item migration results + shared post-migration result.
+     */
+    @Mutation(() => RSUPipelineBatchResultGQL, {
+        description: 'Execute Runtime Schema Update for a batch of inputs. Requires system user.',
+    })
+    @RequireSystemUser()
+    async RunRuntimeSchemaUpdateBatch(
+        @Arg('inputs', () => [RSUPipelineInputGQL]) inputs: RSUPipelineInputGQL[],
+        @Ctx() _ctx: AppContext
+    ): Promise<RSUPipelineBatchResultGQL> {
+        const rsm = RuntimeSchemaManager.Instance;
+
+        const pipelineInputs: RSUPipelineInput[] = inputs.map(input => ({
+            MigrationSQL: input.MigrationSQL,
+            Description: input.Description,
+            AffectedTables: input.AffectedTables,
+            AdditionalSchemaInfo: input.AdditionalSchemaInfo ?? undefined,
+            MetadataFiles: input.MetadataFiles?.map(mf => ({ Path: mf.Path, Content: mf.Content })),
+            SkipGitCommit: input.SkipGitCommit ?? undefined,
+            SkipRestart: input.SkipRestart ?? undefined,
+        }));
+
+        const batchResult = await rsm.RunPipelineBatch(pipelineInputs);
+
+        return {
+            Results: batchResult.Results.map(result => ({
+                Success: result.Success,
+                BranchName: result.BranchName,
+                MigrationFilePath: result.MigrationFilePath,
+                EntitiesProcessed: result.EntitiesProcessed,
+                APIRestarted: result.APIRestarted,
+                GitCommitSuccess: result.GitCommitSuccess,
+                Steps: result.Steps.map(s => ({
+                    Name: s.Name,
+                    Status: s.Status,
+                    DurationMs: s.DurationMs,
+                    Message: s.Message,
+                })),
+                ErrorMessage: result.ErrorMessage,
+                ErrorStep: result.ErrorStep,
+            })),
+            SuccessCount: batchResult.SuccessCount,
+            FailureCount: batchResult.FailureCount,
+            TotalCount: batchResult.TotalCount,
         };
     }
 

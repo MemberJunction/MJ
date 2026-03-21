@@ -9,7 +9,13 @@
  * In-memory concurrency mutex (one operation at a time).
  */
 import { BaseSingleton } from '@memberjunction/global';
+import { Metadata, type DatabaseProviderBase } from '@memberjunction/core';
 import { RSUMetrics } from './RSUMetrics.js';
+import { GetDialect } from './DDLGenerator.js';
+import type { DatabasePlatform } from './interfaces.js';
+
+/** Signal string used to detect lock-held condition in database messages. */
+const RSU_LOCK_HELD_SIGNAL = 'RSU_LOCK_HELD';
 
 // ─── Pipeline Input/Output Types ─────────────────────────────────────
 
@@ -62,6 +68,20 @@ export interface RSUPipelineResult {
     Steps: RSUPipelineStep[];
     ErrorMessage?: string;
     ErrorStep?: string;
+}
+
+/**
+ * Batch result wrapping per-item results with summary counts.
+ */
+export interface RSUPipelineBatchResult {
+    /** Per-item results in the same order as the inputs. */
+    Results: RSUPipelineResult[];
+    /** Number of migrations that succeeded. */
+    SuccessCount: number;
+    /** Number of migrations that failed. */
+    FailureCount: number;
+    /** Total number of inputs in the batch. */
+    TotalCount: number;
 }
 
 /**
@@ -220,109 +240,185 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      *
      * Git commit/push runs automatically unless SkipGitCommit is set to true.
      */
+    /**
+     * Execute the RSU pipeline for a single input. Convenience wrapper
+     * around RunPipelineBatch — a batch of 1.
+     */
     public async RunPipeline(input: RSUPipelineInput): Promise<RSUPipelineResult> {
-        const steps: RSUPipelineStep[] = [];
-        const result: RSUPipelineResult = {
-            Success: false,
-            APIRestarted: false,
-            GitCommitSuccess: false,
-            Steps: steps,
-        };
+        const batchResult = await this.RunPipelineBatch([input]);
+        return batchResult.Results[0];
+    }
 
-        try {
-            // Step 1: Validate environment
-            const envStep = await this.runStep('ValidateEnvironment', () => this.validateEnvironment(), steps);
-            if (!envStep) return this.failResult(result, 'ValidateEnvironment');
+    /**
+     * Execute the RSU pipeline for a batch of inputs.
+     *
+     * Correctness guarantee: migrations and CodeGen never overlap.
+     * All migrations execute under one lock, then CodeGen runs once
+     * against the fully-committed schema.
+     *
+     * Flow:
+     *   1. Validate all inputs (fail fast — reject entire batch on validation error)
+     *   2. Lock
+     *   3. For each input: write migration file → execute SQL (independent success/failure)
+     *   4. Unlock
+     *   5. ONE CodeGen run (covers all successful migrations)
+     *   6. ONE compile
+     *   7. ONE restart
+     *   8. ONE git commit (all migration files)
+     *   9. Resolve each caller with per-item migration result + shared post-migration result
+     */
+    public async RunPipelineBatch(inputs: RSUPipelineInput[]): Promise<RSUPipelineBatchResult> {
+        if (inputs.length === 0) return { Results: [], SuccessCount: 0, FailureCount: 0, TotalCount: 0 };
 
-            // Step 2: Acquire concurrency lock
-            const lockStep = await this.runStep('AcquireLock', () => this.acquireLock(), steps);
-            if (!lockStep) return this.failResult(result, 'AcquireLock');
+        const sharedSteps: RSUPipelineStep[] = [];
 
-            try {
-                // Step 3: Validate migration SQL
-                const sqlStep = await this.runStep('ValidateSQL', () => this.validateSQL(input.MigrationSQL), steps);
-                if (!sqlStep) return this.failResult(result, 'ValidateSQL');
-
-                // Step 4: Write migration file
-                const writeStep = await this.runStep('WriteMigrationFile', () => this.writeMigrationFile(input), steps);
-                if (!writeStep) return this.failResult(result, 'WriteMigrationFile');
-                result.MigrationFilePath = writeStep as string;
-
-                // Step 5: Execute migration SQL against database
-                const execStep = await this.runStep('ExecuteMigration', () => this.executeMigration(input.MigrationSQL), steps);
-                if (!execStep) return this.failResult(result, 'ExecuteMigration');
-
-                // Step 6: Run CodeGen
-                const codegenStep = await this.runStep('RunCodeGen', () => this.runCodeGen(), steps);
-                if (!codegenStep) return this.failResult(result, 'RunCodeGen');
-
-                // Step 7: Compile TypeScript
-                const compileStep = await this.runStep('CompileTypeScript', () => this.compileTypeScript(), steps);
-                if (!compileStep) return this.failResult(result, 'CompileTypeScript');
-
-                // Step 8: Restart MJAPI (unless skipped)
-                if (input.SkipRestart) {
-                    steps.push({ Name: 'RestartMJAPI', Status: 'skipped', DurationMs: 0, Message: 'Skipped by caller' });
-                } else {
-                    const restartStep = await this.runStep('RestartMJAPI', () => this.restartMJAPI(), steps);
-                    if (!restartStep) return this.failResult(result, 'RestartMJAPI');
-                    result.APIRestarted = true;
-                }
-
-                // Step 9: Mark out-of-sync
-                this.MarkOutOfSync();
-                steps.push({ Name: 'MarkOutOfSync', Status: 'success', DurationMs: 0, Message: 'API marked as out-of-sync with git repo' });
-
-                // Phase 2: Git commit/push/PR
-                if (!input.SkipGitCommit) {
-                    const gitStep = await this.runStep(
-                        'GitCommitAndPR',
-                        () => this.gitCommitAndPR(input, result.MigrationFilePath ?? ''),
-                        steps
-                    );
-                    if (gitStep) {
-                        result.GitCommitSuccess = true;
-                        result.BranchName = gitStep as string;
-                        this.ClearOutOfSync();
-                    }
-                    // Git failure is non-fatal — pipeline still succeeds
-                }
-
-                result.Success = true;
-                this._lastRunResult = 'success';
-            } finally {
-                await this.releaseLock();
-            }
-        } catch (error: unknown) {
-            const msg = error instanceof Error ? error.message : String(error);
-            result.ErrorMessage = msg;
-            this._lastRunResult = `failed: ${msg}`;
+        // ─── Phase 1: Validate all inputs (fail fast) ────────────────
+        const envStep = await this.runStep('ValidateEnvironment', () => this.validateEnvironment(), sharedSteps);
+        if (!envStep) {
+            return this.buildBatchResult(inputs.map(input => this.buildFailedResult(input, 'ValidateEnvironment', sharedSteps)));
         }
 
-        this._lastRunAt = new Date();
-
-        // Write audit log entry (best-effort, non-blocking)
-        this.writeAuditLog(input, result).catch(() => { /* ignore audit failures */ });
-
-        // Record metrics (best-effort)
-        try {
-            const stepDurations: Record<string, number> = {};
-            for (const step of result.Steps) {
-                stepDurations[step.Name] = step.DurationMs;
+        for (const input of inputs) {
+            const validation = ValidateMigrationSQL(input.MigrationSQL, this.getProtectedSchemas());
+            if (!validation.Valid) {
+                sharedSteps.push({ Name: 'ValidateSQL', Status: 'failed', DurationMs: 0, Message: validation.Errors.join('; ') });
+                return this.buildBatchResult(inputs.map(i => this.buildFailedResult(i, 'ValidateSQL', sharedSteps)));
             }
-            RSUMetrics.Instance.RecordRun({
-                Timestamp: new Date(),
-                DurationMs: result.Steps.reduce((sum, s) => sum + s.DurationMs, 0),
-                Success: result.Success,
-                StepDurations: stepDurations,
-                ErrorStep: result.ErrorStep,
-                Description: input.Description,
-                AffectedTables: input.AffectedTables,
-                RetryCount: 0,
-            });
-        } catch { /* ignore metrics failures */ }
+        }
+        sharedSteps.push({ Name: 'ValidateSQL', Status: 'success', DurationMs: 0, Message: `Validated ${inputs.length} migration(s)` });
 
-        return result;
+        // ─── Phase 2: Lock → Execute all migrations → Unlock ─────────
+        const lockStep = await this.runStep('AcquireLock', () => this.acquireLock(), sharedSteps);
+        if (!lockStep) {
+            return this.buildBatchResult(inputs.map(input => this.buildFailedResult(input, 'AcquireLock', sharedSteps)));
+        }
+
+        /** Per-item migration results. */
+        const itemResults: Array<{ Input: RSUPipelineInput; FilePath?: string; Success: boolean; Error?: string; Steps: RSUPipelineStep[] }> = [];
+
+        try {
+            for (const input of inputs) {
+                const itemSteps: RSUPipelineStep[] = [];
+
+                // Write migration file
+                const writeStep = await this.runStep('WriteMigrationFile', () => this.writeMigrationFile(input), itemSteps);
+                if (!writeStep) {
+                    itemResults.push({ Input: input, Success: false, Error: itemSteps.find(s => s.Status === 'failed')?.Message, Steps: itemSteps });
+                    continue; // Skip this item, proceed to next
+                }
+                const filePath = writeStep as string;
+
+                // Execute migration SQL
+                const execStep = await this.runStep('ExecuteMigration', () => this.executeMigration(input.MigrationSQL), itemSteps);
+                if (!execStep) {
+                    itemResults.push({ Input: input, FilePath: filePath, Success: false, Error: itemSteps.find(s => s.Status === 'failed')?.Message, Steps: itemSteps });
+                    continue; // Skip this item, proceed to next
+                }
+
+                itemResults.push({ Input: input, FilePath: filePath, Success: true, Steps: itemSteps });
+            }
+
+            // Mark out-of-sync if any migration succeeded
+            const anySuccess = itemResults.some(r => r.Success);
+            if (anySuccess) {
+                this.MarkOutOfSync();
+                sharedSteps.push({ Name: 'MarkOutOfSync', Status: 'success', DurationMs: 0, Message: 'DB changed, API out-of-sync until CodeGen completes' });
+            }
+        } finally {
+            await this.releaseLock();
+        }
+
+        // ─── Phase 3: Shared post-migration pipeline ─────────────────
+        // Only runs if at least one migration succeeded.
+        const successfulItems = itemResults.filter(r => r.Success);
+        let apiRestarted = false;
+        let gitCommitSuccess = false;
+        let branchName: string | undefined;
+
+        if (successfulItems.length > 0) {
+            // CodeGen
+            const codegenOk = await this.runStep('RunCodeGen', () => this.runCodeGen(), sharedSteps);
+
+            if (codegenOk) {
+                // Compile
+                const compileOk = await this.runStep('CompileTypeScript', () => this.compileTypeScript(), sharedSteps);
+
+                if (compileOk) {
+                    // Restart
+                    const skipRestart = inputs.every(i => i.SkipRestart);
+                    if (!skipRestart) {
+                        const restartOk = await this.runStep('RestartMJAPI', () => this.restartMJAPI(), sharedSteps);
+                        if (restartOk) apiRestarted = true;
+                    }
+
+                    // CodeGen + compile succeeded — DB and API are back in sync
+                    // regardless of whether git commit happens or is skipped
+                    this.ClearOutOfSync();
+                }
+            }
+
+            // Git commit (non-fatal)
+            const skipGit = inputs.every(i => i.SkipGitCommit);
+            if (!skipGit) {
+                const allTables = [...new Set(successfulItems.flatMap(r => r.Input.AffectedTables))];
+                const allFiles = successfulItems.map(r => r.FilePath).filter((p): p is string => !!p);
+                const description = successfulItems.length === 1
+                    ? successfulItems[0].Input.Description
+                    : `Batch of ${successfulItems.length} schema changes`;
+
+                const gitStep = await this.runStep(
+                    'GitCommitAndPR',
+                    () => this.gitCommitAndPRForCycle(allFiles, allTables, description),
+                    sharedSteps
+                );
+                if (gitStep) {
+                    gitCommitSuccess = true;
+                    branchName = gitStep as string;
+                }
+            }
+        }
+
+        // ─── Phase 4: Build per-caller results ───────────────────────
+        this._lastRunAt = new Date();
+        const overallSuccess = successfulItems.length > 0;
+        this._lastRunResult = overallSuccess ? 'success' : 'failed';
+
+        const results: RSUPipelineResult[] = itemResults.map(item => {
+            const allSteps = [...sharedSteps, ...item.Steps];
+            const result: RSUPipelineResult = {
+                Success: item.Success && (successfulItems.length > 0),
+                MigrationFilePath: item.FilePath,
+                APIRestarted: apiRestarted,
+                GitCommitSuccess: gitCommitSuccess,
+                BranchName: branchName,
+                Steps: allSteps,
+                ErrorMessage: item.Error,
+                ErrorStep: item.Error ? item.Steps.find(s => s.Status === 'failed')?.Name : undefined,
+            };
+
+            // Audit log per item (best-effort)
+            this.writeAuditLog(item.Input, result).catch(() => { /* ignore */ });
+
+            // Metrics per item (best-effort)
+            try {
+                const stepDurations: Record<string, number> = {};
+                for (const step of allSteps) stepDurations[step.Name] = step.DurationMs;
+                RSUMetrics.Instance.RecordRun({
+                    Timestamp: new Date(),
+                    DurationMs: allSteps.reduce((sum, s) => sum + s.DurationMs, 0),
+                    Success: result.Success,
+                    StepDurations: stepDurations,
+                    ErrorStep: result.ErrorStep,
+                    Description: item.Input.Description,
+                    AffectedTables: item.Input.AffectedTables,
+                    RetryCount: 0,
+                });
+            } catch { /* ignore */ }
+
+            return result;
+        });
+
+        return this.buildBatchResult(results);
     }
 
     /**
@@ -415,19 +511,32 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         return true;
     }
 
+    /** Waiters queued behind the current lock holder. */
+    private _lockWaiters: Array<() => void> = [];
+
+    /**
+     * Acquire the migration lock. If another migration is in progress,
+     * the caller awaits (event-driven, no polling) until the lock is free.
+     * This ensures concurrent RunPipeline calls serialize safely instead
+     * of throwing CONCURRENT errors.
+     */
     private async acquireLock(): Promise<boolean> {
-        // In-memory lock (always checked first for fast-path)
+        // If lock is held, wait in line (event-driven via promise)
         if (this._isRunning) {
-            throw new RSUError(
-                'CONCURRENT',
-                'Another RSU pipeline is already running. Wait for it to complete.'
-            );
+            await new Promise<void>(resolve => {
+                this._lockWaiters.push(resolve);
+            });
         }
 
-        // DB-backed lock for multi-instance safety (if DB is available)
+        this._isRunning = true;
+
+        // DB-backed lock for multi-instance safety (if enabled)
         if (this.IsDBLockEnabled) {
             const acquired = await this.acquireDBLock();
             if (!acquired) {
+                // Another MJAPI instance holds the lock — release in-memory and reject
+                this._isRunning = false;
+                this.notifyNextWaiter();
                 throw new RSUError(
                     'CONCURRENT',
                     'Another RSU pipeline is running on a different instance. Wait for it to complete.'
@@ -435,17 +544,25 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             }
         }
 
-        this._isRunning = true;
         return true;
     }
 
-    private async releaseLock(): Promise<void> {
-        this._isRunning = false;
+    /** Wake the next waiter in line (if any). */
+    private notifyNextWaiter(): void {
+        const next = this._lockWaiters.shift();
+        if (next) next();
+    }
 
+    private async releaseLock(): Promise<void> {
         // Release DB lock if enabled
         if (this.IsDBLockEnabled) {
             await this.releaseDBLock();
         }
+
+        this._isRunning = false;
+
+        // Wake the next waiter in line
+        this.notifyNextWaiter();
     }
 
     private async validateSQL(sql: string): Promise<boolean> {
@@ -491,46 +608,17 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     /**
      * Execute the migration SQL against the database.
-     *
-     * Phase 1: Uses child_process to invoke sqlcmd or a programmatic CodeGen connection.
-     * The actual implementation depends on the database driver available at runtime.
+     * Delegates CLI tool selection to the DBExecProvider abstraction.
      */
     private async executeMigration(sql: string): Promise<boolean> {
-        const { execAsync } = await this.getExecAsync();
-
-        // Replace ${flyway:defaultSchema} placeholder with actual schema
         const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
         const resolvedSQL = sql.replace(/\$\{flyway:defaultSchema\}/g, defaultSchema);
 
-        // Use sqlcmd to execute the migration (available in Docker workbench)
-        const server = process.env.DB_HOST || 'localhost';
-        const database = process.env.DB_DATABASE || '';
-        const user = process.env.DB_USERNAME || 'sa';
-        const password = process.env.DB_PASSWORD || '';
-
-        if (!database) {
-            throw new RSUError('CONFIG', 'DB_DATABASE environment variable is required for ExecuteMigration');
-        }
-
-        // Resolve sqlcmd path — prefer env override, then PATH, then common install location
-        const sqlcmdPath = process.env.RSU_SQLCMD_PATH || 'sqlcmd';
-
-        // Write SQL to temp file, then execute via sqlcmd
-        const tmpFile = `/tmp/rsu_migration_${Date.now()}.sql`;
-        const { writeFileSync, unlinkSync } = await import('node:fs');
-        writeFileSync(tmpFile, resolvedSQL, 'utf-8');
-
         try {
-            const { stdout, stderr } = await execAsync(
-                `${sqlcmdPath} -S "${server}" -d "${database}" -U "${user}" -P "${password}" -i "${tmpFile}" -C`,
-                { timeout: 120_000 }
-            );
-            // sqlcmd writes errors to stdout, not stderr. Check for Msg/Level patterns.
-            if (stdout && /Msg \d+, Level (1[1-9]|[2-9]\d)/.test(stdout)) {
-                throw new RSUError('SQL_EXEC', `sqlcmd reported errors: ${stdout.trim()}`);
-            }
-        } finally {
-            try { unlinkSync(tmpFile); } catch { /* best-effort cleanup */ }
+            await this.getDBProvider().ExecuteSQL(resolvedSQL, undefined, { isMutation: true, description: 'RSU migration' });
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            throw new RSUError('SQL_EXEC', msg);
         }
 
         return true;
@@ -552,11 +640,12 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         const { execAsync } = await this.getExecAsync();
         const { writeFileSync, unlinkSync } = await import('node:fs');
         const workDir = process.env.RSU_WORK_DIR || process.cwd();
+        const timeoutMs = parseInt(process.env.RSU_CODEGEN_TIMEOUT_MS || '600000', 10);
 
         // If caller provides a full custom command, use it directly
         const customCmd = process.env.RSU_CODEGEN_COMMAND;
         if (customCmd) {
-            await execAsync(`cd ${workDir} && ${customCmd}`, { timeout: 600_000 });
+            await execAsync(`cd "${workDir}" && ${customCmd}`, { timeout: timeoutMs });
             return true;
         }
 
@@ -573,30 +662,18 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         writeFileSync(tmpScript, scriptContent, 'utf-8');
 
         try {
-            const { stdout } = await execAsync(
-                `cd ${workDir} && node ${tmpScript}`,
-                { timeout: 600_000 } // 10 minutes for CodeGen
+            // Exit code 0 = success. No stdout string matching needed.
+            await execAsync(
+                `cd "${workDir}" && node "${tmpScript}"`,
+                { timeout: timeoutMs }
             );
-
-            // Verify CodeGen reported success in its output
-            if (stdout && stdout.includes('MJ CodeGen Complete')) {
-                return true;
-            }
-            // Even if the success line isn't found, if the process exited 0 we're good
             return true;
         } catch (err: unknown) {
-            const errObj = err as { stdout?: string; stderr?: string; message?: string };
-            // CodeGen's after-commands (package builds) may fail with exit code 1
-            // even though CodeGen itself succeeded. Check stdout for the success marker.
-            if (errObj.stdout && errObj.stdout.includes('MJ CodeGen Complete')) {
-                return true;
-            }
-            const msg = errObj.message ?? String(err);
+            const msg = err instanceof Error ? err.message : String(err);
             if (msg.includes('not found') || msg.includes('ENOENT') || msg.includes('MODULE_NOT_FOUND')) {
                 throw new RSUError(
                     'CODEGEN_NOT_AVAILABLE',
-                    `CodeGen not available. Ensure @memberjunction/codegen-lib and ` +
-                    `@memberjunction/server-bootstrap-lite are built. Error: ${msg.substring(0, 300)}`
+                    `CodeGen not available. Ensure @memberjunction/codegen-lib and @memberjunction/server-bootstrap-lite are built. Error: ${msg.substring(0, 300)}`
                 );
             }
             throw new RSUError('CODEGEN_FAILED', `CodeGen failed: ${msg.substring(0, 500)}`);
@@ -620,11 +697,12 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     private async compileTypeScript(): Promise<boolean> {
         const { execAsync } = await this.getExecAsync();
         const workDir = process.env.RSU_WORK_DIR || process.cwd();
+        const timeoutMs = parseInt(process.env.RSU_COMPILE_TIMEOUT_MS || '300000', 10);
 
         // Allow full command override
         const compileCmd = process.env.RSU_COMPILE_COMMAND;
         if (compileCmd) {
-            await execAsync(`cd ${workDir} && ${compileCmd}`, { timeout: 300_000 });
+            await execAsync(`cd "${workDir}" && ${compileCmd}`, { timeout: timeoutMs });
             return true;
         }
 
@@ -639,8 +717,8 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
         const filterArgs = packageNames.map(p => `--filter="${p}"`).join(' ');
         await execAsync(
-            `cd ${workDir} && npx turbo build ${filterArgs}`,
-            { timeout: 300_000 } // 5 min for turbo build
+            `cd "${workDir}" && npx turbo build ${filterArgs}`,
+            { timeout: timeoutMs }
         );
 
         return true;
@@ -730,41 +808,83 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      *   RSU_GIT_USER_NAME — git user.name for commits
      *   RSU_GIT_USER_EMAIL — git user.email for commits
      */
-    private async gitCommitAndPR(input: RSUPipelineInput, migrationFilePath: string): Promise<string> {
-        const { execAsync } = await this.getExecAsync();
+    /**
+     * Git commit for a CodeGen cycle batch — commits all migration files,
+     * CodeGen outputs, and metadata from all requests in the batch.
+     * Returns the branch name on success.
+     */
+    private async gitCommitAndPRForCycle(
+        migrationFilePaths: string[],
+        affectedTables: string[],
+        description: string
+    ): Promise<string> {
         const workDir = process.env.RSU_WORK_DIR || process.cwd();
         const targetBranch = process.env.RSU_GIT_TARGET_BRANCH || 'next';
-
-        // 1. Generate branch name
-        const branchName = this.generateBranchName(input.AffectedTables);
-
-        // 2. Stash any unrelated changes, create branch from target
+        const branchName = this.generateBranchName(affectedTables);
         const originalBranch = await this.gitCurrentBranch(workDir);
+
         await this.gitExec(workDir, `checkout -b ${branchName}`);
 
         try {
-            // 3. Configure git user if provided
             await this.configureGitUser(workDir);
 
-            // 4. Stage all RSU artifacts
-            await this.stageRSUArtifacts(workDir, migrationFilePath, input);
+            // Stage all migration files from the batch
+            for (const filePath of migrationFilePaths) {
+                if (filePath) await this.gitExec(workDir, `add "${filePath}"`);
+            }
 
-            // 5. Commit (use temp file to avoid shell escaping issues)
-            const commitMsg = this.buildCommitMessage(input);
+            // Stage CodeGen output directories
+            const codegenOutputPaths = [
+                'packages/MJCoreEntities/src/generated/',
+                'packages/MJServer/src/generated/',
+                'packages/MJAPI/src/generated/',
+                'packages/Angular/Explorer/core-entity-forms/src/lib/generated/',
+                'packages/Actions/CoreActions/src/generated/',
+                'packages/GeneratedEntities/src/generated/',
+                'packages/GeneratedActions/src/generated/',
+                'SQL Scripts/generated/',
+            ];
+            for (const p of codegenOutputPaths) {
+                try { await this.gitExec(workDir, `add "${p}"`); } catch { /* path may not exist */ }
+            }
+
+            const tables = affectedTables.join(', ');
+            const commitMsg = `RSU: ${description}\n\nTables affected: ${tables}\nGenerated by Runtime Schema Update pipeline`;
             await this.gitCommitWithFile(workDir, commitMsg);
-
-            // 6. Push
             await this.gitExec(workDir, `push -u origin ${branchName}`);
 
-            // 7. Create PR via gh CLI
-            const prUrl = await this.createPullRequest(workDir, branchName, targetBranch, input);
+            // Create PR
+            const { writeFileSync, unlinkSync } = await import('node:fs');
+            const title = `RSU: ${description}`.substring(0, 70);
+            const body = [
+                '## Runtime Schema Update',
+                '',
+                `**Tables affected:** ${tables}`,
+                `**Migration files:** ${migrationFilePaths.length}`,
+                '',
+                '### What changed',
+                '- Migration SQL executed against the database',
+                '- CodeGen re-generated entity metadata, TypeScript classes, and SQL objects',
+                '- MJAPI restarted with updated schema',
+                '',
+                '### Generated by',
+                'Runtime Schema Update (RSU) pipeline — auto-generated PR.',
+            ].join('\n');
+            const bodyFile = `${workDir}/.rsu_pr_body_${Date.now()}.md`;
+            writeFileSync(bodyFile, body, 'utf-8');
+            try {
+                const { execAsync } = await this.getExecAsync();
+                await execAsync(
+                    `cd ${workDir} && gh pr create --base "${targetBranch}" --head "${branchName}" --title "${title}" --body-file "${bodyFile}"`,
+                    { timeout: 30_000 }
+                );
+            } finally {
+                try { unlinkSync(bodyFile); } catch { /* best-effort */ }
+            }
 
-            // 8. Switch back to original branch
             await this.gitExec(workDir, `checkout ${originalBranch}`);
-
             return branchName;
         } catch (err) {
-            // On failure, try to switch back to the original branch
             try { await this.gitExec(workDir, `checkout ${originalBranch}`); } catch { /* best effort */ }
             throw err;
         }
@@ -810,7 +930,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      */
     private async gitExec(workDir: string, gitArgs: string): Promise<{ stdout: string; stderr: string }> {
         const { execAsync } = await this.getExecAsync();
-        return execAsync(`cd ${workDir} && git ${gitArgs}`, { timeout: 60_000 });
+        return execAsync(`cd "${workDir}" && git ${gitArgs}`, { timeout: 60_000 });
     }
 
     /**
@@ -823,106 +943,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         if (userEmail) await this.gitExec(workDir, `config user.email "${userEmail}"`);
     }
 
-    /**
-     * Stage all files produced by the RSU pipeline:
-     * - Migration file
-     * - CodeGen output directories (entity subclasses, GraphQL resolvers, SQL scripts)
-     * - Metadata files if provided
-     */
-    private async stageRSUArtifacts(
-        workDir: string,
-        migrationFilePath: string,
-        input: RSUPipelineInput
-    ): Promise<void> {
-        // Stage the migration file
-        if (migrationFilePath) {
-            await this.gitExec(workDir, `add "${migrationFilePath}"`);
-        }
-
-        // Stage CodeGen output files — these directories contain generated code
-        const codegenOutputPaths = [
-            'packages/MJCoreEntities/src/generated/',
-            'packages/MJServer/src/generated/',
-            'packages/MJAPI/src/generated/',
-            'packages/Angular/Explorer/core-entity-forms/src/lib/generated/',
-            'packages/Actions/CoreActions/src/generated/',
-            'packages/GeneratedEntities/src/generated/',
-            'packages/GeneratedActions/src/generated/',
-            'SQL Scripts/generated/',
-        ];
-        for (const p of codegenOutputPaths) {
-            // Use --ignore-errors in case the path doesn't exist in this repo layout
-            try { await this.gitExec(workDir, `add "${p}"`); } catch { /* path may not exist */ }
-        }
-
-        // Stage metadata files if provided
-        if (input.MetadataFiles) {
-            for (const mf of input.MetadataFiles) {
-                await this.gitExec(workDir, `add "${mf.Path}"`);
-            }
-        }
-
-        // Stage additionalSchemaInfo if provided
-        if (input.AdditionalSchemaInfo) {
-            const { writeFileSync } = await import('node:fs');
-            const schemaInfoPath = 'metadata/integrations/additionalSchemaInfo.json';
-            writeFileSync(`${workDir}/${schemaInfoPath}`, input.AdditionalSchemaInfo, 'utf-8');
-            await this.gitExec(workDir, `add "${schemaInfoPath}"`);
-        }
-    }
-
-    /**
-     * Build a descriptive commit message for the RSU changes.
-     * Writes to a temp file to avoid shell escaping issues with newlines and quotes.
-     */
-    private buildCommitMessage(input: RSUPipelineInput): string {
-        const tables = input.AffectedTables.join(', ');
-        return `RSU: ${input.Description}\n\nTables affected: ${tables}\nGenerated by Runtime Schema Update pipeline`;
-    }
-
-    /**
-     * Create a pull request via the GitHub CLI (gh).
-     * Returns the PR URL.
-     */
-    private async createPullRequest(
-        workDir: string,
-        branchName: string,
-        targetBranch: string,
-        input: RSUPipelineInput
-    ): Promise<string> {
-        const { execAsync } = await this.getExecAsync();
-        const { writeFileSync, unlinkSync } = await import('node:fs');
-        const tables = input.AffectedTables.join(', ');
-        const title = `RSU: ${input.Description}`.substring(0, 70);
-        const body = [
-            '## Runtime Schema Update',
-            '',
-            `**Tables affected:** ${tables}`,
-            '',
-            '### What changed',
-            '- Migration SQL executed against the database',
-            '- CodeGen re-generated entity metadata, TypeScript classes, and SQL objects',
-            '- MJAPI restarted with updated schema',
-            '',
-            '### Generated by',
-            'Runtime Schema Update (RSU) pipeline — auto-generated PR.',
-        ].join('\n');
-
-        // Write PR body to temp file to avoid shell escaping issues
-        const bodyFile = `${workDir}/.rsu_pr_body_${Date.now()}.md`;
-        writeFileSync(bodyFile, body, 'utf-8');
-
-        try {
-            const { stdout } = await execAsync(
-                `cd ${workDir} && gh pr create --base "${targetBranch}" --head "${branchName}" --title "${title}" --body-file "${bodyFile}"`,
-                { timeout: 30_000 }
-            );
-            return stdout.trim();
-        } finally {
-            try { unlinkSync(bodyFile); } catch { /* best-effort cleanup */ }
-        }
-    }
-
     // ─── DB-Backed Mutex (Multi-Instance Safety) ──────────────────
 
     /** Whether the DB-backed lock is enabled via RSU_DB_LOCK_ENABLED=1. */
@@ -932,67 +952,26 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     /**
      * Try to acquire a DB-backed lock by inserting a row into the RSULock table.
-     * Uses a unique constraint to ensure only one lock can exist at a time.
-     *
-     * The lock table is auto-created on first use via:
-     *   CREATE TABLE IF NOT EXISTS (for the configured default schema).
-     *
+     * Uses SQLDialect for DDL generation and DBExecProvider for CLI execution.
      * Returns true if the lock was acquired, false if another instance holds it.
      */
     private async acquireDBLock(): Promise<boolean> {
         try {
-            const { execAsync } = await this.getExecAsync();
-            const server = process.env.DB_HOST || 'localhost';
-            const database = process.env.DB_DATABASE || '';
-            const user = process.env.DB_USERNAME || 'sa';
-            const password = process.env.DB_PASSWORD || '';
-            const sqlcmdPath = process.env.RSU_SQLCMD_PATH || 'sqlcmd';
             const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
-
-            if (!database) return true; // No DB configured — fall back to in-memory only
-
             const lockId = `rsu-${process.pid}-${Date.now()}`;
             this._dbLockId = lockId;
 
-            // Ensure lock table exists + try to INSERT (fails if another lock exists)
-            const sql = [
-                `IF NOT EXISTS (SELECT * FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name='${defaultSchema}' AND t.name='RSULock')`,
-                `BEGIN`,
-                `  CREATE TABLE [${defaultSchema}].[RSULock] (`,
-                `    LockID NVARCHAR(200) NOT NULL,`,
-                `    AcquiredAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),`,
-                `    ExpiresAt DATETIMEOFFSET NOT NULL DEFAULT DATEADD(MINUTE, 30, GETUTCDATE()),`,
-                `    CONSTRAINT PK_RSULock PRIMARY KEY (LockID)`,
-                `  );`,
-                `END;`,
-                `-- Clean up expired locks`,
-                `DELETE FROM [${defaultSchema}].[RSULock] WHERE ExpiresAt < GETUTCDATE();`,
-                `-- Try to acquire (will fail if another non-expired lock exists)`,
-                `IF (SELECT COUNT(*) FROM [${defaultSchema}].[RSULock]) = 0`,
-                `  INSERT INTO [${defaultSchema}].[RSULock] (LockID) VALUES ('${lockId}');`,
-                `ELSE`,
-                `  RAISERROR('RSU lock held by another instance', 16, 1);`,
-            ].join('\n');
-
-            const tmpFile = `/tmp/rsu_lock_${Date.now()}.sql`;
-            const { writeFileSync, unlinkSync } = await import('node:fs');
-            writeFileSync(tmpFile, sql, 'utf-8');
-
-            try {
-                const { stdout } = await execAsync(
-                    `${sqlcmdPath} -S "${server}" -d "${database}" -U "${user}" -P "${password}" -i "${tmpFile}" -C`,
-                    { timeout: 15_000 }
-                );
-                // Check for the RAISERROR indicating lock is held
-                if (stdout && /Msg \d+, Level (1[1-9]|[2-9]\d)/.test(stdout)) {
-                    return false;
-                }
-                return true;
-            } finally {
-                try { unlinkSync(tmpFile); } catch { /* best-effort */ }
+            const sql = this.buildAcquireLockSQL(defaultSchema, lockId);
+            await this.getDBProvider().ExecuteSQL(sql, undefined, { isMutation: true, description: 'RSU lock acquire' });
+            // If no exception, lock was acquired (signal would have been a RAISERROR that throws)
+            return true;
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            // Check if the error is our lock-held signal
+            if (msg.includes(RSU_LOCK_HELD_SIGNAL)) {
+                return false;
             }
-        } catch {
-            // If DB lock fails (e.g., sqlcmd not available), fall through to in-memory
+            // Other errors — fall through to in-memory only
             return true;
         }
     }
@@ -1006,21 +985,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         if (!this._dbLockId) return;
 
         try {
-            const { execAsync } = await this.getExecAsync();
-            const server = process.env.DB_HOST || 'localhost';
-            const database = process.env.DB_DATABASE || '';
-            const user = process.env.DB_USERNAME || 'sa';
-            const password = process.env.DB_PASSWORD || '';
-            const sqlcmdPath = process.env.RSU_SQLCMD_PATH || 'sqlcmd';
+            const d = this.Dialect;
             const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
-
-            if (!database) return;
-
-            const sql = `DELETE FROM [${defaultSchema}].[RSULock] WHERE LockID = '${this._dbLockId}';`;
-            await execAsync(
-                `${sqlcmdPath} -S "${server}" -d "${database}" -U "${user}" -P "${password}" -Q "${sql}" -C`,
-                { timeout: 15_000 }
-            );
+            const quotedTable = d.QuoteSchema(defaultSchema, 'RSULock');
+            const sql = `DELETE FROM ${quotedTable} WHERE LockID = '${this._dbLockId}';`;
+            await this.getDBProvider().ExecuteSQL(sql, undefined, { isMutation: true, description: 'RSU lock release' });
             this._dbLockId = null;
         } catch {
             /* best-effort release */
@@ -1039,82 +1008,172 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         if (process.env.RSU_AUDIT_LOG_ENABLED === '0') return;
 
         try {
-            const { execAsync } = await this.getExecAsync();
-            const server = process.env.DB_HOST || 'localhost';
-            const database = process.env.DB_DATABASE || '';
-            const user = process.env.DB_USERNAME || 'sa';
-            const password = process.env.DB_PASSWORD || '';
-            const sqlcmdPath = process.env.RSU_SQLCMD_PATH || 'sqlcmd';
             const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
-
-            if (!database) return;
-
-            const { writeFileSync, unlinkSync } = await import('node:fs');
-
-            // Ensure audit table exists
-            const createTableSQL = [
-                `IF NOT EXISTS (SELECT * FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name='${defaultSchema}' AND t.name='RSUAuditLog')`,
-                `BEGIN`,
-                `  CREATE TABLE [${defaultSchema}].[RSUAuditLog] (`,
-                `    ID INT IDENTITY(1,1) NOT NULL,`,
-                `    Description NVARCHAR(500) NOT NULL,`,
-                `    AffectedTables NVARCHAR(MAX) NULL,`,
-                `    Success BIT NOT NULL,`,
-                `    APIRestarted BIT NOT NULL DEFAULT 0,`,
-                `    GitCommitSuccess BIT NOT NULL DEFAULT 0,`,
-                `    BranchName NVARCHAR(200) NULL,`,
-                `    MigrationFilePath NVARCHAR(500) NULL,`,
-                `    ErrorMessage NVARCHAR(MAX) NULL,`,
-                `    ErrorStep NVARCHAR(100) NULL,`,
-                `    StepsJSON NVARCHAR(MAX) NULL,`,
-                `    TotalDurationMs INT NULL,`,
-                `    RunAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),`,
-                `    CONSTRAINT PK_RSUAuditLog PRIMARY KEY (ID)`,
-                `  );`,
-                `END;`,
-            ].join('\n');
-
-            // Escape strings for SQL
-            const esc = (s: string | undefined | null) => (s ?? '').replace(/'/g, "''");
-            const totalMs = result.Steps.reduce((sum, s) => sum + s.DurationMs, 0);
-            const stepsJson = JSON.stringify(result.Steps).replace(/'/g, "''");
-
-            const insertSQL = [
-                `INSERT INTO [${defaultSchema}].[RSUAuditLog]`,
-                `  (Description, AffectedTables, Success, APIRestarted, GitCommitSuccess, BranchName, MigrationFilePath, ErrorMessage, ErrorStep, StepsJSON, TotalDurationMs)`,
-                `VALUES (`,
-                `  '${esc(input.Description)}',`,
-                `  '${esc(input.AffectedTables.join(', '))}',`,
-                `  ${result.Success ? 1 : 0},`,
-                `  ${result.APIRestarted ? 1 : 0},`,
-                `  ${result.GitCommitSuccess ? 1 : 0},`,
-                `  ${result.BranchName ? `'${esc(result.BranchName)}'` : 'NULL'},`,
-                `  ${result.MigrationFilePath ? `'${esc(result.MigrationFilePath)}'` : 'NULL'},`,
-                `  ${result.ErrorMessage ? `'${esc(result.ErrorMessage).substring(0, 4000)}'` : 'NULL'},`,
-                `  ${result.ErrorStep ? `'${esc(result.ErrorStep)}'` : 'NULL'},`,
-                `  '${stepsJson.substring(0, 8000)}',`,
-                `  ${totalMs}`,
-                `);`,
-            ].join('\n');
-
-            const fullSQL = createTableSQL + '\n' + insertSQL;
-            const tmpFile = `/tmp/rsu_audit_${Date.now()}.sql`;
-            writeFileSync(tmpFile, fullSQL, 'utf-8');
-
-            try {
-                await execAsync(
-                    `${sqlcmdPath} -S "${server}" -d "${database}" -U "${user}" -P "${password}" -i "${tmpFile}" -C`,
-                    { timeout: 15_000 }
-                );
-            } finally {
-                try { unlinkSync(tmpFile); } catch { /* best-effort */ }
-            }
+            // Ensure audit table exists (no user input, safe as string DDL)
+            const createTableSQL = this.buildAuditTableDDL(defaultSchema);
+            await this.getDBProvider().ExecuteSQL(createTableSQL, undefined, { isMutation: true, description: 'RSU audit table DDL' });
+            // Parameterized INSERT for all string values
+            await this.writeAuditInsert(defaultSchema, input, result);
         } catch {
             /* Audit logging is best-effort — don't fail the pipeline */
         }
     }
 
+    // ─── Platform Abstraction ────────────────────────────────────────
+
+    /** Resolve the database platform from environment configuration. */
+    private get Platform(): DatabasePlatform {
+        const platform = (process.env.DB_PLATFORM || 'sqlserver').toLowerCase();
+        if (platform !== 'sqlserver' && platform !== 'postgresql') {
+            throw new RSUError('CONFIG', `Unsupported DB_PLATFORM: "${platform}". Must be "sqlserver" or "postgresql".`);
+        }
+        return platform as DatabasePlatform;
+    }
+
+    /** Get the SQLDialect for the configured platform (SQL generation). */
+    private get Dialect() {
+        return GetDialect(this.Platform);
+    }
+
+    /** Get the MJ database provider. Throws if not initialized. */
+    private getDBProvider(): DatabaseProviderBase {
+        const provider = Metadata.Provider;
+        if (!provider || !('ExecuteSQL' in provider)) {
+            throw new RSUError('CONFIG', 'MJ data provider is not initialized. RSU requires a running MJAPI with a configured database provider.');
+        }
+        return provider as DatabaseProviderBase;
+    }
+
+    // ─── DDL Generation (dialect-driven, zero platform checks) ──────
+
+    /**
+     * Generate SQL to create the RSULock table (if not exists), clean expired locks,
+     * and attempt to acquire the lock.
+     */
+    private buildAcquireLockSQL(schema: string, lockId: string): string {
+        const d = this.Dialect;
+        const quotedTable = d.QuoteSchema(schema, 'RSULock');
+        const utcNow = d.CurrentTimestampUTC();
+        const varchar200 = d.MapDataTypeToString('NVARCHAR', 200);
+        const timestampType = d.MapDataTypeToString('DATETIMEOFFSET');
+        const expiryDefault = d.DateAddExpression('MINUTE', 30, utcNow);
+
+        const columnsDDL = [
+            `    LockID ${varchar200} NOT NULL,`,
+            `    AcquiredAt ${timestampType} NOT NULL DEFAULT ${utcNow},`,
+            `    ExpiresAt ${timestampType} NOT NULL DEFAULT ${expiryDefault},`,
+            `    CONSTRAINT PK_RSULock PRIMARY KEY (LockID)`,
+        ].join('\n');
+
+        const createTable = d.CreateTableIfNotExistsDDL(schema, 'RSULock', columnsDDL);
+        const cleanExpired = `DELETE FROM ${quotedTable} WHERE ExpiresAt < ${utcNow};`;
+        const acquireLock = d.ConditionalBlock(
+            `(SELECT COUNT(*) FROM ${quotedTable}) = 0`,
+            `INSERT INTO ${quotedTable} (LockID) VALUES ('${lockId}')`,
+            d.RaiseSignalSQL(RSU_LOCK_HELD_SIGNAL)
+        );
+
+        return [createTable, '-- Clean up expired locks', cleanExpired, '-- Try to acquire lock', acquireLock].join('\n');
+    }
+
+    /** Generate SQL to create the RSUAuditLog table if it doesn't exist. */
+    private buildAuditTableDDL(schema: string): string {
+        const d = this.Dialect;
+        const intType = d.MapDataTypeToString('INT');
+        const autoIncrement = d.AutoIncrementPKExpression();
+        const varchar500 = d.MapDataTypeToString('NVARCHAR', 500);
+        const varchar200 = d.MapDataTypeToString('NVARCHAR', 200);
+        const varchar100 = d.MapDataTypeToString('NVARCHAR', 100);
+        const textType = d.MapDataTypeToString('NVARCHAR', -1);
+        const boolType = d.MapDataTypeToString('BIT');
+        const timestampType = d.MapDataTypeToString('DATETIMEOFFSET');
+        const utcNow = d.CurrentTimestampUTC();
+        const boolDefault0 = d.BooleanLiteral(false);
+
+        const columnsDDL = [
+            `    ID ${intType} ${autoIncrement} NOT NULL,`,
+            `    Description ${varchar500} NOT NULL,`,
+            `    AffectedTables ${textType} NULL,`,
+            `    Success ${boolType} NOT NULL,`,
+            `    APIRestarted ${boolType} NOT NULL DEFAULT ${boolDefault0},`,
+            `    GitCommitSuccess ${boolType} NOT NULL DEFAULT ${boolDefault0},`,
+            `    BranchName ${varchar200} NULL,`,
+            `    MigrationFilePath ${varchar500} NULL,`,
+            `    ErrorMessage ${textType} NULL,`,
+            `    ErrorStep ${varchar100} NULL,`,
+            `    StepsJSON ${textType} NULL,`,
+            `    TotalDurationMs ${intType} NULL,`,
+            `    RunAt ${timestampType} NOT NULL DEFAULT ${utcNow},`,
+            `    CONSTRAINT PK_RSUAuditLog PRIMARY KEY (ID)`,
+        ].join('\n');
+
+        return d.CreateTableIfNotExistsDDL(schema, 'RSUAuditLog', columnsDDL);
+    }
+
+    /**
+     * Write the audit log INSERT using parameterized query to prevent SQL injection.
+     * The CREATE TABLE DDL runs separately (no user input, safe as-is).
+     */
+    private async writeAuditInsert(schema: string, input: RSUPipelineInput, result: RSUPipelineResult): Promise<void> {
+        const d = this.Dialect;
+        const quotedTable = d.QuoteSchema(schema, 'RSUAuditLog');
+        const totalMs = result.Steps.reduce((sum, s) => sum + s.DurationMs, 0);
+        const stepsJson = JSON.stringify(result.Steps).substring(0, 8000);
+        const boolTrue = d.BooleanLiteral(true);
+        const boolFalse = d.BooleanLiteral(false);
+
+        // Use parameterized query for all string values to prevent injection
+        const p = (i: number) => d.ParameterPlaceholder(i);
+        const sql = [
+            `INSERT INTO ${quotedTable}`,
+            `  (Description, AffectedTables, Success, APIRestarted, GitCommitSuccess, BranchName, MigrationFilePath, ErrorMessage, ErrorStep, StepsJSON, TotalDurationMs)`,
+            `VALUES (`,
+            `  ${p(0)}, ${p(1)},`,
+            `  ${result.Success ? boolTrue : boolFalse},`,
+            `  ${result.APIRestarted ? boolTrue : boolFalse},`,
+            `  ${result.GitCommitSuccess ? boolTrue : boolFalse},`,
+            `  ${p(2)}, ${p(3)}, ${p(4)}, ${p(5)}, ${p(6)},`,
+            `  ${totalMs}`,
+            `);`,
+        ].join('\n');
+
+        const params: unknown[] = [
+            input.Description,
+            input.AffectedTables.join(', '),
+            result.BranchName ?? null,
+            result.MigrationFilePath ?? null,
+            result.ErrorMessage?.substring(0, 4000) ?? null,
+            result.ErrorStep ?? null,
+            stepsJson,
+        ];
+
+        await this.getDBProvider().ExecuteSQL(sql, params, { isMutation: true, description: 'RSU audit log insert' });
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────
+
+    /** Build a failed RSUPipelineResult for early-exit scenarios (validation, lock). */
+    private buildFailedResult(input: RSUPipelineInput, failedStep: string, steps: RSUPipelineStep[]): RSUPipelineResult {
+        const failMsg = steps.find(s => s.Name === failedStep && s.Status === 'failed')?.Message ?? `Failed at ${failedStep}`;
+        return {
+            Success: false,
+            APIRestarted: false,
+            GitCommitSuccess: false,
+            Steps: [...steps],
+            ErrorMessage: failMsg,
+            ErrorStep: failedStep,
+        };
+    }
+
+    private buildBatchResult(results: RSUPipelineResult[]): RSUPipelineBatchResult {
+        const successCount = results.filter(r => r.Success).length;
+        return {
+            Results: results,
+            SuccessCount: successCount,
+            FailureCount: results.length - successCount,
+            TotalCount: results.length,
+        };
+    }
 
     private getProtectedSchemas(): string[] {
         const envSchemas = process.env.RSU_PROTECTED_SCHEMAS;

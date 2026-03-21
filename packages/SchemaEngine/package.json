@@ -16,7 +16,8 @@
   "dependencies": {
     "@memberjunction/global": "5.11.0",
     "@memberjunction/core": "5.11.0",
-    "@memberjunction/sql-dialect": "5.11.0"
+    "@memberjunction/sql-dialect": "5.11.0",
+    "@memberjunction/queue": "5.11.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

@@ -40,7 +40,7 @@ export class SchemaEngine {
         table: TableDefinition,
         platform: DatabasePlatform,
         mjVersion: string,
-        migrationsDir = 'migrations/v2',
+        migrationsDir = 'migrations/v5',
         consumer = 'Schema'
     ): MigrationOutput {
         this.validateOrThrow(table);
@@ -84,7 +84,7 @@ export class SchemaEngine {
         input: SchemaEvolutionInput,
         platform: DatabasePlatform,
         mjVersion: string,
-        migrationsDir = 'migrations/v2',
+        migrationsDir = 'migrations/v5',
         consumer = 'Schema'
     ): MigrationOutput {
         this.validateOrThrow(input.Desired);

@@ -13,7 +13,7 @@ export class MigrationFileWriter {
      * Generate a Flyway-compatible migration file name.
      * Format: {migrationsDir}/V{YYYYMMDDHHMM}__v{VERSION}.x_{Consumer}_{ObjectName}_{Action}.sql
      *
-     * Example: migrations/v2/V202603120230__v5.10.x_Integration_HubSpot_CreateTables.sql
+     * Example: migrations/v5/V202603120230__v5.10.x_Integration_HubSpot_CreateTables.sql
      */
     GenerateMigrationFileName(
         objectName: string,
