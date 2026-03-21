@@ -1,6 +1,6 @@
 # @memberjunction/integration-connectors
 
-Concrete integration connectors for the MemberJunction Integration Engine. This package provides seven connectors — four production REST API connectors, two SQL-based connectors, and a file-based connector — all implementing `BaseIntegrationConnector` from `@memberjunction/integration-engine`.
+Concrete integration connectors for the MemberJunction Integration Engine. This package provides connectors for CRM, accounting, membership, newsletter, and file-based systems — all implementing `BaseIntegrationConnector` from `@memberjunction/integration-engine`.
 
 ## Connectors
 
@@ -110,6 +110,100 @@ Production connector for Wicket membership management platform with full bidirec
 
 **Capabilities:** Full CRUD, search
 
+### Accounting Connectors
+
+These connectors integrate with accounting and ERP systems.
+
+#### SageIntacctConnector
+
+Production connector for Sage Intacct accounting/ERP using the XML Web Services API with full bidirectional sync.
+
+**Registration:** `@RegisterClass(BaseIntegrationConnector, 'SageIntacctConnector')`
+
+**Authentication:** Session-based — Sender ID/Password (app credentials) + User ID/Password authenticate via `getAPISession`, returning a session ID for subsequent requests.
+
+**Credentials JSON:**
+```json
+{
+  "CompanyId": "your-company-id",
+  "SenderId": "your-sender-id",
+  "SenderPassword": "your-sender-password",
+  "UserId": "your-user-id",
+  "UserPassword": "your-user-password",
+  "EntityId": "optional-entity-id"
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `CompanyId` | Yes | Sage Intacct Company ID |
+| `SenderId` | Yes | Web Services Sender ID (from Marketplace subscription) |
+| `SenderPassword` | Yes | Web Services Sender Password |
+| `UserId` | Yes | User ID for API authentication |
+| `UserPassword` | Yes | User password |
+| `EntityId` | No | Entity ID for multi-entity shared companies |
+
+**Capabilities:**
+- Full CRUD (Create, Read, Update, Delete)
+- Query-based search via `readByQuery`
+- Paginated listing via `readMore`
+- Live schema discovery via `inspect` API
+- Incremental sync with `WHENMODIFIED` watermarks
+- Session caching and automatic refresh
+- Retry with exponential backoff
+
+**Objects (9):** Customer, Vendor, GL Account, AP Bill, AR Invoice, Project, Employee, Department, Class
+
+**Default field mappings:**
+| Source Object | Target Entity | Key Mappings |
+|---|---|---|
+| CUSTOMER | Contacts | CUSTOMERID (key), NAME, EMAIL, PHONE, STATUS |
+| VENDOR | Companies | VENDORID (key), NAME, EMAIL, PHONE, STATUS |
+
+#### QuickBooksConnector
+
+Production connector for QuickBooks Online using the REST API v3 with OAuth 2.0 authentication.
+
+**Registration:** `@RegisterClass(BaseIntegrationConnector, 'QuickBooksConnector')`
+
+**Authentication:** OAuth 2.0 with automatic token refresh. Requires a QuickBooks app with client ID/secret and an initial refresh token obtained through the OAuth consent flow.
+
+**Credentials JSON:**
+```json
+{
+  "ClientId": "your-client-id",
+  "ClientSecret": "your-client-secret",
+  "RefreshToken": "your-refresh-token",
+  "RealmId": "your-company-realm-id",
+  "Environment": "production"
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `ClientId` | Yes | OAuth 2.0 Client ID from QuickBooks developer portal |
+| `ClientSecret` | Yes | OAuth 2.0 Client Secret |
+| `RefreshToken` | Yes | OAuth 2.0 refresh token (auto-refreshed on each use) |
+| `RealmId` | Yes | QuickBooks Company ID (Realm ID) |
+| `Environment` | No | `production` (default) or `sandbox` |
+
+**Capabilities:**
+- Full CRUD (Create, Read, Update, Delete)
+- SQL-like query via QuickBooks Query Language
+- Paginated listing
+- Live schema discovery
+- Incremental sync with `MetaData.LastUpdatedTime` watermarks
+- Automatic OAuth token refresh
+- Minor version pinning for API stability
+
+**Objects (10):** Customer, Vendor, Account, Invoice, Bill, Item, Payment, Employee, Department, Class
+
+**Default field mappings:**
+| Source Object | Target Entity | Key Mappings |
+|---|---|---|
+| Customer | Contacts | Id (key), DisplayName, PrimaryEmailAddr, PrimaryPhone, Active |
+| Vendor | Companies | Id (key), DisplayName, PrimaryEmailAddr, PrimaryPhone, Active |
+
 ### SQL-Based Connectors
 
 These connectors read from SQL Server databases and extend `RelationalDBConnector`.
@@ -179,6 +273,8 @@ npx tsx src/generate-integration-actions.ts
 # Generate for a specific connector
 npx tsx src/generate-integration-actions.ts salesforce
 npx tsx src/generate-integration-actions.ts hubspot
+npx tsx src/generate-integration-actions.ts sage-intacct
+npx tsx src/generate-integration-actions.ts quickbooks
 ```
 
 See [INTEGRATION_ACTIONS.md](../INTEGRATION_ACTIONS.md) for full documentation.
@@ -206,6 +302,8 @@ src/
   RelationalDBConnector.ts        # Base class for SQL-based connectors
   HubSpotConnector.ts             # HubSpot REST API connector (full CRUD)
   SalesforceConnector.ts          # Salesforce REST API connector (full CRUD)
+  SageIntacctConnector.ts         # Sage Intacct XML API connector (full CRUD)
+  QuickBooksConnector.ts          # QuickBooks Online REST API connector (full CRUD)
   RasaConnector.ts                # Rasa.io REST API connector (read-only)
   WicketConnector.ts              # Wicket REST API connector (full CRUD)
   YourMembershipConnector.ts      # YourMembership SQL connector

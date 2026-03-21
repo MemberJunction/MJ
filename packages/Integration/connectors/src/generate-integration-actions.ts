@@ -31,6 +31,8 @@ import { HubSpotConnector } from './HubSpotConnector.js';
 import { RasaConnector } from './RasaConnector.js';
 import { SalesforceConnector } from './SalesforceConnector.js';
 import { YourMembershipConnector } from './YourMembershipConnector.js';
+import { SageIntacctConnector } from './SageIntacctConnector.js';
+import { QuickBooksConnector } from './QuickBooksConnector.js';
 
 /** Shape of an mj-sync record with optional primaryKey/sync populated by `mj sync pull`. */
 interface MjSyncRecord {
@@ -48,7 +50,9 @@ const CONNECTOR_REGISTRY: Record<string, { Connector: BaseIntegrationConnector; 
     hubspot:     { Connector: new HubSpotConnector(),           FileName: '.hubspot-actions.json' },
     rasa:        { Connector: new RasaConnector(),               FileName: '.rasa-actions.json' },
     salesforce:  { Connector: new SalesforceConnector(),         FileName: '.salesforce-actions.json' },
-    ym:          { Connector: new YourMembershipConnector(),     FileName: '.ym-actions.json' },
+    ym:              { Connector: new YourMembershipConnector(),     FileName: '.ym-actions.json' },
+    'sage-intacct':  { Connector: new SageIntacctConnector(),       FileName: '.sage-intacct-actions.json' },
+    quickbooks:      { Connector: new QuickBooksConnector(),        FileName: '.quickbooks-actions.json' },
 };
 
 // ─── Main ────────────────────────────────────────────────────────────
