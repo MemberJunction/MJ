@@ -3,12 +3,13 @@ import { MJRecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDataProvider, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { PostgreSQLDialect, SQLDialect, SQLServerDialect } from "@memberjunction/sql-dialect";
+import { getHeapStatistics } from "v8";
 
 /**
- * Maximum number of rows per detection query page. Caps memory usage so that
- * even million-row ETL imports are processed in bounded chunks.
+ * Maximum number of rows per detection query page. Since changes are replayed
+ * per-entity and then discarded (not accumulated), this can be generous.
  */
-const DETECTION_PAGE_SIZE = 2500;
+const DETECTION_PAGE_SIZE = 5000;
 
 /**
  * Abort the entire run if this percentage of entities fail detection.
@@ -488,123 +489,183 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     ];
 
     /**
-     * Detects changes across all of the entities specified. Entity concurrency is
-     * dynamically determined from approximate row counts (via sys.partitions) so
-     * that small tables run in parallel while large tables don't overwhelm the DB.
+     * Detects and replays external changes for the specified entities in an interleaved
+     * fashion: each entity's changes are detected, replayed, and then discarded before
+     * moving to the next entity. This keeps memory bounded to one entity's changes at
+     * a time rather than accumulating all changes across all entities.
      *
-     * Includes production safety mechanisms:
-     * - **Circuit breaker**: Aborts if >50% of entities fail (database under pressure)
-     * - **Cooldown**: Pauses 30s after 5 consecutive failures to let the DB recover
-     * - **Heap guard**: Skips remaining entities if heap usage exceeds 85%
+     * Entity concurrency is dynamically determined from approximate row counts
+     * (via sys.partitions) so small tables run in parallel while large tables
+     * don't overwhelm the DB.
+     *
+     * Production safety mechanisms:
+     * - **Circuit breaker**: Aborts if >50% of entities fail
+     * - **Cooldown**: Pauses 30s after 5 consecutive failures
+     * - **Heap guard**: Stops if heap usage exceeds 85%
      *
      * @param entities Array of entities to process
-     * @param maxConcurrency Optional maximum concurrency cap. Dynamic sizing will
-     *        still apply but never exceed this value. Defaults to 5.
+     * @param replayBatchSize Concurrent replays per entity. Defaults to 20.
+     * @param maxConcurrency Max parallel entity detection. Defaults to 5.
+     * @param staleTimeoutHours Hours before a stuck run is considered stale. Defaults to 24.
+     * @returns Summary with success status and aggregate counts
      */
-    public async DetectChangesForEntities(entities: EntityInfo[], maxConcurrency: number = 5): Promise<ChangeDetectionResult>  {
+    public async DetectAndReplayChanges(
+        entities: EntityInfo[],
+        replayBatchSize: number = 20,
+        maxConcurrency: number = 5,
+        staleTimeoutHours: number = 24
+    ): Promise<{ Success: boolean; ErrorMessage?: string; TotalDetected: number; TotalReplayed: number; EntitiesProcessed: number; EntitiesFailed: number }> {
+        if (!entities || entities.length === 0)
+            throw new Error("entities parameter is required and must have at least one entity");
+
+        const rowCounts = await this.getApproxRowCounts(entities);
+        const sortedEntities = rowCounts.size > 0
+            ? [...entities].sort((a, b) => (rowCounts.get(a.ID) ?? 0) - (rowCounts.get(b.ID) ?? 0))
+            : entities;
+
+        LogStatus(`Detecting and replaying changes for ${sortedEntities.length} entities with dynamic concurrency (max ${maxConcurrency})`);
+
+        // Start the replay run record (ensures no concurrent runs)
+        const run = await this.StartRun(staleTimeoutHours);
+        const replayProviders = await this.createReplayProviders(replayBatchSize);
+
+        let entitiesProcessed = 0;
+        let entitiesFailed = 0;
+        let consecutiveFailures = 0;
+        let totalDetected = 0;
+        let totalReplayed = 0;
+        let aborted = false;
+        let i = 0;
+
         try {
-            if (!entities)
-                throw new Error("entities parameter is required");
-            else if (entities.length === 0)
-                throw new Error("entities parameter must have at least one entity in it");
-
-            const result: ChangeDetectionResult = new ChangeDetectionResult();
-            result.Success = true;
-            result.Changes = [];
-
-            // Get approximate row counts and sort smallest-first so small entities
-            // are processed quickly while large ones are deferred
-            const rowCounts = await this.getApproxRowCounts(entities);
-            const sortedEntities = rowCounts.size > 0
-                ? [...entities].sort((a, b) => (rowCounts.get(a.ID) ?? 0) - (rowCounts.get(b.ID) ?? 0))
-                : entities;
-
-            LogStatus(`Detecting changes for ${sortedEntities.length} entities with dynamic concurrency (max ${maxConcurrency})`);
-
-            let processed = 0;
-            let failureCount = 0;
-            let consecutiveFailures = 0;
-            let i = 0;
-
-            while (i < sortedEntities.length) {
-                // Heap guard — check before starting each batch
+            while (i < sortedEntities.length && !aborted) {
+                // Heap guard
                 if (this.isHeapPressureHigh()) {
-                    LogStatus(`   ⚠ Heap usage exceeds ${Math.round(HEAP_USAGE_LIMIT_PERCENT * 100)}%, stopping detection to prevent OOM (${processed}/${sortedEntities.length} entities processed)`);
-                    result.ErrorMessage = (result.ErrorMessage || '') + `\nAborted: heap pressure too high after ${processed} entities`;
+                    LogStatus(`   ⚠ Heap usage exceeds ${Math.round(HEAP_USAGE_LIMIT_PERCENT * 100)}%, stopping to prevent OOM (${entitiesProcessed}/${sortedEntities.length} processed)`);
+                    aborted = true;
                     break;
                 }
 
-                // Circuit breaker — abort if too many entities are failing
-                if (processed > 0 && failureCount / processed > FAILURE_ABORT_THRESHOLD && processed >= 10) {
-                    LogStatus(`   ⚠ Circuit breaker: ${failureCount}/${processed} entities failed (>${Math.round(FAILURE_ABORT_THRESHOLD * 100)}%), aborting remaining entities`);
-                    result.Success = false;
-                    result.ErrorMessage = (result.ErrorMessage || '') + `\nAborted: failure rate exceeded ${Math.round(FAILURE_ABORT_THRESHOLD * 100)}% threshold`;
+                // Circuit breaker
+                if (entitiesProcessed >= 10 && entitiesFailed / entitiesProcessed > FAILURE_ABORT_THRESHOLD) {
+                    LogStatus(`   ⚠ Circuit breaker: ${entitiesFailed}/${entitiesProcessed} entities failed, aborting`);
+                    aborted = true;
                     break;
                 }
 
+                // Dynamic concurrency for detection (entities run in parallel)
                 const dynamicSize = this.getConcurrencyForEntity(sortedEntities[i], rowCounts);
                 const concurrency = Math.min(dynamicSize, maxConcurrency);
                 const batch = sortedEntities.slice(i, i + concurrency);
 
+                // Detect changes for this batch of entities in parallel
                 const batchPromises = batch.map(e => {
                     const rows = rowCounts?.get(e.ID);
                     const rowInfo = rows != null ? ` (~${rows.toLocaleString()} rows)` : '';
-                    UpdateCurrentConsoleLine(`   Starting change detection for ${e.Name}${rowInfo}`, ConsoleColor.gray);
+                    UpdateCurrentConsoleLine(`   Detecting: ${e.Name}${rowInfo}`, ConsoleColor.gray);
                     return this.DetectChangesForEntity(e);
                 });
-
                 const batchResults = await Promise.all(batchPromises);
 
+                // Replay each entity's changes immediately, then discard
                 for (let j = 0; j < batch.length; j++) {
-                    const r = batchResults[j];
-                    const e = batch[j];
-                    processed++;
-                    if (r.Success) {
-                        result.Changes.push(...r.Changes);
-                        consecutiveFailures = 0;
-                    }
-                    else {
-                        failureCount++;
+                    const entity = batch[j];
+                    const detection = batchResults[j];
+                    entitiesProcessed++;
+
+                    if (!detection.Success) {
+                        entitiesFailed++;
                         consecutiveFailures++;
-                        result.Success = false;
-                        result.ErrorMessage = (result.ErrorMessage ? result.ErrorMessage + "\n" : "") + `Error detecting changes for ${e.Name}: ` + r.ErrorMessage;
+                        UpdateCurrentConsoleProgress(`   Failed: ${entity.Name}`, entitiesProcessed, sortedEntities.length, ConsoleColor.crimson);
+                        continue;
                     }
-                    UpdateCurrentConsoleProgress(`   Finished change detection for ${e.Name}`, processed, sortedEntities.length, r.Success ? ConsoleColor.cyan : ConsoleColor.crimson);
+
+                    const changeCount = detection.Changes.length;
+                    totalDetected += changeCount;
+
+                    if (changeCount > 0) {
+                        const replayed = await this.replayEntityChanges(detection.Changes, replayProviders, replayBatchSize);
+                        totalReplayed += replayed;
+                    }
+
+                    consecutiveFailures = 0;
+                    UpdateCurrentConsoleProgress(`   Done: ${entity.Name} (${changeCount} changes)`, entitiesProcessed, sortedEntities.length, ConsoleColor.cyan);
+                    // Changes go out of scope here — GC can reclaim the BaseEntity objects
                 }
 
                 i += batch.length;
 
-                // Cooldown — pause after too many consecutive failures to let the DB recover
+                // Cooldown after consecutive failures
                 if (consecutiveFailures >= CONSECUTIVE_FAILURE_COOLDOWN_THRESHOLD && i < sortedEntities.length) {
-                    LogStatus(`   ⏸ ${consecutiveFailures} consecutive failures, pausing ${COOLDOWN_PAUSE_MS / 1000}s to let the database recover...`);
+                    LogStatus(`   ⏸ ${consecutiveFailures} consecutive failures, pausing ${COOLDOWN_PAUSE_MS / 1000}s...`);
                     await new Promise(resolve => setTimeout(resolve, COOLDOWN_PAUSE_MS));
-                    consecutiveFailures = 0; // reset after cooldown
+                    consecutiveFailures = 0;
                 }
             }
 
-            LogStatus(`Detection complete: ${processed} entities processed, ${failureCount} failed, ${result.Changes.length} changes found`);
-            return result;
+            run.Status = aborted ? 'Error' : 'Complete';
+            run.EndedAt = new Date();
+            await run.Save();
+
+            const summary = `${entitiesProcessed} entities processed, ${entitiesFailed} failed, ${totalDetected} changes detected, ${totalReplayed} replayed`;
+            LogStatus(`Run complete: ${summary}`);
+
+            return {
+                Success: entitiesFailed === 0 && !aborted,
+                ErrorMessage: aborted ? `Aborted after ${entitiesProcessed} entities` : undefined,
+                TotalDetected: totalDetected,
+                TotalReplayed: totalReplayed,
+                EntitiesProcessed: entitiesProcessed,
+                EntitiesFailed: entitiesFailed
+            };
         }
         catch (e) {
             LogError(e);
+            run.Status = 'Error';
+            run.EndedAt = new Date();
+            await run.Save();
             return {
                 Success: false,
-                ErrorMessage: e.message,
-                Changes: []
-            }
+                ErrorMessage: e instanceof Error ? e.message : String(e),
+                TotalDetected: totalDetected,
+                TotalReplayed: totalReplayed,
+                EntitiesProcessed: entitiesProcessed,
+                EntitiesFailed: entitiesFailed
+            };
         }
     }
 
     /**
-     * Checks whether Node.js heap usage is approaching the limit.
-     * Returns true if used heap exceeds HEAP_USAGE_LIMIT_PERCENT of the total available.
+     * Replays a single entity's changes and returns the count of successful replays.
+     * Changes are processed in batches for concurrency but the entire set is for
+     * one entity only, keeping memory bounded.
+     */
+    private async replayEntityChanges(
+        changes: ChangeDetectionItem[],
+        providers: SQLServerDataProvider[],
+        batchSize: number
+    ): Promise<number> {
+        let successCount = 0;
+        for (let i = 0; i < changes.length; i += batchSize) {
+            const batch = changes.slice(i, i + batchSize);
+            const results = await Promise.all(
+                batch.map((c, idx) => this.ReplayChange(providers[idx], c))
+            );
+            successCount += results.filter(r => r).length;
+        }
+        return successCount;
+    }
+
+    /**
+     * Checks whether Node.js heap usage is approaching the V8 heap limit.
+     * Uses v8.getHeapStatistics().heap_size_limit which is the actual max
+     * (set by --max-old-space-size or V8's default), not the currently
+     * allocated heapTotal which starts small and grows on demand.
      */
     private isHeapPressureHigh(): boolean {
-        const mem = process.memoryUsage();
-        // v8 heap limit isn't directly exposed, but rss vs heapTotal gives a reasonable signal.
-        // heapUsed / heapTotal is the most reliable in-process metric.
-        const heapRatio = mem.heapUsed / mem.heapTotal;
-        return heapRatio > HEAP_USAGE_LIMIT_PERCENT;
+        const stats = getHeapStatistics();
+        const usedRatio = stats.used_heap_size / stats.heap_size_limit;
+        return usedRatio > HEAP_USAGE_LIMIT_PERCENT;
     }
 
     /**
@@ -636,8 +697,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             return map;
         }
         catch (e) {
-            // If row count query fails (e.g., permissions), fall back to default concurrency
-            LogStatus('   Warning: Could not fetch row counts for dynamic concurrency, using default batch size of 5');
+            LogStatus('   Warning: Could not fetch row counts for dynamic concurrency, using default batch size');
             return new Map<string, number>();
         }
     }
@@ -647,7 +707,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      */
     private getConcurrencyForEntity(entity: EntityInfo, rowCounts: Map<string, number> | null): number {
         if (!rowCounts || rowCounts.size === 0)
-            return 2; // conservative default if row counts unavailable
+            return 2;
 
         const rows = rowCounts.get(entity.ID) ?? 0;
         for (const tier of ExternalChangeDetectorEngine.CONCURRENCY_TIERS) {
@@ -657,8 +717,37 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         return 1;
     }
 
-    public async DetectChangesForAllEligibleEntities(entityBatchSize?: number): Promise<ChangeDetectionResult> {
-        return await this.DetectChangesForEntities(this.EligibleEntities, entityBatchSize);
+    /**
+     * @deprecated Use DetectAndReplayChanges() instead, which interleaves detection and replay
+     * per entity to keep memory bounded. This method accumulates all changes in memory.
+     */
+    public async DetectChangesForEntities(entities: EntityInfo[], maxConcurrency: number = 5): Promise<ChangeDetectionResult> {
+        if (!entities)
+            throw new Error("entities parameter is required");
+        if (entities.length === 0)
+            throw new Error("entities parameter must have at least one entity in it");
+
+        const result: ChangeDetectionResult = new ChangeDetectionResult();
+        result.Success = true;
+        result.Changes = [];
+
+        for (const entity of entities) {
+            const r = await this.DetectChangesForEntity(entity);
+            if (r.Success)
+                result.Changes.push(...r.Changes);
+            else {
+                result.Success = false;
+                result.ErrorMessage = (result.ErrorMessage || '') + `\n${entity.Name}: ${r.ErrorMessage}`;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @deprecated Use DetectAndReplayChanges() instead.
+     */
+    public async DetectChangesForAllEligibleEntities(maxConcurrency?: number): Promise<ChangeDetectionResult> {
+        return await this.DetectChangesForEntities(this.EligibleEntities, maxConcurrency);
     }
 
     /**
