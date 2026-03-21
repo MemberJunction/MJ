@@ -2,7 +2,7 @@ import { LocalCacheManager } from './localCacheManager';
 import { QueryInfo } from './queryInfo';
 import { Metadata } from './metadata';
 import { LogStatus } from './logging';
-import { UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Wrapper around LocalCacheManager that translates query-specific caching concerns
@@ -29,8 +29,8 @@ import { UUIDsEqual } from '@memberjunction/global';
  * by removing the early returns at the top of each method. Until then, every query
  * execution hits the database to guarantee fresh results.
  */
-export class QueryCacheManager {
-    private _connectionPrefix: string;
+export class QueryCacheManager extends BaseSingleton<QueryCacheManager> {
+    private _connectionPrefix: string = '';
 
     /** Tracks cache timestamps per fingerprint for computing CacheTTLRemaining */
     private _cacheTimestamps: Map<string, number> = new Map();
@@ -38,7 +38,22 @@ export class QueryCacheManager {
     /** Reverse index: normalized entity name → set of fingerprints that depend on it */
     private _queryEntityIndex: Map<string, Set<string>> = new Map();
 
-    constructor(connectionPrefix: string) {
+    protected constructor() {
+        super();
+    }
+
+    /**
+     * Returns the singleton instance of QueryCacheManager.
+     */
+    public static get Instance(): QueryCacheManager {
+        return super.getInstance<QueryCacheManager>();
+    }
+
+    /**
+     * Initializes (or re-initializes) the connection prefix used for fingerprinting.
+     * Idempotent — safe to call multiple times with the same or different prefix.
+     */
+    public Init(connectionPrefix: string): void {
         this._connectionPrefix = connectionPrefix;
     }
 

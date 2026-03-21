@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [8fe1124]
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/ng-auth-services@5.14.0
+  - @memberjunction/core@5.14.0
+  - @memberjunction/graphql-dataprovider@5.14.0
+  - @memberjunction/ai-engine-base@5.14.0
+  - @memberjunction/ai-core-plus@5.14.0
+  - @memberjunction/ng-base-application@5.14.0
+  - @memberjunction/ng-dashboards@5.14.0
+  - @memberjunction/ng-entity-form-dialog@5.14.0
+  - @memberjunction/ng-entity-permissions@5.14.0
+  - @memberjunction/ng-explorer-settings@5.14.0
+  - @memberjunction/ng-list-detail-grid@5.14.0
+  - @memberjunction/ng-shared@5.14.0
+  - @memberjunction/ng-ai-test-harness@5.14.0
+  - @memberjunction/ng-artifacts@5.14.0
+  - @memberjunction/ng-base-forms@5.14.0
+  - @memberjunction/ng-container-directives@5.14.0
+  - @memberjunction/ng-conversations@5.14.0
+  - @memberjunction/ng-dashboard-viewer@5.14.0
+  - @memberjunction/ng-entity-viewer@5.14.0
+  - @memberjunction/ng-file-storage@5.14.0
+  - @memberjunction/ng-notifications@5.14.0
+  - @memberjunction/ng-query-viewer@5.14.0
+  - @memberjunction/ng-record-changes@5.14.0
+  - @memberjunction/ng-record-selector@5.14.0
+  - @memberjunction/ng-resource-permissions@5.14.0
+  - @memberjunction/ng-shared-generic@5.14.0
+  - @memberjunction/ng-user-avatar@5.14.0
+  - @memberjunction/communication-types@5.14.0
+  - @memberjunction/entity-communications-client@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/templates-base-types@5.14.0
+  - @memberjunction/ng-generic-dialog@5.14.0
+  - @memberjunction/global@5.14.0
+
 ## 5.13.0
 
 ### Patch Changes

@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.14.0
+
+### Patch Changes
+
+- 69b5af4: Add TestQuerySQL resolver and client method for query execution testing, refactor CreateQueryResolver into QuerySystemUserResolver composing CodeGen-generated MJQuery\_ types, add lightweight query catalog for collision detection, unit tests for transitive template composition and ORDER BY stripping, and updated class registration manifests
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/ai-core-plus@5.14.0
+  - @memberjunction/interactive-component-types@5.14.0
+  - @memberjunction/data-context@5.14.0
+
 ## 5.13.0
 
 ### Patch Changes

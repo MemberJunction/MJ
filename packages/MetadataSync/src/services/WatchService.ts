@@ -368,7 +368,8 @@ export class WatchService {
           this.sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
             formatAsMigration: syncConfig.sqlLogging?.formatAsMigration || false,
             description: 'MetadataSync watch operation',
-            logRecordChangeMetadata: true
+            logRecordChangeMetadata: true,
+            batchSeparator: 'GO',
           });
           
           callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);

@@ -294,14 +294,14 @@ describe('E2E: Salesforce Connector', () => {
     describe('Default Field Mappings', () => {
         it('should return contact mappings for Contact object', () => {
             const mappings = connector.GetDefaultFieldMappings('Contact', 'Contacts');
-            expect(mappings.length).toBe(6);
+            expect(mappings.length).toBe(12);
             const keyField = mappings.find((m) => m.IsKeyField);
             expect(keyField?.SourceFieldName).toBe('Email');
         });
 
         it('should return account mappings for Account object', () => {
             const mappings = connector.GetDefaultFieldMappings('Account', 'Companies');
-            expect(mappings.length).toBe(5);
+            expect(mappings.length).toBe(10);
         });
     });
 });

@@ -28,5 +28,12 @@
       "lastModified": "2026-03-17T18:13:33.282Z",
       "checksum": "820b7caa244ebcafcf205075bd938405b72c9f04cfe96176af61a194b5670c52"
     }
+  },
+  {
+    "fields": {
+      "Name": "Salesforce",
+      "Description": "Salesforce integration actions",
+      "Status": "Active"
+    }
   }
 ]
