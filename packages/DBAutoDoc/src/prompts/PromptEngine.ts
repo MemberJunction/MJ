@@ -5,7 +5,7 @@
 import nunjucks from 'nunjucks';
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
 import { PromptFileLoader } from './PromptFileLoader.js';
-import { AIConfig } from '../types/config.js';
+import { AIConfig, RetryConfig } from '../types/config.js';
 import { PromptExecutionResult } from '../types/prompts.js';
 import { createLLMInstance } from '../utils/llm-factory.js';
 import { CleanAndParseJSON } from '@memberjunction/global';
@@ -184,11 +184,8 @@ export class PromptEngine {
         ...(effectiveEffortLevel != null && { effortLevel: effectiveEffortLevel.toString() }) // Optional 1-100, BaseLLM drivers handle if supported
       };
 
-      // 3. Execute with AI/Core (follows RunView pattern - doesn't throw)
-      console.log(`[PromptEngine] Calling LLM (model: ${params.model}, prompt length: ${renderedPrompt.length} chars)`);
-      const llmStartTime = Date.now();
-      const chatResult: ChatResult = await this.llm.ChatCompletion(params);
-      console.log(`[PromptEngine] LLM responded in ${((Date.now() - llmStartTime) / 1000).toFixed(1)}s (success: ${chatResult.success})`);
+      // 3. Execute with AI/Core — retry on transient failures (429, network errors)
+      const chatResult = await this.executeWithRetry(params, renderedPrompt.length);
 
       // 4. Check success (IMPORTANT: like RunView, check .success property)
       if (!chatResult.success) {
@@ -330,5 +327,97 @@ export class PromptEngine {
         tokensUsed: 0
       }));
     }
+  }
+
+  /**
+   * Execute an LLM call with retry and exponential backoff for transient failures.
+   * Retries on 429 (rate limit), network errors, and other transient failures.
+   * Non-retryable errors (400 bad request, auth errors) fail immediately.
+   */
+  private async executeWithRetry(params: ChatParams, promptLength: number): Promise<ChatResult> {
+    const retryConfig = this.config.retry;
+    const maxRetries = retryConfig?.maxRetries ?? 5;
+    const initialDelayMs = retryConfig?.initialDelayMs ?? 30000;
+    const maxDelayMs = retryConfig?.maxDelayMs ?? 480000;
+    const backoffMultiplier = retryConfig?.backoffMultiplier ?? 2;
+
+    let lastResult: ChatResult | undefined;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      console.log(`[PromptEngine] Calling LLM (model: ${params.model}, prompt length: ${promptLength} chars${attempt > 0 ? `, retry ${attempt}/${maxRetries}` : ''})`);
+      const llmStartTime = Date.now();
+
+      try {
+        lastResult = await this.llm.ChatCompletion(params);
+      } catch (error) {
+        // Network-level failure (fetch failed, timeout, etc.)
+        const errMsg = (error as Error).message || '';
+        lastResult = {
+          success: false,
+          errorMessage: errMsg,
+          data: { choices: [], usage: {} }
+        } as ChatResult;
+      }
+
+      const elapsed = ((Date.now() - llmStartTime) / 1000).toFixed(1);
+      console.log(`[PromptEngine] LLM responded in ${elapsed}s (success: ${lastResult.success})`);
+
+      if (lastResult.success) {
+        return lastResult;
+      }
+
+      // Check if error is retryable
+      const errorMsg = lastResult.errorMessage || '';
+      if (!this.isRetryableError(errorMsg)) {
+        console.log(`[PromptEngine] Non-retryable error, giving up: ${errorMsg.substring(0, 200)}`);
+        return lastResult;
+      }
+
+      // Don't retry if we've exhausted attempts
+      if (attempt >= maxRetries) {
+        console.log(`[PromptEngine] Max retries (${maxRetries}) exhausted`);
+        return lastResult;
+      }
+
+      // Calculate delay with exponential backoff + jitter
+      const baseDelay = Math.min(initialDelayMs * Math.pow(backoffMultiplier, attempt), maxDelayMs);
+      const jitter = Math.random() * 0.2 * baseDelay; // ±20% jitter
+      const delay = Math.round(baseDelay + jitter);
+
+      console.log(`[PromptEngine] Retryable error (${this.classifyError(errorMsg)}), waiting ${(delay / 1000).toFixed(0)}s before retry ${attempt + 1}/${maxRetries}`);
+      await this.sleep(delay);
+    }
+
+    return lastResult!;
+  }
+
+  /**
+   * Check if an error message indicates a transient/retryable failure.
+   */
+  private isRetryableError(errorMsg: string): boolean {
+    const lower = errorMsg.toLowerCase();
+    // 429 rate limit
+    if (lower.includes('429') || lower.includes('too many requests') || lower.includes('rate limit') || lower.includes('resource exhausted')) return true;
+    // Network errors
+    if (lower.includes('fetch failed') || lower.includes('econnreset') || lower.includes('etimedout') || lower.includes('socket hang up')) return true;
+    // Server errors (500, 502, 503, 504)
+    if (lower.includes('500') || lower.includes('502') || lower.includes('503') || lower.includes('504') || lower.includes('internal server error') || lower.includes('bad gateway') || lower.includes('service unavailable')) return true;
+    // Not retryable: 400 bad request, 401 auth, 403 forbidden, JSON parse errors
+    return false;
+  }
+
+  /**
+   * Classify error for logging purposes.
+   */
+  private classifyError(errorMsg: string): string {
+    const lower = errorMsg.toLowerCase();
+    if (lower.includes('429') || lower.includes('too many requests') || lower.includes('rate limit')) return 'rate-limit';
+    if (lower.includes('fetch failed') || lower.includes('econnreset') || lower.includes('etimedout')) return 'network';
+    if (lower.includes('500') || lower.includes('502') || lower.includes('503') || lower.includes('504')) return 'server-error';
+    return 'unknown-transient';
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }

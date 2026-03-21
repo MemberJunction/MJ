@@ -82,15 +82,46 @@ export interface AIConfig {
   apiKey: string;
   temperature?: number;
   maxTokens?: number;
+  /** @deprecated Use rateLimits.requestsPerMinute instead */
   requestsPerMinute?: number;
   effortLevel?: number; // Optional effort level 1-100 (1=lowest, 100=highest). Not all models support this.
   pricing?: TokenPricingConfig;
+  /** Rate limiting configuration for API calls */
+  rateLimits?: RateLimitConfig;
+  /** Retry configuration for failed API calls (429, network errors) */
+  retry?: RetryConfig;
   /**
    * Per-purpose model overrides. Keys are purpose names (e.g., "fkPruning").
    * Each override can specify a different model, temperature, maxTokens, and effortLevel.
    * If a purpose is not listed, the default model/settings from the parent AIConfig are used.
    */
   modelOverrides?: Record<string, ModelOverride>;
+}
+
+/**
+ * Rate limiting configuration for LLM API calls.
+ */
+export interface RateLimitConfig {
+  /** Max requests per minute (0 = unlimited). Provider defaults apply if not set. */
+  requestsPerMinute?: number;
+  /** Max tokens per minute (0 = unlimited). Not enforced yet — reserved for future use. */
+  tokensPerMinute?: number;
+  /** Max concurrent LLM requests (default: 1 = serial). For future parallelization. */
+  maxParallelRequests?: number;
+}
+
+/**
+ * Retry configuration for handling transient API failures (429 rate limits, network errors).
+ */
+export interface RetryConfig {
+  /** Max number of retries before giving up (default: 5) */
+  maxRetries?: number;
+  /** Initial delay in ms before first retry (default: 30000 = 30s) */
+  initialDelayMs?: number;
+  /** Maximum delay in ms (default: 480000 = 8 min). Backoff won't exceed this. */
+  maxDelayMs?: number;
+  /** Multiplier for exponential backoff (default: 2). Delay doubles each retry. */
+  backoffMultiplier?: number;
 }
 
 /**
@@ -102,6 +133,8 @@ export interface ModelOverride {
   temperature?: number;
   maxTokens?: number;
   effortLevel?: number;
+  /** Per-model rate limits (Pro models typically have lower limits than Flash) */
+  rateLimits?: RateLimitConfig;
 }
 
 /**
