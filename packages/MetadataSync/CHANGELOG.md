@@ -1,5 +1,21 @@
 # @memberjunction/metadata-sync
 
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/generic-database-provider@5.14.0
+  - @memberjunction/graphql-dataprovider@5.14.0
+  - @memberjunction/server-bootstrap-lite@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/core-entities-server@5.14.0
+  - @memberjunction/sqlserver-dataprovider@5.14.0
+  - @memberjunction/config@5.14.0
+  - @memberjunction/global@5.14.0
+
 ## 5.13.0
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @memberjunction/integration-schema-builder
 
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [140fc6d]
+- Updated dependencies [6489cd8]
+  - @memberjunction/integration-engine@5.14.0
+  - @memberjunction/global@5.14.0
+
 ## 5.13.0
 
 ### Patch Changes

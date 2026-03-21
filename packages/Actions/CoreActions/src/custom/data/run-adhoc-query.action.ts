@@ -2,7 +2,8 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass, SQLExpressionValidator } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
-import { BaseEntity, LogError, QueryCompositionEngine } from "@memberjunction/core";
+import { BaseEntity, LogError } from "@memberjunction/core";
+import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';

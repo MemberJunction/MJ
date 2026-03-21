@@ -3,6 +3,18 @@ const { Parser } = NodeSqlParser;
 import * as nunjucks from 'nunjucks';
 
 /**
+ * Result of extracting CTE definitions from SQL that starts with a WITH clause.
+ */
+export interface SQLCTEExtraction {
+    /** Individual CTE definitions as "name AS (...)" strings, in declaration order */
+    CTEDefinitions: string[];
+    /** The main statement after all CTE definitions (typically a SELECT) */
+    MainStatement: string;
+    /** Whether AST parsing was used (true) or regex fallback (false) */
+    UsedASTParsing: boolean;
+}
+
+/**
  * A single table/view reference extracted from SQL.
  */
 export interface SQLTableReference {
@@ -46,14 +58,16 @@ export interface SQLParseResult {
 export class SQLParser {
     /**
      * Parse a plain SQL statement and extract all table and column references.
-     * Uses AST parsing with TransactSQL dialect, falls back to regex on failure.
+     * Uses AST parsing with the specified dialect, falls back to regex on failure.
+     * @param sql The SQL statement to parse
+     * @param dialect The SQL dialect to use for AST parsing (default: 'TransactSQL')
      */
-    public static Parse(sql: string): SQLParseResult {
+    public static Parse(sql: string, dialect: string = 'TransactSQL'): SQLParseResult {
         if (!sql || sql.trim().length === 0) {
             return { Tables: [], Columns: [], UsedASTParsing: false };
         }
 
-        const astResult = SQLParser.ParseViaAST(sql);
+        const astResult = SQLParser.ParseViaAST(sql, dialect);
         if (astResult) {
             return astResult;
         }
@@ -64,24 +78,196 @@ export class SQLParser {
     /**
      * Parse a SQL statement that may contain Nunjucks template syntax.
      * Pre-processes templates into valid SQL before parsing.
+     * @param sql The SQL statement to parse
+     * @param dialect The SQL dialect to use for AST parsing (default: 'TransactSQL')
      */
-    public static ParseWithTemplatePreprocessing(sql: string): SQLParseResult {
+    public static ParseWithTemplatePreprocessing(sql: string, dialect: string = 'TransactSQL'): SQLParseResult {
         if (!sql || sql.trim().length === 0) {
             return { Tables: [], Columns: [], UsedASTParsing: false };
         }
 
         const processedSQL = SQLParser.PreProcessNunjucksForParsing(sql);
-        return SQLParser.Parse(processedSQL);
+        return SQLParser.Parse(processedSQL, dialect);
+    }
+
+    /**
+     * Extract CTE definitions from SQL that starts with a WITH clause.
+     *
+     * Given SQL like:
+     *   WITH A AS (SELECT 1), B AS (SELECT 2)
+     *   SELECT A.x, B.y FROM A JOIN B ON ...
+     *
+     * Returns:
+     *   CTEDefinitions: ["A AS (\nSELECT 1\n)", "B AS (\nSELECT 2\n)"]
+     *   MainStatement: "SELECT A.x, B.y FROM A JOIN B ON ..."
+     *
+     * This is used by the query composition engine to "hoist" inner CTEs from
+     * dependency queries, avoiding illegal nested WITH clauses.
+     *
+     * Uses AST parsing first (produces bracket-quoted identifiers for SQL Server),
+     * falls back to a paren-depth regex approach if AST parsing fails (e.g. when
+     * SQL contains Nunjucks template tokens).
+     *
+     * @param sql The SQL statement starting with WITH
+     * @param dialect The SQL dialect for AST parsing (default: 'TransactSQL')
+     * @returns Extraction result, or null if the SQL does not start with WITH
+     */
+    public static ExtractCTEs(sql: string, dialect: string = 'TransactSQL'): SQLCTEExtraction | null {
+        const trimmed = sql.trimStart();
+        if (!/^WITH\s/i.test(trimmed)) return null;
+
+        const astResult = SQLParser.ExtractCTEsViaAST(trimmed, dialect);
+        if (astResult) return astResult;
+
+        return SQLParser.ExtractCTEsViaRegex(trimmed);
+    }
+
+    /**
+     * AST-based CTE extraction. Uses node-sql-parser to parse the SQL,
+     * then reconstructs each CTE body and the main SELECT via sqlify.
+     *
+     * Returns null if AST parsing fails.
+     */
+    private static ExtractCTEsViaAST(sql: string, dialect: string): SQLCTEExtraction | null {
+        try {
+            const parser = new Parser();
+            const ast = parser.astify(sql, { database: dialect });
+
+            const singleAst = (Array.isArray(ast) ? ast[0] : ast) as unknown as Record<string, unknown>;
+
+            if (!singleAst.with || !Array.isArray(singleAst.with) || singleAst.with.length === 0) {
+                return null;
+            }
+
+            const cteDefinitions: string[] = [];
+            for (const cte of singleAst.with as unknown[]) {
+                const cteRecord = cte as { name: { value: string }; stmt: { ast: unknown } };
+                const cteName = cteRecord.name.value;
+                const bodySQL = parser.sqlify(cteRecord.stmt.ast as NodeSqlParser.AST, { database: dialect });
+                cteDefinitions.push(`${cteName} AS (\n${bodySQL}\n)`);
+            }
+
+            // Reconstruct main SELECT by nulling out the WITH clause
+            const mainAst = { ...singleAst, with: null } as unknown as NodeSqlParser.AST;
+            const mainStatement = parser.sqlify(mainAst, { database: dialect });
+
+            return { CTEDefinitions: cteDefinitions, MainStatement: mainStatement, UsedASTParsing: true };
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Regex/paren-depth fallback for CTE extraction.
+     *
+     * Walks the SQL character by character after stripping the leading WITH keyword,
+     * tracking parenthesis depth and respecting string literals and SQL comments.
+     * Each `identifier AS (...)` block is extracted as a CTE definition.
+     * Whatever remains after the last CTE is the main statement.
+     */
+    private static ExtractCTEsViaRegex(sql: string): SQLCTEExtraction {
+        const withStripped = sql.trimStart().replace(/^WITH\s+/i, '');
+
+        const cteDefinitions: string[] = [];
+        let pos = 0;
+        const len = withStripped.length;
+
+        while (pos < len) {
+            pos = SQLParser.skipWhitespace(withStripped, pos);
+            if (pos >= len) break;
+
+            // Try to match a CTE header: identifier AS (
+            const remaining = withStripped.substring(pos);
+            const cteHeaderMatch = remaining.match(
+                /^(\[[^\]]+\]|"[^"]+"|[A-Za-z_]\w*)\s+AS\s*\(/i
+            );
+            if (!cteHeaderMatch) break;
+
+            const cteName = cteHeaderMatch[1];
+            pos += cteHeaderMatch[0].length; // right after the opening '('
+
+            // Find the matching closing paren
+            const bodyStart = pos;
+            pos = SQLParser.findMatchingCloseParen(withStripped, pos);
+
+            const cteBody = withStripped.substring(bodyStart, pos);
+            cteDefinitions.push(`${cteName} AS (\n${cteBody}\n)`);
+            pos++; // move past closing ')'
+
+            // Skip whitespace, then check for comma (another CTE follows)
+            pos = SQLParser.skipWhitespace(withStripped, pos);
+            if (pos < len && withStripped[pos] === ',') {
+                pos++;
+            }
+        }
+
+        const mainStatement = withStripped.substring(pos).trim();
+        return { CTEDefinitions: cteDefinitions, MainStatement: mainStatement, UsedASTParsing: false };
+    }
+
+    /**
+     * Advances past whitespace characters, returning the new position.
+     */
+    private static skipWhitespace(sql: string, pos: number): number {
+        while (pos < sql.length && /\s/.test(sql[pos])) pos++;
+        return pos;
+    }
+
+    /**
+     * Finds the matching close parenthesis starting from a position just inside
+     * an opening paren (depth = 1). Respects single-quoted strings, line comments,
+     * and block comments.
+     *
+     * @returns Position of the closing ')' character
+     */
+    private static findMatchingCloseParen(sql: string, pos: number): number {
+        let depth = 1;
+        const len = sql.length;
+
+        while (pos < len && depth > 0) {
+            const ch = sql[pos];
+            if (ch === "'") {
+                // Skip single-quoted string literal (handle escaped quotes '')
+                pos++;
+                while (pos < len) {
+                    if (sql[pos] === "'") {
+                        if (pos + 1 < len && sql[pos + 1] === "'") {
+                            pos += 2; // escaped ''
+                            continue;
+                        }
+                        break; // closing quote
+                    }
+                    pos++;
+                }
+            } else if (ch === '-' && pos + 1 < len && sql[pos + 1] === '-') {
+                // Skip line comment
+                pos += 2;
+                while (pos < len && sql[pos] !== '\n') pos++;
+            } else if (ch === '/' && pos + 1 < len && sql[pos + 1] === '*') {
+                // Skip block comment
+                pos += 2;
+                while (pos < len && !(sql[pos] === '*' && pos + 1 < len && sql[pos + 1] === '/')) pos++;
+                if (pos < len) pos++; // skip past '/'
+            } else if (ch === '(') {
+                depth++;
+            } else if (ch === ')') {
+                depth--;
+                if (depth === 0) return pos;
+            }
+            pos++;
+        }
+
+        return pos;
     }
 
     /**
      * Attempt to parse SQL via node-sql-parser AST.
      * Returns null if parsing fails (caller should fall back to regex).
      */
-    private static ParseViaAST(sql: string): SQLParseResult | null {
+    private static ParseViaAST(sql: string, dialect: string): SQLParseResult | null {
         try {
             const parser = new Parser();
-            const ast = parser.astify(sql, { database: 'TransactSQL' });
+            const ast = parser.astify(sql, { database: dialect });
 
             const tableAliasMap = new Map<string, { schemaName: string; tableName: string }>();
             const columnRefs = new Set<string>();

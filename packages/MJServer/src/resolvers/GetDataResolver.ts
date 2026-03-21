@@ -1,6 +1,7 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, LogStatus, Metadata, QueryCompositionEngine } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { QueryCompositionEngine } from '@memberjunction/generic-database-provider';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { v4 as uuidv4 } from 'uuid';
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';

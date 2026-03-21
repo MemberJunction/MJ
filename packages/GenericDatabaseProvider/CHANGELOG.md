@@ -1,5 +1,24 @@
 # @memberjunction/generic-database-provider
 
+## 5.14.0
+
+### Patch Changes
+
+- 69b5af4: Add TestQuerySQL resolver and client method for query execution testing, refactor CreateQueryResolver into QuerySystemUserResolver composing CodeGen-generated MJQuery\_ types, add lightweight query catalog for collision detection, unit tests for transitive template composition and ORDER BY stripping, and updated class registration manifests
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+- Updated dependencies [6489cd8]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/query-processor@5.14.0
+  - @memberjunction/actions-base@5.14.0
+  - @memberjunction/actions@5.14.0
+  - @memberjunction/aiengine@5.14.0
+  - @memberjunction/encryption@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/queue@5.14.0
+  - @memberjunction/global@5.14.0
+  - @memberjunction/sql-dialect@5.14.0
+
 ## 5.13.0
 
 ### Patch Changes

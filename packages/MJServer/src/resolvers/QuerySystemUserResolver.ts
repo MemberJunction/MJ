@@ -1,12 +1,26 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, RunView, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus } from '@memberjunction/core';
+import { LogError, RunView, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus, QueryFieldInfo, QueryParameterInfo, QueryEntityInfo, QueryPermissionInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { MJQueryCategoryEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
-import { MJQueryResolver } from '../generated/generated.js';
-import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
+import { MJQueryResolver, MJQuery_, MJQueryField_, MJQueryParameter_, MJQueryEntity_, MJQueryPermission_ } from '../generated/generated.js';
+import { GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
 import { MJQueryEntityServer } from '@memberjunction/core-entities-server';
+
+/**
+ * Minimal shape of a query row returned by RunView lookups (plain object, not entity instance).
+ */
+interface QueryViewRow {
+    ID: string;
+    Name: string;
+    Description: string;
+    CategoryID: string;
+    Category: string;
+    SQL: string;
+    Status: string;
+    QualityRank: number;
+}
 
 /**
  * Query status enumeration for GraphQL
@@ -146,227 +160,24 @@ export class UpdateQuerySystemUserInput {
     Permissions?: QueryPermissionInputType[];
 }
 
+/**
+ * Consolidated result type for Create and Update query mutations.
+ * Composes the CodeGen-generated MJQuery_ type so that new entity fields
+ * are automatically available in the GraphQL schema without manual sync.
+ *
+ * On success, Query contains the full query data (scalars + related entities).
+ * On failure, Query is null and ErrorMessage describes the problem.
+ */
 @ObjectType()
-export class QueryFieldType {
-    @Field(() => String)
-    ID!: string;
-
-    @Field(() => String)
-    QueryID!: string;
-
-    @Field(() => String)
-    Name!: string;
-
-    @Field(() => String, { nullable: true })
-    Description?: string;
-
-    @Field(() => Number)
-    Sequence!: number;
-
-    @Field(() => String, { nullable: true })
-    SQLBaseType?: string;
-
-    @Field(() => String, { nullable: true })
-    SQLFullType?: string;
-
-    @Field(() => String, { nullable: true })
-    SourceEntityID?: string;
-
-    @Field(() => String, { nullable: true })
-    SourceEntity?: string;
-
-    @Field(() => String, { nullable: true })
-    SourceFieldName?: string;
-
-    @Field(() => Boolean)
-    IsComputed!: boolean;
-
-    @Field(() => String, { nullable: true })
-    ComputationDescription?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    IsSummary?: boolean;
-
-    @Field(() => String, { nullable: true })
-    SummaryDescription?: string;
-}
-
-@ObjectType()
-export class QueryParameterType {
-    @Field(() => String)
-    ID!: string;
-
-    @Field(() => String)
-    QueryID!: string;
-
-    @Field(() => String)
-    Name!: string;
-
-    @Field(() => String, { nullable: true })
-    Description?: string;
-
-    @Field(() => String)
-    Type!: string;
-
-    @Field(() => Boolean)
-    IsRequired!: boolean;
-
-    @Field(() => String, { nullable: true })
-    DefaultValue?: string;
-
-    @Field(() => String, { nullable: true })
-    SampleValue?: string;
-
-    @Field(() => String, { nullable: true })
-    ValidationFilters?: string;
-}
-
-@ObjectType()
-export class MJQueryEntityType {
-    @Field(() => String)
-    ID!: string;
-
-    @Field(() => String)
-    QueryID!: string;
-
-    @Field(() => String)
-    EntityID!: string;
-
-    @Field(() => String, { nullable: true })
-    Entity?: string;
-}
-
-@ObjectType()
-export class QueryPermissionType {
-    @Field(() => String)
-    ID!: string;
-
-    @Field(() => String)
-    QueryID!: string;
-
-    @Field(() => String)
-    RoleID!: string;
-
-    @Field(() => String, { nullable: true })
-    Role?: string;
-}
-
-@ObjectType()
-export class CreateQueryResultType {
+export class QueryMutationResultType {
     @Field(() => Boolean)
     Success!: boolean;
 
     @Field(() => String, { nullable: true })
     ErrorMessage?: string;
 
-    // Core query properties
-    @Field(() => String, { nullable: true })
-    ID?: string;
-
-    @Field(() => String, { nullable: true })
-    Name?: string;
-
-    @Field(() => String, { nullable: true })
-    Description?: string;
-
-    @Field(() => String, { nullable: true })
-    CategoryID?: string;
-
-    @Field(() => String, { nullable: true })
-    Category?: string;
-
-    @Field(() => String, { nullable: true })
-    SQL?: string;
-
-    @Field(() => String, { nullable: true })
-    Status?: string;
-
-    @Field(() => Number, { nullable: true })
-    QualityRank?: number;
-
-    @Field(() => String, { nullable: true })
-    EmbeddingVector?: string;
-
-    @Field(() => String, { nullable: true })
-    EmbeddingModelID?: string;
-
-    @Field(() => String, { nullable: true })
-    EmbeddingModelName?: string;
-
-    @Field(() => String, { nullable: true })
-    TechnicalDescription?: string;
-
-    // Related collections
-    @Field(() => [QueryFieldType], { nullable: true })
-    Fields?: QueryFieldType[];
-
-    @Field(() => [QueryParameterType], { nullable: true })
-    Parameters?: QueryParameterType[];
-
-    @Field(() => [MJQueryEntityType], { nullable: true })
-    Entities?: MJQueryEntityType[];
-
-    @Field(() => [QueryPermissionType], { nullable: true })
-    Permissions?: QueryPermissionType[];
-}
-
-@ObjectType()
-export class UpdateQueryResultType {
-    @Field(() => Boolean)
-    Success!: boolean;
-
-    @Field(() => String, { nullable: true })
-    ErrorMessage?: string;
-
-    // Core query properties
-    @Field(() => String, { nullable: true })
-    ID?: string;
-
-    @Field(() => String, { nullable: true })
-    Name?: string;
-
-    @Field(() => String, { nullable: true })
-    Description?: string;
-
-    @Field(() => String, { nullable: true })
-    CategoryID?: string;
-
-    @Field(() => String, { nullable: true })
-    Category?: string;
-
-    @Field(() => String, { nullable: true })
-    SQL?: string;
-
-    @Field(() => String, { nullable: true })
-    Status?: string;
-
-    @Field(() => Number, { nullable: true })
-    QualityRank?: number;
-
-    @Field(() => String, { nullable: true })
-    EmbeddingVector?: string;
-
-    @Field(() => String, { nullable: true })
-    EmbeddingModelID?: string;
-
-    @Field(() => String, { nullable: true })
-    EmbeddingModelName?: string;
-
-    @Field(() => String, { nullable: true })
-    TechnicalDescription?: string;
-
-    // Related collections
-    @Field(() => [QueryFieldType], { nullable: true })
-    Fields?: QueryFieldType[];
-
-    @Field(() => [QueryParameterType], { nullable: true })
-    Parameters?: QueryParameterType[];
-
-    @Field(() => [MJQueryEntityType], { nullable: true })
-    Entities?: MJQueryEntityType[];
-
-    @Field(() => [QueryPermissionType], { nullable: true })
-    Permissions?: QueryPermissionType[];
+    @Field(() => MJQuery_, { nullable: true })
+    Query?: MJQuery_;
 }
 
 @ObjectType()
@@ -406,12 +217,12 @@ export class MJQueryResolverExtended extends MJQueryResolver {
      * @returns CreateQueryResultType with success status and query data
      */
     @RequireSystemUser()
-    @Mutation(() => CreateQueryResultType)
+    @Mutation(() => QueryMutationResultType)
     async CreateQuerySystemUser(
         @Arg('input', () => CreateQuerySystemUserInput) input: CreateQuerySystemUserInput,
         @Ctx() context: AppContext,
         @PubSub() pubSub: PubSubEngine
-    ): Promise<CreateQueryResultType> {
+    ): Promise<QueryMutationResultType> {
         try {
             // Handle CategoryPath if provided
             let finalCategoryID = input.CategoryID;
@@ -434,8 +245,8 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             // Use MJQueryEntityServer which handles AI processing
             const record = await provider.GetEntityObject<MJQueryEntityServer>("MJ: Queries", context.userPayload.userRecord);
             
-            // Set the fields from input, handling CategoryPath resolution
-            const fieldsToSet = {
+            // Destructure out non-database fields, keep only fields to persist
+            const { Permissions: _permissions, CategoryPath: _categoryPath, ...fieldsToSet } = {
                 ...input,
                 CategoryID: finalCategoryID || input.CategoryID,
                 Status: input.Status || 'Approved',
@@ -446,9 +257,6 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 CacheTTLMinutes: input.CacheTTLMinutes || null,
                 CacheMaxSize: input.CacheMaxSize || null
             };
-            // Remove non-database fields that we handle separately or are input-only
-            delete (fieldsToSet as any).Permissions;    // Handled separately via createPermissions
-            delete (fieldsToSet as any).CategoryPath;   // Input-only field, resolved to CategoryID
 
             record.SetMany(fieldsToSet, true);
             this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
@@ -470,60 +278,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 // This ensures subsequent operations can find the query without additional DB calls
                 await provider.Refresh();
 
-                return {
-                    Success: true,
-                    ID: record.ID,
-                    Name: record.Name,
-                    Description: record.Description,
-                    CategoryID: record.CategoryID,
-                    Category: record.Category,
-                    SQL: record.SQL,
-                    Status: record.Status,
-                    QualityRank: record.QualityRank,
-                    EmbeddingVector: record.EmbeddingVector,
-                    EmbeddingModelID: record.EmbeddingModelID,
-                    EmbeddingModelName: record.EmbeddingModel,
-                    TechnicalDescription: record.TechnicalDescription,
-                    Fields: record.QueryFields.map(f => ({
-                        ID: f.ID,
-                        QueryID: f.QueryID,
-                        Name: f.Name,
-                        Description: f.Description,
-                        Sequence: f.Sequence,
-                        SQLBaseType: f.SQLBaseType,
-                        SQLFullType: f.SQLFullType,
-                        SourceEntityID: f.SourceEntityID,
-                        SourceEntity: f.SourceEntity,
-                        SourceFieldName: f.SourceFieldName,
-                        IsComputed: f.IsComputed,
-                        ComputationDescription: f.ComputationDescription,
-                        IsSummary: f.IsSummary,
-                        SummaryDescription: f.SummaryDescription
-                    })),
-                    Parameters: record.QueryParameters.map(p => ({
-                        ID: p.ID,
-                        QueryID: p.QueryID,
-                        Name: p.Name,
-                        Description: p.Description,
-                        Type: p.Type,
-                        IsRequired: p.IsRequired,
-                        DefaultValue: p.DefaultValue,
-                        SampleValue: p.SampleValue,
-                        ValidationFilters: p.ValidationFilters
-                    })),
-                    Entities: record.QueryEntities.map(e => ({
-                        ID: e.ID,
-                        QueryID: e.QueryID,
-                        EntityID: e.EntityID,
-                        Entity: e.Entity
-                    })),
-                    Permissions: record.QueryPermissions.map(p => ({
-                        ID: p.ID,
-                        QueryID: p.QueryID,
-                        RoleID: p.RoleID,
-                        Role: p.Role
-                    }))
-                };
+                return this.buildSuccessResult(record);
             }
             else {
                 // Save failed - check if another request created the same query (race condition)
@@ -531,62 +286,17 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 const existingQuery = await this.findExistingQuery(provider, input.Name, finalCategoryID, context.userPayload.userRecord);
 
                 if (existingQuery) {
-                    // Found the query that was created by another request
-                    // Return it as if we created it (it has the same name/category)
+                    // Found the query that was created by another request — load it as a full entity
+                    // so that related metadata (Fields, Parameters, Entities, Permissions) is populated
                     LogStatus(`[CreateQuery] Unique constraint detected for query '${input.Name}'. Using existing query (ID: ${existingQuery.ID}) created by concurrent request.`);
+                    const existingEntity = await provider.GetEntityObject<MJQueryEntityServer>('MJ: Queries', context.userPayload.userRecord);
+                    if (await existingEntity.Load(existingQuery.ID)) {
+                        return this.buildSuccessResult(existingEntity);
+                    }
+                    // Entity load failed after confirming the row exists — extremely rare
                     return {
-                        Success: true,
-                        ID: existingQuery.ID,
-                        Name: existingQuery.Name,
-                        Description: existingQuery.Description,
-                        CategoryID: existingQuery.CategoryID,
-                        Category: existingQuery.Category,
-                        SQL: existingQuery.SQL,
-                        Status: existingQuery.Status,
-                        QualityRank: existingQuery.QualityRank,
-                        EmbeddingVector: existingQuery.EmbeddingVector,
-                        EmbeddingModelID: existingQuery.EmbeddingModelID,
-                        EmbeddingModelName: existingQuery.EmbeddingModel,
-                        TechnicalDescription: existingQuery.TechnicalDescription,
-                        Fields: existingQuery.Fields?.map((f: any) => ({
-                            ID: f.ID,
-                            QueryID: f.QueryID,
-                            Name: f.Name,
-                            Description: f.Description,
-                            Sequence: f.Sequence,
-                            SQLBaseType: f.SQLBaseType,
-                            SQLFullType: f.SQLFullType,
-                            SourceEntityID: f.SourceEntityID,
-                            SourceEntity: f.SourceEntity,
-                            SourceFieldName: f.SourceFieldName,
-                            IsComputed: f.IsComputed,
-                            ComputationDescription: f.ComputationDescription,
-                            IsSummary: f.IsSummary,
-                            SummaryDescription: f.SummaryDescription
-                        })) || [],
-                        Parameters: existingQuery.Parameters?.map((p: any) => ({
-                            ID: p.ID,
-                            QueryID: p.QueryID,
-                            Name: p.Name,
-                            Description: p.Description,
-                            Type: p.Type,
-                            IsRequired: p.IsRequired,
-                            DefaultValue: p.DefaultValue,
-                            SampleValue: p.SampleValue,
-                            ValidationFilters: p.ValidationFilters
-                        })) || [],
-                        Entities: existingQuery.Entities?.map((e: any) => ({
-                            ID: e.ID,
-                            QueryID: e.QueryID,
-                            EntityID: e.EntityID,
-                            Entity: e.Entity
-                        })) || [],
-                        Permissions: existingQuery.Permissions?.map((p: any) => ({
-                            ID: p.ID,
-                            QueryID: p.QueryID,
-                            RoleID: p.RoleID,
-                            Role: p.Role
-                        })) || []
+                        Success: false,
+                        ErrorMessage: `Found query '${input.Name}' created by concurrent request (ID: ${existingQuery.ID}) but failed to load it as entity`
                     };
                 }
 
@@ -607,29 +317,102 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         }
     }
 
-    protected async createPermissions(p: DatabaseProviderBase, permissions: QueryPermissionInputType[], queryID: string, contextUser: UserInfo): Promise<QueryPermissionType[]> {
-        // Create permissions if provided
-        const createdPermissions: QueryPermissionType[] = [];
-        if (permissions && permissions.length > 0) {
-            for (const perm of permissions) {
-                const permissionEntity = await p.GetEntityObject<MJQueryPermissionEntity>('MJ: Query Permissions', contextUser);
-                if (permissionEntity) {
-                    permissionEntity.QueryID = queryID;
-                    permissionEntity.RoleID = perm.RoleID;
-                    
-                    const saveResult = await permissionEntity.Save();
-                    if (saveResult) {
-                        createdPermissions.push({
-                            ID: permissionEntity.ID,
-                            QueryID: permissionEntity.QueryID,
-                            RoleID: permissionEntity.RoleID,
-                            Role: permissionEntity.Role
-                        });
-                    }
-                }
+    /**
+     * Maps an MJQueryEntityServer (with loaded related metadata) to a QueryMutationResultType.
+     * Uses entity.GetAll() for scalar fields so that new CodeGen-generated fields are included
+     * automatically without manual updates. Related entity arrays are mapped explicitly.
+     */
+    private buildSuccessResult(entity: MJQueryEntityServer): QueryMutationResultType {
+        return {
+            Success: true,
+            Query: {
+                ...entity.GetAll(),
+                MJQueryFields_QueryIDArray: this.mapFields(entity.QueryFields),
+                MJQueryParameters_QueryIDArray: this.mapParameters(entity.QueryParameters),
+                MJQueryEntities_QueryIDArray: this.mapEntities(entity.QueryEntities),
+                MJQueryPermissions_QueryIDArray: this.mapPermissions(entity.QueryPermissions),
+            } as MJQuery_
+        };
+    }
+
+    private mapFields(fields: QueryFieldInfo[]): MJQueryField_[] {
+        return fields.map(f => ({
+            ID: f.ID,
+            QueryID: f.QueryID,
+            Name: f.Name,
+            Description: f.Description,
+            Sequence: f.Sequence,
+            SQLBaseType: f.SQLBaseType,
+            SQLFullType: f.SQLFullType,
+            SourceEntityID: f.SourceEntityID,
+            SourceEntity: f.SourceEntity,
+            SourceFieldName: f.SourceFieldName,
+            IsComputed: f.IsComputed,
+            ComputationDescription: f.ComputationDescription,
+            IsSummary: f.IsSummary,
+            SummaryDescription: f.SummaryDescription,
+            _mj__CreatedAt: f.__mj_CreatedAt,
+            _mj__UpdatedAt: f.__mj_UpdatedAt,
+            DetectionMethod: f.DetectionMethod,
+            AutoDetectConfidenceScore: f.AutoDetectConfidenceScore,
+            Query: '',
+        }) as MJQueryField_);
+    }
+
+    private mapParameters(params: QueryParameterInfo[]): MJQueryParameter_[] {
+        return params.map(p => ({
+            ID: p.ID,
+            QueryID: p.QueryID,
+            Name: p.Name,
+            Description: p.Description,
+            Type: p.Type,
+            IsRequired: p.IsRequired,
+            DefaultValue: p.DefaultValue,
+            SampleValue: p.SampleValue,
+            ValidationFilters: p.ValidationFilters,
+            _mj__CreatedAt: p.__mj_CreatedAt,
+            _mj__UpdatedAt: p.__mj_UpdatedAt,
+            DetectionMethod: p.DetectionMethod,
+            AutoDetectConfidenceScore: p.AutoDetectConfidenceScore,
+            Query: p.Query ?? '',
+        }) as MJQueryParameter_);
+    }
+
+    private mapEntities(entities: QueryEntityInfo[]): MJQueryEntity_[] {
+        return entities.map(e => ({
+            ID: e.ID,
+            QueryID: e.QueryID,
+            EntityID: e.EntityID,
+            Entity: e.Entity,
+            _mj__CreatedAt: e.__mj_CreatedAt,
+            _mj__UpdatedAt: e.__mj_UpdatedAt,
+            DetectionMethod: e.DetectionMethod,
+            AutoDetectConfidenceScore: e.AutoDetectConfidenceScore,
+            Query: e.Query ?? '',
+        }) as MJQueryEntity_);
+    }
+
+    private mapPermissions(permissions: QueryPermissionInfo[]): MJQueryPermission_[] {
+        return permissions.map(p => ({
+            ID: p.ID,
+            QueryID: p.QueryID,
+            RoleID: p.RoleID,
+            Role: p.Role,
+            _mj__CreatedAt: new Date(),
+            _mj__UpdatedAt: new Date(),
+            Query: p.Query ?? '',
+        }) as MJQueryPermission_);
+    }
+
+    protected async createPermissions(p: DatabaseProviderBase, permissions: QueryPermissionInputType[], queryID: string, contextUser: UserInfo): Promise<void> {
+        for (const perm of permissions) {
+            const permissionEntity = await p.GetEntityObject<MJQueryPermissionEntity>('MJ: Query Permissions', contextUser);
+            if (permissionEntity) {
+                permissionEntity.QueryID = queryID;
+                permissionEntity.RoleID = perm.RoleID;
+                await permissionEntity.Save();
             }
         }
-        return createdPermissions;
     }
 
     /**
@@ -639,12 +422,12 @@ export class MJQueryResolverExtended extends MJQueryResolver {
      * @returns UpdateQueryResultType with success status and updated query data including related entities
      */
     @RequireSystemUser()
-    @Mutation(() => UpdateQueryResultType)
+    @Mutation(() => QueryMutationResultType)
     async UpdateQuerySystemUser(
         @Arg('input', () => UpdateQuerySystemUserInput) input: UpdateQuerySystemUserInput,
         @Ctx() context: AppContext,
         @PubSub() pubSub: PubSubEngine
-    ): Promise<UpdateQueryResultType> {
+    ): Promise<QueryMutationResultType> {
         try {
             // Load the existing query using MJQueryEntityServer
             const provider = GetReadWriteProvider(context.providers);
@@ -676,7 +459,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             }
 
             // Update fields that were provided
-            const updateFields: Record<string, any> = {};
+            const updateFields: Record<string, string | number | boolean | undefined> = {};
             if (input.Name !== undefined) updateFields.Name = input.Name;
             if (finalCategoryID !== undefined) updateFields.CategoryID = finalCategoryID;
             if (input.UserQuestion !== undefined) updateFields.UserQuestion = input.UserQuestion;
@@ -731,60 +514,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                 await queryEntity.RefreshRelatedMetadata(true);
             }
 
-            return {
-                Success: true,
-                ID: queryEntity.ID,
-                Name: queryEntity.Name,
-                Description: queryEntity.Description,
-                CategoryID: queryEntity.CategoryID,
-                Category: queryEntity.Category,
-                SQL: queryEntity.SQL,
-                Status: queryEntity.Status,
-                QualityRank: queryEntity.QualityRank,
-                EmbeddingVector: queryEntity.EmbeddingVector,
-                EmbeddingModelID: queryEntity.EmbeddingModelID,
-                EmbeddingModelName: queryEntity.EmbeddingModel,
-                TechnicalDescription: queryEntity.TechnicalDescription,
-                Fields: queryEntity.QueryFields.map(f => ({
-                    ID: f.ID,
-                    QueryID: f.QueryID,
-                    Name: f.Name,
-                    Description: f.Description,
-                    Sequence: f.Sequence,
-                    SQLBaseType: f.SQLBaseType,
-                    SQLFullType: f.SQLFullType,
-                    SourceEntityID: f.SourceEntityID,
-                    SourceEntity: f.SourceEntity,
-                    SourceFieldName: f.SourceFieldName,
-                    IsComputed: f.IsComputed,
-                    ComputationDescription: f.ComputationDescription,
-                    IsSummary: f.IsSummary,
-                    SummaryDescription: f.SummaryDescription
-                })),
-                Parameters: queryEntity.QueryParameters.map(p => ({
-                    ID: p.ID,
-                    QueryID: p.QueryID,
-                    Name: p.Name,
-                    Description: p.Description,
-                    Type: p.Type,
-                    IsRequired: p.IsRequired,
-                    DefaultValue: p.DefaultValue,
-                    SampleValue: p.SampleValue,
-                    ValidationFilters: p.ValidationFilters
-                })),
-                Entities: queryEntity.QueryEntities.map(e => ({
-                    ID: e.ID,
-                    QueryID: e.QueryID,
-                    EntityID: e.EntityID,
-                    Entity: e.Entity
-                })),
-                Permissions: queryEntity.QueryPermissions.map(p => ({
-                    ID: p.ID,
-                    QueryID: p.QueryID,
-                    RoleID: p.RoleID,
-                    Role: p.Role
-                }))
-            };
+            return this.buildSuccessResult(queryEntity);
 
         } catch (err) {
             LogError(err);
@@ -949,20 +679,20 @@ export class MJQueryResolverExtended extends MJQueryResolver {
      * @param queryName - Name of the query to find
      * @param categoryID - Category ID (can be null)
      * @param contextUser - User context for database operations
-     * @returns The matching query info or null if not found
+     * @returns The matching query row or null if not found
      */
     private async findExistingQuery(
         provider: DatabaseProviderBase,
         queryName: string,
         categoryID: string | null,
         contextUser: UserInfo
-    ): Promise<any | null> {
+    ): Promise<QueryViewRow | null> {
         try {
             // Query database directly to avoid cache staleness issues
             const categoryFilter = categoryID ? `CategoryID='${categoryID}'` : 'CategoryID IS NULL';
             const nameFilter = `LOWER(Name) = LOWER('${queryName.replace(/'/g, "''")}')`;
 
-            const result = await provider.RunView({
+            const result = await provider.RunView<QueryViewRow>({
                 EntityName: 'MJ: Queries',
                 ExtraFilter: `${nameFilter} AND ${categoryFilter}`
             }, contextUser);

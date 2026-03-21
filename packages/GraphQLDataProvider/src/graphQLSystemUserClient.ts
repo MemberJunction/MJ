@@ -628,56 +628,59 @@ export class GraphQLSystemUserClient {
                 CreateQuerySystemUser(input: $input) {
                     Success
                     ErrorMessage
-                    ID
-                    Name
-                    Description
-                    CategoryID
-                    Category
-                    SQL
-                    Status
-                    QualityRank
-                    EmbeddingVector
-                    EmbeddingModelID
-                    EmbeddingModelName
-                    TechnicalDescription
-                    Fields {
+                    Query {
                         ID
-                        QueryID
                         Name
                         Description
-                        Sequence
-                        SQLBaseType
-                        SQLFullType
-                        SourceEntityID
-                        SourceEntity
-                        SourceFieldName
-                        IsComputed
-                        ComputationDescription
-                        IsSummary
-                        SummaryDescription
-                    }
-                    Parameters {
-                        ID
-                        QueryID
-                        Name
-                        Description
-                        Type
-                        IsRequired
-                        DefaultValue
-                        SampleValue
-                        ValidationFilters
-                    }
-                    Entities {
-                        ID
-                        QueryID
-                        EntityID
-                        Entity
-                    }
-                    Permissions {
-                        ID
-                        QueryID
-                        RoleID
-                        Role
+                        CategoryID
+                        Category
+                        SQL
+                        Status
+                        QualityRank
+                        EmbeddingVector
+                        EmbeddingModelID
+                        EmbeddingModel
+                        TechnicalDescription
+                        Reusable
+                        MJQueryFields_QueryIDArray {
+                            ID
+                            QueryID
+                            Name
+                            Description
+                            Sequence
+                            SQLBaseType
+                            SQLFullType
+                            SourceEntityID
+                            SourceEntity
+                            SourceFieldName
+                            IsComputed
+                            ComputationDescription
+                            IsSummary
+                            SummaryDescription
+                        }
+                        MJQueryParameters_QueryIDArray {
+                            ID
+                            QueryID
+                            Name
+                            Description
+                            Type
+                            IsRequired
+                            DefaultValue
+                            SampleValue
+                            ValidationFilters
+                        }
+                        MJQueryEntities_QueryIDArray {
+                            ID
+                            QueryID
+                            EntityID
+                            Entity
+                        }
+                        MJQueryPermissions_QueryIDArray {
+                            ID
+                            QueryID
+                            RoleID
+                            Role
+                        }
                     }
                 }
             }`
@@ -712,56 +715,59 @@ export class GraphQLSystemUserClient {
                 UpdateQuerySystemUser(input: $input) {
                     Success
                     ErrorMessage
-                    ID
-                    Name
-                    Description
-                    CategoryID
-                    Category
-                    SQL
-                    Status
-                    QualityRank
-                    EmbeddingVector
-                    EmbeddingModelID
-                    EmbeddingModelName
-                    TechnicalDescription
-                    Fields {
+                    Query {
                         ID
-                        QueryID
                         Name
                         Description
-                        Sequence
-                        SQLBaseType
-                        SQLFullType
-                        SourceEntityID
-                        SourceEntity
-                        SourceFieldName
-                        IsComputed
-                        ComputationDescription
-                        IsSummary
-                        SummaryDescription
-                    }
-                    Parameters {
-                        ID
-                        QueryID
-                        Name
-                        Description
-                        Type
-                        IsRequired
-                        DefaultValue
-                        SampleValue
-                        ValidationFilters
-                    }
-                    Entities {
-                        ID
-                        QueryID
-                        EntityID
-                        Entity
-                    }
-                    Permissions {
-                        ID
-                        QueryID
-                        RoleID
-                        Role
+                        CategoryID
+                        Category
+                        SQL
+                        Status
+                        QualityRank
+                        EmbeddingVector
+                        EmbeddingModelID
+                        EmbeddingModel
+                        TechnicalDescription
+                        Reusable
+                        MJQueryFields_QueryIDArray {
+                            ID
+                            QueryID
+                            Name
+                            Description
+                            Sequence
+                            SQLBaseType
+                            SQLFullType
+                            SourceEntityID
+                            SourceEntity
+                            SourceFieldName
+                            IsComputed
+                            ComputationDescription
+                            IsSummary
+                            SummaryDescription
+                        }
+                        MJQueryParameters_QueryIDArray {
+                            ID
+                            QueryID
+                            Name
+                            Description
+                            Type
+                            IsRequired
+                            DefaultValue
+                            SampleValue
+                            ValidationFilters
+                        }
+                        MJQueryEntities_QueryIDArray {
+                            ID
+                            QueryID
+                            EntityID
+                            Entity
+                        }
+                        MJQueryPermissions_QueryIDArray {
+                            ID
+                            QueryID
+                            RoleID
+                            Role
+                        }
                     }
                 }
             }`
@@ -1169,6 +1175,63 @@ export class GraphQLSystemUserClient {
      */
     private processAgentResult(agentResult: any): ExecuteAgentResult {
         return SafeJSONParse(agentResult) as ExecuteAgentResult;
+    }
+
+    /**
+     * Tests transient (unsaved) SQL with full composition + Nunjucks template processing.
+     * Calls the TestQuerySQL resolver which uses a read-only connection and enforces MaxRows limits.
+     *
+     * This enables external systems to test query SQL before saving to the database,
+     * including inline dependency resolution and parameter substitution.
+     *
+     * @param input - The transient query spec including SQL, parameters, dependencies, and MaxRows
+     * @returns Promise containing execution results with parsed data rows
+     */
+    public async TestQuerySQL(input: TestQuerySQLClientInput): Promise<TestQuerySQLClientResult> {
+        try {
+            const query = `query TestQuerySQL($input: TestQuerySQLInput!) {
+                TestQuerySQL(input: $input) {
+                    Success
+                    Results
+                    RowCount
+                    ExecutionTime
+                    ErrorMessage
+                    AppliedParameters
+                }
+            }`;
+
+            const result = await this.Client.request(query, { input }) as { TestQuerySQL: TestQuerySQLRawResult };
+
+            if (result && result.TestQuerySQL) {
+                return {
+                    Success: result.TestQuerySQL.Success,
+                    Results: result.TestQuerySQL.Results ? SafeJSONParse(result.TestQuerySQL.Results) : null,
+                    RowCount: result.TestQuerySQL.RowCount,
+                    ExecutionTime: result.TestQuerySQL.ExecutionTime,
+                    ErrorMessage: result.TestQuerySQL.ErrorMessage,
+                    AppliedParameters: result.TestQuerySQL.AppliedParameters
+                        ? SafeJSONParse(result.TestQuerySQL.AppliedParameters) as Record<string, string>
+                        : undefined,
+                };
+            } else {
+                return {
+                    Success: false,
+                    Results: null,
+                    RowCount: 0,
+                    ExecutionTime: 0,
+                    ErrorMessage: 'TestQuerySQL execution failed',
+                };
+            }
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::TestQuerySQL - Error testing query SQL - ${e}`);
+            return {
+                Success: false,
+                Results: null,
+                RowCount: 0,
+                ExecutionTime: 0,
+                ErrorMessage: e instanceof Error ? e.message : String(e),
+            };
+        }
     }
 
     /**
@@ -1964,7 +2027,8 @@ export interface CreateQueryInput {
 }
 
 /**
- * Type for query field information
+ * Type for query field information.
+ * Includes optional AI detection fields from CodeGen-generated types.
  */
 export interface QueryField {
     ID: string;
@@ -1981,10 +2045,13 @@ export interface QueryField {
     ComputationDescription?: string;
     IsSummary?: boolean;
     SummaryDescription?: string;
+    DetectionMethod?: string;
+    AutoDetectConfidenceScore?: number;
 }
 
 /**
- * Type for query parameter information
+ * Type for query parameter information.
+ * Includes optional AI detection fields from CodeGen-generated types.
  */
 export interface QueryParameter {
     ID: string;
@@ -1996,16 +2063,21 @@ export interface QueryParameter {
     DefaultValue?: string;
     SampleValue?: string;
     ValidationFilters?: string;
+    DetectionMethod?: string;
+    AutoDetectConfidenceScore?: number;
 }
 
 /**
- * Type for query entity information
+ * Type for query entity information.
+ * Includes optional AI detection fields from CodeGen-generated types.
  */
 export interface MJQueryEntity {
     ID: string;
     QueryID: string;
     EntityID: string;
     Entity?: string;
+    DetectionMethod?: string;
+    AutoDetectConfidenceScore?: number;
 }
 
 /**
@@ -2019,82 +2091,49 @@ export interface QueryPermission {
 }
 
 /**
- * Result type for CreateQuery mutation calls - contains creation success status and query data
+ * Query data returned inside a mutation result.
+ * Mirrors the CodeGen-generated MJQuery_ type using CodeGen array naming conventions.
+ * New entity fields are automatically available without manual sync.
  */
-export interface CreateQueryResult {
-    /**
-     * Whether the query creation was successful
-     */
-    Success: boolean;
-    /**
-     * Error message if the creation failed (optional)
-     */
-    ErrorMessage?: string;
-    /**
-     * Unique identifier of the created query (optional)
-     */
-    ID?: string;
-    /**
-     * Display name of the created query (optional)
-     */
-    Name?: string;
-    /**
-     * Description of the created query (optional)
-     */
+export interface QueryMutationQueryData {
+    ID: string;
+    Name: string;
     Description?: string;
-    /**
-     * Category ID the query belongs to (optional)
-     */
     CategoryID?: string;
-    /**
-     * Category name the query belongs to (optional)
-     */
     Category?: string;
-    /**
-     * SQL query text (optional)
-     */
     SQL?: string;
-    /**
-     * Query status: Pending, Approved, Rejected, or Expired (optional)
-     */
-    Status?: string;
-    /**
-     * Quality rank indicator (optional)
-     */
-    QualityRank?: number;
-    /**
-     * Embedding vector for semantic search (optional)
-     */
-    EmbeddingVector?: string;
-    /**
-     * ID of the embedding model used (optional)
-     */
-    EmbeddingModelID?: string;
-    /**
-     * Name of the embedding model used (optional)
-     */
-    EmbeddingModelName?: string;
-    /**
-     * Technical documentation of the query logic, performance considerations, and parameter usage (optional)
-     */
     TechnicalDescription?: string;
-    /**
-     * Array of fields discovered in the query (optional)
-     */
-    Fields?: QueryField[];
-    /**
-     * Array of parameters found in the query template (optional)
-     */
-    Parameters?: QueryParameter[];
-    /**
-     * Array of entities referenced by the query (optional)
-     */
-    Entities?: MJQueryEntity[];
-    /**
-     * Array of permissions created for the query (optional)
-     */
-    Permissions?: QueryPermission[];
+    Status: string;
+    QualityRank?: number;
+    EmbeddingVector?: string;
+    EmbeddingModelID?: string;
+    EmbeddingModel?: string;
+    Reusable?: boolean;
+    /** Related fields — uses CodeGen array naming convention */
+    MJQueryFields_QueryIDArray?: QueryField[];
+    /** Related parameters — uses CodeGen array naming convention */
+    MJQueryParameters_QueryIDArray?: QueryParameter[];
+    /** Related entities — uses CodeGen array naming convention */
+    MJQueryEntities_QueryIDArray?: MJQueryEntity[];
+    /** Related permissions — uses CodeGen array naming convention */
+    MJQueryPermissions_QueryIDArray?: QueryPermission[];
+    /** Catch-all for new fields added by CodeGen */
+    [key: string]: unknown;
 }
+
+/**
+ * Result type for Create and Update query mutation calls.
+ * On success, Query contains the full query data. On failure, Query is null.
+ */
+export interface QueryMutationResult {
+    Success: boolean;
+    ErrorMessage?: string;
+    Query?: QueryMutationQueryData;
+}
+
+/** @deprecated Use QueryMutationResult instead */
+export type CreateQueryResult = QueryMutationResult;
+
 
 /**
  * Input type for UpdateQuery mutation calls - updates an existing query
@@ -2162,83 +2201,8 @@ export interface UpdateQueryInput {
     Permissions?: QueryPermissionInput[];
 }
 
-/**
- * Result type for UpdateQuery mutation calls - contains update success status and query data
- */
-export interface UpdateQueryResult {
-    /**
-     * Whether the query update was successful
-     */
-    Success: boolean;
-    /**
-     * Error message if the update failed (optional)
-     */
-    ErrorMessage?: string;
-    /**
-     * Unique identifier of the updated query (optional)
-     */
-    ID?: string;
-    /**
-     * Display name of the updated query (optional)
-     */
-    Name?: string;
-    /**
-     * Description of the updated query (optional)
-     */
-    Description?: string;
-    /**
-     * Category ID the query belongs to (optional)
-     */
-    CategoryID?: string;
-    /**
-     * Category name the query belongs to (optional)
-     */
-    Category?: string;
-    /**
-     * SQL query text (optional)
-     */
-    SQL?: string;
-    /**
-     * Query status: Pending, Approved, Rejected, or Expired (optional)
-     */
-    Status?: string;
-    /**
-     * Quality rank indicator (optional)
-     */
-    QualityRank?: number;
-    /**
-     * Embedding vector for semantic search (optional)
-     */
-    EmbeddingVector?: string;
-    /**
-     * ID of the embedding model used (optional)
-     */
-    EmbeddingModelID?: string;
-    /**
-     * Name of the embedding model used (optional)
-     */
-    EmbeddingModelName?: string;
-    /**
-     * Technical documentation of the query logic, performance considerations, and parameter usage (optional)
-     */
-    TechnicalDescription?: string;
-    /**
-     * Array of fields discovered in the query (optional)
-     */
-    Fields?: QueryField[];
-    /**
-     * Array of parameters found in the query template (optional)
-     */
-    Parameters?: QueryParameter[];
-    /**
-     * Array of entities referenced by the query (optional)
-     */
-    Entities?: MJQueryEntity[];
-    /**
-     * Array of permissions for the query (optional)
-     */
-    Permissions?: QueryPermission[];
-}
+/** @deprecated Use QueryMutationResult instead */
+export type UpdateQueryResult = QueryMutationResult;
 
 /**
  * Delete options input type for controlling delete behavior.
@@ -2292,4 +2256,70 @@ export interface DeleteQueryResult {
     Name?: string;
 }
 
- 
+/**
+ * Input type for inline dependency queries used in TestQuerySQL.
+ * Self-referencing to support recursive dependency trees.
+ */
+export interface QueryDependencySpecClientInput {
+    /** Query name as referenced in the composition token */
+    Name: string;
+    /** Category path as referenced in the composition token (e.g., "/Analytics/Sales/") */
+    CategoryPath: string;
+    /** The raw SQL for this dependency */
+    SQL: string;
+    /** Whether this dependency uses Nunjucks template syntax */
+    UsesTemplate?: boolean;
+    /** Parameters for this dependency's Nunjucks templates */
+    Parameters?: Record<string, string>;
+    /** Nested dependencies (recursive) */
+    Dependencies?: QueryDependencySpecClientInput[];
+}
+
+/**
+ * Input type for TestQuerySQL method calls — tests transient SQL with full
+ * composition + Nunjucks template processing without requiring a saved query.
+ */
+export interface TestQuerySQLClientInput {
+    /** The raw SQL — may contain {{query:"..."}} and {{ param }} tokens */
+    SQL: string;
+    /** Parameter values for Nunjucks template substitution */
+    Parameters?: Record<string, string>;
+    /** Whether this query uses Nunjucks template syntax */
+    UsesTemplate?: boolean;
+    /** Inline dependency queries for composition resolution */
+    Dependencies?: QueryDependencySpecClientInput[];
+    /** Max rows to return (default: 100) */
+    MaxRows?: number;
+}
+
+/**
+ * Raw result type from the GraphQL TestQuerySQL resolver (before JSON parsing).
+ * Results and AppliedParameters are JSON strings on the wire.
+ */
+interface TestQuerySQLRawResult {
+    Success: boolean;
+    Results?: string;
+    RowCount: number;
+    ExecutionTime: number;
+    ErrorMessage?: string;
+    AppliedParameters?: string;
+}
+
+/**
+ * Parsed result type for TestQuerySQL method calls — Results and AppliedParameters
+ * are deserialized from JSON strings into their native types.
+ */
+export interface TestQuerySQLClientResult {
+    /** Whether the query executed successfully */
+    Success: boolean;
+    /** Parsed result rows, or null if execution failed */
+    Results: unknown[] | null;
+    /** Number of rows returned */
+    RowCount: number;
+    /** Execution time in milliseconds */
+    ExecutionTime: number;
+    /** Error message if execution failed */
+    ErrorMessage?: string;
+    /** Parsed applied parameters including defaults */
+    AppliedParameters?: Record<string, string>;
+}

@@ -93,6 +93,12 @@ export abstract class SQLDialect {
      */
     abstract get PlatformKey(): DatabasePlatform;
 
+    /**
+     * Returns the dialect name used by node-sql-parser for AST parsing.
+     * SQL Server: 'TransactSQL', PostgreSQL: 'PostgresQL', etc.
+     */
+    abstract get ParserDialect(): string;
+
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     /**
@@ -233,6 +239,14 @@ export abstract class SQLDialect {
      * SQL Server: "WITH", PostgreSQL: "WITH RECURSIVE"
      */
     abstract RecursiveCTESyntax(): string;
+
+    /**
+     * Whether the platform allows ORDER BY inside CTE definitions without
+     * TOP, OFFSET, or FOR XML.
+     * SQL Server: false (ORDER BY in CTEs is illegal without TOP/OFFSET/FOR XML)
+     * PostgreSQL: true (ORDER BY in CTEs is always legal)
+     */
+    abstract get AllowsOrderByInCTE(): boolean;
 
     // ─── Data Types ──────────────────────────────────────────────────
 
