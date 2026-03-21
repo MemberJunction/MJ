@@ -132,6 +132,23 @@ export class FKDetector {
         columnCandidates.length = MAX_TARGETS_PER_COLUMN;
       }
 
+      // Fan-out penalty: when a source column has multiple FK targets,
+      // reduce confidence proportionally. This ensures multi-target FKs
+      // drop below the interim ground truth lock threshold (90) so the
+      // pruner can evaluate and pick the correct one.
+      if (columnCandidates.length > 1) {
+        let fanoutMultiplier = 1.0;
+        if (columnCandidates.length === 2) fanoutMultiplier = 0.85;
+        else if (columnCandidates.length === 3) fanoutMultiplier = 0.75;
+        else fanoutMultiplier = 0.65;
+        
+        for (const c of columnCandidates) {
+          const before = c.confidence;
+          c.confidence = Math.round(c.confidence * fanoutMultiplier);
+          console.log(`[FKDetector] Fan-out penalty: ${sourceColumn.name} -> ${c.targetTable}.${c.targetColumn} conf ${before} -> ${c.confidence} (x${fanoutMultiplier}, ${columnCandidates.length} targets)`);
+        }
+      }
+
       candidates.push(...columnCandidates);
     }
 

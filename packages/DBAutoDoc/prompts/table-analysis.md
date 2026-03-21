@@ -165,6 +165,8 @@ Based on the evidence above, generate a JSON response with this exact structure:
    - Specify confidence (0-1 scale) based on evidence strength
    - Example: If `prd_id` exists, add: `{"columnName": "prd_id", "referencesSchema": "inv", "referencesTable": "prd", "referencesColumn": "prd_id", "confidence": 0.95}`
    - **Leave empty array if no foreign keys detected**
+   - **Inheritance/specialization**: When a column could reference either a generic base table (e.g., BusinessEntity) or a more specialized table (e.g., Person, Employee, Vendor) that inherits from it, **always prefer the most specialized table**. The specialized table is the one that adds domain-specific columns beyond the base table. For example, `Employee.BusinessEntityID` should reference `Person.BusinessEntityID` (not `BusinessEntity.BusinessEntityID`) because Person is the specialized entity that Employee relates to.
+   - **Polymorphic FKs**: Some columns may reference different tables depending on the row (e.g., a `ReferenceOrderID` that could point to a SalesOrder, PurchaseOrder, or WorkOrder). If you detect this pattern, pick the **single most common/likely target** and note the polymorphic nature in your reasoning. Do not create multiple FK entries for the same column pointing to different tables unless you are highly confident each is valid.
 7. **Business Domain**: Infer from table name and purpose (e.g., "Sales", "HR", "Inventory", "Billing", "Security")
 8. **Parent Table Insights**: If analyzing this child table reveals new information about parent tables, include it. Examples:
    - Discovering enum values in the parent (e.g., "Member table has a 'Type' column with values: Individual, Corporate, Student")

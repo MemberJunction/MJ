@@ -199,3 +199,26 @@ Add a `Map<string, number>` cache to `ColumnStatsCache` for value overlap result
 - Gate 4 multipliers may need tuning on different databases. The 0.1/0.5/2.0/5.0 thresholds are based on AdventureWorks patterns and should be validated on MSTA and other databases.
 - Gate 6 threshold (75%) provides generous headroom for messy databases. Could be tuned per-database if needed, though 75% should be universally safe.
 - Gate 6 threshold (75%) provides generous headroom for messy databases. Could be tuned per-database if needed, though 75% should be universally safe.
+
+## FK Confidence Adjustments (Post-Run 014)
+
+### Fan-Out Penalty (Deterministic)
+When a source column has multiple FK candidate targets, apply a confidence multiplier:
+- 1 target: 1.0x (no change)
+- 2 targets: 0.85x (e.g., 100 → 85)
+- 3 targets: 0.75x (e.g., 100 → 75)  
+- 4+ targets: 0.65x
+
+**Rationale**: 15 of 22 extra FKs are sibling fan-outs where one source column matches 2-3 valid PK targets. The penalty drops them below the 90 lock threshold so the pruner can evaluate them. 11 correct FKs also have multiple targets — they get the same penalty, allowing the pruner to pick the winner.
+
+**Safety**: Both correct and extra FKs for the same source column are penalized equally. No FKs are removed — they just become pruner-eligible.
+
+### Inheritance/Specialization Prompt Hint
+Added guidance to table-analysis prompt: when a column could reference either a generic base table or a specialized child table, prefer the specialized table. Example: Employee.BusinessEntityID → Person.BusinessEntityID (not BusinessEntity.BusinessEntityID).
+
+**Impact**: Addresses 2 LLM extras and potentially recovers 4 missed FKs (all BusinessEntityID inheritance pattern).
+
+### Polymorphic FK Prompt Guidance  
+Added guidance: when a column references different tables per row (e.g., ReferenceOrderID → SalesOrder/PurchaseOrder/WorkOrder), pick the single most likely target rather than creating multiple entries.
+
+**Impact**: Addresses 3 LLM extras from TransactionHistoryArchive.ReferenceOrderID.
