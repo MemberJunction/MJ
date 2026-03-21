@@ -2527,6 +2527,7 @@ export class AIPromptRunner {
       if (prompt.PresencePenalty != null) promptRun.PresencePenalty = prompt.PresencePenalty;
       if (prompt.Seed != null) promptRun.Seed = prompt.Seed;
       if (prompt.StopSequences) promptRun.StopSequences = prompt.StopSequences;
+      if (prompt.AssistantPrefill) promptRun.AssistantPrefill = prompt.AssistantPrefill;
       if (prompt.IncludeLogProbs != null) promptRun.LogProbs = prompt.IncludeLogProbs;
       if (prompt.TopLogProbs != null) promptRun.TopLogProbs = prompt.TopLogProbs;
       
@@ -2568,9 +2569,16 @@ export class AIPromptRunner {
       if (params.data || params.templateData || systemPromptText) {
         const messages: ChatMessage[] = [];
         if (systemPromptText) {
-          messages.push({ 
+          // Build the system prompt content, including prefill fallback if applicable
+          let systemContent = systemPromptText;
+          if (prompt.AssistantPrefill && prompt.PrefillFallbackMode === 'SystemInstruction') {
+            const fallbackTemplate = this.resolvePrefillFallbackText(model, vendorId);
+            const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, prompt.AssistantPrefill);
+            systemContent += '\n\n' + fallbackInstruction;
+          }
+          messages.push({
             role: 'system',
-            content: systemPromptText
+            content: systemContent
           });
           messages.push(...params.conversationMessages || []);
         }
