@@ -230,6 +230,23 @@ export class AnthropicLLM extends BaseLLM {
 
      
     /**
+     * Appends an assistant prefill message to the messages array if prefill text is provided.
+     * This causes the model to continue generating from where the prefill ends.
+     * @param messages The original messages array
+     * @param prefill The prefill text, or undefined to skip
+     * @returns A new messages array with the prefill appended, or the original if no prefill
+     */
+    private appendPrefillMessage(messages: ChatMessage[], prefill: string | undefined): ChatMessage[] {
+        if (!prefill) {
+            return messages;
+        }
+        return [
+            ...messages,
+            { role: ChatMessageRole.assistant, content: prefill }
+        ];
+    }
+
+    /**
      * Utility method to map a MemberJunction role to OpenAI role
      *  - user maps to user
      *  - assistant maps to assistant
@@ -271,12 +288,15 @@ export class AnthropicLLM extends BaseLLM {
                 }
             }
 
+            // Append assistant prefill message if specified
+            const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, params.assistantPrefill);
+
             // Create the request parameters
             const createParams: MessageCreateParams = {
                 model: params.model,
                 max_tokens: maxTokens,
                 stream: true, // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
-                messages: this.formatMessagesWithCaching(nonSystemMsgs, params.enableCaching || true)
+                messages: this.formatMessagesWithCaching(messagesForApi, params.enableCaching || true)
             };
 
             // Add temperature if specified. Note that Claude 4.5 Opus doesn't support temperature changes when extended thinking is enabled.
@@ -498,9 +518,10 @@ export class AnthropicLLM extends BaseLLM {
             );
         }
         
-        // Add messages with caching applied
+        // Append assistant prefill message if specified, then add messages with caching applied
+        const messagesForApi = this.appendPrefillMessage(nonSystemMsgs, params.assistantPrefill);
         createParams.messages = this.formatMessagesWithCaching(
-            nonSystemMsgs, 
+            messagesForApi,
             params.enableCaching
         );
         

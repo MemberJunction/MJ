@@ -69,13 +69,21 @@ export class BedrockLLM extends BaseLLM {
       
       if (modelId.startsWith('anthropic.')) {
         // Anthropic Claude models
+        const claudeMessages = [...bedrockParams.messages];
+        // Append assistant prefill if specified — Claude on Bedrock supports this natively
+        if (params.assistantPrefill) {
+          claudeMessages.push({ role: 'assistant', content: params.assistantPrefill });
+        }
         requestBody = {
           anthropic_version: "bedrock-2023-05-31",
           max_tokens: params.maxOutputTokens || 1024,
-          messages: bedrockParams.messages,
+          messages: claudeMessages,
           temperature: params.temperature || 0.7,
           top_p: 0.9
         };
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+          requestBody.stop_sequences = params.stopSequences;
+        }
       } else if (modelId.startsWith('ai21.')) {
         // AI21 models
         requestBody = {
@@ -84,6 +92,9 @@ export class BedrockLLM extends BaseLLM {
           temperature: params.temperature || 0.7,
           topP: 0.9
         };
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+          requestBody.stopSequences = params.stopSequences;
+        }
       } else if (modelId.startsWith('amazon.titan-')) {
         // Amazon Titan models
         requestBody = {
@@ -94,6 +105,9 @@ export class BedrockLLM extends BaseLLM {
             topP: 0.9
           }
         };
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+          requestBody.textGenerationConfig.stopSequences = params.stopSequences;
+        }
       } else if (modelId.startsWith('meta.')) {
         // Meta Llama models
         requestBody = {
@@ -102,10 +116,11 @@ export class BedrockLLM extends BaseLLM {
           temperature: params.temperature || 0.7,
           top_p: 0.9
         };
+        // Note: Meta Llama models on Bedrock don't support stop sequences in the request body
       } else {
         throw new Error(`Unsupported model provider for Bedrock: ${modelId}`);
       }
-      
+
       // Invoke the model
       const command = new InvokeModelCommand({
         modelId: modelId,
@@ -211,13 +226,21 @@ export class BedrockLLM extends BaseLLM {
     
     if (modelId.startsWith('anthropic.')) {
       // Anthropic Claude models
+      const claudeMessages = [...bedrockParams.messages];
+      // Append assistant prefill if specified — Claude on Bedrock supports this natively
+      if (params.assistantPrefill) {
+        claudeMessages.push({ role: 'assistant', content: params.assistantPrefill });
+      }
       requestBody = {
         anthropic_version: "bedrock-2023-05-31",
         max_tokens: params.maxOutputTokens || 1024,
-        messages: bedrockParams.messages,
+        messages: claudeMessages,
         temperature: params.temperature || 0.7,
         top_p: 0.9
       };
+      if (params.stopSequences != null && params.stopSequences.length > 0) {
+        requestBody.stop_sequences = params.stopSequences;
+      }
     } else if (modelId.startsWith('ai21.')) {
       // AI21 models
       requestBody = {
@@ -226,6 +249,9 @@ export class BedrockLLM extends BaseLLM {
         temperature: params.temperature || 0.7,
         topP: 0.9
       };
+      if (params.stopSequences != null && params.stopSequences.length > 0) {
+        requestBody.stopSequences = params.stopSequences;
+      }
     } else if (modelId.startsWith('amazon.titan-')) {
       // Amazon Titan models
       requestBody = {
@@ -236,6 +262,9 @@ export class BedrockLLM extends BaseLLM {
           topP: 0.9
         }
       };
+      if (params.stopSequences != null && params.stopSequences.length > 0) {
+        requestBody.textGenerationConfig.stopSequences = params.stopSequences;
+      }
     } else if (modelId.startsWith('meta.')) {
       // Meta Llama models
       requestBody = {
@@ -244,10 +273,11 @@ export class BedrockLLM extends BaseLLM {
         temperature: params.temperature || 0.7,
         top_p: 0.9
       };
+      // Note: Meta Llama models on Bedrock don't support stop sequences in the request body
     } else {
       throw new Error(`Unsupported model provider for Bedrock: ${modelId}`);
     }
-    
+
     // Invoke the model with streaming
     const command = new InvokeModelWithResponseStreamCommand({
       modelId: modelId,

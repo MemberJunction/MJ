@@ -49,8 +49,8 @@ export class MistralLLM extends BaseLLM {
             }
         }
 
-        // Convert messages to format expected by Mistral
-        const messages = this.MapMJMessagesToMistral(params.messages);
+        // Convert messages to format expected by Mistral, with optional prefill
+        const messages = this.MapMJMessagesToMistral(params.messages, params.assistantPrefill);
         // Create params object
         const params_obj: any = {
             model: params.model,
@@ -182,9 +182,9 @@ export class MistralLLM extends BaseLLM {
             responseFormat = { type: "json_object" };
         }
         
-        // Convert messages to format expected by Mistral
-        const messages = this.MapMJMessagesToMistral(params.messages);
-        
+        // Convert messages to format expected by Mistral, with optional prefill
+        const messages = this.MapMJMessagesToMistral(params.messages, params.assistantPrefill);
+
         // Create params object
         const params_obj: ChatCompletionStreamRequest = {
             model: params.model,
@@ -405,15 +405,15 @@ export class MistralLLM extends BaseLLM {
         throw new Error("Method not implemented.");
     }
 
-    protected MapMJMessagesToMistral(messages: ChatMessage[]): Array<any> {
-        const returnMessages = messages.map(m => {
+    protected MapMJMessagesToMistral(messages: ChatMessage[], assistantPrefill?: string): Array<any> {
+        const returnMessages: Array<any> = messages.map(m => {
             if (typeof m.content === 'string') {
                 return {
                     role: m.role,
                     content: m.content
                 };
             } else {
-                return { 
+                return {
                     role: m.role,
                     content: m.content.map(block => {
                         let mistralType = undefined;
@@ -439,15 +439,29 @@ export class MistralLLM extends BaseLLM {
                 }
             }
         });
-        
-        // Mistral expects the last message to either be a user message or a tool message
-        if (returnMessages.length > 0) {
-            const lastMessage = returnMessages[returnMessages.length - 1];
-            if (lastMessage.role !== 'user' /*&& lastMessage.role !== 'tool' -- in future if BaseLLM supports tool messages*/) {
-                returnMessages.push({
-                    role: 'user',
-                    content: 'ok' // Placeholder message to satisfy Mistral's requirement
-                })
+
+        // If assistant prefill is specified, append it with prefix: true
+        // This tells Mistral to treat it as the beginning of the assistant's response
+        if (assistantPrefill) {
+            // Mistral's prefix API flag tells the model this is the start of its response
+            // The 'prefix' property is Mistral-specific and not part of the MJ ChatMessage type
+            const prefillMessage: Record<string, unknown> = {
+                role: 'assistant',
+                content: assistantPrefill,
+                prefix: true
+            };
+            returnMessages.push(prefillMessage);
+        } else {
+            // Mistral expects the last message to either be a user message or a tool message
+            // Only enforce this when NOT using prefill (prefill deliberately ends with an assistant message)
+            if (returnMessages.length > 0) {
+                const lastMessage = returnMessages[returnMessages.length - 1];
+                if (lastMessage.role !== 'user' /*&& lastMessage.role !== 'tool' -- in future if BaseLLM supports tool messages*/) {
+                    returnMessages.push({
+                        role: 'user',
+                        content: 'ok' // Placeholder message to satisfy Mistral's requirement
+                    });
+                }
             }
         }
         return returnMessages;

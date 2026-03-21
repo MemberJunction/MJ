@@ -141,6 +141,11 @@ export class OllamaLLM extends BaseLLM {
             // Convert MJ messages to Ollama format with proper image handling
             const messages = this.convertToOllamaMessages(params.messages);
 
+            // Append assistant prefill if specified — Ollama supports this natively
+            if (params.assistantPrefill) {
+                messages.push({ role: 'assistant', content: params.assistantPrefill });
+            }
+
             // Create chat request parameters
             const chatRequest: ChatRequest & { stream?: false } = {
                 model: params.model,
@@ -295,6 +300,11 @@ export class OllamaLLM extends BaseLLM {
 
         // Convert MJ messages to Ollama format with proper image handling
         const messages = this.convertToOllamaMessages(params.messages);
+
+        // Append assistant prefill if specified — Ollama supports this natively
+        if (params.assistantPrefill) {
+            messages.push({ role: 'assistant', content: params.assistantPrefill });
+        }
 
         // Create streaming chat request parameters
         const chatRequest: ChatRequest = {
