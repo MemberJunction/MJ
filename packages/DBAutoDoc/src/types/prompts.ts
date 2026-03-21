@@ -202,3 +202,10 @@ export interface DatabaseLevelObservation {
   impact: string;
   recommendation: string;
 }
+
+export interface PKPruningProposal {
+  index: number;
+  action: "keep" | "remove";
+  reasoning: string;
+}
+
