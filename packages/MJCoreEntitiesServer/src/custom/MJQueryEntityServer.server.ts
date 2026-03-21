@@ -21,7 +21,8 @@ import {
     removeCollate,
 } from "@memberjunction/sql-converter";
 import { EmbedTextLocalHelper } from "./util";
-import { SQLParser } from "@memberjunction/sql-parser";
+import { MJSQLParser } from "@memberjunction/sql-parser";
+import type { MJParameterInfo } from "@memberjunction/sql-parser";
 
 interface ExtractedParameter {
     name: string;
@@ -257,113 +258,168 @@ export class MJQueryEntityServer extends MJQueryEntity {
     
     private async extractAndSyncData(): Promise<void> {
         try {
-            // Check if SQL contains Nunjucks syntax (determines if query uses templates/parameters)
-            // Strip out {{query:"..."}} composition tokens first — they are NOT Nunjucks parameters
-            const sqlWithoutCompositionTokens = this.SQL ? this.SQL.replace(/\{\{query:"[^"]+"\}\}/g, '') : '';
-            const hasNunjucksSyntax = sqlWithoutCompositionTokens && (
-                sqlWithoutCompositionTokens.includes('{{') ||
-                sqlWithoutCompositionTokens.includes('{%') ||
-                sqlWithoutCompositionTokens.includes('{#')
-            );
+            if (!this.SQL) {
+                this.UsesTemplate = false;
+                return;
+            }
 
-            // Ensure AIEngine is configured
-            await AIEngine.Instance.Config(false, this.ContextCurrentUser, this.ProviderToUse as any as IMetadataProvider);
+            // ── Deterministic analysis via MJSQLParser (source of truth) ──
+            const analysis = MJSQLParser.Analyze(this.SQL);
+            const deterministicParams = MJSQLParser.ExtractParameterInfo(this.SQL);
+            const hasTemplateParameters = analysis.hasTemplateExpressions && deterministicParams.length > 0;
 
-            // Find the SQL Query Parameter Extraction prompt
+            // Extract entity metadata deterministically (for LLM context and entity sync)
+            const entityMetadata = await this.extractEntityMetadataFromSQL();
+
+            // ── LLM enrichment (descriptions and sample values only) ──
+            const llmResult = await this.runLLMEnrichment(entityMetadata);
+
+            // ── Merge: deterministic structure + LLM descriptions ──
+            const syncPromises: Promise<void>[] = [];
+
+            // Parameters: MJSQLParser provides name, type, isRequired, defaultValue.
+            // LLM provides description and sampleValue as enrichment.
+            if (hasTemplateParameters) {
+                const enrichedParams = this.mergeParametersWithLLM(deterministicParams, llmResult);
+                syncPromises.push(this.syncQueryParameters(enrichedParams));
+            } else {
+                syncPromises.push(this.removeAllQueryParameters());
+            }
+
+            // Fields: deterministic for SELECT *, LLM for explicit column lists
+            const selectStarFields = this.buildFieldsForSelectStar();
+            if (selectStarFields) {
+                syncPromises.push(this.syncQueryFields(selectStarFields));
+            } else if (llmResult?.selectClause && Array.isArray(llmResult.selectClause) && llmResult.selectClause.length > 0) {
+                syncPromises.push(this.syncQueryFields(llmResult.selectClause));
+            }
+
+            // Entities: deterministic SQL parsing (more reliable than LLM)
+            if (entityMetadata.length > 0) {
+                syncPromises.push(this.syncQueryEntities(entityMetadata));
+            }
+
+            // Dependencies: deterministic composition token parsing (no LLM)
+            syncPromises.push(this.extractAndSyncQueryDependencies());
+
+            await Promise.all(syncPromises);
+
+            this.UsesTemplate = hasTemplateParameters;
+
+        } catch (e) {
+            LogError(`Query "${this.Name}" extraction error:`, e);
+            this.UsesTemplate = false;
+        }
+    }
+
+    /**
+     * Runs the LLM enrichment prompt to get descriptions and sample values.
+     * Returns null if the LLM is unavailable or fails (non-fatal).
+     */
+    private async runLLMEnrichment(
+        entityMetadata: Array<{ name: string; schemaName: string; baseView: string; fields: Array<{ name: string; type: string; isPrimaryKey: boolean }> }>
+    ): Promise<ParameterExtractionResult | null> {
+        try {
+            await AIEngine.Instance.Config(false, this.ContextCurrentUser, this.ProviderToUse as unknown as IMetadataProvider);
+
             const aiPrompt = AIEngine.Instance.Prompts.find(p =>
                 p.Name === 'SQL Query Parameter Extraction' &&
                 p.Category === 'MJ: System'
             );
 
             if (!aiPrompt) {
-                // Prompt not configured, non-fatal, just warn and return
-                console.warn('AI prompt for SQL Query Parameter Extraction not found. Skipping query metadata extraction.');
-                this.UsesTemplate = false;
-                return;
+                console.warn('AI prompt for SQL Query Parameter Extraction not found. Descriptions will use heuristics.');
+                return null;
             }
 
-            // First, do a quick parse to identify entities from the SQL
-            // We'll use this to provide entity metadata to the LLM for better type inference
-            const entityMetadata = await this.extractEntityMetadataFromSQL();
-
-            // Prepare prompt data - we'll send the SQL as templateText since the prompt
-            // is designed to extract both parameters (if any) and query fields/entities
-            const promptData = {
-                templateText: this.SQL,
-                entities: entityMetadata
-            };
-
-            // Execute the prompt using AIPromptRunner
             const promptRunner = new AIPromptRunner();
             const params = new AIPromptParams();
             params.prompt = aiPrompt;
-            params.data = promptData;
+            params.data = { templateText: this.SQL, entities: entityMetadata };
             params.contextUser = this.ContextCurrentUser;
 
             const result = await promptRunner.ExecutePrompt<ParameterExtractionResult>(params);
 
             if (!result.success || !result.result) {
-                // AI extraction failed - log details for debugging
-                console.warn(`Query "${this.Name}" - AI query metadata extraction failed:`, {
-                    success: result.success,
-                    status: result.status,
-                    errorMessage: result.errorMessage,
-                    hasResult: !!result.result
-                });
-                this.UsesTemplate = false;
-                return;
+                console.warn(`Query "${this.Name}" - LLM enrichment failed, using heuristic descriptions.`);
+                return null;
             }
 
-            // Process the extracted data in parallel
-            const syncPromises: Promise<void>[] = [];
-
-            // Sync parameters if we have Nunjucks syntax and parameters were extracted
-            // For non-templated queries, ensure any stale parameters are removed
-            if (hasNunjucksSyntax && result.result.parameters && Array.isArray(result.result.parameters)) {
-                syncPromises.push(this.syncQueryParameters(result.result.parameters));
-            } else {
-                // No Nunjucks syntax - remove any existing parameters
-                syncPromises.push(this.removeAllQueryParameters());
-            }
-
-            // For SELECT * queries, use deterministic field extraction from entity metadata
-            // instead of the AI (which can't enumerate all columns from *)
-            // For SELECT * queries, use deterministic field extraction from entity metadata
-            // instead of the AI (which can't enumerate all columns from *)
-            const selectStarFields = this.buildFieldsForSelectStar();
-            if (selectStarFields) {
-                syncPromises.push(this.syncQueryFields(selectStarFields));
-            } else if (result.result.selectClause && Array.isArray(result.result.selectClause) && result.result.selectClause.length > 0) {
-                syncPromises.push(this.syncQueryFields(result.result.selectClause));
-            }
-
-            // Use deterministic SQL parsing for entity extraction instead of LLM
-            // entityMetadata is already extracted above and is more reliable than LLM extraction
-            if (entityMetadata.length > 0) {
-                syncPromises.push(this.syncQueryEntities(entityMetadata));
-            }
-
-            // Sync query dependencies from {{query:"..."}} composition tokens (deterministic, no LLM)
-            syncPromises.push(this.extractAndSyncQueryDependencies());
-
-            await Promise.all(syncPromises);
-
-            // Update UsesTemplate flag based on whether Nunjucks syntax exists and parameters were found
-            this.UsesTemplate = hasNunjucksSyntax &&
-                result.result.parameters &&
-                Array.isArray(result.result.parameters) &&
-                result.result.parameters.length > 0;
-
+            return result.result;
         } catch (e) {
-            // Unexpected error during extraction - log for debugging but don't fail the save
-            LogError(`Query "${this.Name}" AI extraction error:`, e);
-            this.UsesTemplate = false;
+            console.warn(`Query "${this.Name}" - LLM enrichment error, using heuristic descriptions:`, e);
+            return null;
+        }
+    }
+
+    /**
+     * Merges deterministic parameter extraction (MJSQLParser) with LLM enrichment.
+     *
+     * MJSQLParser is the authority for: name, type, isRequired, defaultValue
+     * LLM provides: description, sampleValue (with heuristic fallbacks if LLM unavailable)
+     */
+    private mergeParametersWithLLM(
+        deterministicParams: MJParameterInfo[],
+        llmResult: ParameterExtractionResult | null
+    ): ExtractedParameter[] {
+        const llmParams = llmResult?.parameters ?? [];
+
+        return deterministicParams.map(dp => {
+            // Find matching LLM parameter by name (case-insensitive)
+            const llmMatch = llmParams.find(lp => lp.name.toLowerCase() === dp.name.toLowerCase());
+
+            return {
+                name: dp.name,
+                type: dp.type === 'unknown' ? (llmMatch?.type ?? 'string') : dp.type,
+                isRequired: dp.isRequired,
+                description: llmMatch?.description ?? this.generateParameterDescription(dp),
+                usage: llmMatch?.usage ?? dp.usageLocations,
+                defaultValue: dp.defaultValue !== null ? String(dp.defaultValue) : (llmMatch?.defaultValue ?? null),
+                sampleValue: llmMatch?.sampleValue ?? this.generateSampleValue(dp),
+            };
+        });
+    }
+
+    /**
+     * Generates a deterministic description for a parameter when LLM is unavailable.
+     * Uses the parameter name, type, and filter information to create a meaningful description.
+     */
+    private generateParameterDescription(param: MJParameterInfo): string {
+        const typeDescriptions: Record<string, string> = {
+            'string': 'text value',
+            'number': 'numeric value',
+            'date': 'date value',
+            'boolean': 'true/false flag',
+            'array': 'list of values',
+        };
+
+        const typeDesc = typeDescriptions[param.type] || 'value';
+        const requiredDesc = param.isRequired ? 'Required' : 'Optional';
+        const humanName = param.name.replace(/([A-Z])/g, ' $1').trim();
+        const defaultDesc = param.defaultValue !== null ? ` (default: ${param.defaultValue})` : '';
+
+        return `${requiredDesc} ${typeDesc} for ${humanName}${defaultDesc}`;
+    }
+
+    /**
+     * Generates a deterministic sample value based on the parameter type.
+     */
+    private generateSampleValue(param: MJParameterInfo): string | null {
+        if (param.defaultValue !== null) return String(param.defaultValue);
+
+        switch (param.type) {
+            case 'string': return 'Example';
+            case 'number': return '10';
+            case 'date': return '2024-01-01';
+            case 'boolean': return 'true';
+            case 'array': return 'Value1,Value2';
+            default: return null;
         }
     }
     
     /**
      * Extracts entity metadata from the SQL to provide context to the LLM for parameter type inference.
-     * Uses node-sql-parser for robust SQL parsing after pre-processing Nunjucks templates.
+     * Uses MJSQLParser for robust SQL parsing with MJ template support.
      */
     private async extractEntityMetadataFromSQL(): Promise<Array<{
         name: string;
@@ -382,11 +438,10 @@ export class MJQueryEntityServer extends MJQueryEntity {
         if (!this.SQL) return results;
 
         try {
-            // Use the shared SQLParser with Nunjucks preprocessing
-            const parseResult = SQLParser.ParseWithTemplatePreprocessing(this.SQL);
+            const tableRefs = MJSQLParser.ExtractTableRefs(this.SQL);
+            const columnRefs = MJSQLParser.ExtractColumnRefs(this.SQL);
 
-            // Cross-reference parsed tables against entity metadata
-            for (const tableRef of parseResult.Tables) {
+            for (const tableRef of tableRefs) {
                 const matchingEntity = md.Entities.find(e =>
                     (e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase() ||
                      e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase()) &&
@@ -394,14 +449,12 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 );
 
                 if (matchingEntity) {
-                    // Filter to fields that are actually referenced in the SQL
                     const relevantFields = matchingEntity.Fields
                         .filter(f => {
                             const fieldLower = f.Name.toLowerCase();
-                            for (const colRef of parseResult.Columns) {
+                            for (const colRef of columnRefs) {
                                 const colLower = colRef.ColumnName.toLowerCase();
                                 if (colLower === fieldLower) return true;
-                                // Check if column qualifier matches table alias or name
                                 if (colRef.TableQualifier) {
                                     const qualLower = colRef.TableQualifier.toLowerCase();
                                     if ((qualLower === tableRef.Alias.toLowerCase() ||
@@ -411,7 +464,6 @@ export class MJQueryEntityServer extends MJQueryEntity {
                                     }
                                 }
                             }
-                            // Also include primary keys as they're always useful context
                             return f.IsPrimaryKey;
                         })
                         .slice(0, 20)
@@ -523,7 +575,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 newParam.DefaultValue = param.defaultValue;
                 newParam.Description = param.description;
                 newParam.SampleValue = param.sampleValue;
-                newParam.DetectionMethod = 'AI'; // Indicate this was found via AI
+                newParam.DetectionMethod = 'AI'; // Structure from MJSQLParser AST, descriptions enriched by LLM
                 promises.push(newParam.Save());
             }
             
@@ -637,17 +689,16 @@ export class MJQueryEntityServer extends MJQueryEntity {
         if (!this.SQL) return null;
 
         // Check if SELECT clause contains * (possibly with table alias like "a.*")
-        // Use a simple regex that matches SELECT ... * ... FROM (ignoring subqueries)
         const selectStarRegex = /\bSELECT\s+(?:(?:TOP\s+\d+|DISTINCT)\s+)?(\*|[\w.]+\.\*)\s+FROM\b/i;
         if (!selectStarRegex.test(this.SQL)) return null;
 
         const md = this.ProviderToUse as unknown as IMetadataProvider;
 
         try {
-            const parseResult = SQLParser.ParseWithTemplatePreprocessing(this.SQL);
+            const tableRefs = MJSQLParser.ExtractTableRefs(this.SQL);
             const expandedFields: ExtractedField[] = [];
 
-            for (const tableRef of parseResult.Tables) {
+            for (const tableRef of tableRefs) {
                 const matchingEntity = md.Entities.find(e =>
                     (e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase() ||
                      e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase()) &&
@@ -674,18 +725,10 @@ export class MJQueryEntityServer extends MJQueryEntity {
 
             // Also check for {{query:"..."}} composition tokens in FROM clause
             if (expandedFields.length === 0) {
-                const compositionTokenRegex = /\{\{query:"([^"]+)"\}\}/g;
-                let match: RegExpExecArray | null;
-
-                while ((match = compositionTokenRegex.exec(this.SQL)) !== null) {
-                    const tokenContent = match[1];
-                    const parenIdx = tokenContent.indexOf('(');
-                    const pathPart = parenIdx >= 0 ? tokenContent.substring(0, parenIdx) : tokenContent;
-                    const segments = pathPart.split('/');
-                    const queryName = segments[segments.length - 1].trim();
-
+                const compositionRefs = MJSQLParser.ExtractCompositionRefs(this.SQL);
+                for (const ref of compositionRefs) {
                     const referencedQuery = Metadata.Provider.Queries.find(q =>
-                        q.Name.toLowerCase() === queryName.toLowerCase()
+                        q.Name.toLowerCase() === ref.queryName.toLowerCase()
                     );
 
                     if (referencedQuery && referencedQuery.Fields.length > 0) {
