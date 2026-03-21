@@ -1,0 +1,161 @@
+================================================================================
+DBAutoDoc Benchmark Report - AdventureWorks2022
+State file: autodoc-output/run-015/run-1/state.json
+================================================================================
+
+================================================================================
+1. PRIMARY KEY DETECTION
+================================================================================
+
+Ground Truth: 71 | AutoDoc: 70
+Correct: 67 | Missed: 4 | Extra: 3
+Precision: 95.7% | Recall: 94.4% | F1: 95.0%
+
+--- Missed PKs: 1 single, 3 composite, 3 BusinessEntityID, 0 natural keys ---
+  Person.BusinessEntityContact -> [BusinessEntityID,PersonID,ContactTypeID]
+  Person.EmailAddress -> [BusinessEntityID,EmailAddressID]
+  dbo.ErrorLog -> [ErrorLogID]
+  Person.PersonPhone -> [BusinessEntityID,PhoneNumber,PhoneNumberTypeID]
+
+--- Extra PKs (3) [first 20] ---
+  Person.BusinessEntityContact -> [BusinessEntityID,PersonID,ContactTypeID,rowguid] (conf: 100)
+  Person.EmailAddress -> [EmailAddressID] (conf: 100)
+  Person.PersonPhone -> [BusinessEntityID,PhoneNumberTypeID] (conf: 95)
+
+================================================================================
+2. FOREIGN KEY DETECTION
+================================================================================
+
+Ground Truth: 91 | AutoDoc: 100
+Correct: 90 | Missed: 1 | Extra: 10
+Precision: 90.0% | Recall: 98.9% | F1: 94.2%
+
+--- Correct FKs (90) ---
+  address.stateprovinceid -> stateprovince.stateprovinceid (conf: 100)
+  billofmaterials.componentid -> product.productid (conf: 100)
+  billofmaterials.productassemblyid -> product.productid (conf: 100)
+  billofmaterials.unitmeasurecode -> unitmeasure.unitmeasurecode (conf: 100)
+  businessentityaddress.addressid -> address.addressid (conf: 100)
+  businessentityaddress.addresstypeid -> addresstype.addresstypeid (conf: 100)
+  businessentityaddress.businessentityid -> businessentity.businessentityid (conf: 100)
+  businessentitycontact.businessentityid -> businessentity.businessentityid (conf: 100)
+  businessentitycontact.contacttypeid -> contacttype.contacttypeid (conf: 100)
+  businessentitycontact.personid -> person.businessentityid (conf: 100)
+  countryregioncurrency.countryregioncode -> countryregion.countryregioncode (conf: 100)
+  countryregioncurrency.currencycode -> currency.currencycode (conf: 100)
+  currencyrate.fromcurrencycode -> currency.currencycode (conf: 100)
+  currencyrate.tocurrencycode -> currency.currencycode (conf: 100)
+  customer.personid -> person.businessentityid (conf: 100)
+  customer.storeid -> store.businessentityid (conf: 100)
+  customer.territoryid -> salesterritory.territoryid (conf: 100)
+  document.owner -> employee.businessentityid (conf: 100)
+  emailaddress.businessentityid -> person.businessentityid (conf: 100)
+  employee.businessentityid -> person.businessentityid (conf: 100)
+  employeedepartmenthistory.businessentityid -> employee.businessentityid (conf: 100)
+  employeedepartmenthistory.departmentid -> department.departmentid (conf: 100)
+  employeedepartmenthistory.shiftid -> shift.shiftid (conf: 100)
+  employeepayhistory.businessentityid -> employee.businessentityid (conf: 95)
+  jobcandidate.businessentityid -> employee.businessentityid (conf: 100)
+  password.businessentityid -> person.businessentityid (conf: 100)
+  person.businessentityid -> businessentity.businessentityid (conf: 100)
+  personcreditcard.businessentityid -> person.businessentityid (conf: 100)
+  personcreditcard.creditcardid -> creditcard.creditcardid (conf: 100)
+  personphone.businessentityid -> person.businessentityid (conf: 95)
+  personphone.phonenumbertypeid -> phonenumbertype.phonenumbertypeid (conf: 95)
+  product.productmodelid -> productmodel.productmodelid (conf: 100)
+  product.productsubcategoryid -> productsubcategory.productsubcategoryid (conf: 100)
+  product.sizeunitmeasurecode -> unitmeasure.unitmeasurecode (conf: 95)
+  product.weightunitmeasurecode -> unitmeasure.unitmeasurecode (conf: 95)
+  productcosthistory.productid -> product.productid (conf: 100)
+  productdocument.documentnode -> document.documentnode (conf: 100)
+  productdocument.productid -> product.productid (conf: 100)
+  productinventory.locationid -> location.locationid (conf: 100)
+  productinventory.productid -> product.productid (conf: 100)
+  productlistpricehistory.productid -> product.productid (conf: 100)
+  productmodelillustration.illustrationid -> illustration.illustrationid (conf: 100)
+  productmodelillustration.productmodelid -> productmodel.productmodelid (conf: 100)
+  productmodelproductdescriptionculture.cultureid -> culture.cultureid (conf: 100)
+  productmodelproductdescriptionculture.productdescriptionid -> productdescription.productdescriptionid (conf: 100)
+  productmodelproductdescriptionculture.productmodelid -> productmodel.productmodelid (conf: 100)
+  productproductphoto.productid -> product.productid (conf: 100)
+  productproductphoto.productphotoid -> productphoto.productphotoid (conf: 100)
+  productreview.productid -> product.productid (conf: 100)
+  productsubcategory.productcategoryid -> productcategory.productcategoryid (conf: 100)
+  productvendor.businessentityid -> vendor.businessentityid (conf: 100)
+  productvendor.productid -> product.productid (conf: 100)
+  productvendor.unitmeasurecode -> unitmeasure.unitmeasurecode (conf: 100)
+  purchaseorderdetail.productid -> product.productid (conf: 100)
+  purchaseorderdetail.purchaseorderid -> purchaseorderheader.purchaseorderid (conf: 100)
+  purchaseorderheader.employeeid -> employee.businessentityid (conf: 100)
+  purchaseorderheader.shipmethodid -> shipmethod.shipmethodid (conf: 100)
+  purchaseorderheader.vendorid -> vendor.businessentityid (conf: 100)
+  salesorderdetail.productid -> specialofferproduct.productid (conf: 95)
+  salesorderdetail.salesorderid -> salesorderheader.salesorderid (conf: 100)
+  salesorderdetail.specialofferid -> specialofferproduct.specialofferid (conf: 95)
+  salesorderheader.billtoaddressid -> address.addressid (conf: 100)
+  salesorderheader.creditcardid -> creditcard.creditcardid (conf: 100)
+  salesorderheader.currencyrateid -> currencyrate.currencyrateid (conf: 100)
+  salesorderheader.customerid -> customer.customerid (conf: 100)
+  salesorderheader.salespersonid -> salesperson.businessentityid (conf: 100)
+  salesorderheader.shipmethodid -> shipmethod.shipmethodid (conf: 100)
+  salesorderheader.shiptoaddressid -> address.addressid (conf: 100)
+  salesorderheader.territoryid -> salesterritory.territoryid (conf: 100)
+  salesorderheadersalesreason.salesorderid -> salesorderheader.salesorderid (conf: 100)
+  salesorderheadersalesreason.salesreasonid -> salesreason.salesreasonid (conf: 100)
+  salesperson.businessentityid -> employee.businessentityid (conf: 100)
+  salesperson.territoryid -> salesterritory.territoryid (conf: 100)
+  salespersonquotahistory.businessentityid -> salesperson.businessentityid (conf: 100)
+  salestaxrate.stateprovinceid -> stateprovince.stateprovinceid (conf: 100)
+  salesterritory.countryregioncode -> countryregion.countryregioncode (conf: 100)
+  salesterritoryhistory.businessentityid -> salesperson.businessentityid (conf: 100)
+  salesterritoryhistory.territoryid -> salesterritory.territoryid (conf: 100)
+  shoppingcartitem.productid -> product.productid (conf: 100)
+  specialofferproduct.productid -> product.productid (conf: 100)
+  specialofferproduct.specialofferid -> specialoffer.specialofferid (conf: 100)
+  stateprovince.countryregioncode -> countryregion.countryregioncode (conf: 100)
+  stateprovince.territoryid -> salesterritory.territoryid (conf: 100)
+  store.businessentityid -> businessentity.businessentityid (conf: 100)
+  store.salespersonid -> salesperson.businessentityid (conf: 100)
+  transactionhistory.productid -> product.productid (conf: 100)
+  workorder.productid -> product.productid (conf: 100)
+  workorder.scrapreasonid -> scrapreason.scrapreasonid (conf: 100)
+  workorderrouting.locationid -> location.locationid (conf: 100)
+  workorderrouting.workorderid -> workorder.workorderid (conf: 100)
+
+--- Missed FKs (1) [first 25] ---
+  vendor.businessentityid -> businessentity.businessentityid
+
+--- Extra FKs (10) [first 25] ---
+  emailaddress.businessentityid -> businessentity.businessentityid (conf: 95)
+  purchaseorderdetail.productid -> productvendor.productid (conf: 95)
+  salesorderdetail.productid -> product.productid (conf: 100)
+  salesorderdetail.productid -> productcosthistory.productid (conf: 95)
+  salesorderdetail.specialofferid -> specialoffer.specialofferid (conf: 100)
+  transactionhistory.referenceorderid -> workorder.workorderid (conf: 90)
+  transactionhistoryarchive.productid -> product.productid (conf: 100)
+  transactionhistoryarchive.referenceorderid -> workorder.workorderid (conf: 90)
+  vendor.businessentityid -> businessentitycontact.businessentityid (conf: 70)
+  workorderrouting.productid -> product.productid (conf: 100)
+
+================================================================================
+3. DESCRIPTION COVERAGE
+================================================================================
+
+Table descriptions: 70/71 (99%)
+Column descriptions: 480/486 (99%)
+
+================================================================================
+OVERALL SUMMARY
+================================================================================
+
+Tokens: 3,157,458 | Iterations: 2 | Prompts: 230
+
+Metric                          Precision     Recall         F1
+--------------------------------------------------------------
+Primary Key Detection              95.7%     94.4%     95.0%
+Foreign Key Detection              90.0%     98.9%     94.2%
+Table Descriptions                              99%
+Column Descriptions                             99%
+
+Overall Score: 96.7% (Grade: A+)
+Target: PK F1 >= 95%, FK F1 >= 90%
