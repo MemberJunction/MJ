@@ -1135,7 +1135,6 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             const ciLoaded = await ci.InnerLoad(CompositeKey.FromID(input.CompanyIntegrationID));
             if (ciLoaded) {
-                ci.ScheduledJobID = job.ID;
                 ci.ScheduleEnabled = true;
                 ci.ScheduleType = 'Cron';
                 ci.CronExpression = input.CronExpression;
@@ -1215,7 +1214,6 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
                 const ciLoaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
                 if (ciLoaded) {
-                    ci.ScheduledJobID = null;
                     ci.ScheduleEnabled = false;
                     ci.CronExpression = null;
                     await ci.Save();
