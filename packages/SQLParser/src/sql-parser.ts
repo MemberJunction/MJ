@@ -1,6 +1,6 @@
 import NodeSqlParser from 'node-sql-parser';
 const { Parser } = NodeSqlParser;
-import * as nunjucks from 'nunjucks';
+import { MJPlaceholderSubstitution } from './mj-placeholder.js';
 
 /**
  * Result of extracting CTE definitions from SQL that starts with a WITH clause.
@@ -558,61 +558,16 @@ export class SQLParser {
     }
 
     // ─────────────────────────────────────────────────────
-    // Nunjucks Preprocessing (moved from MJQueryEntityServer)
+    // Nunjucks Preprocessing
     // ─────────────────────────────────────────────────────
 
     /**
      * Pre-processes Nunjucks templates in SQL to create valid SQL for parsing.
-     * Replaces Nunjucks syntax with placeholder values.
+     * Uses MJPlaceholderSubstitution which is context-aware (sqlString → string
+     * literal, sqlNumber → numeric literal, etc.) for better AST accuracy.
      */
     private static PreProcessNunjucksForParsing(sql: string): string {
-        const env = new nunjucks.Environment(null, {
-            autoescape: false,
-            throwOnUndefined: false
-        });
-
-        // Add placeholder filters that return safe SQL values
-        env.addFilter('sqlString', () => "'placeholder'");
-        env.addFilter('sqlNumber', () => '0');
-        env.addFilter('sqlDate', () => "'2000-01-01'");
-        env.addFilter('sqlIn', () => "('placeholder')");
-        env.addFilter('sqlIdentifier', (val: string) => val || 'placeholder');
-        env.addFilter('sqlNoKeywordsExpression', (val: string) => val || 'placeholder');
-        env.addFilter('default', (val: string, defaultVal: string) => val || defaultVal || 'placeholder');
-        env.addFilter('safe', (val: string) => val || 'placeholder');
-        env.addFilter('dump', (val: unknown) => JSON.stringify(val || {}));
-
-        try {
-            return env.renderString(sql, {});
-        } catch {
-            return SQLParser.PreProcessNunjucksViaRegex(sql);
-        }
-    }
-
-    /**
-     * Regex fallback for Nunjucks preprocessing when rendering fails.
-     */
-    private static PreProcessNunjucksViaRegex(sql: string): string {
-        let processed = sql;
-
-        // Replace {{ variable | filter }} patterns
-        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlString\s*\}\}/g, "'placeholder'");
-        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlNumber\s*\}\}/g, '0');
-        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlDate\s*\}\}/g, "'2000-01-01'");
-        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlIn\s*\}\}/g, "('placeholder')");
-        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlIdentifier\s*\}\}/g, 'placeholder');
-        processed = processed.replace(/\{\{\s*[\w.]+\s*[^}]*\}\}/g, "'placeholder'");
-
-        // Remove block tags but keep content between them
-        processed = processed.replace(/\{%\s*if\s+[^%]+%\}/g, '');
-        processed = processed.replace(/\{%\s*endif\s*%\}/g, '');
-        processed = processed.replace(/\{%\s*else\s*%\}/g, '');
-        processed = processed.replace(/\{%\s*elif\s+[^%]+%\}/g, '');
-        processed = processed.replace(/\{%\s*for\s+[^%]+%\}/g, '');
-        processed = processed.replace(/\{%\s*endfor\s*%\}/g, '');
-        processed = processed.replace(/\{%\s*set\s+[^%]+%\}/g, '');
-        processed = processed.replace(/\{#[^#]*#\}/g, ''); // Comments
-
-        return processed;
+        const result = MJPlaceholderSubstitution.Substitute(sql);
+        return result.cleanSQL;
     }
 }

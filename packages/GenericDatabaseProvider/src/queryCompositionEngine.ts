@@ -1,6 +1,6 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDialect, PostgreSQLDialect, type SQLDialect } from "@memberjunction/sql-dialect";
-import { SQLParser } from "@memberjunction/sql-parser";
+import { SQLParser, MJPlaceholderSubstitution, MJLexer, extractCompositionRefs } from "@memberjunction/sql-parser";
 import { Metadata, QueryInfo, DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
 import NodeSqlParser from 'node-sql-parser';
 const { Parser: SqlParser } = NodeSqlParser;
@@ -11,23 +11,9 @@ const { Parser: SqlParser } = NodeSqlParser;
  */
 const MAX_COMPOSITION_DEPTH = 10;
 
-/**
- * Regex for matching {{query:"CategoryPath/QueryName(params)"}} tokens.
- * Captures the full content inside the quotes including optional parameters.
- */
-const COMPOSITION_TOKEN_REGEX = /\{\{query:"([^"]+)"\}\}/g;
-
-/**
- * Regex for parsing the inner reference: path/QueryName(param1=value1, param2=value2)
- * Group 1: full path including query name (everything before optional parentheses)
- * Group 2: parameters string (inside parentheses, optional)
- */
-const REFERENCE_PARSE_REGEX = /^(.+?)(?:\((.+)\))?$/;
-
-/**
- * Regex for parsing individual parameter assignments: key=value or key='literal'
- */
-const PARAM_PARSE_REGEX = /^\s*(\w+)\s*=\s*(?:'([^']*)'|(\w+))\s*$/;
+// Composition token regex constants have been replaced by MJLexer-based parsing.
+// The MJLexer provides structured tokenization with full parsing of category paths,
+// query names, and parameter lists — eliminating the need for separate regex patterns.
 
 /**
  * Metadata about a single CTE generated during composition resolution.
@@ -142,13 +128,17 @@ export class QueryCompositionEngine {
     public HasCompositionTokens(sql: string): boolean {
         if (!sql) return false;
         const stripped = this.stripSQLComments(sql);
-        return stripped.includes('{{query:"');
+        const tokens = MJLexer.Tokenize(stripped);
+        return tokens.some(t => t.type === 'MJ_COMPOSITION_REF');
     }
 
     /**
      * Parses all {{query:"..."}} tokens from SQL without resolving them.
      * Useful for dependency extraction during the save pipeline.
      * Only considers tokens outside of SQL comments.
+     *
+     * Uses MJLexer for structured tokenization instead of regex, providing
+     * full parsing of category paths, query names, and parameter lists.
      *
      * @param sql - The SQL text to parse
      * @returns Array of parsed token metadata
@@ -157,18 +147,26 @@ export class QueryCompositionEngine {
         if (!sql) return [];
 
         const stripped = this.stripSQLComments(sql);
-        const tokens: ParsedCompositionToken[] = [];
-        let match: RegExpExecArray | null;
-        const regex = new RegExp(COMPOSITION_TOKEN_REGEX.source, 'g');
+        const refs = extractCompositionRefs(stripped);
 
-        while ((match = regex.exec(stripped)) !== null) {
-            const parsed = this.parseTokenContent(match[0], match[1]);
-            if (parsed) {
-                tokens.push(parsed);
-            }
-        }
+        return refs.map(ref => {
+            const categorySegments = ref.categoryPath
+                ? ref.categoryPath.split('/').map((s: string) => s.trim()).filter((s: string) => s.length > 0)
+                : [];
+            const fullPath = [...categorySegments, ref.queryName].join('/');
 
-        return tokens;
+            return {
+                FullToken: ref.raw,
+                CategorySegments: categorySegments,
+                QueryName: ref.queryName,
+                FullPath: fullPath,
+                Parameters: ref.parameters.map(p => ({
+                    Name: p.key,
+                    StaticValue: p.isPassThrough ? null : p.value,
+                    PassThroughName: p.isPassThrough ? p.value : null,
+                })),
+            };
+        });
     }
 
     /**
@@ -360,77 +358,8 @@ export class QueryCompositionEngine {
         return resolvedSQL;
     }
 
-    /**
-     * Parses the content inside a {{query:"..."}} token.
-     */
-    private parseTokenContent(fullToken: string, content: string): ParsedCompositionToken | null {
-        const refMatch = REFERENCE_PARSE_REGEX.exec(content.trim());
-        if (!refMatch) return null;
-
-        const fullPath = refMatch[1].trim();
-        const paramsString = refMatch[2] || '';
-
-        // Split path into segments; last segment is the query name
-        const segments = fullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
-        if (segments.length === 0) return null;
-
-        const queryName = segments[segments.length - 1];
-        const categorySegments = segments.slice(0, -1);
-
-        // Parse parameters
-        const parameters: ParsedParameter[] = [];
-        if (paramsString.trim().length > 0) {
-            const paramParts = this.splitParams(paramsString);
-            for (const part of paramParts) {
-                const paramMatch = PARAM_PARSE_REGEX.exec(part);
-                if (paramMatch) {
-                    parameters.push({
-                        Name: paramMatch[1],
-                        StaticValue: paramMatch[2] !== undefined ? paramMatch[2] : null,
-                        PassThroughName: paramMatch[3] !== undefined ? paramMatch[3] : null
-                    });
-                }
-            }
-        }
-
-        return {
-            FullToken: fullToken,
-            CategorySegments: categorySegments,
-            QueryName: queryName,
-            FullPath: fullPath,
-            Parameters: parameters
-        };
-    }
-
-    /**
-     * Splits parameter string by commas, respecting quoted values.
-     */
-    private splitParams(paramsString: string): string[] {
-        const parts: string[] = [];
-        let current = '';
-        let inQuote = false;
-
-        for (const ch of paramsString) {
-            if (ch === "'" && !inQuote) {
-                inQuote = true;
-                current += ch;
-            } else if (ch === "'" && inQuote) {
-                inQuote = false;
-                current += ch;
-            } else if (ch === ',' && !inQuote) {
-                parts.push(current.trim());
-                current = '';
-            } else {
-                current += ch;
-            }
-        }
-
-        if (current.trim().length > 0) {
-            parts.push(current.trim());
-        }
-
-        return parts;
-    }
+    // parseTokenContent and splitParams removed — composition token parsing
+    // is now handled by MJLexer via extractCompositionRefs()
 
     /**
      * Looks up a query by category path + name in the metadata provider.
@@ -797,14 +726,16 @@ export class QueryCompositionEngine {
 
     /**
      * Attempts to strip the top-level ORDER BY clause using AST parsing.
-     * Tries direct parsing first, then Nunjucks-preprocessed parsing if the SQL
-     * contains template syntax. Handles UNION/EXCEPT by walking the _next chain.
+     * Tries direct parsing first, then MJPlaceholder-preprocessed parsing if the SQL
+     * contains MJ template syntax. Handles UNION/EXCEPT by walking the _next chain.
      */
     private stripOrderByViaAST(sql: string, parserDialect: string): string | null {
         const directResult = this.tryASTStrip(sql, parserDialect);
         if (directResult !== null) return directResult;
 
-        if (/\{[%{#]/.test(sql)) {
+        // Check for MJ extensions using MJLexer (replaces regex check)
+        const mjParse = MJLexer.Parse(sql);
+        if (mjParse.hasMJExtensions) {
             return this.tryNunjucksAwareStrip(sql, parserDialect);
         }
 
@@ -898,60 +829,63 @@ export class QueryCompositionEngine {
 
     /**
      * Finds character positions of all ORDER BY keywords at the outermost level
-     * (paren depth 0, not inside strings, comments, or Nunjucks tags).
+     * (paren depth 0, not inside strings, comments, or MJ template tokens).
+     *
+     * Uses MJLexer to skip MJ tokens ({{ }}, {% %}, {# #}), then scans only
+     * SQL_TEXT segments for ORDER BY keywords while tracking paren depth and
+     * respecting SQL string literals and comments.
      */
     private findTopLevelOrderByPositions(sql: string): number[] {
+        const tokens = MJLexer.Tokenize(sql);
         const positions: number[] = [];
-        let i = 0;
         let parenDepth = 0;
 
-        while (i < sql.length) {
-            if (sql[i] === "'") {
-                i++;
-                while (i < sql.length) {
-                    if (sql[i] === "'" && i + 1 < sql.length && sql[i + 1] === "'") { i += 2; }
-                    else if (sql[i] === "'") { i++; break; }
-                    else { i++; }
-                }
-                continue;
-            }
-            if (sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
-                while (i < sql.length && sql[i] !== '\n') i++;
-                continue;
-            }
-            if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
-                i += 2;
-                while (i < sql.length) {
-                    if (sql[i] === '*' && i + 1 < sql.length && sql[i + 1] === '/') { i += 2; break; }
-                    i++;
-                }
-                continue;
-            }
-            if (sql[i] === '{' && i + 1 < sql.length && sql[i + 1] === '%') {
-                i += 2;
-                while (i < sql.length) {
-                    if (sql[i] === '%' && i + 1 < sql.length && sql[i + 1] === '}') { i += 2; break; }
-                    i++;
-                }
-                continue;
-            }
-            if (sql[i] === '{' && i + 1 < sql.length && sql[i + 1] === '{') {
-                i += 2;
-                while (i < sql.length) {
-                    if (sql[i] === '}' && i + 1 < sql.length && sql[i + 1] === '}') { i += 2; break; }
-                    i++;
-                }
-                continue;
-            }
-            if (sql[i] === '(') { parenDepth++; i++; continue; }
-            if (sql[i] === ')') { parenDepth--; i++; continue; }
+        for (const token of tokens) {
+            // Only scan SQL_TEXT tokens — MJ tokens are skipped entirely
+            if (token.type !== 'SQL_TEXT') continue;
 
-            if (parenDepth === 0 && /^ORDER\s+BY\b/i.test(sql.substring(i))) {
-                if (i === 0 || /[\s,;()\n]/.test(sql[i - 1])) {
-                    positions.push(i);
+            const text = token.raw;
+            let i = 0;
+
+            while (i < text.length) {
+                const ch = text[i];
+
+                // Skip single-quoted string literals
+                if (ch === "'") {
+                    i++;
+                    while (i < text.length) {
+                        if (text[i] === "'" && i + 1 < text.length && text[i + 1] === "'") { i += 2; }
+                        else if (text[i] === "'") { i++; break; }
+                        else { i++; }
+                    }
+                    continue;
                 }
+                // Skip line comments
+                if (ch === '-' && i + 1 < text.length && text[i + 1] === '-') {
+                    while (i < text.length && text[i] !== '\n') i++;
+                    continue;
+                }
+                // Skip block comments
+                if (ch === '/' && i + 1 < text.length && text[i + 1] === '*') {
+                    i += 2;
+                    while (i < text.length) {
+                        if (text[i] === '*' && i + 1 < text.length && text[i + 1] === '/') { i += 2; break; }
+                        i++;
+                    }
+                    continue;
+                }
+
+                if (ch === '(') { parenDepth++; i++; continue; }
+                if (ch === ')') { parenDepth--; i++; continue; }
+
+                if (parenDepth === 0 && /^ORDER\s+BY\b/i.test(text.substring(i))) {
+                    const absPos = token.start + i;
+                    if (absPos === 0 || /[\s,;()\n]/.test(sql[absPos - 1])) {
+                        positions.push(absPos);
+                    }
+                }
+                i++;
             }
-            i++;
         }
 
         return positions;
@@ -959,27 +893,10 @@ export class QueryCompositionEngine {
 
     /**
      * Preprocesses Nunjucks templates into valid SQL for AST parsing.
+     * Uses MJPlaceholderSubstitution for context-aware placeholder generation.
      */
     private preprocessNunjucks(sql: string): string {
-        let processed = sql;
-
-        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlString\s*\}\}/g, "'placeholder'");
-        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlNumber\s*\}\}/g, '0');
-        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlDate\s*\}\}/g, "'2000-01-01'");
-        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlIn\s*\}\}/g, "('placeholder')");
-        processed = processed.replace(/\{\{\s*[\w.]+\s*\|\s*sqlIdentifier\s*\}\}/g, 'placeholder');
-        processed = processed.replace(/\{\{\s*[\w.]+\s*(?:\|[^}]*)?\}\}/g, "'placeholder'");
-
-        processed = processed.replace(/\{%[-\s]*if\s+[^%]*[-\s]*%\}/g, '');
-        processed = processed.replace(/\{%[-\s]*endif[-\s]*%\}/g, '');
-        processed = processed.replace(/\{%[-\s]*else[-\s]*%\}/g, '');
-        processed = processed.replace(/\{%[-\s]*elif\s+[^%]*[-\s]*%\}/g, '');
-        processed = processed.replace(/\{%[-\s]*for\s+[^%]*[-\s]*%\}/g, '');
-        processed = processed.replace(/\{%[-\s]*endfor[-\s]*%\}/g, '');
-        processed = processed.replace(/\{%[-\s]*set\s+[^%]*[-\s]*%\}/g, '');
-        processed = processed.replace(/\{#[^#]*#\}/g, '');
-
-        return processed;
+        return MJPlaceholderSubstitution.Substitute(sql).cleanSQL;
     }
 
     /**
