@@ -26,6 +26,19 @@ To enable fast mode (2.5x faster Opus 4.6 responses), add `"fastMode": true` to 
   - No `unknown` as a lazy alternative
 - **Why**: MemberJunction has strong typing throughout - there's always a proper type available
 
+### 2b. NO WEAK TYPING — NEVER USE BaseEntity `.Get()` / `.Set()` AS A SUBSTITUTE FOR GENERATED TYPES
+- **NEVER use `record.Get('FieldName')` or `record.Set('FieldName', value)`** to access entity fields that should have strongly-typed properties
+- **NEVER write code that depends on fields not yet in generated types** — if a migration hasn't run and CodeGen hasn't generated the types, **wait for CodeGen** before writing code that references those fields
+- `.Get()` and `.Set()` are dynamic, stringly-typed accessors with zero compile-time safety — they bypass the entire point of MJ's generated entity classes
+- The correct workflow when adding new database columns:
+  1. Write the migration
+  2. Run the migration + CodeGen to generate types
+  3. **Then** write TypeScript code using the strongly-typed properties
+- If you find yourself reaching for `.Get()` or `.Set()`, STOP — it means either:
+  - The types exist and you should use the typed property instead
+  - The types don't exist yet because CodeGen hasn't run — wait for it before writing dependent code
+- **Why**: `.Get()`/`.Set()` fail silently on typos, have no IntelliSense, no refactoring support, and no compile-time checking. They are the `any` of the entity world.
+
 ### 3. NO DESTRUCTIVE GIT OPERATIONS WITHOUT EXPLICIT APPROVAL
 - **NEVER run `git checkout -- <file>` or `git restore <file>`** to discard changes without the user explicitly approving — even in bypass/auto-approve permission mode
 - **NEVER run `git reset --hard`** without explicit approval
@@ -1513,6 +1526,45 @@ When metadata records contain JSON blobs (schemas, templates, etc.):
 1. Create a subdirectory named for the content type (e.g., `schemas/`, `templates/`)
 2. Name files descriptively with appropriate extension (e.g., `api-key.schema.json`)
 3. Use the `@file:relative/path.json` syntax in the main metadata file
+
+### Seeding New Lookup/Reference Tables
+When a migration creates a new lookup or reference table (e.g., `AIAgentRequestType`, `ResourceType`), **never seed it with SQL INSERT statements in the migration**. Instead, use the metadata file system:
+
+1. Create a new directory under `/metadata/` named for the entity (e.g., `agent-request-types/`)
+2. Create `.mj-sync.json` with the entity configuration:
+   ```json
+   {
+     "entity": "MJ: AI Agent Request Types",
+     "filePattern": "**/.*.json",
+     "defaults": {},
+     "pull": {
+       "createNewFileIfNotFound": true,
+       "newFileName": ".agent-request-types.json",
+       "appendRecordsToExistingFile": true,
+       "updateExistingRecords": true,
+       "preserveFields": [],
+       "excludeFields": [],
+       "mergeStrategy": "merge",
+       "backupBeforeUpdate": true,
+       "backupDirectory": ".backups",
+       "filter": "",
+       "externalizeFields": [],
+       "ignoreNullFields": true,
+       "ignoreVirtualFields": true,
+       "lookupFields": {},
+       "relatedEntities": {}
+     }
+   }
+   ```
+3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — these are auto-populated by mj-sync on first push.
+4. Push with: `npx mj sync push --dir=metadata --include="agent-request-types"`
+
+**Why metadata files over SQL INSERTs:**
+- Version-controlled, declarative, and human-readable
+- `@lookup:` references resolve entity names to IDs automatically
+- `mj sync push` handles upsert semantics — safe to re-run
+- Consistent with how all other MJ reference data is managed
+- See `/metadata/resource-types/` for a clean example of a seeded lookup table
 
 ### Application Metadata
 When creating new applications with custom dashboards:

@@ -1,0 +1,3110 @@
+[
+  {
+    "fields": {
+      "Name": "Rasa.io - Get Person",
+      "Description": "Retrieves a single Person record from Rasa.io by its external ID",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "IntegrationActionExecutor",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Rasa.io",
+      "Config": {
+        "IntegrationName": "Rasa.io",
+        "ObjectName": "persons",
+        "Verb": "Get"
+      },
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExternalID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The unique ID of the Person record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "2A16D27E-CCB9-4253-A9F0-5BD388023536"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.594Z",
+            "checksum": "99b8a3e0a0674854171b0870f397f0d71719afd850b7766191fde41ea1003025"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "E9006F35-C59A-4377-BF66-CD9461549FB0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.604Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Record",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The retrieved Person record with all fields"
+          },
+          "primaryKey": {
+            "ID": "5F162A56-36C0-4449-B914-76D2D0238A4E"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.615Z",
+            "checksum": "ee44b4f7813594861bbe69806b108905cd02c9f3e59c4f9e4ac30009d345352e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "email",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Subscriber email address"
+          },
+          "primaryKey": {
+            "ID": "ECF41400-FD42-4065-A4EF-E2E18C7881C7"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.625Z",
+            "checksum": "8e2048207d9ee96a789cc79813e087eadf06b367c9652c84626daa4d0b892985"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "first_name",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Subscriber first name"
+          },
+          "primaryKey": {
+            "ID": "2ED21051-B196-40AE-942B-51CDDD1E8C29"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.636Z",
+            "checksum": "67f81d1312c6f7ded9dd2dd242b6c345de4d2884cd8f8f94fc41daf102468fa4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "last_name",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Subscriber last name"
+          },
+          "primaryKey": {
+            "ID": "9860ABFD-A535-43D2-9D36-B7547D54C7C8"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.647Z",
+            "checksum": "dc805d31df1ae365b16ce28618539c2b786af6a091704e457461d63d80db55f8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "external_id",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "External ID from source system"
+          },
+          "primaryKey": {
+            "ID": "83BF9266-3191-46B6-893A-D4C9F32FB1B9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.658Z",
+            "checksum": "062640d9734e97b9cf23a5dea3a3dca748a70417a8775536cce93cb0ee8831d2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "is_active",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether the subscriber is active"
+          },
+          "primaryKey": {
+            "ID": "B972E127-5761-44DE-9511-AB82B238F9B4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.669Z",
+            "checksum": "97ec5dad411cd47e786ca4a661088b101e54d77a94c3dc542699acddba6f1041"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "is_subscribed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether the subscriber is subscribed"
+          },
+          "primaryKey": {
+            "ID": "37DAE440-4DF6-4D77-9F71-D7ACAE09FA71"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.678Z",
+            "checksum": "9357c6df62028547e270af2f28c3a2acfe22ce40fb676f7567fa3fd0578f69dd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "id",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Rasa.io internal person ID"
+          },
+          "primaryKey": {
+            "ID": "7661A1C5-D761-438A-B133-15652C54B701"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.686Z",
+            "checksum": "b55ab8ed04de1250fb272d96baedeaad59d1f9fa136e94bce98e4c40d42f67bd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "created",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "When the person was created"
+          },
+          "primaryKey": {
+            "ID": "88CCA805-3698-40D4-853C-B19C6BE6B290"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.722Z",
+            "checksum": "9c2d0f7ed7d40d9b2bbcf49001720bff515c7dc5ce3716ce39834451b85197ef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "updated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "When last updated"
+          },
+          "primaryKey": {
+            "ID": "E1CC2117-BED7-484C-BEE9-7EB892AB23BE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.734Z",
+            "checksum": "0e9c0b79a258f8258fb30134dea13345229cab290aa34853bd1c9c457d2f0bc2"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "D9A4CF03-4E93-48E5-818C-BC2F0FB56D67"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.745Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTOR_ERROR",
+            "IsSuccess": false,
+            "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "5C36DE0D-5CF6-452E-A444-2DFA7A0EF3E2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.754Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "CA980934-C9EF-4596-BEE6-1A4C3C85232E"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.762Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DD07C385-C998-4B6E-BE34-5C3C5D1972DF"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:11.411Z",
+      "checksum": "fa788b6cb9417bf913fccc5712b0a1d56c5e273931b0801f4d99213364c86f5e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rasa.io - Search Person",
+      "Description": "Searches for Person records in Rasa.io matching the given field filters",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "IntegrationActionExecutor",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Rasa.io",
+      "Config": {
+        "IntegrationName": "Rasa.io",
+        "ObjectName": "persons",
+        "Verb": "Search"
+      },
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "8BC6C4B8-DF46-4DB4-99EA-E9AF1EF891AF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.773Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PageSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "5ECB6090-2D79-4CA1-9F4A-971CFF9DCFF4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.783Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Page",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "17799164-A7E6-4883-8085-AAD5B9839836"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.793Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Sort",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "3B751950-54C5-4842-9354-CB6E4D4B0F11"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.805Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "email",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Subscriber email address"
+          },
+          "primaryKey": {
+            "ID": "9E820680-6A10-44D9-995A-F284D4AEE857"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.815Z",
+            "checksum": "c3c390fb709db236e85cb44e8d6b0a0812ee005c873385881d4213117ffd8231"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "first_name",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Subscriber first name"
+          },
+          "primaryKey": {
+            "ID": "1F4CE8DB-EC51-4496-9837-285327D7929F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.850Z",
+            "checksum": "8051d252de70affe6ff50685531a80d681cd8e7a0eb052ce656dd15a4f2ea170"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "last_name",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Subscriber last name"
+          },
+          "primaryKey": {
+            "ID": "04C36370-08EE-4D56-86DE-2BBC30B97D81"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.859Z",
+            "checksum": "c46ec6e981b4b192426e4f21e268af41a1b0e476e7c25b3d9f6bcddc86ab4c07"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "external_id",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "External ID from source system"
+          },
+          "primaryKey": {
+            "ID": "C224DAD0-67E3-40AE-AE87-28A290B85BE9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.869Z",
+            "checksum": "27edea724e766dc8996e021b41ed20abed081a7f8086d7acf14e70728779f2fa"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "is_active",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether the subscriber is active"
+          },
+          "primaryKey": {
+            "ID": "64124D14-2E87-4269-9971-33A4165BA8AE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.880Z",
+            "checksum": "c3757d20425a9fa316fe848accf685bd7d9ca8e801d6fc52e6b6a70461bfe780"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "is_subscribed",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether the subscriber is subscribed"
+          },
+          "primaryKey": {
+            "ID": "6CEE6F1A-21B6-4D1D-9880-C97589567B99"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.892Z",
+            "checksum": "45ad23f835522547e4382f3d8c4155b6ddf5daa037a88b6b922b4eaf312351bb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "created",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "When the person was created"
+          },
+          "primaryKey": {
+            "ID": "6967D524-22E3-48A6-A9C5-4FFB31CB0C12"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.903Z",
+            "checksum": "7ed99df11ec8a2df3d2db478f2e2688ded69ee29ef928526191791c96f02c2c1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "updated",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "When last updated"
+          },
+          "primaryKey": {
+            "ID": "F037D8E0-2BC1-4C92-BB5D-6EF8ECBC84ED"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.912Z",
+            "checksum": "fffc37fd66f2411e9aa61b5a6fd784d54da79f77936ce2314c10d4ab6fbf103d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Records",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Array of matching Person records"
+          },
+          "primaryKey": {
+            "ID": "7DC1F842-F8B4-4C7B-BE31-8838360801FB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.922Z",
+            "checksum": "1cfaa0be03732045e96d32f352eb09d88361b5522ff80bb3a8cc4fdeef16ce73"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "4146AE24-A204-4615-AA73-9CA22CAEE9BB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.931Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasMore",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "F6B95B2E-0B23-4B6E-A934-6E33C281B574"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.940Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "4B8BFAE4-C427-4FA2-B578-A12E416577F6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.973Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTOR_ERROR",
+            "IsSuccess": false,
+            "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "A7A55F25-C5C1-40B2-8CBD-BA8252A1EC3B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.982Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "002BD7D0-7F30-401F-83D3-8C5C652149C0"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:11.424Z",
+      "checksum": "14d9437aedde57079162eeff4439226299ef35e2dbae330092587f8bc7a1b237"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rasa.io - List Person",
+      "Description": "Lists Person records from Rasa.io with cursor-based pagination",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "IntegrationActionExecutor",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Rasa.io",
+      "Config": {
+        "IntegrationName": "Rasa.io",
+        "ObjectName": "persons",
+        "Verb": "List"
+      },
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "3DDE1F68-3DCD-4D93-B62E-4F55BE4D0447"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:11.994Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PageSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "C8F732F8-7733-4B0E-A84C-400F246576D1"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.005Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Cursor",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "2F24B8C2-3304-49B2-8550-75DC0C9DA4F5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.018Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Sort",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "E252083D-397A-40B0-AEB4-33518752B2DF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.028Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Records",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Array of Person records in this page"
+          },
+          "primaryKey": {
+            "ID": "1F4440A8-49A6-4F72-B4B4-67484C55EB6A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.038Z",
+            "checksum": "0e59566f8a73e145c153701cc8f2bfda4a335d94187ed94e4d3a280bff6315ac"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasMore",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "AF1B7D4D-CAF5-41E4-8901-006E9BD16268"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.051Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NextCursor",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "5C4229B4-6B63-4A24-8A83-0976F5EF6D0B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.063Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "85596C0B-54A3-4664-A437-5B6DFBCC74A7"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.072Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "E10D05B1-D450-4897-964A-614CE2CD0AEF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.102Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTOR_ERROR",
+            "IsSuccess": false,
+            "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "33642DAF-CE12-4BE4-A0B3-6AA19D79167B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.112Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D89EC8E2-1384-40A0-8B8B-87AFDEC547A7"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:11.437Z",
+      "checksum": "d3b3e1c52ecb86010198dfd31d339ebe083b7c76fdd5b45ad1aafb11b491fa15"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rasa.io - Get Post",
+      "Description": "Retrieves a single Post record from Rasa.io by its external ID",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "IntegrationActionExecutor",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Rasa.io",
+      "Config": {
+        "IntegrationName": "Rasa.io",
+        "ObjectName": "posts",
+        "Verb": "Get"
+      },
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExternalID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The unique ID of the Post record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "9F8182AE-C66C-4ED2-B942-67BF29D7FC26"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.123Z",
+            "checksum": "79c79906bb0d73cfb04d867d077e67473385a07e9f7cba13af65158c076903ee"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "E3187B44-5C57-446C-987E-B06820EA6959"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.134Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Record",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The retrieved Post record with all fields"
+          },
+          "primaryKey": {
+            "ID": "0FAA7055-9177-4CE8-AB67-FFE2236EACDD"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.145Z",
+            "checksum": "4ee8fe4317cd11002317b6fc9b3e5f5e929e4559e2264fb83a9689b2797fd8ac"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "title",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Post title"
+          },
+          "primaryKey": {
+            "ID": "286F5426-DCE9-4FD4-8CC5-06E4016A4285"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.156Z",
+            "checksum": "52160092b84ffa3b380319cb6a9d52724559c98c36cc153d1da6de403e124225"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "description",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Post description/summary"
+          },
+          "primaryKey": {
+            "ID": "CB7103DA-CA53-4A61-8895-2D7EB2C47CDD"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.165Z",
+            "checksum": "035c78764ff7320b708ca12cfbd3ae6c7594e98a96d550c7c965c4d6134f4b29"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "url",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Post URL"
+          },
+          "primaryKey": {
+            "ID": "76C32FBA-7FB2-46DC-875E-027B1E7BB657"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.175Z",
+            "checksum": "a5e5d08022aa65fd0f917b0415d27c9ed3c661cb6ba9f8628dd87859782d50b0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "source_url",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Original source URL"
+          },
+          "primaryKey": {
+            "ID": "40044FB2-8714-480C-ADEC-0C4F6364950C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.184Z",
+            "checksum": "487d556bd151123e7dea2c2e85f0d2e8fbe7fac5f9a532598d7ae43003d693f8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "image_url",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Post image URL"
+          },
+          "primaryKey": {
+            "ID": "4BB0F466-6360-4796-B3EE-888278C13612"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.193Z",
+            "checksum": "1b4d85d2e42154d1b5cf09fa806f97912416edc4c8321d46f2216fef15bdc952"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "quality_score",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Content quality score"
+          },
+          "primaryKey": {
+            "ID": "8B05CDEB-7152-4940-8B65-7648A6E2722B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.226Z",
+            "checksum": "794ce3170a916eecfc091afbac7a73995e7ba60e1a044d250e57f45b9737e36e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "is_active",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether the post is active"
+          },
+          "primaryKey": {
+            "ID": "76FE4030-17E5-4094-804F-FEAF02E8F5D5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.248Z",
+            "checksum": "4e78a907f3cae58791a6e26b7ef59936adce27bf15ceb87e52a7c09d590370ac"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "id",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Rasa.io internal post ID"
+          },
+          "primaryKey": {
+            "ID": "18686D10-EC9A-4C59-9700-FA969B18B0CB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.258Z",
+            "checksum": "4919fb8f2d972a90b48389ae930b97f57739522858d3142b8c651e8ff4cc8e0e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "created",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "When the post was created"
+          },
+          "primaryKey": {
+            "ID": "A7735A50-4E04-46DA-82AC-40548A8441BA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.269Z",
+            "checksum": "37f45e66232d40587da11074eb9f1419681e9cb8514dbe1dc8c4348d37dd02ce"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "updated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "When last updated"
+          },
+          "primaryKey": {
+            "ID": "8A4FD893-6508-4FD0-B679-DE4F9AA2F0B6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.278Z",
+            "checksum": "0e9c0b79a258f8258fb30134dea13345229cab290aa34853bd1c9c457d2f0bc2"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "CEC3B5E9-07AA-4C7C-9B19-990F833121C8"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.290Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTOR_ERROR",
+            "IsSuccess": false,
+            "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "4EFEC0CD-E207-4BE8-806C-B231C0E2BB20"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.300Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "C4FCB0B2-2BE8-4027-ABCF-E983E2DCA358"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.309Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "88D4D813-4208-44F9-AE60-09F36E694860"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:11.450Z",
+      "checksum": "55e1118b6510c72d04a783f832681cc08e7bf47293511d3498c5a98f6ea1dfcc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rasa.io - Search Post",
+      "Description": "Searches for Post records in Rasa.io matching the given field filters",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "IntegrationActionExecutor",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Rasa.io",
+      "Config": {
+        "IntegrationName": "Rasa.io",
+        "ObjectName": "posts",
+        "Verb": "Search"
+      },
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "1F3C6B1D-EC91-4DC8-952B-26427A916115"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.321Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PageSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "A85A4D96-4482-4743-AE52-372CB50BE6F7"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.329Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Page",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "9F7ACA86-BDD7-40F3-A029-CF880D7918EE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.364Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Sort",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "076FCC14-2576-42DC-8BB5-DA8416526941"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.375Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Post title"
+          },
+          "primaryKey": {
+            "ID": "2863F4DD-BBC7-4002-AA6C-C3C43616C746"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.386Z",
+            "checksum": "58b2f779cb2607b8843db68e672058072588805f8397db9d90291e062dfaca01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Post description/summary"
+          },
+          "primaryKey": {
+            "ID": "7D893AAA-DA61-4592-84CF-0A02646A256E"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.396Z",
+            "checksum": "15c365b6587bce0429627cd3daaf6b5d99762a43fed32fecfa27fc7a58081400"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "url",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Post URL"
+          },
+          "primaryKey": {
+            "ID": "EAF61700-AF52-4D88-9983-E3C9B9C022DB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.407Z",
+            "checksum": "77e1e7967d1ae1c15e6288b01f573f48e8113746e126d134fe3dfb2c796b6bb5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "source_url",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Original source URL"
+          },
+          "primaryKey": {
+            "ID": "903AAEA0-A669-49AF-978B-2E34FC4D22B6"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.418Z",
+            "checksum": "9b858b40436eb6986f468c344452ad2454e691a30dc82a44797e9e66a36438b3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "image_url",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Post image URL"
+          },
+          "primaryKey": {
+            "ID": "907EB2F8-CC33-46DF-86F9-2E5BEB397A26"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.430Z",
+            "checksum": "a9ce0baffda4663ecec7e0ee17dba0f126a5a28405c2e203c7da52a12893b0fd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "quality_score",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Content quality score"
+          },
+          "primaryKey": {
+            "ID": "6E70DC86-85A7-42BF-9C21-FECE8507EA7D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.441Z",
+            "checksum": "c65c25445536c6624ed3d4b11bcd62bb2c31f0646823db7097f9656488ac994d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "is_active",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether the post is active"
+          },
+          "primaryKey": {
+            "ID": "70851E8D-E54C-46A8-872D-4E06F43B55ED"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.451Z",
+            "checksum": "23294e68dc195b0593ddd4585708a83578a244cac2ea1087086f2a63c8c39af8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "created",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "When the post was created"
+          },
+          "primaryKey": {
+            "ID": "561D8462-FFC8-41B7-B889-3C04EF7DA7A5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.461Z",
+            "checksum": "43789efc7a0d5e7b34f1de6863f53d5c1c2f75063a6c68a8fe89f2ea5d7c8137"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "updated",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "When last updated"
+          },
+          "primaryKey": {
+            "ID": "B7865A90-0AC8-485F-B18D-3B0ACF125342"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.495Z",
+            "checksum": "fffc37fd66f2411e9aa61b5a6fd784d54da79f77936ce2314c10d4ab6fbf103d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Records",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Array of matching Post records"
+          },
+          "primaryKey": {
+            "ID": "3C02270C-F3EF-4320-8C87-DCCDC2EF8E41"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.506Z",
+            "checksum": "e23de1b3368a8a96d8890c78f97a101b8df318dad762f6a22e562af013db52f2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "500D3861-E91D-4EF5-AF87-F0A93D2CFBFA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.517Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasMore",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "51C94602-19D9-4116-A01C-9DA6A1980734"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.527Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "06D53125-C554-495E-A371-B5AD79BCB359"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.538Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTOR_ERROR",
+            "IsSuccess": false,
+            "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "5261453B-346A-4238-A8B3-30AED32DEB62"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.548Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DD46EDA9-8C92-4331-9E75-F8582A21BCCD"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:11.462Z",
+      "checksum": "1fdfe8f1de323b0b15b5b4e09c6b450bd42254bfe902994ed704261a40ef523f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rasa.io - List Post",
+      "Description": "Lists Post records from Rasa.io with cursor-based pagination",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "IntegrationActionExecutor",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Rasa.io",
+      "Config": {
+        "IntegrationName": "Rasa.io",
+        "ObjectName": "posts",
+        "Verb": "List"
+      },
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "AE0CC6C2-C3F5-476D-B57A-445D4DC402C2"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.559Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PageSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "A748FB22-4AF6-4CF9-AAB9-F6A1E170B062"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.571Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Cursor",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "48EB4077-1ED2-4799-B349-23EA313448EB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.581Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Sort",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "B66DEC97-C37B-4136-B7FB-A383BDA6E834"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.590Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Records",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Array of Post records in this page"
+          },
+          "primaryKey": {
+            "ID": "5867B864-8F1B-4E39-8465-96D93DB785F5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.625Z",
+            "checksum": "f0c8cc20808fd530c1a28e4ce5af1a82081a92ff1a934a238074afcaea82728e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasMore",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "C4854E37-8B26-4BE5-9BF9-78D8526C97CC"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.636Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NextCursor",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "9D0CAC4A-14C8-4731-95E0-45A75EA5F602"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.646Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "B7DF33AC-7F85-4F1F-828F-2E9896EC1F7B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.656Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "88543B47-DDE1-40D9-B5B3-667F3C597926"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.665Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTOR_ERROR",
+            "IsSuccess": false,
+            "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "229446F8-5328-4BCF-ACB6-16A5F867FB97"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.675Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5436D85E-E2A2-4C56-A503-9C3574AB4E5E"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:11.474Z",
+      "checksum": "1dc6cb58d1e93a96058589a50077d02ca080990c0c8c02e843d9d4ed5a4d6d18"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rasa.io - Get Insight Action",
+      "Description": "Retrieves a single Insight Action record from Rasa.io by its external ID",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "IntegrationActionExecutor",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Rasa.io",
+      "Config": {
+        "IntegrationName": "Rasa.io",
+        "ObjectName": "insights-actions",
+        "Verb": "Get"
+      },
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExternalID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The unique ID of the Insight Action record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "C769BE08-1C8A-4533-902A-2C44B93E5155"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.684Z",
+            "checksum": "5f3413cd7d5581017f70f8f638ffdeaac23a17d7daae7db0a26406736bfacb89"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "CD69D3E7-07CF-48AF-8D77-D88A616CD874"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.694Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Record",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The retrieved Insight Action record with all fields"
+          },
+          "primaryKey": {
+            "ID": "528DD39B-AEDD-4E5F-BA2F-1AA8A13D3B07"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.707Z",
+            "checksum": "02e2fbf81f5e3e198caba38bb290fd06509f8ee61f317bfc788530b85e991239"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "person_id",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Associated person ID"
+          },
+          "primaryKey": {
+            "ID": "758F35C3-2C12-4666-AC56-69331205A9CD"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.718Z",
+            "checksum": "fa37e0f7dca27f580c635a1c96ff1edf63638b6872e1f8fbd1beebbc1deca111"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "email",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Person email"
+          },
+          "primaryKey": {
+            "ID": "EB7245FF-F78A-4BC9-AB1D-00AF8CF73C6C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.751Z",
+            "checksum": "8ecaf38c64defb195bc88362952f46792c9ceb43b0e94ecaf60d18eae69a64e2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "action_type",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Type of action (click, open, etc.)"
+          },
+          "primaryKey": {
+            "ID": "45B87D59-71C6-4B20-911A-EB615D8E6F60"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.761Z",
+            "checksum": "0cdd38ac25c00f638e4456eb3559d4b0cf56388001a1b02efa17f8e37f4bdcdb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "created",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "When the action occurred"
+          },
+          "primaryKey": {
+            "ID": "175E7B8C-FAD1-47E0-B1FB-7FA27D2336AA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.771Z",
+            "checksum": "d425997b18c1d8814b262882072f834a18b2c4cd902fe44a62697c65ade9db76"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "id",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Action event ID"
+          },
+          "primaryKey": {
+            "ID": "6598A3F1-1075-40FC-82E8-78E8402F6A4A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.781Z",
+            "checksum": "27b8f12a8042760f3b793785df5f94aa48452fc9aaa6a601b9e82b4e338ccaa2"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "96186C1B-F515-43E8-BC83-6B194E2A7E7B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.790Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTOR_ERROR",
+            "IsSuccess": false,
+            "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "F027E54F-0A23-4C8A-A335-8128EBC4929D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.798Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "69095EC9-5F34-413A-BE5C-BFF433F52A1B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.806Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A06C4837-3CA9-446A-B670-DDC971648927"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:11.486Z",
+      "checksum": "db7d58935ffe661deed757a557d4c4c7eb57150f2c3df00afc7e0eec24421a9c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rasa.io - Search Insight Action",
+      "Description": "Searches for Insight Action records in Rasa.io matching the given field filters",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "IntegrationActionExecutor",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Rasa.io",
+      "Config": {
+        "IntegrationName": "Rasa.io",
+        "ObjectName": "insights-actions",
+        "Verb": "Search"
+      },
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "55E0F70B-6CBD-4B9F-84B1-129214FABE82"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.816Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PageSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "FA669D3D-0D3C-4432-962C-8D269CCF025F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.827Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Page",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "A29F9034-F31E-46E6-9834-FFC665BD85E5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.836Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Sort",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "2239CE48-609E-4FFD-A541-DCA906A3D537"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.869Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "person_id",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Associated person ID"
+          },
+          "primaryKey": {
+            "ID": "4A4F5046-FD9A-43E2-B0D0-CD65504E388B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.880Z",
+            "checksum": "b9395809696f6094393791ed2ed886eba26fb7e29293d39fa65fe06008c85573"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "email",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Person email"
+          },
+          "primaryKey": {
+            "ID": "E5118F9D-6A3A-45BC-9CD8-197A9A9088EE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.889Z",
+            "checksum": "16bdc0ef18dcf0cf90394facac07238991fd2e1dea80a2964703115e8ed6a626"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "action_type",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Type of action (click, open, etc.)"
+          },
+          "primaryKey": {
+            "ID": "25445BFE-2377-4E62-9869-1F912381E2FE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.899Z",
+            "checksum": "861a2b9b14fb4421cbdf6104986fc13ce95c3e27cb1577faeae0088fe7811c3b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "created",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "When the action occurred"
+          },
+          "primaryKey": {
+            "ID": "7377862E-E727-4D88-9EDB-3C48ECC8A2C5"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.909Z",
+            "checksum": "def48c3492b761424a2177a4f3e8c2dc39886f9c3aa986ec05e59ef9c36ff5d4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Records",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Array of matching Insight Action records"
+          },
+          "primaryKey": {
+            "ID": "1ECE7AC9-AB0D-4C08-8CDA-26FC35552B09"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.919Z",
+            "checksum": "732acf0499b16eaedc4a5bfdddfdf0c74878b5413006292e82347dfb048dfb9a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "EEF75E86-63E9-4722-8491-2F43EB1EF187"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.929Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasMore",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "7346A3CD-3C6A-464A-ADCF-99F2D9FF7393"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.939Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "C95D6046-1B33-4229-B8F5-35C61788E82E"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.948Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTOR_ERROR",
+            "IsSuccess": false,
+            "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "E5EF7239-F0F5-43D4-8F4D-634008EEAEE9"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.956Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FE15D2AA-8CE1-4B90-A3E5-01F5CFAB7E17"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:11.501Z",
+      "checksum": "82bc4ecf590ad01d502da997adb42fc741e5722a9060af128a42ff4f093e54b4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rasa.io - List Insight Action",
+      "Description": "Lists Insight Action records from Rasa.io with cursor-based pagination",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "IntegrationActionExecutor",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Rasa.io",
+      "Config": {
+        "IntegrationName": "Rasa.io",
+        "ObjectName": "insights-actions",
+        "Verb": "List"
+      },
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "DDC80EDA-90A7-40E1-986C-2AECF4332644"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:12.991Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PageSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "48B7DD4F-55BA-4621-8370-84D011156BE4"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.002Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Cursor",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "07C8904F-F0B1-42E5-B03D-DE73FF587978"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.012Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Sort",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "5C2258A2-5B8B-4C4F-A57D-0CCBBBA128F7"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.024Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Records",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Array of Insight Action records in this page"
+          },
+          "primaryKey": {
+            "ID": "CB8844AE-ECF5-4D2D-97DB-325821D5C4B0"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.036Z",
+            "checksum": "df4b843bd02aee6bc0c2cbef8525094252273744d7cb7d5a6383b8f82436a303"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasMore",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "ED373B6F-CC9E-4A4B-9D66-EB7F98B70CD8"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.045Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NextCursor",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "3260A127-7BA9-426A-834E-A17207E3D529"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.055Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "5022AC2A-CEA9-48C7-BAA4-A7BBC0219CBD"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.064Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "714CDE1B-2448-4AC3-8FC0-09AC146498D8"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.072Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTOR_ERROR",
+            "IsSuccess": false,
+            "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "E7FAF758-76C1-475F-B517-3E4C034EB9ED"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.080Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B7358517-DBAF-440D-925B-A1E855832898"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:11.514Z",
+      "checksum": "27260d9ebbd6b573a57f52d2c25494a7a57e29dd7b5a32c92b70e89c00195b74"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rasa.io - Get Insight Topic",
+      "Description": "Retrieves a single Insight Topic record from Rasa.io by its external ID",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "IntegrationActionExecutor",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Rasa.io",
+      "Config": {
+        "IntegrationName": "Rasa.io",
+        "ObjectName": "insights-topics",
+        "Verb": "Get"
+      },
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExternalID",
+            "Type": "Both",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "The unique ID of the Insight Topic record to retrieve"
+          },
+          "primaryKey": {
+            "ID": "3BF86620-16F3-4DA1-9237-E2360B014287"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.119Z",
+            "checksum": "868315c15d625291522dba28cb7b1c1860ff27d26f6bd4c11c9b80b7b1145ac8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "1C4342AF-BB5D-4FF1-8F40-2015763CD36C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.130Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Record",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "The retrieved Insight Topic record with all fields"
+          },
+          "primaryKey": {
+            "ID": "D57FD24D-CD08-4FFF-BCB1-E18F6C880AD3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.140Z",
+            "checksum": "26629bac176f61a6aca30f288056c5a64226f3472ba0aa095bb9c7de5f1c6924"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "person_id",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Associated person ID"
+          },
+          "primaryKey": {
+            "ID": "300FD041-AD42-4558-8833-692E1242D35F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.151Z",
+            "checksum": "fa37e0f7dca27f580c635a1c96ff1edf63638b6872e1f8fbd1beebbc1deca111"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "email",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Person email"
+          },
+          "primaryKey": {
+            "ID": "32B02D21-0D1E-4C6D-960C-9D4ACB00C283"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.160Z",
+            "checksum": "8ecaf38c64defb195bc88362952f46792c9ceb43b0e94ecaf60d18eae69a64e2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "topic",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Topic name"
+          },
+          "primaryKey": {
+            "ID": "6985D626-DA9F-4F05-A177-D0844FEDBC8E"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.170Z",
+            "checksum": "d106f9f1392a2daf18429eed70b521338c96b33768544b1f4f1f69c99f580b30"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "weight",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Interest weight/score"
+          },
+          "primaryKey": {
+            "ID": "574A2688-14D1-4847-84BC-A3FB1A7DF18C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.182Z",
+            "checksum": "96e9cd84b866990e8126c7b1f4af06d0f1ed03dc9ccdc8daba80e2621752a4fd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "first_click",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "First interaction with this topic"
+          },
+          "primaryKey": {
+            "ID": "8860C12E-3FDF-4DB4-86F6-2ADF09291763"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.192Z",
+            "checksum": "b69283ddf7926d9f9cb48c6f21779570f28bfcb232c9fedbcd4ae58166d62685"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "last_click",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Most recent interaction"
+          },
+          "primaryKey": {
+            "ID": "93FA6FE0-A857-4826-AFCD-B106F169C4DA"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.202Z",
+            "checksum": "e001fb008fe2da5bb2f7adb15c387d652432c19d005cf5e2f8b39c65256880d3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "id",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Topic interest ID"
+          },
+          "primaryKey": {
+            "ID": "332A9398-F6DE-436F-9BEF-690E5F1B2930"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.210Z",
+            "checksum": "a9b461848af64159dad102e05b9aa3e9437f5ad37d41ba601bb3259709bb4d17"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Get operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "8D3F21E1-6133-42BC-AE6B-C9EA2E7E6701"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.241Z",
+            "checksum": "479dce77d1533bdeb36e41f3af6f761c1fbda8d16c595867d787bc2b5f9dbd5e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTOR_ERROR",
+            "IsSuccess": false,
+            "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "E9ADB207-0672-4278-93CB-EAF306C9957C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.249Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Record not found"
+          },
+          "primaryKey": {
+            "ID": "FBC514F8-2414-4F91-81F4-28B596F7E337"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.259Z",
+            "checksum": "b5db3cbf92e8d90b3fd6c46cf82c66903e1ee8cad66eb0093f6adcb8c30c5ece"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7CF75CCD-4DB4-4A8F-8C99-12B5900219BD"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:11.523Z",
+      "checksum": "655a33acdb29c137ac9dfa3fa9c28c3bb1d4582a19305746ef8fc83d25a1c834"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rasa.io - Search Insight Topic",
+      "Description": "Searches for Insight Topic records in Rasa.io matching the given field filters",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "IntegrationActionExecutor",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Rasa.io",
+      "Config": {
+        "IntegrationName": "Rasa.io",
+        "ObjectName": "insights-topics",
+        "Verb": "Search"
+      },
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "D9492474-69CE-485A-9CFF-1057ABAC958C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.271Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PageSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum number of records to return (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "02896020-CFC6-4069-ADB5-D97457547C4B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.281Z",
+            "checksum": "be65ebfae6d6d9b79916066f5d1603c598684648084c7c813b4ba7717e9ffa4e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Page",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Page number for paginated results (1-based)"
+          },
+          "primaryKey": {
+            "ID": "EDD09115-F9B9-4237-96AA-D2CC850DA9F1"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.292Z",
+            "checksum": "8f84e0bd7b7700ea2cc93079917652a21424a3cd566251f61f3431094327af5d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Sort",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "B690B6DD-97A3-4048-935C-050807EA9353"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.302Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "person_id",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Associated person ID"
+          },
+          "primaryKey": {
+            "ID": "443A5626-5DAD-4839-81C0-0D4E255041D3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.311Z",
+            "checksum": "b9395809696f6094393791ed2ed886eba26fb7e29293d39fa65fe06008c85573"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "email",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Person email"
+          },
+          "primaryKey": {
+            "ID": "AB40A388-F8D5-461E-93BD-1369677A29D3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.322Z",
+            "checksum": "16bdc0ef18dcf0cf90394facac07238991fd2e1dea80a2964703115e8ed6a626"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "topic",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Topic name"
+          },
+          "primaryKey": {
+            "ID": "B17EFA79-4851-4C97-83DA-6BB29866C33F"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.330Z",
+            "checksum": "27abe8b4914362edeff914cb0a559fed82e1cb1937861a8f2db75d52528fcc0c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "weight",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Interest weight/score"
+          },
+          "primaryKey": {
+            "ID": "19DA757A-9F19-4846-B0F2-CDF0F376D235"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.364Z",
+            "checksum": "f3c9e2c57a2a9f40852120b24ec441f7dfc8bfadac9ad260e2f348b917b90682"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "first_click",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "First interaction with this topic"
+          },
+          "primaryKey": {
+            "ID": "8FA608F7-529D-4FED-9F33-A6DAFB4F36C8"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.375Z",
+            "checksum": "60cbbdff6bdd824426dd673e5572a0edb20a730c9309316b4d73870c6a2c1a97"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "last_click",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Most recent interaction"
+          },
+          "primaryKey": {
+            "ID": "487F80E6-052B-4520-BE06-0B181E973EA3"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.384Z",
+            "checksum": "8ea65515a4b2e131fcab8ddab235ddfb2ab83dabed81bece537646b067069286"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Records",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Array of matching Insight Topic records"
+          },
+          "primaryKey": {
+            "ID": "C00166EC-5BF4-4031-8D1A-7C7FFB0214FF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.395Z",
+            "checksum": "5977de985bc263f9114d22a2a7c013ba873ffcbcc7bd0a41964a9c7aa6856f08"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Total number of matching records"
+          },
+          "primaryKey": {
+            "ID": "48F48A14-7305-41A9-9F89-8B5ABB97CB21"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.406Z",
+            "checksum": "e02109f4e3da6b87024abcdb745df12bdfb6fdb913214629b90a5c3a910bb69c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasMore",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "CE24D2E8-B98B-4ABE-B682-9A39232E1CC1"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.416Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Search operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "AD0F8645-C46C-423D-9669-768AB5F7909D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.426Z",
+            "checksum": "3373be2cb2bed713fed8b1032f4786ce62272ee6f57a43c943c2c313a90b8e72"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTOR_ERROR",
+            "IsSuccess": false,
+            "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "79D8A12C-B89C-4545-8476-832FADF66AEE"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.436Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6F638653-F270-4D7A-9573-49D29513E89F"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:11.548Z",
+      "checksum": "790d8838a8ab5f78e8e0432767fbe0b58d53f4519b142ad01bc163a63e1209d0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rasa.io - List Insight Topic",
+      "Description": "Lists Insight Topic records from Rasa.io with cursor-based pagination",
+      "Type": "Custom",
+      "Status": "Active",
+      "DriverClass": "IntegrationActionExecutor",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Rasa.io",
+      "Config": {
+        "IntegrationName": "Rasa.io",
+        "ObjectName": "insights-topics",
+        "Verb": "List"
+      },
+      "IconClass": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyIntegrationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Optional: specific CompanyIntegration to use"
+          },
+          "primaryKey": {
+            "ID": "284713DA-C3CF-4D0D-B59E-DD379C0B5D80"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.448Z",
+            "checksum": "612d8102020e79588e21b28d18f54079390c6b6347a63c8f7a51d207e7c7375e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PageSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum number of records to return per page (default: 100)"
+          },
+          "primaryKey": {
+            "ID": "C3FC9FC5-7BED-4301-A855-492050BDED5C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.456Z",
+            "checksum": "8e913e91c402c85e6d53f08d0c7b27fd7620e3e6511d6002c59ba10f0c9b7ff0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Cursor",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Opaque cursor for fetching the next page (from previous ListResult)"
+          },
+          "primaryKey": {
+            "ID": "443D7C24-E56B-4190-8B72-9CAFCB63F64D"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.486Z",
+            "checksum": "e0c29e2cdcaa8e533d6d475725916498510b6b241d6c88caec7b5f1dcb443a75"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Sort",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Sort expression (connector-specific format)"
+          },
+          "primaryKey": {
+            "ID": "4B20DEA8-3534-4C4B-A3BB-303FA7029C2A"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.498Z",
+            "checksum": "679c6f2c6bbd91910e9efb15a756442ca6c2fa4ad5dee94737faa43cc5ab56e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Records",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Array of Insight Topic records in this page"
+          },
+          "primaryKey": {
+            "ID": "FC85EE8A-CB14-40FA-91A6-50B9E745BB6C"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.509Z",
+            "checksum": "c16b9dd59ed738729b3f555b77c5ca1325a8c25574507edfe3a2ea3a1d04f3da"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasMore",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Whether more pages of results exist"
+          },
+          "primaryKey": {
+            "ID": "1FAD8921-0392-477D-9E41-3FDA133178CF"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.520Z",
+            "checksum": "209a424f02e57038acec1056529416be5821d1576f013ff2284b144a74e66359"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NextCursor",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Cursor to pass for the next page"
+          },
+          "primaryKey": {
+            "ID": "4DF6B064-B640-4424-9D03-17C904B27BED"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.531Z",
+            "checksum": "d3229530acb0652abc213ca10e5821fecafceb12919d68536aa1c24bce23529a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Total number of records, if known"
+          },
+          "primaryKey": {
+            "ID": "9E7A0685-4C7F-404E-88FB-5E419FA50C4B"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.540Z",
+            "checksum": "3b2be011036e5347488cc91720e0139c054bffcf4316f8d30f6e4ca2137db301"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "List operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "5AD99F8B-CE09-4036-A3D4-0122598237BB"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.549Z",
+            "checksum": "be42b070cb47b3b4c7b6666ee69c74810bde6ec0637542c75235cbf8c17faac3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTOR_ERROR",
+            "IsSuccess": false,
+            "Description": "Internal executor error"
+          },
+          "primaryKey": {
+            "ID": "D6ECE7F5-E6F5-4237-A21F-95220A228307"
+          },
+          "sync": {
+            "lastModified": "2026-03-17T18:14:13.557Z",
+            "checksum": "828371f451d8db6c0fda4c2ba434942110fce4ccde91e196c38cd1287e3b0f5f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FF768FA6-7B07-4C5B-A0C3-8A9D67B40BA0"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:14:11.557Z",
+      "checksum": "645193a73374b86bebd100e0f510769a6c41cca0e8d7cb64123d0f8b9b476e89"
+    }
+  }
+]

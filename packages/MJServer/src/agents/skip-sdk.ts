@@ -16,6 +16,7 @@ import {
     SkipResponsePhase,
     SkipAPIRequestAPIKey,
     SkipQueryInfo,
+    SkipQueryCatalogEntry,
     SkipEntityInfo,
     SkipEntityFieldInfo,
     SkipEntityFieldValueInfo,
@@ -360,6 +361,7 @@ export class SkipSDK {
             payload, // Pass through payload for incremental artifact building (e.g., PRD in progress)
             entities: baseRequest.entities || [],
             queries: baseRequest.queries || [],
+            queryCatalog: baseRequest.queryCatalog,
             notes: baseRequest.notes,
             noteTypes: baseRequest.noteTypes,
             userEmail: baseRequest.userEmail,
@@ -391,6 +393,9 @@ export class SkipSDK {
     ): Promise<Partial<SkipAPIRequest>> {
         const entities = includeEntities ? await this.buildEntities(dataSource, forceEntityRefresh) : [];
         const queries = includeQueries ? this.buildQueries() : [];
+        // Always build the lightweight query catalog for collision detection,
+        // regardless of whether full queries are included
+        const queryCatalog = this.buildQueryCatalog();
         const { notes, noteTypes } = includeNotes ? await this.buildAgentNotes(contextUser) : { notes: [], noteTypes: [] };
         // Note: requests would be built here if includeRequests is true
 
@@ -415,6 +420,7 @@ export class SkipSDK {
         return {
             entities,
             queries,
+            queryCatalog,
             notes,
             noteTypes,
             userEmail: contextUser.Email,
@@ -468,6 +474,7 @@ export class SkipSDK {
             SQL: q.SQL,
             Status: q.Status,
             QualityRank: q.QualityRank,
+            Reusable: q.Reusable,
             EmbeddingVector: q.EmbeddingVector,
             EmbeddingModelID: q.EmbeddingModelID,
             EmbeddingModelName: q.EmbeddingModel,
@@ -521,6 +528,22 @@ export class SkipSDK {
         if (!cat.ParentID) return cat.Name;
         const parentPath = this.buildQueryCategoryPath(md, cat.ParentID);
         return parentPath ? `${parentPath}/${cat.Name}` : cat.Name;
+    }
+
+    /**
+     * Build a lightweight catalog of ALL query names and category paths (regardless of status).
+     * Always called regardless of includeQueries, so collision detection
+     * has accurate data even when full query metadata is not transmitted.
+     * Includes all statuses because the database enforces name+category uniqueness
+     * across all queries, not just approved ones.
+     */
+    private buildQueryCatalog(): SkipQueryCatalogEntry[] {
+        const md = new Metadata();
+
+        return md.Queries.map((q) => ({
+            Name: q.Name,
+            CategoryPath: this.buildQueryCategoryPath(md, q.CategoryID)
+        }));
     }
 
     /**

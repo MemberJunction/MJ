@@ -1,5 +1,31 @@
 # @memberjunction/ai-minimax
 
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [140fc6d]
+  - @memberjunction/ai-openai@5.14.0
+  - @memberjunction/ai@5.14.0
+  - @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ai@5.13.0
+  - @memberjunction/ai-openai@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.12.0
+- @memberjunction/ai-openai@5.12.0
+- @memberjunction/global@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes

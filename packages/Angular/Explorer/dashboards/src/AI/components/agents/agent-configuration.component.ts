@@ -1,7 +1,7 @@
 import { Component, OnDestroy, AfterViewInit, ChangeDetectorRef } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey, RunView } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
@@ -18,6 +18,23 @@ interface AgentFilter {
   status: string;
   executionMode: string;
   exposeAsAction: string;
+  categoryId: string;
+}
+
+/** Lightweight category row for tree-view grouping */
+interface CategoryInfo {
+  ID: string;
+  Name: string;
+  ParentID: string | null;
+  Description: string | null;
+}
+
+/** A category node with nested agents and child categories for tree rendering */
+export interface CategoryTreeNode {
+  Category: CategoryInfo;
+  Agents: MJAIAgentEntityExtended[];
+  Children: CategoryTreeNode[];
+  Expanded: boolean;
 }
 
 /**
@@ -25,7 +42,7 @@ interface AgentFilter {
  */
 interface AgentConfigurationUserPreferences {
   filterPanelVisible: boolean;
-  viewMode: 'grid' | 'list';
+  viewMode: 'grid' | 'list' | 'tree';
   sortColumn: string;
   sortDirection: 'asc' | 'desc';
   filters: AgentFilter;
@@ -50,7 +67,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   public isLoading = false;
   public filterPanelVisible = true;
-  public viewMode: 'grid' | 'list' = 'grid';
+  public viewMode: 'grid' | 'list' | 'tree' = 'grid';
   public expandedAgentId: string | null = null;
 
   public agents: MJAIAgentEntityExtended[] = [];
@@ -70,10 +87,16 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     parentAgent: 'all',
     status: 'all',
     executionMode: 'all',
-    exposeAsAction: 'all'
+    exposeAsAction: 'all',
+    categoryId: 'all'
   };
 
   public selectedAgentForTest: MJAIAgentEntityExtended | null = null;
+
+  // Category tree view data
+  public categoryTree: CategoryTreeNode[] = [];
+  public uncategorizedAgents: MJAIAgentEntityExtended[] = [];
+  private categories: CategoryInfo[] = [];
 
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
@@ -186,6 +209,11 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     // Apply filters after data is loaded (uses saved preferences)
     this.applyFilters();
 
+    // If tree view mode is active, load categories for the tree
+    if (this.viewMode === 'tree') {
+      this.loadCategoriesAndBuildTree();
+    }
+
     // Notify that the resource has finished loading
     this.NotifyLoadComplete();
   }
@@ -239,7 +267,8 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
         parentAgent: prefs.filters.parentAgent || 'all',
         status: prefs.filters.status || 'all',
         executionMode: prefs.filters.executionMode || 'all',
-        exposeAsAction: prefs.filters.exposeAsAction || 'all'
+        exposeAsAction: prefs.filters.exposeAsAction || 'all',
+        categoryId: prefs.filters.categoryId || 'all'
       };
     }
   }
@@ -340,7 +369,8 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       parentAgent: 'all',
       status: 'all',
       executionMode: 'all',
-      exposeAsAction: 'all'
+      exposeAsAction: 'all',
+      categoryId: 'all'
     };
     this.applyFilters();
     this.saveUserPreferencesDebounced();
@@ -393,10 +423,24 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       filtered = filtered.filter(agent => agent.ExposeAsAction === isExposed);
     }
 
+    // Apply category filter — match the selected category or any of its descendants
+    if (this.currentFilters.categoryId !== 'all') {
+      const matchingIds = this.getCategoryAndDescendantIds(this.currentFilters.categoryId);
+      filtered = filtered.filter(agent => {
+        const agentCatId = agent.CategoryID;
+        return agentCatId != null && matchingIds.some(id => UUIDsEqual(id, agentCatId));
+      });
+    }
+
     // Apply sorting
     filtered = this.applySorting(filtered);
 
     this.filteredAgents = filtered;
+
+    // Rebuild tree view data when filters change
+    if (this.viewMode === 'tree') {
+      this.buildCategoryTree();
+    }
   }
 
   /**
@@ -455,8 +499,13 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     // For now, just a placeholder for tracking state changes
   }
 
-  public setViewMode(mode: 'grid' | 'list'): void {
+  public setViewMode(mode: 'grid' | 'list' | 'tree'): void {
     this.viewMode = mode;
+    if (mode === 'tree' && this.categories.length === 0) {
+      this.loadCategoriesAndBuildTree();
+    } else if (mode === 'tree') {
+      this.buildCategoryTree();
+    }
     this.emitStateChange();
     this.saveUserPreferencesDebounced();
   }
@@ -654,6 +703,103 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
    */
   public hasLogoURL(agent: MJAIAgentEntityExtended): boolean {
     return !!agent?.LogoURL;
+  }
+
+  // ========================================
+  // Category Tree View
+  // ========================================
+
+  /** Load categories from the database and build the tree structure */
+  private async loadCategoriesAndBuildTree(): Promise<void> {
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<CategoryInfo>({
+        EntityName: 'MJ: AI Agent Categories',
+        Fields: ['ID', 'Name', 'ParentID', 'Description'],
+        ExtraFilter: "Status='Active'",
+        OrderBy: 'Name ASC',
+        ResultType: 'simple'
+      });
+      if (result.Success) {
+        this.categories = result.Results;
+        this.buildCategoryTree();
+        this.cdr.detectChanges();
+      }
+    } catch (error) {
+      console.error('[AgentConfiguration] Error loading categories:', error);
+    }
+  }
+
+  /** Build tree nodes from flat categories + filtered agents */
+  private buildCategoryTree(): void {
+    const agentsByCategory = new Map<string, MJAIAgentEntityExtended[]>();
+    const uncategorized: MJAIAgentEntityExtended[] = [];
+
+    for (const agent of this.filteredAgents) {
+      const catId = agent.CategoryID;
+      if (catId) {
+        const normalizedId = catId.toUpperCase();
+        if (!agentsByCategory.has(normalizedId)) {
+          agentsByCategory.set(normalizedId, []);
+        }
+        agentsByCategory.get(normalizedId)!.push(agent);
+      } else {
+        uncategorized.push(agent);
+      }
+    }
+
+    // Build tree from root categories (ParentID is null)
+    const rootCategories = this.categories.filter(c => !c.ParentID);
+    this.categoryTree = rootCategories.map(c => this.buildTreeNode(c, agentsByCategory));
+    this.uncategorizedAgents = uncategorized;
+  }
+
+  /** Recursively build a CategoryTreeNode */
+  private buildTreeNode(
+    category: CategoryInfo,
+    agentsByCategory: Map<string, MJAIAgentEntityExtended[]>
+  ): CategoryTreeNode {
+    const children = this.categories
+      .filter(c => c.ParentID && UUIDsEqual(c.ParentID, category.ID))
+      .map(c => this.buildTreeNode(c, agentsByCategory));
+
+    const normalizedId = category.ID.toUpperCase();
+    return {
+      Category: category,
+      Agents: agentsByCategory.get(normalizedId) || [],
+      Children: children,
+      Expanded: true // default expanded
+    };
+  }
+
+  /** Get a category and all its descendant IDs (for inclusive filtering) */
+  private getCategoryAndDescendantIds(categoryId: string): string[] {
+    const ids = [categoryId];
+    const children = this.categories.filter(c => c.ParentID && UUIDsEqual(c.ParentID, categoryId));
+    for (const child of children) {
+      ids.push(...this.getCategoryAndDescendantIds(child.ID));
+    }
+    return ids;
+  }
+
+  /** Toggle a category node's expanded state in the tree view */
+  public toggleCategoryNode(node: CategoryTreeNode): void {
+    node.Expanded = !node.Expanded;
+  }
+
+  /** Check if a tree node has any visible content (agents or children with content) */
+  public hasVisibleContent(node: CategoryTreeNode): boolean {
+    if (node.Agents.length > 0) return true;
+    return node.Children.some(child => this.hasVisibleContent(child));
+  }
+
+  /** Get the total agent count for a category including all descendants */
+  public getAgentCount(node: CategoryTreeNode): number {
+    let count = node.Agents.length;
+    for (const child of node.Children) {
+      count += this.getAgentCount(child);
+    }
+    return count;
   }
 
   // === BaseResourceComponent Required Methods ===

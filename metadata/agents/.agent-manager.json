@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Agent Manager",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
       "Description": "Top-level orchestrator agent responsible for creating, editing, and managing other AI agents in the MemberJunction system. Uses specialized sub-agents to gather requirements, design architecture, and craft prompts.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -139,6 +140,7 @@
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Requirements Analyst Agent",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
             "Description": "MBA-type business analyst with technical expertise, specialized in gathering and clarifying detailed requirements through iterative conversations. Ensures clear definition of agent objectives before design begins.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
@@ -233,14 +235,15 @@
             "ID": "A15E6AC3-CE68-4D08-A52A-505019BB2099"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:33.747Z",
-            "checksum": "67e26b2426b690e543da09dbb27df8d8eadd3074e12e076c175e6e0c6910245f"
+            "lastModified": "2026-03-13T19:10:48.123Z",
+            "checksum": "6129d2982ff7d9395f117e89d11eca18e31246765f507ea3cc26c3cadf7ae16e"
           }
         },
         {
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Planning Designer Agent",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
             "Description": "System architect specialized in designing agent hierarchies, selecting appropriate actions from the library, and creating optimal agent structures based on requirements.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
@@ -402,14 +405,15 @@
             "ID": "644674DB-7791-44C4-8360-3914111C0E10"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:33.748Z",
-            "checksum": "e8ae3cdd60cae566506df52d63f2261c88d579acc5d02187d89a5c3c3b39b234"
+            "lastModified": "2026-03-13T19:10:48.147Z",
+            "checksum": "b645f791fe7c431579a30849c6e93adc52f54f610a8f6f9262c64586e0fb5980"
           }
         },
         {
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Architect Agent",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
             "Description": "Transforms technical design into validated AgentSpec JSON using AgentSpec interface",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
@@ -478,14 +482,15 @@
             "ID": "F80CB55D-7C89-41B4-9E99-73A53EF3D92A"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:33.750Z",
-            "checksum": "00d34ad4c5321d789c5464e03e6867dfe4bb9757aaab10c73b06beb4574df83d"
+            "lastModified": "2026-03-13T19:10:48.166Z",
+            "checksum": "e016e28241619d83a2a5bb1fd25075959e9a701831220eac0baf298674fc54cf"
           }
         },
         {
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Builder Agent",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
             "Description": "Persists validated AgentSpec to database via AgentSpecSync",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
@@ -502,14 +507,15 @@
             "ID": "F3686377-DD93-480D-89AB-8427A36A5C2E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:33.787Z",
-            "checksum": "f41f5c7de51060b51c11ccd600e88c4a7864f2930671c6fb2d49271adecc4990"
+            "lastModified": "2026-03-13T19:10:48.225Z",
+            "checksum": "455a46991ba7e58a089eb76cff91811c27f85f28066de8cd690d02c3d0bd3412"
           }
         },
         {
           "fields": {
             "ParentID": "@parent:ID",
             "Name": "Agent Spec Loader",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Platform Management",
             "Description": "Simple flow agent that loads complete agent specification from database by agent ID",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
             "Status": "Active",
@@ -608,8 +614,8 @@
             "ID": "09D7E6EE-A3DC-4DBD-BA72-349FC68FE8C0"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:07:33.789Z",
-            "checksum": "3acbcda3dd5537fb9c35be6515450dcd319b7e505a2d89947afb97134cae5b3a"
+            "lastModified": "2026-03-13T19:10:48.246Z",
+            "checksum": "2947a4e22fb5ade95cc08170d448a3f93b73acc01b067e3cecfef04971bd718f"
           }
         }
       ]
@@ -618,8 +624,8 @@
       "ID": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:33.585Z",
-      "checksum": "aada3643ea637f8f48a36500d20a168c2fa1081e091a5db02999bcbd429cea59"
+      "lastModified": "2026-03-13T19:10:48.006Z",
+      "checksum": "7766e1b59a251e6c0530d0f1a5b08d9775a983be325f1e159a1d99116ade9099"
     }
   }
 ]

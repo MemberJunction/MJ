@@ -117,6 +117,10 @@ export interface MappedRecord {
 export interface SyncResult {
     /** Whether the overall sync completed without fatal errors */
     Success: boolean;
+    /** Summary error message when the sync fails or completes with errors */
+    ErrorMessage?: string;
+    /** The CompanyIntegrationRun ID created for this sync */
+    RunID?: string;
     /** Total records processed */
     RecordsProcessed: number;
     /** New records created in MJ */
@@ -133,6 +137,31 @@ export interface SyncResult {
     Errors: SyncRecordError[];
     /** Watermark value after this sync for incremental next-run */
     WatermarkAfter?: string;
+    /** Per-entity-map results breakdown */
+    EntityMapResults?: EntityMapSyncResult[];
+    /** Duration of the sync in milliseconds */
+    Duration?: number;
+}
+
+/** Per-entity-map result within a sync run */
+export interface EntityMapSyncResult {
+    /** The entity map ID */
+    EntityMapID: string;
+    /** External object name */
+    ExternalObjectName: string;
+    /** Target MJ entity name */
+    EntityName: string;
+    /** Whether this entity map synced without errors */
+    Success: boolean;
+    /** Record counts for this entity map */
+    RecordsProcessed: number;
+    RecordsCreated: number;
+    RecordsUpdated: number;
+    RecordsDeleted: number;
+    RecordsErrored: number;
+    RecordsSkipped: number;
+    /** Duration of this entity map sync in milliseconds */
+    Duration?: number;
 }
 
 /** Error details for a single record during sync */
@@ -196,6 +225,16 @@ export interface SyncNotification {
 
 /** Callback invoked after a sync run completes (success or failure) */
 export type OnNotificationCallback = (notification: SyncNotification) => void;
+
+/** Options for controlling integration sync behavior */
+export interface IntegrationSyncOptions {
+    /** Restrict sync to specific entity map IDs. If omitted, all enabled maps are synced. */
+    EntityMapIDs?: string[];
+    /** Force a full sync, ignoring watermarks. Defaults to false. */
+    FullSync?: boolean;
+    /** Links this sync run to a ScheduledJobRun for traceability. */
+    ScheduledJobRunID?: string;
+}
 
 // ─── Source Schema Introspection Types ──────────────────────────────
 // These types define the schema introspection contract for connectors.
@@ -338,6 +377,30 @@ export interface SearchResult {
     TotalCount: number;
     /** Whether more pages of results exist */
     HasMore: boolean;
+}
+
+/** Context for listing records from an external system with pagination */
+export interface ListContext extends CRUDContext {
+    /** Maximum records to return per page */
+    PageSize?: number;
+    /** Opaque cursor for cursor-based pagination (returned from previous ListResult) */
+    Cursor?: string;
+    /** Sort expression (connector-specific format) */
+    Sort?: string;
+    /** Optional filter expression (connector-specific, e.g., for filtered list variants like "Deals by Company") */
+    Filter?: Record<string, string>;
+}
+
+/** Result of a list operation */
+export interface ListResult {
+    /** Records in this page */
+    Records: ExternalRecord[];
+    /** Whether more pages exist */
+    HasMore: boolean;
+    /** Opaque cursor for fetching the next page */
+    NextCursor?: string;
+    /** Total number of matching records, if known */
+    TotalCount?: number;
 }
 
 /** A default field mapping returned by a connector's discovery */

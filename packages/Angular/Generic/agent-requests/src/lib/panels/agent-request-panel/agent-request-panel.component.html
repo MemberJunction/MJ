@@ -1,0 +1,264 @@
+@if (IsOpen && Request) {
+    <div class="panel-backdrop" (click)="OnBackdropClick()">
+        <div class="request-panel" #panelElement [class.open]="IsOpen" [class.resizing]="IsResizing" [style.width.px]="PanelWidth" (click)="$event.stopPropagation()">
+            <!-- Resize Handle (left edge) -->
+            <div class="resize-handle" (mousedown)="OnResizeStart($event)">
+                <div class="resize-grip"></div>
+            </div>
+            <!-- Header -->
+            <div class="panel-header">
+                <div class="header-content">
+                    <div class="header-title-row">
+                        @if (RequestType?.Icon) {
+                            <i class="{{ RequestType!.Icon }} header-icon"></i>
+                        }
+                        <h3 class="panel-title">{{ RequestType?.Name || 'Agent Request' }}</h3>
+                        <span class="priority-badge" [class]="PriorityClass">{{ PriorityLabel }}</span>
+                        <span class="status-badge status-{{ Request.Status.toLowerCase() }}">{{ Request.Status }}</span>
+                    </div>
+                    @if (Request.Agent) {
+                        <span class="agent-name">
+                            <i class="fa-solid fa-robot"></i> {{ Request.Agent }}
+                        </span>
+                    }
+                </div>
+                <button class="close-btn" (click)="OnCancel()" title="Close">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="panel-body">
+                <!-- Request Details -->
+                <div class="section">
+                    <h4 class="section-title">Request</h4>
+                    <p class="request-text">{{ Request.Request }}</p>
+                </div>
+
+                <!-- Metadata -->
+                <div class="section metadata-section">
+                    <div class="metadata-grid">
+                        @if (Request.ExpiresAt) {
+                            <div class="metadata-item">
+                                <span class="metadata-label">Expires</span>
+                                <span class="metadata-value" [class.expired]="IsExpired">
+                                    {{ Request.ExpiresAt | date:'medium' }}
+                                    @if (IsExpired) {
+                                        <span class="expired-tag">Expired</span>
+                                    }
+                                </span>
+                            </div>
+                        }
+                        @if (Request.__mj_CreatedAt) {
+                            <div class="metadata-item">
+                                <span class="metadata-label">Created</span>
+                                <span class="metadata-value">{{ Request.__mj_CreatedAt | date:'medium' }}</span>
+                            </div>
+                        }
+                        @if (Request.RespondedAt) {
+                            <div class="metadata-item">
+                                <span class="metadata-label">Responded</span>
+                                <span class="metadata-value">{{ Request.RespondedAt | date:'medium' }}</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Dynamic Response Form (from ResponseSchema) -->
+                @if (HasResponseForm && IsActionable && ResponseFormDefinition) {
+                    <div class="section">
+                        <mj-dynamic-form #dynamicForm
+                            [FormDefinition]="ResponseFormDefinition"
+                            [Disabled]="IsSaving">
+                        </mj-dynamic-form>
+                    </div>
+                }
+
+                <!-- Free-text response (always available for actionable requests) -->
+                @if (IsActionable) {
+                    <div class="section">
+                        <h4 class="section-title">
+                            @if (HasResponseForm) {
+                                Additional Comments
+                            } @else {
+                                Response
+                            }
+                        </h4>
+                        <textarea
+                            class="response-textarea"
+                            [(ngModel)]="ResponseText"
+                            placeholder="Type your response here..."
+                            rows="4">
+                        </textarea>
+                    </div>
+                }
+
+                <!-- Show existing response for already-handled requests -->
+                @if (!IsActionable && (Request.Response || Request.ResponseData)) {
+                    @if (Request.ResponseData) {
+                        <div class="section">
+                            <mj-dynamic-form-response
+                                [FormDefinition]="ResponseFormDefinition"
+                                [ResponseData]="Request.ResponseData"
+                                DisplayMode="card">
+                            </mj-dynamic-form-response>
+                        </div>
+                    }
+                    @if (Request.Response) {
+                        <div class="section">
+                            <h4 class="section-title">
+                                @if (Request.ResponseData) {
+                                    Additional Comments
+                                } @else {
+                                    Response
+                                }
+                            </h4>
+                            <p class="response-text">{{ Request.Response }}</p>
+                        </div>
+                    }
+                }
+            </div>
+
+            <!-- Footer (action buttons) -->
+            @if (IsActionable && !IsExpired) {
+                <div class="panel-footer">
+                    @if (IsApprovalType) {
+                        <button
+                            class="btn btn-approve"
+                            (click)="OnApprove()"
+                            [disabled]="IsSaving">
+                            <i class="fa-solid fa-check"></i> Approve
+                        </button>
+                        <button
+                            class="btn btn-reject"
+                            (click)="OnReject()"
+                            [disabled]="IsSaving">
+                            <i class="fa-solid fa-times"></i> Reject
+                        </button>
+                    } @else {
+                        <button
+                            class="btn btn-respond"
+                            (click)="OnRespond()"
+                            [disabled]="IsSaving">
+                            <i class="fa-solid fa-paper-plane"></i> Submit Response
+                        </button>
+                    }
+                    <button
+                        class="btn btn-reassign"
+                        (click)="OnReassignClick()"
+                        [disabled]="IsSaving"
+                        title="Reassign to another user">
+                        <i class="fa-solid fa-user-plus"></i> Reassign
+                    </button>
+                    <button
+                        class="btn btn-cancel"
+                        (click)="OnCancel()"
+                        [disabled]="IsSaving">
+                        Cancel
+                    </button>
+                </div>
+            } @else if (IsExpired) {
+                <div class="panel-footer">
+                    <div class="expired-notice">
+                        <i class="fa-solid fa-clock"></i> This request has expired and can no longer be responded to.
+                    </div>
+                    <button class="btn btn-cancel" (click)="OnCancel()">Close</button>
+                </div>
+            } @else {
+                <div class="panel-footer">
+                    <button class="btn btn-cancel" (click)="OnCancel()">Close</button>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Reassign Dialog Overlay -->
+    @if (ShowReassignDialog) {
+        <div class="reassign-overlay" (click)="OnReassignCancel()">
+            <div class="reassign-dialog" (click)="$event.stopPropagation()">
+                <div class="reassign-header">
+                    <h4 class="reassign-title">
+                        <i class="fa-solid fa-user-plus"></i> Reassign Request
+                    </h4>
+                    <button class="close-btn" (click)="OnReassignCancel()">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="reassign-body">
+                    <!-- User Search -->
+                    <div class="reassign-field">
+                        <label class="field-label">Search User</label>
+                        <div class="search-input-wrapper">
+                            <i class="fa-solid fa-search search-icon"></i>
+                            <input
+                                type="text"
+                                class="field-input search-input"
+                                placeholder="Type a name or email..."
+                                [value]="ReassignSearchTerm"
+                                (input)="OnReassignSearchChange($any($event.target).value)">
+                        </div>
+                    </div>
+
+                    <!-- Search Results -->
+                    @if (IsSearchingUsers) {
+                        <div class="search-status">
+                            <i class="fa-solid fa-spinner fa-spin"></i> Searching...
+                        </div>
+                    }
+                    @if (ReassignUsers.length > 0) {
+                        <div class="user-results">
+                            @for (user of ReassignUsers; track user.ID) {
+                                <button
+                                    class="user-result-item"
+                                    [class.selected]="SelectedReassignUser?.ID === user.ID"
+                                    (click)="OnSelectReassignUser(user)">
+                                    <i class="fa-solid fa-user user-avatar"></i>
+                                    <div class="user-info">
+                                        <span class="user-name">{{ user.Name }}</span>
+                                        <span class="user-email">{{ user.Email }}</span>
+                                    </div>
+                                    @if (SelectedReassignUser?.ID === user.ID) {
+                                        <i class="fa-solid fa-check selected-check"></i>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    } @else if (ReassignSearchTerm.length >= 2 && !IsSearchingUsers) {
+                        <div class="search-status">No users found</div>
+                    }
+
+                    <!-- Note -->
+                    <div class="reassign-field">
+                        <label class="field-label">Note (optional)</label>
+                        <textarea
+                            class="field-textarea"
+                            [(ngModel)]="ReassignNote"
+                            placeholder="Add a reason for reassignment..."
+                            rows="2">
+                        </textarea>
+                    </div>
+                </div>
+
+                <div class="reassign-footer">
+                    <button
+                        class="btn btn-respond"
+                        (click)="OnReassignSubmit()"
+                        [disabled]="!SelectedReassignUser || IsReassigning">
+                        @if (IsReassigning) {
+                            <i class="fa-solid fa-spinner fa-spin"></i> Reassigning...
+                        } @else {
+                            <i class="fa-solid fa-user-plus"></i> Reassign
+                        }
+                    </button>
+                    <button
+                        class="btn btn-cancel"
+                        (click)="OnReassignCancel()"
+                        [disabled]="IsReassigning">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+}

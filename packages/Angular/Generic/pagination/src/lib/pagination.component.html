@@ -1,0 +1,31 @@
+@if (TotalRowCount > 0 && TotalPages > 1) {
+  <div class="pagination">
+    <span class="pager-summary">
+      {{ DisplayFrom | number }}-{{ DisplayTo | number }} of {{ TotalRowCount | number }}
+    </span>
+
+    <div class="pager-controls">
+      <button class="pager-btn" [disabled]="!CanGoBack" (click)="GoToFirst()" title="First page">
+        <i class="fa-solid fa-angles-left"></i>
+      </button>
+      <button class="pager-btn" [disabled]="!CanGoBack" (click)="GoToPrevious()" title="Previous page">
+        <i class="fa-solid fa-angle-left"></i>
+      </button>
+
+      <span class="pager-page-info">
+        Page {{ PageNumber }} of {{ TotalPages }}
+      </span>
+
+      <button class="pager-btn" [disabled]="!CanGoForward" (click)="GoToNext()" title="Next page">
+        <i class="fa-solid fa-angle-right"></i>
+      </button>
+      <button class="pager-btn" [disabled]="!CanGoForward" (click)="GoToLast()" title="Last page">
+        <i class="fa-solid fa-angles-right"></i>
+      </button>
+
+      @if (IsLoading) {
+        <i class="fa-solid fa-spinner fa-spin pager-loading"></i>
+      }
+    </div>
+  </div>
+}

@@ -1,5 +1,94 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+- Updated dependencies [6489cd8]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/server-bootstrap-lite@5.14.0
+  - @memberjunction/actions-base@5.14.0
+  - @memberjunction/actions@5.14.0
+  - @memberjunction/ai-core-plus@5.14.0
+  - @memberjunction/aiengine@5.14.0
+  - @memberjunction/ai-prompts@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/core-entities-server@5.14.0
+  - @memberjunction/postgresql-dataprovider@5.14.0
+  - @memberjunction/sqlserver-dataprovider@5.14.0
+  - @memberjunction/ai-provider-bundle@5.14.0
+  - @memberjunction/ai@5.14.0
+  - @memberjunction/config@5.14.0
+  - @memberjunction/global@5.14.0
+  - @memberjunction/sql-dialect@5.14.0
+  - @memberjunction/sql-parser@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ai-core-plus@5.13.0
+  - @memberjunction/aiengine@5.13.0
+  - @memberjunction/ai-prompts@5.13.0
+  - @memberjunction/actions-base@5.13.0
+  - @memberjunction/actions@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/core-entities-server@5.13.0
+  - @memberjunction/postgresql-dataprovider@5.13.0
+  - @memberjunction/sqlserver-dataprovider@5.13.0
+  - @memberjunction/server-bootstrap-lite@5.13.0
+  - @memberjunction/ai@5.13.0
+  - @memberjunction/ai-provider-bundle@5.13.0
+  - @memberjunction/config@5.13.0
+  - @memberjunction/sql-dialect@5.13.0
+
+## 5.12.0
+
+### Minor Changes
+
+- 257512b: feat: Integration scheduled job type, YM/HubSpot connector improvements, CodeGen custom view refresh
+  - Add ScheduledJobRunID FK to CompanyIntegrationRun and ScheduledJobID FK to CompanyIntegration (migration v5.12.x)
+  - Add Integration Sync scheduled job type metadata
+  - Pass contextUser through HubSpot credential loading for proper server-side data isolation
+  - Make YM connector performance defaults (retries, timeouts, batch size, throttle) overrideable per Configuration JSON
+  - CodeGen now auto-emits sp_refreshview for custom base views (BaseViewGenerated=false) so devs don't need to add it manually to migrations
+  - BaseIntegrationPointAction scaffold for future write-back actions
+
+- 1e5d181: migration
+
+### Patch Changes
+
+- 217bca4: no migration
+- 21a04c1: Support per-schema entity package resolution in CodeGen for OpenApp multi-package distribution
+- Updated dependencies [05f19ff]
+- Updated dependencies [7def002]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [8ca8698]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/core-entities-server@5.12.0
+  - @memberjunction/aiengine@5.12.0
+  - @memberjunction/server-bootstrap-lite@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/postgresql-dataprovider@5.12.0
+  - @memberjunction/ai-core-plus@5.12.0
+  - @memberjunction/ai-prompts@5.12.0
+  - @memberjunction/actions-base@5.12.0
+  - @memberjunction/actions@5.12.0
+  - @memberjunction/sqlserver-dataprovider@5.12.0
+  - @memberjunction/ai-provider-bundle@5.12.0
+  - @memberjunction/ai@5.12.0
+  - @memberjunction/config@5.12.0
+  - @memberjunction/global@5.12.0
+  - @memberjunction/sql-dialect@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes

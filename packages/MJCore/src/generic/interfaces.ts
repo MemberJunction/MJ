@@ -7,6 +7,7 @@ import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { RunQueryParams } from "./runQuery";
+import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
@@ -929,6 +930,16 @@ export type RunQueryResult = {
      * Only differs from RowCount when StartRow or MaxRows are used.
      */
     TotalRowCount: number;
+    /**
+     * The page number returned (1-based). Derived from StartRow and MaxRows.
+     * Undefined when paging is not active.
+     */
+    PageNumber?: number;
+    /**
+     * The page size used for this result.
+     * Undefined when paging is not active.
+     */
+    PageSize?: number;
     ExecutionTime: number;
     ErrorMessage: string;
     /**
@@ -1074,6 +1085,16 @@ export interface IRunQueryProvider {
      * @returns Response containing status and fresh data only for stale caches
      */
     RunQueriesWithCacheCheck?<T = unknown>(params: RunQueryWithCacheCheckParams[], contextUser?: UserInfo): Promise<RunQueriesWithCacheCheckResponse<T>>
+
+    /**
+     * Executes a query from a `QueryExecutionSpec` — the lower-layer interface-based entry point.
+     * Runs the full pipeline: composition resolution → Nunjucks template processing → SQL execution.
+     * Used for both saved queries (upper layer maps QueryInfo to spec) and transient test queries.
+     * @param spec - The execution spec describing the query, parameters, and inline dependencies
+     * @param contextUser - Optional user context for permissions (required server-side)
+     * @returns Query results including data rows and execution metadata
+     */
+    ExecuteQueryFromSpec(spec: QueryExecutionSpec, contextUser?: UserInfo): Promise<RunQueryResult>
 }
 
 /**

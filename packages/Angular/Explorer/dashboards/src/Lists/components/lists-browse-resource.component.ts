@@ -545,12 +545,11 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           [style.left.px]="entityDropdownPosition.left"
           [style.width.px]="entityDropdownPosition.width"
           [class.dropdown-above]="entityDropdownPosition.openAbove">
-          <div class="entity-dropdown-backdrop" (click)="closeEntityDropdown()"></div>
           <div class="entity-dropdown-content" [class.open-above]="entityDropdownPosition.openAbove">
             @for (entity of filteredEntitiesList; track entity) {
               <div
                 class="dropdown-item"
-                (click)="selectEntity(entity)">
+                (mousedown)="selectEntity(entity); $event.preventDefault()">
                 {{entity.Name}}
               </div>
             }
@@ -1569,15 +1568,6 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       z-index: 10002;
     }
 
-    .entity-dropdown-backdrop {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      z-index: -1;
-    }
-
     .entity-dropdown-content {
       max-height: 200px;
       overflow-y: auto;
@@ -1752,7 +1742,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   onDocumentClick(event: MouseEvent) {
     if (this.showEntityDropdown) {
       const target = event.target as HTMLElement;
-      if (!target.closest('.custom-select-wrapper')) {
+      if (!target.closest('.custom-select-wrapper') && !target.closest('.entity-dropdown-portal')) {
         this.showEntityDropdown = false;
       }
     }
@@ -2151,6 +2141,12 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.filteredEntitiesList = this.availableEntities.filter(e =>
       e.Name.toLowerCase().includes(lowerTerm)
     );
+    // Ensure dropdown is visible while typing
+    if (!this.showEntityDropdown && term) {
+      this.showEntityDropdown = true;
+    }
+    // Clear selection when user modifies the search text
+    this.selectedEntityId = '';
   }
 
   openEntityDropdown(inputElement: HTMLInputElement) {

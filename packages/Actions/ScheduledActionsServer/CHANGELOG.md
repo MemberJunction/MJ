@@ -1,5 +1,65 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+- Updated dependencies [6489cd8]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/ai-openai@5.14.0
+  - @memberjunction/actions@5.14.0
+  - @memberjunction/ai-vectors-pinecone@5.14.0
+  - @memberjunction/ai-vector-sync@5.14.0
+  - @memberjunction/actions-apollo@5.14.0
+  - @memberjunction/actions-content-autotag@5.14.0
+  - @memberjunction/scheduled-actions@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/sqlserver-dataprovider@5.14.0
+  - @memberjunction/ai@5.14.0
+  - @memberjunction/ai-mistral@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/ai-vectors-pinecone@5.13.0
+  - @memberjunction/ai-vector-sync@5.13.0
+  - @memberjunction/actions-apollo@5.13.0
+  - @memberjunction/actions-content-autotag@5.13.0
+  - @memberjunction/actions@5.13.0
+  - @memberjunction/scheduled-actions@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/sqlserver-dataprovider@5.13.0
+  - @memberjunction/ai@5.13.0
+  - @memberjunction/ai-mistral@5.13.0
+  - @memberjunction/ai-openai@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- Updated dependencies [05f19ff]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/ai-vectors-pinecone@5.12.0
+  - @memberjunction/ai-vector-sync@5.12.0
+  - @memberjunction/actions-apollo@5.12.0
+  - @memberjunction/actions-content-autotag@5.12.0
+  - @memberjunction/actions@5.12.0
+  - @memberjunction/scheduled-actions@5.12.0
+  - @memberjunction/sqlserver-dataprovider@5.12.0
+  - @memberjunction/ai@5.12.0
+  - @memberjunction/ai-mistral@5.12.0
+  - @memberjunction/ai-openai@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes

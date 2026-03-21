@@ -1,0 +1,167 @@
+@if (IsLoading) {
+    <div class="editor-loading">
+        <mj-loading text="Loading..."></mj-loading>
+    </div>
+} @else {
+    <div class="editor-container">
+        <!-- General Section -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="fa-solid fa-circle-info"></i> General
+            </div>
+
+            <div class="form-group">
+                <label for="jobName">Name <span class="required">*</span></label>
+                <input id="jobName" type="text" [(ngModel)]="Name" placeholder="Job name" />
+            </div>
+
+            <div class="form-group">
+                <label for="jobDesc">Description</label>
+                <textarea id="jobDesc" [(ngModel)]="Description" rows="2" placeholder="Optional description"></textarea>
+            </div>
+
+            @if (!HideJobType) {
+                <div class="form-group">
+                    <label for="jobType">Job Type <span class="required">*</span></label>
+                    <select id="jobType" [(ngModel)]="SelectedJobTypeID">
+                        <option value="">-- Select Type --</option>
+                        @for (jt of JobTypes; track jt.ID) {
+                            <option [value]="jt.ID">{{ jt.Name }}</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            <div class="form-group">
+                <label for="jobStatus">Status</label>
+                <select id="jobStatus" [(ngModel)]="Status">
+                    @for (s of StatusOptions; track s) {
+                        <option [value]="s">{{ s }}</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <!-- Schedule Section -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="fa-solid fa-clock"></i> Schedule
+            </div>
+
+            <div class="form-group">
+                <label for="cronExpr">Cron Expression <span class="required">*</span></label>
+                <input id="cronExpr" type="text" [(ngModel)]="CronExpression"
+                       placeholder="e.g. 0 */15 * * * *" />
+                <div class="hint">Standard cron format: second minute hour day month weekday</div>
+            </div>
+
+            <div class="form-group">
+                <label for="timezone">Timezone</label>
+                <select id="timezone" [(ngModel)]="Timezone">
+                    @for (tz of Timezones; track tz) {
+                        <option [value]="tz">{{ tz }}</option>
+                    }
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="concurrency">Concurrency</label>
+                <select id="concurrency" [(ngModel)]="ConcurrencyMode">
+                    @for (c of ConcurrencyOptions; track c) {
+                        <option [value]="c">{{ c }}</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <!-- Configuration Section -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="fa-solid fa-code"></i> Configuration
+            </div>
+
+            <div class="form-group">
+                <label for="config">Configuration JSON</label>
+                <textarea id="config" [(ngModel)]="Configuration" rows="6"
+                          class="code-textarea"
+                          placeholder='{ "key": "value" }'></textarea>
+            </div>
+        </div>
+
+        <!-- Notifications Section -->
+        <div class="form-section">
+            <div class="section-title">
+                <i class="fa-solid fa-bell"></i> Notifications
+            </div>
+
+            <div class="toggle-row">
+                <label class="toggle-label">
+                    <input type="checkbox" [(ngModel)]="NotifyOnSuccess" />
+                    Notify on success
+                </label>
+            </div>
+            <div class="toggle-row">
+                <label class="toggle-label">
+                    <input type="checkbox" [(ngModel)]="NotifyOnFailure" />
+                    Notify on failure
+                </label>
+            </div>
+        </div>
+
+        <!-- Statistics (edit mode only) -->
+        @if (!IsNew && TotalRuns > 0) {
+            <div class="form-section">
+                <div class="section-title">
+                    <i class="fa-solid fa-chart-bar"></i> Statistics
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-value">{{ TotalRuns }}</span>
+                        <span class="stat-label">Total Runs</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value success">{{ SuccessRuns }}</span>
+                        <span class="stat-label">Succeeded</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value error">{{ FailedRuns }}</span>
+                        <span class="stat-label">Failed</span>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Footer Actions -->
+        <div class="editor-footer">
+            @if (!IsNew) {
+                <button class="btn btn-danger" (click)="ConfirmDelete()" [disabled]="IsSaving">
+                    <i class="fa-solid fa-trash"></i> Delete
+                </button>
+            }
+            <div class="footer-right">
+                <button class="btn btn-primary" (click)="Save()" [disabled]="!CanSave || IsSaving">
+                    @if (IsSaving) {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                    }
+                    {{ IsNew ? 'Create' : 'Save' }}
+                </button>
+                <button class="btn btn-secondary" (click)="Cancel()" [disabled]="IsSaving">
+                    Cancel
+                </button>
+            </div>
+        </div>
+
+        <!-- Delete Confirmation -->
+        @if (ShowDeleteConfirm) {
+            <div class="confirm-overlay" (click)="CancelDelete()">
+                <div class="confirm-dialog" (click)="$event.stopPropagation()">
+                    <p>Are you sure you want to delete this scheduled job?</p>
+                    <div class="confirm-actions">
+                        <button class="btn btn-danger" (click)="DeleteJob()">Delete</button>
+                        <button class="btn btn-secondary" (click)="CancelDelete()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

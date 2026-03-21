@@ -117,7 +117,7 @@ export abstract class BaseAutoDocDriver {
   /**
    * Get sample values from a column
    */
-  protected abstract getSampleValues(
+  public abstract getSampleValues(
     schemaName: string,
     tableName: string,
     columnName: string,
@@ -306,6 +306,7 @@ export abstract class BaseAutoDocDriver {
     filter: AutoDocTableFilter,
     tableColumnName: string
   ): string {
+    if (!filter) return '';
     const conditions: string[] = [];
 
     if (filter.exclude && filter.exclude.length > 0) {

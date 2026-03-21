@@ -1,9 +1,12 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { QueryCompositionEngine } from '@memberjunction/generic-database-provider';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { v4 as uuidv4 } from 'uuid';
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
+import { getDbType } from '../index.js';
+import { getSystemUser } from '../auth/index.js';
 import sql from 'mssql';
  
 @InputType() 
@@ -128,13 +131,27 @@ export class GetDataResolver {
                 throw new Error('Read-only data source not found');
             }
 
+            // Resolve composition tokens in queries before execution.
+            // Queries may contain {{query:"CategoryPath/QueryName(params)"}} tokens that
+            // reference reusable queries. These must be resolved to CTEs before raw SQL execution.
+            const compositionEngine = new QueryCompositionEngine();
+            const platform = getDbType();
+            const systemUser = await getSystemUser();
+
             // Execute all queries in parallel, but execute each individual query in its own try catch block so that if one fails, the others can still be processed
             // and also so that we can capture the error message for each query and return it
             const results = await Promise.allSettled(
                 input.Queries.map(async (query) => {
                     try {
+                        // Resolve composition tokens if present
+                        let resolvedSQL = query;
+                        if (compositionEngine.HasCompositionTokens(query)) {
+                            const compositionResult = compositionEngine.ResolveComposition(query, platform, systemUser);
+                            resolvedSQL = compositionResult.ResolvedSQL;
+                        }
+
                         const request = new sql.Request(readOnlyDataSource);
-                        const result = await request.query(query);
+                        const result = await request.query(resolvedSQL);
                         return { result: result.recordset, error: null };
                     } catch (err) {
                         // Extract clean SQL error message

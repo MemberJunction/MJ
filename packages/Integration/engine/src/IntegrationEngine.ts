@@ -27,6 +27,8 @@ import type {
     OnNotificationCallback,
     SyncNotification,
     WatermarkType,
+    IntegrationSyncOptions,
+    EntityMapSyncResult,
 } from './types.js';
 import { ClassifyError } from './types.js';
 import { ConnectorFactory } from './ConnectorFactory.js';
@@ -81,7 +83,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         contextUser: UserInfo,
         triggerType: SyncTriggerType = 'Manual',
         onProgress?: OnProgressCallback,
-        onNotification?: OnNotificationCallback
+        onNotification?: OnNotificationCallback,
+        options?: IntegrationSyncOptions
     ): Promise<SyncResult> {
         const lockKey = companyIntegrationID.toLowerCase();
         const existing = IntegrationEngine.activeSyncs.get(lockKey);
@@ -91,7 +94,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
 
         const syncPromise = this.executeSyncInternal(
-            companyIntegrationID, contextUser, triggerType, onProgress, onNotification
+            companyIntegrationID, contextUser, triggerType, onProgress, onNotification, options
         );
         IntegrationEngine.activeSyncs.set(lockKey, syncPromise);
         try {
@@ -109,13 +112,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         contextUser: UserInfo,
         triggerType: SyncTriggerType,
         onProgress?: OnProgressCallback,
-        onNotification?: OnNotificationCallback
+        onNotification?: OnNotificationCallback,
+        options?: IntegrationSyncOptions
     ): Promise<SyncResult> {
-        const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser);
-        const run = await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser);
+        const startTime = Date.now();
+        const config = await this.LoadRunConfiguration(companyIntegrationID, contextUser, options);
+        const run = await this.CreateRunRecord(config.companyIntegration, triggerType, contextUser, options?.ScheduledJobRunID);
 
         try {
             const result = await this.ExecuteEntityMaps(config, run, contextUser, onProgress);
+            result.RunID = run.Get('ID') as string;
+            result.Duration = Date.now() - startTime;
+            if (result.RecordsErrored > 0) {
+                result.ErrorMessage = `Sync completed with ${result.RecordsErrored} error(s)`;
+            }
             await this.FinalizeRun(run, result, contextUser, onNotification);
             return result;
         } catch (err) {
@@ -129,7 +139,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      */
     private async LoadRunConfiguration(
         companyIntegrationID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        options?: IntegrationSyncOptions
     ): Promise<RunConfiguration> {
         const rv = new RunView();
 
@@ -166,11 +177,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const connector = ConnectorFactory.Resolve(integration);
 
+        let entityMaps = entityMapsResult.Results as ICompanyIntegrationEntityMap[];
+
+        // Filter to specific entity maps if requested
+        if (options?.EntityMapIDs && options.EntityMapIDs.length > 0) {
+            const requestedIDs = new Set(options.EntityMapIDs.map(id => id.toLowerCase()));
+            entityMaps = entityMaps.filter(m => requestedIDs.has((m.Get('ID') as string).toLowerCase()));
+        }
+
         return {
             companyIntegration,
-            entityMaps: entityMapsResult.Results as ICompanyIntegrationEntityMap[],
+            entityMaps,
             integration,
             connector,
+            fullSync: options?.FullSync ?? false,
         };
     }
 
@@ -180,7 +200,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private async CreateRunRecord(
         companyIntegration: MJCompanyIntegrationEntity,
         triggerType: SyncTriggerType,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        scheduledJobRunID?: string
     ): Promise<MJCompanyIntegrationRunEntity> {
         const md = new Metadata();
         const run = await md.GetEntityObject<MJCompanyIntegrationRunEntity>(
@@ -194,6 +215,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         run.Status = 'In Progress';
         run.TotalRecords = 0;
         run.ConfigData = JSON.stringify({ triggerType });
+
+        // Link to scheduled job run if triggered by the scheduler.
+        // Use Set() because the ScheduledJobRunID column won't exist on the
+        // generated entity type until CodeGen runs after the migration.
+        if (scheduledJobRunID) {
+            run.Set('ScheduledJobRunID', scheduledJobRunID);
+        }
 
         const saved = await run.Save();
         if (!saved) {
@@ -220,17 +248,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             RecordsErrored: 0,
             RecordsSkipped: 0,
             Errors: [],
+            EntityMapResults: [],
         };
 
         const totalMaps = config.entityMaps.length;
 
         for (let i = 0; i < totalMaps; i++) {
             const entityMap = config.entityMaps[i];
+            const mapStartTime = Date.now();
             try {
                 const mapResult = await this.ProcessSingleEntityMap(
                     config, entityMap, run, contextUser, i, totalMaps, onProgress
                 );
                 this.MergeResult(aggregate, mapResult);
+                aggregate.EntityMapResults!.push(this.buildEntityMapResult(entityMap, mapResult, Date.now() - mapStartTime));
             } catch (err) {
                 const objName = entityMap.ExternalObjectName ?? String(entityMap.Get('ID'));
                 const errMsg = err instanceof Error ? err.message : String(err);
@@ -243,6 +274,19 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     ErrorCode: 'CONNECTOR_ERROR',
                     Severity: 'Critical',
                     ExternalRecord: { ExternalID: objName, ObjectType: objName, Fields: {} },
+                });
+                aggregate.EntityMapResults!.push({
+                    EntityMapID: entityMap.Get('ID') as string,
+                    ExternalObjectName: objName,
+                    EntityName: entityMap.Entity ?? '',
+                    Success: false,
+                    RecordsProcessed: 0,
+                    RecordsCreated: 0,
+                    RecordsUpdated: 0,
+                    RecordsDeleted: 0,
+                    RecordsErrored: 1,
+                    RecordsSkipped: 0,
+                    Duration: Date.now() - mapStartTime,
                 });
             }
         }
@@ -266,8 +310,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const fieldMaps = await this.LoadFieldMaps(entityMapID, contextUser);
         const watermark = await this.watermarkService.Load(entityMapID, contextUser);
 
-        // A6: Validate watermark before using it
-        let initialWatermark = watermark?.WatermarkValue ?? null;
+        // A6: Validate watermark before using it — skip entirely when FullSync requested
+        let initialWatermark = config.fullSync ? null : (watermark?.WatermarkValue ?? null);
         if (initialWatermark && watermark) {
             const watermarkType = (watermark.WatermarkType ?? 'Timestamp') as WatermarkType;
             if (!this.watermarkService.ValidateWatermark(initialWatermark, watermarkType)) {
@@ -292,37 +336,85 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let hasMore = true;
         let currentWatermark = initialWatermark;
         let recordsInMap = 0;
+        let currentPage: number | undefined;
+        let currentOffset: number | undefined;
+        let currentCursor: string | undefined;
+        let batchCount = 0;
+        let previousBatchFingerprint: string | undefined;
+        const MAX_BATCHES_PER_MAP = 5000;
 
         while (hasMore) {
+            batchCount++;
+            if (batchCount > MAX_BATCHES_PER_MAP) {
+                console.error(
+                    `[IntegrationEngine] Safety limit reached: ${MAX_BATCHES_PER_MAP} batches for ` +
+                    `${entityMap.ExternalObjectName}. Stopping to prevent infinite loop.`
+                );
+                break;
+            }
             const ctx: FetchContext = {
                 CompanyIntegration: config.companyIntegration,
                 ObjectName: entityMap.ExternalObjectName,
                 WatermarkValue: currentWatermark,
                 BatchSize: this.MaxBatchSize,
                 ContextUser: contextUser,
+                CurrentPage: currentPage,
+                CurrentOffset: currentOffset,
+                CurrentCursor: currentCursor,
             };
 
             const batch = await config.connector.FetchChanges(ctx);
 
-            // A7: Batch size enforcement — truncate if connector returns more than MaxBatchSize
-            let batchRecords = batch.Records;
-            if (batchRecords.length > this.MaxBatchSize) {
+            // Enforce MaxBatchSize — connectors are asked to respect it but may overshoot
+            if (batch.Records.length > this.MaxBatchSize) {
                 console.warn(
-                    `[IntegrationEngine] Connector returned ${batchRecords.length} records, exceeding MaxBatchSize of ${this.MaxBatchSize}. Truncating.`
+                    `[IntegrationEngine] ${entityMap.ExternalObjectName}: connector returned ` +
+                    `${batch.Records.length} records, exceeding MaxBatchSize of ${this.MaxBatchSize}. ` +
+                    `Truncating to ${this.MaxBatchSize}.`
                 );
-                batchRecords = batchRecords.slice(0, this.MaxBatchSize);
+                batch.Records = batch.Records.slice(0, this.MaxBatchSize);
+            }
+
+            if (batch.Records.length > 0) {
+                const fingerprint = batch.Records.map(r => r.ExternalID).join(',');
+                if (fingerprint === previousBatchFingerprint) {
+                    console.warn(
+                        `[IntegrationEngine] Duplicate batch detected for ${entityMap.ExternalObjectName} — ` +
+                        `connector returned same records twice. Stopping to prevent infinite loop.`
+                    );
+                    break;
+                }
+                previousBatchFingerprint = fingerprint;
             }
 
             const mapped = this.fieldMappingEngine.Apply(
-                batchRecords, fieldMaps, entityMap.Entity
+                batch.Records, fieldMaps, entityMap.Entity
             );
             const resolved = await this.matchEngine.Resolve(
                 mapped, entityMap, fieldMaps, contextUser
             );
 
+            const beforeApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
             await this.ApplyRecords(resolved, config.companyIntegration, entityMap, result, contextUser);
+            const afterApply = result.RecordsCreated + result.RecordsUpdated + result.RecordsSkipped + result.RecordsErrored;
 
-            recordsInMap += batchRecords.length;
+            if (batch.Records.length > 0) {
+                const written = afterApply - beforeApply;
+                const offsetInfo = currentOffset != null ? ` (offset ${currentOffset})` : '';
+                console.log(
+                    `[IntegrationEngine] ${entityMap.ExternalObjectName}: wrote ${written} records to DB` +
+                    `${offsetInfo} — running totals: ${result.RecordsCreated} created, ${result.RecordsUpdated} updated, ` +
+                    `${result.RecordsSkipped} skipped, ${result.RecordsErrored} errored` +
+                    (batch.HasMore ? ` | more batches pending` : ` | batch complete`)
+                );
+
+                // Update progress on the watermark record so the DB reflects live sync state
+                if (batch.HasMore) {
+                    await this.watermarkService.UpdateProgress(entityMapID, afterApply, contextUser);
+                }
+            }
+
+            recordsInMap += batch.Records.length;
 
             // A8: Progress tracking
             if (onProgress) {
@@ -332,7 +424,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             if (batch.NewWatermarkValue) {
                 currentWatermark = batch.NewWatermarkValue;
             }
-            hasMore = batch.HasMore;
+            currentPage = batch.NextPage;
+            currentOffset = batch.NextOffset;
+            currentCursor = batch.NextCursor;
+            hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
 
         if (currentWatermark) {
@@ -490,10 +585,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const md = new Metadata();
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
-        // Use the entity's actual PK field (SourceRecordID for integration tables, ID for __mj targets)
         const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
-        const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
-        const loaded = await entity.InnerLoad(this.BuildCompositeKey(record.MatchedMJRecordID, pkFieldName));
+        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             throw new Error(`Failed to load ${record.MJEntityName} record ${record.MatchedMJRecordID}`);
         }
@@ -544,8 +638,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const md = new Metadata();
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
         const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
-        const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
-        const loaded = await entity.InnerLoad(this.BuildCompositeKey(record.MatchedMJRecordID, pkFieldName));
+        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             throw new Error(`Failed to load ${record.MJEntityName} for deletion: ${record.MatchedMJRecordID}`);
         }
@@ -557,12 +651,24 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     }
 
     /**
-     * Builds a CompositeKey for a record lookup.
-     * Integration tables use the natural PK field from the source system.
+     * Builds a CompositeKey for a record lookup using the entity's PK field definitions.
+     * Supports both single-PK and composite-PK entities. For composite PKs the recordID
+     * is expected to be a '|'-delimited string of values in PK-field sequence order —
+     * the same format written by BaseRESTIntegrationConnector.ToExternalRecord.
      */
-    private BuildCompositeKey(id: string, fieldName: string = 'ID'): CompositeKey {
+    private BuildEntityPrimaryKey(
+        recordID: string,
+        pkFields: Array<{ Name: string }>
+    ): CompositeKey {
         const key = new CompositeKey();
-        key.KeyValuePairs.push({ FieldName: fieldName, Value: id });
+        if (pkFields.length <= 1) {
+            key.KeyValuePairs.push({ FieldName: pkFields[0]?.Name ?? 'ID', Value: recordID });
+        } else {
+            const parts = recordID.split('|');
+            for (let i = 0; i < pkFields.length; i++) {
+                key.KeyValuePairs.push({ FieldName: pkFields[i].Name, Value: parts[i] ?? '' });
+            }
+        }
         return key;
     }
 
@@ -663,6 +769,29 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (mapResult.RecordsErrored > 0) {
             aggregate.Success = false;
         }
+    }
+
+    /**
+     * Builds a per-entity-map result summary from the entity map and its sync result.
+     */
+    private buildEntityMapResult(
+        entityMap: ICompanyIntegrationEntityMap,
+        mapResult: SyncResult,
+        duration?: number
+    ): EntityMapSyncResult {
+        return {
+            EntityMapID: entityMap.Get('ID') as string,
+            ExternalObjectName: entityMap.ExternalObjectName ?? '',
+            EntityName: entityMap.Entity ?? '',
+            Success: mapResult.RecordsErrored === 0,
+            RecordsProcessed: mapResult.RecordsProcessed,
+            RecordsCreated: mapResult.RecordsCreated,
+            RecordsUpdated: mapResult.RecordsUpdated,
+            RecordsDeleted: mapResult.RecordsDeleted,
+            RecordsErrored: mapResult.RecordsErrored,
+            RecordsSkipped: mapResult.RecordsSkipped,
+            Duration: duration,
+        };
     }
 
     /**
@@ -937,6 +1066,7 @@ interface RunConfiguration {
     entityMaps: ICompanyIntegrationEntityMap[];
     integration: MJIntegrationEntity;
     connector: BaseIntegrationConnector;
+    fullSync: boolean;
 }
 
 /** Shape of a validation result from BaseEntity.Validate() */

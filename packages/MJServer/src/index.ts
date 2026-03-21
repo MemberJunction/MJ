@@ -4,8 +4,8 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
@@ -99,13 +99,14 @@ export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';
 export * from './resolvers/ReportResolver.js';
 export * from './resolvers/QueryResolver.js';
+export * from './resolvers/TestQuerySQLResolver.js';
 export * from './resolvers/SqlLoggingConfigResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';
 export * from './resolvers/SyncDataResolver.js';
 export * from './resolvers/GetDataResolver.js';
 export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
-export * from './resolvers/CreateQueryResolver.js';
+export * from './resolvers/QuerySystemUserResolver.js';
 export * from './resolvers/TelemetryResolver.js';
 export * from './resolvers/APIKeyResolver.js';
 export * from './resolvers/MCPResolver.js';
@@ -126,32 +127,16 @@ export * from './resolvers/CurrentUserContextResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
-export * from './hooks.js';
 export * from './multiTenancy/index.js';
+export * from './middleware/index.js';
 
-import type { ServerExtensibilityOptions, HookWithOptions } from './hooks.js';
-import { HookRegistry } from '@memberjunction/core';
-import type { HookRegistrationOptions } from '@memberjunction/core';
+import { RegisterDataHook } from '@memberjunction/core';
+import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
-import { createTenantMiddleware, createTenantPreRunViewHook, createTenantPreSaveHook } from './multiTenancy/index.js';
+import type { GraphQLSchema } from 'graphql';
+import { BaseServerMiddleware } from './middleware/BaseServerMiddleware.js';
 
-/**
- * Register a hook that may be a plain function or a `{ hook, Priority, Namespace }` object.
- * Dynamic packages (e.g., BCSaaS) return hooks in object form to declare registration metadata.
- */
-function registerHookEntry<T>(hookName: string, entry: T | HookWithOptions<T>): void {
-  if (typeof entry === 'function') {
-    HookRegistry.Register(hookName, entry);
-  } else if (entry && typeof entry === 'object' && 'hook' in entry) {
-    const { hook, Priority, Namespace } = entry as HookWithOptions<T>;
-    const options: HookRegistrationOptions = {};
-    if (Priority != null) options.Priority = Priority;
-    if (Namespace != null) options.Namespace = Namespace;
-    HookRegistry.Register(hookName, hook, options);
-  }
-}
-
-export type MJServerOptions = ServerExtensibilityOptions & {
+export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;
   restApiOptions?: Partial<RESTApiOptions>; // Options for REST API configuration
 };
@@ -417,6 +402,91 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];
 
+  // ─── Discover all server middleware via ClassFactory ─────────────────────
+  const allRegistrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseServerMiddleware);
+
+  // Deduplicate by key (same key -> highest priority wins).
+  // This is the replacement mechanism: if BCSaaS registers with the same
+  // key as MJ's built-in tenant filter, ClassFactory's priority system
+  // ensures only the higher-priority one is used.
+  const uniqueKeys = new Set(
+      allRegistrations.map(r => r.Key?.trim().toLowerCase()).filter((k): k is string => k != null)
+  );
+
+  const winnerRegistrations: typeof allRegistrations = [];
+  for (const key of uniqueKeys) {
+      const winner = MJGlobal.Instance.ClassFactory.GetRegistration(BaseServerMiddleware, key);
+      if (winner) winnerRegistrations.push(winner);
+  }
+
+  // Instantiate and filter by Enabled
+  const middlewares: BaseServerMiddleware[] = [];
+  for (const reg of winnerRegistrations) {
+      const MwClass = reg.SubClass as new () => BaseServerMiddleware;
+      const mw = new MwClass();
+      if (mw.Enabled) {
+          middlewares.push(mw);
+      }
+  }
+
+  // Initialize all middleware
+  for (const mw of middlewares) {
+      await mw.Initialize();
+      console.log(`  [Middleware] ${mw.Label}`);
+  }
+
+  // Collect middleware contributions for each pipeline stage
+  const mwPreAuth: RequestHandler[] = [];
+  const mwPostAuth: RequestHandler[] = [];
+  const mwPostRoute: (RequestHandler | ErrorRequestHandler)[] = [];
+  const mwApolloPlugins: ApolloServerPlugin[] = [];
+  const mwSchemaTransformers: ((schema: GraphQLSchema) => GraphQLSchema)[] = [];
+  const mwResolverPaths: string[] = [];
+
+  for (const mw of middlewares) {
+      mwPreAuth.push(...mw.GetPreAuthMiddleware());
+      mwPostAuth.push(...mw.GetPostAuthMiddleware());
+      mwPostRoute.push(...mw.GetPostRouteMiddleware());
+      mwApolloPlugins.push(...mw.GetApolloPlugins());
+      mwSchemaTransformers.push(...mw.GetSchemaTransformers());
+      mwResolverPaths.push(...mw.GetResolverPaths());
+
+      // Express app configuration escape hatch
+      if (mw.ConfigureExpressApp) {
+          await mw.ConfigureExpressApp(app);
+      }
+
+      // Extract hook methods and register in the global hook store
+      // (ProviderBase/BaseEntity will read these via GetDataHooks())
+      RegisterDataHook('PreRunView', mw.PreRunView.bind(mw));
+      RegisterDataHook('PostRunView', mw.PostRunView.bind(mw));
+      RegisterDataHook('PreSave', mw.PreSave.bind(mw));
+  }
+
+  // ─── Resolve middleware-contributed resolver paths and merge into resolvers ───
+  let allResolvers = resolvers;
+  if (mwResolverPaths.length > 0) {
+      const mwGlobs = mwResolverPaths.flatMap((p) => (isWindows ? p.replace(/\\/g, '/') : p));
+      const mwResolverFiles = fg.globSync(mwGlobs);
+      if (mwResolverFiles.length > 0) {
+          const mwModules = await Promise.all(
+              mwResolverFiles.map((modulePath) => {
+                  try {
+                      return import(isWindows ? `file://${modulePath}` : modulePath);
+                  } catch (e) {
+                      console.error(`Error loading middleware resolver at '${modulePath}'`, e);
+                      throw e;
+                  }
+              })
+          );
+          const mwResolvers = mwModules.flatMap((module) =>
+              Object.values(module).filter((value) => typeof value === 'function')
+          );
+          allResolvers = [...resolvers, ...mwResolvers] as BuildSchemaOptions['resolvers'];
+          console.log(`  [Middleware Resolvers] Loaded ${mwResolverFiles.length} resolver file(s) from middleware`);
+      }
+  }
+
   // Create an explicit PubSub instance so we can reference it outside of resolvers
   // graphql-subscriptions v3 renamed asyncIterator→asyncIterableIterator, but
   // type-graphql still calls asyncIterator. Shim for compatibility.
@@ -426,10 +496,32 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   }
   PubSubManager.Instance.SetPubSubEngine(pubSub as unknown as PubSubEngine);
 
+  // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
+  // ANY BaseEntity save/delete occurs on this server — regardless of whether it
+  // originated from a GraphQL mutation or internal server-side code (agents, actions,
+  // task orchestrator, etc.).  This closes the gap where server-internal saves were
+  // invisible to browser BaseEngine caches.
+  MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
+    if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode) {
+      const beEvent = event.args as BaseEntityEvent;
+      if (beEvent.type === 'save' || beEvent.type === 'delete') {
+        PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
+          entityName: beEvent.baseEntity.EntityInfo.Name,
+          primaryKeyValues: JSON.stringify(beEvent.baseEntity.PrimaryKey.KeyValuePairs),
+          action: beEvent.type,
+          sourceServerId: MJGlobal.Instance.ProcessUUID,
+          timestamp: new Date(),
+          originSessionId: null,
+          recordData: beEvent.type === 'save' ? JSON.stringify(beEvent.baseEntity.GetAll()) : undefined,
+        });
+      }
+    }
+  });
+
   let schema = mergeSchemas({
     schemas: [
       buildSchemaSync({
-        resolvers,
+        resolvers: allResolvers,
         validate: false,
         scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
         emitSchemaFile: websiteRunFromPackage !== 1,
@@ -441,11 +533,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
 
-  // Apply user-provided schema transformers (after built-in directive transformers)
-  if (options?.SchemaTransformers) {
-    for (const transformer of options.SchemaTransformers) {
-      schema = transformer(schema);
-    }
+  // Apply middleware-contributed schema transformers (after built-in directive transformers)
+  for (const transformer of mwSchemaTransformers) {
+    schema = transformer(schema);
   }
 
   const httpServer = createServer(app);
@@ -480,7 +570,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   const apolloServer = buildApolloServer(
     { schema },
     { httpServer, serverCleanup },
-    options?.ApolloPlugins
+    mwApolloPlugins.length > 0 ? mwApolloPlugins : undefined
   );
   await apolloServer.start();
   
@@ -505,16 +595,16 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     level: 6
   }));
 
-  // Apply user-provided Express middleware (after compression, before routes)
-  if (options?.ExpressMiddlewareBefore) {
-    for (const mw of options.ExpressMiddlewareBefore) {
-      app.use(mw);
-    }
-  }
+  // Health check endpoint - registered before auth middleware so cloud
+  // platform probes (Azure App Service, AWS ALB, k8s, etc.) don't
+  // generate noisy auth errors in the logs.
+  app.get('/healthcheck', (_req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
 
-  // Escape hatch for advanced Express app configuration
-  if (options?.ConfigureExpressApp) {
-    await Promise.resolve(options.ConfigureExpressApp(app));
+  // Apply middleware-contributed pre-auth handlers (after compression, before routes)
+  for (const mw of mwPreAuth) {
+    app.use(mw);
   }
 
   // ─── OAuth callback routes (unauthenticated, registered BEFORE auth) ─────
@@ -546,20 +636,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
   app.use(createUnifiedAuthMiddleware(dataSources));
 
-  // ─── Built-in post-auth middleware (multi-tenancy) ─────
-  // Config-driven multi-tenancy middleware runs after auth so it can read req.userPayload.
-  if (configInfo.multiTenancy?.enabled) {
-    const tenantMiddleware = createTenantMiddleware(configInfo.multiTenancy);
-    app.use(tenantMiddleware);
-  }
-
-  // ─── Post-auth middleware from plugins ─────
+  // ─── Post-auth middleware from BaseServerMiddleware plugins ─────
   // Middleware here has access to the authenticated user via req.userPayload.
-  // Use this for tenant context resolution, org membership loading, etc.
-  if (options?.ExpressMiddlewarePostAuth) {
-    for (const mw of options.ExpressMiddlewarePostAuth) {
-      app.use(mw);
-    }
+  // Contributions come from @RegisterClass(BaseServerMiddleware, key) classes
+  // (e.g., MJTenantFilterMiddleware for multi-tenancy, BCSaaSMiddleware for org context).
+  for (const mw of mwPostAuth) {
+    app.use(mw);
   }
 
   // ─── OAuth authenticated routes (auth already handled by unified middleware) ─────
@@ -616,10 +698,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   );
 
   // ─── Post-route middleware (error handlers, catch-alls) ─────
-  if (options?.ExpressMiddlewareAfter) {
-    for (const mw of options.ExpressMiddlewareAfter) {
-      app.use(mw);
-    }
+  for (const mw of mwPostRoute) {
+    app.use(mw);
   }
 
   // Initialize and start scheduled jobs service if enabled
@@ -635,45 +715,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     }
   }
 
-  // Register provider-level hooks with the global HookRegistry.
-  // Each entry can be a plain function or a { hook, Priority, Namespace } object.
-  if (options?.PreRunViewHooks) {
-    for (const entry of options.PreRunViewHooks) {
-      registerHookEntry('PreRunView', entry);
-    }
-  }
-  if (options?.PostRunViewHooks) {
-    for (const entry of options.PostRunViewHooks) {
-      registerHookEntry('PostRunView', entry);
-    }
-  }
-  if (options?.PreSaveHooks) {
-    for (const entry of options.PreSaveHooks) {
-      registerHookEntry('PreSave', entry);
-    }
-  }
-
-  // Auto-register multi-tenancy hooks when enabled in config
-  // (The tenant Express middleware was already registered above in the post-auth slot)
-  if (configInfo.multiTenancy?.enabled) {
-    console.log('[MultiTenancy] Enabled — registering tenant isolation hooks');
-    const tenantConfig = configInfo.multiTenancy;
-
-    // Register tenant PreRunView hook (injects WHERE clauses)
-    // Priority 50 + namespace allows middle layers to replace with their own implementation
-    HookRegistry.Register('PreRunView', createTenantPreRunViewHook(tenantConfig), {
-      Priority: 50,
-      Namespace: 'mj:tenantFilter',
-    });
-
-    // Register tenant PreSave hook (validates tenant column on writes)
-    HookRegistry.Register('PreSave', createTenantPreSaveHook(tenantConfig), {
-      Priority: 50,
-      Namespace: 'mj:tenantSave',
-    });
-
-    console.log(`[MultiTenancy] Context source: ${tenantConfig.contextSource}, scoping: ${tenantConfig.scopingStrategy}, write protection: ${tenantConfig.writeProtection}`);
-  }
+  // Data hooks are now registered via BaseServerMiddleware classes above
+  // (e.g., MJTenantFilterMiddleware registers PreRunView and PreSave hooks).
+  // No config-bag hook registration needed.
 
   if (options?.onBeforeServe) {
     await Promise.resolve(options.onBeforeServe());

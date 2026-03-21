@@ -14,6 +14,7 @@ import {
     type ExternalRecord,
     type DefaultFieldMapping,
     type DefaultIntegrationConfig,
+    type IntegrationObjectInfo,
 } from '@memberjunction/integration-engine';
 import type { MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 
@@ -27,6 +28,20 @@ export interface YMConnectionConfig {
     APIKey: string;
     /** YM API password (used as Password for session auth) */
     APIPassword: string;
+
+    // ── Optional performance overrides (all have defaults) ──────────
+    /** Maximum retries for rate-limited or failed requests. Default: 5 */
+    MaxRetries?: number;
+    /** HTTP request timeout in milliseconds. Default: 30000 */
+    RequestTimeoutMs?: number;
+    /** Minimum milliseconds between API requests to avoid rate limiting. Default: 600 */
+    MinRequestIntervalMs?: number;
+    /** Number of members to enrich per batch before writing to DB. Default: 500 */
+    EnrichBatchSize?: number;
+    /** JSON parsing timeout in milliseconds. Default: 30000 */
+    JsonTimeoutMs?: number;
+    /** Detail enrichment timeout per record in milliseconds. Default: 45000 */
+    EnrichTimeoutMs?: number;
 }
 
 /** Extended auth context with YM-specific session and config data */
@@ -53,7 +68,10 @@ const MAX_RETRIES = 5;
 const REQUEST_TIMEOUT_MS = 30000;
 
 /** Minimum milliseconds between API requests to avoid rate limiting */
-const MIN_REQUEST_INTERVAL_MS = 350;
+const MIN_REQUEST_INTERVAL_MS = 600;
+
+/** Number of members to enrich per batch before writing to DB */
+const ENRICH_BATCH_SIZE = 500;
 
 /** JSON parsing timeout in milliseconds */
 const JSON_TIMEOUT_MS = 30000;
@@ -80,8 +98,136 @@ const METADATA_KEYS = new Set([
  *   2. Receive SessionId
  *   3. Pass SessionId as X-SS-ID header on all data requests
  *
- * Configuration JSON: { "ClientID": "25363", "APIKey": "...", "APIPassword": "..." }
+ * Configuration JSON (required + optional overrides):
+ * {
+ *   "ClientID": "25363",
+ *   "APIKey": "...",
+ *   "APIPassword": "...",
+ *   "MaxRetries": 5,             // optional, default: 5
+ *   "RequestTimeoutMs": 30000,   // optional, default: 30000
+ *   "MinRequestIntervalMs": 600, // optional, default: 600
+ *   "EnrichBatchSize": 500,      // optional, default: 500
+ *   "JsonTimeoutMs": 30000,      // optional, default: 30000
+ *   "EnrichTimeoutMs": 45000     // optional, default: 45000
+ * }
  */
+// ─── Action Metadata Objects ──────────────────────────────────────────
+
+const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
+    {
+        Name: 'members', DisplayName: 'Member',
+        Description: 'An individual membership record in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'EmailAddr', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Member email address (key field)' },
+            { Name: 'FirstName', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Member first name' },
+            { Name: 'LastName', DisplayName: 'Last Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Member last name' },
+            { Name: 'Phone', DisplayName: 'Phone', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Member phone number' },
+            { Name: 'Organization', DisplayName: 'Company Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Member company/organization' },
+            { Name: 'MemberTypeCode', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Membership type code/status' },
+            { Name: 'ProfileID', DisplayName: 'Profile ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'YM profile identifier' },
+            { Name: 'Address1', DisplayName: 'Address Line 1', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Street address line 1' },
+            { Name: 'City', DisplayName: 'City', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'City' },
+            { Name: 'State', DisplayName: 'State', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'State/province' },
+            { Name: 'PostalCode', DisplayName: 'Postal Code', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Postal/zip code' },
+            { Name: 'Country', DisplayName: 'Country', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Country' },
+            { Name: 'ExpirationDate', DisplayName: 'Expiration Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Membership expiration date' },
+            { Name: 'LastUpdated', DisplayName: 'Last Updated', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When the member record was last updated' },
+        ],
+    },
+    {
+        Name: 'events', DisplayName: 'Event',
+        Description: 'An event or conference in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'EventId', DisplayName: 'Event ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Event identifier' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Event name' },
+            { Name: 'StartDate', DisplayName: 'Start Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Event start date' },
+            { Name: 'EndDate', DisplayName: 'End Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Event end date' },
+        ],
+    },
+    {
+        Name: 'event-registrations', DisplayName: 'Event Registration',
+        Description: 'A registration for an event in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Registration ID' },
+            { Name: 'EventId', DisplayName: 'Event ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Associated event ID' },
+            { Name: 'FirstName', DisplayName: 'First Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Registrant first name' },
+            { Name: 'LastName', DisplayName: 'Last Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Registrant last name' },
+            { Name: 'DisplayName', DisplayName: 'Display Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Registrant display name' },
+            { Name: 'DateRegistered', DisplayName: 'Date Registered', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When registration occurred' },
+            { Name: 'IsPrimary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Whether this is the primary registrant' },
+        ],
+    },
+    {
+        Name: 'event-sessions', DisplayName: 'Event Session',
+        Description: 'A session within an event in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'SessionId', DisplayName: 'Session ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Session identifier' },
+            { Name: 'EventId', DisplayName: 'Event ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Associated event ID' },
+            { Name: 'Name', DisplayName: 'Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Session name' },
+            { Name: 'Presenter', DisplayName: 'Presenter', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Session presenter' },
+            { Name: 'StartDate', DisplayName: 'Start Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Session start date/time' },
+            { Name: 'EndDate', DisplayName: 'End Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Session end date/time' },
+        ],
+    },
+    {
+        Name: 'groups', DisplayName: 'Group',
+        Description: 'A membership group in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'GroupId', DisplayName: 'Group ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Group identifier' },
+            { Name: 'GroupName', DisplayName: 'Group Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Group name' },
+            { Name: 'GroupTypeId', DisplayName: 'Group Type ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Associated group type ID' },
+            { Name: 'GroupTypeName', DisplayName: 'Group Type Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Group type name' },
+        ],
+    },
+    {
+        Name: 'invoice-items', DisplayName: 'Invoice Item',
+        Description: 'A line item from an invoice in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'LineItemID', DisplayName: 'Line Item ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Line item identifier' },
+            { Name: 'InvoiceNo', DisplayName: 'Invoice Number', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Invoice number' },
+            { Name: 'InvoiceType', DisplayName: 'Invoice Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Type of invoice' },
+            { Name: 'WebSiteMemberID', DisplayName: 'Member ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Website member ID' },
+            { Name: 'LineItemDescription', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Line item description' },
+            { Name: 'LineItemAmount', DisplayName: 'Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Line item amount' },
+            { Name: 'LineItemDate', DisplayName: 'Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Line item date' },
+        ],
+    },
+    {
+        Name: 'dues-transactions', DisplayName: 'Dues Transaction',
+        Description: 'A membership dues transaction in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'TransactionID', DisplayName: 'Transaction ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Transaction identifier' },
+            { Name: 'WebsiteMemberID', DisplayName: 'Member ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Website member ID' },
+            { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Transaction status' },
+            { Name: 'Amount', DisplayName: 'Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Transaction amount' },
+            { Name: 'MembershipRequested', DisplayName: 'Membership Requested', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Membership type requested' },
+            { Name: 'DateSubmitted', DisplayName: 'Date Submitted', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When transaction was submitted' },
+        ],
+    },
+    {
+        Name: 'donation-history', DisplayName: 'Donation',
+        Description: 'A historical donation record in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'intDonationId', DisplayName: 'Donation ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Donation identifier' },
+            { Name: 'ProfileID', DisplayName: 'Profile ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Donor profile ID' },
+            { Name: 'dblDonation', DisplayName: 'Amount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Donation amount' },
+            { Name: 'strFundName', DisplayName: 'Fund Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Donation fund name' },
+            { Name: 'DatDonation', DisplayName: 'Donation Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When the donation was made' },
+            { Name: 'strStatus', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Donation status' },
+        ],
+    },
+    {
+        Name: 'career-openings', DisplayName: 'Career Opening',
+        Description: 'A job/career listing in YourMembership', SupportsWrite: false,
+        Fields: [
+            { Name: 'CareerOpeningID', DisplayName: 'Career Opening ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Career opening identifier' },
+            { Name: 'Position', DisplayName: 'Position', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Job position/title' },
+            { Name: 'Organization', DisplayName: 'Organization', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Hiring organization' },
+            { Name: 'DatePosted', DisplayName: 'Date Posted', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'When the listing was posted' },
+        ],
+    },
+];
+
 @RegisterClass(BaseIntegrationConnector, 'YourMembershipConnector')
 export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     /** Session cache keyed by ClientID */
@@ -90,13 +236,56 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     /** Timestamp of the last API request, used for throttling */
     private lastRequestTime = 0;
 
+    public override get IntegrationName(): string { return 'YourMembership'; }
+
+    public override GetIntegrationObjects(): IntegrationObjectInfo[] {
+        return YM_ACTION_OBJECTS;
+    }
+
+    public override GetActionGeneratorConfig() {
+        const config = super.GetActionGeneratorConfig();
+        if (!config) return null;
+        config.IconClass = 'fa-solid fa-id-card';
+        config.CategoryDescription = 'YourMembership AMS integration for managing members, events, dues, and association data';
+        config.ParentCategoryName = 'Business Apps';
+        // YM is read-only but we still want Search/List for querying
+        config.IncludeSearch = true;
+        config.IncludeList = true;
+        return config;
+    }
+
+    /** Resolved config (populated after first Authenticate call) */
+    private _config: YMConnectionConfig | null = null;
+
+    /** Current adaptive request interval — increases on 429, recovers toward resolved MIN */
+    private currentRequestIntervalMs = MIN_REQUEST_INTERVAL_MS;
+
+    // ── Per-instance config accessors (fall back to module-level defaults) ──
+    private get effectiveMaxRetries(): number { return this._config?.MaxRetries ?? MAX_RETRIES; }
+    private get effectiveRequestTimeoutMs(): number { return this._config?.RequestTimeoutMs ?? REQUEST_TIMEOUT_MS; }
+    private get effectiveMinRequestIntervalMs(): number { return this._config?.MinRequestIntervalMs ?? MIN_REQUEST_INTERVAL_MS; }
+    private get effectiveEnrichBatchSize(): number { return this._config?.EnrichBatchSize ?? ENRICH_BATCH_SIZE; }
+    private get effectiveJsonTimeoutMs(): number { return this._config?.JsonTimeoutMs ?? JSON_TIMEOUT_MS; }
+    private get effectiveEnrichTimeoutMs(): number { return this._config?.EnrichTimeoutMs ?? ENRICH_TIMEOUT_MS; }
+
+    /** Cache of the filtered member list pending enrichment, shared across batch calls */
+    private memberFetchCache: {
+        changedRecords: ExternalRecord[];
+        newWatermark: string | null;
+    } | null = null;
+
     // ─── Abstract method implementations (BaseRESTIntegrationConnector) ──
 
     protected async Authenticate(
-        companyIntegration: MJCompanyIntegrationEntity
+        companyIntegration: MJCompanyIntegrationEntity,
+        contextUser: UserInfo
     ): Promise<RESTAuthContext> {
-        const config = await this.ParseConfig(companyIntegration);
+        console.log(`[YM] Authenticating...`);
+        const config = await this.ParseConfig(companyIntegration, contextUser);
+        this._config = config;
+        this.currentRequestIntervalMs = this.effectiveMinRequestIntervalMs;
         const sessionId = await this.GetSession(config);
+        console.log(`[YM] Authenticated, sessionId length: ${sessionId.length}`);
         const auth: YMAuthContext = { SessionID: sessionId, Config: config };
         return auth;
     }
@@ -115,19 +304,20 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         const ymAuth = auth as YMAuthContext;
         const currentHeaders = { ...headers };
 
-        // Throttle: ensure minimum interval between requests
+        // Throttle: ensure adaptive minimum interval between requests
         const elapsed = Date.now() - this.lastRequestTime;
-        if (elapsed < MIN_REQUEST_INTERVAL_MS) {
-            await this.Sleep(MIN_REQUEST_INTERVAL_MS - elapsed);
+        if (elapsed < this.currentRequestIntervalMs) {
+            await this.Sleep(this.currentRequestIntervalMs - elapsed);
         }
 
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const maxRetries = this.effectiveMaxRetries;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
             let response: Response;
             try {
                 response = await this.FetchWithTimeout(url, method, currentHeaders);
             } catch (err) {
                 if (this.IsTimeoutError(err)) {
-                    console.warn(`YM timeout on ${url}, re-authenticating (attempt ${attempt + 1}/${MAX_RETRIES})`);
+                    console.warn(`YM timeout on ${url}, re-authenticating (attempt ${attempt + 1}/${maxRetries})`);
                     await this.RefreshSession(ymAuth, currentHeaders);
                     continue;
                 }
@@ -141,17 +331,26 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
             if (response.status === 429) {
                 const delayMs = this.CalculateRetryDelay(response, attempt);
-                console.warn(`YM rate limited (429), retrying in ${delayMs}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+                this.currentRequestIntervalMs = Math.min(this.currentRequestIntervalMs * 2, 10000);
+                console.warn(`YM rate limited (429), retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries}). Interval adjusted to ${this.currentRequestIntervalMs}ms`);
                 await this.Sleep(delayMs);
                 continue;
             }
 
             this.lastRequestTime = Date.now();
-            const body = await this.JsonWithTimeout(response, JSON_TIMEOUT_MS);
+            // Gradually recover interval toward configured minimum on successful requests
+            const minInterval = this.effectiveMinRequestIntervalMs;
+            if (this.currentRequestIntervalMs > minInterval) {
+                this.currentRequestIntervalMs = Math.max(
+                    this.currentRequestIntervalMs - 50,
+                    minInterval
+                );
+            }
+            const body = await this.JsonWithTimeout(response, this.effectiveJsonTimeoutMs);
             return this.BuildRESTResponse(response, body);
         }
 
-        throw new Error(`YM API request failed after ${MAX_RETRIES} retries: ${url}`);
+        throw new Error(`YM API request failed after ${maxRetries} retries: ${url}`);
     }
 
     protected NormalizeResponse(
@@ -201,7 +400,11 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         };
     }
 
-    protected GetBaseURL(companyIntegration: MJCompanyIntegrationEntity): string {
+    protected GetBaseURL(companyIntegration: MJCompanyIntegrationEntity, auth: RESTAuthContext): string {
+        const ymAuth = auth as YMAuthContext;
+        if (ymAuth.Config?.ClientID) {
+            return `${YM_API_BASE}/Ams/${ymAuth.Config.ClientID}`;
+        }
         const configJson = companyIntegration.Get('Configuration') as string | null;
         if (configJson) {
             const parsed = JSON.parse(configJson) as Record<string, string>;
@@ -247,62 +450,78 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     /**
      * Overrides base FetchChanges to handle YM-specific edge cases:
      * - Groups/GroupTypes: nested GroupTypeList response needs custom flattening
-     * - Members: client-side watermark filtering + selective detail enrichment
+     * - Members: client-side watermark filtering + batched detail enrichment
      *
      * The MemberList API returns all members every time (no server-side date filter),
-     * but each record includes a `LastUpdated` field. We pull the full list, filter
-     * to only records changed since the watermark, and only call the expensive
-     * per-member detail endpoint for those changed records.
+     * but each record includes a `LastUpdated` field. We pull the full list once,
+     * filter to only records changed since the watermark, cache that filtered list,
+     * and enrich + return ENRICH_BATCH_SIZE records per FetchChanges call so the
+     * engine writes each batch to the database before moving to the next.
      */
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
+        console.log(`[YM] FetchChanges called for '${ctx.ObjectName}' (batchSize=${ctx.BatchSize}, watermark=${ctx.WatermarkValue ?? 'none'}, offset=${ctx.CurrentOffset ?? 'none'})`);
+
         if (ctx.ObjectName === 'Groups' || ctx.ObjectName === 'GroupTypes') {
             return this.FetchGroups(ctx);
         }
 
-        const result = await super.FetchChanges(ctx);
-
-        if (ctx.ObjectName === 'Members' && result.Records.length > 0) {
-            return this.FetchMembersWithWatermark(ctx, result);
+        if (ctx.ObjectName === 'Members') {
+            return this.FetchMemberBatch(ctx);
         }
 
-        return result;
+        return super.FetchChanges(ctx);
     }
 
     /**
-     * Filters the full member list to only records changed since the watermark,
-     * then enriches only those changed records via the detail endpoint.
-     * Returns a new watermark based on the latest LastUpdated value seen.
+     * Fetches and enriches members in batches of ENRICH_BATCH_SIZE.
+     *
+     * On the first call (CurrentOffset = 0 or undefined), fetches the full member
+     * list via the base class, filters by watermark, and caches the result.
+     * On subsequent calls, uses the cached list and enriches the next slice.
+     * Returns HasMore=true until all records are enriched.
+     * Only sets NewWatermarkValue on the final batch so the watermark is only
+     * updated once all records have been written to the database.
      */
-    private async FetchMembersWithWatermark(
-        ctx: FetchContext,
-        fullResult: FetchBatchResult
-    ): Promise<FetchBatchResult> {
+    private async FetchMemberBatch(ctx: FetchContext): Promise<FetchBatchResult> {
+        // Simple approach: fetch one page of member IDs, enrich them, return.
+        // The engine's outer loop handles pagination — it calls FetchChanges
+        // repeatedly with incrementing offsets until HasMore=false.
+        const pageResult = await super.FetchChanges(ctx);
+
+        if (pageResult.Records.length === 0) {
+            return pageResult;
+        }
+
+        // Client-side watermark filtering: YM's MemberList API returns all members
+        // every time (no server-side date filter), so we filter locally by LastUpdated.
         const { changedRecords, newWatermark } = this.FilterByWatermark(
-            fullResult.Records,
-            ctx.WatermarkValue,
-            'LastUpdated'
+            pageResult.Records, ctx.WatermarkValue, 'LastUpdated'
         );
 
         if (changedRecords.length === 0) {
             return {
                 Records: [],
-                HasMore: false,
-                NewWatermarkValue: newWatermark ?? ctx.WatermarkValue ?? undefined,
+                HasMore: pageResult.HasMore,
+                NextOffset: pageResult.NextOffset,
+                NextPage: pageResult.NextPage,
+                NextCursor: pageResult.NextCursor,
+                NewWatermarkValue: !pageResult.HasMore ? (newWatermark ?? pageResult.NewWatermarkValue) : undefined,
             };
         }
 
-        console.log(
-            `[YM Members] ${changedRecords.length} of ${fullResult.Records.length} records changed since watermark`
+        console.log(`[YM Members] Fetched ${pageResult.Records.length} member IDs, ${changedRecords.length} changed since watermark, enriching...`);
+
+        const enriched = await this.EnrichMembersWithDetails(
+            ctx, changedRecords, ctx.CurrentOffset ?? 0, changedRecords.length
         );
 
-        const enriched = await this.EnrichMembersWithDetails(ctx, {
-            Records: changedRecords,
-            HasMore: false,
-        });
-
         return {
-            ...enriched,
-            NewWatermarkValue: newWatermark ?? ctx.WatermarkValue ?? undefined,
+            Records: enriched,
+            HasMore: pageResult.HasMore,
+            NextOffset: pageResult.NextOffset,
+            NextPage: pageResult.NextPage,
+            NextCursor: pageResult.NextCursor,
+            NewWatermarkValue: !pageResult.HasMore ? (newWatermark ?? pageResult.NewWatermarkValue) : undefined,
         };
     }
 
@@ -486,7 +705,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
      * the type entries. When 'Groups', flattens into individual group records.
      */
     private async FetchGroups(ctx: FetchContext): Promise<FetchBatchResult> {
-        const auth = await this.Authenticate(ctx.CompanyIntegration) as YMAuthContext;
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser) as YMAuthContext;
         const json = await this.MakeYMRequest(auth, 'Groups');
         const typeList = json['GroupTypeList'] as GroupTypeListItem[] | undefined;
 
@@ -536,27 +755,42 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     // ─── Detail enrichment (Members) ─────────────────────────────────
 
     /**
-     * Enriches Members records with full profile data from the detail endpoint.
+     * Enriches a slice of member records with full profile data from the detail endpoint.
      * The list endpoint returns sparse data (name, email); the detail endpoint
      * returns full address, phone, custom fields, etc.
+     *
+     * @param ctx - Fetch context for auth
+     * @param records - The slice of records to enrich
+     * @param batchOffset - Starting index of this slice within the overall set (for progress logging)
+     * @param overallTotal - Total number of records being enriched across all batches (for progress logging)
      */
     private async EnrichMembersWithDetails(
         ctx: FetchContext,
-        result: FetchBatchResult
-    ): Promise<FetchBatchResult> {
-        const auth = await this.Authenticate(ctx.CompanyIntegration) as YMAuthContext;
+        records: ExternalRecord[],
+        batchOffset: number,
+        overallTotal: number
+    ): Promise<ExternalRecord[]> {
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser) as YMAuthContext;
         const concurrency = 3;
         const enriched: ExternalRecord[] = [];
+        let lastLoggedPct = Math.floor((batchOffset / overallTotal) * 100);
 
-        for (let i = 0; i < result.Records.length; i += concurrency) {
-            const batch = result.Records.slice(i, i + concurrency);
+        for (let i = 0; i < records.length; i += concurrency) {
+            const chunk = records.slice(i, i + concurrency);
             const results = await Promise.all(
-                batch.map(record => this.EnrichSingleMember(auth, record))
+                chunk.map(record => this.EnrichSingleMember(auth, record))
             );
             enriched.push(...results);
+
+            const doneOverall = batchOffset + enriched.length;
+            const pct = Math.floor((doneOverall / overallTotal) * 100);
+            if (pct >= lastLoggedPct + 1) {
+                lastLoggedPct = pct;
+                console.log(`[YM Members] Enriched ${doneOverall}/${overallTotal} (${pct}%)`);
+            }
         }
 
-        return { ...result, Records: enriched };
+        return enriched;
     }
 
     /**
@@ -571,13 +805,14 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             const detailPath = `Members/${record.ExternalID}`;
             const fetchPromise = this.MakeYMRequest(auth, detailPath);
             const timeoutPromise = new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error(`Detail fetch timed out for ${record.ExternalID}`)), ENRICH_TIMEOUT_MS)
+                setTimeout(() => reject(new Error(`Detail fetch timed out for ${record.ExternalID}`)), this.effectiveEnrichTimeoutMs)
             );
             const json = await Promise.race([fetchPromise, timeoutPromise]);
             const normalized = this.NormalizeMemberDetail(json);
             record.Fields = { ...record.Fields, ...normalized };
-        } catch {
-            // Keep list data if detail fetch fails
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(`[YM Members] Failed to enrich member ${record.ExternalID}: ${message}`);
         }
 
         return record;
@@ -669,7 +904,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     }
 
     private ParseConfigJson(json: string): YMConnectionConfig {
-        const parsed = JSON.parse(json) as Record<string, string>;
+        const parsed = JSON.parse(json) as Record<string, unknown>;
         const clientId = parsed['ClientID'] || parsed['clientId'] || parsed['ClientId'];
         const apiKey = parsed['APIKey'] || parsed['apiKey'] || parsed['ApiKey'];
         const apiPassword = parsed['APIPassword'] || parsed['apiPassword'] || parsed['ApiPassword'];
@@ -678,7 +913,24 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             throw new Error('Configuration JSON must contain ClientID, APIKey, and APIPassword (any casing)');
         }
 
-        return { ClientID: String(clientId), APIKey: apiKey, APIPassword: apiPassword };
+        const parseOptionalInt = (key: string): number | undefined => {
+            const v = parsed[key];
+            if (v == null) return undefined;
+            const n = Number(v);
+            return isNaN(n) ? undefined : Math.floor(n);
+        };
+
+        return {
+            ClientID: String(clientId),
+            APIKey: String(apiKey),
+            APIPassword: String(apiPassword),
+            MaxRetries: parseOptionalInt('MaxRetries'),
+            RequestTimeoutMs: parseOptionalInt('RequestTimeoutMs'),
+            MinRequestIntervalMs: parseOptionalInt('MinRequestIntervalMs'),
+            EnrichBatchSize: parseOptionalInt('EnrichBatchSize'),
+            JsonTimeoutMs: parseOptionalInt('JsonTimeoutMs'),
+            EnrichTimeoutMs: parseOptionalInt('EnrichTimeoutMs'),
+        };
     }
 
     // ─── Session management ──────────────────────────────────────────
@@ -699,8 +951,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({
                 provider: 'credentials',
-                UserName: config.APIPassword,
-                Password: config.APIKey,
+                UserName: config.APIKey,
+                Password: config.APIPassword,
                 UserType: 'Admin',
                 ClientID: Number(config.ClientID),
             }),
@@ -772,12 +1024,13 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         headers: Record<string, string>
     ): Promise<Response> {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        const timeoutMs = this.effectiveRequestTimeoutMs;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         try {
             return await fetch(url, { method, headers, signal: controller.signal });
         } catch (err) {
             if (err instanceof Error && err.name === 'AbortError') {
-                throw new Error(`YM API request timed out after ${REQUEST_TIMEOUT_MS / 1000}s: ${url}`);
+                throw new Error(`YM API request timed out after ${timeoutMs / 1000}s: ${url}`);
             }
             throw err;
         } finally {

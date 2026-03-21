@@ -10,6 +10,7 @@ import {
     ProviderType,
     PotentialDuplicateRequest,
     PotentialDuplicateResponse,
+    RunQueryResult,
     DatasetResultType,
     DatasetStatusResultType,
     DatasetItemFilterType,
@@ -21,6 +22,7 @@ import { UserInfo } from '../../generic/securityInfo';
 import { RecordDependency, RecordMergeRequest, RecordMergeResult } from '../../generic/entityInfo';
 import { CompositeKey } from '../../generic/compositeKey';
 import { TransactionGroupBase } from '../../generic/transactionGroup';
+import { QueryExecutionSpec } from '../../generic/queryExecutionSpec';
 
 export class TestMetadataProvider extends ProviderBase {
     private _allowRefresh = true;
@@ -98,6 +100,10 @@ export class TestMetadataProvider extends ProviderBase {
 
     protected async InternalRunQueries(): Promise<any[]> {
         return [];
+    }
+
+    protected async InternalExecuteQueryFromSpec(_spec: QueryExecutionSpec, _contextUser?: UserInfo): Promise<RunQueryResult> {
+        throw new Error('ExecuteQueryFromSpec is not supported by this provider.');
     }
 
     // Required abstract methods (minimal stubs for testing - no database needed)
