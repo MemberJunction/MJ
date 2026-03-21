@@ -11,6 +11,10 @@ import { ConfigLoader } from '../utils/config-loader.js';
 import { AnalysisEngine } from '../core/AnalysisEngine.js';
 import { StateManager } from '../state/StateManager.js';
 import * as path from 'path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { PromptEngine } from '../prompts/PromptEngine.js';
 import { IterationTracker } from '../state/IterationTracker.js';
 import { DatabaseDocumentation, AnalysisRun } from '../types/state.js';
@@ -74,6 +78,7 @@ export default class Prune extends Command {
       const promptsDir = path.join(__dirname, '../../prompts');
       const promptEngine = new PromptEngine(config.ai, promptsDir);
       const iterationTracker = new IterationTracker();
+      await promptEngine.initialize();
       const analysisEngine = new AnalysisEngine(config, promptEngine, stateManager, iterationTracker);
 
       // Create a minimal run object for tracking
