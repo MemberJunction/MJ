@@ -315,3 +315,41 @@ PK improvement is a separate workstream from FK optimization.
 - Comparison scripts: `compare-v3.py`, `compare-v4.py` (status-aware)
 - Ground truth: Extracted from AdventureWorks2022 via SQL scripts
 - Run outputs: `autodoc-output/run-001` through `run-010`
+
+---
+
+## Overnight Results Update (March 21, 2026)
+
+### Run 012 (Partial — 1 iteration, died mid-run)
+- PK: 55 correct (up from 41) — LLM PK proposals working immediately
+- FK: 49 correct (only 1 iteration, insufficient for full FK coverage)
+- Key finding: LLM successfully proposed BusinessEntityID PKs, composite keys, natural keys
+
+### Run 013 (Complete — 5 iterations + pruning attempt)
+
+| Metric | Run 011 | Run 013 | Delta |
+|--------|---------|---------|-------|
+| **PK F1** | 51.2% | **72.7%** | **+21.5%** |
+| PK Correct | 41 | **68** | +27 |
+| PK Missed | 30 | **3** | -27 |
+| **FK F1** | 87.9% | **86.4%** | -1.5% |
+| FK Correct | 91 | **89** | -2 |
+| FK Missed | 0 | **2** | +2 |
+| FK Extra | 25 | **26** | +1 |
+| **Overall** | 84.1% | **89.1%** | **+5.0%** |
+
+### Key Findings
+
+1. **LLM PK proposals are a breakthrough**: 27 new PKs created by the LLM, all passing deterministic eligibility checks. PK correct count jumped from 41 to 68 (+66%). The LLM correctly identified:
+   - BusinessEntityID as PK for Employee, Person, Password, etc.
+   - Composite PKs like PersonPhone(BusinessEntityID, PhoneNumber, PhoneNumberTypeID)
+   - Natural keys like CountryRegion(CountryRegionCode), Culture(CultureID)
+   - Document PKs like Document(DocumentNode)
+
+2. **3 remaining PK misses**: EmailAddress composite, ErrorLog single, WorkOrderRouting 3-column composite
+
+3. **48 PK extras**: Same count as Run 011 — this is from the stats phase, not LLM proposals. PK pruning is a future optimization target.
+
+4. **FK pruning still hitting guardrails**: Duration limit (3 hours) exceeded before pruning could complete on 2 tables. Need to increase duration limit or optimize pruning speed.
+
+5. **Overall grade 89.1%**: Very close to 90% target. PK improvement was the biggest contributor.
