@@ -7,7 +7,7 @@ import { MJApplicationEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
-import { SQLParser } from "@memberjunction/sql-parser";
+import { MJSQLParser } from "@memberjunction/sql-parser";
 import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
@@ -1141,7 +1141,7 @@ export class ManageMetadataBase {
          IsForeignKey: boolean;
       }>;
    }> {
-      const parseResult = SQLParser.Parse(viewDefinition);
+      const tableRefs = MJSQLParser.ExtractTableRefs(viewDefinition);
       const md = new Metadata();
       const sourceEntities: Array<{
          Name: string;
@@ -1158,7 +1158,7 @@ export class ManageMetadataBase {
 
       const seen = new Set<string>();
 
-      for (const tableRef of parseResult.Tables) {
+      for (const tableRef of tableRefs) {
          // Match against MJ entities by BaseTable/BaseView + SchemaName
          const matchingEntity = md.Entities.find(e =>
             (e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase() ||
