@@ -222,3 +222,58 @@ Added guidance to table-analysis prompt: when a column could reference either a 
 Added guidance: when a column references different tables per row (e.g., ReferenceOrderID → SalesOrder/PurchaseOrder/WorkOrder), pick the single most likely target rather than creating multiple entries.
 
 **Impact**: Addresses 3 LLM extras from TransactionHistoryArchive.ReferenceOrderID.
+
+## Post-Benchmark Refactoring Plan
+
+### Driver Refactoring: BaseAutoDocDriver + SQLDialect Integration
+The SQL Server and PostgreSQL drivers are ~90% identical (955 and ~1000 lines respectively). The only differences are:
+1. `TOP N` vs `LIMIT N` — handled by SQLDialect
+2. `NEWID()` vs `RANDOM()` — handled by SQLDialect  
+3. `[brackets]` vs `"quotes"` for identifier escaping — handled by SQLDialect
+4. `sys.tables`/`sys.columns` vs `information_schema`/`pg_catalog` — genuinely different
+5. Connection library (`mssql` vs `pg`)
+
+**Refactoring plan:**
+- Move ~600 lines of shared query-building logic into BaseAutoDocDriver
+- Use SQLDialect for quoting, TOP/LIMIT, random sort, and other dialect-specific SQL fragments
+- Subclasses only override: metadata introspection queries + connection management (~300-400 lines each)
+- MySQL driver benefits too — same pattern applies
+- Test all 3 drivers (SQL Server, PostgreSQL, MySQL) after refactoring
+
+### SQLConverter for Cross-Platform Test Databases
+Use MJ SQLConverter toolchain to:
+1. Convert public benchmark databases (Northwind, Chinook, Pagila, AdventureWorks) between SQL Server, PostgreSQL, and MySQL
+2. Store converted versions in `packages/DBAutoDoc/test-databases/` for easy loading
+3. Each DB includes: create script (per platform), data load script, ground truth JSON (PKs, FKs, descriptions)
+4. Users can load any benchmark DB on any supported RDBMS and run DBAutoDoc against it
+5. Enables community testing and reproducibility across platforms
+
+### Pre-packaged Benchmark Suite
+```
+packages/DBAutoDoc/test-databases/
+  adventureworks/
+    sqlserver/create.sql
+    postgresql/create.sql  (via SQLConverter)
+    ground-truth/pks.json, fks.json, descriptions.json
+  northwind/
+    sqlserver/create.sql
+    postgresql/create.sql
+    ground-truth/...
+  chinook/
+    sqlserver/create.sql
+    postgresql/create.sql
+    ground-truth/...
+  pagila/
+    postgresql/create.sql  (native)
+    sqlserver/create.sql   (via SQLConverter)
+    ground-truth/...
+  lousydb/
+    sqlserver/create.sql
+    postgresql/create.sql
+    mysql/create.sql  (already exists)
+    ground-truth/...
+  compare.py  (benchmark comparison script)
+  README.md   (how to run benchmarks)
+```
+
+This gives the community a turnkey benchmark suite: pick a database, pick a platform, load it, run DBAutoDoc, compare against ground truth.
