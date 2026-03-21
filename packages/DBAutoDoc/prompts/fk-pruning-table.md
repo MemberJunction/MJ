@@ -27,6 +27,11 @@ These FKs were identified by statistical analysis and/or LLM analysis. Some are 
 
 4. **Column name mismatch creating false match**: Same data type and overlapping values but no real relationship. Example: `OrderQty → OnOrderQty` — both are integers with overlapping ranges but aren't referential.
 
+5. **Sibling fan-out**: When a source column has multiple FK targets with the same column name, usually only ONE is the correct FK (to the parent/lookup table). The others are sibling tables that independently reference the same parent. Look for the pattern: `A.TerritoryID → SalesTerritory.TerritoryID` (correct — SalesTerritory is the lookup) vs `A.TerritoryID → SalesTerritoryHistory.TerritoryID` (wrong — History is a sibling, not a parent). The correct target is typically:
+   - The table whose PK matches the FK column
+   - The shorter/simpler table name (lookup/master vs history/detail)
+   - The table with fewer columns (lookup tables are small)
+
 ## Response Format
 
 Return a JSON array of FKs you propose to REMOVE. Only include FKs you are confident are wrong. Do NOT include locked FKs. If all unlocked FKs look correct, return an empty array `[]`.
@@ -41,6 +46,6 @@ Return a JSON array of FKs you propose to REMOVE. Only include FKs you are confi
 ]
 ```
 
-**Be conservative** — only propose removal when you are confident the FK is wrong. It is better to keep a questionable FK than to remove a correct one.
+**Be moderately aggressive** — remove FKs that follow the sibling/reverse/transitive patterns described above. The locked FKs protect the high-confidence correct relationships, so your job is to clean up the lower-confidence noise.
 
 Return ONLY valid JSON. Do not include markdown code fences or explanatory text.

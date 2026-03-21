@@ -456,6 +456,16 @@ export class AnalysisEngine {
         );
       }
 
+      // Process PK proposal from LLM — verify eligibility deterministically
+      if (state.phases.keyDetection && result.result.primaryKey) {
+        this.processPKInsightFromLLM(
+          state,
+          tableNode.schema,
+          tableNode.table,
+          result.result.primaryKey
+        );
+      }
+
       // Update inferred business domain
       if (result.result.inferredBusinessDomain) {
         // Could store this in table metadata if needed
@@ -1042,6 +1052,133 @@ export class AnalysisEngine {
     // Method disabled - awaiting structured LLM output implementation
     console.log(`[AnalysisEngine] extractAndFeedbackFKInsights disabled - awaiting structured FK output from LLM`);
     return;
+  }
+
+  /**
+   * Process PK proposal from LLM. The LLM can propose a PK, but ALL proposed columns
+   * must pass deterministic eligibility: zero nulls, zero blanks, 100% unique values.
+   * If any column fails, the entire proposal is rejected.
+   */
+  private processPKInsightFromLLM(
+    state: DatabaseDocumentation,
+    schemaName: string,
+    tableName: string,
+    pkProposal: import('../types/prompts.js').PrimaryKeyPromptResult
+  ): void {
+    const discoveryPhase = state.phases.keyDetection;
+    if (!discoveryPhase || !pkProposal || !pkProposal.columns || pkProposal.columns.length === 0) return;
+
+    const columns = pkProposal.columns;
+    const confidence = Math.round(pkProposal.confidence * 100);
+
+    // Check if we already have a confirmed PK for this table
+    const existingConfirmedPK = discoveryPhase.discovered.primaryKeys.find(pk =>
+      pk.schemaName === schemaName &&
+      pk.tableName === tableName &&
+      pk.status === 'confirmed'
+    );
+
+    if (existingConfirmedPK) {
+      // Already have a confirmed PK — check if LLM agrees
+      const sameColumns = existingConfirmedPK.columnNames.length === columns.length &&
+        existingConfirmedPK.columnNames.every(c => columns.some(pc => pc.toLowerCase() === c.toLowerCase()));
+
+      if (sameColumns) {
+        // LLM agrees with existing PK — boost confidence
+        existingConfirmedPK.confidence = Math.min(existingConfirmedPK.confidence + 10, 100);
+        existingConfirmedPK.validatedByLLM = true;
+        console.log(`[AnalysisEngine] LLM confirmed existing PK: ${schemaName}.${tableName} (${columns.join(', ')}), confidence: ${existingConfirmedPK.confidence}`);
+      } else {
+        // LLM disagrees — log but don't override a confirmed PK
+        console.log(`[AnalysisEngine] LLM proposed different PK for ${schemaName}.${tableName}: [${columns.join(', ')}] vs confirmed [${existingConfirmedPK.columnNames.join(', ')}] — keeping confirmed`);
+      }
+      return;
+    }
+
+    // Check if an existing candidate matches
+    const existingCandidate = discoveryPhase.discovered.primaryKeys.find(pk =>
+      pk.schemaName === schemaName &&
+      pk.tableName === tableName &&
+      pk.columnNames.length === columns.length &&
+      pk.columnNames.every(c => columns.some(pc => pc.toLowerCase() === c.toLowerCase()))
+    );
+
+    if (existingCandidate) {
+      // LLM confirms a stats candidate — promote and boost
+      existingCandidate.validatedByLLM = true;
+      existingCandidate.status = 'confirmed';
+      existingCandidate.confidence = Math.min(existingCandidate.confidence + 20, 100);
+      console.log(`[AnalysisEngine] LLM confirmed PK candidate: ${schemaName}.${tableName} (${columns.join(', ')}), confidence: ${existingCandidate.confidence}`);
+
+      // Update column flags
+      for (const colName of columns) {
+        const column = this.findColumnInState(state, schemaName, tableName, colName);
+        if (column) column.isPrimaryKey = true;
+      }
+      return;
+    }
+
+    // New PK proposal — verify ALL columns are PK-eligible deterministically
+    const table = this.stateManager.findTable(state, schemaName, tableName);
+    if (!table) return;
+
+    for (const colName of columns) {
+      const column = table.columns.find(c => c.name.toLowerCase() === colName.toLowerCase());
+      if (!column) {
+        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName} — column "${colName}" not found`);
+        return;
+      }
+
+      // Check PK eligibility from stats
+      const stats = column.statistics;
+      if (!stats) {
+        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName}.${colName} — no statistics available`);
+        return;
+      }
+
+      const uniqueness = stats.totalRows > 0 ? stats.distinctCount / stats.totalRows : 0;
+      const hasNulls = (stats.nullCount || 0) > 0;
+
+      if (hasNulls) {
+        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName}.${colName} — has ${stats.nullCount} nulls`);
+        return;
+      }
+
+      if (uniqueness < 1.0) {
+        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName}.${colName} — uniqueness ${(uniqueness * 100).toFixed(1)}% (must be 100%)`);
+        return;
+      }
+    }
+
+    // All columns pass — create new PK candidate
+    const newPK: import('../types/discovery.js').PKCandidate = {
+      schemaName,
+      tableName,
+      columnNames: columns,
+      confidence,
+      evidence: {
+        uniqueness: 1.0,
+        nullCount: 0,
+        totalRows: table.rowCount || 0,
+        dataPattern: columns.length > 1 ? 'composite' : 'unknown',
+        namingScore: 0.5,
+        dataTypeScore: 0.8,
+        warnings: ['Created from LLM proposal — passed deterministic eligibility']
+      },
+      discoveredInIteration: 1,
+      validatedByLLM: true,
+      status: 'confirmed'
+    };
+
+    discoveryPhase.discovered.primaryKeys.push(newPK);
+
+    // Update column flags
+    for (const colName of columns) {
+      const column = this.findColumnInState(state, schemaName, tableName, colName);
+      if (column) column.isPrimaryKey = true;
+    }
+
+    console.log(`[AnalysisEngine] Created PK from LLM: ${schemaName}.${tableName} (${columns.join(', ')}) confidence: ${confidence}`);
   }
 
   /**

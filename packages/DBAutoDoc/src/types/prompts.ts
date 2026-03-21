@@ -21,8 +21,18 @@ export interface TableAnalysisPromptResult {
   confidence: number;
   columnDescriptions: ColumnDescriptionPromptResult[];
   foreignKeys?: ForeignKeyPromptResult[];
+  /** LLM-proposed primary key for this table */
+  primaryKey?: PrimaryKeyPromptResult;
   inferredBusinessDomain?: string;
   parentTableInsights?: ParentTableInsight[];
+}
+
+/** LLM-proposed primary key — must pass deterministic eligibility check before acceptance */
+export interface PrimaryKeyPromptResult {
+  /** Column name(s) that form the primary key. Use array for composite keys. */
+  columns: string[];
+  confidence: number;
+  reasoning: string;
 }
 
 export interface ForeignKeyPromptResult {

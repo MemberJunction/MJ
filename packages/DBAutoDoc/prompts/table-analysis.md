@@ -122,6 +122,11 @@ Based on the evidence above, generate a JSON response with this exact structure:
       "reasoning": "Brief explanation of the evidence"
     }
   ],
+  "primaryKey": {
+    "columns": ["CustomerID"],
+    "confidence": 0.95,
+    "reasoning": "Single auto-increment column with 100% uniqueness, named after the table"
+  },
   "foreignKeys": [
     {
       "columnName": "prd_id",
@@ -147,14 +152,21 @@ Based on the evidence above, generate a JSON response with this exact structure:
 2. **Reasoning**: Reference specific evidence (column names, FK relationships, sample values, cardinality patterns)
 3. **Confidence**: 0-1 scale. Be conservative. Use < 0.7 if ambiguous.
 4. **Column Descriptions**: Every column should be described. Explain its role and meaning.
-5. **Foreign Keys**: **CRITICAL** - Use structured format for ALL foreign key relationships:
+5. **Primary Key**: Identify the column(s) that most likely form this table's primary key.
+   - Look for columns with 100% uniqueness, zero nulls, and names like `ID`, `TableNameID`, or `Code`
+   - For junction/bridge tables (e.g., `ProductModelIllustration`), the PK is likely a composite of the FK columns
+   - If the table inherits an ID from a parent (e.g., `Employee` using `BusinessEntityID` from `BusinessEntity`), that inherited column IS the PK
+   - Use `"columns": ["Col1", "Col2"]` for composite keys
+   - Confidence should reflect how certain you are (0-1 scale)
+   - If a PK is already marked in the column list above, you may confirm it or propose a different one
+6. **Foreign Keys**: **CRITICAL** - Use structured format for ALL foreign key relationships:
    - Include EVERY column that references another table
    - Use EXACT schema and table names from the "All Database Tables" list above
    - Specify confidence (0-1 scale) based on evidence strength
    - Example: If `prd_id` exists, add: `{"columnName": "prd_id", "referencesSchema": "inv", "referencesTable": "prd", "referencesColumn": "prd_id", "confidence": 0.95}`
    - **Leave empty array if no foreign keys detected**
-6. **Business Domain**: Infer from table name and purpose (e.g., "Sales", "HR", "Inventory", "Billing", "Security")
-7. **Parent Table Insights**: If analyzing this child table reveals new information about parent tables, include it. Examples:
+7. **Business Domain**: Infer from table name and purpose (e.g., "Sales", "HR", "Inventory", "Billing", "Security")
+8. **Parent Table Insights**: If analyzing this child table reveals new information about parent tables, include it. Examples:
    - Discovering enum values in the parent (e.g., "Member table has a 'Type' column with values: Individual, Corporate, Student")
    - Revealing parent table classification/purpose (e.g., "BoardMember reveals that Member table includes leadership roles, not just general members")
    - Identifying parent table patterns (e.g., "Multiple child tables suggest Organization serves as a multi-tenant partition key")
