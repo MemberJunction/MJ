@@ -342,10 +342,21 @@ class EntityMapUpdateInput {
 }
 
 @ObjectType()
+class EntityMapSummaryOutput {
+    @Field() ID: string;
+    @Field({ nullable: true }) EntityID?: string;
+    @Field({ nullable: true }) Entity?: string;
+    @Field({ nullable: true }) ExternalObjectName?: string;
+    @Field({ nullable: true }) SyncDirection?: string;
+    @Field({ nullable: true }) Priority?: number;
+    @Field({ nullable: true }) Status?: string;
+}
+
+@ObjectType()
 class ListEntityMapsOutput {
     @Field() Success: boolean;
     @Field() Message: string;
-    @Field({ nullable: true }) EntityMaps?: string; // JSON-serialized array of entity map records
+    @Field(() => [EntityMapSummaryOutput], { nullable: true }) EntityMaps?: EntityMapSummaryOutput[];
 }
 
 @ObjectType()
@@ -363,10 +374,20 @@ class IntegrationStatusOutput {
 }
 
 @ObjectType()
+class SyncRunSummaryOutput {
+    @Field() ID: string;
+    @Field({ nullable: true }) Status?: string;
+    @Field({ nullable: true }) StartedAt?: string;
+    @Field({ nullable: true }) EndedAt?: string;
+    @Field({ nullable: true }) TotalRecords?: number;
+    @Field({ nullable: true }) RunByUserID?: string;
+}
+
+@ObjectType()
 class SyncHistoryOutput {
     @Field() Success: boolean;
     @Field() Message: string;
-    @Field({ nullable: true }) Runs?: string; // JSON-serialized array of run records
+    @Field(() => [SyncRunSummaryOutput], { nullable: true }) Runs?: SyncRunSummaryOutput[];
 }
 
 @ObjectType()
@@ -598,9 +619,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Platform: validatedPlatform,
                 MJVersion: process.env.MJ_VERSION ?? '5.11.0',
                 SourceType: companyIntegration.Integration,
-                AdditionalSchemaInfoPath: 'additionalSchemaInfo.json',
+                AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
                 MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/v5',
-                MetadataDir: 'metadata',
+                MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
                 ExistingTables: [],
                 EntitySettingsForTargets: {}
             };
@@ -1092,9 +1113,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Platform: validatedPlatform,
                 MJVersion: process.env.MJ_VERSION ?? '5.11.0',
                 SourceType: companyIntegration.Integration,
-                AdditionalSchemaInfoPath: 'additionalSchemaInfo.json',
+                AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
                 MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/v5',
-                MetadataDir: 'metadata',
+                MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
                 ExistingTables: [],
                 EntitySettingsForTargets: {}
             };
@@ -1381,7 +1402,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const rv = new RunView();
-            const result = await rv.RunView<MJCompanyIntegrationEntityMapEntity>({
+            const result = await rv.RunView<EntityMapSummaryOutput>({
                 EntityName: 'MJ: Company Integration Entity Maps',
                 ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
                 OrderBy: 'Priority ASC',
@@ -1393,7 +1414,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             return {
                 Success: true,
                 Message: `${result.Results.length} entity maps`,
-                EntityMaps: JSON.stringify(result.Results)
+                EntityMaps: result.Results
             };
         } catch (e) {
             LogError(`IntegrationListEntityMaps error: ${e}`);
@@ -1547,7 +1568,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const rv = new RunView();
-            const result = await rv.RunView<MJCompanyIntegrationRunEntity>({
+            const result = await rv.RunView<SyncRunSummaryOutput>({
                 EntityName: 'MJ: Company Integration Runs',
                 ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
                 OrderBy: 'StartedAt DESC',
@@ -1560,7 +1581,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             return {
                 Success: true,
                 Message: `${result.Results.length} runs`,
-                Runs: JSON.stringify(result.Results)
+                Runs: result.Results
             };
         } catch (e) {
             LogError(`IntegrationGetSyncHistory error: ${e}`);

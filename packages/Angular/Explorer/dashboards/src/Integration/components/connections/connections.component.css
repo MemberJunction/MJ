@@ -1392,8 +1392,8 @@
 
 /* Schedule section */
 .schedule-section {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 12px;
   padding: 16px 20px;
   margin-bottom: 16px;
@@ -1409,13 +1409,13 @@
   gap: 8px;
   font-size: 0.8rem;
   font-weight: 700;
-  color: #475569;
+  color: var(--mj-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .schedule-section-title i {
-  color: #0076b6;
+  color: var(--mj-brand-primary);
 }
 
 .schedule-empty {
@@ -1427,7 +1427,7 @@
 
 .schedule-empty-text {
   font-size: 0.85rem;
-  color: #94a3b8;
+  color: var(--mj-text-disabled);
 }
 
 .schedule-create-btn {
@@ -1435,7 +1435,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: linear-gradient(135deg, #0076b6 0%, #005a8c 100%);
+  background: linear-gradient(135deg, var(--mj-brand-primary) 0%, var(--mj-brand-primary-active) 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -1447,7 +1447,7 @@
 
 .schedule-create-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 118, 182, 0.4);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
 }
 
 /* Detail toolbar */
