@@ -42,6 +42,13 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
+     * Anthropic natively supports assistant prefill
+     */
+    public override get SupportsPrefill(): boolean {
+        return true;
+    }
+
+    /**
      * Format message content for Anthropic API with optional caching.
      * Supports both text and image content blocks.
      * @param content The message content (string or content blocks)

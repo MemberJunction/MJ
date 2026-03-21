@@ -3173,7 +3173,7 @@ export class AIPromptRunner {
       chatParams.messages = this.buildMessageArray(renderedPrompt, conversationMessages, templateMessageRole);
 
       // Apply assistant prefill (native or fallback) based on prompt config and provider support
-      this.applyAssistantPrefill(chatParams, prompt, model, vendorId, params);
+      this.applyAssistantPrefill(chatParams, prompt, model, vendorId, llm);
 
       // Execute the model with cancellation support
       if (cancellationToken) {
@@ -3253,28 +3253,38 @@ export class AIPromptRunner {
    * Default fallback instruction text used when no PrefillFallbackText is configured
    * at any level of the AIModelType → AIModel → AIModelVendor cascade.
    */
-  private static readonly DEFAULT_PREFILL_FALLBACK = 'IMPORTANT: You must begin your response with exactly the following text (do not add quotes or modify it): {{prefill}}';
+  private static readonly DEFAULT_PREFILL_FALLBACK = '# **CRITICAL**\nYour response must start with exactly: {{prefill}}\nDo not add quotes, markdown formatting, or any other characters before it.';
 
   /**
-   * Resolves whether the current model/vendor supports native assistant prefill
-   * using the cascade: AIModelType → AIModel → AIModelVendor (most specific wins, null = inherit).
+   * Resolves whether the current model/vendor supports native assistant prefill.
+   *
+   * Resolution order:
+   *   1. Start with llm.SupportsPrefill (code-level default from BaseLLM subclass)
+   *   2. AIModel.SupportsPrefill overrides if non-null
+   *   3. AIModelVendor.SupportsPrefill overrides if non-null
+   *
+   * AIModelType.SupportsPrefill is NOT used because it is NOT NULL DEFAULT 0,
+   * so there is no way to distinguish "explicitly disabled" from "never configured."
+   * The code-level default (llm.SupportsPrefill) serves as the type-level default instead.
+   *
+   * - `null` at AIModel/AIModelVendor means "inherit" (defer to code default)
+   * - `true` means "force enable" (overrides code default)
+   * - `false` means "force disable" (overrides code default, even if the driver says yes)
    */
   private resolveSupportsPrefill(
     model: MJAIModelEntityExtended,
-    vendorId: string | null
+    vendorId: string | null,
+    llm: BaseLLM
   ): boolean {
-    // Start with model type default
-    const modelType = AIEngine.Instance.ModelTypes.find(
-      mt => UUIDsEqual(mt.ID, model.AIModelTypeID)
-    );
-    let supportsPrefill = modelType?.SupportsPrefill ?? false;
+    // Start with the code-level default from the BaseLLM subclass
+    let supportsPrefill = llm.SupportsPrefill;
 
-    // Model-level override (null = inherit from type)
+    // Model-level override (null = inherit from code default)
     if (model.SupportsPrefill != null) {
       supportsPrefill = model.SupportsPrefill;
     }
 
-    // Vendor-level override (null = inherit from model/type)
+    // Vendor-level override (null = inherit)
     if (vendorId) {
       const modelVendor = AIEngine.Instance.ModelVendors.find(
         mv => UUIDsEqual(mv.ModelID, model.ID) && UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active'
@@ -3329,14 +3339,14 @@ export class AIPromptRunner {
     prompt: MJAIPromptEntityExtended,
     model: MJAIModelEntityExtended,
     vendorId: string | null,
-    params: AIPromptParams
+    llm: BaseLLM
   ): void {
     const prefillText = prompt.AssistantPrefill;
     if (!prefillText) {
       return; // No prefill configured on this prompt
     }
 
-    const supportsPrefill = this.resolveSupportsPrefill(model, vendorId);
+    const supportsPrefill = this.resolveSupportsPrefill(model, vendorId, llm);
 
     if (supportsPrefill) {
       // Provider supports native prefill — use it directly
@@ -3348,15 +3358,22 @@ export class AIPromptRunner {
     const fallbackMode = prompt.PrefillFallbackMode;
 
     if (fallbackMode === 'SystemInstruction') {
-      // Inject a system instruction telling the model to start with the prefill text
+      // Inject a system instruction telling the model to start with the prefill text.
+      // Append to the existing system message rather than adding a new one,
+      // since some providers only support a single system message entry.
       const fallbackTemplate = this.resolvePrefillFallbackText(model, vendorId);
       const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, prefillText);
 
-      // Append as a system message at the end of the messages array (before any trailing user message)
-      chatParams.messages.push({
-        role: ChatMessageRole.system,
-        content: fallbackInstruction
-      });
+      const existingSystemMsg = chatParams.messages.find(m => m.role === ChatMessageRole.system);
+      if (existingSystemMsg && typeof existingSystemMsg.content === 'string') {
+        existingSystemMsg.content += '\n\n' + fallbackInstruction;
+      } else {
+        // No existing system message — add one
+        chatParams.messages.unshift({
+          role: ChatMessageRole.system,
+          content: fallbackInstruction
+        });
+      }
     }
     // 'Ignore' and 'None' — silently skip, no action needed
   }

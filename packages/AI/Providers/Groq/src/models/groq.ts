@@ -37,6 +37,13 @@ export class GroqLLM extends BaseLLM {
     }
 
     /**
+     * Groq natively supports assistant prefill
+     */
+    public override get SupportsPrefill(): boolean {
+        return true;
+    }
+
+    /**
      * Check if the provider supports thinking models
      * Groq supports thinking models with <think> blocks
      */

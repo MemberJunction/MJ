@@ -52,6 +52,14 @@ export class BedrockLLM extends BaseLLM {
   }
 
   /**
+   * Bedrock supports assistant prefill for Claude (anthropic.*) models.
+   * The provider implementation handles per-model-prefix gating internally.
+   */
+  public override get SupportsPrefill(): boolean {
+    return true;
+  }
+
+  /**
    * Implementation of non-streaming chat completion for Amazon Bedrock
    */
   protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {

@@ -39,6 +39,13 @@ export class OllamaLLM extends BaseLLM {
     }
 
     /**
+     * Ollama natively supports assistant prefill
+     */
+    public override get SupportsPrefill(): boolean {
+        return true;
+    }
+
+    /**
      * Check if the provider supports thinking models
      * Ollama can support thinking models depending on the loaded model
      */

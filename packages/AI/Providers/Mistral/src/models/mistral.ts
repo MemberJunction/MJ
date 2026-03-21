@@ -37,6 +37,13 @@ export class MistralLLM extends BaseLLM {
     }
 
     /**
+     * Mistral natively supports assistant prefill via the prefix flag
+     */
+    public override get SupportsPrefill(): boolean {
+        return true;
+    }
+
+    /**
      * Implementation of non-streaming chat completion for Mistral
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
