@@ -204,3 +204,91 @@ Orchestrates multiple DBAutoDoc runs:
 5. **Table: Cross-LLM Comparison** — Same database, different models, quality + cost
 6. **Figure: Backprop Diff Examples** — Before/after descriptions for selected tables (qualitative)
 7. **Table: Ground Truth Propagation** — % of non-GT tables improved when 10% have GT anchors
+
+---
+
+## PK Detection: Position-Based Scoring and Composite Key Detection
+
+### Problem Statement (Run 013 Analysis)
+PK detection has 48 false positives at confidence 100, indistinguishable from the 68 correct PKs.
+Root cause: any column with 100% uniqueness, 0 nulls, and an ID-like name gets confidence 100,
+regardless of its position in the table schema.
+
+**Key finding**: 100% of correct PKs (68/68) start at column position 0. 
+All 4 false positive PKs at position 1+ are columns that should be part of composites
+(e.g., `SalesOrderDetailID` at position 1 — real PK is `(SalesOrderID, SalesOrderDetailID)` at positions 0,1).
+
+### Heuristic H9: Position-Based PK Confidence Multiplier
+
+**Rule**: Apply a confidence multiplier based on the column's ordinal position in the table:
+- Position 0: 1.0x (full confidence)
+- Position 1: 0.85x
+- Position 2: 0.70x
+- Position 3: 0.55x
+- Position 4+: 0.40x
+
+**Rationale**: PKs are almost universally placed first in table DDL. A column at position 5
+with 100% uniqueness is far more likely an FK to another table than a PK.
+
+**Impact (projected)**: Reduces 4 false positives (pos 1) from confidence 100 to 85,
+putting them below the 90 lock threshold for pruning to evaluate.
+
+### Heuristic H10: Consecutive Column Composite Key Detection
+
+**Rule**: When 2+ consecutive columns starting at position 0 are each:
+- 100% non-null
+- Not date/bit/float types
+- Have key-naming patterns (end in ID, Key, Code, etc.)
+- Individually may or may not be 100% unique
+
+Test whether their COMBINATION is 100% unique. If so, favor this combination as the
+PK candidate over any individual column PK for the same table.
+
+**Rationale**: Junction/bridge tables have composite PKs formed by consecutive FK columns.
+`PersonCreditCard(BusinessEntityID, CreditCardID)` — each column is individually unique
+(or near-unique), but the combination IS the PK. The individual columns are FKs, not PKs.
+
+**Implementation**:
+1. In `detectCompositeCandidates()`, find consecutive PK-eligible columns starting at pos 0
+2. Query the database for combination uniqueness: `SELECT COUNT(DISTINCT col1||col2) = COUNT(*)`
+3. If the combination is unique, create a composite PK candidate with high confidence
+4. Reduce confidence of individual column PKs that are part of a detected composite
+
+### Heuristic H11: Progressive Discount for Later PK-Eligible Columns
+
+**Rule**: When multiple PK-eligible columns exist in a table, apply increasing discounts:
+- 1st PK-eligible column (by position): 1.0x
+- 2nd: 0.85x
+- 3rd: 0.70x
+- 4th+: 0.55x
+
+**Rationale**: Tables commonly have 3-4 columns with 100% uniqueness (FK columns to parent
+tables with many rows). Only 1-2 form the actual PK — typically the earliest positionally.
+
+### Heuristic H12: Composite Supersedes Individual
+
+**Rule**: When a composite PK candidate is detected for a table, reduce individual column
+PK confidence by 0.5x for columns that are part of the composite. The composite inherits
+the higher score.
+
+**Rationale**: If `(PurchaseOrderID, PurchaseOrderDetailID)` is a composite PK, then
+`PurchaseOrderDetailID` alone should not also be a PK candidate at high confidence.
+
+### Expected Combined Impact
+- H9 alone: 4 false positives drop below 90 threshold
+- H10+H12: Correctly identifies composite PKs, demotes their individual columns
+- H11: Additional discount for 3rd/4th unique columns in multi-FK tables
+- Net: PK precision should improve significantly with minimal recall impact
+
+### Performance Optimization Opportunities
+
+The following parallelization opportunities exist but should be configurable
+due to API TPM/RPM limits:
+
+1. **Per-table LLM calls**: Tables at the same dependency level are independent
+   and can be analyzed in parallel (configurable concurrency limit)
+2. **Cross-schema discovery**: FK detection across schemas can run in parallel
+3. **Pruning pass**: Per-table pruning proposals are independent
+4. **Configuration**: `analysis.parallelism.maxConcurrentTables` (default: 1)
+   and `analysis.parallelism.maxConcurrentPrompts` (default: 1)
+
