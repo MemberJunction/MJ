@@ -1257,7 +1257,10 @@ export class AnalysisEngine {
         return;
       }
 
-      const uniqueness = stats.totalRows > 0 ? stats.distinctCount / stats.totalRows : 0;
+      // Safety: prefer pre-computed uniquenessRatio if available (totalRows can be 0 due to field naming bug)
+      const uniqueness = stats.uniquenessRatio != null && stats.uniquenessRatio > 0
+        ? stats.uniquenessRatio
+        : (stats.totalRows > 0 ? stats.distinctCount / stats.totalRows : 0);
       const hasNulls = (stats.nullCount || 0) > 0;
 
       if (hasNulls) {
