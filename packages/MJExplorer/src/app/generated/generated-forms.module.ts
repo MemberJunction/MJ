@@ -17,30 +17,15 @@ import { LayoutModule } from '@progress/kendo-angular-layout';
 
 // Import Generated Components
 
+   
+
+
 
 @NgModule({
 declarations: [
 ],
 imports: [
-    CommonModule,
-    FormsModule,
-    LayoutModule,
-    BaseFormsModule,
-    EntityViewerModule,
-    LinkDirectivesModule
-],
-exports: [
-]
-})
-export class GeneratedForms_SubModule_0 { }
     
-
-
-@NgModule({
-declarations: [
-],
-imports: [
-    GeneratedForms_SubModule_0
 ]
 })
 export class GeneratedFormsModule { }
