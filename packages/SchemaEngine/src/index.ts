@@ -34,6 +34,8 @@ export { GetDialect as GetPlatformProvider } from './DDLGenerator.js';
 
 export { MigrationFileWriter, FormatTimestamp, SanitizeForFileName } from './MigrationFileWriter.js';
 export { SchemaEvolution } from './SchemaEvolution.js';
+export { SoftFKConfigEmitter } from './SoftFKConfigEmitter.js';
+export type { SoftFKEntry } from './SoftFKConfigEmitter.js';
 
 // ─── Runtime Schema Manager ─────────────────────────────────────────
 export { RuntimeSchemaManager, ValidateMigrationSQL, RSUError } from './RuntimeSchemaManager.js';
@@ -45,6 +47,7 @@ export type {
   RSUPreviewResult,
   RSUStatus,
   SQLValidationResult,
+  IRSUCodeGenRunner,
 } from './RuntimeSchemaManager.js';
 
 // ─── Metrics & Observability ────────────────────────────────────────

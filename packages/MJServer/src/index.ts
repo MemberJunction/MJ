@@ -297,6 +297,58 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     await setupSQLServerClient(config);
     const md = new Metadata();
     console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+
+    // Set up CodeGen-credentialed provider for RSU DDL operations (CREATE TABLE, CREATE SCHEMA, etc.)
+    const codegenUser = process.env.CODEGEN_DB_USERNAME;
+    const codegenPass = process.env.CODEGEN_DB_PASSWORD;
+    if (codegenUser && codegenPass) {
+      try {
+        const codegenPool = new sql.ConnectionPool({
+          ...createMSSQLConfig(),
+          user: codegenUser,
+          password: codegenPass,
+        });
+        codegenPool.on('error', (err) => {
+          console.error('[ConnectionPool] CodeGen pool connection error:', err.message);
+        });
+        await codegenPool.connect();
+
+        const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
+        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, cacheRefreshInterval);
+        const codegenProvider = new SQLServerDataProvider();
+        await codegenProvider.Config(codegenConfig);
+        RuntimeSchemaManager.Instance.SetDDLProvider(codegenProvider);
+        console.log('RSU DDL provider initialized with CodeGen credentials.');
+
+        // Set up in-process CodeGen runner for RSU
+        try {
+          const { RunCodeGenBase } = await import('@memberjunction/codegen-lib');
+          const { SQLServerCodeGenConnection } = await import('@memberjunction/codegen-lib/dist/Database/providers/sqlserver/SQLServerCodeGenConnection.js');
+
+          const codegenConnection = new SQLServerCodeGenConnection(codegenPool);
+          const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+
+          const codegenDataSource = {
+            provider: codegenProvider,
+            connection: codegenConnection,
+            currentUser: codegenCurrentUser,
+            connectionInfo: `${configInfo.dbHost}:${configInfo.dbPort}/${configInfo.dbDatabase} (CodeGen)`,
+          };
+
+          const runObject = MJGlobal.Instance.ClassFactory.CreateInstance(RunCodeGenBase) as InstanceType<typeof RunCodeGenBase>;
+
+          const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
+          RuntimeSchemaManager.Instance.SetCodeGenRunner({
+            RunInProcess: (skipDB) => runObject.RunInProcess(codegenDataSource, skipDB, rsuWorkDir),
+          });
+          console.log('RSU in-process CodeGen runner initialized.');
+        } catch (codegenErr) {
+          console.warn(`RSU in-process CodeGen runner setup failed (will fall back to child process): ${(codegenErr as Error).message}`);
+        }
+      } catch (err) {
+        console.warn(`RSU DDL provider setup failed (RSU will fall back to default provider): ${(err as Error).message}`);
+      }
+    }
   }
 
   // Store queryDialects config in GlobalObjectStore so MJQueryEntityServer can

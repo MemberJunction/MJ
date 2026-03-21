@@ -55,14 +55,16 @@ export class DDLGenerator {
     const q = d.QuoteIdentifier.bind(d);
     const fullTable = `${q(def.SchemaName)}.${q(def.TableName)}`;
 
+    // PK columns in a UNIQUE constraint may need type capping (e.g. SQL Server NVARCHAR(MAX) → 450)
+    const pkFieldSet = new Set((def.SoftPrimaryKeys ?? []).map(f => f.toLowerCase()));
     const lines: string[] = [];
 
     for (const col of def.Columns) {
-      lines.push(this.renderColumnLine(col, d));
+      lines.push(this.renderColumnLine(this.capPKColumnType(col, pkFieldSet, d), d));
     }
 
     for (const col of def.AdditionalColumns ?? []) {
-      lines.push(this.renderColumnLine(col, d));
+      lines.push(this.renderColumnLine(this.capPKColumnType(col, pkFieldSet, d), d));
     }
 
     if (def.SoftPrimaryKeys && def.SoftPrimaryKeys.length > 0) {
@@ -163,6 +165,16 @@ export class DDLGenerator {
   }
 
   // ─── Private helpers ─────────────────────────────────────────────
+
+  private capPKColumnType(col: ColumnDefinition, pkFieldSet: Set<string>, dialect: SQLDialect): ColumnDefinition {
+    if (pkFieldSet.has(col.Name.toLowerCase()) && col.RawSqlType) {
+      const capped = dialect.CapIndexableType(col.RawSqlType);
+      if (capped !== col.RawSqlType) {
+        return { ...col, RawSqlType: capped };
+      }
+    }
+    return col;
+  }
 
   private renderColumnLine(col: ColumnDefinition, dialect: SQLDialect): string {
     ValidateIdentifier(col.Name, 'column');

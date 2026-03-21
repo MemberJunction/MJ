@@ -620,6 +620,16 @@ export class IntegrationDataService {
     return { Success: result.Success, Message: result.Message };
   }
 
+  /** Execute the RSU pipeline for new entity maps — introspects, generates DDL, runs full pipeline */
+  async ApplySchemaForNewMaps(
+    companyIntegrationID: string,
+    objects: SchemaPreviewObjectInput[]
+  ): Promise<{ Success: boolean; Message: string }> {
+    const client = this.getIntegrationClient();
+    const result = await client.ApplySchema(companyIntegrationID, objects);
+    return { Success: result.Success, Message: result.Message ?? '' };
+  }
+
   /** Get the connector's default configuration for quick setup */
   async GetDefaultConfig(companyIntegrationID: string): Promise<DefaultConfigResult> {
     const client = this.getIntegrationClient();

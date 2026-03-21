@@ -21,18 +21,22 @@ const RSU_LOCK_HELD_SIGNAL = 'RSU_LOCK_HELD';
 
 /** Centralized, typed access to all RSU environment variables with defaults. */
 class RSUConfig {
-    get MigrationsPath(): string { return rsuConfig.MigrationsPath; }
-    get DefaultSchema(): string { return rsuConfig.DefaultSchema; }
-    get WorkDir(): string { return rsuConfig.WorkDir; }
-    get CodeGenTimeoutMs(): number { return rsuConfig.CodeGenTimeoutMs; }
-    get CodeGenCommand(): string | undefined { return rsuConfig.CodeGenCommand; }
-    get CompileTimeoutMs(): number { return rsuConfig.CompileTimeoutMs; }
-    get CompileCommand(): string | undefined { return rsuConfig.CompileCommand; }
-    get CompilePackages(): string | undefined { return rsuConfig.CompilePackages; }
-    get PM2ProcessName(): string { return rsuConfig.PM2ProcessName; }
-    get GitTargetBranch(): string { return rsuConfig.GitTargetBranch; }
-    get GitUserName(): string | undefined { return rsuConfig.GitUserName; }
-    get GitUserEmail(): string | undefined { return rsuConfig.GitUserEmail; }
+    get MigrationsPath(): string { return process.env.RSU_MIGRATIONS_PATH || 'migrations/v5'; }
+    get AdditionalSchemaInfoPath(): string { return process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH || 'additionalSchemaInfo.json'; }
+    get DefaultSchema(): string { return process.env.RSU_DEFAULT_SCHEMA || '__mj'; }
+    get WorkDir(): string { return process.env.RSU_WORK_DIR || process.cwd(); }
+    /** Directory where CodeGen runs (needs node_modules). Defaults to WorkDir. */
+    get CodeGenDir(): string { return process.env.RSU_CODEGEN_DIR || this.WorkDir; }
+    get CodeGenTimeoutMs(): number { return parseInt(process.env.RSU_CODEGEN_TIMEOUT_MS || '600000', 10); }
+    get CodeGenCommand(): string | undefined { return process.env.RSU_CODEGEN_COMMAND; }
+    get CompileTimeoutMs(): number { return parseInt(process.env.RSU_COMPILE_TIMEOUT_MS || '300000', 10); }
+    get CompileCommand(): string | undefined { return process.env.RSU_COMPILE_COMMAND; }
+    get CompilePackages(): string | undefined { return process.env.RSU_COMPILE_PACKAGES; }
+    get PM2ProcessName(): string { return process.env.RSU_PM2_PROCESS_NAME || 'mjapi'; }
+    get GitTargetBranch(): string { return process.env.RSU_GIT_TARGET_BRANCH || 'next'; }
+    get GitRemote(): string { return process.env.RSU_GIT_REMOTE || 'origin'; }
+    get GitUserName(): string | undefined { return process.env.RSU_GIT_USER_NAME; }
+    get GitUserEmail(): string | undefined { return process.env.RSU_GIT_USER_EMAIL; }
     get IsDBLockEnabled(): boolean { return process.env.RSU_DB_LOCK_ENABLED === '1'; }
     get IsAuditLogEnabled(): boolean { return process.env.RSU_AUDIT_LOG_ENABLED !== '0'; }
     get ProtectedSchemas(): string[] {
@@ -110,6 +114,22 @@ export interface RSUPipelineBatchResult {
     TotalCount: number;
 }
 
+/** Per-item result from the migration execution phase. */
+interface MigrationItemResult {
+    Input: RSUPipelineInput;
+    FilePath?: string;
+    Success: boolean;
+    Error?: string;
+    Steps: RSUPipelineStep[];
+}
+
+/** Aggregate result from the post-migration pipeline (CodeGen, compile, restart, git). */
+interface PostMigrationResult {
+    ApiRestarted: boolean;
+    GitCommitSuccess: boolean;
+    BranchName?: string;
+}
+
 /**
  * Dry-run preview of what the pipeline would do.
  */
@@ -130,6 +150,15 @@ export interface RSUStatus {
     OutOfSyncSince: Date | null;
     LastRunAt: Date | null;
     LastRunResult: string | null;
+}
+
+/**
+ * Interface for in-process CodeGen execution.
+ * Injected by the server at startup so SchemaEngine doesn't depend on CodeGenLib directly.
+ */
+export interface IRSUCodeGenRunner {
+    /** Run CodeGen in-process. Returns true on success. */
+    RunInProcess(skipDatabaseGeneration?: boolean): Promise<boolean>;
 }
 
 // ─── Schema Protection ───────────────────────────────────────────────
@@ -202,12 +231,31 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     // ─── State ───────────────────────────────────────────────────────
 
     private _isRunning = false;
+    private _ddlProvider: DatabaseProviderBase | null = null;
+    private _codeGenRunner: IRSUCodeGenRunner | null = null;
     private _outOfSync = false;
     private _outOfSyncSince: Date | null = null;
     private _lastRunAt: Date | null = null;
     private _lastRunResult: string | null = null;
 
     // ─── Public Properties ───────────────────────────────────────────
+
+    /**
+     * Set a dedicated provider for DDL operations (CREATE TABLE, CREATE SCHEMA, etc.).
+     * Should be configured with elevated credentials (e.g. MJ_CodeGen with db_owner).
+     * If not set, falls back to the default Metadata.Provider.
+     */
+    public SetDDLProvider(provider: DatabaseProviderBase): void {
+        this._ddlProvider = provider;
+    }
+
+    /**
+     * Set the in-process CodeGen runner.
+     * Injected by the server at startup so RSU can run CodeGen without shelling out.
+     */
+    public SetCodeGenRunner(runner: IRSUCodeGenRunner): void {
+        this._codeGenRunner = runner;
+    }
 
     /** Whether RSU is enabled based on ALLOW_RUNTIME_SCHEMA_UPDATE=1. */
     public get IsEnabled(): boolean {
@@ -283,9 +331,31 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     public async RunPipelineBatch(inputs: RSUPipelineInput[]): Promise<RSUPipelineBatchResult> {
         if (inputs.length === 0) return { Results: [], SuccessCount: 0, FailureCount: 0, TotalCount: 0 };
 
+        this.rsuLog(`═══════════════════════════════════════════════════`);
+        this.rsuLog(`Pipeline batch started — ${inputs.length} input(s)`);
+        for (const input of inputs) {
+            this.rsuLog(`  • ${input.Description} [tables: ${input.AffectedTables.join(', ')}]`);
+        }
+
         const sharedSteps: RSUPipelineStep[] = [];
 
-        // ─── Phase 1: Validate all inputs (fail fast) ────────────────
+        // Phase 1: Validate
+        const validationFailure = await this.validateBatch(inputs, sharedSteps);
+        if (validationFailure) return validationFailure;
+
+        // Phase 2: Execute migrations under lock
+        const itemResults = await this.executeMigrations(inputs, sharedSteps);
+
+        // Phase 3: Post-migration pipeline (CodeGen, compile, restart, git)
+        const successfulItems = itemResults.filter(r => r.Success);
+        const postResult = await this.runPostMigrationPipeline(inputs, successfulItems, sharedSteps);
+
+        // Phase 4: Build per-caller results
+        return this.buildPerCallerResults(itemResults, successfulItems, sharedSteps, postResult);
+    }
+
+    /** Phase 1: Validate environment and all migration SQL. Returns a batch failure result if validation fails, null on success. */
+    private async validateBatch(inputs: RSUPipelineInput[], sharedSteps: RSUPipelineStep[]): Promise<RSUPipelineBatchResult | null> {
         const envStep = await this.runStep('ValidateEnvironment', () => this.validateEnvironment(), sharedSteps);
         if (!envStep) {
             return this.buildBatchResult(inputs.map(input => this.buildFailedResult(input, 'ValidateEnvironment', sharedSteps)));
@@ -299,41 +369,40 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             }
         }
         sharedSteps.push({ Name: 'ValidateSQL', Status: 'success', DurationMs: 0, Message: `Validated ${inputs.length} migration(s)` });
+        return null;
+    }
 
-        // ─── Phase 2: Lock → Execute all migrations → Unlock ─────────
+    /** Phase 2: Acquire lock, write and execute each migration, release lock. */
+    private async executeMigrations(inputs: RSUPipelineInput[], sharedSteps: RSUPipelineStep[]): Promise<MigrationItemResult[]> {
         const lockStep = await this.runStep('AcquireLock', () => this.acquireLock(), sharedSteps);
         if (!lockStep) {
-            return this.buildBatchResult(inputs.map(input => this.buildFailedResult(input, 'AcquireLock', sharedSteps)));
+            return inputs.map(input => ({ Input: input, Success: false, Error: 'Failed to acquire lock', Steps: [] }));
         }
 
-        /** Per-item migration results. */
-        const itemResults: Array<{ Input: RSUPipelineInput; FilePath?: string; Success: boolean; Error?: string; Steps: RSUPipelineStep[] }> = [];
-
+        const itemResults: MigrationItemResult[] = [];
         try {
-            for (const input of inputs) {
+            for (let i = 0; i < inputs.length; i++) {
+                const input = inputs[i];
+                this.rsuLog(`── Migration ${i + 1}/${inputs.length}: ${input.Description} [${input.AffectedTables.join(', ')}]`);
                 const itemSteps: RSUPipelineStep[] = [];
 
-                // Write migration file
                 const writeStep = await this.runStep('WriteMigrationFile', () => this.writeMigrationFile(input), itemSteps);
                 if (!writeStep) {
                     itemResults.push({ Input: input, Success: false, Error: itemSteps.find(s => s.Status === 'failed')?.Message, Steps: itemSteps });
-                    continue; // Skip this item, proceed to next
+                    continue;
                 }
                 const filePath = writeStep as string;
 
-                // Execute migration SQL
                 const execStep = await this.runStep('ExecuteMigration', () => this.executeMigration(input.MigrationSQL), itemSteps);
                 if (!execStep) {
                     itemResults.push({ Input: input, FilePath: filePath, Success: false, Error: itemSteps.find(s => s.Status === 'failed')?.Message, Steps: itemSteps });
-                    continue; // Skip this item, proceed to next
+                    continue;
                 }
 
                 itemResults.push({ Input: input, FilePath: filePath, Success: true, Steps: itemSteps });
             }
 
-            // Mark out-of-sync if any migration succeeded
-            const anySuccess = itemResults.some(r => r.Success);
-            if (anySuccess) {
+            if (itemResults.some(r => r.Success)) {
                 this.MarkOutOfSync();
                 sharedSteps.push({ Name: 'MarkOutOfSync', Status: 'success', DurationMs: 0, Message: 'DB changed, API out-of-sync until CodeGen completes' });
             }
@@ -341,97 +410,98 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             await this.releaseLock();
         }
 
-        // ─── Phase 3: Shared post-migration pipeline ─────────────────
-        // Only runs if at least one migration succeeded.
-        const successfulItems = itemResults.filter(r => r.Success);
-        let apiRestarted = false;
-        let gitCommitSuccess = false;
-        let branchName: string | undefined;
+        return itemResults;
+    }
 
-        if (successfulItems.length > 0) {
-            // CodeGen
-            const codegenOk = await this.runStep('RunCodeGen', () => this.runCodeGen(), sharedSteps);
+    /** Phase 3: CodeGen, compile, restart, and git commit for successful migrations. */
+    private async runPostMigrationPipeline(
+        inputs: RSUPipelineInput[],
+        successfulItems: MigrationItemResult[],
+        sharedSteps: RSUPipelineStep[]
+    ): Promise<PostMigrationResult> {
+        const result: PostMigrationResult = { ApiRestarted: false, GitCommitSuccess: false };
 
-            if (codegenOk) {
-                // Compile
-                const compileOk = await this.runStep('CompileTypeScript', () => this.compileTypeScript(), sharedSteps);
+        if (successfulItems.length === 0) return result;
 
-                if (compileOk) {
-                    // Restart
-                    const skipRestart = inputs.every(i => i.SkipRestart);
-                    if (!skipRestart) {
-                        const restartOk = await this.runStep('RestartMJAPI', () => this.restartMJAPI(), sharedSteps);
-                        if (restartOk) apiRestarted = true;
-                    }
+        await this.runStep('WriteAdditionalSchemaInfo', () => this.writeAdditionalSchemaInfo(successfulItems.map(r => r.Input)), sharedSteps);
 
-                    // CodeGen + compile succeeded — DB and API are back in sync
-                    // regardless of whether git commit happens or is skipped
-                    this.ClearOutOfSync();
+        const codegenOk = await this.runStep('RunCodeGen', () => this.runCodeGen(), sharedSteps);
+        if (codegenOk) {
+            const compileOk = await this.runStep('CompileTypeScript', () => this.compileTypeScript(), sharedSteps);
+            if (compileOk) {
+                if (!inputs.every(i => i.SkipRestart)) {
+                    const restartOk = await this.runStep('RestartMJAPI', () => this.restartMJAPI(), sharedSteps);
+                    if (restartOk) result.ApiRestarted = true;
                 }
-            }
-
-            // Git commit (non-fatal)
-            const skipGit = inputs.every(i => i.SkipGitCommit);
-            if (!skipGit) {
-                const allTables = [...new Set(successfulItems.flatMap(r => r.Input.AffectedTables))];
-                const allFiles = successfulItems.map(r => r.FilePath).filter((p): p is string => !!p);
-                const description = successfulItems.length === 1
-                    ? successfulItems[0].Input.Description
-                    : `Batch of ${successfulItems.length} schema changes`;
-
-                const gitStep = await this.runStep(
-                    'GitCommitAndPR',
-                    () => this.gitCommitAndPRForCycle(allFiles, allTables, description),
-                    sharedSteps
-                );
-                if (gitStep) {
-                    gitCommitSuccess = true;
-                    branchName = gitStep as string;
-                }
+                this.ClearOutOfSync();
             }
         }
 
-        // ─── Phase 4: Build per-caller results ───────────────────────
+        if (!inputs.every(i => i.SkipGitCommit)) {
+            const allTables = [...new Set(successfulItems.flatMap(r => r.Input.AffectedTables))];
+            const allFiles = successfulItems.map(r => r.FilePath).filter((p): p is string => !!p);
+            const description = successfulItems.length === 1
+                ? successfulItems[0].Input.Description
+                : `Batch of ${successfulItems.length} schema changes`;
+
+            const gitStep = await this.runStep('GitCommitAndPR', () => this.gitCommitAndPRForCycle(allFiles, allTables, description), sharedSteps);
+            if (gitStep) {
+                result.GitCommitSuccess = true;
+                result.BranchName = gitStep as string;
+            }
+        }
+
+        return result;
+    }
+
+    /** Phase 4: Assemble per-caller RSUPipelineResult entries with audit and metrics. */
+    private buildPerCallerResults(
+        itemResults: MigrationItemResult[],
+        successfulItems: MigrationItemResult[],
+        sharedSteps: RSUPipelineStep[],
+        postResult: PostMigrationResult
+    ): RSUPipelineBatchResult {
         this._lastRunAt = new Date();
-        const overallSuccess = successfulItems.length > 0;
-        this._lastRunResult = overallSuccess ? 'success' : 'failed';
+        this._lastRunResult = successfulItems.length > 0 ? 'success' : 'failed';
 
         const results: RSUPipelineResult[] = itemResults.map(item => {
             const allSteps = [...sharedSteps, ...item.Steps];
             const result: RSUPipelineResult = {
                 Success: item.Success && (successfulItems.length > 0),
                 MigrationFilePath: item.FilePath,
-                APIRestarted: apiRestarted,
-                GitCommitSuccess: gitCommitSuccess,
-                BranchName: branchName,
+                APIRestarted: postResult.ApiRestarted,
+                GitCommitSuccess: postResult.GitCommitSuccess,
+                BranchName: postResult.BranchName,
                 Steps: allSteps,
                 ErrorMessage: item.Error,
                 ErrorStep: item.Error ? item.Steps.find(s => s.Status === 'failed')?.Name : undefined,
             };
 
-            // Audit log per item (best-effort)
             this.writeAuditLog(item.Input, result).catch(err => LogError(`[RSU] Audit log failed: ${err instanceof Error ? err.message : String(err)}`));
-
-            // Metrics per item (best-effort)
-            try {
-                const stepDurations: Record<string, number> = {};
-                for (const step of allSteps) stepDurations[step.Name] = step.DurationMs;
-                RSUMetrics.Instance.RecordRun({
-                    Timestamp: new Date(),
-                    DurationMs: allSteps.reduce((sum, s) => sum + s.DurationMs, 0),
-                    Success: result.Success,
-                    StepDurations: stepDurations,
-                    ErrorStep: result.ErrorStep,
-                    Description: item.Input.Description,
-                    AffectedTables: item.Input.AffectedTables,
-                    RetryCount: 0,
-                });
-            } catch (err) { LogError(`[RSU] Metrics recording failed: ${err instanceof Error ? err.message : String(err)}`); }
+            this.recordMetrics(item, allSteps, result);
 
             return result;
         });
 
         return this.buildBatchResult(results);
+    }
+
+    /** Record metrics for a single pipeline item (best-effort, errors are logged). */
+    private recordMetrics(item: MigrationItemResult, allSteps: RSUPipelineStep[], result: RSUPipelineResult): void {
+        try {
+            const stepDurations: Record<string, number> = {};
+            for (const step of allSteps) stepDurations[step.Name] = step.DurationMs;
+            RSUMetrics.Instance.RecordRun({
+                Timestamp: new Date(),
+                DurationMs: allSteps.reduce((sum, s) => sum + s.DurationMs, 0),
+                Success: result.Success,
+                StepDurations: stepDurations,
+                ErrorStep: result.ErrorStep,
+                Description: item.Input.Description,
+                AffectedTables: item.Input.AffectedTables,
+                RetryCount: 0,
+            });
+        } catch (err) { LogError(`[RSU] Metrics recording failed: ${err instanceof Error ? err.message : String(err)}`); }
     }
 
     /**
@@ -587,7 +657,8 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      */
     private async writeMigrationFile(input: RSUPipelineInput): Promise<string> {
         const { writeFileSync, mkdirSync } = await import('node:fs');
-        const migrationsPath = rsuConfig.MigrationsPath;
+        const { join } = await import('node:path');
+        const migrationsPath = join(rsuConfig.WorkDir, rsuConfig.MigrationsPath);
         const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
         const tableSlug = input.AffectedTables
             .slice(0, 3)
@@ -612,6 +683,51 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     }
 
     /**
+     * Write/merge AdditionalSchemaInfo (soft PK/FK config) to disk so CodeGen can find it.
+     * Path comes from RSU_ADDITIONAL_SCHEMA_INFO_PATH config, resolved relative to WorkDir.
+     */
+    private async writeAdditionalSchemaInfo(inputs: RSUPipelineInput[]): Promise<boolean> {
+        const contents = inputs
+            .map(i => i.AdditionalSchemaInfo)
+            .filter((c): c is string => !!c);
+
+        if (contents.length === 0) return true;
+
+        const { readFileSync, writeFileSync, existsSync, mkdirSync } = await import('node:fs');
+        const { join, dirname } = await import('node:path');
+        const configFilePath = join(rsuConfig.WorkDir, rsuConfig.AdditionalSchemaInfoPath);
+
+        // Load existing config or start fresh
+        let existing: { tables?: Array<{ SchemaName: string; TableName: string }> } = {};
+        if (existsSync(configFilePath)) {
+            try { existing = JSON.parse(readFileSync(configFilePath, 'utf-8')); } catch { /* start fresh */ }
+        }
+        if (!existing.tables) existing.tables = [];
+
+        for (const content of contents) {
+            try {
+                const incoming = JSON.parse(content);
+                if (incoming.tables && Array.isArray(incoming.tables)) {
+                    for (const table of incoming.tables) {
+                        const idx = existing.tables.findIndex(
+                            (t: { SchemaName: string; TableName: string }) =>
+                                t.SchemaName.toLowerCase() === String(table.SchemaName).toLowerCase() &&
+                                t.TableName.toLowerCase() === String(table.TableName).toLowerCase()
+                        );
+                        if (idx >= 0) existing.tables[idx] = table;
+                        else existing.tables.push(table);
+                    }
+                }
+            } catch { /* skip unparseable */ }
+        }
+
+        mkdirSync(dirname(configFilePath), { recursive: true });
+        writeFileSync(configFilePath, JSON.stringify(existing, null, 2), 'utf-8');
+        this.rsuLog(`Wrote additionalSchemaInfo to ${configFilePath}`);
+        return true;
+    }
+
+    /**
      * Execute the migration SQL against the database.
      * Delegates CLI tool selection to the DBExecProvider abstraction.
      */
@@ -619,8 +735,17 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         const defaultSchema = rsuConfig.DefaultSchema;
         const resolvedSQL = sql.replace(/\$\{flyway:defaultSchema\}/g, defaultSchema);
 
+        // Split on GO batch separators (SQL Server SSMS convention, not valid T-SQL)
+        const batches = resolvedSQL
+            .split(/^\s*GO\s*$/gim)
+            .map(b => b.trim())
+            .filter(b => b.length > 0);
+
         try {
-            await this.getDBProvider().ExecuteSQL(resolvedSQL, undefined, { isMutation: true, description: 'RSU migration' });
+            for (const batch of batches) {
+                this.rsuLog(`  Executing batch (${batch.length} chars)`);
+                await this.getDBProvider().ExecuteSQL(batch, undefined, { isMutation: true, description: 'RSU migration' });
+            }
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
             throw new RSUError('SQL_EXEC', msg);
@@ -642,21 +767,32 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      * Override via RSU_CODEGEN_COMMAND env var for custom setups.
      */
     private async runCodeGen(): Promise<boolean> {
-        const { execAsync } = await this.getExecAsync();
-        const { writeFileSync, unlinkSync } = await import('node:fs');
-        const workDir = rsuConfig.WorkDir;
-        const timeoutMs = rsuConfig.CodeGenTimeoutMs;
-
-        // If caller provides a full custom command, use it directly
-        const customCmd = rsuConfig.CodeGenCommand;
-        if (customCmd) {
-            await execAsync(`cd "${workDir}" && ${customCmd}`, { timeout: timeoutMs });
+        // Prefer in-process CodeGen runner if injected (no child process, no filesystem deps)
+        if (this._codeGenRunner) {
+            this.rsuLog('Running CodeGen in-process');
+            const success = await this._codeGenRunner.RunInProcess(false);
+            if (!success) {
+                throw new RSUError('CODEGEN', 'In-process CodeGen failed');
+            }
             return true;
         }
 
-        // Write a temp .mjs script inside the work dir so Node module resolution
+        // Fallback: shell out to a temp script (legacy approach for environments without injection)
+        this.rsuLog('No in-process CodeGen runner — falling back to child process');
+        const { execAsync } = await this.getExecAsync();
+        const { writeFileSync, unlinkSync } = await import('node:fs');
+        const codegenDir = rsuConfig.CodeGenDir;
+        const timeoutMs = rsuConfig.CodeGenTimeoutMs;
+
+        const customCmd = rsuConfig.CodeGenCommand;
+        if (customCmd) {
+            await execAsync(`cd "${codegenDir}" && ${customCmd}`, { timeout: timeoutMs });
+            return true;
+        }
+
+        // Write a temp .mjs script inside the codegen dir so Node module resolution
         // can find dotenv, codegen-lib, etc. from node_modules
-        const tmpScript = `${workDir}/.rsu_codegen_${Date.now()}.mjs`;
+        const tmpScript = `${codegenDir}/.rsu_codegen_${Date.now()}.mjs`;
         const scriptContent = [
             "import 'dotenv/config';",
             "await import('@memberjunction/server-bootstrap-lite/mj-class-registrations');",
@@ -669,7 +805,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         try {
             // Exit code 0 = success. No stdout string matching needed.
             await execAsync(
-                `cd "${workDir}" && node "${tmpScript}"`,
+                `cd "${codegenDir}" && node "${tmpScript}"`,
                 { timeout: timeoutMs }
             );
             return true;
@@ -701,13 +837,13 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      */
     private async compileTypeScript(): Promise<boolean> {
         const { execAsync } = await this.getExecAsync();
-        const workDir = rsuConfig.WorkDir;
+        const codegenDir = rsuConfig.CodeGenDir;
         const timeoutMs = rsuConfig.CompileTimeoutMs;
 
         // Allow full command override
         const compileCmd = rsuConfig.CompileCommand;
         if (compileCmd) {
-            await execAsync(`cd "${workDir}" && ${compileCmd}`, { timeout: timeoutMs });
+            await execAsync(`cd "${codegenDir}" && ${compileCmd}`, { timeout: timeoutMs });
             return true;
         }
 
@@ -722,7 +858,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
         const filterArgs = packageNames.map(p => `--filter="${p}"`).join(' ');
         await execAsync(
-            `cd "${workDir}" && npx turbo build ${filterArgs}`,
+            `cd "${codegenDir}" && npx turbo build ${filterArgs}`,
             { timeout: timeoutMs }
         );
 
@@ -800,20 +936,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     // ─── Phase 2: Git Integration ───────────────────────────────────
 
     /**
-     * Create a branch, commit all RSU artifacts, push, and open a PR.
-     * Returns the branch name on success.
-     *
-     * Files committed:
-     *   - Migration SQL file
-     *   - CodeGen outputs (entity subclasses, GraphQL resolvers, SQL scripts, etc.)
-     *   - Any metadata files provided in the input
-     *
-     * Environment variables:
-     *   RSU_GIT_TARGET_BRANCH — PR target branch (default: 'next')
-     *   RSU_GIT_USER_NAME — git user.name for commits
-     *   RSU_GIT_USER_EMAIL — git user.email for commits
-     */
-    /**
      * Git commit for a CodeGen cycle batch — commits all migration files,
      * CodeGen outputs, and metadata from all requests in the batch.
      * Returns the branch name on success.
@@ -833,30 +955,14 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         try {
             await this.configureGitUser(workDir);
 
-            // Stage all migration files from the batch
-            for (const filePath of migrationFilePaths) {
-                if (filePath) await this.gitExec(workDir, `add "${filePath}"`);
-            }
-
-            // Stage CodeGen output directories
-            const codegenOutputPaths = [
-                'packages/MJCoreEntities/src/generated/',
-                'packages/MJServer/src/generated/',
-                'packages/MJAPI/src/generated/',
-                'packages/Angular/Explorer/core-entity-forms/src/lib/generated/',
-                'packages/Actions/CoreActions/src/generated/',
-                'packages/GeneratedEntities/src/generated/',
-                'packages/GeneratedActions/src/generated/',
-                'SQL Scripts/generated/',
-            ];
-            for (const p of codegenOutputPaths) {
-                try { await this.gitExec(workDir, `add "${p}"`); } catch { /* path may not exist */ }
-            }
+            // Stage all changed/new files (migration files, CodeGen outputs, etc.)
+            await this.gitExec(workDir, 'add -A');
 
             const tables = affectedTables.join(', ');
             const commitMsg = `RSU: ${description}\n\nTables affected: ${tables}\nGenerated by Runtime Schema Update pipeline`;
             await this.gitCommitWithFile(workDir, commitMsg);
-            await this.gitExec(workDir, `push -u origin ${branchName}`);
+            const remote = rsuConfig.GitRemote;
+            await this.gitExec(workDir, `push -u ${remote} ${branchName}`);
 
             // Create PR
             const { writeFileSync, unlinkSync } = await import('node:fs');
@@ -880,7 +986,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             try {
                 const { execAsync } = await this.getExecAsync();
                 await execAsync(
-                    `cd ${workDir} && gh pr create --base "${targetBranch}" --head "${branchName}" --title "${title}" --body-file "${bodyFile}"`,
+                    `cd ${workDir} && gh pr create --repo $(git remote get-url ${remote}) --base "${targetBranch}" --head "${branchName}" --title "${title}" --body-file "${bodyFile}"`,
                     { timeout: 30_000 }
                 );
             } finally {
@@ -1040,8 +1146,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         return GetDialect(this.Platform);
     }
 
-    /** Get the MJ database provider. Throws if not initialized. */
+    /** Get the database provider for DDL operations. Prefers the dedicated DDL provider if set. */
     private getDBProvider(): DatabaseProviderBase {
+        if (this._ddlProvider) {
+            return this._ddlProvider;
+        }
         const provider = Metadata.Provider;
         if (!provider || !('ExecuteSQL' in provider)) {
             throw new RSUError('CONFIG', 'MJ data provider is not initialized. RSU requires a running MJAPI with a configured database provider.');
@@ -1142,7 +1251,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             `);`,
         ].join('\n');
 
-        const params: unknown[] = [
+        const params: Array<string | null> = [
             input.Description,
             input.AffectedTables.join(', '),
             result.BranchName ?? null,
@@ -1172,10 +1281,17 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     private buildBatchResult(results: RSUPipelineResult[]): RSUPipelineBatchResult {
         const successCount = results.filter(r => r.Success).length;
+        const failureCount = results.length - successCount;
+        this.rsuLog(`Pipeline batch finished — ${successCount} succeeded, ${failureCount} failed, ${results.length} total`);
+        for (const r of results) {
+            const status = r.Success ? '✓' : '✗';
+            this.rsuLog(`  ${status} ${r.MigrationFilePath ?? '(no file)'} — ${r.Steps.map(s => `${s.Name}:${s.Status}`).join(', ')}`);
+        }
+        this.rsuLog(`═══════════════════════════════════════════════════`);
         return {
             Results: results,
             SuccessCount: successCount,
-            FailureCount: results.length - successCount,
+            FailureCount: failureCount,
             TotalCount: results.length,
         };
     }
@@ -1212,24 +1328,36 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         steps: RSUPipelineStep[]
     ): Promise<T | undefined> {
         const start = Date.now();
+        this.rsuLog(`▶ Starting step: ${name}`);
         try {
             const result = await fn();
-            steps.push({
-                Name: name,
-                Status: 'success',
-                DurationMs: Date.now() - start,
-                Message: `${name} completed successfully`,
-            });
+            const durationMs = Date.now() - start;
+            const msg = `${name} completed successfully`;
+            steps.push({ Name: name, Status: 'success', DurationMs: durationMs, Message: msg });
+            this.rsuLog(`✓ ${name} — ${durationMs}ms`);
             return result;
         } catch (error: unknown) {
+            const durationMs = Date.now() - start;
             const msg = error instanceof Error ? error.message : String(error);
-            steps.push({
-                Name: name,
-                Status: 'failed',
-                DurationMs: Date.now() - start,
-                Message: msg,
-            });
+            steps.push({ Name: name, Status: 'failed', DurationMs: durationMs, Message: msg });
+            this.rsuLog(`✗ ${name} — FAILED after ${durationMs}ms: ${msg}`);
             return undefined;
+        }
+    }
+
+    /**
+     * Log to both console and file. File path: RSU_WORK_DIR/rsu-pipeline.log.
+     */
+    private rsuLog(message: string): void {
+        const timestamp = new Date().toISOString();
+        const line = `[RSU] ${timestamp}  ${message}`;
+        console.log(line);
+        try {
+            const { appendFileSync } = require('node:fs');
+            const logPath = `${rsuConfig.WorkDir}/rsu-pipeline.log`;
+            appendFileSync(logPath, `${line}\n`, 'utf-8');
+        } catch {
+            // Best-effort file logging — don't break the pipeline
         }
     }
 

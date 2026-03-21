@@ -970,9 +970,26 @@
           <i class="fa-solid fa-code"></i> Generate SQL
         }
       </button>
+      <button class="new-entity-preview-btn"
+              [disabled]="!CanGenerateSQL || IsApplyingSchema"
+              (click)="ApplySchema()"
+              style="background: var(--mj-brand-primary); color: var(--mj-text-inverse);">
+        @if (IsApplyingSchema) {
+          <i class="fa-solid fa-spinner fa-spin"></i> Running Pipeline...
+        } @else {
+          <i class="fa-solid fa-gears"></i> Apply Schema
+        }
+      </button>
       <button class="new-entity-dialog-done-btn" (click)="CloseNewEntityDialog()">
         Done
       </button>
     </div>
+    @if (ApplySchemaMessage) {
+      <div style="padding: 0 24px 16px; font-size: 13px;"
+           [style.color]="ApplySchemaSuccess ? 'var(--mj-status-success)' : 'var(--mj-status-error)'">
+        <i [class]="ApplySchemaSuccess ? 'fa-solid fa-circle-check' : 'fa-solid fa-circle-xmark'"></i>
+        {{ ApplySchemaMessage }}
+      </div>
+    }
   </div>
 }

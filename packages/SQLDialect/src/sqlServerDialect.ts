@@ -293,6 +293,11 @@ export class SQLServerDialect extends SQLDialect {
         return `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '${schemaName}')\n    EXEC('CREATE SCHEMA [${schemaName}]');\nGO`;
     }
 
+    /** SQL Server cannot index NVARCHAR(MAX) columns — cap to NVARCHAR(450). */
+    override CapIndexableType(rawSqlType: string): string {
+        return rawSqlType.toUpperCase() === 'NVARCHAR(MAX)' ? 'NVARCHAR(450)' : rawSqlType;
+    }
+
     // ─── DDL Generation (Conditional/Procedural) ────────────────────
 
     DateAddExpression(unit: 'MINUTE' | 'HOUR' | 'DAY', amount: number, baseExpr: string): string {

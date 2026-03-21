@@ -175,6 +175,11 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   IsGeneratingDDL = false;
   IsCreatingEntity = false;
 
+  // Apply Schema (RSU Pipeline) state
+  IsApplyingSchema = false;
+  ApplySchemaMessage = '';
+  ApplySchemaSuccess = false;
+
   // Auto-map schema state
   ShowAutoMapPanel = false;
   AutoMapSchemas: string[] = [];
@@ -619,8 +624,16 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       const md = new Metadata();
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(companyIntegrationID);
-      const scheduledJobID = ci.Get('ScheduledJobID') as string | null;
-      this.ScheduledJobID = scheduledJobID ?? null;
+      // ScheduledJobID is not a typed property on MJCompanyIntegrationEntity.
+      // Look up the scheduled job via a RunView query instead.
+      const rv2 = new RunView();
+      const jobResult = await rv2.RunView<{ ID: string }>({
+        EntityName: 'MJ: Scheduled Jobs',
+        ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+        Fields: ['ID'],
+        ResultType: 'simple'
+      });
+      this.ScheduledJobID = (jobResult.Success && jobResult.Results.length > 0) ? jobResult.Results[0].ID : null;
 
       // Also look up the Integration Sync job type ID for pre-populating new schedules
       if (!this.integrationSyncJobTypeID) {
@@ -827,6 +840,35 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       this.DDLPreview = `-- Failed to generate DDL: ${msg}`;
     } finally {
       this.IsGeneratingDDL = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async ApplySchema(): Promise<void> {
+    if (!this.SelectedSummary || !this.AddMapSourceObjectName || !this.NewEntitySchema || !this.NewEntityTable) return;
+
+    this.IsApplyingSchema = true;
+    this.ApplySchemaMessage = '';
+    this.cdr.detectChanges();
+
+    try {
+      const result = await this.dataService.ApplySchemaForNewMaps(
+        this.SelectedSummary.Integration.ID,
+        [{
+          SourceObjectName: this.AddMapSourceObjectName,
+          SchemaName: this.NewEntitySchema.trim(),
+          TableName: this.NewEntityTable.trim(),
+          EntityName: this.NewEntityName
+        }]
+      );
+
+      this.ApplySchemaSuccess = result.Success;
+      this.ApplySchemaMessage = result.Message;
+    } catch (e) {
+      this.ApplySchemaSuccess = false;
+      this.ApplySchemaMessage = `Apply schema failed: ${(e as Error).message}`;
+    } finally {
+      this.IsApplyingSchema = false;
       this.cdr.detectChanges();
     }
   }

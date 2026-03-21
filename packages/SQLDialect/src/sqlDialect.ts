@@ -367,6 +367,16 @@ export abstract class SQLDialect {
     abstract CreateSchemaDDL(schemaName: string): string;
 
     /**
+     * Cap a column type if it cannot be used in a UNIQUE/index constraint.
+     * SQL Server: NVARCHAR(MAX) → NVARCHAR(450) (MAX columns cannot be indexed).
+     * PostgreSQL: no-op (TEXT can be indexed).
+     * Override in platform-specific dialects.
+     */
+    CapIndexableType(rawSqlType: string): string {
+        return rawSqlType;
+    }
+
+    /**
      * Returns the ADD COLUMN clause for ALTER TABLE.
      * SQL Server: ADD [colName] type NULL DEFAULT ...
      * PostgreSQL: ADD COLUMN "colName" type NULL DEFAULT ...

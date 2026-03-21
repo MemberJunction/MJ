@@ -129,7 +129,8 @@ export class SchemaBuilder {
         const allSoftFKs = this.CollectSoftFKs(input, evolutionConfigs);
         // Always emit additionalSchemaInfo — every integration table needs a soft PK
         if (allConfigs.length > 0) {
-            const existingConfig = this.SoftFKEmitter.ParseExistingConfig(null);
+            const existingContent = this.ReadFileIfExists(input.AdditionalSchemaInfoPath);
+            const existingConfig = this.SoftFKEmitter.ParseExistingConfig(existingContent);
             const withPKs = this.SoftFKEmitter.MergeSoftPKs(existingConfig, allConfigs);
             const merged = allSoftFKs.length > 0
                 ? this.SoftFKEmitter.MergeSchemaConfig(withPKs, allSoftFKs)
@@ -309,21 +310,14 @@ export class SchemaBuilder {
      * SchemaEngine wraps DDL in a migration header — we need just the DDL
      * since we produce our own single consolidated migration file.
      */
-    private ExtractDDLFromMigration(migrationContent: string): string {
-        const lines = migrationContent.split('\n');
-        // Skip comment header lines (starting with --)  and the initial empty line
-        const bodyLines: string[] = [];
-        let pastHeader = false;
-        for (const line of lines) {
-            if (!pastHeader) {
-                if (line.startsWith('--') || line.trim() === '') {
-                    continue;
-                }
-                pastHeader = true;
+    private ReadFileIfExists(filePath: string): string | null {
+        try {
+            const fs = require('node:fs');
+            if (fs.existsSync(filePath)) {
+                return fs.readFileSync(filePath, 'utf-8');
             }
-            bodyLines.push(line);
-        }
-        return bodyLines.join('\n').trim();
+        } catch { /* file doesn't exist yet */ }
+        return null;
     }
 
     // ─── Validation & Classification ────────────────────────────────────
