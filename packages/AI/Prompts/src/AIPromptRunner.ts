@@ -3172,6 +3172,9 @@ export class AIPromptRunner {
       // Build message array with rendered prompt and conversation messages
       chatParams.messages = this.buildMessageArray(renderedPrompt, conversationMessages, templateMessageRole);
 
+      // Apply assistant prefill (native or fallback) based on prompt config and provider support
+      this.applyAssistantPrefill(chatParams, prompt, model, vendorId, params);
+
       // Execute the model with cancellation support
       if (cancellationToken) {
         // If cancellation token is provided, wrap the execution to handle cancellation
@@ -3244,6 +3247,118 @@ export class AIPromptRunner {
     }
 
     return messages;
+  }
+
+  /**
+   * Default fallback instruction text used when no PrefillFallbackText is configured
+   * at any level of the AIModelType → AIModel → AIModelVendor cascade.
+   */
+  private static readonly DEFAULT_PREFILL_FALLBACK = 'IMPORTANT: You must begin your response with exactly the following text (do not add quotes or modify it): {{prefill}}';
+
+  /**
+   * Resolves whether the current model/vendor supports native assistant prefill
+   * using the cascade: AIModelType → AIModel → AIModelVendor (most specific wins, null = inherit).
+   */
+  private resolveSupportsPrefill(
+    model: MJAIModelEntityExtended,
+    vendorId: string | null
+  ): boolean {
+    // Start with model type default
+    const modelType = AIEngine.Instance.ModelTypes.find(
+      mt => UUIDsEqual(mt.ID, model.AIModelTypeID)
+    );
+    let supportsPrefill = modelType?.SupportsPrefill ?? false;
+
+    // Model-level override (null = inherit from type)
+    if (model.SupportsPrefill != null) {
+      supportsPrefill = model.SupportsPrefill;
+    }
+
+    // Vendor-level override (null = inherit from model/type)
+    if (vendorId) {
+      const modelVendor = AIEngine.Instance.ModelVendors.find(
+        mv => UUIDsEqual(mv.ModelID, model.ID) && UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active'
+      );
+      if (modelVendor?.SupportsPrefill != null) {
+        supportsPrefill = modelVendor.SupportsPrefill;
+      }
+    }
+
+    return supportsPrefill;
+  }
+
+  /**
+   * Resolves the prefill fallback instruction text using the cascade:
+   * AIModelType → AIModel → AIModelVendor (most specific non-null wins).
+   * Falls back to DEFAULT_PREFILL_FALLBACK if none are configured.
+   */
+  private resolvePrefillFallbackText(
+    model: MJAIModelEntityExtended,
+    vendorId: string | null
+  ): string {
+    // Start with model type default
+    const modelType = AIEngine.Instance.ModelTypes.find(
+      mt => UUIDsEqual(mt.ID, model.AIModelTypeID)
+    );
+    let fallbackText: string | null = modelType?.PrefillFallbackText ?? null;
+
+    // Model-level override
+    if (model.PrefillFallbackText != null) {
+      fallbackText = model.PrefillFallbackText;
+    }
+
+    // Vendor-level override
+    if (vendorId) {
+      const modelVendor = AIEngine.Instance.ModelVendors.find(
+        mv => UUIDsEqual(mv.ModelID, model.ID) && UUIDsEqual(mv.VendorID, vendorId) && mv.Status === 'Active'
+      );
+      if (modelVendor?.PrefillFallbackText != null) {
+        fallbackText = modelVendor.PrefillFallbackText;
+      }
+    }
+
+    return fallbackText ?? AIPromptRunner.DEFAULT_PREFILL_FALLBACK;
+  }
+
+  /**
+   * Applies assistant prefill to ChatParams based on prompt configuration and provider support.
+   * Handles the full prefill resolution logic including fallback to system instructions.
+   */
+  private applyAssistantPrefill(
+    chatParams: ChatParams,
+    prompt: MJAIPromptEntityExtended,
+    model: MJAIModelEntityExtended,
+    vendorId: string | null,
+    params: AIPromptParams
+  ): void {
+    const prefillText = prompt.AssistantPrefill;
+    if (!prefillText) {
+      return; // No prefill configured on this prompt
+    }
+
+    const supportsPrefill = this.resolveSupportsPrefill(model, vendorId);
+
+    if (supportsPrefill) {
+      // Provider supports native prefill — use it directly
+      chatParams.assistantPrefill = prefillText;
+      return;
+    }
+
+    // Provider does NOT support native prefill — check fallback mode
+    const fallbackMode = prompt.PrefillFallbackMode;
+
+    if (fallbackMode === 'SystemInstruction') {
+      // Inject a system instruction telling the model to start with the prefill text
+      const fallbackTemplate = this.resolvePrefillFallbackText(model, vendorId);
+      const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, prefillText);
+
+      // Append as a system message at the end of the messages array (before any trailing user message)
+      chatParams.messages.push({
+        role: ChatMessageRole.system,
+        content: fallbackInstruction
+      });
+    }
+    // 'Ignore' and 'None' — silently skip, no action needed
   }
 
   /**

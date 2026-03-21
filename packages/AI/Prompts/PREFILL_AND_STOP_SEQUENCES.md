@@ -106,7 +106,7 @@ The following providers do not support prefill. When `assistantPrefill` is set, 
 - LM Studio
 - BettyBot
 
-For these providers, use prompt-based instructions instead (e.g., "Always start your response with `{`" in the system message).
+For these providers, MemberJunction's prompt runner can automatically inject a system instruction as a fallback — see [Automatic Fallback](#automatic-fallback-for-non-supporting-providers) below.
 
 ### Stop Sequences — Universal Support
 
@@ -128,21 +128,55 @@ For these providers, use prompt-based instructions instead (e.g., "Always start 
 
 ## Integration with MJ Prompt System
 
-When using `AIPromptRunner` with database-driven prompt templates, you can set `assistantPrefill` and `stopSequences` on the `ChatParams` object before execution. These parameters flow through to whichever provider is selected for the prompt.
+### Entity-Level Configuration
+
+The `MJ: AI Prompts` entity has built-in fields for prefill:
+
+| Field | Type | Description |
+|---|---|---|
+| `AssistantPrefill` | `nvarchar(MAX)` | The prefill text for this prompt |
+| `StopSequences` | `nvarchar(MAX)` | Comma-delimited stop sequences |
+| `PrefillFallbackMode` | `nvarchar(20)` | `Ignore`, `SystemInstruction`, or `None` |
+
+When `AIPromptRunner` executes a prompt, it reads these fields and automatically applies prefill with provider-aware logic.
+
+### Automatic Fallback for Non-Supporting Providers
+
+When the selected provider doesn't support native prefill, the `PrefillFallbackMode` controls what happens:
+
+- **`Ignore`** (default) — Silently skip prefill. The prompt executes normally without it.
+- **`SystemInstruction`** — Inject a system message instructing the model to start its response with the prefill text. The instruction template is resolved from a three-level cascade.
+- **`None`** — No fallback. Prefill only works with natively supporting providers.
+
+### Fallback Text Cascade
+
+When `PrefillFallbackMode` is `SystemInstruction`, the fallback instruction text is resolved using a three-level cascade (most specific wins, `null` means inherit):
+
+1. **AI Model Type** → `PrefillFallbackText` (broadest default, e.g., for all LLMs)
+2. **AI Model** → `PrefillFallbackText` (model-specific override, e.g., for GPT-4o)
+3. **AI Model Vendor** → `PrefillFallbackText` (vendor-specific override, e.g., for Claude on Bedrock vs Claude on Anthropic)
+
+Use `{{prefill}}` as a placeholder in the text. If no level provides fallback text, a built-in default is used:
+
+> `IMPORTANT: You must begin your response with exactly the following text (do not add quotes or modify it): {{prefill}}`
+
+The same cascade determines `SupportsPrefill` (whether native prefill is available):
+**AI Model Type** → **AI Model** → **AI Model Vendor**
+
+### Programmatic Usage
+
+You can also set prefill directly on `ChatParams` when calling LLMs outside the prompt system:
 
 ```typescript
-const runner = new AIPromptRunner();
-const promptParams = new AIPromptParams();
-promptParams.prompt = myPrompt;
-promptParams.data = { /* template data */ };
+const chatParams = new ChatParams();
+chatParams.model = 'claude-sonnet-4-5-20250514';
+chatParams.messages = [
+    { role: 'user', content: 'List the top 3 languages' }
+];
+chatParams.assistantPrefill = '```json\n';
+chatParams.stopSequences = ['```'];
 
-// Override chat params for prefill optimization
-promptParams.chatParamsOverrides = {
-    assistantPrefill: '```json\n',
-    stopSequences: ['```']
-};
-
-const result = await runner.ExecutePrompt(promptParams);
+const result = await llm.ChatCompletion(chatParams);
 ```
 
 ## References
