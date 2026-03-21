@@ -698,24 +698,25 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         const configFilePath = join(rsuConfig.WorkDir, rsuConfig.AdditionalSchemaInfoPath);
 
         // Load existing config or start fresh
-        let existing: { tables?: Array<{ SchemaName: string; TableName: string }> } = {};
+        // Format: { schemaName: [ { TableName, PrimaryKey?, ForeignKeys? }, ... ], ... }
+        let existing: Record<string, Array<{ TableName: string }>> = {};
         if (existsSync(configFilePath)) {
             try { existing = JSON.parse(readFileSync(configFilePath, 'utf-8')); } catch { /* start fresh */ }
         }
-        if (!existing.tables) existing.tables = [];
 
+        // Merge each incoming config (keyed by schema name) into existing
         for (const content of contents) {
             try {
-                const incoming = JSON.parse(content);
-                if (incoming.tables && Array.isArray(incoming.tables)) {
-                    for (const table of incoming.tables) {
-                        const idx = existing.tables.findIndex(
-                            (t: { SchemaName: string; TableName: string }) =>
-                                t.SchemaName.toLowerCase() === String(table.SchemaName).toLowerCase() &&
-                                t.TableName.toLowerCase() === String(table.TableName).toLowerCase()
+                const incoming: Record<string, Array<{ TableName: string }>> = JSON.parse(content);
+                for (const [schemaName, tables] of Object.entries(incoming)) {
+                    if (!Array.isArray(tables)) continue;
+                    if (!existing[schemaName]) existing[schemaName] = [];
+                    for (const table of tables) {
+                        const idx = existing[schemaName].findIndex(
+                            t => t.TableName.toLowerCase() === table.TableName.toLowerCase()
                         );
-                        if (idx >= 0) existing.tables[idx] = table;
-                        else existing.tables.push(table);
+                        if (idx >= 0) existing[schemaName][idx] = table;
+                        else existing[schemaName].push(table);
                     }
                 }
             } catch { /* skip unparseable */ }
