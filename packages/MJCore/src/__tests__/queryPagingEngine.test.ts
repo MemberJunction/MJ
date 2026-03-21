@@ -269,3 +269,83 @@ ORDER BY COALESCE(rc.ChangeCount, 0) DESC, au.Name`;
         expect(result.DataSQL).not.toContain('ORDER BY COALESCE(rc.ChangeCount');
     });
 });
+
+// ═══════════════════════════════════════════════════
+// Trailing Semicolon Handling
+// ═══════════════════════════════════════════════════
+
+describe('QueryPagingEngine — Trailing Semicolon Handling', () => {
+    it('should strip trailing semicolon from simple SQL before wrapping', () => {
+        const sql = `SELECT ID, Name FROM Users ORDER BY Name;`;
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+        // The OFFSET clause must come right after ORDER BY, not after a semicolon
+        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+        expect(result.DataSQL).not.toContain(';\nOFFSET');
+        expect(result.DataSQL).not.toContain(';\nSELECT');
+    });
+
+    it('should strip trailing semicolon from SQL with CTE', () => {
+        const sql = `WITH Active AS (SELECT ID FROM Users WHERE Active = 1)
+SELECT * FROM Active ORDER BY ID;`;
+
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 50, 'sqlserver');
+
+        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY');
+        expect(result.DataSQL).not.toContain(';\n');
+    });
+
+    it('should strip trailing semicolon with whitespace after it', () => {
+        const sql = `SELECT * FROM Users ORDER BY Name;   \n  `;
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, 'sqlserver');
+
+        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY');
+        expect(result.DataSQL).not.toContain(';');
+    });
+
+    it('should not affect SQL without trailing semicolon', () => {
+        const sql = `SELECT * FROM Users ORDER BY Name`;
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+    });
+
+    it('should preserve semicolons inside string literals', () => {
+        const sql = `SELECT ID, 'value; with semicolon' AS Label FROM Users ORDER BY ID`;
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+        // String literal with semicolon should be preserved inside the CTE body
+        expect(result.DataSQL).toContain('value; with semicolon');
+        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+    });
+
+    it('should handle PostgreSQL paging with trailing semicolon', () => {
+        const sql = `SELECT * FROM users ORDER BY name;`;
+        const result = QueryPagingEngine.WrapWithPaging(sql, 10, 20, 'postgresql');
+
+        expect(result.DataSQL).toContain('LIMIT 20 OFFSET 10');
+        expect(result.DataSQL).not.toContain(';\n');
+    });
+
+    it('should handle SQL with Nunjucks template expression followed by semicolon', () => {
+        // This is the exact pattern from the External Change Detection bug
+        const sql = `SELECT * FROM Users WHERE Region = 'West' ORDER BY ID;`;
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 5000, 'sqlserver');
+
+        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 5000 ROWS ONLY');
+        // The semicolon should NOT appear between ORDER BY and OFFSET
+        const orderByIdx = result.DataSQL.lastIndexOf('ORDER BY');
+        const offsetIdx = result.DataSQL.indexOf('OFFSET');
+        const between = result.DataSQL.substring(orderByIdx, offsetIdx);
+        expect(between).not.toContain(';');
+    });
+
+    it('should produce valid count SQL without semicolon', () => {
+        const sql = `SELECT * FROM Users ORDER BY Name;`;
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+        // Count SQL should not have a semicolon in the CTE body
+        expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount');
+        expect(result.CountSQL).not.toContain(';');
+    });
+});

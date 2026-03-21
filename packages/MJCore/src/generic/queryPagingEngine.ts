@@ -44,8 +44,11 @@ export class QueryPagingEngine {
         maxRows: number,
         platform: DatabasePlatform,
     ): PagingWrappedSQL {
+        // Strip trailing semicolons — they break CTE wrapping and OFFSET/FETCH clauses
+        const cleanedSQL = resolvedSQL.trimEnd().replace(/;\s*$/, '');
+
         // Parse the SQL into CTE prefix + main SELECT
-        const { ctePrefix, mainSelect } = QueryPagingEngine.splitCTEAndSelect(resolvedSQL);
+        const { ctePrefix, mainSelect } = QueryPagingEngine.splitCTEAndSelect(cleanedSQL);
 
         // Extract ORDER BY from the main SELECT
         const { sqlWithoutOrder, orderByClause } = QueryPagingEngine.extractOrderBy(mainSelect);
