@@ -1,5 +1,6 @@
-// Existing API (backward compatible)
-export { SQLParser, SQLTableReference, SQLColumnReference, SQLParseResult, SQLCTEExtraction } from './sql-parser.js';
+// MJ SQL Parser — unified parser for MJ's SQL superset
+export { MJSQLParser } from './mj-sql-parser.js';
+export type { MJAstifyResult, SQLTableReference, SQLColumnReference, SQLCTEExtraction, MJParameterInfo } from './mj-sql-parser.js';
 
 // MJ AST Types
 export type {
@@ -34,20 +35,3 @@ export type {
     // Parse result
     MJParseResult,
 } from './mj-ast-types.js';
-
-// MJ Lexer
-export { MJLexer } from './mj-lexer.js';
-
-// MJ Placeholder Substitution
-export { MJPlaceholderSubstitution } from './mj-placeholder.js';
-
-// MJ SQL Parser — main entry points
-export {
-    mjAstify,
-    mjSqlify,
-    extractTemplateExpressions,
-    extractCompositionRefs,
-    extractConditionalBlocks,
-    extractParameterInfo,
-} from './mj-sql-parser.js';
-export type { MJAstifyResult, MJParameterInfo } from './mj-sql-parser.js';

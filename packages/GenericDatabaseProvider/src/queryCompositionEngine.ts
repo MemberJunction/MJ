@@ -1,6 +1,6 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDialect, PostgreSQLDialect, type SQLDialect } from "@memberjunction/sql-dialect";
-import { SQLParser, MJPlaceholderSubstitution, MJLexer, extractCompositionRefs } from "@memberjunction/sql-parser";
+import { MJSQLParser } from "@memberjunction/sql-parser";
 import { Metadata, QueryInfo, DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
 import NodeSqlParser from 'node-sql-parser';
 const { Parser: SqlParser } = NodeSqlParser;
@@ -128,7 +128,7 @@ export class QueryCompositionEngine {
     public HasCompositionTokens(sql: string): boolean {
         if (!sql) return false;
         const stripped = this.stripSQLComments(sql);
-        const tokens = MJLexer.Tokenize(stripped);
+        const tokens = MJSQLParser.Tokenize(stripped);
         return tokens.some(t => t.type === 'MJ_COMPOSITION_REF');
     }
 
@@ -147,7 +147,7 @@ export class QueryCompositionEngine {
         if (!sql) return [];
 
         const stripped = this.stripSQLComments(sql);
-        const refs = extractCompositionRefs(stripped);
+        const refs = MJSQLParser.ExtractCompositionRefs(stripped);
 
         return refs.map(ref => {
             const categorySegments = ref.categoryPath
@@ -359,15 +359,7 @@ export class QueryCompositionEngine {
     }
 
     // parseTokenContent and splitParams removed — composition token parsing
-    // is now handled by MJLexer via extractCompositionRefs()
-
-    /**
-     * Looks up a query by category path + name in the metadata provider.
-     */
-    private lookupQuery(token: ParsedCompositionToken): QueryInfo {
-        const result = this.lookupQueryWithInline(token);
-        return result.Query;
-    }
+    // is now handled by MJLexer via MJSQLParser.ExtractCompositionRefs()
 
     /**
      * Looks up a query by category path + name, checking inline dependencies first,
@@ -659,7 +651,7 @@ export class QueryCompositionEngine {
     /**
      * Extracts inner CTE definitions from SQL that starts with a WITH clause.
      *
-     * Delegates to {@link SQLParser.ExtractCTEs} which uses AST parsing first
+     * Delegates to {@link MJSQLParser.ExtractCTEs} which uses AST parsing first
      * (via node-sql-parser), falling back to a paren-depth regex approach when
      * AST parsing fails (e.g. SQL contains Nunjucks template tokens).
      *
@@ -668,7 +660,7 @@ export class QueryCompositionEngine {
      */
     private hoistInnerCTEs(sql: string, platform: DatabasePlatform): { innerCTEDefinitions: string[]; mainSelect: string } {
         const dialect = platform === 'postgresql' ? 'PostgresQL' : 'TransactSQL';
-        const extraction = SQLParser.ExtractCTEs(sql, dialect);
+        const extraction = MJSQLParser.ExtractCTEs(sql, dialect);
 
         if (!extraction) {
             // Should not happen since caller already verified WITH prefix,
@@ -734,7 +726,7 @@ export class QueryCompositionEngine {
         if (directResult !== null) return directResult;
 
         // Check for MJ extensions using MJLexer (replaces regex check)
-        const mjParse = MJLexer.Parse(sql);
+        const mjParse = MJSQLParser.Analyze(sql);
         if (mjParse.hasMJExtensions) {
             return this.tryNunjucksAwareStrip(sql, parserDialect);
         }
@@ -836,7 +828,7 @@ export class QueryCompositionEngine {
      * respecting SQL string literals and comments.
      */
     private findTopLevelOrderByPositions(sql: string): number[] {
-        const tokens = MJLexer.Tokenize(sql);
+        const tokens = MJSQLParser.Tokenize(sql);
         const positions: number[] = [];
         let parenDepth = 0;
 
@@ -896,7 +888,7 @@ export class QueryCompositionEngine {
      * Uses MJPlaceholderSubstitution for context-aware placeholder generation.
      */
     private preprocessNunjucks(sql: string): string {
-        return MJPlaceholderSubstitution.Substitute(sql).cleanSQL;
+        return MJSQLParser.Substitute(sql).cleanSQL;
     }
 
     /**

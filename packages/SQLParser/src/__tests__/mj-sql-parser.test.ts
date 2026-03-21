@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import {
-    mjAstify,
-    mjSqlify,
-    extractTemplateExpressions,
-    extractCompositionRefs,
-    extractConditionalBlocks,
-    extractParameterInfo,
-} from '../mj-sql-parser.js';
+import { MJSQLParser } from '../mj-sql-parser.js';
+const mjAstify = MJSQLParser.Astify.bind(MJSQLParser);
+const mjSqlify = MJSQLParser.Sqlify.bind(MJSQLParser);
+const extractTemplateExpressions = MJSQLParser.ExtractTemplateExpressions.bind(MJSQLParser);
+const extractCompositionRefs = MJSQLParser.ExtractCompositionRefs.bind(MJSQLParser);
+const extractConditionalBlocks = MJSQLParser.ExtractConditionalBlocks.bind(MJSQLParser);
+const extractParameterInfo = MJSQLParser.ExtractParameterInfo.bind(MJSQLParser);
 
 // ═══════════════════════════════════════════════════
 // Real-world SQL query snippets
