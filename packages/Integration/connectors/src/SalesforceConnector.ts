@@ -34,27 +34,43 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────
 
-/** Parsed Salesforce JWT Bearer credentials */
+/** Supported Salesforce auth flows */
+type SalesforceAuthFlow = 'jwt_bearer' | 'client_credentials';
+
+/** Parsed Salesforce credentials — supports JWT Bearer and Client Credentials flows */
 interface SalesforceCredentials {
+    AuthFlow: SalesforceAuthFlow;
     LoginUrl: string;
     ClientId: string;
-    Username: string;
-    PrivateKey: string;
     ApiVersion: string;
+    /** JWT Bearer only — integration user email */
+    Username?: string;
+    /** JWT Bearer only — PEM-encoded RSA private key */
+    PrivateKey?: string;
+    /** Client Credentials only — Connected App client secret */
+    ClientSecret?: string;
+    /** Optional — token endpoint URL if different from LoginUrl (e.g. My Domain URL for JWT flow) */
+    TokenUrl?: string;
 }
 
 /** Connection configuration parsed from CompanyIntegration.Configuration JSON */
 export interface SalesforceConnectionConfig {
-    /** Salesforce login URL */
+    /** Auth flow to use */
+    AuthFlow: SalesforceAuthFlow;
+    /** Salesforce login URL (e.g. https://login.salesforce.com or https://myorg.my.salesforce.com) */
     LoginUrl: string;
     /** Connected App Consumer Key */
     ClientId: string;
-    /** Integration user email */
-    Username: string;
-    /** PEM-encoded RSA private key */
-    PrivateKey: string;
     /** Salesforce REST API version. Default: '61.0' */
     ApiVersion: string;
+    /** JWT Bearer only — Integration user email */
+    Username?: string;
+    /** JWT Bearer only — PEM-encoded RSA private key */
+    PrivateKey?: string;
+    /** Client Credentials only — Connected App client secret */
+    ClientSecret?: string;
+    /** Optional — token endpoint URL if different from LoginUrl (e.g. My Domain URL for JWT flow) */
+    TokenUrl?: string;
 
     // ── Optional performance overrides ──────────────────────────
     /** Maximum retries for rate-limited or failed requests. Default: 5 */
@@ -621,13 +637,15 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
             return this.cachedAuth;
         }
 
-        console.log('[Salesforce] Authenticating via JWT Bearer Token...');
         const credentials = await this.LoadCredentials(companyIntegration, contextUser);
         const config = this.BuildConnectionConfig(credentials, companyIntegration);
         this._config = config;
 
-        const jwtAssertion = this.BuildJWTAssertion(config);
-        const tokenResponse = await this.ExchangeJWTForToken(config.LoginUrl, jwtAssertion);
+        console.log(`[Salesforce] Authenticating via ${config.AuthFlow === 'client_credentials' ? 'Client Credentials' : 'JWT Bearer Token'}...`);
+
+        const tokenResponse = config.AuthFlow === 'client_credentials'
+            ? await this.ExchangeClientCredentialsForToken(config)
+            : await this.ExchangeJWTForToken(config.TokenUrl ?? config.LoginUrl, this.BuildJWTAssertion(config));
 
         this.cachedAuth = {
             Token: tokenResponse.access_token,
@@ -921,6 +939,46 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
+     * Exchanges Client Credentials for an access token.
+     * Used with Connected Apps configured for the OAuth 2.0 Client Credentials flow.
+     */
+    private async ExchangeClientCredentialsForToken(
+        config: SalesforceConnectionConfig
+    ): Promise<{ access_token: string; instance_url: string }> {
+        if (!config.ClientSecret) {
+            throw new Error('Client Credentials flow requires clientSecret');
+        }
+
+        const tokenUrl = `${config.LoginUrl}/services/oauth2/token`;
+        const body = new URLSearchParams({
+            grant_type: 'client_credentials',
+            client_id: config.ClientId,
+            client_secret: config.ClientSecret,
+        }).toString();
+
+        const response = await fetch(tokenUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body,
+            signal: AbortSignal.timeout(this.effectiveRequestTimeoutMs),
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(
+                `Salesforce Client Credentials token exchange failed (HTTP ${response.status}): ${errorBody}`
+            );
+        }
+
+        const result = await response.json() as { access_token: string; instance_url: string; token_type: string };
+        if (!result.access_token || !result.instance_url) {
+            throw new Error('Salesforce token response missing access_token or instance_url');
+        }
+
+        return result;
+    }
+
+    /**
      * Checks if the cached token is still valid (within 80% of lifetime).
      */
     private IsTokenValid(): boolean {
@@ -953,8 +1011,9 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         }
 
         throw new Error(
-            'No Salesforce credentials found. Attach a credential of type "Salesforce JWT Bearer" ' +
-            'or set Configuration JSON on the CompanyIntegration with loginUrl, clientId, username, and privateKey.'
+            'No Salesforce credentials found. Set Configuration JSON with either ' +
+            '(a) clientId + clientSecret for Client Credentials flow, or ' +
+            '(b) clientId + username + privateKey for JWT Bearer flow.'
         );
     }
 
@@ -972,18 +1031,42 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
     private ParseCredentialJson(json: string): SalesforceCredentials | null {
         try {
             const parsed = JSON.parse(json) as Record<string, string>;
-            const privateKey = parsed['privateKey'] ?? parsed['PrivateKey'];
             const clientId = parsed['clientId'] ?? parsed['ClientId'];
+            if (!clientId) return null;
+
+            const loginUrl = parsed['loginUrl'] ?? parsed['LoginUrl'] ?? 'https://login.salesforce.com';
+            const apiVersion = parsed['apiVersion'] ?? parsed['ApiVersion'] ?? DEFAULT_API_VERSION;
+            const tokenUrl = parsed['tokenUrl'] ?? parsed['TokenUrl'];
+
+            // Detect auth flow: if clientSecret is present, use client_credentials;
+            // otherwise require privateKey + username for JWT Bearer
+            const clientSecret = parsed['clientSecret'] ?? parsed['ClientSecret'];
+            const privateKey = parsed['privateKey'] ?? parsed['PrivateKey'];
             const username = parsed['username'] ?? parsed['Username'];
+            const explicitFlow = parsed['authFlow'] ?? parsed['AuthFlow'];
 
-            if (!privateKey || !clientId || !username) return null;
+            if (explicitFlow === 'client_credentials' || (clientSecret && !privateKey)) {
+                if (!clientSecret) return null;
+                return {
+                    AuthFlow: 'client_credentials',
+                    LoginUrl: loginUrl,
+                    ClientId: clientId,
+                    ClientSecret: clientSecret,
+                    ApiVersion: apiVersion,
+                    TokenUrl: tokenUrl,
+                };
+            }
 
+            // JWT Bearer flow
+            if (!privateKey || !username) return null;
             return {
-                LoginUrl: parsed['loginUrl'] ?? parsed['LoginUrl'] ?? 'https://login.salesforce.com',
+                AuthFlow: 'jwt_bearer',
+                LoginUrl: loginUrl,
                 ClientId: clientId,
                 Username: username,
                 PrivateKey: privateKey,
-                ApiVersion: parsed['apiVersion'] ?? parsed['ApiVersion'] ?? DEFAULT_API_VERSION,
+                ApiVersion: apiVersion,
+                TokenUrl: tokenUrl,
             };
         } catch {
             return null;
@@ -995,11 +1078,14 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
         companyIntegration: MJCompanyIntegrationEntity
     ): SalesforceConnectionConfig {
         const config: SalesforceConnectionConfig = {
+            AuthFlow: credentials.AuthFlow,
             LoginUrl: credentials.LoginUrl,
             ClientId: credentials.ClientId,
+            ApiVersion: credentials.ApiVersion,
             Username: credentials.Username,
             PrivateKey: credentials.PrivateKey,
-            ApiVersion: credentials.ApiVersion,
+            ClientSecret: credentials.ClientSecret,
+            TokenUrl: credentials.TokenUrl,
         };
 
         const configJson = companyIntegration.Get('Configuration') as string | null;
