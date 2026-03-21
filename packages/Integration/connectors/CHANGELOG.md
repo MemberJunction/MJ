@@ -1,5 +1,61 @@
 # @memberjunction/integration-connectors
 
+## 5.14.0
+
+### Minor Changes
+
+- 140fc6d: Add HubSpot v4 association fetch, fix empty-string-to-null coercion for HubSpot datetime fields, widen GetCachedObject/GetCachedFields visibility to protected, and fix OpenAI streaming max_completion_tokens parameter
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+- Updated dependencies [6489cd8]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/integration-engine@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/integration-engine@5.13.0
+  - @memberjunction/core-entities@5.13.0
+
+## 5.12.0
+
+### Minor Changes
+
+- 6f9350c: migration
+- 257512b: feat: Integration scheduled job type, YM/HubSpot connector improvements, CodeGen custom view refresh
+  - Add ScheduledJobRunID FK to CompanyIntegrationRun and ScheduledJobID FK to CompanyIntegration (migration v5.12.x)
+  - Add Integration Sync scheduled job type metadata
+  - Pass contextUser through HubSpot credential loading for proper server-side data isolation
+  - Make YM connector performance defaults (retries, timeouts, batch size, throttle) overrideable per Configuration JSON
+  - CodeGen now auto-emits sp_refreshview for custom base views (BaseViewGenerated=false) so devs don't need to add it manually to migrations
+  - BaseIntegrationPointAction scaffold for future write-back actions
+
+- 492de8e: Add Rasa.io newsletter platform integration connector with sync support for persons, posts, insight actions, and insight topics. Includes credential type metadata and integration object definitions.
+
+### Patch Changes
+
+- 93a9f7d: Update YourMembership connector watermark tests to match simplified FetchMemberBatch that delegates pagination to the engine instead of filtering client-side.
+- Updated dependencies [6f9350c]
+- Updated dependencies [05f19ff]
+- Updated dependencies [257512b]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/integration-engine@5.12.0
+  - @memberjunction/core@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/global@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes

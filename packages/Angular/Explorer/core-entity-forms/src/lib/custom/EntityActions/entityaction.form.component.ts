@@ -11,7 +11,7 @@ import { TabEvent } from '@memberjunction/ng-tabstrip';
   standalone: false,
     selector: 'mj-custom-entity-action-extended-form',
     templateUrl: './entityaction.form.component.html',
-    styleUrls: ['../../../shared/form-styles.css']
+    styleUrls: ['../../../shared/form-styles.css', './entityaction.form.component.css']
 })
 export class MJEntityActionFormComponentExtended extends MJEntityActionFormComponent {
     public record!: MJEntityActionEntity;

@@ -1,5 +1,31 @@
 # @memberjunction/ai-azure
 
+## 5.14.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.14.0
+- @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ai@5.13.0
+
+## 5.12.0
+
+### Minor Changes
+
+- c21c28c: Amazon Bedrock and Azure Foundry AI Models
+
+### Patch Changes
+
+- @memberjunction/ai@5.12.0
+- @memberjunction/global@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes

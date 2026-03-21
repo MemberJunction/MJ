@@ -1,5 +1,82 @@
 # @memberjunction/core-entities-server
 
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+- Updated dependencies [6489cd8]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/generic-database-provider@5.14.0
+  - @memberjunction/skip-types@5.14.0
+  - @memberjunction/actions-base@5.14.0
+  - @memberjunction/ai-engine-base@5.14.0
+  - @memberjunction/ai-core-plus@5.14.0
+  - @memberjunction/aiengine@5.14.0
+  - @memberjunction/ai-prompts@5.14.0
+  - @memberjunction/ai-vector-dupe@5.14.0
+  - @memberjunction/ai-vectors-memory@5.14.0
+  - @memberjunction/doc-utils@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/sqlserver-dataprovider@5.14.0
+  - @memberjunction/ai-provider-bundle@5.14.0
+  - @memberjunction/ai@5.14.0
+  - @memberjunction/global@5.14.0
+  - @memberjunction/sql-converter@5.14.0
+  - @memberjunction/sql-parser@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ai-engine-base@5.13.0
+  - @memberjunction/ai-core-plus@5.13.0
+  - @memberjunction/aiengine@5.13.0
+  - @memberjunction/ai-prompts@5.13.0
+  - @memberjunction/ai-vector-dupe@5.13.0
+  - @memberjunction/actions-base@5.13.0
+  - @memberjunction/doc-utils@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/sqlserver-dataprovider@5.13.0
+  - @memberjunction/skip-types@5.13.0
+  - @memberjunction/ai@5.13.0
+  - @memberjunction/ai-provider-bundle@5.13.0
+  - @memberjunction/sql-converter@5.13.0
+
+## 5.12.0
+
+### Minor Changes
+
+- 05f19ff: Add composable query system with semantic catalog search, CTE composition engine, server-side paging, query caching with TTL/dependency invalidation, and agent directive surfacing. Includes QueryCacheManager wrapper over LocalCacheManager, QueryPagingEngine for SQL-level OFFSET/FETCH paging, QueryCompositionEngine for platform-aware CTE generation, and SearchQueryCatalog action for vector-based query discovery. Renames PaginationComponent to DataPagerComponent and extracts into shared module.
+- 1567293: migration
+
+### Patch Changes
+
+- Updated dependencies [05f19ff]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/aiengine@5.12.0
+  - @memberjunction/skip-types@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/ai-engine-base@5.12.0
+  - @memberjunction/ai-core-plus@5.12.0
+  - @memberjunction/ai-prompts@5.12.0
+  - @memberjunction/ai-vector-dupe@5.12.0
+  - @memberjunction/actions-base@5.12.0
+  - @memberjunction/doc-utils@5.12.0
+  - @memberjunction/sqlserver-dataprovider@5.12.0
+  - @memberjunction/ai-provider-bundle@5.12.0
+  - @memberjunction/ai@5.12.0
+  - @memberjunction/global@5.12.0
+  - @memberjunction/sql-converter@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes

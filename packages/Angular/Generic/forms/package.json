@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-forms",
-  "version": "5.11.0",
+  "version": "5.14.0",
   "description": "MemberJunction: Generic dynamic form rendering from JSON schemas. Renders structured forms with 14+ field types (text, textarea, number, currency, date, daterange, time, checkbox, radio, dropdown, buttongroup, slider, email) with built-in validation, responsive layout, and intelligent field sizing.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -33,7 +33,7 @@
     "@angular/forms": "21.1.3"
   },
   "dependencies": {
-    "@memberjunction/ai-core-plus": "5.11.0",
+    "@memberjunction/ai-core-plus": "5.14.0",
     "@progress/kendo-angular-buttons": "22.0.1",
     "@progress/kendo-angular-dateinputs": "22.0.1",
     "@progress/kendo-angular-inputs": "22.0.1",

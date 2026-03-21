@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { Subject, debounceTime } from 'rxjs';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { MJListFormComponent } from '../../generated/Entities/MJList/mjlist.form.component';
@@ -545,7 +545,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         }, this.metadata.CurrentUser);
 
         if (result.Success) {
-            this.existingListDetailIds = new Set(result.Results.map(r => r.RecordID));
+            this.existingListDetailIds = new Set(result.Results.map(r => NormalizeUUID(r.RecordID)));
         }
     }
 
@@ -593,7 +593,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
                 return {
                     ID: recordId,
                     Name: nameField ? String(record[nameField.Name]) : recordId,
-                    isInList: this.existingListDetailIds.has(recordId),
+                    isInList: this.existingListDetailIds.has(NormalizeUUID(recordId)),
                     isSelected: false
                 };
             });
@@ -738,14 +738,14 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         for (const userView of this.userViewsToAdd) {
             const runViewResult = await rv.RunView({
-                EntityName: 'MJ: User Views',
+                ViewID: userView.ID,
                 ViewEntity: userView,
                 Fields: ['ID']
             }, this.metadata.CurrentUser);
 
             if (runViewResult.Success) {
-                const records = runViewResult.Results as Array<{ ID: string }>;
-                records.forEach(r => recordIdSet.add(r.ID));
+                const records = runViewResult.Results as Array<Record<string, string>>;
+                records.forEach(r => recordIdSet.add(NormalizeUUID(r.ID)));
             }
         }
 

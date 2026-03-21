@@ -21,7 +21,7 @@ export * from "./generic/util";
 export * from "./generic/logging";
 export * from "./generic/queryInfo";
 export * from "./generic/queryInfoInterfaces";
-export * from "./generic/queryCompositionEngine";
+export * from "./generic/queryExecutionSpec";
 export * from "./generic/queryPagingEngine";
 export * from "./generic/querySQLFilters";
 export * from "./generic/runQuerySQLFilterImplementations";
@@ -44,7 +44,7 @@ export * from "./generic/localCacheManager";
 export * from "./generic/RegisterForStartup";
 export * from "./generic/telemetryManager";
 export * from "./generic/InMemoryLocalStorageProvider";
-export * from "./generic/hookRegistry";
+export * from "./generic/dataHooks";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider;

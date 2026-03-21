@@ -1,3 +1,32 @@
+/* Host and Container Layout */
+:host {
+    display: block;
+    height: 100%;
+}
+
+.record-form-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.record-form {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0 !important;
+    overflow: hidden;
+}
+
+.form-content {
+    padding: 16px;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
 /* Error Info Styles */
 .error-info {
     margin-top: 16px;

@@ -1,5 +1,43 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.14.0
+
+### Patch Changes
+
+- 69b5af4: Add TestQuerySQL resolver and client method for query execution testing, refactor CreateQueryResolver into QuerySystemUserResolver composing CodeGen-generated MJQuery\_ types, add lightweight query catalog for collision detection, unit tests for transitive template composition and ORDER BY stripping, and updated class registration manifests
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/ai-core-plus@5.14.0
+  - @memberjunction/interactive-component-types@5.14.0
+  - @memberjunction/data-context@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/ai-core-plus@5.13.0
+  - @memberjunction/interactive-component-types@5.13.0
+  - @memberjunction/data-context@5.13.0
+
+## 5.12.0
+
+### Minor Changes
+
+- 05f19ff: Add composable query system with semantic catalog search, CTE composition engine, server-side paging, query caching with TTL/dependency invalidation, and agent directive surfacing. Includes QueryCacheManager wrapper over LocalCacheManager, QueryPagingEngine for SQL-level OFFSET/FETCH paging, QueryCompositionEngine for platform-aware CTE generation, and SearchQueryCatalog action for vector-based query discovery. Renames PaginationComponent to DataPagerComponent and extracts into shared module.
+
+### Patch Changes
+
+- Updated dependencies [05f19ff]
+- Updated dependencies [d92502e]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/ai-core-plus@5.12.0
+  - @memberjunction/interactive-component-types@5.12.0
+  - @memberjunction/data-context@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes

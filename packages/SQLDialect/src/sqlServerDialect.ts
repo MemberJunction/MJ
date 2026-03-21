@@ -127,6 +127,10 @@ export class SQLServerDialect extends SQLDialect {
         return 'sqlserver';
     }
 
+    get ParserDialect(): string {
+        return 'TransactSQL';
+    }
+
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {
@@ -244,6 +248,10 @@ export class SQLServerDialect extends SQLDialect {
 
     RecursiveCTESyntax(): string {
         return 'WITH';
+    }
+
+    get AllowsOrderByInCTE(): boolean {
+        return false;
     }
 
     // ─── Data Types ──────────────────────────────────────────────────

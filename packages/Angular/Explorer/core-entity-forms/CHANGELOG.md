@@ -1,5 +1,129 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+- Updated dependencies [6489cd8]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/graphql-dataprovider@5.14.0
+  - @memberjunction/actions-base@5.14.0
+  - @memberjunction/ai-engine-base@5.14.0
+  - @memberjunction/ai-core-plus@5.14.0
+  - @memberjunction/ng-base-application@5.14.0
+  - @memberjunction/ng-link-directives@5.14.0
+  - @memberjunction/ng-shared@5.14.0
+  - @memberjunction/ng-testing@5.14.0
+  - @memberjunction/ng-action-gallery@5.14.0
+  - @memberjunction/ng-actions@5.14.0
+  - @memberjunction/ng-agents@5.14.0
+  - @memberjunction/ng-ai-test-harness@5.14.0
+  - @memberjunction/ng-base-forms@5.14.0
+  - @memberjunction/ng-code-editor@5.14.0
+  - @memberjunction/ng-deep-diff@5.14.0
+  - @memberjunction/ng-entity-relationship-diagram@5.14.0
+  - @memberjunction/ng-entity-viewer@5.14.0
+  - @memberjunction/ng-flow-editor@5.14.0
+  - @memberjunction/ng-join-grid@5.14.0
+  - @memberjunction/ng-list-management@5.14.0
+  - @memberjunction/ng-notifications@5.14.0
+  - @memberjunction/ng-shared-generic@5.14.0
+  - @memberjunction/ng-timeline@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/templates-base-types@5.14.0
+  - @memberjunction/ng-tabstrip@5.14.0
+  - @memberjunction/ai@5.14.0
+  - @memberjunction/ng-markdown@5.14.0
+  - @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- 1bb9b86: Entity Form scrollbars and List fixes
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ai-engine-base@5.13.0
+  - @memberjunction/ai-core-plus@5.13.0
+  - @memberjunction/actions-base@5.13.0
+  - @memberjunction/ng-base-application@5.13.0
+  - @memberjunction/ng-link-directives@5.13.0
+  - @memberjunction/ng-shared@5.13.0
+  - @memberjunction/ng-testing@5.13.0
+  - @memberjunction/ng-action-gallery@5.13.0
+  - @memberjunction/ng-actions@5.13.0
+  - @memberjunction/ng-agents@5.13.0
+  - @memberjunction/ng-ai-test-harness@5.13.0
+  - @memberjunction/ng-base-forms@5.13.0
+  - @memberjunction/ng-code-editor@5.13.0
+  - @memberjunction/ng-deep-diff@5.13.0
+  - @memberjunction/ng-entity-relationship-diagram@5.13.0
+  - @memberjunction/ng-entity-viewer@5.13.0
+  - @memberjunction/ng-flow-editor@5.13.0
+  - @memberjunction/ng-join-grid@5.13.0
+  - @memberjunction/ng-list-management@5.13.0
+  - @memberjunction/ng-notifications@5.13.0
+  - @memberjunction/ng-shared-generic@5.13.0
+  - @memberjunction/ng-timeline@5.13.0
+  - @memberjunction/graphql-dataprovider@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/templates-base-types@5.13.0
+  - @memberjunction/ai@5.13.0
+  - @memberjunction/ng-tabstrip@5.13.0
+  - @memberjunction/ng-markdown@5.13.0
+
+## 5.12.0
+
+### Minor Changes
+
+- d92502e: migration/metadata
+
+### Patch Changes
+
+- a57b8d5: Migrate all hardcoded CSS colors to design tokens for dark mode and white-label support. Introduces `--mj-*` semantic CSS custom properties in `_tokens.scss` with full `[data-theme="dark"]` overrides. Migrates 1,544 of 1,659 hardcoded hex values (93%) across 72+ CSS files to semantic tokens. Adds logo token system (`--mj-logo-mark`, `--mj-logo-color`) for themeable branding. Fixes dark mode theming for CodeMirror, AG Grid v35, and Kendo popups. No API or behavioral changes — CSS only.
+- e87d153: design tokens phase 1
+- Updated dependencies [05f19ff]
+- Updated dependencies [a57b8d5]
+- Updated dependencies [e87d153]
+- Updated dependencies [7def002]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/ng-entity-viewer@5.12.0
+  - @memberjunction/ng-shared-generic@5.12.0
+  - @memberjunction/ng-base-application@5.12.0
+  - @memberjunction/ng-testing@5.12.0
+  - @memberjunction/ng-actions@5.12.0
+  - @memberjunction/ng-agents@5.12.0
+  - @memberjunction/ng-ai-test-harness@5.12.0
+  - @memberjunction/ng-base-forms@5.12.0
+  - @memberjunction/ng-code-editor@5.12.0
+  - @memberjunction/ng-deep-diff@5.12.0
+  - @memberjunction/ng-entity-relationship-diagram@5.12.0
+  - @memberjunction/ng-flow-editor@5.12.0
+  - @memberjunction/ng-join-grid@5.12.0
+  - @memberjunction/ng-list-management@5.12.0
+  - @memberjunction/ng-markdown@5.12.0
+  - @memberjunction/ng-tabstrip@5.12.0
+  - @memberjunction/ng-timeline@5.12.0
+  - @memberjunction/graphql-dataprovider@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/ai-engine-base@5.12.0
+  - @memberjunction/ai-core-plus@5.12.0
+  - @memberjunction/actions-base@5.12.0
+  - @memberjunction/ng-link-directives@5.12.0
+  - @memberjunction/ng-shared@5.12.0
+  - @memberjunction/ng-action-gallery@5.12.0
+  - @memberjunction/ng-notifications@5.12.0
+  - @memberjunction/templates-base-types@5.12.0
+  - @memberjunction/ai@5.12.0
+  - @memberjunction/global@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes

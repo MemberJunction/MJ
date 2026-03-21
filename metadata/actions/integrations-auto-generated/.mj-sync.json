@@ -1,0 +1,36 @@
+{
+  "entity": "MJ: Actions",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".integration-actions.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "CategoryID": {
+        "entity": "MJ: Action Categories",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: Action Params": {
+        "entity": "MJ: Action Params",
+        "foreignKey": "ActionID"
+      },
+      "MJ: Action Result Codes": {
+        "entity": "MJ: Action Result Codes",
+        "foreignKey": "ActionID"
+      }
+    }
+  }
+}

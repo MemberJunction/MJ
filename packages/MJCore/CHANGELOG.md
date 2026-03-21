@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/core
 
+## 5.14.0
+
+### Minor Changes
+
+- 140fc6d: Add HubSpot v4 association fetch, fix empty-string-to-null coercion for HubSpot datetime fields, widen GetCachedObject/GetCachedFields visibility to protected, and fix OpenAI streaming max_completion_tokens parameter
+
+### Patch Changes
+
+- 69b5af4: Add TestQuerySQL resolver and client method for query execution testing, refactor CreateQueryResolver into QuerySystemUserResolver composing CodeGen-generated MJQuery\_ types, add lightweight query catalog for collision detection, unit tests for transitive template composition and ORDER BY stripping, and updated class registration manifests
+  - @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Minor Changes
+
+- d0d9eba: Add metadata migration script for v5.13.0
+
+### Patch Changes
+
+- f72b538: Replace HookRegistry and DynamicPackageLoader with @RegisterClass + ClassFactory middleware pattern, and add GetResolverPaths() to BaseServerMiddleware for auto-discovery of middleware-contributed GraphQL resolvers
+- Updated dependencies [f72b538]
+  - @memberjunction/global@5.13.0
+
+## 5.12.0
+
+### Minor Changes
+
+- 05f19ff: Add composable query system with semantic catalog search, CTE composition engine, server-side paging, query caching with TTL/dependency invalidation, and agent directive surfacing. Includes QueryCacheManager wrapper over LocalCacheManager, QueryPagingEngine for SQL-level OFFSET/FETCH paging, QueryCompositionEngine for platform-aware CTE generation, and SearchQueryCatalog action for vector-based query discovery. Renames PaginationComponent to DataPagerComponent and extracts into shared module.
+- d92502e: migration/metadata
+
+### Patch Changes
+
+- @memberjunction/global@5.12.0
+
 ## 5.11.0
 
 ### Minor Changes

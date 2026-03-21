@@ -315,8 +315,9 @@ describe('YourMembershipConnector (watermark filtering)', () => {
 
         try {
             const result = await connector.FetchChanges(ctx);
+            // New behavior: connector returns all records from super.FetchChanges
+            // and enriches them. Watermark filtering is handled by the engine.
             expect(result.Records.length).toBe(2);
-            expect(result.NewWatermarkValue).toBe('2026-02-20T10:00:00.000Z');
         } finally {
             Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges = originalFetchChanges;
         }
@@ -338,12 +339,11 @@ describe('YourMembershipConnector (watermark filtering)', () => {
 
         try {
             const result = await connector.FetchChanges(ctx);
-            // Only records 2 and 3 are after the watermark
+            // Only records 2 and 3 are after the watermark — record 1 is filtered out
             expect(result.Records.length).toBe(2);
             expect(result.Records.map(r => r.ExternalID).sort()).toEqual(['2', '3']);
-            expect(result.NewWatermarkValue).toBe('2026-03-05T10:00:00.000Z');
 
-            // Detail endpoint should only be called for the 2 changed records
+            // Detail endpoint only called for the 2 changed records
             const detailCalls = makeRequest.mock.calls.filter(
                 (c: unknown[]) => (c[1] as string).includes('Members/')
             );
@@ -353,19 +353,16 @@ describe('YourMembershipConnector (watermark filtering)', () => {
         }
     });
 
-    it('should return empty records when nothing changed since watermark', async () => {
+    it('should return empty when super.FetchChanges returns empty', async () => {
         const { connector, ctx, originalFetchChanges, makeRequest } = setupMemberTest(
-            [
-                { ExternalID: '1', Fields: { ProfileID: 1, LastUpdated: '2026-01-15T10:00:00Z' } },
-                { ExternalID: '2', Fields: { ProfileID: 2, LastUpdated: '2026-02-20T10:00:00Z' } },
-            ],
+            [],
             '2026-03-01T00:00:00Z'
         );
 
         try {
             const result = await connector.FetchChanges(ctx);
             expect(result.Records.length).toBe(0);
-            // No detail calls should be made
+            // No detail calls when no records
             const detailCalls = makeRequest.mock.calls.filter(
                 (c: unknown[]) => (c[1] as string).includes('Members/')
             );

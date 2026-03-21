@@ -1,0 +1,39 @@
+[
+  {
+    "fields": {
+      "Name": "Rasa.io",
+      "Description": "Rasa.io email newsletter integration for managing subscribers, newsletters, and engagement data",
+      "Status": "Active",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Communication"
+    },
+    "primaryKey": {
+      "ID": "CD554E55-82FB-4472-B0F4-8C16F56D9DA9"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:13:33.270Z",
+      "checksum": "383aa541b43eba0b93c9da2e74452d2a5dc089d32bfe8c6747dca1a155ee50f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "YourMembership",
+      "Description": "YourMembership AMS integration for managing members, events, dues, and association data",
+      "Status": "Active",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Business Apps"
+    },
+    "primaryKey": {
+      "ID": "437E9C50-2E6B-4B6A-8B03-2B3F0FD730F2"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:13:33.282Z",
+      "checksum": "820b7caa244ebcafcf205075bd938405b72c9f04cfe96176af61a194b5670c52"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Salesforce",
+      "Description": "Salesforce integration actions",
+      "Status": "Active"
+    }
+  }
+]
