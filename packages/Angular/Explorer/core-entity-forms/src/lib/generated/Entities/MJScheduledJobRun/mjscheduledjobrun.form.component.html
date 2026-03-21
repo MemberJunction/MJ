@@ -166,5 +166,30 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <!-- Company Integration Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJCompanyIntegrationRuns"
+        SectionName="Company Integration Runs"
+        Icon="fa fa-briefcase"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Runs','ScheduledJobRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Company Integration Runs')"
+                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationRuns')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationRuns', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 </mj-record-form-container>
         

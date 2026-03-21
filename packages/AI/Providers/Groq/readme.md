@@ -78,6 +78,8 @@ const result = await llm.ChatCompletion({
 
 All parameters supported by the OpenAI provider are available, including `temperature`, `maxOutputTokens`, `topP`, `frequencyPenalty`, `presencePenalty`, `seed`, `stopSequences`, and `responseFormat`.
 
+Additionally, `assistantPrefill` is supported — Groq natively supports prefilling the assistant's response to guide output format. See the [Prefill & Stop Sequences Guide](../../Prompts/PREFILL_AND_STOP_SEQUENCES.md) for details.
+
 ## Class Registration
 
 Registered as `GroqLLM` via `@RegisterClass(BaseLLM, 'GroqLLM')`.
