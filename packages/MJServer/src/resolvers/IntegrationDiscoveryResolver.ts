@@ -355,11 +355,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ServerVersion: result.ServerVersion
             };
         } catch (e) {
-            const error = e as Error;
-            LogError(`IntegrationTestConnection error: ${error}`);
+            LogError(`IntegrationTestConnection error: ${this.formatError(e)}`);
             return {
                 Success: false,
-                Message: `Error: ${error.message}`
+                Message: `Error: ${this.formatError(e)}`
             };
         }
     }
@@ -403,11 +402,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }))
             };
         } catch (e) {
-            const error = e as Error;
-            LogError(`IntegrationGetDefaultConfig error: ${error}`);
+            LogError(`IntegrationGetDefaultConfig error: ${this.formatError(e)}`);
             return {
                 Success: false,
-                Message: `Error: ${error.message}`
+                Message: `Error: ${this.formatError(e)}`
             };
         }
     }
@@ -439,14 +437,17 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
             };
 
+            // Validate platform before use
+            const validatedPlatform = this.validatePlatform(platform);
+
             // Build target configs from user input + source schema
-            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, platform as 'sqlserver' | 'postgresql');
+            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform);
 
             // Run SchemaBuilder
             const input: SchemaBuilderInput = {
                 SourceSchema: filteredSchema,
                 TargetConfigs: targetConfigs,
-                Platform: platform as 'sqlserver' | 'postgresql',
+                Platform: validatedPlatform,
                 MJVersion: process.env.MJ_VERSION ?? '5.11.0',
                 SourceType: companyIntegration.Integration,
                 AdditionalSchemaInfoPath: 'additionalSchemaInfo.json',
@@ -484,11 +485,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Warnings: output.Warnings.length > 0 ? output.Warnings : undefined
             };
         } catch (e) {
-            const error = e as Error;
-            LogError(`IntegrationSchemaPreview error: ${error}`);
+            LogError(`IntegrationSchemaPreview error: ${this.formatError(e)}`);
             return {
                 Success: false,
-                Message: `Error: ${error.message}`
+                Message: `Error: ${this.formatError(e)}`
             };
         }
     }
@@ -528,11 +528,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }))
             };
         } catch (e) {
-            const error = e as Error;
-            LogError(`IntegrationPreviewData error: ${error}`);
+            LogError(`IntegrationPreviewData error: ${this.formatError(e)}`);
             return {
                 Success: false,
-                Message: `Error: ${error.message}`
+                Message: `Error: ${this.formatError(e)}`
             };
         }
     }
@@ -627,16 +626,25 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     private handleDiscoveryError(e: unknown): DiscoverObjectsOutput & DiscoverFieldsOutput {
-        const error = e as Error;
-        LogError(`Integration discovery error: ${error}`);
+        LogError(`Integration discovery error: ${this.formatError(e)}`);
         return {
             Success: false,
-            Message: `Error: ${error.message}`
+            Message: `Error: ${this.formatError(e)}`
         };
     }
 
     private formatError(e: unknown): string {
         return e instanceof Error ? e.message : String(e);
+    }
+
+    private static readonly VALID_PLATFORMS = new Set<string>(['sqlserver', 'postgresql']);
+
+    /** Validates and narrows a platform string to the supported union type. */
+    private validatePlatform(platform: string): 'sqlserver' | 'postgresql' {
+        if (!IntegrationDiscoveryResolver.VALID_PLATFORMS.has(platform)) {
+            throw new Error(`Unsupported platform "${platform}". Must be one of: ${[...IntegrationDiscoveryResolver.VALID_PLATFORMS].join(', ')}`);
+        }
+        return platform as 'sqlserver' | 'postgresql';
     }
 
     // ── CONNECTION LIFECYCLE ─────────────────────────────────────────────
@@ -931,12 +939,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
             };
 
-            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, platform as 'sqlserver' | 'postgresql');
+            const validatedPlatform = this.validatePlatform(platform);
+            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform);
 
             const input: SchemaBuilderInput = {
                 SourceSchema: filteredSchema,
                 TargetConfigs: targetConfigs,
-                Platform: platform as 'sqlserver' | 'postgresql',
+                Platform: validatedPlatform,
                 MJVersion: process.env.MJ_VERSION ?? '5.11.0',
                 SourceType: companyIntegration.Integration,
                 AdditionalSchemaInfoPath: 'additionalSchemaInfo.json',

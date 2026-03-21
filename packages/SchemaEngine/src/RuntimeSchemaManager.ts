@@ -9,13 +9,39 @@
  * In-memory concurrency mutex (one operation at a time).
  */
 import { BaseSingleton } from '@memberjunction/global';
-import { Metadata, type DatabaseProviderBase } from '@memberjunction/core';
+import { LogError, Metadata, type DatabaseProviderBase } from '@memberjunction/core';
 import { RSUMetrics } from './RSUMetrics.js';
 import { GetDialect } from './DDLGenerator.js';
 import type { DatabasePlatform } from './interfaces.js';
 
 /** Signal string used to detect lock-held condition in database messages. */
 const RSU_LOCK_HELD_SIGNAL = 'RSU_LOCK_HELD';
+
+// ─── Typed RSU Configuration ─────────────────────────────────────────
+
+/** Centralized, typed access to all RSU environment variables with defaults. */
+class RSUConfig {
+    get MigrationsPath(): string { return rsuConfig.MigrationsPath; }
+    get DefaultSchema(): string { return rsuConfig.DefaultSchema; }
+    get WorkDir(): string { return rsuConfig.WorkDir; }
+    get CodeGenTimeoutMs(): number { return rsuConfig.CodeGenTimeoutMs; }
+    get CodeGenCommand(): string | undefined { return rsuConfig.CodeGenCommand; }
+    get CompileTimeoutMs(): number { return rsuConfig.CompileTimeoutMs; }
+    get CompileCommand(): string | undefined { return rsuConfig.CompileCommand; }
+    get CompilePackages(): string | undefined { return rsuConfig.CompilePackages; }
+    get PM2ProcessName(): string { return rsuConfig.PM2ProcessName; }
+    get GitTargetBranch(): string { return rsuConfig.GitTargetBranch; }
+    get GitUserName(): string | undefined { return rsuConfig.GitUserName; }
+    get GitUserEmail(): string | undefined { return rsuConfig.GitUserEmail; }
+    get IsDBLockEnabled(): boolean { return process.env.RSU_DB_LOCK_ENABLED === '1'; }
+    get IsAuditLogEnabled(): boolean { return process.env.RSU_AUDIT_LOG_ENABLED !== '0'; }
+    get ProtectedSchemas(): string[] {
+        const envSchemas = process.env.RSU_PROTECTED_SCHEMAS;
+        return envSchemas ? envSchemas.split(',').map(s => s.trim()) : [];
+    }
+}
+
+const rsuConfig = new RSUConfig();
 
 // ─── Pipeline Input/Output Types ─────────────────────────────────────
 
@@ -228,19 +254,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     // ─── Pipeline ────────────────────────────────────────────────────
 
     /**
-     * Execute the full RSU pipeline:
-     * 1. Validate environment & permissions
-     * 2. Validate migration SQL (schema protection)
-     * 3. Write migration file to migrations dir
-     * 4. Execute migration SQL against database
-     * 5. Run CodeGen (excluding __mj schema)
-     * 6. Compile affected TypeScript packages
-     * 7. Restart MJAPI via PM2
-     * 8. Mark as out-of-sync
-     *
-     * Git commit/push runs automatically unless SkipGitCommit is set to true.
-     */
-    /**
      * Execute the RSU pipeline for a single input. Convenience wrapper
      * around RunPipelineBatch — a batch of 1.
      */
@@ -397,7 +410,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             };
 
             // Audit log per item (best-effort)
-            this.writeAuditLog(item.Input, result).catch(() => { /* ignore */ });
+            this.writeAuditLog(item.Input, result).catch(err => LogError(`[RSU] Audit log failed: ${err instanceof Error ? err.message : String(err)}`));
 
             // Metrics per item (best-effort)
             try {
@@ -413,7 +426,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
                     AffectedTables: item.Input.AffectedTables,
                     RetryCount: 0,
                 });
-            } catch { /* ignore */ }
+            } catch (err) { LogError(`[RSU] Metrics recording failed: ${err instanceof Error ? err.message : String(err)}`); }
 
             return result;
         });
@@ -565,14 +578,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         this.notifyNextWaiter();
     }
 
-    private async validateSQL(sql: string): Promise<boolean> {
-        const result = ValidateMigrationSQL(sql, this.getProtectedSchemas());
-        if (!result.Valid) {
-            throw new RSUError('VALIDATION', result.Errors.join('; '));
-        }
-        return true;
-    }
-
     /**
      * Write the migration file to the configured migrations directory.
      * Returns the file path of the written migration.
@@ -582,7 +587,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      */
     private async writeMigrationFile(input: RSUPipelineInput): Promise<string> {
         const { writeFileSync, mkdirSync } = await import('node:fs');
-        const migrationsPath = process.env.RSU_MIGRATIONS_PATH || 'migrations/v5';
+        const migrationsPath = rsuConfig.MigrationsPath;
         const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
         const tableSlug = input.AffectedTables
             .slice(0, 3)
@@ -611,7 +616,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      * Delegates CLI tool selection to the DBExecProvider abstraction.
      */
     private async executeMigration(sql: string): Promise<boolean> {
-        const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
+        const defaultSchema = rsuConfig.DefaultSchema;
         const resolvedSQL = sql.replace(/\$\{flyway:defaultSchema\}/g, defaultSchema);
 
         try {
@@ -639,11 +644,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     private async runCodeGen(): Promise<boolean> {
         const { execAsync } = await this.getExecAsync();
         const { writeFileSync, unlinkSync } = await import('node:fs');
-        const workDir = process.env.RSU_WORK_DIR || process.cwd();
-        const timeoutMs = parseInt(process.env.RSU_CODEGEN_TIMEOUT_MS || '600000', 10);
+        const workDir = rsuConfig.WorkDir;
+        const timeoutMs = rsuConfig.CodeGenTimeoutMs;
 
         // If caller provides a full custom command, use it directly
-        const customCmd = process.env.RSU_CODEGEN_COMMAND;
+        const customCmd = rsuConfig.CodeGenCommand;
         if (customCmd) {
             await execAsync(`cd "${workDir}" && ${customCmd}`, { timeout: timeoutMs });
             return true;
@@ -696,11 +701,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      */
     private async compileTypeScript(): Promise<boolean> {
         const { execAsync } = await this.getExecAsync();
-        const workDir = process.env.RSU_WORK_DIR || process.cwd();
-        const timeoutMs = parseInt(process.env.RSU_COMPILE_TIMEOUT_MS || '300000', 10);
+        const workDir = rsuConfig.WorkDir;
+        const timeoutMs = rsuConfig.CompileTimeoutMs;
 
         // Allow full command override
-        const compileCmd = process.env.RSU_COMPILE_COMMAND;
+        const compileCmd = rsuConfig.CompileCommand;
         if (compileCmd) {
             await execAsync(`cd "${workDir}" && ${compileCmd}`, { timeout: timeoutMs });
             return true;
@@ -708,7 +713,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
         // Build using turbo with --filter for each package
         const defaultPackages = '@memberjunction/core-entities,@memberjunction/server,mj_api';
-        const envPackages = process.env.RSU_COMPILE_PACKAGES;
+        const envPackages = rsuConfig.CompilePackages;
         const rawPackages = envPackages !== undefined ? envPackages : defaultPackages;
         const packageNames = rawPackages
             .split(',')
@@ -733,8 +738,8 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      */
     private async restartMJAPI(): Promise<boolean> {
         const { execAsync } = await this.getExecAsync();
-        const workDir = process.env.RSU_WORK_DIR || process.cwd();
-        const processName = process.env.RSU_PM2_PROCESS_NAME || 'mjapi';
+        const workDir = rsuConfig.WorkDir;
+        const processName = rsuConfig.PM2ProcessName;
 
         // Check if MJAPI is already managed by PM2
         const isManaged = await this.isPM2ProcessRunning(processName);
@@ -818,8 +823,8 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         affectedTables: string[],
         description: string
     ): Promise<string> {
-        const workDir = process.env.RSU_WORK_DIR || process.cwd();
-        const targetBranch = process.env.RSU_GIT_TARGET_BRANCH || 'next';
+        const workDir = rsuConfig.WorkDir;
+        const targetBranch = rsuConfig.GitTargetBranch;
         const branchName = this.generateBranchName(affectedTables);
         const originalBranch = await this.gitCurrentBranch(workDir);
 
@@ -937,8 +942,8 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      * Configure git user name/email if RSU_GIT_USER_NAME/EMAIL are set.
      */
     private async configureGitUser(workDir: string): Promise<void> {
-        const userName = process.env.RSU_GIT_USER_NAME;
-        const userEmail = process.env.RSU_GIT_USER_EMAIL;
+        const userName = rsuConfig.GitUserName;
+        const userEmail = rsuConfig.GitUserEmail;
         if (userName) await this.gitExec(workDir, `config user.name "${userName}"`);
         if (userEmail) await this.gitExec(workDir, `config user.email "${userEmail}"`);
     }
@@ -947,7 +952,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     /** Whether the DB-backed lock is enabled via RSU_DB_LOCK_ENABLED=1. */
     private get IsDBLockEnabled(): boolean {
-        return process.env.RSU_DB_LOCK_ENABLED === '1';
+        return rsuConfig.IsDBLockEnabled;
     }
 
     /**
@@ -957,7 +962,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      */
     private async acquireDBLock(): Promise<boolean> {
         try {
-            const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
+            const defaultSchema = rsuConfig.DefaultSchema;
             const lockId = `rsu-${process.pid}-${Date.now()}`;
             this._dbLockId = lockId;
 
@@ -986,7 +991,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
         try {
             const d = this.Dialect;
-            const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
+            const defaultSchema = rsuConfig.DefaultSchema;
             const quotedTable = d.QuoteSchema(defaultSchema, 'RSULock');
             const sql = `DELETE FROM ${quotedTable} WHERE LockID = '${this._dbLockId}';`;
             await this.getDBProvider().ExecuteSQL(sql, undefined, { isMutation: true, description: 'RSU lock release' });
@@ -1005,10 +1010,10 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      * is available and RSU_AUDIT_LOG_ENABLED is not explicitly '0'.
      */
     private async writeAuditLog(input: RSUPipelineInput, result: RSUPipelineResult): Promise<void> {
-        if (process.env.RSU_AUDIT_LOG_ENABLED === '0') return;
+        if (!rsuConfig.IsAuditLogEnabled) return;
 
         try {
-            const defaultSchema = process.env.RSU_DEFAULT_SCHEMA || '__mj';
+            const defaultSchema = rsuConfig.DefaultSchema;
             // Ensure audit table exists (no user input, safe as string DDL)
             const createTableSQL = this.buildAuditTableDDL(defaultSchema);
             await this.getDBProvider().ExecuteSQL(createTableSQL, undefined, { isMutation: true, description: 'RSU audit table DDL' });
@@ -1153,7 +1158,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     // ─── Helpers ─────────────────────────────────────────────────────
 
     /** Build a failed RSUPipelineResult for early-exit scenarios (validation, lock). */
-    private buildFailedResult(input: RSUPipelineInput, failedStep: string, steps: RSUPipelineStep[]): RSUPipelineResult {
+    private buildFailedResult(_input: RSUPipelineInput, failedStep: string, steps: RSUPipelineStep[]): RSUPipelineResult {
         const failMsg = steps.find(s => s.Name === failedStep && s.Status === 'failed')?.Message ?? `Failed at ${failedStep}`;
         return {
             Success: false,
@@ -1176,8 +1181,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     }
 
     private getProtectedSchemas(): string[] {
-        const envSchemas = process.env.RSU_PROTECTED_SCHEMAS;
-        return envSchemas ? envSchemas.split(',').map(s => s.trim()) : [];
+        return rsuConfig.ProtectedSchemas;
     }
 
     /**
@@ -1229,15 +1233,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         }
     }
 
-    private failResult(result: RSUPipelineResult, stepName: string): RSUPipelineResult {
-        result.Success = false;
-        result.ErrorStep = stepName;
-        const failedStep = result.Steps.find(s => s.Name === stepName && s.Status === 'failed');
-        result.ErrorMessage = failedStep?.Message ?? `Failed at step: ${stepName}`;
-        this._lastRunResult = `failed at ${stepName}`;
-        this._lastRunAt = new Date();
-        return result;
-    }
 }
 
 // ─── Custom Error ────────────────────────────────────────────────────
