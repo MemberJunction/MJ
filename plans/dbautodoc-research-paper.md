@@ -2,7 +2,7 @@
 
 **Amith Nagarajan**¹ (corresponding author) · **Thomas Altman**²
 
-¹ MemberJunction Project · ² Independent Researcher
+¹ Founder, Blue Cypress · ² Co-Founder, Tasio Labs (a Blue Cypress company)
 
 ---
 
