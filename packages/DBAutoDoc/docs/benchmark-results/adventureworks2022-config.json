@@ -14,7 +14,7 @@
   "ai": {
     "provider": "gemini",
     "model": "gemini-3-flash-preview",
-    "apiKey": "AIzaSyAy0-BvzZp-BYpTDWmOr-M24W5Pa9oJw3M",
+    "apiKey": "YOUR_GEMINI_API_KEY",
     "temperature": 0.1,
     "maxTokens": 8000,
     "modelOverrides": {
