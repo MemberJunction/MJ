@@ -1,6 +1,0 @@
-LocalCacheManager: BaseEntity save event for "MJ: AI Models", updating 1 cached fingerprint(s)
-LocalCacheManager: Upserting entity 2E328C31-9B9D-4E78-B084-C8381BC82F2F in unfiltered cache "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:143"
-Redis pub/sub: published set event for key "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" on channel "mj:__pubsub__"
-Redis pub/sub: published set event for key "__MJ_CACHE_REGISTRY__" on channel "mj:__pubsub__"
-Redis pub/sub: published set event for key "MJ: AI Models|_|_|entity_object|-1|0|_|mssql://localhost:1433/" on channel "mj:__pubsub__"
-Redis pub/sub: published set event for key "__MJ_CACHE_REGISTRY__" on channel "mj:__pubsub__"

@@ -82,6 +82,7 @@ const result = await llm.ChatCompletion({
 | topP | Yes | Nucleus sampling |
 | topK | Yes | Top-K sampling |
 | stopSequences | Yes | Custom stop sequences |
+| assistantPrefill | Yes | Pre-seed the start of the assistant's response ([guide](../../Prompts/PREFILL_AND_STOP_SEQUENCES.md)) |
 | responseFormat | Yes | JSON mode supported |
 | streaming | Yes | Real-time streaming |
 | effortLevel | Yes | Maps to thinking budget |

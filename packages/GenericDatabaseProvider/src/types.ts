@@ -39,6 +39,19 @@ export interface SqlLoggingOptions {
   /** Whether to output verbose debug information to console (default: false) */
   verboseOutput?: boolean;
   /**
+   * When set, enables variable-count-based batch separation instead of emitting the batch separator
+   * after every statement. The logger tracks how many SQL variable declarations (DECLARE @...) have
+   * accumulated in the current batch. When the running count reaches this threshold, a batch separator
+   * is emitted before the next statement and the counter resets.
+   *
+   * This prevents SQL Server's 10,000-variable-per-batch limit from being hit on large migration files
+   * while avoiding the verbosity of one GO per statement.
+   *
+   * Requires `batchSeparator` to also be set. Recommended value: 200.
+   * Set to 0 or leave undefined to use the legacy per-statement behavior.
+   */
+  variableBatchThreshold?: number;
+  /**
    * Array of patterns to filter SQL statements.
    * Supports both regex (RegExp objects) and simple wildcard patterns (strings).
    * How these patterns are applied depends on filterType.
