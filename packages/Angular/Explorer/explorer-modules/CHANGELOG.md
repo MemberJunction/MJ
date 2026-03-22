@@ -1,5 +1,32 @@
 # @memberjunction/ng-explorer-modules
 
+## 5.14.0
+
+### Patch Changes
+
+- @memberjunction/ng-explorer-core@5.14.0
+- @memberjunction/ng-workspace-initializer@5.14.0
+- @memberjunction/ng-core-entity-forms@5.14.0
+- @memberjunction/ng-explorer-settings@5.14.0
+- @memberjunction/ng-link-directives@5.14.0
+- @memberjunction/ng-shared@5.14.0
+- @memberjunction/ng-container-directives@5.14.0
+- @memberjunction/ng-kendo-modules@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [1bb9b86]
+  - @memberjunction/ng-core-entity-forms@5.13.0
+  - @memberjunction/ng-explorer-core@5.13.0
+  - @memberjunction/ng-explorer-settings@5.13.0
+  - @memberjunction/ng-link-directives@5.13.0
+  - @memberjunction/ng-shared@5.13.0
+  - @memberjunction/ng-workspace-initializer@5.13.0
+  - @memberjunction/ng-container-directives@5.13.0
+  - @memberjunction/ng-kendo-modules@5.13.0
+
 ## 5.12.0
 
 ### Patch Changes

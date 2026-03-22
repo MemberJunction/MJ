@@ -151,6 +151,10 @@ export class PostgreSQLDialect extends SQLDialect {
         return 'postgresql';
     }
 
+    get ParserDialect(): string {
+        return 'PostgresQL';
+    }
+
     // ─── Identifier Quoting ──────────────────────────────────────────
 
     QuoteIdentifier(name: string): string {
@@ -291,6 +295,10 @@ export class PostgreSQLDialect extends SQLDialect {
 
     RecursiveCTESyntax(): string {
         return 'WITH RECURSIVE';
+    }
+
+    get AllowsOrderByInCTE(): boolean {
+        return true;
     }
 
     // ─── Data Types ──────────────────────────────────────────────────

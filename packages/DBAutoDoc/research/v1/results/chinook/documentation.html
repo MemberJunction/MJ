@@ -1,0 +1,1777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Documentation - Chinook</title>
+<style>
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f5f7fa;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      .container {
+        width: 100%;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+
+      header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+      }
+
+      header .subtitle {
+        font-size: 1.1rem;
+        opacity: 0.95;
+        margin-bottom: 1rem;
+      }
+
+      header .meta {
+        display: flex;
+        gap: 2rem;
+        font-size: 0.95rem;
+        opacity: 0.9;
+      }
+
+      .main-wrapper {
+        display: flex;
+        flex: 1;
+        gap: 0;
+      }
+
+      .sidebar {
+        width: 280px;
+        background-color: #fff;
+        border-right: 1px solid #e0e0e0;
+        overflow-y: auto;
+        padding: 1.5rem 0;
+        position: sticky;
+        top: 0;
+        max-height: calc(100vh - 200px);
+      }
+
+      .sidebar h3 {
+        padding: 0.5rem 1.5rem;
+        color: #667eea;
+        font-size: 0.95rem;
+        text-transform: uppercase;
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+        letter-spacing: 0.5px;
+      }
+
+      .sidebar a {
+        display: block;
+        padding: 0.6rem 1.5rem;
+        color: #555;
+        text-decoration: none;
+        border-left: 3px solid transparent;
+        transition: all 0.2s;
+      }
+
+      .sidebar a:hover {
+        background-color: #f5f5f5;
+        color: #667eea;
+        border-left-color: #667eea;
+      }
+
+      .main-content {
+        flex: 1;
+        padding: 2rem;
+        overflow-y: auto;
+      }
+
+      section {
+        background: white;
+        border-radius: 8px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      }
+
+      h2 {
+        color: #667eea;
+        font-size: 1.8rem;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #e0e0e0;
+        padding-bottom: 0.5rem;
+      }
+
+      h3 {
+        color: #764ba2;
+        font-size: 1.3rem;
+        margin-top: 1.5rem;
+        margin-bottom: 0.8rem;
+      }
+
+      h4 {
+        color: #555;
+        font-size: 1.1rem;
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .summary-card {
+        background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        padding: 1rem;
+        border-radius: 6px;
+        border-left: 4px solid #667eea;
+      }
+
+      .summary-card strong {
+        display: block;
+        color: #667eea;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        margin-bottom: 0.3rem;
+      }
+
+      .summary-card .value {
+        font-size: 1.6rem;
+        font-weight: bold;
+        color: #333;
+      }
+
+      .search-box {
+        margin-bottom: 2rem;
+      }
+
+      .search-box input {
+        width: 100%;
+        padding: 0.8rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 6px;
+        font-size: 1rem;
+        transition: border-color 0.2s;
+      }
+
+      .search-box input:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .search-results {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .search-result {
+        padding: 0.8rem;
+        background-color: #f9f9f9;
+        border-radius: 4px;
+        border-left: 3px solid #667eea;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .search-result:hover {
+        background-color: #f0f0f0;
+        transform: translateX(4px);
+      }
+
+      .search-result .table-name {
+        font-weight: bold;
+        color: #667eea;
+      }
+
+      .search-result .column-name {
+        color: #666;
+        font-size: 0.9rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+      }
+
+      table th {
+        background-color: #f5f5f5;
+        padding: 0.8rem;
+        text-align: left;
+        font-weight: 600;
+        color: #667eea;
+        border-bottom: 2px solid #e0e0e0;
+      }
+
+      table td {
+        padding: 0.8rem;
+        border-bottom: 1px solid #e0e0e0;
+      }
+
+      table tr:hover {
+        background-color: #f9f9f9;
+      }
+
+      .confidence-indicator {
+        display: inline-block;
+        padding: 0.3rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+
+      .confidence-high {
+        background-color: #d4edda;
+        color: #155724;
+      }
+
+      .confidence-medium {
+        background-color: #fff3cd;
+        color: #856404;
+      }
+
+      .confidence-low {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+
+      .schema-section {
+        background: white;
+        border-radius: 8px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      }
+
+      .schema-title {
+        color: #667eea;
+        font-size: 1.6rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #e0e0e0;
+      }
+
+      .mermaid {
+        background-color: #f9f9f9;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 1rem;
+        margin: 1rem 0;
+        display: flex;
+        justify-content: center;
+      }
+
+      .mermaid svg {
+        max-width: 100%;
+        height: auto;
+      }
+
+      .relationship-info {
+        margin-top: 1rem;
+        padding: 1rem;
+        background-color: #f5f5f5;
+        border-radius: 4px;
+      }
+
+      .relationship-info strong {
+        color: #667eea;
+      }
+
+      .tag {
+        display: inline-block;
+        padding: 0.25rem 0.6rem;
+        margin-right: 0.5rem;
+        background-color: #e0e0e0;
+        color: #333;
+        border-radius: 3px;
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+
+      .tag.pk {
+        background-color: #667eea;
+        color: white;
+      }
+
+      .tag.fk {
+        background-color: #764ba2;
+        color: white;
+      }
+
+      .tag.notnull {
+        background-color: #ff6b6b;
+        color: white;
+      }
+
+      .no-results {
+        text-align: center;
+        color: #999;
+        padding: 2rem;
+        font-style: italic;
+      }
+
+      @media (max-width: 1024px) {
+        .main-wrapper {
+          flex-direction: column;
+        }
+
+        .sidebar {
+          width: 100%;
+          max-height: auto;
+          border-right: none;
+          border-bottom: 1px solid #e0e0e0;
+          padding: 1rem 0;
+        }
+
+        .sidebar h3 {
+          display: inline-block;
+          margin-right: 1rem;
+          margin-top: 0;
+          margin-bottom: 0;
+        }
+
+        .sidebar a {
+          display: inline-block;
+          margin-right: 1rem;
+          border-left: none;
+          border-bottom: 2px solid transparent;
+          padding: 0.5rem 0;
+        }
+
+        .sidebar a:hover {
+          border-left: none;
+          border-bottom-color: #667eea;
+        }
+      }
+    
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>📊 Chinook</h1>
+<div class="subtitle">Database Documentation</div>
+<div class="meta">
+<span><strong>Server:</strong> sql-claude</span>
+<span><strong>Generated:</strong> 3/22/2026</span>
+</div>
+</header>
+<div class="main-wrapper">
+<aside class="sidebar">
+<h3>📑 Schemas</h3>
+<a href="#schema-dbo">dbo</a>
+</aside>
+<div class="main-content">
+<section id="summary">
+<h2>📈 Analysis Summary</h2>
+<div class="summary-grid">
+<div class="summary-card">
+      <strong>Total Schemas</strong>
+      <div class="value">1</div>
+    </div>
+<div class="summary-card">
+      <strong>Total Tables</strong>
+      <div class="value">11</div>
+    </div>
+<div class="summary-card">
+      <strong>Total Columns</strong>
+      <div class="value">64</div>
+    </div>
+<div class="summary-card">
+      <strong>Total Iterations</strong>
+      <div class="value">2</div>
+    </div>
+<div class="summary-card">
+      <strong>Tokens Used</strong>
+      <div class="value">98,385</div>
+    </div>
+<div class="summary-card">
+      <strong>Estimated Cost</strong>
+      <div class="value">$0.00</div>
+    </div>
+</div>
+<h3>Latest Analysis Run</h3>
+<p><strong>Status:</strong> converged</p>
+<p><strong>Model:</strong> gemini-3-flash-preview (gemini)</p>
+<p><strong>Temperature:</strong> 0.1</p>
+</section>
+<section id="search">
+<h2>🔍 Search Tables & Columns</h2>
+<div class="search-box">
+<input type="text" id="search-input" placeholder="Search for tables or columns...">
+</div>
+<div id="search-results" class="search-results"></div>
+</section>
+<script>
+const searchData = [
+  {
+    type: 'table',
+    schema: 'dbo',
+    name: 'Album',
+    description: 'Stores metadata for music albums, acting as a logical container that groups tracks under a specific title and primary artist entity. While it organizes the library hierarchy, it does not enforce uniform authorship, as individual track composers are maintained independently within the Track table.',
+    anchor: 'table-album'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Album',
+    name: 'AlbumId',
+    dataType: 'int',
+    description: 'The unique primary identifier for each album record.',
+    anchor: 'table-album'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Album',
+    name: 'Title',
+    dataType: 'nvarchar',
+    description: 'The name of the album as it appears in the media library.',
+    anchor: 'table-album'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Album',
+    name: 'ArtistId',
+    dataType: 'int',
+    description: 'A reference to the artist or band responsible for the album.',
+    anchor: 'table-album'
+  },
+  {
+    type: 'table',
+    schema: 'dbo',
+    name: 'Artist',
+    description: 'A foundational lookup table that stores the names of musical artists, bands, classical composers, and television series soundtracks, representing the diverse range of creators and source entities within the multi-genre media library.',
+    anchor: 'table-artist'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Artist',
+    name: 'ArtistId',
+    dataType: 'int',
+    description: 'The unique primary identifier for each artist or musical group.',
+    anchor: 'table-artist'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Artist',
+    name: 'Name',
+    dataType: 'nvarchar',
+    description: 'The display name of the artist, band, or ensemble.',
+    anchor: 'table-artist'
+  },
+  {
+    type: 'table',
+    schema: 'dbo',
+    name: 'Customer',
+    description: 'The dbo.Customer table stores current profile and contact information for a global base of individual and corporate clients across at least 24 countries. It serves as a central CRM hub, linking customers to assigned support staff and providing the master identity for billing and invoicing. While this table maintains the active customer profile, historical billing details are preserved within individual invoice records to ensure transactional accuracy even if the customer\'s primary contact information changes.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'CustomerId',
+    dataType: 'int',
+    description: 'Unique identifier for each customer record.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'FirstName',
+    dataType: 'nvarchar',
+    description: 'The given name of the customer.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'LastName',
+    dataType: 'nvarchar',
+    description: 'The surname or family name of the customer.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'Company',
+    dataType: 'nvarchar',
+    description: 'The business or organization the customer is affiliated with, if applicable.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'Address',
+    dataType: 'nvarchar',
+    description: 'The street address for billing or shipping.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'City',
+    dataType: 'nvarchar',
+    description: 'The city where the customer is located.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'State',
+    dataType: 'nvarchar',
+    description: 'The state, province, or region of the customer\'s address.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'Country',
+    dataType: 'nvarchar',
+    description: 'The country of residence for the customer.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'PostalCode',
+    dataType: 'nvarchar',
+    description: 'The alphanumeric code used for mail sorting and delivery.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'Phone',
+    dataType: 'nvarchar',
+    description: 'The primary telephone contact number for the customer.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'Fax',
+    dataType: 'nvarchar',
+    description: 'The facsimile number for the customer.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'Email',
+    dataType: 'nvarchar',
+    description: 'The primary electronic mail address used for communication and potentially account login.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Customer',
+    name: 'SupportRepId',
+    dataType: 'int',
+    description: 'Reference to the internal employee assigned to manage this customer\'s account or provide support.',
+    anchor: 'table-customer'
+  },
+  {
+    type: 'table',
+    schema: 'dbo',
+    name: 'Employee',
+    description: 'The dbo.Employee table serves as the primary repository for personnel records within the Chinook organization, managing a small, flat team of 8 staff members. It defines the internal organizational hierarchy—led by a General Manager (Andrew Adams)—and identifies specific employees who function as Support Representatives, serving as the primary point of contact for the company\'s customer base.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'EmployeeId',
+    dataType: 'int',
+    description: 'A unique internal identifier assigned to each employee.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'LastName',
+    dataType: 'nvarchar',
+    description: 'The legal surname of the employee.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'FirstName',
+    dataType: 'nvarchar',
+    description: 'The legal given name of the employee.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'Title',
+    dataType: 'nvarchar',
+    description: 'The official job title or role of the employee within the company (e.g., General Manager, Sales Support Agent).',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'ReportsTo',
+    dataType: 'int',
+    description: 'The EmployeeId of the individual\'s direct supervisor or manager, establishing the organizational chart.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'BirthDate',
+    dataType: 'datetime',
+    description: 'The employee\'s date of birth, used for HR records and age verification.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'HireDate',
+    dataType: 'datetime',
+    description: 'The date the employee officially joined the organization.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'Address',
+    dataType: 'nvarchar',
+    description: 'The street address of the employee\'s residence.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'City',
+    dataType: 'nvarchar',
+    description: 'The city where the employee resides (e.g., Calgary, Edmonton).',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'State',
+    dataType: 'nvarchar',
+    description: 'The province or state of residence.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'Country',
+    dataType: 'nvarchar',
+    description: 'The country of residence.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'PostalCode',
+    dataType: 'nvarchar',
+    description: 'The alphanumeric postal code for the employee\'s address.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'Phone',
+    dataType: 'nvarchar',
+    description: 'The primary telephone contact number for the employee.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'Fax',
+    dataType: 'nvarchar',
+    description: 'The facsimile number for the employee.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Employee',
+    name: 'Email',
+    dataType: 'nvarchar',
+    description: 'The corporate email address for the employee, typically following a \'firstname@chinookcorp.com\' pattern.',
+    anchor: 'table-employee'
+  },
+  {
+    type: 'table',
+    schema: 'dbo',
+    name: 'Genre',
+    description: 'A lookup table that defines the various musical and media genres available in the database, such as Rock, Jazz, and TV Shows.',
+    anchor: 'table-genre'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Genre',
+    name: 'GenreId',
+    dataType: 'int',
+    description: 'The unique primary identifier for each genre record.',
+    anchor: 'table-genre'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Genre',
+    name: 'Name',
+    dataType: 'nvarchar',
+    description: 'The descriptive name of the music or media genre.',
+    anchor: 'table-genre'
+  },
+  {
+    type: 'table',
+    schema: 'dbo',
+    name: 'Invoice',
+    description: 'The dbo.Invoice table serves as the header-level record for sales transactions, specifically for digital music tracks. It captures essential metadata for each purchase, including the customer, transaction date, total monetary value, and billing address. On average, each transaction consists of approximately 5.4 tracks.',
+    anchor: 'table-invoice'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Invoice',
+    name: 'InvoiceId',
+    dataType: 'int',
+    description: 'The unique identifier for each invoice record.',
+    anchor: 'table-invoice'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Invoice',
+    name: 'CustomerId',
+    dataType: 'int',
+    description: 'A reference to the customer who placed the order.',
+    anchor: 'table-invoice'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Invoice',
+    name: 'InvoiceDate',
+    dataType: 'datetime',
+    description: 'The date and time when the invoice was generated.',
+    anchor: 'table-invoice'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Invoice',
+    name: 'BillingAddress',
+    dataType: 'nvarchar',
+    description: 'The street address where the invoice was sent or associated with the payment method.',
+    anchor: 'table-invoice'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Invoice',
+    name: 'BillingCity',
+    dataType: 'nvarchar',
+    description: 'The city associated with the billing address.',
+    anchor: 'table-invoice'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Invoice',
+    name: 'BillingState',
+    dataType: 'nvarchar',
+    description: 'The state or province associated with the billing address.',
+    anchor: 'table-invoice'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Invoice',
+    name: 'BillingCountry',
+    dataType: 'nvarchar',
+    description: 'The country associated with the billing address.',
+    anchor: 'table-invoice'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Invoice',
+    name: 'BillingPostalCode',
+    dataType: 'nvarchar',
+    description: 'The postal or zip code for the billing address.',
+    anchor: 'table-invoice'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Invoice',
+    name: 'Total',
+    dataType: 'numeric',
+    description: 'The total monetary amount of the invoice, including all line items and taxes.',
+    anchor: 'table-invoice'
+  },
+  {
+    type: 'table',
+    schema: 'dbo',
+    name: 'InvoiceLine',
+    description: 'The dbo.InvoiceLine table functions as a line-item detail table that breaks down each sales transaction into its individual components. It records the specific tracks purchased, the price at which they were sold, and the quantity for each item within a larger invoice.',
+    anchor: 'table-invoiceline'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'InvoiceLine',
+    name: 'InvoiceLineId',
+    dataType: 'int',
+    description: 'A unique surrogate primary key for each individual line item in the database.',
+    anchor: 'table-invoiceline'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'InvoiceLine',
+    name: 'InvoiceId',
+    dataType: 'int',
+    description: 'A foreign key linking the line item to its parent transaction record in the dbo.Invoice table.',
+    anchor: 'table-invoiceline'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'InvoiceLine',
+    name: 'TrackId',
+    dataType: 'int',
+    description: 'A foreign key identifying the specific digital media item (song, video, etc.) being purchased.',
+    anchor: 'table-invoiceline'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'InvoiceLine',
+    name: 'UnitPrice',
+    dataType: 'numeric',
+    description: 'The cost per unit of the track at the time of the transaction.',
+    anchor: 'table-invoiceline'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'InvoiceLine',
+    name: 'Quantity',
+    dataType: 'int',
+    description: 'The number of units of the specific track purchased in this line item.',
+    anchor: 'table-invoiceline'
+  },
+  {
+    type: 'table',
+    schema: 'dbo',
+    name: 'MediaType',
+    description: 'A lookup table that defines the various digital file formats for tracks in the music library. These media types categorize content into audio and video formats, which directly correlate with different pricing tiers (typically $0.99 for audio and $1.99 for video) in the associated Track table.',
+    anchor: 'table-mediatype'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'MediaType',
+    name: 'MediaTypeId',
+    dataType: 'int',
+    description: 'The unique primary identifier for a specific media format.',
+    anchor: 'table-mediatype'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'MediaType',
+    name: 'Name',
+    dataType: 'nvarchar',
+    description: 'The descriptive name of the media format, indicating the codec or container type (e.g., MPEG, AAC) and whether it is protected by DRM.',
+    anchor: 'table-mediatype'
+  },
+  {
+    type: 'table',
+    schema: 'dbo',
+    name: 'Playlist',
+    description: 'A foundational lookup table defining the 14 primary organizational containers for the media library. It categorizes tracks into logical groups such as media types (Movies, TV Shows), genres (90’s Music, Heavy Metal Classic), or curated collections (Classical 101), serving as the top-level structure for media organization.',
+    anchor: 'table-playlist'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Playlist',
+    name: 'PlaylistId',
+    dataType: 'int',
+    description: 'The unique primary identifier for each playlist.',
+    anchor: 'table-playlist'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Playlist',
+    name: 'Name',
+    dataType: 'nvarchar',
+    description: 'The descriptive name of the playlist used for display and categorization.',
+    anchor: 'table-playlist'
+  },
+  {
+    type: 'table',
+    schema: 'dbo',
+    name: 'PlaylistTrack',
+    description: 'A junction table that facilitates a many-to-many relationship between playlists and tracks, allowing individual media items to be organized into multiple curated collections or categories.',
+    anchor: 'table-playlisttrack'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'PlaylistTrack',
+    name: 'PlaylistId',
+    dataType: 'int',
+    description: 'The unique identifier for a playlist; part of the composite primary key.',
+    anchor: 'table-playlisttrack'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'PlaylistTrack',
+    name: 'TrackId',
+    dataType: 'int',
+    description: 'The unique identifier for a specific media track; part of the composite primary key.',
+    anchor: 'table-playlisttrack'
+  },
+  {
+    type: 'table',
+    schema: 'dbo',
+    name: 'Track',
+    description: 'The dbo.Track table serves as the central repository for individual media items (songs, videos, or episodes) within the digital store. It stores descriptive metadata, technical specifications, and pricing information—primarily following a tiered structure of 0.99 or 1.99—for each track, while linking to albums, genres, and media formats.',
+    anchor: 'table-track'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Track',
+    name: 'TrackId',
+    dataType: 'int',
+    description: 'Unique identifier for each media track.',
+    anchor: 'table-track'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Track',
+    name: 'Name',
+    dataType: 'nvarchar',
+    description: 'The title of the song, video, or media track.',
+    anchor: 'table-track'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Track',
+    name: 'AlbumId',
+    dataType: 'int',
+    description: 'Reference to the album that contains this track.',
+    anchor: 'table-track'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Track',
+    name: 'MediaTypeId',
+    dataType: 'int',
+    description: 'Identifier for the digital format of the track (e.g., MPEG, AAC).',
+    anchor: 'table-track'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Track',
+    name: 'GenreId',
+    dataType: 'int',
+    description: 'Identifier for the musical or content category (e.g., Rock, Jazz).',
+    anchor: 'table-track'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Track',
+    name: 'Composer',
+    dataType: 'nvarchar',
+    description: 'The individual or group credited with writing the track.',
+    anchor: 'table-track'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Track',
+    name: 'Milliseconds',
+    dataType: 'int',
+    description: 'The total playback duration of the track in milliseconds.',
+    anchor: 'table-track'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Track',
+    name: 'Bytes',
+    dataType: 'int',
+    description: 'The storage size of the digital file in bytes.',
+    anchor: 'table-track'
+  },
+  {
+    type: 'column',
+    schema: 'dbo',
+    table: 'Track',
+    name: 'UnitPrice',
+    dataType: 'numeric',
+    description: 'The cost to purchase the individual track.',
+    anchor: 'table-track'
+  },
+];
+
+      const searchInput = document.getElementById('search-input');
+      const searchResults = document.getElementById('search-results');
+
+      searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+
+        if (!query) {
+          searchResults.innerHTML = '';
+          return;
+        }
+
+        const results = searchData.filter(item =>
+          item.name.toLowerCase().includes(query) ||
+          item.description.toLowerCase().includes(query)
+        ).slice(0, 50);
+
+        if (results.length === 0) {
+          searchResults.innerHTML = '<div class="no-results">No results found</div>';
+          return;
+        }
+
+        searchResults.innerHTML = results.map(item => {
+          if (item.type === 'table') {
+            return `<div class="search-result" onclick="document.getElementById('${item.anchor}').scrollIntoView({behavior: 'smooth'})">
+              <div class="table-name">${item.schema}.${item.name}</div>
+              <div class="column-name">${item.description || 'No description'}</div>
+            </div>`;
+          } else {
+            return `<div class="search-result" onclick="document.getElementById('${item.anchor}').scrollIntoView({behavior: 'smooth'})">
+              <div class="table-name">${item.table}.${item.name}</div>
+              <div class="column-name">${item.dataType} - ${item.description || 'No description'}</div>
+            </div>`;
+          }
+        }).join('');
+      });
+    
+</script>
+<div class="schema-section" id="schema-dbo">
+<div class="schema-title">dbo</div>
+<h3>Entity Relationship Diagram</h3>
+<div class="mermaid">
+erDiagram
+    Album {
+        int AlbumId "PK,NOT_NULL"
+        nvarchar Title "NOT_NULL"
+        int ArtistId "FK,NOT_NULL"
+    }
+    Artist {
+        int ArtistId "PK,NOT_NULL"
+        nvarchar Name
+    }
+    Customer {
+        int CustomerId "PK,NOT_NULL"
+        nvarchar FirstName "NOT_NULL"
+        nvarchar LastName "NOT_NULL"
+        nvarchar Company
+        nvarchar Address
+        nvarchar City
+        nvarchar State
+        nvarchar Country
+        nvarchar PostalCode
+        nvarchar Phone
+        nvarchar Fax
+        nvarchar Email "NOT_NULL"
+        int SupportRepId "FK"
+    }
+    Employee {
+        int EmployeeId "PK,NOT_NULL"
+        nvarchar LastName "NOT_NULL"
+        nvarchar FirstName "NOT_NULL"
+        nvarchar Title
+        int ReportsTo "FK"
+        datetime BirthDate
+        datetime HireDate
+        nvarchar Address
+        nvarchar City
+        nvarchar State
+        nvarchar Country
+        nvarchar PostalCode
+        nvarchar Phone
+        nvarchar Fax
+        nvarchar Email
+    }
+    Genre {
+        int GenreId "PK,NOT_NULL"
+        nvarchar Name
+    }
+    Invoice {
+        int InvoiceId "PK,NOT_NULL"
+        int CustomerId "FK,NOT_NULL"
+        datetime InvoiceDate "NOT_NULL"
+        nvarchar BillingAddress
+        nvarchar BillingCity
+        nvarchar BillingState
+        nvarchar BillingCountry
+        nvarchar BillingPostalCode
+        numeric Total "NOT_NULL"
+    }
+    InvoiceLine {
+        int InvoiceLineId "PK,NOT_NULL"
+        int InvoiceId "FK,NOT_NULL"
+        int TrackId "FK,NOT_NULL"
+        numeric UnitPrice "NOT_NULL"
+        int Quantity "NOT_NULL"
+    }
+    MediaType {
+        int MediaTypeId "PK,NOT_NULL"
+        nvarchar Name
+    }
+    Playlist {
+        int PlaylistId "PK,NOT_NULL"
+        nvarchar Name
+    }
+    PlaylistTrack {
+        int PlaylistId "PK,FK,NOT_NULL"
+        int TrackId "PK,FK,NOT_NULL"
+    }
+    Track {
+        int TrackId "PK,NOT_NULL"
+        nvarchar Name "NOT_NULL"
+        int AlbumId "FK"
+        int MediaTypeId "FK,NOT_NULL"
+        int GenreId "FK"
+        nvarchar Composer
+        int Milliseconds "NOT_NULL"
+        int Bytes
+        numeric UnitPrice "NOT_NULL"
+    }
+
+    Artist ||--o{ Album : "has"
+    Employee ||--o{ Customer : "has"
+    Employee ||--o{ Employee : "has"
+    Customer ||--o{ Invoice : "has"
+    Invoice ||--o{ InvoiceLine : "has"
+    Track ||--o{ InvoiceLine : "has"
+    PlaylistTrack ||--o{ InvoiceLine : "has"
+    Playlist ||--o{ PlaylistTrack : "has"
+    Track ||--o{ PlaylistTrack : "has"
+    Album ||--o{ Track : "has"
+    MediaType ||--o{ Track : "has"
+    Genre ||--o{ Track : "has"
+</div>
+<h3>Tables</h3>
+<div id="table-album">
+<h4>Album</h4>
+<p>Stores metadata for music albums, acting as a logical container that groups tracks under a specific title and primary artist entity. While it organizes the library hierarchy, it does not enforce uniform authorship, as individual track composers are maintained independently within the Track table.</p>
+<p><strong>Row Count:</strong> 347</p>
+<p><strong>Dependency Level:</strong> 1</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-artist">dbo.Artist</a> (via ArtistId)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-track">dbo.Track</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>AlbumId</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for each album record.</td>
+</tr>
+<tr>
+<td>Title</td>
+<td>nvarchar <span class="tag notnull">NOT NULL</span></td>
+<td>The name of the album as it appears in the media library.</td>
+</tr>
+<tr>
+<td>ArtistId</td>
+<td>int <span class="tag fk">FK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>A reference to the artist or band responsible for the album.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-artist">
+<h4>Artist</h4>
+<p>A foundational lookup table that stores the names of musical artists, bands, classical composers, and television series soundtracks, representing the diverse range of creators and source entities within the multi-genre media library.</p>
+<p><strong>Row Count:</strong> 275</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-album">dbo.Album</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>ArtistId</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for each artist or musical group.</td>
+</tr>
+<tr>
+<td>Name</td>
+<td>nvarchar</td>
+<td>The display name of the artist, band, or ensemble.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-customer">
+<h4>Customer</h4>
+<p>The dbo.Customer table stores current profile and contact information for a global base of individual and corporate clients across at least 24 countries. It serves as a central CRM hub, linking customers to assigned support staff and providing the master identity for billing and invoicing. While this table maintains the active customer profile, historical billing details are preserved within individual invoice records to ensure transactional accuracy even if the customer&#039;s primary contact information changes.</p>
+<p><strong>Row Count:</strong> 59</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-employee">dbo.Employee</a> (via SupportRepId)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-invoice">dbo.Invoice</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>CustomerId</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Unique identifier for each customer record.</td>
+</tr>
+<tr>
+<td>FirstName</td>
+<td>nvarchar <span class="tag notnull">NOT NULL</span></td>
+<td>The given name of the customer.</td>
+</tr>
+<tr>
+<td>LastName</td>
+<td>nvarchar <span class="tag notnull">NOT NULL</span></td>
+<td>The surname or family name of the customer.</td>
+</tr>
+<tr>
+<td>Company</td>
+<td>nvarchar</td>
+<td>The business or organization the customer is affiliated with, if applicable.</td>
+</tr>
+<tr>
+<td>Address</td>
+<td>nvarchar</td>
+<td>The street address for billing or shipping.</td>
+</tr>
+<tr>
+<td>City</td>
+<td>nvarchar</td>
+<td>The city where the customer is located.</td>
+</tr>
+<tr>
+<td>State</td>
+<td>nvarchar</td>
+<td>The state, province, or region of the customer&#039;s address.</td>
+</tr>
+<tr>
+<td>Country</td>
+<td>nvarchar</td>
+<td>The country of residence for the customer.</td>
+</tr>
+<tr>
+<td>PostalCode</td>
+<td>nvarchar</td>
+<td>The alphanumeric code used for mail sorting and delivery.</td>
+</tr>
+<tr>
+<td>Phone</td>
+<td>nvarchar</td>
+<td>The primary telephone contact number for the customer.</td>
+</tr>
+<tr>
+<td>Fax</td>
+<td>nvarchar</td>
+<td>The facsimile number for the customer.</td>
+</tr>
+<tr>
+<td>Email</td>
+<td>nvarchar <span class="tag notnull">NOT NULL</span></td>
+<td>The primary electronic mail address used for communication and potentially account login.</td>
+</tr>
+<tr>
+<td>SupportRepId</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Reference to the internal employee assigned to manage this customer&#039;s account or provide support.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-employee">
+<h4>Employee</h4>
+<p>The dbo.Employee table serves as the primary repository for personnel records within the Chinook organization, managing a small, flat team of 8 staff members. It defines the internal organizational hierarchy—led by a General Manager (Andrew Adams)—and identifies specific employees who function as Support Representatives, serving as the primary point of contact for the company&#039;s customer base.</p>
+<p><strong>Row Count:</strong> 8</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-employee">dbo.Employee</a> (via ReportsTo)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-customer">dbo.Customer</a></li>
+<li><a href="#table-employee">dbo.Employee</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>EmployeeId</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>A unique internal identifier assigned to each employee.</td>
+</tr>
+<tr>
+<td>LastName</td>
+<td>nvarchar <span class="tag notnull">NOT NULL</span></td>
+<td>The legal surname of the employee.</td>
+</tr>
+<tr>
+<td>FirstName</td>
+<td>nvarchar <span class="tag notnull">NOT NULL</span></td>
+<td>The legal given name of the employee.</td>
+</tr>
+<tr>
+<td>Title</td>
+<td>nvarchar</td>
+<td>The official job title or role of the employee within the company (e.g., General Manager, Sales Support Agent).</td>
+</tr>
+<tr>
+<td>ReportsTo</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>The EmployeeId of the individual&#039;s direct supervisor or manager, establishing the organizational chart.</td>
+</tr>
+<tr>
+<td>BirthDate</td>
+<td>datetime</td>
+<td>The employee&#039;s date of birth, used for HR records and age verification.</td>
+</tr>
+<tr>
+<td>HireDate</td>
+<td>datetime</td>
+<td>The date the employee officially joined the organization.</td>
+</tr>
+<tr>
+<td>Address</td>
+<td>nvarchar</td>
+<td>The street address of the employee&#039;s residence.</td>
+</tr>
+<tr>
+<td>City</td>
+<td>nvarchar</td>
+<td>The city where the employee resides (e.g., Calgary, Edmonton).</td>
+</tr>
+<tr>
+<td>State</td>
+<td>nvarchar</td>
+<td>The province or state of residence.</td>
+</tr>
+<tr>
+<td>Country</td>
+<td>nvarchar</td>
+<td>The country of residence.</td>
+</tr>
+<tr>
+<td>PostalCode</td>
+<td>nvarchar</td>
+<td>The alphanumeric postal code for the employee&#039;s address.</td>
+</tr>
+<tr>
+<td>Phone</td>
+<td>nvarchar</td>
+<td>The primary telephone contact number for the employee.</td>
+</tr>
+<tr>
+<td>Fax</td>
+<td>nvarchar</td>
+<td>The facsimile number for the employee.</td>
+</tr>
+<tr>
+<td>Email</td>
+<td>nvarchar</td>
+<td>The corporate email address for the employee, typically following a &#039;firstname@chinookcorp.com&#039; pattern.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-genre">
+<h4>Genre</h4>
+<p>A lookup table that defines the various musical and media genres available in the database, such as Rock, Jazz, and TV Shows.</p>
+<p><strong>Row Count:</strong> 25</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-track">dbo.Track</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>GenreId</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for each genre record.</td>
+</tr>
+<tr>
+<td>Name</td>
+<td>nvarchar</td>
+<td>The descriptive name of the music or media genre.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-invoice">
+<h4>Invoice</h4>
+<p>The dbo.Invoice table serves as the header-level record for sales transactions, specifically for digital music tracks. It captures essential metadata for each purchase, including the customer, transaction date, total monetary value, and billing address. On average, each transaction consists of approximately 5.4 tracks.</p>
+<p><strong>Row Count:</strong> 412</p>
+<p><strong>Dependency Level:</strong> 1</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-customer">dbo.Customer</a> (via CustomerId)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-invoiceline">dbo.InvoiceLine</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>InvoiceId</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique identifier for each invoice record.</td>
+</tr>
+<tr>
+<td>CustomerId</td>
+<td>int <span class="tag fk">FK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>A reference to the customer who placed the order.</td>
+</tr>
+<tr>
+<td>InvoiceDate</td>
+<td>datetime <span class="tag notnull">NOT NULL</span></td>
+<td>The date and time when the invoice was generated.</td>
+</tr>
+<tr>
+<td>BillingAddress</td>
+<td>nvarchar</td>
+<td>The street address where the invoice was sent or associated with the payment method.</td>
+</tr>
+<tr>
+<td>BillingCity</td>
+<td>nvarchar</td>
+<td>The city associated with the billing address.</td>
+</tr>
+<tr>
+<td>BillingState</td>
+<td>nvarchar</td>
+<td>The state or province associated with the billing address.</td>
+</tr>
+<tr>
+<td>BillingCountry</td>
+<td>nvarchar</td>
+<td>The country associated with the billing address.</td>
+</tr>
+<tr>
+<td>BillingPostalCode</td>
+<td>nvarchar</td>
+<td>The postal or zip code for the billing address.</td>
+</tr>
+<tr>
+<td>Total</td>
+<td>numeric <span class="tag notnull">NOT NULL</span></td>
+<td>The total monetary amount of the invoice, including all line items and taxes.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-invoiceline">
+<h4>InvoiceLine</h4>
+<p>The dbo.InvoiceLine table functions as a line-item detail table that breaks down each sales transaction into its individual components. It records the specific tracks purchased, the price at which they were sold, and the quantity for each item within a larger invoice.</p>
+<p><strong>Row Count:</strong> 2240</p>
+<p><strong>Dependency Level:</strong> 3</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-invoice">dbo.Invoice</a> (via InvoiceId)</li>
+<li><a href="#table-track">dbo.Track</a> (via TrackId)</li>
+<li><a href="#table-playlisttrack">dbo.PlaylistTrack</a> (via TrackId)</li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>InvoiceLineId</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>A unique surrogate primary key for each individual line item in the database.</td>
+</tr>
+<tr>
+<td>InvoiceId</td>
+<td>int <span class="tag fk">FK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>A foreign key linking the line item to its parent transaction record in the dbo.Invoice table.</td>
+</tr>
+<tr>
+<td>TrackId</td>
+<td>int <span class="tag fk">FK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>A foreign key identifying the specific digital media item (song, video, etc.) being purchased.</td>
+</tr>
+<tr>
+<td>UnitPrice</td>
+<td>numeric <span class="tag notnull">NOT NULL</span></td>
+<td>The cost per unit of the track at the time of the transaction.</td>
+</tr>
+<tr>
+<td>Quantity</td>
+<td>int <span class="tag notnull">NOT NULL</span></td>
+<td>The number of units of the specific track purchased in this line item.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-mediatype">
+<h4>MediaType</h4>
+<p>A lookup table that defines the various digital file formats for tracks in the music library. These media types categorize content into audio and video formats, which directly correlate with different pricing tiers (typically $0.99 for audio and $1.99 for video) in the associated Track table.</p>
+<p><strong>Row Count:</strong> 5</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-track">dbo.Track</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>MediaTypeId</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for a specific media format.</td>
+</tr>
+<tr>
+<td>Name</td>
+<td>nvarchar</td>
+<td>The descriptive name of the media format, indicating the codec or container type (e.g., MPEG, AAC) and whether it is protected by DRM.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-playlist">
+<h4>Playlist</h4>
+<p>A foundational lookup table defining the 14 primary organizational containers for the media library. It categorizes tracks into logical groups such as media types (Movies, TV Shows), genres (90’s Music, Heavy Metal Classic), or curated collections (Classical 101), serving as the top-level structure for media organization.</p>
+<p><strong>Row Count:</strong> 18</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-playlisttrack">dbo.PlaylistTrack</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>PlaylistId</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for each playlist.</td>
+</tr>
+<tr>
+<td>Name</td>
+<td>nvarchar</td>
+<td>The descriptive name of the playlist used for display and categorization.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-playlisttrack">
+<h4>PlaylistTrack</h4>
+<p>A junction table that facilitates a many-to-many relationship between playlists and tracks, allowing individual media items to be organized into multiple curated collections or categories.</p>
+<p><strong>Row Count:</strong> 8715</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-playlist">dbo.Playlist</a> (via PlaylistId)</li>
+<li><a href="#table-track">dbo.Track</a> (via TrackId)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-invoiceline">dbo.InvoiceLine</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>PlaylistId</td>
+<td>int <span class="tag pk">PK</span> <span class="tag fk">FK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique identifier for a playlist; part of the composite primary key.</td>
+</tr>
+<tr>
+<td>TrackId</td>
+<td>int <span class="tag pk">PK</span> <span class="tag fk">FK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique identifier for a specific media track; part of the composite primary key.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-track">
+<h4>Track</h4>
+<p>The dbo.Track table serves as the central repository for individual media items (songs, videos, or episodes) within the digital store. It stores descriptive metadata, technical specifications, and pricing information—primarily following a tiered structure of 0.99 or 1.99—for each track, while linking to albums, genres, and media formats.</p>
+<p><strong>Row Count:</strong> 3503</p>
+<p><strong>Dependency Level:</strong> 2</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-album">dbo.Album</a> (via AlbumId)</li>
+<li><a href="#table-mediatype">dbo.MediaType</a> (via MediaTypeId)</li>
+<li><a href="#table-genre">dbo.Genre</a> (via GenreId)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-invoiceline">dbo.InvoiceLine</a></li>
+<li><a href="#table-playlisttrack">dbo.PlaylistTrack</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>TrackId</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Unique identifier for each media track.</td>
+</tr>
+<tr>
+<td>Name</td>
+<td>nvarchar <span class="tag notnull">NOT NULL</span></td>
+<td>The title of the song, video, or media track.</td>
+</tr>
+<tr>
+<td>AlbumId</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Reference to the album that contains this track.</td>
+</tr>
+<tr>
+<td>MediaTypeId</td>
+<td>int <span class="tag fk">FK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Identifier for the digital format of the track (e.g., MPEG, AAC).</td>
+</tr>
+<tr>
+<td>GenreId</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Identifier for the musical or content category (e.g., Rock, Jazz).</td>
+</tr>
+<tr>
+<td>Composer</td>
+<td>nvarchar</td>
+<td>The individual or group credited with writing the track.</td>
+</tr>
+<tr>
+<td>Milliseconds</td>
+<td>int <span class="tag notnull">NOT NULL</span></td>
+<td>The total playback duration of the track in milliseconds.</td>
+</tr>
+<tr>
+<td>Bytes</td>
+<td>int</td>
+<td>The storage size of the digital file in bytes.</td>
+</tr>
+<tr>
+<td>UnitPrice</td>
+<td>numeric <span class="tag notnull">NOT NULL</span></td>
+<td>The cost to purchase the individual track.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "default" }); mermaid.contentLoaded();</script>
+</div>
+</div>
+</div>
+</body>
+</html>

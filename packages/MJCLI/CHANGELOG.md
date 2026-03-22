@@ -1,5 +1,43 @@
 # Change Log - @memberjunction/cli
 
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/server-bootstrap-lite@5.14.0
+  - @memberjunction/ai-cli@5.14.0
+  - @memberjunction/codegen-lib@5.14.0
+  - @memberjunction/db-auto-doc@5.14.0
+  - @memberjunction/metadata-sync@5.14.0
+  - @memberjunction/query-gen@5.14.0
+  - @memberjunction/sqlserver-dataprovider@5.14.0
+  - @memberjunction/testing-cli@5.14.0
+  - @memberjunction/config@5.14.0
+  - @memberjunction/installer@5.14.0
+  - @memberjunction/sql-converter@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/db-auto-doc@5.13.0
+  - @memberjunction/ai-cli@5.13.0
+  - @memberjunction/codegen-lib@5.13.0
+  - @memberjunction/metadata-sync@5.13.0
+  - @memberjunction/query-gen@5.13.0
+  - @memberjunction/sqlserver-dataprovider@5.13.0
+  - @memberjunction/server-bootstrap-lite@5.13.0
+  - @memberjunction/testing-cli@5.13.0
+  - @memberjunction/config@5.13.0
+  - @memberjunction/installer@5.13.0
+  - @memberjunction/sql-converter@5.13.0
+
 ## 5.12.0
 
 ### Patch Changes

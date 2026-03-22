@@ -88,7 +88,7 @@ describe('ConfigLoader - applyDefaults', () => {
 
     const config = await ConfigLoader.load('/tmp/config.json');
     expect(config.analysis.convergence).toBeDefined();
-    expect(config.analysis.convergence.maxIterations).toBe(10);
+    expect(config.analysis.convergence.maxIterations).toBe(5);
     expect(config.analysis.convergence.stabilityWindow).toBe(2);
     expect(config.analysis.convergence.confidenceThreshold).toBe(0.85);
   });

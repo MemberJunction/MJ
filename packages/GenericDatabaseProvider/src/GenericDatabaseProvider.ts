@@ -57,15 +57,18 @@ import {
     LogStatusEx,
     StripStopWords,
     QueryCacheManager,
-    QueryPagingEngine,
     DatabasePlatform,
+    QueryExecutionSpec,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { QueryPagingEngine } from './queryPagingEngine.js';
 import { QueryParameterProcessor } from '@memberjunction/query-processor';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
+import { SQLDialect } from '@memberjunction/sql-dialect';
+import { QueryCompositionEngine } from './queryCompositionEngine.js';
 
 import {
     MJEntityAIActionEntity,
@@ -102,6 +105,7 @@ export interface ExecuteSQLBatchOptions {
  * to inherit these shared behaviors.
  */
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
+    private _compositionEngine = new QueryCompositionEngine();
 
     /**************************************************************************/
     // Local Storage Provider — Server-Side Cache Backend
@@ -214,8 +218,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const session = new SqlLoggingSessionImpl(sessionId, filePath,
             {
                 defaultSchemaName: mjCoreSchema,
-                ...options // if defaultSchemaName is not provided, it will use the MJCoreSchemaName, otherwise
-                // the caller's defaultSchemaName will be used
+                // Inject the platform's batch separator as the default so callers don't need to
+                // hardcode 'GO'. Callers can still override by passing batchSeparator explicitly.
+                batchSeparator: this.PlatformBatchSeparator || undefined,
+                ...options
             });
 
         // Initialize the session (create file, write header)
@@ -675,6 +681,26 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
     // InternalRunView — Shared View Execution Engine
     /**************************************************************************/
+
+    /**
+     * Returns the SQLDialect instance for this provider's platform.
+     * Subclasses override to return the appropriate dialect (e.g. SQLServerDialect, PostgreSQLDialect).
+     * Used by `PlatformBatchSeparator` to retrieve the correct batch separator token via
+     * `@memberjunction/sql-dialect` rather than hardcoding platform strings.
+     */
+    protected getDialect(): SQLDialect | null {
+        return null;
+    }
+
+    /**
+     * Returns the batch separator token for the underlying database platform by delegating to
+     * the SQLDialect instance returned by `getDialect()`.
+     * SQL Server → `'GO'`, PostgreSQL → `''` (no separator needed).
+     * Auto-injected as the default `batchSeparator` in `CreateSqlLogger`.
+     */
+    protected get PlatformBatchSeparator(): string {
+        return this.getDialect()?.BatchSeparator() ?? '';
+    }
 
     /**
      * Builds a platform-specific pagination clause.
@@ -1917,17 +1943,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     // InternalRunQuery — Shared Pipeline Implementation
     /**************************************************************************/
 
-    /**
-     * Query cache manager wrapping LocalCacheManager for query result caching.
-     * Per-instance because it needs the connection string for fingerprinting.
-     */
-    private _queryCacheManager: QueryCacheManager | null = null;
+    private _queryCacheInitialized: boolean = false;
 
     private get QueryCacheMgr(): QueryCacheManager {
-        if (!this._queryCacheManager) {
-            this._queryCacheManager = new QueryCacheManager(this.InstanceConnectionString);
+        if (!this._queryCacheInitialized) {
+            QueryCacheManager.Instance.Init(this.InstanceConnectionString);
+            this._queryCacheInitialized = true;
         }
-        return this._queryCacheManager;
+        return QueryCacheManager.Instance;
     }
 
     /**
@@ -2184,11 +2207,23 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         let appliedParameters: Record<string, string> = {};
 
         // Step 1: Resolve {{query:"..."}} composition tokens BEFORE Nunjucks processing
-        finalSQL = this.ResolveQueryComposition(finalSQL, contextUser, parameters);
+        const compositionResult = this._compositionEngine.HasCompositionTokens(finalSQL) && contextUser
+            ? this._compositionEngine.ResolveComposition(finalSQL, this.PlatformKey, contextUser, parameters)
+            : { ResolvedSQL: finalSQL, CTEs: [], DependencyGraph: new Map<string, string[]>(), HasCompositions: false, AnyDependencyUsesTemplates: false };
+        finalSQL = compositionResult.ResolvedSQL;
 
-        // Step 2: Process Nunjucks template parameters
-        if (query.UsesTemplate) {
-            const processingResult = QueryParameterProcessor.processQueryTemplate(query, parameters, finalSQL);
+        // Step 2: Process Nunjucks template parameters.
+        // UsesTemplate is transitive: if ANY dependency uses templates, we must run Nunjucks
+        // even if the outer query itself has UsesTemplate = false.
+        const needsTemplateProcessing = query.UsesTemplate || compositionResult.AnyDependencyUsesTemplates;
+
+        if (needsTemplateProcessing) {
+            const processingResult = QueryParameterProcessor.processQueryTemplate(
+                query,
+                parameters,
+                finalSQL,
+                compositionResult.AnyDependencyUsesTemplates
+            );
 
             if (!processingResult.success) {
                 throw new Error(processingResult.error);
@@ -2201,6 +2236,134 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }
 
         return { finalSQL, appliedParameters };
+    }
+
+    /**
+     * Lower-layer execution: resolves composition, processes templates, executes SQL.
+     * This is the single execution pathway used by both saved queries (via RunQuery upper layer)
+     * and transient test queries (via TestQuerySQL resolver).
+     *
+     * Processing order:
+     * 1. Resolve {{query:"..."}} composition tokens → CTEs (inline deps checked first, then Metadata)
+     * 2. Process {{ param }} Nunjucks templates (if UsesTemplate or any dependency uses templates)
+     * 3. Apply MaxRows safety limit (wrap with TOP/LIMIT if specified)
+     * 4. Execute the fully resolved SQL
+     * 5. Return results with execution metadata
+     */
+    protected override async InternalExecuteQueryFromSpec(
+        spec: QueryExecutionSpec,
+        contextUser?: UserInfo,
+    ): Promise<RunQueryResult> {
+        try {
+            const { finalSQL, appliedParameters } = this.resolveSpecParameters(spec, contextUser);
+
+            // Execute
+            const { result, executionTime } = await this.executeQueryWithTiming(finalSQL, contextUser);
+
+            return {
+                Success: true,
+                QueryID: '',
+                QueryName: '',
+                Results: result ?? [],
+                RowCount: result?.length ?? 0,
+                TotalRowCount: result?.length ?? 0,
+                ExecutionTime: executionTime,
+                ErrorMessage: '',
+                AppliedParameters: appliedParameters,
+            };
+        } catch (e) {
+            LogError(e);
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            return {
+                Success: false,
+                QueryID: '',
+                QueryName: '',
+                Results: [],
+                RowCount: 0,
+                TotalRowCount: 0,
+                ExecutionTime: 0,
+                ErrorMessage: errorMessage,
+            };
+        }
+    }
+
+    /**
+     * Resolves composition tokens and Nunjucks templates for a QueryExecutionSpec.
+     * Shared logic used by both `InternalExecuteQueryFromSpec` and can be reused
+     * if `processQueryParameters` is refactored in the future.
+     */
+    private resolveSpecParameters(
+        spec: QueryExecutionSpec,
+        contextUser?: UserInfo,
+    ): { finalSQL: string; appliedParameters: Record<string, string> } {
+        let finalSQL = spec.SQL;
+        let appliedParameters: Record<string, string> = {};
+
+        // Step 1: Resolve {{query:"..."}} composition tokens (with inline deps support)
+        const compositionResult = this._compositionEngine.HasCompositionTokens(finalSQL) && contextUser
+            ? this._compositionEngine.ResolveComposition(finalSQL, this.PlatformKey, contextUser, spec.Parameters, spec.Dependencies)
+            : { ResolvedSQL: finalSQL, CTEs: [], DependencyGraph: new Map<string, string[]>(), HasCompositions: false, AnyDependencyUsesTemplates: false };
+        finalSQL = compositionResult.ResolvedSQL;
+
+        // Step 2: Process Nunjucks templates
+        const needsTemplateProcessing = spec.UsesTemplate || compositionResult.AnyDependencyUsesTemplates;
+        if (needsTemplateProcessing) {
+            const templateInput = {
+                SQL: spec.SQL,
+                UsesTemplate: spec.UsesTemplate ?? false,
+                Parameters: spec.ParameterDefinitions ?? [],
+            };
+            // Skip unknown-parameter validation when a dependency uses templates (existing behavior)
+            // OR when no formal ParameterDefinitions were provided (transient specs from TestQuerySQL
+            // don't have definitions — parameters should pass through to Nunjucks without validation).
+            const skipUnknownParamCheck = compositionResult.AnyDependencyUsesTemplates || !spec.ParameterDefinitions;
+            const processingResult = QueryParameterProcessor.processQueryTemplate(
+                templateInput,
+                spec.Parameters,
+                finalSQL,
+                skipUnknownParamCheck
+            );
+            if (!processingResult.success) {
+                throw new Error(processingResult.error);
+            }
+            finalSQL = processingResult.processedSQL;
+            appliedParameters = (processingResult.appliedParameters || {}) as Record<string, string>;
+        } else if (spec.Parameters && Object.keys(spec.Parameters).length > 0) {
+            LogStatus('Warning: Parameters provided but query does not use templates. Parameters will be ignored.');
+        }
+
+        // Step 3: Apply MaxRows safety limit
+        if (spec.MaxRows != null && spec.MaxRows > 0) {
+            finalSQL = this.wrapWithMaxRows(finalSQL, spec.MaxRows);
+        }
+
+        return { finalSQL, appliedParameters };
+    }
+
+    /**
+     * Wraps SQL with a row limit for safety when testing transient queries.
+     * Uses platform-aware syntax: TOP N for SQL Server, LIMIT N for PostgreSQL.
+     */
+    private wrapWithMaxRows(sql: string, maxRows: number): string {
+        const platform = this.PlatformKey as DatabasePlatform;
+        const trimmed = sql.trim();
+
+        // Don't wrap if already has a TOP or LIMIT clause
+        if (/\bTOP\s+\d/i.test(trimmed) || /\bLIMIT\s+\d/i.test(trimmed)) {
+            return sql;
+        }
+
+        if (platform === 'postgresql') {
+            // Append LIMIT N — handle trailing semicolons
+            const withoutSemicolon = trimmed.replace(/;\s*$/, '');
+            return `${withoutSemicolon}\nLIMIT ${maxRows}`;
+        }
+
+        // SQL Server: inject TOP N after SELECT (handling SELECT DISTINCT)
+        return trimmed.replace(
+            /^(SELECT\s+(?:DISTINCT\s+)?)/i,
+            `$1TOP ${maxRows} `
+        );
     }
 
     /**

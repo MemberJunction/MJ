@@ -368,7 +368,10 @@ export class WatchService {
           this.sqlLoggingSession = await provider.CreateSqlLogger(filepath, {
             formatAsMigration: syncConfig.sqlLogging?.formatAsMigration || false,
             description: 'MetadataSync watch operation',
-            logRecordChangeMetadata: true
+            logRecordChangeMetadata: true,
+            // batchSeparator is intentionally omitted — CreateSqlLogger injects the platform-appropriate
+            // separator automatically (GO for SQL Server, nothing for PostgreSQL) via PlatformBatchSeparator.
+            variableBatchThreshold: syncConfig.sqlLogging?.variableBatchThreshold ?? 200,
           });
           
           callbacks?.onLog?.(`📝 SQL logging enabled: ${filepath}`);

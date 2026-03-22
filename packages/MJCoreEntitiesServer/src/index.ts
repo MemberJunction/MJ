@@ -13,4 +13,6 @@ export * from './custom/MJArtifactVersionEntityServer.server';
 export * from './custom/MJAIAgentNoteEntityServer.server';
 export * from './custom/MJAIAgentExampleEntityServer.server';
 export * from './custom/util';
-export * from './custom/sql-parser';
+
+export * from './engines/QueryEngineServer';
+export * from './engines/QueryMatchResult';

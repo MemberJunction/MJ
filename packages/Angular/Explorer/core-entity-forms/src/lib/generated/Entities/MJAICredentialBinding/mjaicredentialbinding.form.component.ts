@@ -15,7 +15,9 @@ export class MJAICredentialBindingFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+            { sectionKey: 'credentialPriority', sectionName: 'Credential & Priority', isExpanded: true },
+            { sectionKey: 'targetDefinition', sectionName: 'Target Definition', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }

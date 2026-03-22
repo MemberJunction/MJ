@@ -1,5 +1,56 @@
 # @memberjunction/ng-bootstrap
 
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [8fe1124]
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+- Updated dependencies [6489cd8]
+  - @memberjunction/ng-auth-services@5.14.0
+  - @memberjunction/core@5.14.0
+  - @memberjunction/graphql-dataprovider@5.14.0
+  - @memberjunction/actions-base@5.14.0
+  - @memberjunction/ng-explorer-core@5.14.0
+  - @memberjunction/ai-engine-base@5.14.0
+  - @memberjunction/ai-core-plus@5.14.0
+  - @memberjunction/ng-core-entity-forms@5.14.0
+  - @memberjunction/ng-dashboards@5.14.0
+  - @memberjunction/ng-explorer-settings@5.14.0
+  - @memberjunction/ng-shared@5.14.0
+  - @memberjunction/ng-artifacts@5.14.0
+  - @memberjunction/ng-dashboard-viewer@5.14.0
+  - @memberjunction/ng-file-storage@5.14.0
+  - @memberjunction/communication-types@5.14.0
+  - @memberjunction/entity-communications-base@5.14.0
+  - @memberjunction/core-entities@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [1bb9b86]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/ng-core-entity-forms@5.13.0
+  - @memberjunction/ng-explorer-core@5.13.0
+  - @memberjunction/ng-dashboards@5.13.0
+  - @memberjunction/ai-engine-base@5.13.0
+  - @memberjunction/ai-core-plus@5.13.0
+  - @memberjunction/actions-base@5.13.0
+  - @memberjunction/ng-auth-services@5.13.0
+  - @memberjunction/ng-explorer-settings@5.13.0
+  - @memberjunction/ng-shared@5.13.0
+  - @memberjunction/ng-artifacts@5.13.0
+  - @memberjunction/ng-dashboard-viewer@5.13.0
+  - @memberjunction/ng-file-storage@5.13.0
+  - @memberjunction/communication-types@5.13.0
+  - @memberjunction/entity-communications-base@5.13.0
+  - @memberjunction/graphql-dataprovider@5.13.0
+  - @memberjunction/core-entities@5.13.0
+
 ## 5.12.0
 
 ### Minor Changes

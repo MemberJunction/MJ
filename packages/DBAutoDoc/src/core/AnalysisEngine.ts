@@ -4,6 +4,7 @@
  */
 
 import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
+import { ensureArray } from "../utils/ensureArray.js";
 import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext } from '../types/analysis.js';
 import {
   TableAnalysisPromptResult,
@@ -73,6 +74,353 @@ export class AnalysisEngine {
     this.startTime = Date.now();
     this.currentRun = run;
     this.guardrailsManager.startPhase('analysis');
+  }
+
+  /**
+   * Lock interim ground truth: FKs with confidence ≥ threshold become immutable.
+   * Call this AFTER the iterative analysis completes but BEFORE the pruning pass.
+   */
+  public lockInterimGroundTruth(
+    state: DatabaseDocumentation,
+    confidenceThreshold: number = 90
+  ): { locked: number; unlocked: number } {
+    const discoveryPhase = state.phases.keyDetection;
+    if (!discoveryPhase) return { locked: 0, unlocked: 0 };
+
+    let locked = 0;
+    let unlocked = 0;
+    for (const fk of discoveryPhase.discovered.foreignKeys) {
+      if (fk.status === 'rejected') continue;
+      if (fk.confidence >= confidenceThreshold) {
+        fk.status = 'confirmed';
+        locked++;
+      } else {
+        unlocked++;
+      }
+    }
+
+    console.log(`[AnalysisEngine] Interim ground truth locked: ${locked} FKs at ≥${confidenceThreshold}% confidence, ${unlocked} unlocked for pruning`);
+    this.onProgress('Interim ground truth locked', { locked, unlocked, threshold: confidenceThreshold });
+    return { locked, unlocked };
+  }
+
+  /**
+   * Lock high-confidence PK candidates as interim ground truth.
+   */
+  public lockInterimPKGroundTruth(
+    state: DatabaseDocumentation,
+    confidenceThreshold: number = 90
+  ): { locked: number; unlocked: number } {
+    const discoveryPhase = state.phases.keyDetection;
+    if (!discoveryPhase) return { locked: 0, unlocked: 0 };
+
+    let locked = 0;
+    let unlocked = 0;
+    for (const pk of discoveryPhase.discovered.primaryKeys) {
+      if (pk.status === 'rejected') continue;
+      if (pk.confidence >= confidenceThreshold) {
+        pk.status = 'confirmed';
+        locked++;
+      } else {
+        unlocked++;
+      }
+    }
+
+    console.log(`[AnalysisEngine] Interim PK ground truth locked: ${locked} PKs at >=${confidenceThreshold}% confidence, ${unlocked} unlocked for pruning`);
+    this.onProgress('Interim PK ground truth locked', { locked, unlocked, threshold: confidenceThreshold });
+    return { locked, unlocked };
+  }
+
+  /**
+   * Two-pass PK pruning using a potentially stronger model.
+   */
+  public async prunePrimaryKeys(
+    state: DatabaseDocumentation,
+    run: AnalysisRun
+  ): Promise<{ removed: number; kept: number }> {
+    const discoveryPhase = state.phases.keyDetection;
+    if (!discoveryPhase) return { removed: 0, kept: 0 };
+
+    const override = this.config.ai.modelOverrides?.['pkPruning'] ?? this.config.ai.modelOverrides?.['fkPruning'];
+    const effectiveModel = override?.model ?? this.config.ai.model;
+
+    const allTables = state.schemas.flatMap(s =>
+      s.tables.map(t => {
+        const pk = discoveryPhase.discovered.primaryKeys.find(
+          p => p.schemaName === s.name && p.tableName === t.name && p.status === 'confirmed'
+        );
+        return { schema: s.name, name: t.name, description: t.description || '', pk: pk ? pk.columnNames.join(', ') : '' };
+      })
+    );
+
+    const allPKs = discoveryPhase.discovered.primaryKeys.filter(pk => pk.status !== 'rejected');
+    const pksByTable = new Map<string, typeof allPKs>();
+    for (const pk of allPKs) {
+      const key = `${pk.schemaName}.${pk.tableName}`;
+      if (!pksByTable.has(key)) pksByTable.set(key, []);
+      pksByTable.get(key)!.push(pk);
+    }
+
+    this.onProgress('PK pruning pass 1: per-table analysis', { tables: pksByTable.size, model: effectiveModel });
+
+    interface PKProposedRemoval { pk: typeof allPKs[0]; reasoning: string; sourceSchema: string; sourceTable: string; columns: string[]; confidence: number; }
+    const allProposals: PKProposedRemoval[] = [];
+
+    for (const [tableKey, tablePKs] of pksByTable.entries()) {
+      const hasUnlocked = tablePKs.some(pk => pk.status !== 'confirmed');
+      if (!hasUnlocked) continue;
+
+      const [schemaName, tableName] = tableKey.split('.');
+      const table = this.stateManager.findTable(state, schemaName, tableName);
+      const candidates = tablePKs.map(pk => ({ columns: pk.columnNames, confidence: pk.confidence, locked: pk.status === 'confirmed' }));
+      const context = { sourceSchema: schemaName, sourceTable: tableName, tableDescription: table?.description || '', allTables, candidates, seedContext: state.seedContext ?? this.config.seedContext };
+
+      const result = await this.promptEngine.executePrompt<import('../types/prompts.js').PKPruningProposal[]>(
+        'pk-pruning-table', context,
+        { responseFormat: 'JSON', temperature: override?.temperature ?? 0.05, maxTokens: override?.maxTokens ?? this.config.ai.maxTokens, modelOverride: override?.model, effortLevelOverride: override?.effortLevel }
+      );
+
+      if (!result.success || !result.result) { console.log(`[AnalysisEngine] PK pruning failed for ${tableKey}: ${result.errorMessage}`); continue; }
+
+      try { for (const proposal of ensureArray(result.result, "PK pruning per-table")) {
+        if (proposal.action === 'remove' && proposal.index >= 1 && proposal.index <= tablePKs.length) {
+          const pk = tablePKs[proposal.index - 1];
+          if (pk.status === 'confirmed') { console.log(`[AnalysisEngine] BLOCKED removal of locked PK: ${tableKey} [${pk.columnNames.join(', ')}]`); continue; }
+          allProposals.push({ pk, reasoning: proposal.reasoning, sourceSchema: pk.schemaName, sourceTable: pk.tableName, columns: pk.columnNames, confidence: pk.confidence });
+        }
+      }
+      } catch (pruneErr) { console.log(`[AnalysisEngine] PK pruning error for ${tableKey}: ${(pruneErr as Error).message}`); }
+    }
+
+    this.onProgress('PK pruning pass 1 complete', { proposals: allProposals.length });
+    if (allProposals.length === 0) return { removed: 0, kept: allPKs.length };
+
+    this.onProgress('PK pruning pass 2: holistic review', { proposals: allProposals.length, model: effectiveModel });
+    const holisticContext = { allTables, proposals: allProposals.map(p => ({ sourceSchema: p.sourceSchema, sourceTable: p.sourceTable, columns: p.columns, confidence: p.confidence, reasoning: p.reasoning })), seedContext: state.seedContext ?? this.config.seedContext };
+
+    const holisticResult = await this.promptEngine.executePrompt<import('../types/prompts.js').PKPruningProposal[]>(
+      'pk-pruning-holistic', holisticContext,
+      { responseFormat: 'JSON', temperature: override?.temperature ?? 0.05, maxTokens: override?.maxTokens ?? this.config.ai.maxTokens, modelOverride: override?.model, effortLevelOverride: override?.effortLevel }
+    );
+
+    let removed = 0;
+    if (holisticResult.success && holisticResult.result) {
+      for (const decision of ensureArray(holisticResult.result, "holistic pruning")) {
+        if (decision.action === 'remove' && decision.index >= 1 && decision.index <= allProposals.length) {
+          const proposal = allProposals[decision.index - 1];
+          proposal.pk.status = 'rejected';
+          removed++;
+          console.log(`[AnalysisEngine] Pruned PK: ${proposal.sourceSchema}.${proposal.sourceTable} [${proposal.columns.join(', ')}] - ${decision.reasoning}`);
+        }
+      }
+    } else {
+      console.log(`[AnalysisEngine] Holistic PK pruning failed: ${holisticResult.errorMessage}. Applying pass 1 proposals.`);
+      for (const proposal of allProposals) { proposal.pk.status = 'rejected'; removed++; }
+    }
+
+    const kept = allPKs.length - removed;
+    console.log(`[AnalysisEngine] PK pruning complete: ${removed} removed, ${kept} kept (model: ${effectiveModel})`);
+    this.onProgress('PK pruning complete', { removed, kept, model: effectiveModel });
+    this.stateManager.updateSummary(state);
+    await this.stateManager.save(state);
+    return { removed, kept };
+  }
+
+    /**
+   * Two-pass FK pruning using a potentially stronger model.
+   * Pass 1: Per-table — evaluate each table's unlocked FKs, propose removals.
+   * Pass 2: Holistic — review all proposed removals at once for final decision.
+   * Locked FKs (interim ground truth) are never touched.
+   */
+  public async pruneForeignKeys(
+    state: DatabaseDocumentation,
+    run: AnalysisRun
+  ): Promise<{ removed: number; kept: number }> {
+    const discoveryPhase = state.phases.keyDetection;
+    if (!discoveryPhase) return { removed: 0, kept: 0 };
+
+    const override = this.config.ai.modelOverrides?.['fkPruning'];
+    const effectiveModel = override?.model ?? this.config.ai.model;
+
+    // Build table info for context
+    const allTables = state.schemas.flatMap(s =>
+      s.tables.map(t => {
+        const pk = discoveryPhase.discovered.primaryKeys.find(
+          p => p.schemaName === s.name && p.tableName === t.name
+        );
+        return {
+          schema: s.name,
+          name: t.name,
+          description: t.description || '',
+          pk: pk ? pk.columnNames.join(', ') : ''
+        };
+      })
+    );
+
+    // Group non-rejected FKs by source table
+    const allFKs = discoveryPhase.discovered.foreignKeys.filter(fk => fk.status !== 'rejected');
+    const fksByTable = new Map<string, typeof allFKs>();
+    for (const fk of allFKs) {
+      const key = `${fk.schemaName}.${fk.sourceTable}`;
+      if (!fksByTable.has(key)) fksByTable.set(key, []);
+      fksByTable.get(key)!.push(fk);
+    }
+
+    // ==================== PASS 1: Per-table pruning proposals ====================
+    this.onProgress('FK pruning pass 1: per-table analysis', { tables: fksByTable.size, model: effectiveModel });
+
+    interface ProposedRemoval {
+      fk: typeof allFKs[0];
+      reasoning: string;
+      sourceSchema: string;
+      sourceTable: string;
+      sourceColumn: string;
+      targetSchema: string;
+      targetTable: string;
+      targetColumn: string;
+      confidence: number;
+    }
+    const allProposals: ProposedRemoval[] = [];
+    let tableIdx = 0;
+
+    for (const [tableKey, tableFKs] of fksByTable.entries()) {
+      tableIdx++;
+      // Skip tables where ALL FKs are locked
+      const hasUnlocked = tableFKs.some(fk => fk.status !== 'confirmed');
+      if (!hasUnlocked) continue;
+
+      if (tableIdx % 10 === 1) {
+        this.onProgress(`FK pruning: table ${tableIdx}/${fksByTable.size}`);
+      }
+
+      const [schemaName, tableName] = tableKey.split('.');
+      const table = this.stateManager.findTable(state, schemaName, tableName);
+
+      const candidates = tableFKs.map(fk => ({
+        sourceColumn: fk.sourceColumn,
+        targetSchema: fk.targetSchema,
+        targetTable: fk.targetTable,
+        targetColumn: fk.targetColumn,
+        confidence: fk.confidence,
+        locked: fk.status === 'confirmed'
+      }));
+
+      const context = {
+        sourceSchema: schemaName,
+        sourceTable: tableName,
+        tableDescription: table?.description || '',
+        allTables,
+        candidates,
+        seedContext: state.seedContext ?? this.config.seedContext
+      };
+
+      const result = await this.promptEngine.executePrompt<import('../types/prompts.js').FKPruningProposal[]>(
+        'fk-pruning-table',
+        context,
+        {
+          responseFormat: 'JSON',
+          temperature: override?.temperature ?? 0.05,
+          maxTokens: override?.maxTokens ?? this.config.ai.maxTokens,
+          modelOverride: override?.model,
+          effortLevelOverride: override?.effortLevel
+        }
+      );
+
+      if (!result.success || !result.result) {
+        console.log(`[AnalysisEngine] FK pruning failed for ${tableKey}: ${result.errorMessage}`);
+        continue;
+      }
+
+      try { for (const proposal of ensureArray(result.result, "FK pruning per-table")) {
+        if (proposal.action === 'remove' && proposal.index >= 1 && proposal.index <= tableFKs.length) {
+          const fk = tableFKs[proposal.index - 1];
+          if (fk.status === 'confirmed') {
+            console.log(`[AnalysisEngine] BLOCKED removal of locked FK: ${tableKey}.${fk.sourceColumn} -> ${fk.targetTable}.${fk.targetColumn}`);
+            continue;
+          }
+          allProposals.push({
+            fk,
+            reasoning: proposal.reasoning,
+            sourceSchema: fk.schemaName,
+            sourceTable: fk.sourceTable,
+            sourceColumn: fk.sourceColumn,
+            targetSchema: fk.targetSchema,
+            targetTable: fk.targetTable,
+            targetColumn: fk.targetColumn,
+            confidence: fk.confidence
+          });
+        }
+      }
+      } catch (pruneErr) { console.log(`[AnalysisEngine] FK pruning error for ${tableKey}: ${(pruneErr as Error).message}`); }
+
+      console.log(`[AnalysisEngine] FK pruning ${tableKey}: ${result.result.length} removals proposed`);
+    }
+
+    console.log(`[AnalysisEngine] Pass 1 complete: ${allProposals.length} total removals proposed`);
+    this.onProgress('FK pruning pass 1 complete', { proposals: allProposals.length });
+
+    if (allProposals.length === 0) {
+      return { removed: 0, kept: allFKs.length };
+    }
+
+    // ==================== PASS 2: Holistic review of all proposals ====================
+    this.onProgress('FK pruning pass 2: holistic review', { proposals: allProposals.length, model: effectiveModel });
+
+    const holisticContext = {
+      allTables,
+      proposals: allProposals.map(p => ({
+        sourceSchema: p.sourceSchema,
+        sourceTable: p.sourceTable,
+        sourceColumn: p.sourceColumn,
+        targetSchema: p.targetSchema,
+        targetTable: p.targetTable,
+        targetColumn: p.targetColumn,
+        confidence: p.confidence,
+        reasoning: p.reasoning
+      })),
+      seedContext: state.seedContext ?? this.config.seedContext
+    };
+
+    const holisticResult = await this.promptEngine.executePrompt<import('../types/prompts.js').FKPruningFinalDecision[]>(
+      'fk-pruning-holistic',
+      holisticContext,
+      {
+        responseFormat: 'JSON',
+        temperature: override?.temperature ?? 0.05,
+        maxTokens: override?.maxTokens ?? this.config.ai.maxTokens,
+        modelOverride: override?.model,
+        effortLevelOverride: override?.effortLevel
+      }
+    );
+
+    let removed = 0;
+    if (holisticResult.success && holisticResult.result) {
+      for (const decision of ensureArray(holisticResult.result, "holistic pruning")) {
+        if (decision.action === 'remove' && decision.index >= 1 && decision.index <= allProposals.length) {
+          const proposal = allProposals[decision.index - 1];
+          proposal.fk.status = 'rejected';
+          removed++;
+          console.log(`[AnalysisEngine] Pruned FK: ${proposal.sourceSchema}.${proposal.sourceTable}.${proposal.sourceColumn} -> ${proposal.targetSchema}.${proposal.targetTable}.${proposal.targetColumn} — ${decision.reasoning}`);
+        }
+      }
+    } else {
+      console.log(`[AnalysisEngine] Holistic pruning failed: ${holisticResult.errorMessage}. Falling back to pass 1 proposals.`);
+      // Fallback: apply all pass 1 proposals directly
+      for (const proposal of allProposals) {
+        proposal.fk.status = 'rejected';
+        removed++;
+      }
+    }
+
+    const kept = allFKs.length - removed;
+    console.log(`[AnalysisEngine] FK pruning complete: ${removed} removed, ${kept} kept (model: ${effectiveModel})`);
+    this.onProgress('FK pruning complete', { removed, kept, model: effectiveModel });
+
+    // Save state
+    this.stateManager.updateSummary(state);
+    await this.stateManager.save(state);
+
+    return { removed, kept };
   }
 
   /**
@@ -232,6 +580,16 @@ export class AnalysisEngine {
         );
       }
 
+      // Process PK proposal from LLM — verify eligibility deterministically
+      if (state.phases.keyDetection && result.result.primaryKey) {
+        this.processPKInsightFromLLM(
+          state,
+          tableNode.schema,
+          tableNode.table,
+          result.result.primaryKey
+        );
+      }
+
       // Update inferred business domain
       if (result.result.inferredBusinessDomain) {
         // Could store this in table metadata if needed
@@ -318,6 +676,9 @@ export class AnalysisEngine {
     // Build ground truth context if available
     const groundTruthContext = this.buildGroundTruthContext(tableNode.schema, tableNode.table);
 
+    // Build FK candidate stats from discovery phase for LLM context
+    const fkCandidateStats = this.buildFKCandidateStats(state, tableNode.schema, tableNode.table);
+
     return {
       schema: tableNode.schema,
       table: tableNode.table,
@@ -341,8 +702,39 @@ export class AnalysisEngine {
       userNotes: table.userNotes,
       seedContext: state.seedContext ?? this.config.seedContext,
       allTables,
-      groundTruth: groundTruthContext
+      groundTruth: groundTruthContext,
+      fkCandidateStats
     };
+  }
+
+  /**
+   * Build FK candidate stats from the discovery phase for this table.
+   * Provides the LLM with cross-table relationship evidence (value overlap,
+   * cardinality ratio) to make better FK decisions.
+   */
+  private buildFKCandidateStats(
+    state: DatabaseDocumentation,
+    schemaName: string,
+    tableName: string
+  ): Array<{ sourceColumn: string; targetSchema: string; targetTable: string; targetColumn: string; valueOverlap: number; cardinalityRatio: number; confidence: number }> {
+    const discoveryPhase = state.phases.keyDetection;
+    if (!discoveryPhase) return [];
+
+    return discoveryPhase.discovered.foreignKeys
+      .filter(fk =>
+        fk.schemaName === schemaName &&
+        fk.sourceTable === tableName &&
+        fk.status !== 'rejected'
+      )
+      .map(fk => ({
+        sourceColumn: fk.sourceColumn,
+        targetSchema: fk.targetSchema,
+        targetTable: fk.targetTable,
+        targetColumn: fk.targetColumn,
+        valueOverlap: fk.evidence.valueOverlap,
+        cardinalityRatio: fk.evidence.cardinalityRatio,
+        confidence: fk.confidence
+      }));
   }
 
   /**
@@ -784,6 +1176,136 @@ export class AnalysisEngine {
     // Method disabled - awaiting structured LLM output implementation
     console.log(`[AnalysisEngine] extractAndFeedbackFKInsights disabled - awaiting structured FK output from LLM`);
     return;
+  }
+
+  /**
+   * Process PK proposal from LLM. The LLM can propose a PK, but ALL proposed columns
+   * must pass deterministic eligibility: zero nulls, zero blanks, 100% unique values.
+   * If any column fails, the entire proposal is rejected.
+   */
+  private processPKInsightFromLLM(
+    state: DatabaseDocumentation,
+    schemaName: string,
+    tableName: string,
+    pkProposal: import('../types/prompts.js').PrimaryKeyPromptResult
+  ): void {
+    const discoveryPhase = state.phases.keyDetection;
+    if (!discoveryPhase || !pkProposal || !pkProposal.columns || pkProposal.columns.length === 0) return;
+
+    const columns = pkProposal.columns;
+    const confidence = Math.round(pkProposal.confidence * 100);
+
+    // Check if we already have a confirmed PK for this table
+    const existingConfirmedPK = discoveryPhase.discovered.primaryKeys.find(pk =>
+      pk.schemaName === schemaName &&
+      pk.tableName === tableName &&
+      pk.status === 'confirmed'
+    );
+
+    if (existingConfirmedPK) {
+      // Already have a confirmed PK — check if LLM agrees
+      const sameColumns = existingConfirmedPK.columnNames.length === columns.length &&
+        existingConfirmedPK.columnNames.every(c => columns.some(pc => pc.toLowerCase() === c.toLowerCase()));
+
+      if (sameColumns) {
+        // LLM agrees with existing PK — boost confidence
+        existingConfirmedPK.confidence = Math.min(existingConfirmedPK.confidence + 10, 100);
+        existingConfirmedPK.validatedByLLM = true;
+        console.log(`[AnalysisEngine] LLM confirmed existing PK: ${schemaName}.${tableName} (${columns.join(', ')}), confidence: ${existingConfirmedPK.confidence}`);
+      } else {
+        // LLM disagrees — log but don't override a confirmed PK
+        console.log(`[AnalysisEngine] LLM proposed different PK for ${schemaName}.${tableName}: [${columns.join(', ')}] vs confirmed [${existingConfirmedPK.columnNames.join(', ')}] — keeping confirmed`);
+      }
+      return;
+    }
+
+    // Check if an existing candidate matches
+    const existingCandidate = discoveryPhase.discovered.primaryKeys.find(pk =>
+      pk.schemaName === schemaName &&
+      pk.tableName === tableName &&
+      pk.columnNames.length === columns.length &&
+      pk.columnNames.every(c => columns.some(pc => pc.toLowerCase() === c.toLowerCase()))
+    );
+
+    if (existingCandidate) {
+      // LLM confirms a stats candidate — promote and boost
+      existingCandidate.validatedByLLM = true;
+      existingCandidate.status = 'confirmed';
+      existingCandidate.confidence = Math.min(existingCandidate.confidence + 20, 100);
+      console.log(`[AnalysisEngine] LLM confirmed PK candidate: ${schemaName}.${tableName} (${columns.join(', ')}), confidence: ${existingCandidate.confidence}`);
+
+      // Update column flags
+      for (const colName of columns) {
+        const column = this.findColumnInState(state, schemaName, tableName, colName);
+        if (column) column.isPrimaryKey = true;
+      }
+      return;
+    }
+
+    // New PK proposal — verify ALL columns are PK-eligible deterministically
+    const table = this.stateManager.findTable(state, schemaName, tableName);
+    if (!table) return;
+
+    for (const colName of columns) {
+      const column = table.columns.find(c => c.name.toLowerCase() === colName.toLowerCase());
+      if (!column) {
+        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName} — column "${colName}" not found`);
+        return;
+      }
+
+      // Check PK eligibility from stats
+      const stats = column.statistics;
+      if (!stats) {
+        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName}.${colName} — no statistics available`);
+        return;
+      }
+
+      // Safety: prefer pre-computed uniquenessRatio if available (totalRows can be 0 due to field naming bug)
+      const uniqueness = stats.uniquenessRatio != null && stats.uniquenessRatio > 0
+        ? stats.uniquenessRatio
+        : (stats.totalRows > 0 ? stats.distinctCount / stats.totalRows : 0);
+      const hasNulls = (stats.nullCount || 0) > 0;
+
+      if (hasNulls) {
+        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName}.${colName} — has ${stats.nullCount} nulls`);
+        return;
+      }
+
+      if (uniqueness < 1.0) {
+        console.log(`[AnalysisEngine] LLM PK rejected: ${schemaName}.${tableName}.${colName} — uniqueness ${(uniqueness * 100).toFixed(1)}% (must be 100%)`);
+        return;
+      }
+    }
+
+    // All columns pass — create new PK candidate
+    const newPK: import('../types/discovery.js').PKCandidate = {
+      schemaName,
+      tableName,
+      columnNames: columns,
+      confidence,
+      evidence: {
+        uniqueness: 1.0,
+        nullCount: 0,
+        totalRows: table.rowCount || 0,
+        dataPattern: columns.length > 1 ? 'composite' : 'unknown',
+        namingScore: 0.5,
+        dataTypeScore: 0.8,
+        warnings: ['Created from LLM proposal — passed deterministic eligibility']
+      },
+      discoveredInIteration: 1,
+      validatedByLLM: true,
+      status: 'confirmed'
+    };
+
+    discoveryPhase.discovered.primaryKeys.push(newPK);
+
+    // Update column flags
+    for (const colName of columns) {
+      const column = this.findColumnInState(state, schemaName, tableName, colName);
+      if (column) column.isPrimaryKey = true;
+    }
+
+    console.log(`[AnalysisEngine] Created PK from LLM: ${schemaName}.${tableName} (${columns.join(', ')}) confidence: ${confidence}`);
   }
 
   /**

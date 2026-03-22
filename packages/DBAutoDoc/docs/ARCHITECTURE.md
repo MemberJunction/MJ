@@ -63,6 +63,10 @@ graph TD
 
 ### 2. Relationship Discovery Phase
 
+
+> **Note**: The relationship discovery pipeline has been significantly enhanced with deterministic gates (G1-G8), PK position heuristics (H9-H12), fan-out confidence penalties, and two-pass LLM pruning. See the [research paper](../research/v1/paper.md) Section 4 and Appendix A for full specifications. These improvements achieved 95.0% PK F1 and 94.2% FK F1 on AdventureWorks2022.
+
+
 ```mermaid
 graph TD
     A[Start Discovery] --> B{Check Triggers}
@@ -750,7 +754,7 @@ await stateManager.save(state);
   },
   "ai": {
     "provider": "anthropic",
-    "model": "claude-3-5-sonnet-20241022",
+    "model": "claude-sonnet-4-6",
     "apiKey": "sk-ant-xxx"
   },
   "analysis": {
@@ -809,7 +813,7 @@ await stateManager.save(state);
   },
   "ai": {
     "provider": "anthropic",
-    "model": "claude-3-5-sonnet-20241022",
+    "model": "claude-sonnet-4-6",
     "apiKey": "sk-ant-xxx",
     "temperature": 0.1,
     "maxTokens": 2000,
@@ -1166,7 +1170,7 @@ const config: DBAutoDocConfig = {
   },
   ai: {
     provider: 'anthropic',
-    model: 'claude-3-5-sonnet-20241022',
+    model: 'claude-sonnet-4-6',
     apiKey: process.env.ANTHROPIC_API_KEY!
   },
   analysis: {

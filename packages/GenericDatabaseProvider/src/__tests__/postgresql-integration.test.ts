@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-    QueryCompositionEngine,
-    QueryPagingEngine,
     QueryCache,
     QueryCacheConfig,
     QueryInfo,
@@ -9,6 +7,8 @@ import {
     UserInfo,
     DatabasePlatform
 } from '@memberjunction/core';
+import { QueryCompositionEngine } from '../queryCompositionEngine';
+import { QueryPagingEngine } from '../queryPagingEngine';
 
 // Mock logging
 vi.mock('@memberjunction/core', async (importOriginal) => {

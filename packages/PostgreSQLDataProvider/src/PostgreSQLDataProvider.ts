@@ -149,6 +149,10 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
         return pgDialect;
     }
 
+    protected getDialect(): PostgreSQLDialect {
+        return pgDialect;
+    }
+
     // ─── Configuration & Lifecycle ───────────────────────────────────
 
     get ConfigData(): PostgreSQLProviderConfigData {

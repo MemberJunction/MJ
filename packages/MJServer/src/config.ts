@@ -90,6 +90,14 @@ const sqlLoggingOptionsSchema = z.object({
   formatAsMigration: z.boolean().optional().default(false),
   statementTypes: z.enum(['queries', 'mutations', 'both']).optional().default('both'),
   batchSeparator: z.string().optional().default('GO'),
+  /**
+   * When set, enables variable-count-based batch separation.
+   * A batch separator is emitted only when the accumulated DECLARE @ count reaches this threshold,
+   * instead of after every statement. Prevents hitting SQL Server's 10,000-variable-per-batch limit
+   * on large migration files while avoiding one GO per statement. Recommended: 200.
+   * Set to 0 to use the legacy per-statement behavior.
+   */
+  variableBatchThreshold: z.coerce.number().optional().default(200),
   prettyPrint: z.boolean().optional().default(true),
   logRecordChangeMetadata: z.boolean().optional().default(false),
   retainEmptyLogFiles: z.boolean().optional().default(false),

@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/ai-openai
 
+## 5.14.0
+
+### Minor Changes
+
+- 140fc6d: Add HubSpot v4 association fetch, fix empty-string-to-null coercion for HubSpot datetime fields, widen GetCachedObject/GetCachedFields visibility to protected, and fix OpenAI streaming max_completion_tokens parameter
+
+### Patch Changes
+
+- @memberjunction/ai@5.14.0
+- @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ai@5.13.0
+
 ## 5.12.0
 
 ### Patch Changes

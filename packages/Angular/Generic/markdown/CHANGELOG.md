@@ -1,5 +1,9 @@
 # @memberjunction/ng-markdown
 
+## 5.14.0
+
+## 5.13.0
+
 ## 5.12.0
 
 ### Patch Changes

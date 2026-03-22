@@ -158,6 +158,28 @@ export class ChatParams extends BaseParams  {
     messages: ChatMessage[] = [];
 
     /**
+     * Optional text to prefill the assistant's response. When set, the model will behave as if
+     * it has already started generating this text and will continue from where the prefill ends.
+     *
+     * This is useful for:
+     * - Forcing structured output formats (e.g., prefill with "```json" to get raw JSON)
+     * - Skipping preamble (e.g., prefill with "{" to get a JSON object directly)
+     * - Guiding the model's response style or format
+     *
+     * Best used in combination with `stopSequences` — for example, prefill with "```json\n"
+     * and set stopSequences to ["```"] to extract clean JSON without any markdown fencing.
+     *
+     * **Provider support:** Anthropic, Mistral, Groq, Bedrock (Claude models), Ollama, and
+     * OpenRouter natively support prefill. For providers that don't support it, this parameter
+     * is silently ignored.
+     *
+     * **Note:** The prefill text is NOT included in the response — the model's output begins
+     * immediately after the prefill. If you need the prefill text in your final result,
+     * prepend it yourself after receiving the response.
+     */
+    assistantPrefill?: string;
+
+    /**
      * Whether to use streaming for this request.
      * If true and the provider supports streaming, responses will be streamed.
      * If true but the provider doesn't support streaming, the request will fall back to non-streaming.
