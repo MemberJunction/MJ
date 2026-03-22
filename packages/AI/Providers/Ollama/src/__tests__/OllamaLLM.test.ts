@@ -269,6 +269,103 @@ describe('OllamaLLM', () => {
     });
   });
 
+  /* ---- assistantPrefill ---- */
+  describe('assistantPrefill', () => {
+    it('should append an assistant message when assistantPrefill is set (non-streaming)', async () => {
+      mockChat.mockResolvedValueOnce({
+        message: { content: 'Completed response' },
+        done: true,
+        prompt_eval_count: 10,
+        eval_count: 20,
+      });
+
+      const params = {
+        model: 'llama3',
+        messages: [{ role: 'user', content: 'Hello' }],
+        assistantPrefill: 'Sure, here is',
+      };
+
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion']
+        .bind(llm);
+      await fn(params);
+
+      const callArgs = mockChat.mock.calls[0][0] as { messages: Array<{ role: string; content: string }> };
+      const lastMessage = callArgs.messages[callArgs.messages.length - 1];
+      expect(lastMessage.role).toBe('assistant');
+      expect(lastMessage.content).toBe('Sure, here is');
+    });
+
+    it('should not append an assistant message when assistantPrefill is not set (non-streaming)', async () => {
+      mockChat.mockResolvedValueOnce({
+        message: { content: 'Hello!' },
+        done: true,
+        prompt_eval_count: 5,
+        eval_count: 10,
+      });
+
+      const params = {
+        model: 'llama3',
+        messages: [{ role: 'user', content: 'Hello' }],
+      };
+
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion']
+        .bind(llm);
+      await fn(params);
+
+      const callArgs = mockChat.mock.calls[0][0] as { messages: Array<{ role: string; content: string }> };
+      const lastMessage = callArgs.messages[callArgs.messages.length - 1];
+      expect(lastMessage.role).toBe('user');
+    });
+
+    it('should append an assistant message when assistantPrefill is set (streaming)', async () => {
+      // createStreamingRequest returns an async generator; mock chat to return one
+      const asyncIterator = (async function* () {
+        yield { message: { content: 'chunk1' }, done: false };
+        yield { message: { content: 'chunk2' }, done: true, prompt_eval_count: 5, eval_count: 10 };
+      })();
+      mockChat.mockResolvedValueOnce(asyncIterator);
+
+      const params = {
+        model: 'llama3',
+        messages: [{ role: 'user', content: 'Hello' }],
+        assistantPrefill: 'Let me think',
+      };
+
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['createStreamingRequest']
+        .bind(llm);
+      // Call the method to trigger the mockChat invocation
+      await fn(params);
+
+      const callArgs = mockChat.mock.calls[0][0] as { messages: Array<{ role: string; content: string }> };
+      const lastMessage = callArgs.messages[callArgs.messages.length - 1];
+      expect(lastMessage.role).toBe('assistant');
+      expect(lastMessage.content).toBe('Let me think');
+    });
+
+    it('should not append an assistant message when assistantPrefill is empty string', async () => {
+      mockChat.mockResolvedValueOnce({
+        message: { content: 'Response' },
+        done: true,
+        prompt_eval_count: 5,
+        eval_count: 10,
+      });
+
+      const params = {
+        model: 'llama3',
+        messages: [{ role: 'user', content: 'Hello' }],
+        assistantPrefill: '',
+      };
+
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion']
+        .bind(llm);
+      await fn(params);
+
+      const callArgs = mockChat.mock.calls[0][0] as { messages: Array<{ role: string; content: string }> };
+      const lastMessage = callArgs.messages[callArgs.messages.length - 1];
+      expect(lastMessage.role).toBe('user');
+    });
+  });
+
   /* ---- Image handling ---- */
   describe('convertToOllamaMessages', () => {
     it('should handle multimodal messages with images', () => {

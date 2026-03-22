@@ -21,8 +21,18 @@ export interface TableAnalysisPromptResult {
   confidence: number;
   columnDescriptions: ColumnDescriptionPromptResult[];
   foreignKeys?: ForeignKeyPromptResult[];
+  /** LLM-proposed primary key for this table */
+  primaryKey?: PrimaryKeyPromptResult;
   inferredBusinessDomain?: string;
   parentTableInsights?: ParentTableInsight[];
+}
+
+/** LLM-proposed primary key — must pass deterministic eligibility check before acceptance */
+export interface PrimaryKeyPromptResult {
+  /** Column name(s) that form the primary key. Use array for composite keys. */
+  columns: string[];
+  confidence: number;
+  reasoning: string;
 }
 
 export interface ForeignKeyPromptResult {
@@ -31,6 +41,20 @@ export interface ForeignKeyPromptResult {
   referencesTable: string;
   referencesColumn: string;
   confidence: number;
+}
+
+/** Result from per-table FK pruning pass — proposes which FKs to remove */
+export interface FKPruningProposal {
+  index: number;
+  action: 'remove';
+  reasoning: string;
+}
+
+/** Result from holistic FK pruning pass — final decision on proposed removals */
+export interface FKPruningFinalDecision {
+  index: number;
+  action: 'remove' | 'keep';
+  reasoning: string;
 }
 
 export interface ParentTableInsight {
@@ -178,3 +202,10 @@ export interface DatabaseLevelObservation {
   impact: string;
   recommendation: string;
 }
+
+export interface PKPruningProposal {
+  index: number;
+  action: "keep" | "remove";
+  reasoning: string;
+}
+

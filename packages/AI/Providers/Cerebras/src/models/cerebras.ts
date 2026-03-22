@@ -116,6 +116,11 @@ export class CerebrasLLM extends BaseLLM {
         // Add reasoning_effort if supported by the model
         this.setCerebrasParamsEffortLevel(cerebrasParams, params);
         
+        // Add stop sequences if specified
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            cerebrasParams.stop = params.stopSequences;
+        }
+
         // Handle response format if specified
         switch (params.responseFormat) {
             case 'Any':
@@ -210,7 +215,12 @@ export class CerebrasLLM extends BaseLLM {
         
         // Add reasoning_effort if supported by the model
         this.setCerebrasParamsEffortLevel(cerebrasParams, params);
-        
+
+        // Add stop sequences if specified
+        if (params.stopSequences != null && params.stopSequences.length > 0) {
+            cerebrasParams.stop = params.stopSequences;
+        }
+
         // Set response format if specified
         switch (params.responseFormat) {
             case 'JSON':
@@ -220,7 +230,7 @@ export class CerebrasLLM extends BaseLLM {
                 cerebrasParams.response_format = params.modelSpecificResponseFormat;
                 break;
         }
-        
+
         return this.client.chat.completions.create(cerebrasParams);
     }
     

@@ -1,0 +1,225 @@
+{
+    "Schemas": [
+        {
+            "name": "dbo",
+            "entityNamePrefix": "",
+            "entityNameSuffix": ""
+        }
+    ],
+    "dbo": [
+        {
+            "TableName": "CustomerCustomerDemo",
+            "PrimaryKey": [
+                {
+                    "FieldName": "CustomerID",
+                    "Description": "The unique identifier of the customer being associated with a demographic type."
+                },
+                {
+                    "FieldName": "CustomerTypeID",
+                    "Description": "The unique identifier of the demographic category assigned to the customer."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "CustomerID",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Customers",
+                    "RelatedField": "CustomerID",
+                    "Description": "The unique identifier of the customer being associated with a demographic type."
+                },
+                {
+                    "FieldName": "CustomerTypeID",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "CustomerDemographics",
+                    "RelatedField": "CustomerTypeID",
+                    "Description": "The unique identifier of the demographic category assigned to the customer."
+                }
+            ]
+        },
+        {
+            "TableName": "Customers",
+            "PrimaryKey": [
+                {
+                    "FieldName": "CustomerID",
+                    "Description": "A unique 5-character alphanumeric code used as the primary identifier for each customer."
+                }
+            ]
+        },
+        {
+            "TableName": "Employees",
+            "ForeignKeys": [
+                {
+                    "FieldName": "ReportsTo",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Employees",
+                    "RelatedField": "EmployeeID",
+                    "Description": "Identifier of the employee's direct manager"
+                }
+            ]
+        },
+        {
+            "TableName": "EmployeeTerritories",
+            "PrimaryKey": [
+                {
+                    "FieldName": "EmployeeID",
+                    "Description": "The unique identifier of the employee assigned to a specific territory."
+                },
+                {
+                    "FieldName": "TerritoryID",
+                    "Description": "The unique identifier (typically a ZIP code) of the geographic territory assigned to the employee."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "EmployeeID",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Employees",
+                    "RelatedField": "EmployeeID",
+                    "Description": "The unique identifier of the employee assigned to a specific territory."
+                },
+                {
+                    "FieldName": "TerritoryID",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Territories",
+                    "RelatedField": "TerritoryID",
+                    "Description": "The unique identifier (typically a ZIP code) of the geographic territory assigned to the employee."
+                }
+            ]
+        },
+        {
+            "TableName": "Order Details",
+            "PrimaryKey": [
+                {
+                    "FieldName": "OrderID",
+                    "Description": "A foreign key referencing the parent order header; identifies which transaction this line item belongs to."
+                },
+                {
+                    "FieldName": "ProductID",
+                    "Description": "A foreign key referencing the product catalog; identifies the specific item being sold."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "OrderID",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Orders",
+                    "RelatedField": "OrderID",
+                    "Description": "A foreign key referencing the parent order header; identifies which transaction this line item belongs to."
+                },
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Products",
+                    "RelatedField": "ProductID",
+                    "Description": "A foreign key referencing the product catalog; identifies the specific item being sold."
+                }
+            ]
+        },
+        {
+            "TableName": "Orders",
+            "PrimaryKey": [
+                {
+                    "FieldName": "OrderID",
+                    "Description": "Unique identifier for each sales order."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "CustomerID",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Customers",
+                    "RelatedField": "CustomerID",
+                    "Description": "Reference to the customer who placed the order."
+                },
+                {
+                    "FieldName": "EmployeeID",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Employees",
+                    "RelatedField": "EmployeeID",
+                    "Description": "Reference to the employee (sales representative) who processed the order."
+                },
+                {
+                    "FieldName": "ShipVia",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Shippers",
+                    "RelatedField": "ShipperID",
+                    "Description": "Reference to the shipping company or carrier used to deliver the order."
+                }
+            ]
+        },
+        {
+            "TableName": "Products",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductID",
+                    "Description": "A unique identifier for each product in the catalog."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "SupplierID",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Suppliers",
+                    "RelatedField": "SupplierID",
+                    "Description": "A reference to the external vendor that provides the product."
+                },
+                {
+                    "FieldName": "CategoryID",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Categories",
+                    "RelatedField": "CategoryID",
+                    "Description": "A reference to the logical grouping or department the product belongs to."
+                }
+            ]
+        },
+        {
+            "TableName": "Region",
+            "PrimaryKey": [
+                {
+                    "FieldName": "RegionID",
+                    "Description": "The unique primary identifier for a geographical region."
+                }
+            ]
+        },
+        {
+            "TableName": "Shippers",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ShipperID",
+                    "Description": "The unique primary identifier for each shipping company."
+                }
+            ]
+        },
+        {
+            "TableName": "Suppliers",
+            "PrimaryKey": [
+                {
+                    "FieldName": "SupplierID",
+                    "Description": "Unique identifier for each supplier"
+                }
+            ]
+        },
+        {
+            "TableName": "Territories",
+            "PrimaryKey": [
+                {
+                    "FieldName": "TerritoryID",
+                    "Description": "A unique identifier for each territory, formatted as a 5-digit string resembling a US Zip Code."
+                },
+                {
+                    "FieldName": "RegionID",
+                    "Description": "A reference to the broader geographical region (e.g., Eastern, Western) that this territory belongs to."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "RegionID",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Region",
+                    "RelatedField": "RegionID",
+                    "Description": "A reference to the broader geographical region (e.g., Eastern, Western) that this territory belongs to."
+                }
+            ]
+        }
+    ]
+}

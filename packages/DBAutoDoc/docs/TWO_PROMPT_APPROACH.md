@@ -87,7 +87,7 @@ interface QuerySQL {
 
 ### Cost Comparison
 
-Assuming GPT-4o pricing ($2.50/1M input, $10/1M output):
+Assuming Gemini Flash pricing ($2.50/1M input, $10/1M output):
 
 **Old Approach** (if it worked):
 - Input: 58 tables × ~3K context = 174K tokens → $0.44
@@ -201,10 +201,10 @@ To test the new implementation:
 ```bash
 cd /Users/jordanfanapour/Documents/GitHub/MJ/Demos/AssociationDB
 
-# Make sure config uses GPT-4o (not GPT-5) with sufficient tokens
+# Make sure config uses Gemini Flash (not GPT-5) with sufficient tokens
 # {
 #   "ai": {
-#     "model": "gpt-4o",
+#     "model": "gemini-3-flash-preview",
 #     "temperature": 0.1,
 #     "maxTokens": 16000
 #   }
