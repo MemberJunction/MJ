@@ -94,6 +94,43 @@ npm install @memberjunction/db-auto-doc
 npm install @memberjunction/db-auto-doc --save
 ```
 
+
+## Benchmark Results
+
+DBAutoDoc has been extensively benchmarked across multiple databases and LLM providers. Full details in the [research paper](research/v1/paper.md).
+
+### AdventureWorks2022 (71 tables, all constraints stripped)
+
+| Model Configuration | PK F1 | FK F1 | Overall |
+|---------------------|-------|-------|---------|
+| Gemini 3 Flash / 3.1 Pro | 95.0% | 94.2% | 96.1% (A+) |
+| Claude Sonnet 4.6 / Opus 4.6 | 95.0% | 93.0% | 96.1% (A+) |
+| GPT-5.4-mini / GPT-5.4 | 89.4% | 77.9% | 87.9% (B+) |
+
+### Cross-Database Results (Gemini Flash)
+
+| Database | Tables | PK F1 | FK F1 | Descriptions |
+|----------|--------|-------|-------|-------------|
+| AdventureWorks | 71 | 95.0% | 94.2% | 99% |
+| Chinook | 11 | 95.2% | 95.2% | 100% |
+| LousyDB (dark DB) | 20 | 97.6% | 77.2% | 100% |
+| Northwind | 13 | 72.7% | 75.0% | 100% |
+
+### Key Discovery Pipeline
+
+DBAutoDoc uses a 4-phase pipeline for relationship discovery:
+
+1. **Statistical Discovery** — PK/FK candidates via uniqueness analysis, value overlap, cardinality ratios. Six deterministic gates filter false positives with zero correct-key loss.
+2. **LLM Iterative Analysis** — The LLM creates new FK/PK proposals based on semantic understanding (89% precision on LLM-created FKs). Cross-table statistics provided in prompt context.
+3. **Ground Truth Locking** — High-confidence keys (≥90%) become immutable to protect correct discoveries.
+4. **Two-Pass Pruning** — A stronger model evaluates remaining candidates per-table, then holistically reviews all proposals.
+
+### Research Paper
+
+See [research/v1/](research/v1/) for the full paper, benchmark results, and comparison scripts:
+- **[Paper](research/v1/paper.md)** — "DBAutoDoc: Automated Discovery and Documentation of Undocumented Database Schemas via Statistical Analysis and Iterative LLM Refinement"
+- **[Results](research/v1/results/)** — Full exports (HTML, Markdown, ERD, SQL, CSV) for all public benchmarks
+
 ## Quick Start
 
 ### 1. Initialize
