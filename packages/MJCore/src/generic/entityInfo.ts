@@ -114,6 +114,139 @@ export class EntityRelationshipInfo extends BaseInfo  {
     }
 }
 
+/**
+ * Metadata about an organic key defined on an entity — a set of fields that constitute
+ * a natural identifier for cross-system matching (e.g., email, phone, SSN).
+ * Maps to the MJ: Entity Organic Keys metadata entity.
+ */
+export class EntityOrganicKeyInfo extends BaseInfo {
+    ID: string = null
+    EntityID: string = null
+    Name: string = null
+    Description: string | null = null
+    MatchFieldNames: string = null
+    NormalizationStrategy: 'LowerCaseTrim' | 'Trim' | 'ExactMatch' | 'Custom' = 'LowerCaseTrim'
+    CustomNormalizationExpression: string | null = null
+    AutoCreateRelatedViewOnForm: boolean = false
+    Sequence: number = 0
+    Status: 'Active' | 'Disabled' = 'Active'
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
+
+    // virtual fields from the database view
+    Entity: string = null
+
+    private _RelatedEntities: EntityOrganicKeyRelatedEntityInfo[] = []
+
+    /**
+     * Gets the related entities configured for this organic key.
+     */
+    get RelatedEntities(): EntityOrganicKeyRelatedEntityInfo[] {
+        return this._RelatedEntities;
+    }
+
+    /**
+     * Returns the match field names as a parsed array, trimmed.
+     */
+    get MatchFieldNamesArray(): string[] {
+        return this.MatchFieldNames ? this.MatchFieldNames.split(',').map(f => f.trim()) : [];
+    }
+
+    constructor(initData: {EntityOrganicKeyRelatedEntities?: unknown[]; _RelatedEntities?: unknown[]} & Record<string, unknown> = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+
+            this._RelatedEntities = [];
+            const re = initData.EntityOrganicKeyRelatedEntities || initData._RelatedEntities;
+            if (re && Array.isArray(re)) {
+                // sort by sequence
+                const sorted = [...re] as Record<string, unknown>[];
+                sorted.sort((a, b) => {
+                    const aSeq = (a.Sequence as number) ?? 999999;
+                    const bSeq = (b.Sequence as number) ?? 999999;
+                    return aSeq - bSeq;
+                });
+                for (const item of sorted) {
+                    this._RelatedEntities.push(new EntityOrganicKeyRelatedEntityInfo(item));
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Metadata about a related entity that should appear on a form when viewing a record,
+ * matched via a parent organic key. Supports both direct field matching and transitive
+ * matching via a SQL view/table.
+ * Maps to the MJ: Entity Organic Key Related Entities metadata entity.
+ */
+export class EntityOrganicKeyRelatedEntityInfo extends BaseInfo {
+    ID: string = null
+    EntityOrganicKeyID: string = null
+    RelatedEntityID: string = null
+
+    // Direct match
+    RelatedEntityFieldNames: string | null = null
+
+    // Transitive match
+    TransitiveObjectName: string | null = null
+    TransitiveObjectMatchFieldNames: string | null = null
+    TransitiveObjectOutputFieldName: string | null = null
+    RelatedEntityJoinFieldName: string | null = null
+
+    // Display
+    DisplayName: string | null = null
+    DisplayLocation: 'After Field Tabs' | 'Before Field Tabs' = 'After Field Tabs'
+    DisplayComponentID: string | null = null
+    DisplayComponentConfiguration: string | null = null
+    Sequence: number = 0
+
+    __mj_CreatedAt: Date = null
+    __mj_UpdatedAt: Date = null
+
+    // virtual fields from the database view
+    EntityOrganicKey: string = null
+    RelatedEntity: string = null
+
+    /**
+     * Whether this is a direct match (vs transitive).
+     */
+    get IsDirectMatch(): boolean {
+        return this.RelatedEntityFieldNames != null;
+    }
+
+    /**
+     * Whether this is a transitive match via a SQL view/table.
+     */
+    get IsTransitiveMatch(): boolean {
+        return this.TransitiveObjectName != null;
+    }
+
+    /**
+     * Returns the related entity field names as a parsed array, trimmed.
+     * Only meaningful for direct matches.
+     */
+    get RelatedEntityFieldNamesArray(): string[] {
+        return this.RelatedEntityFieldNames ? this.RelatedEntityFieldNames.split(',').map(f => f.trim()) : [];
+    }
+
+    /**
+     * Returns the transitive object match field names as a parsed array, trimmed.
+     * Only meaningful for transitive matches.
+     */
+    get TransitiveObjectMatchFieldNamesArray(): string[] {
+        return this.TransitiveObjectMatchFieldNames ? this.TransitiveObjectMatchFieldNames.split(',').map(f => f.trim()) : [];
+    }
+
+    constructor(initData: Record<string, unknown> = null) {
+        super();
+        if (initData) {
+            this.copyInitData(initData);
+        }
+    }
+}
+
 export const EntityPermissionType = {
     Read: 'Read',
     Create: 'Create',
@@ -1349,6 +1482,7 @@ export class EntityInfo extends BaseInfo {
     private _Permissions: EntityPermissionInfo[]
     private _Settings: EntitySettingInfo[]
     private _FieldCategories: Record<string, FieldCategoryInfo> | null = null
+    private _OrganicKeys: EntityOrganicKeyInfo[] = []
     _hasIdField: boolean = false
     _virtualCount: number = 0 
     _manyToManyCount: number = 0 
@@ -1431,6 +1565,16 @@ export class EntityInfo extends BaseInfo {
      */
     get FieldCategories(): Record<string, FieldCategoryInfo> | null {
         return this._FieldCategories;
+    }
+
+    /**
+     * Gets the organic keys defined on this entity. Organic keys enable cross-entity
+     * relationships based on shared business data (email, phone, SSN, etc.) rather than
+     * foreign key references. Only active organic keys are included.
+     * @returns {EntityOrganicKeyInfo[]} Array of organic key definitions with their related entities
+     */
+    get OrganicKeys(): EntityOrganicKeyInfo[] {
+        return this._OrganicKeys;
     }
 
     private static __createdAtFieldName = '__mj_CreatedAt';
@@ -1836,6 +1980,132 @@ export class EntityInfo extends BaseInfo {
         return obj;
     }
 
+    /**
+     * Returns a RunViewParams object configured to query the related entity matched via an organic key.
+     * Supports both direct field matching and transitive matching via SQL views/tables.
+     * @param record - The current record whose organic key values will be used for matching
+     * @param organicKeyRelatedEntity - The organic key related entity configuration
+     * @param organicKey - The parent organic key definition
+     * @param filter - Optional additional SQL filter to AND with the organic key filter
+     * @param maxRecords - Optional max rows to return
+     * @returns RunViewParams ready to pass to RunView
+     */
+    public static BuildOrganicKeyViewParams(
+        record: BaseEntity,
+        organicKeyRelatedEntity: EntityOrganicKeyRelatedEntityInfo,
+        organicKey: EntityOrganicKeyInfo,
+        filter?: string,
+        maxRecords?: number
+    ): RunViewParams {
+        const params: RunViewParams = {};
+        const matchFields = organicKey.MatchFieldNamesArray;
+
+        if (organicKeyRelatedEntity.IsTransitiveMatch) {
+            params.ExtraFilter = EntityInfo.BuildTransitiveOrganicKeyFilter(record, organicKeyRelatedEntity, organicKey, matchFields);
+        } else {
+            params.ExtraFilter = EntityInfo.BuildDirectOrganicKeyFilter(record, organicKeyRelatedEntity, organicKey, matchFields);
+        }
+
+        if (filter && filter.length > 0) {
+            params.ExtraFilter = `(${params.ExtraFilter}) AND (${filter})`;
+        }
+
+        params.EntityName = organicKeyRelatedEntity.RelatedEntity;
+
+        if (maxRecords && maxRecords > 0) {
+            params.MaxRows = maxRecords;
+        }
+
+        return params;
+    }
+
+    /**
+     * Builds an ExtraFilter for direct organic key matching (field-to-field comparison).
+     */
+    private static BuildDirectOrganicKeyFilter(
+        record: BaseEntity,
+        relatedEntity: EntityOrganicKeyRelatedEntityInfo,
+        organicKey: EntityOrganicKeyInfo,
+        matchFields: string[]
+    ): string {
+        const relatedFields = relatedEntity.RelatedEntityFieldNamesArray;
+        const conditions: string[] = [];
+
+        for (let i = 0; i < matchFields.length; i++) {
+            const value = record.Get(matchFields[i]);
+            if (value == null) {
+                // NULL values can't match — return a filter that yields no results
+                return '1=0';
+            }
+            const relatedField = relatedFields[i] || matchFields[i];
+            const escapedValue = String(value).replace(/'/g, "''");
+            conditions.push(EntityInfo.WrapWithNormalization(
+                `[${relatedField}]`, organicKey, escapedValue
+            ));
+        }
+
+        return conditions.join(' AND ');
+    }
+
+    /**
+     * Builds an ExtraFilter for transitive organic key matching (via SQL view/table subquery).
+     */
+    private static BuildTransitiveOrganicKeyFilter(
+        record: BaseEntity,
+        relatedEntity: EntityOrganicKeyRelatedEntityInfo,
+        organicKey: EntityOrganicKeyInfo,
+        matchFields: string[]
+    ): string {
+        const transitiveMatchFields = relatedEntity.TransitiveObjectMatchFieldNamesArray;
+        const conditions: string[] = [];
+
+        for (let i = 0; i < matchFields.length; i++) {
+            const value = record.Get(matchFields[i]);
+            if (value == null) {
+                return '1=0';
+            }
+            const transitiveField = transitiveMatchFields[i] || matchFields[i];
+            const escapedValue = String(value).replace(/'/g, "''");
+            conditions.push(EntityInfo.WrapWithNormalization(
+                `[${transitiveField}]`, organicKey, escapedValue
+            ));
+        }
+
+        return `[${relatedEntity.RelatedEntityJoinFieldName}] IN (SELECT [${relatedEntity.TransitiveObjectOutputFieldName}] FROM [${relatedEntity.TransitiveObjectName}] WHERE ${conditions.join(' AND ')})`;
+    }
+
+    /**
+     * Wraps a field expression and a literal value with the appropriate normalization
+     * based on the organic key's NormalizationStrategy.
+     * Returns a SQL comparison expression like: LOWER(LTRIM(RTRIM([Field]))) = LOWER(LTRIM(RTRIM('value')))
+     */
+    private static WrapWithNormalization(
+        fieldExpression: string,
+        organicKey: EntityOrganicKeyInfo,
+        escapedValue: string
+    ): string {
+        switch (organicKey.NormalizationStrategy) {
+            case 'LowerCaseTrim':
+                return `LOWER(LTRIM(RTRIM(${fieldExpression}))) = LOWER(LTRIM(RTRIM('${escapedValue}')))`;
+            case 'Trim':
+                return `LTRIM(RTRIM(${fieldExpression})) = LTRIM(RTRIM('${escapedValue}'))`;
+            case 'ExactMatch':
+                return `${fieldExpression} = '${escapedValue}'`;
+            case 'Custom': {
+                const expr = organicKey.CustomNormalizationExpression;
+                if (!expr) {
+                    // Fall back to exact match if no custom expression defined
+                    return `${fieldExpression} = '${escapedValue}'`;
+                }
+                const normalizedField = expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
+                const normalizedValue = expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+                return `${normalizedField} = ${normalizedValue}`;
+            }
+            default:
+                return `${fieldExpression} = '${escapedValue}'`;
+        }
+    }
+
 
     constructor(initData: any = null) {
         super();
@@ -1897,6 +2167,15 @@ export class EntityInfo extends BaseInfo {
                 // now that we have prepared the er array by sorting it, if needed, let's load up the related entities
                 for (let j = 0; j < er.length; j++) {
                     this._RelatedEntities.push(new EntityRelationshipInfo(er[j]));
+                }
+            }
+
+            // copy the Organic Keys (sorted by sequence inside EntityOrganicKeyInfo constructor)
+            this._OrganicKeys = [];
+            const ok = initData.EntityOrganicKeys || initData._OrganicKeys;
+            if (ok && Array.isArray(ok)) {
+                for (const item of ok) {
+                    this._OrganicKeys.push(new EntityOrganicKeyInfo(item));
                 }
             }
 

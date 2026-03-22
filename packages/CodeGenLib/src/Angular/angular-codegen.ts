@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo, FieldCategoryInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, FieldCategoryInfo } from '@memberjunction/core';
 import { logError, logStatus } from '../Misc/status_logging';
 import { UUIDsEqual } from '@memberjunction/global';
 import fs from 'fs';
@@ -946,7 +946,89 @@ ${componentCodeWithIndent}
 
         return tabs;
       }
-      
+
+      /**
+       * Generates organic key tab sections for an entity form. Organic keys enable
+       * cross-entity relationships based on shared business data (email, phone, etc.).
+       * Each organic key related entity gets its own collapsible panel with an EntityDataGrid.
+       * @param entity The entity to generate organic key tabs for
+       * @param startIndex Starting index for tab ordering
+       * @returns Array of organic key tab sections
+       */
+      protected generateOrganicKeyTabs(entity: EntityInfo, startIndex: number): AngularFormSectionInfo[] {
+        const md = new Metadata();
+        const tabs: AngularFormSectionInfo[] = [];
+        const organicKeys = entity.OrganicKeys;
+
+        if (!organicKeys || organicKeys.length === 0) {
+            return tabs;
+        }
+
+        let index = startIndex;
+        for (const organicKey of organicKeys) {
+            for (const relatedEntity of organicKey.RelatedEntities) {
+                const tabName = relatedEntity.DisplayName || relatedEntity.RelatedEntity;
+
+                // Determine icon from the related entity
+                let iconClass = 'fa fa-link';
+                const re: EntityInfo | undefined = md.Entities.find(e => UUIDsEqual(e.ID, relatedEntity.RelatedEntityID));
+                if (re && re.Icon && re.Icon.length > 0) {
+                    iconClass = re.Icon;
+                }
+
+                // Build a unique section key
+                const sectionKey = this.camelCase('organic ' + organicKey.Name + ' ' + relatedEntity.RelatedEntity);
+
+                // Generate the EntityDataGrid template for this organic key match
+                const allowLoadCheck = `IsSectionExpanded('${sectionKey}')`;
+                const afterDataLoadEvent = `(AfterDataLoad)="SetSectionRowCount('${sectionKey}', $event.totalRowCount)"`;
+
+                // Use BuildOrganicKeyViewParamsByNames instead of BuildRelationshipViewParamsByEntityName
+                const template = `<mj-explorer-entity-data-grid
+    [Params]="BuildOrganicKeyViewParamsByNames('${organicKey.Name.replace(/'/g, "\\'")}','${relatedEntity.RelatedEntity.replace(/'/g, "\\'")}')"
+    [AllowLoad]="${allowLoadCheck}"
+    [ShowToolbar]="false"
+    (Navigate)="OnFormNavigate($event)"
+    ${afterDataLoadEvent}
+    >
+</mj-explorer-entity-data-grid>`;
+
+                const componentCodeWithIndent = template.split('\n').map(l => `            ${l}`).join('\n');
+                const relatedEntitySearchTerms = (relatedEntity.RelatedEntity + ' ' + organicKey.Name).toLowerCase();
+
+                const tabCode = `${index > 0 ? '\n' : ''}    <!-- Organic Key: ${organicKey.Name} → ${tabName} Section -->
+    <mj-collapsible-panel
+        SectionKey="${sectionKey}"
+        SectionName="${tabName}"
+        Icon="${iconClass}"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('${sectionKey}')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+${componentCodeWithIndent}
+        </div>
+        }
+    </mj-collapsible-panel>`;
+
+                tabs.push({
+                    Type: GeneratedFormSectionType.Category,
+                    IsRelatedEntity: true,
+                    RelatedEntityDisplayLocation: relatedEntity.DisplayLocation,
+                    Name: tabName,
+                    TabCode: tabCode,
+                    EntityClassName: entity.ClassName,
+                    UniqueKey: sectionKey,
+                });
+                index++;
+            }
+        }
+
+        return tabs;
+      }
+
       /**
        * Removes all whitespace from a string
        * @param s The string to process
@@ -1112,6 +1194,9 @@ ${componentCodeWithIndent}
           // calc ending index for additional sections so we can pass taht into the related entity tabs because they need to start incrementally up from there...
           const endingIndex = additionalSections && additionalSections.length ? (topArea && topArea.length > 0 ? additionalSections.length - 1 : additionalSections.length) : 0;
           const relatedEntitySections = await this.generateRelatedEntityTabs(entity, endingIndex, contextUser);
+          // Generate organic key tabs (cross-entity matching by shared business data)
+          const organicKeySections = this.generateOrganicKeyTabs(entity, endingIndex + relatedEntitySections.length);
+          relatedEntitySections.push(...organicKeySections);
           const htmlCode = topArea.length > 0 ? this.generateSingleEntityHTMLWithSplitterForAngular(topArea, additionalSections, relatedEntitySections) :
                                                 this.generateSingleEntityHTMLWithOUTSplitterForAngular(topArea, additionalSections, relatedEntitySections);
           return {htmlCode, additionalSections, relatedEntitySections};
