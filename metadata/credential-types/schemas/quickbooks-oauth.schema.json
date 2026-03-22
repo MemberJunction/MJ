@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "description": "QuickBooks Online OAuth 2.0 credentials for REST API v3 integration.",
+  "properties": {
+    "ClientId": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "OAuth 2.0 Client ID from your Intuit Developer app.",
+      "isSecret": false,
+      "order": 0
+    },
+    "ClientSecret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "OAuth 2.0 Client Secret from your Intuit Developer app.",
+      "isSecret": true,
+      "order": 1
+    },
+    "RealmId": {
+      "type": "string",
+      "title": "Realm ID (Company ID)",
+      "description": "QuickBooks company identifier. Found in Settings > Account and Settings or in the URL when logged in.",
+      "isSecret": false,
+      "order": 2
+    },
+    "AccessToken": {
+      "type": "string",
+      "title": "Access Token",
+      "description": "OAuth 2.0 access token. Automatically refreshed by the connector when expired.",
+      "isSecret": true,
+      "order": 3
+    },
+    "RefreshToken": {
+      "type": "string",
+      "title": "Refresh Token",
+      "description": "OAuth 2.0 refresh token used to obtain new access tokens. Valid for 100 days.",
+      "isSecret": true,
+      "order": 4
+    },
+    "Environment": {
+      "type": "string",
+      "title": "Environment",
+      "description": "QuickBooks environment: sandbox for development, production for live data.",
+      "default": "sandbox",
+      "enum": ["sandbox", "production"],
+      "isSecret": false,
+      "order": 5
+    }
+  },
+  "required": ["ClientId", "ClientSecret", "RealmId", "RefreshToken"]
+}
