@@ -134,6 +134,17 @@ interface PostMigrationResult {
 }
 
 /**
+ * Pending work to be completed after MJAPI restarts.
+ * Written to disk before restart, read and processed on startup.
+ */
+export interface RSUPendingWork {
+    CompanyIntegrationID: string;
+    SourceObjectNames: string[];
+    SchemaName: string;
+    CreatedAt: string;
+}
+
+/**
  * Dry-run preview of what the pipeline would do.
  */
 export interface RSUPreviewResult {
@@ -267,6 +278,42 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      */
     public SetCodeGenOutputPaths(paths: string[]): void {
         this._codeGenOutputPaths = paths;
+    }
+
+    // ─── Pending Work (post-restart tasks) ─────────────────────────
+
+    /** Write pending work to disk so it can be processed after restart. */
+    public async WritePendingWork(data: RSUPendingWork): Promise<string> {
+        const { writeFileSync, mkdirSync } = await import('node:fs');
+        const { join } = await import('node:path');
+        const dir = join(rsuConfig.WorkDir, '.rsu_pending');
+        mkdirSync(dir, { recursive: true });
+        const filePath = join(dir, `${Date.now()}.json`);
+        writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+        this.rsuLog(`Wrote pending work to ${filePath}`);
+        return filePath;
+    }
+
+    /** Read all pending work files, return them, and delete them. */
+    public async ReadAndClearPendingWork(): Promise<RSUPendingWork[]> {
+        const { readdirSync, readFileSync, unlinkSync, existsSync } = await import('node:fs');
+        const { join } = await import('node:path');
+        const dir = join(rsuConfig.WorkDir, '.rsu_pending');
+        if (!existsSync(dir)) return [];
+        const files = readdirSync(dir).filter(f => f.endsWith('.json'));
+        const results: RSUPendingWork[] = [];
+        for (const file of files) {
+            const filePath = join(dir, file);
+            try {
+                const data = JSON.parse(readFileSync(filePath, 'utf-8')) as RSUPendingWork;
+                results.push(data);
+                unlinkSync(filePath);
+            } catch { /* skip corrupt files */ }
+        }
+        if (results.length > 0) {
+            this.rsuLog(`Found ${results.length} pending work item(s)`);
+        }
+        return results;
     }
 
     /** Whether RSU is enabled based on ALLOW_RUNTIME_SCHEMA_UPDATE=1. */

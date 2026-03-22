@@ -776,7 +776,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 MaxLength: f.MaxLength,
                 Precision: f.Precision,
                 Scale: f.Scale,
-                DefaultValue: f.DefaultValue
+                DefaultValue: f.DefaultValue,
+                Description: f.Description,
             }));
 
             const primaryKeyFields = (sourceObj?.Fields ?? [])
@@ -788,6 +789,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 SchemaName: obj.SchemaName,
                 TableName: obj.TableName,
                 EntityName: obj.EntityName,
+                Description: sourceObj?.Description,
                 Columns: columns,
                 PrimaryKeyFields: primaryKeyFields.length > 0 ? primaryKeyFields : ['ID'],
                 SoftForeignKeys: []
@@ -1297,20 +1299,31 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Step 2: Build SchemaPreviewObjectInput for each source object
             const objects = this.buildObjectInputsFromNames(input.SourceObjectNames, schemaName);
 
-            // Step 3: Build schema and run pipeline
+            // Step 3: Write pending work file BEFORE pipeline runs
+            // After restart, MJAPI reads this and creates entity maps + field maps + starts sync
+            const rsm = RuntimeSchemaManager.Instance;
+            await rsm.WritePendingWork({
+                CompanyIntegrationID: input.CompanyIntegrationID,
+                SourceObjectNames: input.SourceObjectNames,
+                SchemaName: schemaName,
+                CreatedAt: new Date().toISOString(),
+            });
+
+            // Step 4: Build schema and run pipeline (with restart — kills process at the end)
             const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
                 input.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart
             );
 
-            const rsm = RuntimeSchemaManager.Instance;
             const batchResult = await rsm.RunPipelineBatch([rsuInput]);
 
-            const pipelineSuccess = batchResult.SuccessCount > 0;
+            const migrationSucceeded = batchResult.SuccessCount > 0;
             const pipelineSteps = batchResult.Results[0]?.Steps.map((s: RSUPipelineStep) => ({
                 Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message,
             }));
 
-            if (!pipelineSuccess) {
+            // If pipeline failed (migration/CodeGen), clean up pending work and return error
+            if (!migrationSucceeded) {
+                await rsm.ReadAndClearPendingWork(); // discard
                 return {
                     Success: false,
                     Message: `Pipeline failed: ${batchResult.Results[0]?.ErrorMessage ?? 'unknown error'}`,
@@ -1319,25 +1332,37 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 };
             }
 
-            // Step 4: Refresh metadata so new entities are visible
-            await Metadata.Provider.Refresh();
+            // If we get here, pipeline succeeded but restart may or may not have happened yet.
+            // If restart happened, this code never executes (process died).
+            // If skipRestart=true, we can do entity maps now.
+            if (skipRestart) {
+                await Metadata.Provider.Refresh();
+                const entityMapsCreated = await this.createEntityAndFieldMaps(
+                    input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user
+                );
+                const syncRunID = await this.startSyncAfterApply(input.CompanyIntegrationID, user);
+                await rsm.ReadAndClearPendingWork(); // done, clear it
 
-            // Step 5: Create entity maps + field maps for each source object
-            const entityMapsCreated = await this.createEntityAndFieldMaps(
-                input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user
-            );
+                return {
+                    Success: true,
+                    Message: `Applied ${objects.length} object(s) — ${entityMapsCreated.length} entity maps created${syncRunID ? ', sync started' : ''}`,
+                    Steps: pipelineSteps,
+                    EntityMapsCreated: entityMapsCreated,
+                    SyncRunID: syncRunID ?? undefined,
+                    GitCommitSuccess: batchResult.Results[0]?.GitCommitSuccess,
+                    APIRestarted: false,
+                    Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
+                };
+            }
 
-            // Step 6: Start sync
-            const syncRunID = await this.startSyncAfterApply(input.CompanyIntegrationID, user);
-
+            // If restart is enabled, this return may or may not execute
+            // (depends on whether PM2 kills process before GraphQL response is sent)
             return {
                 Success: true,
-                Message: `Applied ${objects.length} object(s) — ${entityMapsCreated.length} entity maps created${syncRunID ? ', sync started' : ''}`,
+                Message: `Applied ${objects.length} object(s) — entity maps will be created after restart`,
                 Steps: pipelineSteps,
-                EntityMapsCreated: entityMapsCreated,
-                SyncRunID: syncRunID ?? undefined,
                 GitCommitSuccess: batchResult.Results[0]?.GitCommitSuccess,
-                APIRestarted: batchResult.Results[0]?.APIRestarted,
+                APIRestarted: true,
                 Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
             };
         } catch (e) {
