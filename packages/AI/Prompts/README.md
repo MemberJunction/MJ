@@ -2,6 +2,10 @@
 
 Advanced AI prompt execution engine for MemberJunction. Provides hierarchical template composition, intelligent model selection with failover, parallel execution with judge-based result selection, structured output validation with retry, comprehensive execution tracking, and streaming support. This is the primary interface for executing AI prompts in the MemberJunction framework.
 
+## Guides
+
+- **[Assistant Prefill & Stop Sequences](PREFILL_AND_STOP_SEQUENCES.md)** — How to use `assistantPrefill` and `stopSequences` to control output format, reduce token usage, and eliminate verbose format instructions from prompts.
+
 ## Architecture
 
 ```mermaid
