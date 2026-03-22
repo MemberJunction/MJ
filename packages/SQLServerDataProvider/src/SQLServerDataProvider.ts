@@ -73,6 +73,7 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { v4 as uuidv4 } from 'uuid';
 import { UUIDsEqual } from '@memberjunction/global';
+import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
 /**
  * Checks whether an error indicates a stale/dead database connection that
  * could be resolved by retrying with a fresh connection from the pool.
@@ -248,6 +249,15 @@ export class SQLServerDataProvider
   /**************************************************************************/
   // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
   /**************************************************************************/
+
+  /**
+   * Returns the SQL Server dialect instance so that platform-specific tokens
+   * (batch separator, quoted identifiers, etc.) are sourced from
+   * `@memberjunction/sql-dialect` rather than hardcoded strings.
+   */
+  protected getDialect(): SQLDialect {
+    return new SQLServerDialect();
+  }
 
   public override QuoteIdentifier(name: string): string {
     return `[${name}]`;
