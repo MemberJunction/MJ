@@ -20,7 +20,8 @@ import {
   ConnectionTestGraphQLResult,
   SchemaPreviewObjectInput,
   SchemaPreviewResult,
-  DefaultConfigResult
+  DefaultConfigResult,
+  ApplyAllResult
 } from '@memberjunction/graphql-dataprovider';
 
 /**
@@ -643,6 +644,15 @@ export class IntegrationDataService {
   }> {
     const client = this.getIntegrationClient();
     return client.ApplySchemaBatch(items);
+  }
+
+  /** Full automatic "Apply All" flow: pipeline + entity maps + field maps + sync */
+  async ApplyAll(
+    companyIntegrationID: string,
+    sourceObjectNames: string[]
+  ): Promise<ApplyAllResult> {
+    const client = this.getIntegrationClient();
+    return client.ApplyAll(companyIntegrationID, sourceObjectNames);
   }
 
   /** Start a sync for a company integration */

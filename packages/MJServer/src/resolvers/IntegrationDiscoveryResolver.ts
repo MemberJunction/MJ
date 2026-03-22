@@ -60,6 +60,34 @@ class ApplySchemaBatchItemInput {
     @Field(() => [SchemaPreviewObjectInput]) Objects: SchemaPreviewObjectInput[];
 }
 
+// ─── Apply All Input/Output Types ───────────────────────────────────────────
+
+@InputType()
+class ApplyAllInput {
+    @Field() CompanyIntegrationID: string;
+    @Field(() => [String]) SourceObjectNames: string[];
+}
+
+@ObjectType()
+class ApplyAllEntityMapCreated {
+    @Field() SourceObjectName: string;
+    @Field() EntityName: string;
+    @Field() EntityMapID: string;
+    @Field() FieldMapCount: number;
+}
+
+@ObjectType()
+class ApplyAllOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [RSUStepOutput], { nullable: true }) Steps?: RSUStepOutput[];
+    @Field(() => [ApplyAllEntityMapCreated], { nullable: true }) EntityMapsCreated?: ApplyAllEntityMapCreated[];
+    @Field({ nullable: true }) SyncRunID?: string;
+    @Field({ nullable: true }) GitCommitSuccess?: boolean;
+    @Field({ nullable: true }) APIRestarted?: boolean;
+    @Field(() => [String], { nullable: true }) Warnings?: string[];
+}
+
 @ObjectType()
 class ApplySchemaBatchItemOutput {
     @Field() CompanyIntegrationID: string;
@@ -1236,6 +1264,245 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         } catch (e) {
             LogError(`IntegrationApplySchemaBatch error: ${e}`);
             return { Success: false, Message: this.formatError(e), Items: [] };
+        }
+    }
+
+    // ── APPLY ALL (Full Automatic Flow) ──────────────────────────────────
+
+    /**
+     * Full automatic "Apply All" flow for MJ integrations.
+     * 1. Auto-generates schema/table names from the integration name + source object names
+     * 2. Builds DDL + additionalSchemaInfo
+     * 3. Runs RSU pipeline (migration → CodeGen → compile → git → restart)
+     * 4. Creates CompanyIntegrationEntityMap records for each object
+     * 5. Creates CompanyIntegrationFieldMap records for each field (1:1 mapping)
+     * 6. Starts sync for the integration
+     */
+    @Mutation(() => ApplyAllOutput)
+    async IntegrationApplyAll(
+        @Arg("input") input: ApplyAllInput,
+        @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
+        @Arg("skipGitCommit", { defaultValue: false }) skipGitCommit: boolean,
+        @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
+        @Ctx() ctx: AppContext
+    ): Promise<ApplyAllOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const validatedPlatform = this.validatePlatform(platform);
+
+            // Step 1: Resolve connector and derive schema name
+            const { connector, companyIntegration } = await this.resolveConnector(input.CompanyIntegrationID, user);
+            const schemaName = this.deriveSchemaName(companyIntegration.Integration);
+
+            // Step 2: Build SchemaPreviewObjectInput for each source object
+            const objects = this.buildObjectInputsFromNames(input.SourceObjectNames, schemaName);
+
+            // Step 3: Build schema and run pipeline
+            const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
+                input.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart
+            );
+
+            const rsm = RuntimeSchemaManager.Instance;
+            const batchResult = await rsm.RunPipelineBatch([rsuInput]);
+
+            const pipelineSuccess = batchResult.SuccessCount > 0;
+            const pipelineSteps = batchResult.Results[0]?.Steps.map((s: RSUPipelineStep) => ({
+                Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message,
+            }));
+
+            if (!pipelineSuccess) {
+                return {
+                    Success: false,
+                    Message: `Pipeline failed: ${batchResult.Results[0]?.ErrorMessage ?? 'unknown error'}`,
+                    Steps: pipelineSteps,
+                    Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
+                };
+            }
+
+            // Step 4: Refresh metadata so new entities are visible
+            await Metadata.Provider.Refresh();
+
+            // Step 5: Create entity maps + field maps for each source object
+            const entityMapsCreated = await this.createEntityAndFieldMaps(
+                input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user
+            );
+
+            // Step 6: Start sync
+            const syncRunID = await this.startSyncAfterApply(input.CompanyIntegrationID, user);
+
+            return {
+                Success: true,
+                Message: `Applied ${objects.length} object(s) — ${entityMapsCreated.length} entity maps created${syncRunID ? ', sync started' : ''}`,
+                Steps: pipelineSteps,
+                EntityMapsCreated: entityMapsCreated,
+                SyncRunID: syncRunID ?? undefined,
+                GitCommitSuccess: batchResult.Results[0]?.GitCommitSuccess,
+                APIRestarted: batchResult.Results[0]?.APIRestarted,
+                Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
+            };
+        } catch (e) {
+            LogError(`IntegrationApplyAll error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /** Derives a SQL-safe schema name from the integration name (e.g., "HubSpot" → "hubspot"). */
+    private deriveSchemaName(integrationName: string): string {
+        return (integrationName || 'integration').toLowerCase().replace(/[^a-z0-9_]/g, '_');
+    }
+
+    /** Builds SchemaPreviewObjectInput[] from source object name strings, using auto-derived schema/table names. */
+    private buildObjectInputsFromNames(sourceObjectNames: string[], schemaName: string): SchemaPreviewObjectInput[] {
+        return sourceObjectNames.map(name => {
+            const obj = new SchemaPreviewObjectInput();
+            obj.SourceObjectName = name;
+            obj.SchemaName = schemaName;
+            obj.TableName = name.replace(/[^A-Za-z0-9_]/g, '_');
+            obj.EntityName = name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
+            return obj;
+        });
+    }
+
+    /**
+     * After pipeline success, creates CompanyIntegrationEntityMap + CompanyIntegrationFieldMap
+     * records for each source object by matching schema + table name to newly created entities.
+     */
+    private async createEntityAndFieldMaps(
+        companyIntegrationID: string,
+        objects: SchemaPreviewObjectInput[],
+        connector: BaseIntegrationConnector,
+        companyIntegration: MJCompanyIntegrationEntity,
+        schemaName: string,
+        user: UserInfo
+    ): Promise<ApplyAllEntityMapCreated[]> {
+        const md = new Metadata();
+        const results: ApplyAllEntityMapCreated[] = [];
+
+        for (const obj of objects) {
+            const entityMapResult = await this.createSingleEntityMap(
+                companyIntegrationID, obj, connector, companyIntegration, schemaName, user, md
+            );
+            if (entityMapResult) {
+                results.push(entityMapResult);
+            }
+        }
+        return results;
+    }
+
+    /** Creates a single entity map + field maps for one source object. */
+    private async createSingleEntityMap(
+        companyIntegrationID: string,
+        obj: SchemaPreviewObjectInput,
+        connector: BaseIntegrationConnector,
+        companyIntegration: MJCompanyIntegrationEntity,
+        schemaName: string,
+        user: UserInfo,
+        md: Metadata
+    ): Promise<ApplyAllEntityMapCreated | null> {
+        // Find the entity by schema + table name
+        const entityInfo = md.Entities.find(
+            e => e.SchemaName.toLowerCase() === schemaName.toLowerCase()
+              && e.BaseTable.toLowerCase() === obj.TableName.toLowerCase()
+        );
+        if (!entityInfo) {
+            LogError(`IntegrationApplyAll: entity not found for ${schemaName}.${obj.TableName}`);
+            return null;
+        }
+
+        // Create entity map
+        const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
+        em.NewRecord();
+        em.CompanyIntegrationID = companyIntegrationID;
+        em.ExternalObjectName = obj.SourceObjectName;
+        em.EntityID = entityInfo.ID;
+        em.SyncDirection = 'Pull';
+        em.Priority = 0;
+        em.Status = 'Active';
+        em.SyncEnabled = true;
+
+        if (!await em.Save()) {
+            LogError(`IntegrationApplyAll: failed to save entity map for ${obj.SourceObjectName}`);
+            return null;
+        }
+
+        // Discover fields from the source and create 1:1 field maps
+        const fieldMapCount = await this.createFieldMapsForEntityMap(
+            em.ID, obj.SourceObjectName, connector, companyIntegration, user, md
+        );
+
+        return {
+            SourceObjectName: obj.SourceObjectName,
+            EntityName: entityInfo.Name,
+            EntityMapID: em.ID,
+            FieldMapCount: fieldMapCount,
+        };
+    }
+
+    /** Discovers fields from the source object and creates 1:1 field maps. */
+    private async createFieldMapsForEntityMap(
+        entityMapID: string,
+        sourceObjectName: string,
+        connector: BaseIntegrationConnector,
+        companyIntegration: MJCompanyIntegrationEntity,
+        user: UserInfo,
+        md: Metadata
+    ): Promise<number> {
+        let fieldCount = 0;
+        try {
+            const discoverFields = connector.DiscoverFields.bind(connector) as
+                (ci: unknown, obj: string, u: unknown) => Promise<ExternalFieldSchema[]>;
+            const fields = await discoverFields(companyIntegration, sourceObjectName, user);
+
+            for (const field of fields) {
+                const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps', user);
+                fm.NewRecord();
+                fm.EntityMapID = entityMapID;
+                fm.SourceFieldName = field.Name;
+                fm.DestinationFieldName = field.Name.replace(/[^A-Za-z0-9_]/g, '_');
+                fm.IsKeyField = field.IsUniqueKey;
+                fm.IsRequired = field.IsRequired;
+                fm.Direction = 'SourceToDest';
+                fm.Status = 'Active';
+                fm.Priority = 0;
+
+                if (await fm.Save()) {
+                    fieldCount++;
+                }
+            }
+        } catch (e) {
+            LogError(`IntegrationApplyAll: failed to discover/create field maps for ${sourceObjectName}: ${this.formatError(e)}`);
+        }
+        return fieldCount;
+    }
+
+    /** Starts sync after a successful apply-all pipeline, returning the run ID if available. */
+    private async startSyncAfterApply(companyIntegrationID: string, user: UserInfo): Promise<string | null> {
+        try {
+            await IntegrationEngine.Instance.Config(false, user);
+            const syncPromise = IntegrationEngine.Instance.RunSync(companyIntegrationID, user, 'Manual');
+
+            // Fire and forget — don't block the response
+            syncPromise.catch(err => {
+                LogError(`IntegrationApplyAll: background sync failed for ${companyIntegrationID}: ${err}`);
+            });
+
+            // Small delay to let the run record get created
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            const rv = new RunView();
+            const runResult = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: Company Integration Runs',
+                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}' AND Status='In Progress'`,
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 1,
+                ResultType: 'simple',
+                Fields: ['ID']
+            }, user);
+
+            return (runResult.Success && runResult.Results.length > 0) ? runResult.Results[0].ID : null;
+        } catch (e) {
+            LogError(`IntegrationApplyAll: sync start failed: ${this.formatError(e)}`);
+            return null;
         }
     }
 

@@ -93,6 +93,26 @@ export interface MutationResult {
     Message: string;
 }
 
+/** A single entity map created during Apply All */
+export interface ApplyAllEntityMapCreated {
+    SourceObjectName: string;
+    EntityName: string;
+    EntityMapID: string;
+    FieldMapCount: number;
+}
+
+/** Result of the full automatic Apply All flow */
+export interface ApplyAllResult {
+    Success: boolean;
+    Message: string;
+    Steps?: Array<{ Name: string; Status: string; DurationMs: number; Message: string }>;
+    EntityMapsCreated?: ApplyAllEntityMapCreated[];
+    SyncRunID?: string;
+    GitCommitSuccess?: boolean;
+    APIRestarted?: boolean;
+    Warnings?: string[];
+}
+
 /** Composite integration status for dashboard */
 export interface IntegrationStatusResult {
     Success: boolean;
@@ -589,6 +609,39 @@ export class GraphQLIntegrationClient {
             }`;
             const result = await this._dataProvider.ExecuteGQL(query, { items, platform, skipGitCommit, skipRestart });
             return result?.IntegrationApplySchemaBatch ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /**
+     * Full automatic "Apply All" flow: auto-names schema/tables, runs RSU pipeline,
+     * creates entity maps + field maps, and starts sync.
+     * @param companyIntegrationID - ID of the CompanyIntegration
+     * @param sourceObjectNames - List of source object names to apply
+     * @param platform - Target database platform
+     * @param skipGitCommit - Skip git commit step
+     * @param skipRestart - Skip API restart step
+     */
+    public async ApplyAll(
+        companyIntegrationID: string,
+        sourceObjectNames: string[],
+        platform = 'sqlserver',
+        skipGitCommit = false,
+        skipRestart = false
+    ): Promise<ApplyAllResult> {
+        try {
+            const query = gql`mutation IntegrationApplyAll(
+                $input: ApplyAllInput!, $platform: String!, $skipGitCommit: Boolean!, $skipRestart: Boolean!
+            ) {
+                IntegrationApplyAll(input: $input, platform: $platform, skipGitCommit: $skipGitCommit, skipRestart: $skipRestart) {
+                    Success Message
+                    Steps { Name Status DurationMs Message }
+                    EntityMapsCreated { SourceObjectName EntityName EntityMapID FieldMapCount }
+                    SyncRunID GitCommitSuccess APIRestarted Warnings
+                }
+            }`;
+            const input = { CompanyIntegrationID: companyIntegrationID, SourceObjectNames: sourceObjectNames };
+            const result = await this._dataProvider.ExecuteGQL(query, { input, platform, skipGitCommit, skipRestart });
+            return result?.IntegrationApplyAll ?? { Success: false, Message: 'No response' };
         } catch (e) { return { Success: false, Message: (e as Error).message }; }
     }
 

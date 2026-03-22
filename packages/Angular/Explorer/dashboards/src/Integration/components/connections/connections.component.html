@@ -271,12 +271,12 @@
               <i class="fa-solid fa-plus"></i> Add Map
             </button>
             <button class="add-map-btn apply-all-btn"
-                    [disabled]="IsApplyingSchemaBatch"
+                    [disabled]="IsApplyingSchemaBatch || SelectedSourceObjects.size === 0"
                     (click)="ApplySchemaBatch()">
               @if (IsApplyingSchemaBatch) {
                 <i class="fa-solid fa-spinner fa-spin"></i> Running Pipeline...
               } @else {
-                <i class="fa-solid fa-gears"></i> Apply All Schemas
+                <i class="fa-solid fa-gears"></i> Apply All ({{ SelectedSourceObjects.size }})
               }
             </button>
           </div>
@@ -307,6 +307,68 @@
             </div>
           }
         }
+
+        <!-- Discovered source objects with checkboxes for Apply All -->
+        <div class="discovered-objects-section">
+          <div class="discovered-objects-header">
+            <div class="discovered-objects-title">
+              <i class="fa-solid fa-database"></i>
+              <span>Source Objects</span>
+              @if (DiscoveredSourceObjects.length > 0) {
+                <span class="discovered-count">({{ SelectedSourceObjects.size }}/{{ DiscoveredSourceObjects.length }} selected)</span>
+              }
+            </div>
+            <div class="discovered-objects-actions">
+              @if (!IsLoadingDiscoveredObjects && DiscoveredSourceObjects.length > 0) {
+                <button class="discovered-action-btn" (click)="ToggleSelectAllSourceObjects()">
+                  @if (AllSourceObjectsSelected) {
+                    Deselect All
+                  } @else {
+                    Select All
+                  }
+                </button>
+              }
+              <button class="discovered-action-btn" (click)="LoadDiscoveredObjects()" [disabled]="IsLoadingDiscoveredObjects">
+                <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoadingDiscoveredObjects"></i>
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          @if (IsLoadingDiscoveredObjects) {
+            <div class="discovered-loading">
+              <i class="fa-solid fa-spinner fa-spin"></i> Discovering source objects...
+            </div>
+          } @else if (DiscoveredSourceObjects.length === 0) {
+            <div class="discovered-empty">
+              <span>No source objects discovered. Click Refresh to load.</span>
+            </div>
+          } @else {
+            <div class="discovered-objects-list">
+              @for (obj of DiscoveredSourceObjects; track obj.Name) {
+                <label class="discovered-object-row" [class.selected]="IsSourceObjectSelected(obj.Name)">
+                  <input type="checkbox"
+                         [checked]="IsSourceObjectSelected(obj.Name)"
+                         (change)="ToggleSourceObjectSelection(obj.Name)" />
+                  <span class="discovered-object-name">{{ obj.Label || obj.Name }}</span>
+                  <span class="discovered-object-api-name">{{ obj.Name }}</span>
+                  <span class="discovered-object-badges">
+                    @if (obj.SupportsIncrementalSync) {
+                      <span class="discovered-badge incremental" title="Supports incremental sync">
+                        <i class="fa-solid fa-bolt"></i>
+                      </span>
+                    }
+                    @if (obj.SupportsWrite) {
+                      <span class="discovered-badge writable" title="Supports write">
+                        <i class="fa-solid fa-pen"></i>
+                      </span>
+                    }
+                  </span>
+                </label>
+              }
+            </div>
+          }
+        </div>
 
         <!-- Sync result banner -->
         @if (SyncResult) {

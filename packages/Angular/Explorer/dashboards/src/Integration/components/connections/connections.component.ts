@@ -7,6 +7,7 @@ import { ResourceData, MJCompanyIntegrationEntity, MJCredentialEntity, MJIntegra
 import { CredentialDialogResult } from '@memberjunction/ng-credentials';
 import { TreeBranchConfig, TreeLeafConfig, TreeNode, TreeDropdownComponent } from '@memberjunction/ng-trees';
 import { SchemaPreviewObjectInput, SchemaPreviewResult } from '@memberjunction/graphql-dataprovider';
+import { DiscoveredObjectResult } from '@memberjunction/graphql-dataprovider';
 import {
   IntegrationDataService,
   ResolveIntegrationIcon,
@@ -185,6 +186,11 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   ApplySchemaBatchMessage = '';
   ApplySchemaBatchSuccess = false;
   ApplySchemaBatchSteps: Array<{ Name: string; Status: string; DurationMs: number; Message: string }> = [];
+
+  // Apply All: discovered source objects + selection
+  DiscoveredSourceObjects: DiscoveredObjectResult[] = [];
+  IsLoadingDiscoveredObjects = false;
+  SelectedSourceObjects = new Set<string>();
 
   // Auto-map schema state
   ShowAutoMapPanel = false;
@@ -556,13 +562,16 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.SelectedSummary = summary;
     this.DetailSearchTerm = '';
     this.ScheduledJobID = null;
+    this.DiscoveredSourceObjects = [];
+    this.SelectedSourceObjects.clear();
     this.IsDetailLoading = true;
     this.cdr.detectChanges();
 
     try {
       const [maps] = await Promise.all([
         this.loadEntityMapsForIntegration(summary.Integration.ID),
-        this.loadScheduledJobForIntegration(summary.Integration.ID)
+        this.loadScheduledJobForIntegration(summary.Integration.ID),
+        this.LoadDiscoveredObjects()
       ]);
       this.DetailEntityMaps = maps;
       this.DetailFilteredMaps = maps;
@@ -879,12 +888,90 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Source object discovery + selection for Apply All
+  // ---------------------------------------------------------------------------
+
+  async LoadDiscoveredObjects(): Promise<void> {
+    if (!this.SelectedSummary) return;
+    this.IsLoadingDiscoveredObjects = true;
+    this.DiscoveredSourceObjects = [];
+    this.SelectedSourceObjects.clear();
+    this.cdr.detectChanges();
+
+    try {
+      const result = await this.dataService.DiscoverObjects(this.SelectedSummary.Integration.ID);
+      if (result.Success) {
+        this.DiscoveredSourceObjects = result.Data;
+      } else {
+        console.error('[IntegrationConnections] Discover objects failed:', result.Message);
+      }
+    } catch (err) {
+      console.error('[IntegrationConnections] Discover objects error:', err);
+    } finally {
+      this.IsLoadingDiscoveredObjects = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  ToggleSourceObjectSelection(name: string): void {
+    if (this.SelectedSourceObjects.has(name)) {
+      this.SelectedSourceObjects.delete(name);
+    } else {
+      this.SelectedSourceObjects.add(name);
+    }
+    this.cdr.detectChanges();
+  }
+
+  IsSourceObjectSelected(name: string): boolean {
+    return this.SelectedSourceObjects.has(name);
+  }
+
+  SelectAllSourceObjects(): void {
+    for (const obj of this.DiscoveredSourceObjects) {
+      this.SelectedSourceObjects.add(obj.Name);
+    }
+    this.cdr.detectChanges();
+  }
+
+  DeselectAllSourceObjects(): void {
+    this.SelectedSourceObjects.clear();
+    this.cdr.detectChanges();
+  }
+
+  get AllSourceObjectsSelected(): boolean {
+    return this.DiscoveredSourceObjects.length > 0
+      && this.SelectedSourceObjects.size === this.DiscoveredSourceObjects.length;
+  }
+
+  get SomeSourceObjectsSelected(): boolean {
+    return this.SelectedSourceObjects.size > 0
+      && this.SelectedSourceObjects.size < this.DiscoveredSourceObjects.length;
+  }
+
+  ToggleSelectAllSourceObjects(): void {
+    if (this.AllSourceObjectsSelected) {
+      this.DeselectAllSourceObjects();
+    } else {
+      this.SelectAllSourceObjects();
+    }
+  }
+
   /**
-   * Batch apply schema for all source objects that have entity maps but no existing tables.
-   * Collects all pending/new objects from the selected connector and runs one RSU pipeline batch.
+   * Full automatic "Apply All" flow: discovers objects, runs RSU pipeline,
+   * creates entity maps + field maps, starts sync.
+   * Uses selected source objects from the discovered objects list.
    */
   async ApplySchemaBatch(): Promise<void> {
     if (!this.SelectedSummary) return;
+
+    const selectedNames = Array.from(this.SelectedSourceObjects);
+    if (selectedNames.length === 0) {
+      this.ApplySchemaBatchSuccess = false;
+      this.ApplySchemaBatchMessage = 'No source objects selected. Select objects from the discovered list first.';
+      this.cdr.detectChanges();
+      return;
+    }
 
     this.IsApplyingSchemaBatch = true;
     this.ApplySchemaBatchMessage = '';
@@ -892,47 +979,25 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
 
     try {
-      // Collect source objects from entity maps that need new tables
-      // Use the integration name (lowercase) as the default schema
-      const integrationName = this.SelectedSummary.Integration.Integration?.toLowerCase().replace(/[^a-z0-9_]/g, '_') || 'integration';
-      const objects = this.DetailEntityMaps.map(map => ({
-        SourceObjectName: map.ExternalObjectName,
-        SchemaName: integrationName,
-        TableName: map.ExternalObjectName.replace(/[^A-Za-z0-9_]/g, '_'),
-        EntityName: map.ExternalObjectLabel || map.ExternalObjectName,
-      }));
-
-      if (objects.length === 0) {
-        this.ApplySchemaBatchSuccess = false;
-        this.ApplySchemaBatchMessage = 'No entity maps configured. Add maps first.';
-        return;
-      }
-
-      const result = await this.dataService.ApplySchemaBatch([{
-        CompanyIntegrationID: this.SelectedSummary.Integration.ID,
-        Objects: objects,
-      }]);
+      const result = await this.dataService.ApplyAll(
+        this.SelectedSummary.Integration.ID,
+        selectedNames
+      );
 
       this.ApplySchemaBatchSuccess = result.Success;
       this.ApplySchemaBatchMessage = result.Message;
       this.ApplySchemaBatchSteps = result.Steps ?? [];
 
-      // Auto-trigger sync after successful schema apply
+      // Refresh entity maps after successful apply
       if (result.Success && this.SelectedSummary) {
-        this.ApplySchemaBatchMessage += ' — Starting initial sync...';
-        this.cdr.detectChanges();
-        try {
-          const syncResult = await this.dataService.StartSync(this.SelectedSummary.Integration.ID);
-          this.ApplySchemaBatchMessage = syncResult.Success
-            ? `${result.Message} — Sync started (Run ID: ${syncResult.RunID})`
-            : `${result.Message} — Sync failed: ${syncResult.Message}`;
-        } catch {
-          this.ApplySchemaBatchMessage += ' — Sync trigger failed';
-        }
+        const maps = await this.loadEntityMapsForIntegration(this.SelectedSummary.Integration.ID);
+        this.DetailEntityMaps = maps;
+        this.DetailFilteredMaps = this.applyDetailFilter();
+        this.EntityMapCounts = this.countMapsByIntegration(await this.loadAllEntityMaps());
       }
     } catch (e) {
       this.ApplySchemaBatchSuccess = false;
-      this.ApplySchemaBatchMessage = `Batch apply failed: ${(e as Error).message}`;
+      this.ApplySchemaBatchMessage = `Apply All failed: ${(e as Error).message}`;
     } finally {
       this.IsApplyingSchemaBatch = false;
       this.cdr.detectChanges();
