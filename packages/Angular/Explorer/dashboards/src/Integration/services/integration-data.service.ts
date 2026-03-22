@@ -630,6 +630,27 @@ export class IntegrationDataService {
     return { Success: result.Success, Message: result.Message ?? '' };
   }
 
+  /** Batch apply schema for multiple connectors — one RSU pipeline run */
+  async ApplySchemaBatch(
+    items: Array<{ CompanyIntegrationID: string; Objects: SchemaPreviewObjectInput[] }>
+  ): Promise<{
+    Success: boolean;
+    Message: string;
+    Items?: Array<{ CompanyIntegrationID: string; Success: boolean; Message: string; Warnings?: string[] }>;
+    Steps?: Array<{ Name: string; Status: string; DurationMs: number; Message: string }>;
+    GitCommitSuccess?: boolean;
+    APIRestarted?: boolean;
+  }> {
+    const client = this.getIntegrationClient();
+    return client.ApplySchemaBatch(items);
+  }
+
+  /** Start a sync for a company integration */
+  async StartSync(companyIntegrationID: string): Promise<{ Success: boolean; Message: string; RunID?: string }> {
+    const client = this.getIntegrationClient();
+    return client.StartSync(companyIntegrationID);
+  }
+
   /** Get the connector's default configuration for quick setup */
   async GetDefaultConfig(companyIntegrationID: string): Promise<DefaultConfigResult> {
     const client = this.getIntegrationClient();

@@ -561,6 +561,37 @@ export class GraphQLIntegrationClient {
         } catch (e) { return { Success: false, Message: (e as Error).message }; }
     }
 
+    /**
+     * Batch apply schema for multiple connectors in one RSU pipeline run.
+     * Sequential migrations, one CodeGen, one compile, one git PR, one restart.
+     */
+    public async ApplySchemaBatch(
+        items: Array<{ CompanyIntegrationID: string; Objects: SchemaPreviewObjectInput[] }>,
+        platform = 'sqlserver', skipGitCommit = false, skipRestart = false
+    ): Promise<{
+        Success: boolean;
+        Message: string;
+        Items?: Array<{ CompanyIntegrationID: string; Success: boolean; Message: string; Warnings?: string[] }>;
+        Steps?: Array<{ Name: string; Status: string; DurationMs: number; Message: string }>;
+        GitCommitSuccess?: boolean;
+        APIRestarted?: boolean;
+    }> {
+        try {
+            const query = gql`mutation IntegrationApplySchemaBatch(
+                $items: [ApplySchemaBatchItemInput!]!, $platform: String!, $skipGitCommit: Boolean!, $skipRestart: Boolean!
+            ) {
+                IntegrationApplySchemaBatch(items: $items, platform: $platform, skipGitCommit: $skipGitCommit, skipRestart: $skipRestart) {
+                    Success Message
+                    Items { CompanyIntegrationID Success Message Warnings }
+                    Steps { Name Status DurationMs Message }
+                    GitCommitSuccess APIRestarted
+                }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { items, platform, skipGitCommit, skipRestart });
+            return result?.IntegrationApplySchemaBatch ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
     // ── Sync Execution ─────────────────────────────────────────────────
 
     public async StartSync(companyIntegrationID: string, webhookURL?: string): Promise<MutationResult & { RunID?: string }> {

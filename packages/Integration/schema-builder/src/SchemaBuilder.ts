@@ -219,7 +219,7 @@ export class SchemaBuilder {
      * Convert SchemaBuilderOutput into an RSUPipelineInput suitable for
      * RuntimeSchemaManager.RunPipeline().
      */
-    private BuildRSUInput(
+    public BuildRSUInput(
         schemaOutput: SchemaBuilderOutput,
         input: SchemaBuilderInput,
         rsuOptions?: { SkipGitCommit?: boolean; SkipRestart?: boolean }

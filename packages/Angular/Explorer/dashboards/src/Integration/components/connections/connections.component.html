@@ -270,8 +270,43 @@
             <button class="add-map-btn" (click)="ToggleAddMapPanel()" [class.active]="ShowAddMapPanel">
               <i class="fa-solid fa-plus"></i> Add Map
             </button>
+            <button class="add-map-btn apply-all-btn"
+                    [disabled]="IsApplyingSchemaBatch"
+                    (click)="ApplySchemaBatch()">
+              @if (IsApplyingSchemaBatch) {
+                <i class="fa-solid fa-spinner fa-spin"></i> Running Pipeline...
+              } @else {
+                <i class="fa-solid fa-gears"></i> Apply All Schemas
+              }
+            </button>
           </div>
         </div>
+
+        <!-- Batch Apply Schema result banner -->
+        @if (ApplySchemaBatchMessage) {
+          <div class="sync-result-banner" [class.sync-success]="ApplySchemaBatchSuccess" [class.sync-failure]="!ApplySchemaBatchSuccess">
+            @if (ApplySchemaBatchSuccess) {
+              <i class="fa-solid fa-circle-check"></i>
+            } @else {
+              <i class="fa-solid fa-circle-xmark"></i>
+            }
+            <span>{{ ApplySchemaBatchMessage }}</span>
+          </div>
+          @if (ApplySchemaBatchSteps.length > 0) {
+            <div class="sync-result-banner" style="flex-direction: column; align-items: flex-start; gap: 4px; font-size: 12px; color: var(--mj-text-muted);">
+              @for (step of ApplySchemaBatchSteps; track step.Name) {
+                <div>
+                  @if (step.Status === 'success') {
+                    <i class="fa-solid fa-check" style="color: var(--mj-status-success);"></i>
+                  } @else {
+                    <i class="fa-solid fa-xmark" style="color: var(--mj-status-error);"></i>
+                  }
+                  {{ step.Name }} — {{ step.DurationMs }}ms
+                </div>
+              }
+            </div>
+          }
+        }
 
         <!-- Sync result banner -->
         @if (SyncResult) {

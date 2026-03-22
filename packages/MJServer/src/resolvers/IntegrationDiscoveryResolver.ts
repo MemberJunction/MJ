@@ -26,7 +26,8 @@ import {
     TargetTableConfig,
     TargetColumnConfig
 } from "@memberjunction/integration-schema-builder";
-import type { RSUPipelineStep } from "@memberjunction/schema-engine";
+import { RuntimeSchemaManager, type RSUPipelineStep, type RSUPipelineInput } from "@memberjunction/schema-engine";
+import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-builder";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
@@ -51,6 +52,30 @@ class ApplySchemaOutput {
     @Field({ nullable: true }) GitCommitSuccess?: boolean;
     @Field({ nullable: true }) APIRestarted?: boolean;
     @Field(() => [String], { nullable: true }) Warnings?: string[];
+}
+
+@InputType()
+class ApplySchemaBatchItemInput {
+    @Field() CompanyIntegrationID: string;
+    @Field(() => [SchemaPreviewObjectInput]) Objects: SchemaPreviewObjectInput[];
+}
+
+@ObjectType()
+class ApplySchemaBatchItemOutput {
+    @Field() CompanyIntegrationID: string;
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [String], { nullable: true }) Warnings?: string[];
+}
+
+@ObjectType()
+class ApplySchemaBatchOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [ApplySchemaBatchItemOutput]) Items: ApplySchemaBatchItemOutput[];
+    @Field(() => [RSUStepOutput], { nullable: true }) Steps?: RSUStepOutput[];
+    @Field({ nullable: true }) GitCommitSuccess?: boolean;
+    @Field({ nullable: true }) APIRestarted?: boolean;
 }
 
 // ─── Connector Capabilities Output Type ─────────────────────────────────────
@@ -1147,6 +1172,120 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationApplySchema error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+    }
+
+    /**
+     * Batch apply schema for multiple connectors in one RSU pipeline run.
+     * Each item specifies a companyIntegrationID + source objects to create tables for.
+     * All migrations run sequentially, then ONE CodeGen, ONE compile, ONE git PR, ONE restart.
+     */
+    @Mutation(() => ApplySchemaBatchOutput)
+    async IntegrationApplySchemaBatch(
+        @Arg("items", () => [ApplySchemaBatchItemInput]) items: ApplySchemaBatchItemInput[],
+        @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
+        @Arg("skipGitCommit", { defaultValue: false }) skipGitCommit: boolean,
+        @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
+        @Ctx() ctx: AppContext
+    ): Promise<ApplySchemaBatchOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const validatedPlatform = this.validatePlatform(platform);
+            const pipelineInputs: RSUPipelineInput[] = [];
+            const itemResults: ApplySchemaBatchItemOutput[] = [];
+
+            // Phase 1: Build schema artifacts for each connector's objects
+            for (const item of items) {
+                try {
+                    const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
+                        item.CompanyIntegrationID, item.Objects, validatedPlatform, user, skipGitCommit, skipRestart
+                    );
+                    pipelineInputs.push(rsuInput);
+                    itemResults.push({
+                        CompanyIntegrationID: item.CompanyIntegrationID,
+                        Success: true,
+                        Message: `Schema generated for ${item.Objects.length} object(s)`,
+                        Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
+                    });
+                } catch (e) {
+                    itemResults.push({
+                        CompanyIntegrationID: item.CompanyIntegrationID,
+                        Success: false,
+                        Message: this.formatError(e),
+                    });
+                }
+            }
+
+            // Phase 2: Run all successful migrations through one pipeline batch
+            if (pipelineInputs.length === 0) {
+                return { Success: false, Message: 'No valid schema inputs to process', Items: itemResults };
+            }
+
+            const rsm = RuntimeSchemaManager.Instance;
+            const batchResult = await rsm.RunPipelineBatch(pipelineInputs);
+
+            return {
+                Success: batchResult.SuccessCount > 0,
+                Message: `Batch complete: ${batchResult.SuccessCount} succeeded, ${batchResult.FailureCount} failed`,
+                Items: itemResults,
+                Steps: batchResult.Results[0]?.Steps.map((s: RSUPipelineStep) => ({
+                    Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message,
+                })),
+                GitCommitSuccess: batchResult.Results[0]?.GitCommitSuccess,
+                APIRestarted: batchResult.Results[0]?.APIRestarted,
+            };
+        } catch (e) {
+            LogError(`IntegrationApplySchemaBatch error: ${e}`);
+            return { Success: false, Message: this.formatError(e), Items: [] };
+        }
+    }
+
+    /**
+     * Build schema artifacts for a single connector's objects.
+     * Shared by IntegrationApplySchema (single) and IntegrationApplySchemaBatch (batch).
+     */
+    private async buildSchemaForConnector(
+        companyIntegrationID: string,
+        objects: SchemaPreviewObjectInput[],
+        platform: 'sqlserver' | 'postgresql',
+        user: UserInfo,
+        skipGitCommit: boolean,
+        skipRestart: boolean
+    ): Promise<{ schemaOutput: SchemaBuilderOutput; rsuInput: RSUPipelineInput }> {
+        const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+
+        const introspect = connector.IntrospectSchema.bind(connector) as
+            (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
+        const sourceSchema = await introspect(companyIntegration, user);
+
+        const requestedNames = new Set(objects.map(o => o.SourceObjectName));
+        const filteredSchema: SourceSchemaInfo = {
+            Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
+        };
+
+        const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, platform);
+
+        const input: SchemaBuilderInput = {
+            SourceSchema: filteredSchema,
+            TargetConfigs: targetConfigs,
+            Platform: platform,
+            MJVersion: process.env.MJ_VERSION ?? '5.11.0',
+            SourceType: companyIntegration.Integration,
+            AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
+            MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/v5',
+            MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
+            ExistingTables: [],
+            EntitySettingsForTargets: {}
+        };
+
+        const builder = new SchemaBuilder();
+        const schemaOutput = builder.BuildSchema(input);
+
+        if (schemaOutput.Errors.length > 0) {
+            throw new Error(`Schema generation failed: ${schemaOutput.Errors.join('; ')}`);
+        }
+
+        const rsuInput = builder.BuildRSUInput(schemaOutput, input, { SkipGitCommit: skipGitCommit, SkipRestart: skipRestart });
+        return { schemaOutput, rsuInput };
     }
 
     // ── SYNC ────────────────────────────────────────────────────────────

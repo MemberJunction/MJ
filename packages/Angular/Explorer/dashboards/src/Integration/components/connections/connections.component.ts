@@ -180,6 +180,12 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   ApplySchemaMessage = '';
   ApplySchemaSuccess = false;
 
+  // Batch Apply Schema state
+  IsApplyingSchemaBatch = false;
+  ApplySchemaBatchMessage = '';
+  ApplySchemaBatchSuccess = false;
+  ApplySchemaBatchSteps: Array<{ Name: string; Status: string; DurationMs: number; Message: string }> = [];
+
   // Auto-map schema state
   ShowAutoMapPanel = false;
   AutoMapSchemas: string[] = [];
@@ -869,6 +875,64 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       this.ApplySchemaMessage = `Apply schema failed: ${(e as Error).message}`;
     } finally {
       this.IsApplyingSchema = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Batch apply schema for all source objects that have entity maps but no existing tables.
+   * Collects all pending/new objects from the selected connector and runs one RSU pipeline batch.
+   */
+  async ApplySchemaBatch(): Promise<void> {
+    if (!this.SelectedSummary) return;
+
+    this.IsApplyingSchemaBatch = true;
+    this.ApplySchemaBatchMessage = '';
+    this.ApplySchemaBatchSteps = [];
+    this.cdr.detectChanges();
+
+    try {
+      // Collect all source objects that need new tables from discovered objects
+      const objects = this.AvailableSourceObjects.map(obj => ({
+        SourceObjectName: obj.Name,
+        SchemaName: this.AutoMapSelectedSchema || this.NewEntitySchema || 'integration',
+        TableName: obj.Name.replace(/[^A-Za-z0-9_]/g, '_'),
+        EntityName: obj.Label || obj.Name,
+      }));
+
+      if (objects.length === 0) {
+        this.ApplySchemaBatchSuccess = false;
+        this.ApplySchemaBatchMessage = 'No source objects to apply';
+        return;
+      }
+
+      const result = await this.dataService.ApplySchemaBatch([{
+        CompanyIntegrationID: this.SelectedSummary.Integration.ID,
+        Objects: objects,
+      }]);
+
+      this.ApplySchemaBatchSuccess = result.Success;
+      this.ApplySchemaBatchMessage = result.Message;
+      this.ApplySchemaBatchSteps = result.Steps ?? [];
+
+      // Auto-trigger sync after successful schema apply
+      if (result.Success && this.SelectedSummary) {
+        this.ApplySchemaBatchMessage += ' — Starting initial sync...';
+        this.cdr.detectChanges();
+        try {
+          const syncResult = await this.dataService.StartSync(this.SelectedSummary.Integration.ID);
+          this.ApplySchemaBatchMessage = syncResult.Success
+            ? `${result.Message} — Sync started (Run ID: ${syncResult.RunID})`
+            : `${result.Message} — Sync failed: ${syncResult.Message}`;
+        } catch {
+          this.ApplySchemaBatchMessage += ' — Sync trigger failed';
+        }
+      }
+    } catch (e) {
+      this.ApplySchemaBatchSuccess = false;
+      this.ApplySchemaBatchMessage = `Batch apply failed: ${(e as Error).message}`;
+    } finally {
+      this.IsApplyingSchemaBatch = false;
       this.cdr.detectChanges();
     }
   }
