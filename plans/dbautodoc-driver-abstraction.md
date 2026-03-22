@@ -212,7 +212,7 @@ After refactoring, each driver shrinks to ~200-300 lines covering only:
 2. Remove all methods now provided by generic layer
 3. Implement the new abstract methods
 4. Keep `@RegisterClass(BaseAutoDocDriver, 'SQLServer')` — registration target stays the same
-5. **Test**: Run against AutoCare database, compare results to pre-refactor
+5. **Test**: Run against OrgB database, compare results to pre-refactor
 
 ### Phase 3: Migrate PostgreSQLDriver
 
@@ -233,7 +233,7 @@ After refactoring, each driver shrinks to ~200-300 lines covering only:
 1. Remove any dead code
 2. Verify all three drivers compile cleanly
 3. Run existing unit tests if any exist
-4. Run a fresh AutoCare analysis to validate end-to-end
+4. Run a fresh OrgB analysis to validate end-to-end
 
 ---
 

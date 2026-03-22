@@ -196,7 +196,7 @@ Add a `Map<string, number>` cache to `ColumnStatsCache` for value overlap result
 
 - These gates operate on the statistical discovery phase only. The LLM's ability to create FKs during table analysis is unaffected.
 - Gate 1 depends on the quality of column statistics. If `ColumnStatsCache` doesn't have stats for a target column, the gate should be skipped (fail-open) rather than blocking the candidate.
-- Gate 4 multipliers may need tuning on different databases. The 0.1/0.5/2.0/5.0 thresholds are based on AdventureWorks patterns and should be validated on MSTA and other databases.
+- Gate 4 multipliers may need tuning on different databases. The 0.1/0.5/2.0/5.0 thresholds are based on AdventureWorks patterns and should be validated on other databases.
 - Gate 6 threshold (75%) provides generous headroom for messy databases. Could be tuned per-database if needed, though 75% should be universally safe.
 - Gate 6 threshold (75%) provides generous headroom for messy databases. Could be tuned per-database if needed, though 75% should be universally safe.
 

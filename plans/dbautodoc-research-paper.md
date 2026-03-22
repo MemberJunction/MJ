@@ -974,15 +974,15 @@ Table 6 reports token consumption and estimated API cost across benchmark databa
 
 #### 7.5.1 OrgA: Professional Association in the Education Sector
 
-**Database profile.** OrgA is a professional association in the education sector that uses a Salesforce-based CRM/AMS platform (Nimble AMS built on Salesforce) as its primary membership and operations system. The database snapshot contained 36 tables, 1,807 columns, spread across 4 schemas. Critically, the database was *completely undocumented*: no primary keys were declared, no foreign key constraints existed, and no table or column descriptions were present in the schema metadata. This represents the most challenging operating condition for DBAutoDoc — a true "dark database" with zero structural hints.
+**Database profile.** OrgA is a professional association in the education sector that uses a cloud-based CRM/AMS platform as its primary membership and operations system. The database snapshot contained 36 tables, 1,807 columns, spread across 4 schemas. Critically, the database was *completely undocumented*: no primary keys were declared, no foreign key constraints existed, and no table or column descriptions were present in the schema metadata. This represents the most challenging operating condition for DBAutoDoc — a true "dark database" with zero structural hints.
 
-**Evaluation methodology.** Because no ground truth existed for this database — neither declared constraints nor independent expert documentation — we performed a qualitative evaluation only. Quantitative precision/recall metrics cannot be computed without a reference set. Instead, we assessed the output by reviewing the discovered keys and generated descriptions against domain knowledge of the Salesforce platform architecture and the association management domain.
+**Evaluation methodology.** Because no ground truth existed for this database — neither declared constraints nor independent expert documentation — we performed a qualitative evaluation only. Quantitative precision/recall metrics cannot be computed without a reference set. Instead, we assessed the output by reviewing the discovered keys and generated descriptions against domain knowledge of the CRM platform architecture and the association management domain.
 
 **Key discovery results.** DBAutoDoc detected 35 primary keys across the 36 tables (97% table coverage), identifying the correct Salesforce `Id` or `sfid` column in each case. The system discovered 193 foreign key relationships, of which 1 was pruned during the LLM validation phase. The adaptive weight redistribution mechanism (Section 4.3.5) activated as expected, since no declared PKs existed to anchor the target-is-PK scoring factor.
 
 **Semantic analysis highlights.** The most striking result was the LLM's ability to reverse-engineer platform-specific architectural patterns from cryptic column names alone:
 
-- **Salesforce Person Account model.** Columns following the `NU__Account__c` naming pattern were correctly identified as Nimble AMS custom objects on the Salesforce platform. The system recognized that the `__c` suffix denotes custom fields/objects in Salesforce's managed package architecture, and correctly inferred the `NU` namespace prefix as belonging to the Nimble AMS package.
+- **Salesforce Person Account model.** Columns following platform-specific naming conventions were correctly identified as custom objects from the CRM platform. The system recognized platform-specific suffixes and namespace prefixes in the managed package architecture.
 
 - **Committee governance structure.** The system identified a multi-table committee governance model spanning committee definitions, membership rosters, role assignments, and term tracking — a common pattern in professional associations — from tables whose names and columns provided no explicit indication of this structure beyond cryptic Salesforce API names.
 
@@ -992,7 +992,7 @@ Table 6 reports token consumption and estimated API cost across benchmark databa
 
 **Processing statistics.** The analysis completed in 2 iterations, consuming 1.1M tokens over approximately 1.5 hours of wall-clock time. No ground truth or seed context was provided — the system operated in fully autonomous mode.
 
-**Significance.** This case study demonstrates DBAutoDoc's ability to operate on a completely undocumented database and produce actionable documentation. The system's capacity to recognize platform-specific architectural patterns (Salesforce managed packages, Person Account model) and domain-specific structures (association membership, committee governance) from raw schema and data analysis alone — without any human hints — validates the iterative context propagation approach in a real-world setting where no quantitative ground truth is available for comparison.
+**Significance.** This case study demonstrates DBAutoDoc's ability to operate on a completely undocumented database and produce actionable documentation. The system's capacity to recognize platform-specific architectural patterns (platform-managed packages, Person Account model) and domain-specific structures (association membership, committee governance) from raw schema and data analysis alone — without any human hints — validates the iterative context propagation approach in a real-world setting where no quantitative ground truth is available for comparison.
 
 #### 7.5.2 OrgB: Trade Association in the Automotive Aftermarket
 

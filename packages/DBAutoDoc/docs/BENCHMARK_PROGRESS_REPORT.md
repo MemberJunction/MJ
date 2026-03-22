@@ -129,7 +129,7 @@ positives while keeping all 90 correct FKs untouched.
 - 10 extras: sibling fan-outs and LLM-created wrong targets
 
 ### Next Steps
-1. Test on additional databases (MSTA as "OrgA", Northwind, other public databases)
+1. Test on additional databases (OrgA, Northwind, other public databases)
 2. PostgreSQL compatibility testing
 3. Performance optimization (parallelization)
 4. Research paper write-up with AdventureWorks2022 as primary benchmark

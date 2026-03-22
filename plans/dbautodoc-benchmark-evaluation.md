@@ -13,7 +13,7 @@ Run DBAutoDoc against well-known public databases with ground truth (declared PK
 | **Northwind** | SQL Server / PostgreSQL | 13 | 1 | Low | Classic, well-understood, easy to validate manually |
 | **Chinook** | Cross-platform | 11 | 1 | Low | Music store, simple relationships, good for baseline |
 | **WideWorldImporters** | SQL Server | 30+ | 5 (Application, Purchasing, Sales, Warehouse, Website) | Medium-High | Modern MS sample DB, temporal tables, JSON columns |
-| **AutoCare** (enterprise) | SQL Server | 125 | 10 | High | Real-world AMS, anonymized, already running |
+| **OrgB** (enterprise) | SQL Server | 125 | 10 | High | Real-world association management, anonymized |
 
 ### Download Sources
 - **AdventureWorks**: Microsoft SQL Server samples (GitHub `microsoft/sql-server-samples`)

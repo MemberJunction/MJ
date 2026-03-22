@@ -23,7 +23,7 @@
 | [Northwind](results/northwind/) | 13 | 72.7% | 75.0% | 83.1% (B) | Classic order management |
 
 ### Enterprise Case Studies (anonymized, results not included)
-- **OrgA**: 36-table education association platform (Salesforce/Nimble AMS). 100% PK coverage, 201 FKs.
+- **OrgA**: 36-table education association platform. 100% PK coverage, 201 FKs.
 - **OrgB**: 125-table automotive trade association. 97% PK coverage, 490 FKs across 10 schemas.
 
 ## Scoring Methodology
