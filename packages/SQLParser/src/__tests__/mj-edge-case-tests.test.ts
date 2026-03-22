@@ -5,7 +5,7 @@
  * a comprehensive set of edge cases covering unusual/tricky scenarios.
  */
 import { describe, it, expect } from 'vitest';
-import { SQLParser } from '../mj-sql-parser.js';
+import { SQLParser } from '../sql-parser.js';
 import { MJLexer } from '../mj-lexer.js';
 import { MJPlaceholderSubstitution } from '../mj-placeholder.js';
 const mjAstify = SQLParser.Astify.bind(SQLParser);

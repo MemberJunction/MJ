@@ -1,5 +1,5 @@
 // MJ SQL Parser — unified parser for MJ's SQL superset
-export { SQLParser } from './mj-sql-parser.js';
+export { SQLParser } from './sql-parser.js';
 export type {
     MJAstifyResult,
     SQLTableReference,
@@ -8,7 +8,7 @@ export type {
     MJParameterInfo,
     SQLParseResult,
     SQLParseOptions,
-} from './mj-sql-parser.js';
+} from './sql-parser.js';
 
 // Re-export node-sql-parser's AST type so consumers don't need a direct dependency
 export type { AST as SQLAst } from 'node-sql-parser';

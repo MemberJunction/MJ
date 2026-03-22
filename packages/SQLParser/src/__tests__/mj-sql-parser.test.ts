@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SQLParser } from '../mj-sql-parser.js';
+import { SQLParser } from '../sql-parser.js';
 const mjAstify = SQLParser.Astify.bind(SQLParser);
 const mjSqlify = SQLParser.Sqlify.bind(SQLParser);
 const extractTemplateExpressions = SQLParser.ExtractTemplateExpressions.bind(SQLParser);

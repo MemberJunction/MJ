@@ -6,7 +6,7 @@
  * clause context (SELECT, WHERE, FROM, ORDER BY, etc.).
  */
 import { describe, it, expect } from 'vitest';
-import { SQLParser } from '../mj-sql-parser.js';
+import { SQLParser } from '../sql-parser.js';
 
 describe('SQLParser.WalkAST', () => {
     describe('Basic functionality', () => {
