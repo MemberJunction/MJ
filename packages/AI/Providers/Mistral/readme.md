@@ -101,6 +101,8 @@ console.log(`Dimensions: ${result.vector.length}`);
 | maxOutputTokens | Yes | Maximum response length |
 | topP | Yes | Nucleus sampling |
 | seed | Yes | Deterministic outputs |
+| stopSequences | Yes | Custom stop sequences |
+| assistantPrefill | Yes | Pre-seed the start of the assistant's response via Mistral's `prefix` flag ([guide](../../Prompts/PREFILL_AND_STOP_SEQUENCES.md)) |
 | responseFormat | Yes | JSON mode support |
 | streaming | Yes | Real-time streaming |
 
