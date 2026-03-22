@@ -40,6 +40,10 @@ export * from './lib/resource-wrappers/query-resource.component'
 // Validation services
 export * from './lib/services/system-validation.service'
 export * from './lib/services/startup-validation.service'
+
+// Lazy loading infrastructure
+export * from './lib/services/lazy-module-registry'
+export * from './lib/services/lazy-feature-config'
 export * from './lib/system-validation/system-validation-banner.component'
 
 // User Menu Plugin System

@@ -1,0 +1,64 @@
+{
+  "name": "@memberjunction/ng-bootstrap-lite",
+  "version": "5.14.0",
+  "description": "Lite class registrations manifest excluding lazy-loaded dashboard and settings packages",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./mj-class-registrations": {
+      "types": "./dist/mj-class-registrations.d.ts",
+      "default": "./dist/mj-class-registrations.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "if [ -d dist ]; then mj codegen manifest --appDir . --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./src/generated/mj-class-registrations.ts --scan-dist || echo 'Warning: mj codegen manifest not available, using existing manifest'; else touch .needs-manifest-rebuild; fi",
+    "build": "tsc && tsc-alias -f",
+    "postbuild": "if [ -f .needs-manifest-rebuild ]; then rm .needs-manifest-rebuild && (mj codegen manifest --appDir . --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./src/generated/mj-class-registrations.ts --scan-dist && tsc && tsc-alias -f || echo 'Warning: mj codegen manifest not available, manifest will be generated on next build'); fi",
+    "watch": "tsc --watch",
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "memberjunction",
+    "angular",
+    "bootstrap",
+    "lite"
+  ],
+  "author": "MemberJunction",
+  "license": "MIT",
+  "dependencies": {
+    "@memberjunction/actions-base": "5.14.0",
+    "@memberjunction/ai-core-plus": "5.14.0",
+    "@memberjunction/ai-engine-base": "5.14.0",
+    "@memberjunction/communication-types": "5.14.0",
+    "@memberjunction/core": "5.14.0",
+    "@memberjunction/core-entities": "5.14.0",
+    "@memberjunction/entity-communications-base": "5.14.0",
+    "@memberjunction/graphql-dataprovider": "5.14.0",
+    "@memberjunction/ng-artifacts": "5.14.0",
+    "@memberjunction/ng-auth-services": "5.14.0",
+    "@memberjunction/ng-core-entity-forms": "5.14.0",
+    "@memberjunction/ng-dashboard-viewer": "5.14.0",
+    "@memberjunction/ng-explorer-core": "5.14.0",
+    "@memberjunction/ng-file-storage": "5.14.0",
+    "@memberjunction/ng-shared": "5.14.0",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.11",
+    "typescript": "^5.9.3"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

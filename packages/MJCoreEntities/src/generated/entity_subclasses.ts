@@ -13870,6 +13870,189 @@ export const MJEntityFieldSchema = z.object({
 export type MJEntityFieldEntityType = z.infer<typeof MJEntityFieldSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Entity Organic Key Related Entities
+ */
+export const MJEntityOrganicKeyRelatedEntitySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityOrganicKeyID: z.string().describe(`
+        * * Field Name: EntityOrganicKeyID
+        * * Display Name: Organic Key ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Organic Keys (vwEntityOrganicKeys.ID)`),
+    RelatedEntityID: z.string().describe(`
+        * * Field Name: RelatedEntityID
+        * * Display Name: Related Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    RelatedEntityFieldNames: z.string().nullable().describe(`
+        * * Field Name: RelatedEntityFieldNames
+        * * Display Name: Related Entity Fields
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Comma-delimited field names in the related entity, positionally matching MatchFieldNames on the parent key. NULL when using transitive matching.`),
+    TransitiveObjectName: z.string().nullable().describe(`
+        * * Field Name: TransitiveObjectName
+        * * Display Name: Transitive Object Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Schema-qualified name of a SQL view or table that bridges the organic key to the related entity (e.g., "dbo.vwContactRecipientBridge"). This object encapsulates any number of join hops. NULL for direct matches.`),
+    TransitiveObjectMatchFieldNames: z.string().nullable().describe(`
+        * * Field Name: TransitiveObjectMatchFieldNames
+        * * Display Name: Transitive Match Fields
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Comma-delimited field names in the transitive object that match the organic key values, positionally aligned with MatchFieldNames. NULL for direct matches.`),
+    TransitiveObjectOutputFieldName: z.string().nullable().describe(`
+        * * Field Name: TransitiveObjectOutputFieldName
+        * * Display Name: Transitive Output Field
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The field in the transitive object that produces the value to join against the related entity. NULL for direct matches.`),
+    RelatedEntityJoinFieldName: z.string().nullable().describe(`
+        * * Field Name: RelatedEntityJoinFieldName
+        * * Display Name: Related Entity Join Field
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The field in the related entity that matches TransitiveObjectOutputFieldName. NULL for direct matches.`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Tab/section label override. If NULL, defaults to the related entity's display name.`),
+    DisplayLocation: z.union([z.literal('After Field Tabs'), z.literal('Before Field Tabs')]).describe(`
+        * * Field Name: DisplayLocation
+        * * Display Name: Display Location
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: After Field Tabs
+    * * Value List Type: List
+    * * Possible Values 
+    *   * After Field Tabs
+    *   * Before Field Tabs
+        * * Description: Where to render the organic key tab relative to FK relationship tabs. After Field Tabs or Before Field Tabs.`),
+    DisplayComponentID: z.string().nullable().describe(`
+        * * Field Name: DisplayComponentID
+        * * Display Name: Display Component
+        * * SQL Data Type: uniqueidentifier
+        * * Description: FK to component registry for a custom display component. NULL uses the default EntityDataGrid.`),
+    DisplayComponentConfiguration: z.string().nullable().describe(`
+        * * Field Name: DisplayComponentConfiguration
+        * * Display Name: Display Component Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration passed to the display component.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Tab ordering within this organic key's related entities. Lower values appear first.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EntityOrganicKey: z.string().describe(`
+        * * Field Name: EntityOrganicKey
+        * * Display Name: Organic Key
+        * * SQL Data Type: nvarchar(255)`),
+    RelatedEntity: z.string().describe(`
+        * * Field Name: RelatedEntity
+        * * Display Name: Related Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJEntityOrganicKeyRelatedEntityEntityType = z.infer<typeof MJEntityOrganicKeyRelatedEntitySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Entity Organic Keys
+ */
+export const MJEntityOrganicKeySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable label for this organic key (e.g., "Email Match", "SSN Match"). Must be unique per entity.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional explanation of the key's purpose and matching semantics.`),
+    MatchFieldNames: z.string().describe(`
+        * * Field Name: MatchFieldNames
+        * * Display Name: Match Fields
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Comma-delimited field names in the owning entity that constitute the key. Single value for simple keys (e.g., "EmailAddress"), multiple for compound keys (e.g., "FirstName,LastName,DateOfBirth"). Field names must match EntityField.Name values.`),
+    NormalizationStrategy: z.union([z.literal('Custom'), z.literal('ExactMatch'), z.literal('LowerCaseTrim'), z.literal('Trim')]).describe(`
+        * * Field Name: NormalizationStrategy
+        * * Display Name: Normalization Strategy
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: LowerCaseTrim
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * ExactMatch
+    *   * LowerCaseTrim
+    *   * Trim
+        * * Description: How field values are normalized before comparison. LowerCaseTrim = LOWER(TRIM(x)), Trim = TRIM(x), ExactMatch = no transformation, Custom = uses CustomNormalizationExpression.`),
+    CustomNormalizationExpression: z.string().nullable().describe(`
+        * * Field Name: CustomNormalizationExpression
+        * * Display Name: Custom Normalization Expression
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: SQL expression template when NormalizationStrategy is Custom. Uses {{FieldName}} as placeholder. Example: "REPLACE(REPLACE({{FieldName}}, '-', ''), ' ', '')" for phone number normalization.`),
+    AutoCreateRelatedViewOnForm: z.boolean().describe(`
+        * * Field Name: AutoCreateRelatedViewOnForm
+        * * Display Name: Auto Create Related View
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, a future discovery process will automatically scan entities and create EntityOrganicKeyRelatedEntity rows for entities with matching field patterns.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Ordering when an entity has multiple organic keys. Lower values = higher priority.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active or Disabled. Disabled keys are ignored at runtime.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJEntityOrganicKeyEntityType = z.infer<typeof MJEntityOrganicKeySchema>;
+
+/**
  * zod schema definition for the entity MJ: Entity Permissions
  */
 export const MJEntityPermissionSchema = z.object({
@@ -59581,6 +59764,500 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     */
     get RelatedEntityClassName(): string | null {
         return this.Get('RelatedEntityClassName');
+    }
+}
+
+
+/**
+ * MJ: Entity Organic Key Related Entities - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityOrganicKeyRelatedEntity
+ * * Base View: vwEntityOrganicKeyRelatedEntities
+ * * @description Maps a related entity to an organic key, defining how records are matched — either by direct field comparison or transitively via a SQL view/table that bridges multiple hops.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Organic Key Related Entities')
+export class MJEntityOrganicKeyRelatedEntityEntity extends BaseEntity<MJEntityOrganicKeyRelatedEntityEntityType> {
+    /**
+    * Loads the MJ: Entity Organic Key Related Entities record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Organic Key Related Entities record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityOrganicKeyRelatedEntityEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Organic Key Related Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: To ensure clear data mapping, you must define a relationship using either the Related Entity Field Names or a complete Transitive Object configuration. This constraint prevents ambiguous setups by ensuring that only one of these two methods is used and that all required fields for a transitive relationship are provided together.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRelatedEntityOrTransitiveMapping(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * To ensure clear data mapping, you must define a relationship using either the Related Entity Field Names or a complete Transitive Object configuration. This constraint prevents ambiguous setups by ensuring that only one of these two methods is used and that all required fields for a transitive relationship are provided together.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRelatedEntityOrTransitiveMapping(result: ValidationResult) {
+    	const hasRelatedFields = this.RelatedEntityFieldNames != null;
+    	const hasTransitiveName = this.TransitiveObjectName != null;
+    	const hasTransitiveMatch = this.TransitiveObjectMatchFieldNames != null;
+    	const hasTransitiveOutput = this.TransitiveObjectOutputFieldName != null;
+    	const hasJoinField = this.RelatedEntityJoinFieldName != null;
+    
+    	// Option 1: Only RelatedEntityFieldNames is provided
+    	const isDirectMapping = hasRelatedFields && !hasTransitiveName && !hasTransitiveMatch && !hasTransitiveOutput && !hasJoinField;
+    	
+    	// Option 2: All transitive fields are provided and RelatedEntityFieldNames is null
+    	const isTransitiveMapping = !hasRelatedFields && hasTransitiveName && hasTransitiveMatch && hasTransitiveOutput && hasJoinField;
+    
+    	if (!isDirectMapping && !isTransitiveMapping) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RelatedEntityFieldNames",
+    			"You must provide either only the Related Entity Field Names OR a complete set of Transitive Object fields (Object Name, Match Fields, Output Field, and Join Field). Partial or overlapping configurations are not allowed.",
+    			this.RelatedEntityFieldNames,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityOrganicKeyID
+    * * Display Name: Organic Key ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Organic Keys (vwEntityOrganicKeys.ID)
+    */
+    get EntityOrganicKeyID(): string {
+        return this.Get('EntityOrganicKeyID');
+    }
+    set EntityOrganicKeyID(value: string) {
+        this.Set('EntityOrganicKeyID', value);
+    }
+
+    /**
+    * * Field Name: RelatedEntityID
+    * * Display Name: Related Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get RelatedEntityID(): string {
+        return this.Get('RelatedEntityID');
+    }
+    set RelatedEntityID(value: string) {
+        this.Set('RelatedEntityID', value);
+    }
+
+    /**
+    * * Field Name: RelatedEntityFieldNames
+    * * Display Name: Related Entity Fields
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Comma-delimited field names in the related entity, positionally matching MatchFieldNames on the parent key. NULL when using transitive matching.
+    */
+    get RelatedEntityFieldNames(): string | null {
+        return this.Get('RelatedEntityFieldNames');
+    }
+    set RelatedEntityFieldNames(value: string | null) {
+        this.Set('RelatedEntityFieldNames', value);
+    }
+
+    /**
+    * * Field Name: TransitiveObjectName
+    * * Display Name: Transitive Object Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Schema-qualified name of a SQL view or table that bridges the organic key to the related entity (e.g., "dbo.vwContactRecipientBridge"). This object encapsulates any number of join hops. NULL for direct matches.
+    */
+    get TransitiveObjectName(): string | null {
+        return this.Get('TransitiveObjectName');
+    }
+    set TransitiveObjectName(value: string | null) {
+        this.Set('TransitiveObjectName', value);
+    }
+
+    /**
+    * * Field Name: TransitiveObjectMatchFieldNames
+    * * Display Name: Transitive Match Fields
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Comma-delimited field names in the transitive object that match the organic key values, positionally aligned with MatchFieldNames. NULL for direct matches.
+    */
+    get TransitiveObjectMatchFieldNames(): string | null {
+        return this.Get('TransitiveObjectMatchFieldNames');
+    }
+    set TransitiveObjectMatchFieldNames(value: string | null) {
+        this.Set('TransitiveObjectMatchFieldNames', value);
+    }
+
+    /**
+    * * Field Name: TransitiveObjectOutputFieldName
+    * * Display Name: Transitive Output Field
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The field in the transitive object that produces the value to join against the related entity. NULL for direct matches.
+    */
+    get TransitiveObjectOutputFieldName(): string | null {
+        return this.Get('TransitiveObjectOutputFieldName');
+    }
+    set TransitiveObjectOutputFieldName(value: string | null) {
+        this.Set('TransitiveObjectOutputFieldName', value);
+    }
+
+    /**
+    * * Field Name: RelatedEntityJoinFieldName
+    * * Display Name: Related Entity Join Field
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The field in the related entity that matches TransitiveObjectOutputFieldName. NULL for direct matches.
+    */
+    get RelatedEntityJoinFieldName(): string | null {
+        return this.Get('RelatedEntityJoinFieldName');
+    }
+    set RelatedEntityJoinFieldName(value: string | null) {
+        this.Set('RelatedEntityJoinFieldName', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Tab/section label override. If NULL, defaults to the related entity's display name.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: DisplayLocation
+    * * Display Name: Display Location
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: After Field Tabs
+    * * Value List Type: List
+    * * Possible Values 
+    *   * After Field Tabs
+    *   * Before Field Tabs
+    * * Description: Where to render the organic key tab relative to FK relationship tabs. After Field Tabs or Before Field Tabs.
+    */
+    get DisplayLocation(): 'After Field Tabs' | 'Before Field Tabs' {
+        return this.Get('DisplayLocation');
+    }
+    set DisplayLocation(value: 'After Field Tabs' | 'Before Field Tabs') {
+        this.Set('DisplayLocation', value);
+    }
+
+    /**
+    * * Field Name: DisplayComponentID
+    * * Display Name: Display Component
+    * * SQL Data Type: uniqueidentifier
+    * * Description: FK to component registry for a custom display component. NULL uses the default EntityDataGrid.
+    */
+    get DisplayComponentID(): string | null {
+        return this.Get('DisplayComponentID');
+    }
+    set DisplayComponentID(value: string | null) {
+        this.Set('DisplayComponentID', value);
+    }
+
+    /**
+    * * Field Name: DisplayComponentConfiguration
+    * * Display Name: Display Component Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration passed to the display component.
+    */
+    get DisplayComponentConfiguration(): string | null {
+        return this.Get('DisplayComponentConfiguration');
+    }
+    set DisplayComponentConfiguration(value: string | null) {
+        this.Set('DisplayComponentConfiguration', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Tab ordering within this organic key's related entities. Lower values appear first.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityOrganicKey
+    * * Display Name: Organic Key
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EntityOrganicKey(): string {
+        return this.Get('EntityOrganicKey');
+    }
+
+    /**
+    * * Field Name: RelatedEntity
+    * * Display Name: Related Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RelatedEntity(): string {
+        return this.Get('RelatedEntity');
+    }
+}
+
+
+/**
+ * MJ: Entity Organic Keys - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityOrganicKey
+ * * Base View: vwEntityOrganicKeys
+ * * @description Defines organic keys on entities — sets of fields that constitute natural identifiers for cross-system matching (e.g., email, phone, SSN). Enables related record views across integration boundaries without foreign keys.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Organic Keys')
+export class MJEntityOrganicKeyEntity extends BaseEntity<MJEntityOrganicKeyEntityType> {
+    /**
+    * Loads the MJ: Entity Organic Keys record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Organic Keys record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityOrganicKeyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable label for this organic key (e.g., "Email Match", "SSN Match"). Must be unique per entity.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional explanation of the key's purpose and matching semantics.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: MatchFieldNames
+    * * Display Name: Match Fields
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Comma-delimited field names in the owning entity that constitute the key. Single value for simple keys (e.g., "EmailAddress"), multiple for compound keys (e.g., "FirstName,LastName,DateOfBirth"). Field names must match EntityField.Name values.
+    */
+    get MatchFieldNames(): string {
+        return this.Get('MatchFieldNames');
+    }
+    set MatchFieldNames(value: string) {
+        this.Set('MatchFieldNames', value);
+    }
+
+    /**
+    * * Field Name: NormalizationStrategy
+    * * Display Name: Normalization Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: LowerCaseTrim
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * ExactMatch
+    *   * LowerCaseTrim
+    *   * Trim
+    * * Description: How field values are normalized before comparison. LowerCaseTrim = LOWER(TRIM(x)), Trim = TRIM(x), ExactMatch = no transformation, Custom = uses CustomNormalizationExpression.
+    */
+    get NormalizationStrategy(): 'Custom' | 'ExactMatch' | 'LowerCaseTrim' | 'Trim' {
+        return this.Get('NormalizationStrategy');
+    }
+    set NormalizationStrategy(value: 'Custom' | 'ExactMatch' | 'LowerCaseTrim' | 'Trim') {
+        this.Set('NormalizationStrategy', value);
+    }
+
+    /**
+    * * Field Name: CustomNormalizationExpression
+    * * Display Name: Custom Normalization Expression
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: SQL expression template when NormalizationStrategy is Custom. Uses {{FieldName}} as placeholder. Example: "REPLACE(REPLACE({{FieldName}}, '-', ''), ' ', '')" for phone number normalization.
+    */
+    get CustomNormalizationExpression(): string | null {
+        return this.Get('CustomNormalizationExpression');
+    }
+    set CustomNormalizationExpression(value: string | null) {
+        this.Set('CustomNormalizationExpression', value);
+    }
+
+    /**
+    * * Field Name: AutoCreateRelatedViewOnForm
+    * * Display Name: Auto Create Related View
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, a future discovery process will automatically scan entities and create EntityOrganicKeyRelatedEntity rows for entities with matching field patterns.
+    */
+    get AutoCreateRelatedViewOnForm(): boolean {
+        return this.Get('AutoCreateRelatedViewOnForm');
+    }
+    set AutoCreateRelatedViewOnForm(value: boolean) {
+        this.Set('AutoCreateRelatedViewOnForm', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordering when an entity has multiple organic keys. Lower values = higher priority.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active or Disabled. Disabled keys are ignored at runtime.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
     }
 }
 

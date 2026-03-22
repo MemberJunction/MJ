@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSkillEntity, MJSQLDialectEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentConfigurationEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExplorerNavigationItemEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJOutputTriggerTypeEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJReportCategoryEntity, MJReportSnapshotEntity, MJReportUserStateEntity, MJReportVersionEntity, MJReportEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJScheduledActionParamEntity, MJScheduledActionEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJSkillEntity, MJSQLDialectEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJWorkflowEngineEntity, MJWorkflowRunEntity, MJWorkflowEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -35758,6 +35758,12 @@ export class MJEntity_ {
     @Field(() => [MJEntityRelationship_])
     MJEntityRelationships_RelatedEntityIDArray: MJEntityRelationship_[]; // Link to MJEntityRelationships
     
+    @Field(() => [MJEntityOrganicKeyRelatedEntity_])
+    MJEntityOrganicKeyRelatedEntities_RelatedEntityIDArray: MJEntityOrganicKeyRelatedEntity_[]; // Link to MJEntityOrganicKeyRelatedEntities
+    
+    @Field(() => [MJEntityOrganicKey_])
+    MJEntityOrganicKeys_EntityIDArray: MJEntityOrganicKey_[]; // Link to MJEntityOrganicKeys
+    
     @Field(() => [MJGeneratedCode_])
     MJGeneratedCodes_LinkedEntityIDArray: MJGeneratedCode_[]; // Link to MJGeneratedCodes
     
@@ -36625,6 +36631,26 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityRelationships')} WHERE ${provider.QuoteIdentifier('RelatedEntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Relationships', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Relationships', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityOrganicKeyRelatedEntity_])
+    async MJEntityOrganicKeyRelatedEntities_RelatedEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Organic Key Related Entities', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityOrganicKeyRelatedEntities')} WHERE ${provider.QuoteIdentifier('RelatedEntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Organic Key Related Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Organic Key Related Entities', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityOrganicKey_])
+    async MJEntityOrganicKeys_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Organic Keys', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityOrganicKeys')} WHERE ${provider.QuoteIdentifier('EntityID')}='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Organic Keys', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Organic Keys', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -39790,6 +39816,485 @@ export class MJEntityFieldResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Entity Fields', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Entity Organic Key Related Entities
+//****************************************************************************
+@ObjectType({ description: `Maps a related entity to an organic key, defining how records are matched — either by direct field comparison or transitively via a SQL view/table that bridges multiple hops.` })
+export class MJEntityOrganicKeyRelatedEntity_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    EntityOrganicKeyID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    RelatedEntityID: string;
+        
+    @Field({nullable: true, description: `Comma-delimited field names in the related entity, positionally matching MatchFieldNames on the parent key. NULL when using transitive matching.`}) 
+    @MaxLength(500)
+    RelatedEntityFieldNames?: string;
+        
+    @Field({nullable: true, description: `Schema-qualified name of a SQL view or table that bridges the organic key to the related entity (e.g., "dbo.vwContactRecipientBridge"). This object encapsulates any number of join hops. NULL for direct matches.`}) 
+    @MaxLength(500)
+    TransitiveObjectName?: string;
+        
+    @Field({nullable: true, description: `Comma-delimited field names in the transitive object that match the organic key values, positionally aligned with MatchFieldNames. NULL for direct matches.`}) 
+    @MaxLength(500)
+    TransitiveObjectMatchFieldNames?: string;
+        
+    @Field({nullable: true, description: `The field in the transitive object that produces the value to join against the related entity. NULL for direct matches.`}) 
+    @MaxLength(255)
+    TransitiveObjectOutputFieldName?: string;
+        
+    @Field({nullable: true, description: `The field in the related entity that matches TransitiveObjectOutputFieldName. NULL for direct matches.`}) 
+    @MaxLength(255)
+    RelatedEntityJoinFieldName?: string;
+        
+    @Field({nullable: true, description: `Tab/section label override. If NULL, defaults to the related entity's display name.`}) 
+    @MaxLength(255)
+    DisplayName?: string;
+        
+    @Field({description: `Where to render the organic key tab relative to FK relationship tabs. After Field Tabs or Before Field Tabs.`}) 
+    @MaxLength(50)
+    DisplayLocation: string;
+        
+    @Field({nullable: true, description: `FK to component registry for a custom display component. NULL uses the default EntityDataGrid.`}) 
+    @MaxLength(36)
+    DisplayComponentID?: string;
+        
+    @Field({nullable: true, description: `JSON configuration passed to the display component.`}) 
+    DisplayComponentConfiguration?: string;
+        
+    @Field(() => Int, {description: `Tab ordering within this organic key's related entities. Lower values appear first.`}) 
+    Sequence: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    EntityOrganicKey: string;
+        
+    @Field() 
+    @MaxLength(255)
+    RelatedEntity: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Entity Organic Key Related Entities
+//****************************************************************************
+@InputType()
+export class CreateMJEntityOrganicKeyRelatedEntityInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    EntityOrganicKeyID?: string;
+
+    @Field({ nullable: true })
+    RelatedEntityID?: string;
+
+    @Field({ nullable: true })
+    RelatedEntityFieldNames: string | null;
+
+    @Field({ nullable: true })
+    TransitiveObjectName: string | null;
+
+    @Field({ nullable: true })
+    TransitiveObjectMatchFieldNames: string | null;
+
+    @Field({ nullable: true })
+    TransitiveObjectOutputFieldName: string | null;
+
+    @Field({ nullable: true })
+    RelatedEntityJoinFieldName: string | null;
+
+    @Field({ nullable: true })
+    DisplayName: string | null;
+
+    @Field({ nullable: true })
+    DisplayLocation?: string;
+
+    @Field({ nullable: true })
+    DisplayComponentID: string | null;
+
+    @Field({ nullable: true })
+    DisplayComponentConfiguration: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Entity Organic Key Related Entities
+//****************************************************************************
+@InputType()
+export class UpdateMJEntityOrganicKeyRelatedEntityInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    EntityOrganicKeyID?: string;
+
+    @Field({ nullable: true })
+    RelatedEntityID?: string;
+
+    @Field({ nullable: true })
+    RelatedEntityFieldNames?: string | null;
+
+    @Field({ nullable: true })
+    TransitiveObjectName?: string | null;
+
+    @Field({ nullable: true })
+    TransitiveObjectMatchFieldNames?: string | null;
+
+    @Field({ nullable: true })
+    TransitiveObjectOutputFieldName?: string | null;
+
+    @Field({ nullable: true })
+    RelatedEntityJoinFieldName?: string | null;
+
+    @Field({ nullable: true })
+    DisplayName?: string | null;
+
+    @Field({ nullable: true })
+    DisplayLocation?: string;
+
+    @Field({ nullable: true })
+    DisplayComponentID?: string | null;
+
+    @Field({ nullable: true })
+    DisplayComponentConfiguration?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Entity Organic Key Related Entities
+//****************************************************************************
+@ObjectType()
+export class RunMJEntityOrganicKeyRelatedEntityViewResult {
+    @Field(() => [MJEntityOrganicKeyRelatedEntity_])
+    Results: MJEntityOrganicKeyRelatedEntity_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJEntityOrganicKeyRelatedEntity_)
+export class MJEntityOrganicKeyRelatedEntityResolver extends ResolverBase {
+    @Query(() => RunMJEntityOrganicKeyRelatedEntityViewResult)
+    async RunMJEntityOrganicKeyRelatedEntityViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJEntityOrganicKeyRelatedEntityViewResult)
+    async RunMJEntityOrganicKeyRelatedEntityViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJEntityOrganicKeyRelatedEntityViewResult)
+    async RunMJEntityOrganicKeyRelatedEntityDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Entity Organic Key Related Entities';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJEntityOrganicKeyRelatedEntity_, { nullable: true })
+    async MJEntityOrganicKeyRelatedEntity(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJEntityOrganicKeyRelatedEntity_ | null> {
+        this.CheckUserReadPermissions('MJ: Entity Organic Key Related Entities', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityOrganicKeyRelatedEntities')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Organic Key Related Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Entity Organic Key Related Entities', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJEntityOrganicKeyRelatedEntity_)
+    async CreateMJEntityOrganicKeyRelatedEntity(
+        @Arg('input', () => CreateMJEntityOrganicKeyRelatedEntityInput) input: CreateMJEntityOrganicKeyRelatedEntityInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Entity Organic Key Related Entities', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJEntityOrganicKeyRelatedEntity_)
+    async UpdateMJEntityOrganicKeyRelatedEntity(
+        @Arg('input', () => UpdateMJEntityOrganicKeyRelatedEntityInput) input: UpdateMJEntityOrganicKeyRelatedEntityInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Entity Organic Key Related Entities', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJEntityOrganicKeyRelatedEntity_)
+    async DeleteMJEntityOrganicKeyRelatedEntity(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Entity Organic Key Related Entities', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Entity Organic Keys
+//****************************************************************************
+@ObjectType({ description: `Defines organic keys on entities — sets of fields that constitute natural identifiers for cross-system matching (e.g., email, phone, SSN). Enables related record views across integration boundaries without foreign keys.` })
+export class MJEntityOrganicKey_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(36)
+    EntityID: string;
+        
+    @Field({description: `Human-readable label for this organic key (e.g., "Email Match", "SSN Match"). Must be unique per entity.`}) 
+    @MaxLength(255)
+    Name: string;
+        
+    @Field({nullable: true, description: `Optional explanation of the key's purpose and matching semantics.`}) 
+    Description?: string;
+        
+    @Field({description: `Comma-delimited field names in the owning entity that constitute the key. Single value for simple keys (e.g., "EmailAddress"), multiple for compound keys (e.g., "FirstName,LastName,DateOfBirth"). Field names must match EntityField.Name values.`}) 
+    @MaxLength(500)
+    MatchFieldNames: string;
+        
+    @Field({description: `How field values are normalized before comparison. LowerCaseTrim = LOWER(TRIM(x)), Trim = TRIM(x), ExactMatch = no transformation, Custom = uses CustomNormalizationExpression.`}) 
+    @MaxLength(50)
+    NormalizationStrategy: string;
+        
+    @Field({nullable: true, description: `SQL expression template when NormalizationStrategy is Custom. Uses {{FieldName}} as placeholder. Example: "REPLACE(REPLACE({{FieldName}}, '-', ''), ' ', '')" for phone number normalization.`}) 
+    CustomNormalizationExpression?: string;
+        
+    @Field(() => Boolean, {description: `When true, a future discovery process will automatically scan entities and create EntityOrganicKeyRelatedEntity rows for entities with matching field patterns.`}) 
+    AutoCreateRelatedViewOnForm: boolean;
+        
+    @Field(() => Int, {description: `Ordering when an entity has multiple organic keys. Lower values = higher priority.`}) 
+    Sequence: number;
+        
+    @Field({description: `Active or Disabled. Disabled keys are ignored at runtime.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    Entity: string;
+        
+    @Field(() => [MJEntityOrganicKeyRelatedEntity_])
+    MJEntityOrganicKeyRelatedEntities_EntityOrganicKeyIDArray: MJEntityOrganicKeyRelatedEntity_[]; // Link to MJEntityOrganicKeyRelatedEntities
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Entity Organic Keys
+//****************************************************************************
+@InputType()
+export class CreateMJEntityOrganicKeyInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    MatchFieldNames?: string;
+
+    @Field({ nullable: true })
+    NormalizationStrategy?: string;
+
+    @Field({ nullable: true })
+    CustomNormalizationExpression: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoCreateRelatedViewOnForm?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Entity Organic Keys
+//****************************************************************************
+@InputType()
+export class UpdateMJEntityOrganicKeyInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    EntityID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    MatchFieldNames?: string;
+
+    @Field({ nullable: true })
+    NormalizationStrategy?: string;
+
+    @Field({ nullable: true })
+    CustomNormalizationExpression?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    AutoCreateRelatedViewOnForm?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Entity Organic Keys
+//****************************************************************************
+@ObjectType()
+export class RunMJEntityOrganicKeyViewResult {
+    @Field(() => [MJEntityOrganicKey_])
+    Results: MJEntityOrganicKey_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJEntityOrganicKey_)
+export class MJEntityOrganicKeyResolver extends ResolverBase {
+    @Query(() => RunMJEntityOrganicKeyViewResult)
+    async RunMJEntityOrganicKeyViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJEntityOrganicKeyViewResult)
+    async RunMJEntityOrganicKeyViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJEntityOrganicKeyViewResult)
+    async RunMJEntityOrganicKeyDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Entity Organic Keys';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJEntityOrganicKey_, { nullable: true })
+    async MJEntityOrganicKey(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJEntityOrganicKey_ | null> {
+        this.CheckUserReadPermissions('MJ: Entity Organic Keys', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityOrganicKeys')} WHERE ${provider.QuoteIdentifier('ID')}='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Organic Keys', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Entity Organic Keys', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @FieldResolver(() => [MJEntityOrganicKeyRelatedEntity_])
+    async MJEntityOrganicKeyRelatedEntities_EntityOrganicKeyIDArray(@Root() mjentityorganickey_: MJEntityOrganicKey_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Organic Key Related Entities', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityOrganicKeyRelatedEntities')} WHERE ${provider.QuoteIdentifier('EntityOrganicKeyID')}='${mjentityorganickey_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Organic Key Related Entities', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Organic Key Related Entities', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @Mutation(() => MJEntityOrganicKey_)
+    async CreateMJEntityOrganicKey(
+        @Arg('input', () => CreateMJEntityOrganicKeyInput) input: CreateMJEntityOrganicKeyInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Entity Organic Keys', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJEntityOrganicKey_)
+    async UpdateMJEntityOrganicKey(
+        @Arg('input', () => UpdateMJEntityOrganicKeyInput) input: UpdateMJEntityOrganicKeyInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Entity Organic Keys', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJEntityOrganicKey_)
+    async DeleteMJEntityOrganicKey(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Entity Organic Keys', key, options, provider, userPayload, pubSub);
     }
     
 }

@@ -33,6 +33,7 @@
     "@memberjunction/ng-base-application": "5.14.0",
     "@memberjunction/ng-base-forms": "5.14.0",
     "@memberjunction/ng-bootstrap": "5.14.0",
+    "@memberjunction/ng-bootstrap-lite": "5.14.0",
     "@memberjunction/ng-core-entity-forms": "5.14.0",
     "@memberjunction/ng-dashboards": "5.14.0",
     "@memberjunction/ng-explorer-app": "5.14.0",

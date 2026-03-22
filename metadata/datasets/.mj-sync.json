@@ -1,0 +1,28 @@
+{
+  "entity": "MJ: Datasets",
+  "filePattern": "**/.*.json",
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".datasets.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "Name = 'MJ_Metadata'",
+    "relatedEntities": {
+      "MJ: Dataset Items": {
+        "entity": "MJ: Dataset Items",
+        "foreignKey": "DatasetID",
+        "lookupFields": {
+          "EntityID": {
+            "entity": "MJ: Entities",
+            "field": "Name"
+          }
+        }
+      }
+    }
+  }
+}
