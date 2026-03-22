@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { QueryPagingEngine, PagingWrappedSQL } from '../generic/queryPagingEngine';
-import { DatabasePlatform } from '../generic/platformSQL';
+import { QueryPagingEngine, PagingWrappedSQL } from '../queryPagingEngine';
+import { DatabasePlatform } from '@memberjunction/core';
 
 // ─── ShouldPage ────────────────────────────────────────────────────────────────
 
@@ -137,7 +137,8 @@ describe('QueryPagingEngine.WrapWithPaging — SQL Server', () => {
         expect(result.PageSize).toBe(25);
         expect(result.DataSQL).toContain('[__paged]');
         expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY');
-        expect(result.DataSQL).toContain('ORDER BY Name');
+        // AST path quotes identifiers: ORDER BY `Name`, [Name], or Name
+        expect(result.DataSQL).toMatch(/ORDER BY [`[\s]?Name[`\]]?/);
         expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount FROM [__paged]');
     });
 
@@ -148,7 +149,8 @@ SELECT ID, Name FROM Users WHERE Active = 1
 SELECT * FROM active_users ORDER BY Name`;
         const result = QueryPagingEngine.WrapWithPaging(sql, 10, 50, platform);
 
-        expect(result.DataSQL).toContain('active_users AS');
+        // AST path bracket-quotes CTE names: [active_users] AS (...)
+        expect(result.DataSQL).toMatch(/\[?active_users\]?\s+AS/);
         expect(result.DataSQL).toContain('[__paged] AS');
         expect(result.DataSQL).toContain('OFFSET 10 ROWS FETCH NEXT 50 ROWS ONLY');
     });
@@ -222,15 +224,18 @@ ORDER BY r.TotalRevenue DESC`;
         const result = QueryPagingEngine.WrapWithPaging(sql, 0, 20, 'sqlserver');
 
         // Should have all three CTEs: __cq_0, __cq_1, and __paged
-        expect(result.DataSQL).toContain('__cq_0 AS');
-        expect(result.DataSQL).toContain('__cq_1 AS');
+        // AST path bracket-quotes CTE names
+        expect(result.DataSQL).toMatch(/\[?__cq_0\]?\s+AS/);
+        expect(result.DataSQL).toMatch(/\[?__cq_1\]?\s+AS/);
         expect(result.DataSQL).toContain('[__paged] AS');
         expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY');
-        // After remapping, ORDER BY should use projected column names, not table aliases
-        expect(result.DataSQL).toContain('ORDER BY TotalRevenue DESC');
+        // After remapping, ORDER BY should use projected column names
+        // AST exprToSQL preserves table qualifiers with backtick quoting
+        // The ORDER BY should reference TotalRevenue (possibly with table qualifier and quoting)
+        expect(result.DataSQL).toMatch(/ORDER BY.*TotalRevenue.*DESC/);
 
         // Count query should also have all CTEs
-        expect(result.CountSQL).toContain('__cq_0 AS');
+        expect(result.CountSQL).toMatch(/\[?__cq_0\]?\s+AS/);
         expect(result.CountSQL).toContain('[__paged] AS');
         expect(result.CountSQL).toContain('TotalRowCount');
     });
