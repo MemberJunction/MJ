@@ -15,7 +15,8 @@
     "useDefineForClassFields": false,
     "paths": {
       "fs": ["./src/fs.ts"],
-      "@memberjunction/ng-bootstrap": ["../Angular/Bootstrap/dist"]
+      "@memberjunction/ng-bootstrap": ["../Angular/Bootstrap/dist"],
+      "@memberjunction/ng-bootstrap-lite": ["../Angular/BootstrapLite/dist"]
     }
   },
   "angularCompilerOptions": {
