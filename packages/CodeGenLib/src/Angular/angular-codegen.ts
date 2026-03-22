@@ -206,7 +206,7 @@ export class AngularClientGeneratorBase {
                   const componentName: string = `${entity.ClassName}FormComponent`;
                   componentImports.push (`import { ${componentName} } from "./Entities/${entity.ClassName}/${entity.ClassName.toLowerCase()}.form.component";`);
                   const currentComponentDistinctRelatedEntityClassNames: {itemClassName: string, moduleClassName: string}[] = [];
-                  relatedEntitySections.forEach(s => s.GeneratedOutput!.Component!.ImportItems.forEach(i => {
+                  relatedEntitySections.filter(s => s.GeneratedOutput?.Component?.ImportItems).forEach(s => s.GeneratedOutput!.Component!.ImportItems.forEach(i => {
                     if (!currentComponentDistinctRelatedEntityClassNames.find(ii => ii.itemClassName === i.ClassName))
                         currentComponentDistinctRelatedEntityClassNames.push({itemClassName: i.ClassName, moduleClassName: i.ModuleName});
                   }))
@@ -217,7 +217,7 @@ export class AngularClientGeneratorBase {
                   });
 
                   // go through all related entities used by this component and add them to the relatedEntityModuleImports array, but distinct for the library and the module names within the library
-                  relatedEntitySections.forEach(s => {
+                  relatedEntitySections.filter(s => s.GeneratedOutput?.Component?.ImportPath).forEach(s => {
                     let match = relatedEntityModuleImports.find(m => m.library === s.GeneratedOutput!.Component!.ImportPath)
                       if (!match) {
                         match = {library: s.GeneratedOutput!.Component!.ImportPath, modules: []};
