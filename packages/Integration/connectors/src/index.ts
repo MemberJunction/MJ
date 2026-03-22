@@ -5,3 +5,5 @@ export { YourMembershipConnector, type YMConnectionConfig } from './YourMembersh
 export { FileFeedConnector, parseCsvLine } from './FileFeedConnector.js';
 export { RasaConnector, type RasaConnectionConfig } from './RasaConnector.js';
 export { WicketConnector, type WicketCRUDResult, type WicketSearchOptions, type WicketSearchResult } from './WicketConnector.js';
+export { SageIntacctConnector, type SageIntacctConnectionConfig } from './SageIntacctConnector.js';
+export { QuickBooksConnector, type QuickBooksConnectionConfig } from './QuickBooksConnector.js';

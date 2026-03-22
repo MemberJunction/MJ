@@ -36,11 +36,41 @@
       "Status": "Active"
     },
     "primaryKey": {
-      "ID": "BAD8EAA4-68BB-4025-B0E5-BBE283787591"
+      "ID": "90687B09-3181-4C24-B94F-84EDB108F8A7"
     },
     "sync": {
-      "lastModified": "2026-03-22T01:05:33.303Z",
+      "lastModified": "2026-03-21T18:09:30.028Z",
       "checksum": "c0e1926fa0569f7b38c65205dfb8d914eaddafc1e899a69db18d272be498ae6e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sage Intacct",
+      "Description": "Sage Intacct accounting and ERP integration actions",
+      "Status": "Active",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Business Apps"
+    },
+    "primaryKey": {
+      "ID": "64C35E2F-C709-4B45-8168-6F9A70D2D2B6"
+    },
+    "sync": {
+      "lastModified": "2026-03-21T18:09:30.092Z",
+      "checksum": "ab617bb457a3266a7f2749f94cbfe96601b47c31d057fc09b5c0da91934d7ecb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "QuickBooks",
+      "Description": "QuickBooks Online accounting integration actions",
+      "Status": "Active",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Business Apps"
+    },
+    "primaryKey": {
+      "ID": "B78A928D-DBF4-4C2D-837E-7C1501346F19"
+    },
+    "sync": {
+      "lastModified": "2026-03-21T18:09:30.112Z",
+      "checksum": "065cf79584bff1f3947c09cc1321cd7ba6db1ec66e82c32f11c162dbb8e4618a"
     }
   }
 ]

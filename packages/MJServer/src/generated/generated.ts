@@ -10241,7 +10241,7 @@ export class MJAICredentialBinding_ {
     AIVendor?: string;
         
     @Field({nullable: true}) 
-    @MaxLength(50)
+    @MaxLength(100)
     AIModelVendor?: string;
         
     @Field({nullable: true}) 
@@ -11883,6 +11883,12 @@ export class MJAIModelType_ {
     @MaxLength(36)
     DefaultOutputModalityID: string;
         
+    @Field(() => Boolean, {description: `Whether models of this type generally support assistant prefill. This is a default value that individual AI Model Vendor records can override. For LLM types, many providers support prefill; for image/audio types, this is typically false.`}) 
+    SupportsPrefill: boolean;
+        
+    @Field({nullable: true, description: `Default fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Use {{prefill}} as a placeholder for the actual prefill text. Example: "IMPORTANT: You must begin your response with exactly: {{prefill}}". Individual AI Model Vendor records can override this. If null, a generic fallback is used.`}) 
+    PrefillFallbackText?: string;
+        
     @Field() 
     @MaxLength(50)
     DefaultInputModality: string;
@@ -11918,6 +11924,12 @@ export class CreateMJAIModelTypeInput {
 
     @Field({ nullable: true })
     DefaultOutputModalityID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPrefill?: boolean;
+
+    @Field({ nullable: true })
+    PrefillFallbackText: string | null;
 }
     
 
@@ -11940,6 +11952,12 @@ export class UpdateMJAIModelTypeInput {
 
     @Field({ nullable: true })
     DefaultOutputModalityID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPrefill?: boolean;
+
+    @Field({ nullable: true })
+    PrefillFallbackText?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12123,6 +12141,12 @@ export class MJAIModelVendor_ {
     @MaxLength(36)
     TypeID: string;
         
+    @Field(() => Boolean, {nullable: true, description: `Whether this specific model-vendor implementation supports assistant prefill. Overrides the AI Model Type default when set. NULL means inherit from the AI Model Type. For example, Claude via Anthropic supports prefill (true), but GPT-4 via OpenAI does not (false).`}) 
+    SupportsPrefill?: boolean;
+        
+    @Field({nullable: true, description: `Model-specific fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default. Use {{prefill}} as a placeholder. Allows tuning the fallback instruction per model since different models respond better to different phrasing.`}) 
+    PrefillFallbackText?: string;
+        
     @Field() 
     @MaxLength(50)
     Model: string;
@@ -12186,6 +12210,12 @@ export class CreateMJAIModelVendorInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPrefill: boolean | null;
+
+    @Field({ nullable: true })
+    PrefillFallbackText: string | null;
 }
     
 
@@ -12235,6 +12265,12 @@ export class UpdateMJAIModelVendorInput {
 
     @Field({ nullable: true })
     TypeID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPrefill?: boolean | null;
+
+    @Field({ nullable: true })
+    PrefillFallbackText?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12384,6 +12420,12 @@ export class MJAIModel_ {
     @MaxLength(36)
     PriorVersionID?: string;
         
+    @Field(() => Boolean, {nullable: true, description: `Whether this model supports assistant prefill. Overrides the AI Model Type default when set. NULL means inherit from the AI Model Type. Can be further overridden per-vendor in AI Model Vendor.`}) 
+    SupportsPrefill?: boolean;
+        
+    @Field({nullable: true, description: `Model-level fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default, can be further overridden per-vendor in AI Model Vendor. Use {{prefill}} as a placeholder.`}) 
+    PrefillFallbackText?: string;
+        
     @Field() 
     @MaxLength(50)
     AIModelType: string;
@@ -12517,6 +12559,12 @@ export class CreateMJAIModelInput {
     @Field({ nullable: true })
     PriorVersionID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    SupportsPrefill: boolean | null;
+
+    @Field({ nullable: true })
+    PrefillFallbackText: string | null;
+
     @Field({ nullable: true })
     Vendor: string | null;
 
@@ -12577,6 +12625,12 @@ export class UpdateMJAIModelInput {
 
     @Field({ nullable: true })
     PriorVersionID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsPrefill?: boolean | null;
+
+    @Field({ nullable: true })
+    PrefillFallbackText?: string | null;
 
     @Field({ nullable: true })
     Vendor?: string | null;
@@ -13928,6 +13982,9 @@ export class MJAIPromptRun_ {
     @MaxLength(36)
     TestRunID?: string;
         
+    @Field({nullable: true, description: `The assistant prefill text that was used during this prompt execution. Records whether native prefill or fallback was applied. NULL means no prefill was used.`}) 
+    AssistantPrefill?: string;
+        
     @Field() 
     @MaxLength(255)
     Prompt: string;
@@ -14248,6 +14305,9 @@ export class CreateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     TestRunID: string | null;
+
+    @Field({ nullable: true })
+    AssistantPrefill: string | null;
 }
     
 
@@ -14501,6 +14561,9 @@ export class UpdateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     TestRunID?: string | null;
+
+    @Field({ nullable: true })
+    AssistantPrefill?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -14970,6 +15033,13 @@ export class MJAIPrompt_ {
     @Field(() => Int, {nullable: true, description: `Effort level for this specific prompt (1-100, where 1=minimal effort, 100=maximum effort). Higher values request more thorough reasoning and analysis. Can be overridden by agent DefaultPromptEffortLevel or runtime parameters.`}) 
     EffortLevel?: number;
         
+    @Field({nullable: true, description: `Optional text to prefill the assistant response. The model will continue generating from where this text ends. Used with StopSequences for structured output extraction (e.g., prefill with \`\`\`json to get raw JSON). Only effective with providers that support prefill natively; see PrefillFallbackMode for non-supporting providers.`}) 
+    AssistantPrefill?: string;
+        
+    @Field({description: `Controls behavior when the selected provider does not support native assistant prefill. Ignore = silently skip prefill, SystemInstruction = inject a system message instructing the model to start its response with the prefill text (uses fallback text from AI Model Vendor or AI Model Type), None = no fallback (prefill only works with supported providers).`}) 
+    @MaxLength(20)
+    PrefillFallbackMode: string;
+        
     @Field() 
     @MaxLength(255)
     Template: string;
@@ -15189,6 +15259,12 @@ export class CreateMJAIPromptInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel: number | null;
+
+    @Field({ nullable: true })
+    AssistantPrefill: string | null;
+
+    @Field({ nullable: true })
+    PrefillFallbackMode?: string;
 }
     
 
@@ -15343,6 +15419,12 @@ export class UpdateMJAIPromptInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel?: number | null;
+
+    @Field({ nullable: true })
+    AssistantPrefill?: string | null;
+
+    @Field({ nullable: true })
+    PrefillFallbackMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

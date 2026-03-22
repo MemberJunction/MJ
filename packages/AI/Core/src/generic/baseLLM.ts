@@ -158,7 +158,17 @@ export abstract class BaseLLM extends BaseModel {
         // Default to false, providers that support streaming should override
         return false;
     }
-    
+
+    /**
+     * Whether this LLM provider supports assistant prefill (pre-seeding the start of the model's response).
+     * Providers that support prefill should override this to return true.
+     * This is used as a code-level default when database metadata (AIModelType/AIModel/AIModelVendor.SupportsPrefill)
+     * is null. Database values of true/false override this getter.
+     */
+    public get SupportsPrefill(): boolean {
+        return false;
+    }
+
     /**
      * Template method for handling streaming chat completion
      * This implements the common pattern across providers while delegating
