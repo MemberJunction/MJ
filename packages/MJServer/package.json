@@ -67,6 +67,7 @@
     "@memberjunction/graphql-dataprovider": "5.14.0",
     "@memberjunction/integration-engine": "5.14.0",
     "@memberjunction/integration-schema-builder": "5.14.0",
+    "@memberjunction/codegen-lib": "5.14.0",
     "@memberjunction/schema-engine": "5.14.0",
     "@memberjunction/interactive-component-types": "5.14.0",
     "@memberjunction/computer-use-engine": "5.14.0",
