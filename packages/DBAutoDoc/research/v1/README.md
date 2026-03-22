@@ -23,8 +23,8 @@
 | [Northwind](results/northwind/) | 13 | 72.7% | 75.0% | 83.1% (B) | Classic order management |
 
 ### Enterprise Case Studies (anonymized, results not included)
-- **OrgA**: 36-table education association platform. 100% PK coverage, 201 FKs.
-- **OrgB**: 125-table automotive trade association. 97% PK coverage, 490 FKs across 10 schemas.
+- **OrgA**: 36-table professional membership association. 100% PK coverage, 201 FKs.
+- **OrgB**: 125-table trade association. 97% PK coverage, 490 FKs across 10 schemas.
 
 ## Scoring Methodology
 Weighted average: FK F1 (35%) + PK F1 (30%) + Table Descriptions (20%) + Column Descriptions (15%)
