@@ -166,7 +166,7 @@ export class MJOktaProvider extends MJAuthBase {
     }
   }
 
-  async logout(): Promise<void> {
+  protected async logoutInternal(): Promise<void> {
     try {
       // Clear the local authentication state immediately
       this.updateAuthState(false);
