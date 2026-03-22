@@ -961,6 +961,43 @@ Table 6 reports token consumption and estimated API cost across benchmark databa
 
 **Significance.** This case study demonstrates DBAutoDoc's ability to operate on a completely undocumented database and produce actionable documentation. The system's capacity to recognize platform-specific architectural patterns (Salesforce managed packages, Person Account model) and domain-specific structures (association membership, committee governance) from raw schema and data analysis alone — without any human hints — validates the iterative context propagation approach in a real-world setting where no quantitative ground truth is available for comparison.
 
+#### 7.5.2 OrgB: Trade Association in the Automotive Aftermarket
+
+**Database profile.** OrgB is a trade association in the automotive aftermarket industry that operates a custom .NET application with a SQL Server backend. The database snapshot contained 125 tables, 2,347 columns, spread across 10 schemas organized by business function (CRM, Shopping, Purchasing, Accounting, Awards, Exhibits, Speakers, App, among others). Like OrgA, this database was *completely undocumented*: no primary keys were declared, no foreign key constraints existed, and no table or column descriptions were present in the schema metadata. At 3.5x the table count of OrgA, this case study tests DBAutoDoc's scalability on a significantly larger undocumented enterprise schema.
+
+**Key discovery results.** DBAutoDoc detected primary keys for 116 of 125 tables (93% table coverage), identifying 175 non-rejected PK candidates across the schema. The system discovered 490 foreign key relationships (non-rejected), yielding an average FK density of 3.9 relationships per table. The 9 tables without detected PKs were primarily lookup and reference tables with non-standard naming conventions that did not match the column-naming heuristics used by the statistical discovery engine.
+
+**Semantic analysis highlights.** The LLM demonstrated strong architectural comprehension across the multi-schema structure:
+
+- **CRM-centric architecture.** The system correctly identified the CRM schema's Customer table as the hub entity of the entire database, recognizing that it served as the central reference point for cross-schema relationships spanning Shopping, Purchasing, and Accounting operations.
+
+- **Cross-schema FK detection.** DBAutoDoc successfully discovered relationships that crossed schema boundaries -- linking CRM.Customer records to transactional records in the Shopping, Purchasing, and Accounting schemas. This validates the unified dependency graph's ability to propagate context across schema partitions in a database with many more schemas than OrgA.
+
+- **Large schema comprehension.** The CRM schema, containing 55 tables (44% of the total database), was analyzed comprehensively with proper entity grouping and relationship threading. The system maintained coherent descriptions across this dense subgraph despite the absence of any declared constraints.
+
+- **Composite PK detection.** Junction tables (e.g., product-to-file URL mappings) were correctly identified as requiring composite primary keys, demonstrating the system's ability to recognize many-to-many bridge patterns from column-naming conventions and statistical overlap analysis.
+
+**Description coverage.** All 125 tables and all 2,347 columns received generated descriptions (100% coverage), consistent with OrgA's results and confirming that the description generation pipeline scales reliably.
+
+**Processing statistics.** The analysis completed in 2 iterations using Gemini 3 Flash and Gemini 3.1 Pro models, consuming approximately 3.3M tokens at an estimated cost of ~$0.50.
+
+**Comparison with OrgA.** OrgB provides a useful scaling comparison point against OrgA:
+
+| Metric | OrgA (36 tables) | OrgB (125 tables) | Ratio |
+|--------|------------------|-------------------|-------|
+| PK table coverage | 97% (35/36) | 93% (116/125) | -- |
+| Total FKs detected | 193 | 490 | 2.5x |
+| FK density (per table) | 5.4 | 3.9 | 0.7x |
+| Description coverage | 100% | 100% | -- |
+| Tokens consumed | 1.1M | 3.3M | 3.0x |
+| Estimated cost | ~$0.20 | ~$0.50 | 2.5x |
+
+PK coverage remained high despite the 3.5x increase in table count, dropping only 4 percentage points. Cost scaled roughly linearly with table count, confirming the economic viability of DBAutoDoc on larger schemas. The lower FK density in OrgB (3.9 vs 5.4 per table) reflects a more modular, schema-partitioned architecture compared to OrgA's tightly coupled Salesforce-based design.
+
+**Significance.** This case study demonstrates that DBAutoDoc scales effectively to databases several times larger than OrgA while maintaining comparable quality metrics. The successful cross-schema relationship discovery across 10 schemas -- more than double OrgA's 4 schemas -- validates the unified dependency graph's ability to handle complex, multi-domain enterprise architectures. The low cost (~$0.50 for 125 tables) reinforces the economic argument that automated documentation is viable even for mid-sized enterprise databases.
+
+
+
 ---
 
 
