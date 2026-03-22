@@ -13,6 +13,8 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { AgentsModule } from '@memberjunction/ng-agents';
+import { AgentRequestsModule } from '@memberjunction/ng-agent-requests';
+import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 
@@ -31,6 +33,7 @@ import { PromptVersionControlComponent } from './AI/components/prompts/prompt-ve
 // AI Instrumentation Widgets (KPICard and TimeSeriesChart are in SharedDashboardWidgetsModule)
 import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execution-widget.component';
 import { PerformanceHeatmapComponent } from './AI/components/charts/performance-heatmap.component';
+import { AgentRequestsResourceComponent } from './AI/components/requests/agent-requests-resource.component';
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
 
 /**
@@ -51,7 +54,8 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     ModelPromptPriorityMatrixComponent,
     PromptVersionControlComponent,
     LiveExecutionWidgetComponent,
-    PerformanceHeatmapComponent
+    PerformanceHeatmapComponent,
+    AgentRequestsResourceComponent
   ],
   imports: [
     CommonModule,
@@ -71,6 +75,8 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     CodeEditorModule,
     SharedGenericModule,
     AgentsModule,
+    AgentRequestsModule,
+    NgTreesModule,
     SharedDashboardWidgetsModule,
     SharedPipesModule
   ],
@@ -85,6 +91,7 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     SystemConfigurationComponent,
     LiveExecutionWidgetComponent,
     PerformanceHeatmapComponent,
+    AgentRequestsResourceComponent,
     SharedDashboardWidgetsModule
   ]
 })

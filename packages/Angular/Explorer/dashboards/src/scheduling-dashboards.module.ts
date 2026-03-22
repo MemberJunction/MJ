@@ -9,13 +9,13 @@ import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { SchedulingModule } from '@memberjunction/ng-scheduling';
 
 // Scheduling Components
 import { SchedulingDashboardComponent } from './Scheduling/scheduling-dashboard.component';
 import { SchedulingOverviewComponent } from './Scheduling/components/scheduling-overview.component';
 import { SchedulingJobsComponent } from './Scheduling/components/scheduling-jobs.component';
 import { SchedulingActivityComponent } from './Scheduling/components/scheduling-activity.component';
-import { JobSlideoutComponent } from './Scheduling/components/job-slideout.component';
 import { SchedulingOverviewResourceComponent } from './Scheduling/components/scheduling-overview-resource.component';
 import { SchedulingJobsResourceComponent } from './Scheduling/components/scheduling-jobs-resource.component';
 import { SchedulingActivityResourceComponent } from './Scheduling/components/scheduling-activity-resource.component';
@@ -23,7 +23,7 @@ import { SchedulingInstrumentationService } from './Scheduling/services/scheduli
 
 /**
  * SchedulingDashboardsModule — Scheduling feature area: overview, jobs,
- * activity monitoring, and job slideout panel.
+ * activity monitoring, and job slideout panel (via SchedulingModule).
  */
 @NgModule({
   declarations: [
@@ -31,7 +31,6 @@ import { SchedulingInstrumentationService } from './Scheduling/services/scheduli
     SchedulingOverviewComponent,
     SchedulingJobsComponent,
     SchedulingActivityComponent,
-    JobSlideoutComponent,
     SchedulingOverviewResourceComponent,
     SchedulingJobsResourceComponent,
     SchedulingActivityResourceComponent
@@ -48,7 +47,8 @@ import { SchedulingInstrumentationService } from './Scheduling/services/scheduli
     WindowModule,
     ContainerDirectivesModule,
     SharedGenericModule,
-    CodeEditorModule
+    CodeEditorModule,
+    SchedulingModule
   ],
   providers: [
     SchedulingInstrumentationService

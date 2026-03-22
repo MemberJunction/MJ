@@ -832,11 +832,13 @@ import {
     RunSyncAction,
 } from '@memberjunction/integration-actions';
 
-// @memberjunction/integration-connectors (6 classes)
+// @memberjunction/integration-connectors (8 classes)
 import {
     FileFeedConnector,
     HubSpotConnector,
+    QuickBooksConnector,
     RasaConnector,
+    SageIntacctConnector,
     SalesforceConnector,
     WicketConnector,
     YourMembershipConnector,
@@ -1528,7 +1530,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     RunSyncAction,
     FileFeedConnector,
     HubSpotConnector,
+    QuickBooksConnector,
     RasaConnector,
+    SageIntacctConnector,
     SalesforceConnector,
     WicketConnector,
     YourMembershipConnector,
@@ -1563,7 +1567,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 652;
+export const CLASS_REGISTRATIONS_COUNT = 654;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
