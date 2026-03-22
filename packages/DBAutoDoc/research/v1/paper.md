@@ -360,10 +360,10 @@ We evaluate DBAutoDoc on four public benchmark databases plus two private enterp
 
 | Database | Tables | Columns | Domain | Constraints |
 |---|---|---|---|---|
-| AdventureWorks2022 | 71 | 486 | Manufacturing/Sales | Full (stripped for eval) |
-| Chinook | 11 | 64 | Music store | Full (stripped for eval) |
-| Northwind | 13 | 88 | Order management | Full (stripped for eval) |
-| LousyDB | 20 | 162 | Synthetic (dark DB) | None by design |
+| [AdventureWorks2022](results/adventureworks/) | 71 | 486 | Manufacturing/Sales | Full (stripped for eval) |
+| [Chinook](results/chinook/) | 11 | 64 | Music store | Full (stripped for eval) |
+| [Northwind](results/northwind/) | 13 | 88 | Order management | Full (stripped for eval) |
+| [LousyDB](results/lousydb/) | 20 | 162 | Synthetic (dark DB) | None by design |
 | OrgA | 36 | 1,807 | Education association | None (dark DB) |
 | OrgB | 125 | 2,347 | Automotive trade assoc. | None (dark DB) |
 
@@ -374,6 +374,8 @@ We evaluate DBAutoDoc on four public benchmark databases plus two private enterp
 **Northwind** (13 tables, order management) tests behavior on small schemas with limited statistical signal.
 
 **LousyDB** is a purpose-built synthetic benchmark with intentionally cryptic abbreviated names (`cst`, `ord`, `prd`, `inv_ln`), no constraints, no descriptions, and intentional data quality issues -- the archetype of a dark database not present in any LLM training data.
+
+Full output artifacts (HTML documentation, ERD diagrams, SQL scripts, CSV exports) for all public benchmarks are available in the [`results/`](results/) directory.
 
 **OrgA** and **OrgB** are production enterprise databases (details in Section 7.5).
 
@@ -419,7 +421,7 @@ Northwind's lower score is partly attributable to evaluation artifacts (the `Ord
 
 **Table 4: Cross-Model Comparison on AdventureWorks2022**
 
-| Metric | Gemini 3 Flash / 3.1 Pro | GPT-5.4-mini / 5.4 | Sonnet 4.6 / Opus 4.6 |
+| Metric | [Gemini 3 Flash / 3.1 Pro](results/adventureworks/gemini/) | [GPT-5.4-mini / 5.4](results/adventureworks/openai/) | [Sonnet 4.6 / Opus 4.6](results/adventureworks/claude/) |
 |--------|--------------------------|---------------------|----------------------|
 | **PK F1** | **95.0%** | 89.4% | **95.0%** |
 | **FK F1** | **94.2%** | 77.9% | 93.0% |
