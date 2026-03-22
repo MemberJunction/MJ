@@ -1,6 +1,5 @@
 import { DatabasePlatform } from '@memberjunction/core';
-import NodeSqlParser from 'node-sql-parser';
-const { Parser } = NodeSqlParser;
+import { MJSQLParser } from '@memberjunction/sql-parser';
 
 /**
  * Result of wrapping SQL with paging directives.
@@ -75,17 +74,18 @@ export class QueryPagingEngine {
     ): PagingWrappedSQL | null {
         const parserDialect = platform === 'postgresql' ? 'PostgresQL' : 'TransactSQL';
         try {
-            const parser = new Parser();
-            const ast = parser.astify(sql, { database: parserDialect });
+            const ast = MJSQLParser.ParseSQL(sql, parserDialect);
+            if (!ast) return null;
+
             const stmt = (Array.isArray(ast) ? ast[0] : ast) as unknown as Record<string, unknown>;
             if (!stmt) return null;
 
-            // Extract CTEs
-            const cteDefs = QueryPagingEngine.extractCTEsFromAST(stmt, parser, parserDialect, platform);
+            // Extract CTEs via AST
+            const cteDefs = QueryPagingEngine.extractCTEsFromAST(stmt, parserDialect, platform);
 
             // Find and extract ORDER BY (walks UNION chain)
             const orderByStmt = QueryPagingEngine.findOrderByStatement(stmt);
-            const orderBySQL = QueryPagingEngine.extractOrderByFromAST(orderByStmt, parser);
+            const orderBySQL = QueryPagingEngine.extractOrderByFromAST(orderByStmt);
             if (orderByStmt?.orderby) {
                 orderByStmt.orderby = null;
             }
@@ -95,7 +95,7 @@ export class QueryPagingEngine {
 
             // Get main SELECT without CTEs or ORDER BY
             stmt.with = null;
-            const mainSelectSQL = parser.sqlify(stmt as unknown as NodeSqlParser.AST, { database: parserDialect });
+            const mainSelectSQL = MJSQLParser.SqlifyAST(stmt as unknown as Parameters<typeof MJSQLParser.SqlifyAST>[0], parserDialect);
 
             // Assemble paged query
             return QueryPagingEngine.assemblePagingResult(
@@ -108,7 +108,6 @@ export class QueryPagingEngine {
 
     private static extractCTEsFromAST(
         stmt: Record<string, unknown>,
-        parser: InstanceType<typeof Parser>,
         parserDialect: string,
         platform: DatabasePlatform
     ): string[] {
@@ -116,19 +115,18 @@ export class QueryPagingEngine {
         return ctes.map(cte => {
             const cteRecord = cte as { name: { value: string }; stmt: { ast: unknown } };
             const quotedName = QueryPagingEngine.quoteIdentifier(cteRecord.name.value, platform);
-            const bodySQL = parser.sqlify(cteRecord.stmt.ast as NodeSqlParser.AST, { database: parserDialect });
+            const bodySQL = MJSQLParser.SqlifyAST(cteRecord.stmt.ast as Parameters<typeof MJSQLParser.SqlifyAST>[0], parserDialect);
             return `${quotedName} AS (\n${bodySQL}\n)`;
         });
     }
 
     private static extractOrderByFromAST(
-        orderByStmt: Record<string, unknown> | null,
-        parser: InstanceType<typeof Parser>
+        orderByStmt: Record<string, unknown> | null
     ): string | null {
         if (!orderByStmt?.orderby || !Array.isArray(orderByStmt.orderby)) return null;
 
         const terms = (orderByStmt.orderby as Array<{ expr: unknown; type: string }>).map(o => {
-            const exprSQL = parser.exprToSQL(o.expr);
+            const exprSQL = MJSQLParser.ExprToSQL(o.expr);
             return o.type === 'DESC' ? `${exprSQL} DESC` : exprSQL;
         });
         return terms.join(', ');

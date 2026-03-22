@@ -2,6 +2,9 @@
 export { MJSQLParser } from './mj-sql-parser.js';
 export type { MJAstifyResult, SQLTableReference, SQLColumnReference, SQLCTEExtraction, MJParameterInfo } from './mj-sql-parser.js';
 
+// Re-export node-sql-parser's AST type so consumers don't need a direct dependency
+export type { AST as SQLAst } from 'node-sql-parser';
+
 // MJ AST Types
 export type {
     // AST node types

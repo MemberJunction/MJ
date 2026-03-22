@@ -367,4 +367,65 @@ GROUP BY YEAR(e.StartDate)`;
             expect(result.cleanSQL).toContain('42001');
         });
     });
+
+    // ================================================================
+    // ParseSQL — FOR XML Workaround
+    // ================================================================
+    describe('ParseSQL — FOR XML Workaround', () => {
+        it('should parse SQL with FOR XML PATH (single arg — already works)', () => {
+            const ast = MJSQLParser.ParseSQL("SELECT Name FROM T FOR XML PATH('M')");
+            expect(ast).not.toBeNull();
+        });
+
+        it('should parse SQL with FOR XML PATH + ROOT (multi-directive — workaround)', () => {
+            const ast = MJSQLParser.ParseSQL("SELECT Name FROM T FOR XML PATH('Member'), ROOT('Members')");
+            expect(ast).not.toBeNull();
+
+            // The AST should have a FOR clause
+            const stmt = (Array.isArray(ast) ? ast![0] : ast) as unknown as Record<string, unknown>;
+            expect(stmt.for).toBeDefined();
+        });
+
+        it('should parse SQL with FOR XML PATH + ROOT + TYPE', () => {
+            const ast = MJSQLParser.ParseSQL("SELECT Name FROM T FOR XML PATH('M'), ROOT('R'), TYPE");
+            expect(ast).not.toBeNull();
+        });
+
+        it('should parse SQL with FOR XML RAW + ROOT', () => {
+            const ast = MJSQLParser.ParseSQL("SELECT Name FROM T FOR XML RAW('Row'), ROOT('Data')");
+            expect(ast).not.toBeNull();
+        });
+
+        it('should parse SQL with ORDER BY + FOR XML PATH + ROOT', () => {
+            const ast = MJSQLParser.ParseSQL(
+                "SELECT Name FROM T ORDER BY Name FOR XML PATH('M'), ROOT('Members')"
+            );
+            expect(ast).not.toBeNull();
+
+            // Both ORDER BY and FOR should be present
+            const stmt = (Array.isArray(ast) ? ast![0] : ast) as unknown as Record<string, unknown>;
+            expect(stmt.orderby).not.toBeNull();
+            expect(stmt.for).toBeDefined();
+        });
+
+        it('should extract tables from SQL with FOR XML PATH + ROOT', () => {
+            const tables = MJSQLParser.ExtractTableRefs(
+                "SELECT m.Name, m.Email FROM [__mj].[Members] m ORDER BY m.Name FOR XML PATH('Member'), ROOT('Members')"
+            );
+            expect(tables.length).toBeGreaterThanOrEqual(1);
+            expect(tables[0].TableName).toBe('Members');
+        });
+
+        it('should still return null for truly unparseable SQL', () => {
+            const ast = MJSQLParser.ParseSQL("SELECT FROM WHERE (((( BROKEN SYNTAX");
+            expect(ast).toBeNull();
+        });
+
+        it('Astify should handle FOR XML PATH + ROOT', () => {
+            const result = MJSQLParser.Astify(
+                "SELECT Name FROM T ORDER BY Name FOR XML PATH('M'), ROOT('R')"
+            );
+            expect(result.astParsed).toBe(true);
+        });
+    });
 });

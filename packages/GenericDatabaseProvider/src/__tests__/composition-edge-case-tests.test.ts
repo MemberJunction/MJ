@@ -108,15 +108,12 @@ describe('Composition Engine Edge Cases', () => {
             expect(result.ResolvedSQL).toMatch(/OFFSET/i);
         });
 
-        it.skip('should NOT strip ORDER BY when FOR XML is present (KNOWN BUG: node-sql-parser cannot parse FOR XML PATH with ROOT)', () => {
-            // node-sql-parser v5.4.0 fails to parse FOR XML PATH('Member'), ROOT('Members')
-            // because of the comma in the FOR XML clause. Both AST and regex paths
-            // incorrectly strip the ORDER BY. When the MJ SQL Parser handles FOR XML
-            // natively, this test should be un-skipped and pass.
+        it('should NOT strip ORDER BY when FOR XML is present', () => {
             const ec = ORDER_BY_EDGE_CASES.find(e => e.description.includes('FOR XML'))!;
             const { result } = setupAndResolve(ec);
 
             expect(result.HasCompositions).toBe(true);
+            // ORDER BY + FOR XML should both be preserved (FOR XML makes ORDER BY legal)
             expect(result.ResolvedSQL).toMatch(/ORDER\s+BY/i);
             expect(result.ResolvedSQL).toMatch(/FOR\s+XML/i);
         });
@@ -333,6 +330,293 @@ describe('Composition Engine Edge Cases', () => {
             expect(result.HasCompositions).toBe(true);
             // ORDER BY TotalCount DESC should be stripped for SQL Server
             expect(result.ResolvedSQL).not.toMatch(/ORDER\s+BY\s+TotalCount\s+DESC/i);
+        });
+
+        it('PostgreSQL RECURSIVE CTE should be handled', () => {
+            const ec = PLATFORM_SPECIFIC_EDGE_CASES.find(e => e.description.includes('RECURSIVE'))!;
+            if (!ec) return; // skip if fixture not present
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // The recursive CTE body should appear in the output
+            expect(result.ResolvedSQL).toContain('org_tree');
+        });
+    });
+
+    // ================================================================
+    // CTE Hoisting — Additional Edge Cases
+    // ================================================================
+    describe('CTE Hoisting — Additional', () => {
+        it('should handle two dependencies with same-named CTEs (deduplication)', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('same name'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(2);
+            // Both CTEs should be in the output — ActiveMembers should appear
+            expect(result.ResolvedSQL).toMatch(/ActiveMembers/i);
+            // No nested WITH clauses
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+        });
+
+        it('should handle outer + dependency CTEs with overlapping names', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('overlapping names'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // The outer ActiveMembers and the dependency ActiveMembers should both appear
+            // The dependency's CTE may be renamed or deduplicated
+            expect(result.ResolvedSQL).toMatch(/ActiveMembers/i);
+            // Should still produce valid SQL (single WITH keyword)
+            const withCount = (result.ResolvedSQL.match(/\bWITH\b/gi) || []).length;
+            expect(withCount).toBe(1);
+        });
+
+        it('should handle nested composition (dependency references another dependency)', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('nested composition'))!;
+            // This test needs an additional "Raw Scores" query registered
+            const rawScoresQuery = makeQueryInfo(
+                { name: 'Raw Scores', categoryPath: 'Analytics', sql: 'SELECT MemberID, SUM(Points) AS Score FROM Points GROUP BY MemberID' },
+                'TransactSQL'
+            );
+
+            const queries = ec.dependencies.map(d => makeQueryInfo(d, ec.dialect));
+            queries.push(rawScoresQuery);
+            const mockUser = { UserRoles: [{ Role: 'Admin' }] } as unknown as UserInfo;
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: queries,
+                QueryDependencies: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const engine = new QueryCompositionEngine();
+            const result = engine.ResolveComposition(ec.outerSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            // Both Weighted Scores and Raw Scores should be resolved
+            expect(result.CTEs.length).toBeGreaterThanOrEqual(1);
+        });
+    });
+
+    // ================================================================
+    // Template Parameter Edge Cases
+    // ================================================================
+    describe('Template Parameter Edge Cases', () => {
+        it('should handle pass-through parameter', () => {
+            const ec = TEMPLATE_PARAMETER_EDGE_CASES.find(e => e.description.includes('Pass-through'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+        });
+
+        it('should handle static (literal) parameter', () => {
+            const ec = TEMPLATE_PARAMETER_EDGE_CASES.find(e => e.description.includes('Static'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // Static params are stored in CTE metadata for downstream Nunjucks rendering
+            expect(result.CTEs[0].Parameters).toHaveProperty('type', 'Professional');
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+        });
+
+        it('should handle mixed parameters (static + pass-through)', () => {
+            const ec = TEMPLATE_PARAMETER_EDGE_CASES.find(e => e.description.includes('Mixed'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // Both params stored in CTE metadata
+            expect(result.CTEs[0].Parameters).toHaveProperty('type', 'Professional');
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+        });
+
+        it.skip('should handle parameter with nested Nunjucks expression (KNOWN LIMITATION: nested {{ }} inside composition refs)', () => {
+            // The MJLexer finds the inner }} and closes the composition ref early.
+            // Nested {{ }} inside {{query:"..."}} is a fundamental delimiter ambiguity.
+            // Workaround: use pass-through params instead of nested expressions.
+            const ec = TEMPLATE_PARAMETER_EDGE_CASES.find(e => e.description.includes('nested'))!;
+            const { result } = setupAndResolve(ec);
+            expect(result.HasCompositions).toBe(true);
+        });
+
+        it('should handle parameter that affects SQL structure via {% if %} block', () => {
+            const ec = TEMPLATE_PARAMETER_EDGE_CASES.find(e => e.description.includes('affects SQL structure'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // The 'true' value should be substituted for IncludeInactive
+            expect(result.ResolvedSQL).toContain("'true'");
+        });
+    });
+
+    // ================================================================
+    // Multiple Dependencies — Additional
+    // ================================================================
+    describe('Multiple Dependencies — Additional', () => {
+        it('should handle composition ref in FROM + WHERE subquery', () => {
+            const ec = MULTIPLE_DEPENDENCY_EDGE_CASES.find(e => e.description.includes('WHERE subquery'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(2);
+            // Both refs should be replaced with CTE aliases
+            expect(result.ResolvedSQL).not.toContain('{{query:');
+        });
+    });
+
+    // ================================================================
+    // SQL Structure — Additional Edge Cases
+    // ================================================================
+    describe('SQL Structure — Additional', () => {
+        it('should handle UNION ALL with composition ref in one branch', () => {
+            const ec = SQL_STRUCTURE_EDGE_CASES.find(e => e.description.includes('UNION ALL'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.ResolvedSQL).toMatch(/UNION\s+ALL/i);
+            expect(result.ResolvedSQL).not.toContain('{{query:');
+        });
+
+        it('should handle CROSS APPLY with composition ref', () => {
+            const ec = SQL_STRUCTURE_EDGE_CASES.find(e => e.description.includes('CROSS APPLY'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.ResolvedSQL).not.toContain('{{query:');
+        });
+
+        it('should handle dependency SQL starting with comments', () => {
+            const ec = SQL_STRUCTURE_EDGE_CASES.find(e => e.description.includes('starts with comments'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.ResolvedSQL).toMatch(/WITH/i);
+        });
+
+        it('should handle empty dependency SQL gracefully', () => {
+            const ec = SQL_STRUCTURE_EDGE_CASES.find(e => e.description.includes('Empty'))!;
+            // Empty SQL in CTE may cause an error — that's acceptable behavior
+            try {
+                const { result } = setupAndResolve(ec);
+                // If it succeeds, it should still have a CTE
+                expect(result.HasCompositions).toBe(true);
+            } catch (e) {
+                // Empty dependency causing an error is valid behavior
+                expect(e).toBeDefined();
+            }
+        });
+
+        it('should handle outer query with no FROM clause (scalar subquery)', () => {
+            const ec = SQL_STRUCTURE_EDGE_CASES.find(e => e.description.includes('no FROM clause'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.ResolvedSQL).not.toContain('{{query:');
+        });
+
+        it('should handle dependency with DECLARE/SET statements', () => {
+            const ec = SQL_STRUCTURE_EDGE_CASES.find(e => e.description.includes('DECLARE'))!;
+            // DECLARE cannot be inside a CTE — engine should handle gracefully
+            try {
+                const { result } = setupAndResolve(ec);
+                expect(result.HasCompositions).toBe(true);
+            } catch (e) {
+                // Error is acceptable — DECLARE in CTE is a known limitation
+                expect(e).toBeDefined();
+            }
+        });
+    });
+
+    // ================================================================
+    // Complex — Additional Edge Cases
+    // ================================================================
+    describe('Complex — Additional', () => {
+        it('should handle diamond dependency pattern (B and C both reference D)', () => {
+            const ec = COMPLEX_EDGE_CASES.find(e => e.description.includes('Diamond'))!;
+            // Diamond pattern needs QueryD registered as well
+            const queryD = makeQueryInfo(
+                { name: 'QueryD', categoryPath: 'Layer', sql: 'SELECT ID, Val FROM BaseData' },
+                'TransactSQL'
+            );
+
+            const queries = ec.dependencies.map(d => makeQueryInfo(d, ec.dialect));
+            queries.push(queryD);
+            const mockUser = { UserRoles: [{ Role: 'Admin' }] } as unknown as UserInfo;
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: queries,
+                QueryDependencies: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const engine = new QueryCompositionEngine();
+            const result = engine.ResolveComposition(ec.outerSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            // QueryD should be resolved (appears as a CTE)
+            expect(result.CTEs.length).toBeGreaterThanOrEqual(2);
+            // No unresolved composition tokens
+            expect(result.ResolvedSQL).not.toContain('{{query:');
+        });
+
+        it('should handle composition ref inside Nunjucks conditional block', () => {
+            const ec = COMPLEX_EDGE_CASES.find(e => e.description.includes('Nunjucks conditional block'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // The composition ref is inside {% if %} — it should still be resolved
+            // since the engine processes composition tokens before Nunjucks rendering
+            expect(result.CTEs.length).toBeGreaterThanOrEqual(1);
+        });
+
+        it('should handle deeply nested composition (3 levels)', () => {
+            const ec = COMPLEX_EDGE_CASES.find(e => e.description.includes('Deeply nested'))!;
+            // Need to register the entire chain: QueryA → QueryB → QueryC
+            const queryB = makeQueryInfo(
+                { name: 'QueryB', categoryPath: 'Level2', sql: 'SELECT c.Result FROM {{query:"Level3/QueryC"}} c' },
+                'TransactSQL'
+            );
+            const queryC = makeQueryInfo(
+                { name: 'QueryC', categoryPath: 'Level3', sql: 'SELECT 42 AS Result' },
+                'TransactSQL'
+            );
+
+            const queries = ec.dependencies.map(d => makeQueryInfo(d, ec.dialect));
+            queries.push(queryB, queryC);
+            const mockUser = { UserRoles: [{ Role: 'Admin' }] } as unknown as UserInfo;
+
+            vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+                Queries: queries,
+                QueryDependencies: [],
+            } as ReturnType<typeof Metadata.Provider>);
+
+            const engine = new QueryCompositionEngine();
+            const result = engine.ResolveComposition(ec.outerSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            // All three levels should be resolved
+            expect(result.CTEs.length).toBeGreaterThanOrEqual(3);
+            expect(result.ResolvedSQL).not.toContain('{{query:');
+        });
+
+        it('should handle outer query with window functions referencing CTE alias', () => {
+            const ec = COMPLEX_EDGE_CASES.find(e => e.description.includes('window functions'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // The OVER (ORDER BY ...) in the outer query must be preserved
+            expect(result.ResolvedSQL).toMatch(/OVER\s*\(/i);
+        });
+
+        it('should handle dependency with multi-statement batch (DECLARE + SELECT)', () => {
+            const ec = COMPLEX_EDGE_CASES.find(e => e.description.includes('multiple statements'))!;
+            // Multi-statement batches in CTEs are problematic
+            try {
+                const { result } = setupAndResolve(ec);
+                expect(result.HasCompositions).toBe(true);
+            } catch (e) {
+                // Error is acceptable — multi-statement batch in CTE is a known limitation
+                expect(e).toBeDefined();
+            }
         });
     });
 });

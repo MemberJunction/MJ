@@ -2,7 +2,7 @@
  * SQL WHERE Clause Validator
  *
  * Validates SQL WHERE clauses for syntax and field references.
- * Uses node-sql-parser for accurate AST-based validation with regex fallback.
+ * Uses MJSQLParser for accurate AST-based validation with regex fallback.
  *
  * This validator is essential for catching errors like:
  * ```jsx
@@ -44,8 +44,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseConstraintValidator } from './base-constraint-validator';
 import { ValidationContext } from './validation-context';
 import { PropValueExtractor } from '../prop-value-extractor';
-import NodeSqlParser from 'node-sql-parser';
-const { Parser } = NodeSqlParser;
+import { MJSQLParser } from '@memberjunction/sql-parser';
 
 /**
  * Validates SQL WHERE clauses for syntax and field references
@@ -57,8 +56,8 @@ const { Parser } = NodeSqlParser;
  * - RunView ExtraFilter parameter
  * - Custom components with SQL filtering
  *
- * **Implementation**: Uses node-sql-parser (same as MJQueryEntity.server.ts)
- * for accurate AST-based validation with regex fallback for edge cases.
+ * **Implementation**: Uses MJSQLParser for accurate AST-based validation
+ * with regex fallback for edge cases.
  */
 @RegisterClass(BaseConstraintValidator, 'sql-where-clause')
 export class SqlWhereClauseValidator extends BaseConstraintValidator {
@@ -168,8 +167,7 @@ export class SqlWhereClauseValidator extends BaseConstraintValidator {
   /**
    * Validate WHERE clause using AST parsing (Level 1: Field existence)
    *
-   * Uses node-sql-parser to accurately extract column references.
-   * Pattern based on MJQueryEntity.server.ts (lines 305-324, 560-590)
+   * Uses MJSQLParser to accurately extract column references.
    *
    * @param whereClause - SQL WHERE clause
    * @param entityName - Entity name for context
@@ -191,12 +189,11 @@ export class SqlWhereClauseValidator extends BaseConstraintValidator {
   ): ConstraintViolation[] {
     const violations: ConstraintViolation[] = [];
 
-    // Parse WHERE clause using node-sql-parser
-    // Same pattern as MJQueryEntity.server.ts line 309
-    const parser = new Parser();
-    const ast = parser.astify(`SELECT * FROM t WHERE ${whereClause}`, {
-      database: 'TransactSQL',
-    });
+    // Parse WHERE clause using MJSQLParser (wraps node-sql-parser with FOR XML workaround)
+    const ast = MJSQLParser.ParseSQL(`SELECT * FROM t WHERE ${whereClause}`);
+    if (!ast) {
+      throw new Error('Failed to parse WHERE clause');
+    }
 
     // Extract column references from AST
     const columnRefs = new Set<string>();

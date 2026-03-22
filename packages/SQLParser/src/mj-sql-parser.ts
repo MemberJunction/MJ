@@ -165,6 +165,35 @@ export class MJSQLParser {
         return result.mjParse.tokens.map(t => t.raw).join('');
     }
 
+    // ─── Raw SQL Parsing ────────────────────────────────
+
+    /**
+     * Parse plain SQL into a node-sql-parser AST.
+     * Handles FOR XML multi-directive workaround automatically.
+     * Returns null if parsing fails.
+     */
+    static ParseSQL(sql: string, dialect: string = 'TransactSQL'): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
+        return MJSQLParser.parseSQL(sql, dialect);
+    }
+
+    /**
+     * Convert a node-sql-parser AST (or array of ASTs) back to a SQL string.
+     * This is a thin wrapper around node-sql-parser's sqlify.
+     */
+    static SqlifyAST(ast: NodeSqlParser.AST | NodeSqlParser.AST[], dialect: string = 'TransactSQL'): string {
+        const parser = new Parser();
+        return parser.sqlify(Array.isArray(ast) ? ast[0] : ast, { database: dialect });
+    }
+
+    /**
+     * Convert a single AST expression node to a SQL string.
+     * Useful for extracting ORDER BY terms, column expressions, etc.
+     */
+    static ExprToSQL(expr: unknown): string {
+        const parser = new Parser();
+        return parser.exprToSQL(expr);
+    }
+
     // ─── Tokenization ──────────────────────────────────
 
     /**
@@ -407,13 +436,96 @@ export class MJSQLParser {
     // Private: SQL Parsing
     // ═══════════════════════════════════════════════════
 
-    /** Parse SQL safely, returning null on failure */
+    /**
+     * Parse SQL safely, returning null on failure.
+     *
+     * Includes a workaround for node-sql-parser's inability to handle multi-directive
+     * FOR XML clauses (e.g., `FOR XML PATH('M'), ROOT('R')`). The parser handles
+     * `FOR XML PATH('M')` fine but chokes on the comma-separated directives.
+     * We strip the extra directives before parsing and restore them on the AST's `for` property.
+     */
     private static parseSQL(sql: string, dialect: string): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
         try {
             const parser = new Parser();
             return parser.astify(sql, { database: dialect });
         } catch {
+            // If direct parse fails, try with FOR XML workaround
+            const forXmlResult = MJSQLParser.stripForXmlDirectives(sql);
+            if (forXmlResult) {
+                try {
+                    const parser = new Parser();
+                    const ast = parser.astify(forXmlResult.cleanedSQL, { database: dialect });
+                    // Restore the original FOR XML clause on the AST
+                    MJSQLParser.restoreForXmlOnAST(ast, forXmlResult.originalForXml);
+                    return ast;
+                } catch {
+                    return null;
+                }
+            }
             return null;
+        }
+    }
+
+    /**
+     * Detects FOR XML clauses that node-sql-parser can't handle and simplifies them.
+     *
+     * node-sql-parser handles: FOR XML PATH, FOR XML PATH('arg'), FOR XML RAW, FOR XML AUTO
+     * node-sql-parser fails on: FOR XML RAW('arg'), and any comma-separated directives
+     *
+     * Simplifies to a form the parser accepts, preserving the original for restoration.
+     * Returns null if no problematic FOR XML pattern is found.
+     */
+    private static stripForXmlDirectives(sql: string): { cleanedSQL: string; originalForXml: string } | null {
+        // Match FOR XML <directive> with optional quoted arg and optional comma-separated extras
+        const forXmlRegex = /\bFOR\s+XML\s+(PATH|RAW|AUTO|EXPLICIT)(\s*\('[^']*'\))?(\s*,\s*[^;]*)?$/i;
+        const match = sql.match(forXmlRegex);
+        if (!match) return null;
+
+        const fullForXml = match[0];
+        const directive = match[1].toUpperCase(); // PATH, RAW, etc.
+        const hasQuotedArg = !!match[2];
+        const hasExtraDirectives = !!match[3];
+
+        // Only needs workaround if there are extra comma-separated directives
+        // OR if it's RAW/EXPLICIT with a quoted arg (parser can't handle those)
+        const needsWorkaround = hasExtraDirectives ||
+            (hasQuotedArg && (directive === 'RAW' || directive === 'EXPLICIT'));
+
+        if (!needsWorkaround) return null;
+
+        // Simplify to a form the parser accepts:
+        // PATH('arg') → PATH('arg')  (parser handles this)
+        // RAW('arg')  → RAW          (parser can't handle quoted arg on RAW)
+        // Any + comma extras → strip extras
+        let simplifiedDirective: string;
+        if (directive === 'PATH' && hasQuotedArg) {
+            simplifiedDirective = `FOR XML PATH${match[2]}`;
+        } else {
+            simplifiedDirective = `FOR XML ${directive}`;
+        }
+
+        const cleanedSQL = sql.substring(0, match.index!) + simplifiedDirective;
+        return { cleanedSQL, originalForXml: fullForXml };
+    }
+
+    /**
+     * Restores the original FOR XML clause text on the AST's `for` property.
+     * This ensures that when the AST is inspected (e.g., for isOrderByLegalInCTE checks),
+     * the FOR XML presence is correctly detected.
+     */
+    private static restoreForXmlOnAST(ast: NodeSqlParser.AST | NodeSqlParser.AST[], originalForXml: string): void {
+        const stmt = (Array.isArray(ast) ? ast[0] : ast) as unknown as Record<string, unknown>;
+        if (!stmt) return;
+
+        // Walk the _next chain (UNION) to find the statement with the FOR clause
+        let current: Record<string, unknown> | null = stmt;
+        while (current) {
+            if (current.for && typeof current.for === 'object') {
+                // Attach the original text so downstream code can reconstruct it
+                (current.for as Record<string, unknown>).__originalForXml = originalForXml;
+                return;
+            }
+            current = current._next as Record<string, unknown> | null;
         }
     }
 

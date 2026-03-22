@@ -2,8 +2,6 @@ import { UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDialect, PostgreSQLDialect, type SQLDialect } from "@memberjunction/sql-dialect";
 import { MJSQLParser } from "@memberjunction/sql-parser";
 import { Metadata, QueryInfo, DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
-import NodeSqlParser from 'node-sql-parser';
-const { Parser: SqlParser } = NodeSqlParser;
 
 /**
  * Maximum depth for recursive query composition resolution.
@@ -739,8 +737,10 @@ export class QueryCompositionEngine {
      */
     private tryASTStrip(sql: string, parserDialect: string): string | null {
         try {
-            const parser = new SqlParser();
-            const ast = parser.astify(sql, { database: parserDialect });
+            // Use MJSQLParser.ParseSQL for FOR XML multi-directive workaround
+            const ast = MJSQLParser.ParseSQL(sql, parserDialect);
+            if (!ast) return null;
+
             const stmt = Array.isArray(ast) ? ast[0] : ast;
             if (!stmt) return sql;
 
@@ -750,7 +750,7 @@ export class QueryCompositionEngine {
             if (this.isOrderByLegalInCTE(orderByStmt)) return sql;
 
             orderByStmt.orderby = null;
-            return parser.sqlify(Array.isArray(ast) ? ast : [stmt], { database: parserDialect });
+            return MJSQLParser.SqlifyAST(Array.isArray(ast) ? ast : [stmt], parserDialect);
         } catch {
             return null;
         }
@@ -775,8 +775,8 @@ export class QueryCompositionEngine {
         const preprocessed = this.preprocessNunjucks(sql);
 
         try {
-            const parser = new SqlParser();
-            const ast = parser.astify(preprocessed, { database: parserDialect });
+            const ast = MJSQLParser.ParseSQL(preprocessed, parserDialect);
+            if (!ast) return null;
             const stmt = Array.isArray(ast) ? ast[0] : ast;
             if (!stmt) return sql;
 
