@@ -4,7 +4,7 @@
  * - Auth types
  * - MJAuthBase (via dynamic import)
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AuthErrorType } from '../auth-types';
 
 // Mock Angular
@@ -265,7 +265,7 @@ describe('logout and cache clearing', () => {
    * Pass preservedKeys to override the default preservedLocalStorageKeys getter.
    */
   function makeProvider(preservedKeys?: Set<string>) {
-    const logoutSpy = vi.fn<[], Promise<void>>().mockResolvedValue(undefined);
+    const logoutSpy = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
     class TestProvider extends MJAuthBase {
       readonly type = 'test';
       readonly logoutSpy = logoutSpy;
@@ -360,7 +360,7 @@ describe('logout and cache clearing', () => {
     vi.stubGlobal('indexedDB', { deleteDatabase });
     stubLocalStorage({});
 
-    const logoutSpy = vi.fn<[], Promise<void>>().mockImplementation(async () => {
+    const logoutSpy = vi.fn<() => Promise<void>>().mockImplementation(async () => {
       callOrder.push('logoutInternal');
     });
     class OrderTestProvider extends MJAuthBase {
