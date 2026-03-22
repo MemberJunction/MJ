@@ -6,11 +6,6 @@
   background: var(--mj-bg-surface-card);
 }
 
-/* Pagination footer - always visible at bottom */
-mj-pagination {
-  flex-shrink: 0;
-}
-
 /* Header */
 .viewer-header {
   display: flex;

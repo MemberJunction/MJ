@@ -15,6 +15,16 @@ import { ComponentStudioDashboardsModule } from './component-studio-dashboards.m
 // Existing standalone modules
 import { MCPModule } from './MCP';
 import { IntegrationModule } from './Integration/integration.module';
+// External generic modules (imported for backward compatibility with non-MJExplorer consumers)
+import { CredentialsModule } from '@memberjunction/ng-credentials';
+import { AgentRequestsModule } from '@memberjunction/ng-agent-requests';
+import { SharedPipesModule } from './shared/shared-pipes.module';
+import { ActionsModule } from '@memberjunction/ng-actions';
+import { AgentsModule } from '@memberjunction/ng-agents';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
+import { VersionsModule } from '@memberjunction/ng-versions';
+import { SchedulingModule } from '@memberjunction/ng-scheduling';
+import { NgTreesModule } from '@memberjunction/ng-trees';
 
 /**
  * DashboardsModule — backward-compatible wrapper that imports and re-exports
@@ -38,7 +48,17 @@ import { IntegrationModule } from './Integration/integration.module';
     ListsDashboardsModule,
     ComponentStudioDashboardsModule,
     MCPModule,
-    IntegrationModule
+    IntegrationModule,
+    // External generic modules (re-exported for backward compatibility)
+    CredentialsModule,
+    AgentRequestsModule,
+    SharedPipesModule,
+    ActionsModule,
+    AgentsModule,
+    MarkdownModule,
+    VersionsModule,
+    SchedulingModule,
+    NgTreesModule
   ],
   exports: [
     CoreDashboardsModule,
@@ -53,7 +73,11 @@ import { IntegrationModule } from './Integration/integration.module';
     ListsDashboardsModule,
     ComponentStudioDashboardsModule,
     MCPModule,
-    IntegrationModule
+    IntegrationModule,
+    // External generic modules (re-exported for backward compatibility)
+    CredentialsModule,
+    AgentRequestsModule,
+    SharedPipesModule
   ]
 })
 export class DashboardsModule { }

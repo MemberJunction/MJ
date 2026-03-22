@@ -7,6 +7,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { PromptEngine } from '../prompts/PromptEngine.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
+import { TokenPricingConfig } from '../types/config.js';
+import { IterationTracker } from '../state/IterationTracker.js';
 import {
   SampleQuery,
   SampleQueryGenerationResult,
@@ -120,6 +122,8 @@ interface QueryRefinementContext {
 
 export class SampleQueryGenerator {
   private totalTokensUsed: number = 0;
+  private totalInputTokens: number = 0;
+  private totalOutputTokens: number = 0;
   private totalCost: number = 0;
   private startTime: number = 0;
 
@@ -130,7 +134,8 @@ export class SampleQueryGenerator {
     private model: string,
     private stateManager: StateManager,  // StateManager for incremental writes
     private effortLevel?: number,
-    private maxTokens: number = 16000  // Default from typical AI config
+    private maxTokens: number = 16000,  // Default from typical AI config
+    private pricing?: TokenPricingConfig
   ) {}
 
   public async generateQueries(
@@ -138,6 +143,8 @@ export class SampleQueryGenerator {
   ): Promise<SampleQueryGenerationResult> {
     this.startTime = Date.now();
     this.totalTokensUsed = 0;
+    this.totalInputTokens = 0;
+    this.totalOutputTokens = 0;
     this.totalCost = 0;
 
     const state = await this.stateManager.load();
@@ -181,6 +188,8 @@ export class SampleQueryGenerator {
       status: 'running',
       queriesGenerated: 0,
       tokensUsed: 0,
+      inputTokens: 0,
+      outputTokens: 0,
       estimatedCost: 0
     };
 
@@ -220,6 +229,8 @@ export class SampleQueryGenerator {
       state.phases.queryGeneration.completedAt = new Date().toISOString();
       state.phases.queryGeneration.queriesGenerated = allQueries.length;
       state.phases.queryGeneration.tokensUsed = this.totalTokensUsed;
+      state.phases.queryGeneration.inputTokens = this.totalInputTokens;
+      state.phases.queryGeneration.outputTokens = this.totalOutputTokens;
       state.phases.queryGeneration.estimatedCost = this.totalCost;
 
       // Save final state
@@ -449,7 +460,9 @@ export class SampleQueryGenerator {
     );
 
     this.totalTokensUsed += result.tokensUsed;
-    this.totalCost += result.cost || 0;
+    this.totalInputTokens += result.inputTokens || 0;
+    this.totalOutputTokens += result.outputTokens || 0;
+    this.totalCost += result.cost || (this.pricing ? IterationTracker.CalculateCost(result.inputTokens || 0, result.outputTokens || 0, this.pricing) : 0);
 
     if (!result.success || !result.result) {
       throw new Error(`Query planning failed: ${result.errorMessage || 'Unknown error'}`);
@@ -498,7 +511,9 @@ export class SampleQueryGenerator {
     );
 
     this.totalTokensUsed += result.tokensUsed;
-    this.totalCost += result.cost || 0;
+    this.totalInputTokens += result.inputTokens || 0;
+    this.totalOutputTokens += result.outputTokens || 0;
+    this.totalCost += result.cost || (this.pricing ? IterationTracker.CalculateCost(result.inputTokens || 0, result.outputTokens || 0, this.pricing) : 0);
 
     if (!result.success || !result.result) {
       throw new Error(`SQL generation failed: ${result.errorMessage || 'Unknown error'}`);
@@ -958,7 +973,9 @@ export class SampleQueryGenerator {
     );
 
     this.totalTokensUsed += result.tokensUsed;
-    this.totalCost += result.cost || 0;
+    this.totalInputTokens += result.inputTokens || 0;
+    this.totalOutputTokens += result.outputTokens || 0;
+    this.totalCost += result.cost || (this.pricing ? IterationTracker.CalculateCost(result.inputTokens || 0, result.outputTokens || 0, this.pricing) : 0);
 
     if (!result.success || !result.result) {
       throw new Error(`Query fix failed: ${result.errorMessage || 'Unknown error'}`);
@@ -1012,7 +1029,9 @@ export class SampleQueryGenerator {
     );
 
     this.totalTokensUsed += result.tokensUsed;
-    this.totalCost += result.cost || 0;
+    this.totalInputTokens += result.inputTokens || 0;
+    this.totalOutputTokens += result.outputTokens || 0;
+    this.totalCost += result.cost || (this.pricing ? IterationTracker.CalculateCost(result.inputTokens || 0, result.outputTokens || 0, this.pricing) : 0);
 
     if (!result.success || !result.result) {
       throw new Error(`Query refinement failed: ${result.errorMessage || 'Unknown error'}`);
@@ -1123,6 +1142,8 @@ export class SampleQueryGenerator {
       if (state.phases.queryGeneration) {
         state.phases.queryGeneration.queriesGenerated = queries.length;
         state.phases.queryGeneration.tokensUsed = this.totalTokensUsed;
+        state.phases.queryGeneration.inputTokens = this.totalInputTokens;
+        state.phases.queryGeneration.outputTokens = this.totalOutputTokens;
         state.phases.queryGeneration.estimatedCost = this.totalCost;
       }
 

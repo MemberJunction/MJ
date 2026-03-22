@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 5.12.0
+
+### Patch Changes
+
+- 7def002: Fix ExternalChangeDetection unquoted string IDs and log spam, add /healthcheck endpoint before auth middleware, return TechnicalDescription in CreateQuery/UpdateQuery mutations, and improve MJCLI config validation errors with env var hints
+- Updated dependencies [05f19ff]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/ai-core-plus@5.12.0
+  - @memberjunction/actions-base@5.12.0
+  - @memberjunction/interactive-component-types@5.12.0
+  - @memberjunction/global@5.12.0
+
 ## 5.11.0
 
 ### Minor Changes

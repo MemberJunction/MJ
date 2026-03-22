@@ -201,10 +201,11 @@ import {
     PlanningDesignerAgent,
 } from '@memberjunction/ai-agent-manager';
 
-// @memberjunction/ai-agents (4 classes)
+// @memberjunction/ai-agents (5 classes)
 import {
     FlowAgentType,
     LoopAgentType,
+    MJAIAgentRequestEntityServer,
     MemoryManagerAgent,
     QueryBuilderAgent,
 } from '@memberjunction/ai-agents';
@@ -390,7 +391,7 @@ import {
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
-// @memberjunction/core-actions (101 classes)
+// @memberjunction/core-actions (103 classes)
 import {
     APIRateLimiterAction,
     AddRecordsToListAction,
@@ -428,7 +429,6 @@ import {
     ExecuteAIPromptAction,
     ExecuteCodeAction,
     ExecuteMCPToolAction,
-    ExecuteResearchQueryAction,
     ExploreDatabaseSchemaAction,
     ExternalChangeDetectionAction,
     FileCompressAction,
@@ -474,6 +474,9 @@ import {
     RemoveRecordsFromListAction,
     RetryAction,
     ReverseGeocodeAction,
+    RunAdhocQueryAction,
+    RunStoredQueryAction,
+    SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendSingleMessageAction,
     SlackWebhookAction,
@@ -495,11 +498,12 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (296 classes)
+// @memberjunction/core-entities (298 classes)
 import {
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
+    MJAIAgentCategoryEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
@@ -513,6 +517,7 @@ import {
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
+    MJAIAgentRequestTypeEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
@@ -844,10 +849,11 @@ import {
     RunSyncAction,
 } from '@memberjunction/integration-actions';
 
-// @memberjunction/integration-connectors (5 classes)
+// @memberjunction/integration-connectors (6 classes)
 import {
     FileFeedConnector,
     HubSpotConnector,
+    RasaConnector,
     SalesforceConnector,
     WicketConnector,
     YourMembershipConnector,
@@ -869,10 +875,11 @@ import {
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
 
-// @memberjunction/scheduling-engine (2 classes)
+// @memberjunction/scheduling-engine (3 classes)
 import {
     ActionScheduledJobDriver,
     AgentScheduledJobDriver,
+    IntegrationSyncScheduledJobDriver,
 } from '@memberjunction/scheduling-engine';
 
 // @memberjunction/scheduling-engine-base (1 classes)
@@ -1070,6 +1077,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     PlanningDesignerAgent,
     FlowAgentType,
     LoopAgentType,
+    MJAIAgentRequestEntityServer,
     MemoryManagerAgent,
     QueryBuilderAgent,
     AnthropicLLM,
@@ -1161,7 +1169,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     ExecuteAIPromptAction,
     ExecuteCodeAction,
     ExecuteMCPToolAction,
-    ExecuteResearchQueryAction,
     ExploreDatabaseSchemaAction,
     ExternalChangeDetectionAction,
     FileCompressAction,
@@ -1207,6 +1214,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     RemoveRecordsFromListAction,
     RetryAction,
     ReverseGeocodeAction,
+    RunAdhocQueryAction,
+    RunStoredQueryAction,
+    SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendSingleMessageAction,
     SlackWebhookAction,
@@ -1229,6 +1239,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIActionEntity,
     MJAIAgentActionEntity,
     MJAIAgentArtifactTypeEntity,
+    MJAIAgentCategoryEntity,
     MJAIAgentConfigurationEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
@@ -1242,6 +1253,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
+    MJAIAgentRequestTypeEntity,
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
@@ -1549,6 +1561,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     RunSyncAction,
     FileFeedConnector,
     HubSpotConnector,
+    RasaConnector,
     SalesforceConnector,
     WicketConnector,
     YourMembershipConnector,
@@ -1562,6 +1575,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     UpdateScheduledJobAction,
     ActionScheduledJobDriver,
     AgentScheduledJobDriver,
+    IntegrationSyncScheduledJobDriver,
     MJScheduledJobEntityExtended,
     MJEntityPermissionEntityServer,
     SkipProxyAgent,
@@ -1581,7 +1595,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 661;
+export const CLASS_REGISTRATIONS_COUNT = 668;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

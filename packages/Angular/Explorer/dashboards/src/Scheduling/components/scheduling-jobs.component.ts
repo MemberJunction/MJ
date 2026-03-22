@@ -28,14 +28,11 @@ export class SchedulingJobsComponent implements OnInit, OnDestroy {
 
   // Slideout state
   public SlideoutOpen = false;
-  public SlideoutMode: 'create' | 'edit' = 'create';
   public SelectedJob: JobStatistics | null = null;
-  public SlideoutWidth = 620;
 
-  // Resize state
-  private resizeStartX = 0;
-  private resizeStartWidth = 0;
-  private isResizing = false;
+  // Delete confirmation state
+  public DeleteConfirmJobId: string | null = null;
+  public IsDeleting = false;
 
   // Filters
   public SearchTerm = '';
@@ -46,7 +43,6 @@ export class SchedulingJobsComponent implements OnInit, OnDestroy {
   public TypeOptions: string[] = [''];
 
   // Settings keys
-  private static readonly PANEL_WIDTH_KEY = 'Scheduling.SlideoutPanelWidth';
   private static readonly SEARCH_STATE_KEY = 'Scheduling.JobsSearchState';
 
   private searchSubject = new BehaviorSubject<string>('');
@@ -87,19 +83,10 @@ export class SchedulingJobsComponent implements OnInit, OnDestroy {
     this.destroy$.next();
     this.destroy$.complete();
     this.subscriptions.forEach(s => s.unsubscribe());
-    document.removeEventListener('mousemove', this.onResizeMove);
-    document.removeEventListener('mouseup', this.onResizeEnd);
   }
 
   private loadUserSettings(): void {
     try {
-      const widthStr = UserInfoEngine.Instance.GetSetting(SchedulingJobsComponent.PANEL_WIDTH_KEY);
-      if (widthStr) {
-        const width = parseInt(widthStr, 10);
-        if (!isNaN(width) && width >= 400 && width <= 900) {
-          this.SlideoutWidth = width;
-        }
-      }
       const stateStr = UserInfoEngine.Instance.GetSetting(SchedulingJobsComponent.SEARCH_STATE_KEY);
       if (stateStr) {
         const state = JSON.parse(stateStr) as Record<string, string>;
@@ -185,46 +172,14 @@ export class SchedulingJobsComponent implements OnInit, OnDestroy {
     this.schedulingService.refresh();
   }
 
-  // ── Resize ──────────────────────────────────────────────
-  public OnResizeStart(event: MouseEvent): void {
-    event.preventDefault();
-    this.isResizing = true;
-    this.resizeStartX = event.clientX;
-    this.resizeStartWidth = this.SlideoutWidth;
-    document.addEventListener('mousemove', this.onResizeMove);
-    document.addEventListener('mouseup', this.onResizeEnd);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-  }
-
-  private onResizeMove = (event: MouseEvent): void => {
-    const delta = this.resizeStartX - event.clientX;
-    this.SlideoutWidth = Math.max(400, Math.min(900, this.resizeStartWidth + delta));
-    this.cdr.detectChanges();
-  };
-
-  private onResizeEnd = (): void => {
-    this.isResizing = false;
-    document.removeEventListener('mousemove', this.onResizeMove);
-    document.removeEventListener('mouseup', this.onResizeEnd);
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    UserInfoEngine.Instance.SetSettingDebounced(
-      SchedulingJobsComponent.PANEL_WIDTH_KEY,
-      String(this.SlideoutWidth)
-    );
-  };
-
   public OpenCreateSlideout(): void {
     this.SelectedJob = null;
-    this.SlideoutMode = 'create';
     this.SlideoutOpen = true;
     this.cdr.markForCheck();
   }
 
   public OpenEditSlideout(job: JobStatistics): void {
     this.SelectedJob = job;
-    this.SlideoutMode = 'edit';
     this.SlideoutOpen = true;
     this.cdr.markForCheck();
   }
@@ -244,6 +199,39 @@ export class SchedulingJobsComponent implements OnInit, OnDestroy {
     event.stopPropagation();
     const newStatus = job.status === 'Active' ? 'Paused' : 'Active';
     await this.schedulingService.updateJobStatus(job.jobId, newStatus as 'Active' | 'Paused');
+  }
+
+  public ShowDeleteConfirm(job: JobStatistics, event: MouseEvent): void {
+    event.stopPropagation();
+    this.DeleteConfirmJobId = job.jobId;
+    this.cdr.markForCheck();
+  }
+
+  public CancelDelete(event: MouseEvent): void {
+    event.stopPropagation();
+    this.DeleteConfirmJobId = null;
+    this.cdr.markForCheck();
+  }
+
+  public async ConfirmDelete(jobId: string, event: MouseEvent): Promise<void> {
+    event.stopPropagation();
+    this.IsDeleting = true;
+    this.cdr.markForCheck();
+    try {
+      const result = await this.schedulingService.deleteJob(jobId);
+      if (result) {
+        this.DeleteConfirmJobId = null;
+      }
+    } catch (err) {
+      console.error('[SchedulingJobs] Delete error:', err);
+    } finally {
+      this.IsDeleting = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public IsDeleteConfirming(jobId: string): boolean {
+    return this.DeleteConfirmJobId === jobId;
   }
 
   public OpenEntityRecord(job: JobStatistics): void {

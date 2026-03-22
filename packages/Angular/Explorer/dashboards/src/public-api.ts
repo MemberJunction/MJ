@@ -23,7 +23,8 @@ export {
   KPICardComponent,
   LiveExecutionWidgetComponent,
   TimeSeriesChartComponent,
-  PerformanceHeatmapComponent
+  PerformanceHeatmapComponent,
+  AgentRequestsResourceComponent
 } from './AI/index';
 
 // Export Actions components as resources (BaseResourceComponent-based)

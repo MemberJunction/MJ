@@ -132,24 +132,9 @@
                   }
                 </button>
               }
-              <div class="card-menu-wrapper">
-                <button class="menu-trigger" (click)="ToggleMenu(summary.Integration.ID, $event)">
-                  <i class="fa-solid fa-ellipsis-vertical"></i>
-                </button>
-                @if (IsMenuOpen(summary.Integration.ID)) {
-                  <div class="card-menu-dropdown">
-                    <button class="menu-item" (click)="OnMenuAction('edit', summary)">
-                      <i class="fa-solid fa-pen-to-square"></i> Edit
-                    </button>
-                    <button class="menu-item" (click)="OnMenuAction('disable', summary)">
-                      <i class="fa-solid fa-toggle-off"></i> {{ GetMenuActionLabel(summary) }}
-                    </button>
-                    <button class="menu-item menu-item-danger" (click)="OnMenuAction('delete', summary)">
-                      <i class="fa-solid fa-trash-can"></i> Delete
-                    </button>
-                  </div>
-                }
-              </div>
+              <button class="card-delete-btn" (click)="OnMenuAction('delete', summary)" title="Delete integration">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
             </div>
           </div>
         }
@@ -225,6 +210,42 @@
             }
           </div>
         </div>
+
+        <!-- Schedule section -->
+        <div class="schedule-section">
+          <div class="schedule-section-header">
+            <div class="schedule-section-title">
+              <i class="fa-solid fa-calendar-check"></i>
+              <span>Sync Schedule</span>
+            </div>
+          </div>
+          @if (ScheduledJobID) {
+            <mj-scheduled-job-summary
+              [ScheduledJobID]="ScheduledJobID"
+              (EditRequested)="OpenSchedulePanel()">
+            </mj-scheduled-job-summary>
+          } @else {
+            <div class="schedule-empty">
+              <span class="schedule-empty-text">No sync schedule configured</span>
+              <button class="schedule-create-btn" (click)="OpenSchedulePanel()">
+                <i class="fa-solid fa-plus"></i>
+                Schedule Sync
+              </button>
+            </div>
+          }
+        </div>
+
+        <!-- Schedule slide panel -->
+        <mj-scheduled-job-slide-panel
+          [IsOpen]="ShowScheduleSlidePanel"
+          [ScheduledJobID]="ScheduledJobID"
+          [JobTypeID]="IntegrationSyncJobTypeID"
+          [DefaultConfiguration]="ScheduleDefaultConfiguration"
+          [HideJobType]="true"
+          (Close)="CloseSchedulePanel()"
+          (Saved)="OnScheduleSaved()"
+          (Deleted)="OnScheduleDeleted()">
+        </mj-scheduled-job-slide-panel>
 
         <!-- Entity maps toolbar -->
         <div class="detail-toolbar">

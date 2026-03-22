@@ -8,6 +8,7 @@ import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
 import { AIConfig } from '../types/config.js';
 import { createLLMInstance } from '../utils/llm-factory.js';
+import { ColumnStatsCache } from './ColumnStatsCache.js';
 
 export interface SanityCheckResult {
   invalidPKs: Array<{
@@ -24,12 +25,14 @@ export interface SanityCheckResult {
   }>;
   suggestions: string[];
   tokensUsed: number;
+  inputTokens: number;
+  outputTokens: number;
 }
 
 export class LLMSanityChecker {
   private llm: BaseLLM;
 
-  constructor(private aiConfig: AIConfig) {
+  constructor(private aiConfig: AIConfig, private statsCache?: ColumnStatsCache) {
     // Create LLM instance using shared factory (DRY principle)
     this.llm = createLLMInstance(aiConfig.provider, aiConfig.apiKey);
   }
@@ -74,7 +77,9 @@ export class LLMSanityChecker {
         invalidPKs: [],
         invalidFKs: [],
         suggestions: [],
-        tokensUsed: 0
+        tokensUsed: 0,
+        inputTokens: 0,
+        outputTokens: 0
       };
     }
 
@@ -95,7 +100,9 @@ export class LLMSanityChecker {
         invalidPKs: result.invalidPKs,
         invalidFKs: result.invalidFKs,
         suggestions: result.suggestions || [],
-        tokensUsed: usage?.totalTokens || 0
+        tokensUsed: usage?.totalTokens || 0,
+        inputTokens: usage?.promptTokens || 0,
+        outputTokens: usage?.completionTokens || 0
       };
     } catch (parseError) {
       console.error(`[LLMSanityChecker] Failed to parse LLM response: ${(parseError as Error).message}`);
@@ -104,7 +111,9 @@ export class LLMSanityChecker {
         invalidPKs: [],
         invalidFKs: [],
         suggestions: [],
-        tokensUsed: usage?.totalTokens || 0
+        tokensUsed: usage?.totalTokens || 0,
+        inputTokens: usage?.promptTokens || 0,
+        outputTokens: usage?.completionTokens || 0
       };
     }
   }
@@ -145,6 +154,7 @@ CRITICAL RULES:
 4. Boolean/flag fields are NEVER primary keys
 5. Each table should have exactly 1 PK (or a composite PK with 2-3 columns max)
 6. Foreign keys should reference another table, not point to themselves
+7. **HARD CONSTRAINT**: You may ONLY validate candidates from the list below. You CANNOT suggest new PK or FK columns that are not already candidates — eligibility has been determined by statistical analysis (zero nulls, zero blanks, 100% unique values for PKs; key-compatible data types for FKs). If a column is not in the candidate list, it mathematically cannot be a PK or FK.
 
 DETECTED PRIMARY KEY CANDIDATES:
 

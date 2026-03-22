@@ -1,7 +1,7 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityFieldTSType, EntityInfo, IMetadataProvider, KeyValuePair, LogError, LogStatus, Metadata, RunQuery, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
 import { MJRecordChangeEntity, MJRecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { UUIDsEqual } from "@memberjunction/global";
-import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
+import { SQLServerDataProvider, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { PostgreSQLDialect, SQLDialect, SQLServerDialect } from "@memberjunction/sql-dialect";
 
 
@@ -132,9 +132,19 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
 
             const [createResult, updateResult, deleteResult] = await rq.RunQueries([
                 { QueryName: 'ExternalChangeDetection_DetectCreations', Parameters: commonParams },
-                { QueryName: 'ExternalChangeDetection_DetectUpdates', Parameters: commonParams },
+                { QueryName: 'ExternalChangeDetection_DetectUpdates', Parameters: {
+                    EntityID: commonParams.EntityID,
+                    SchemaName: commonParams.SchemaName,
+                    BaseView: commonParams.BaseView,
+                    ColumnList: commonParams.ColumnList,
+                    PrimaryKeyJoin: commonParams.PrimaryKeyJoin,
+                    UpdatedAtField: commonParams.UpdatedAtField
+                } },
                 { QueryName: 'ExternalChangeDetection_DetectDeletions', Parameters: {
-                    ...commonParams,
+                    EntityID: commonParams.EntityID,
+                    SchemaName: commonParams.SchemaName,
+                    BaseView: commonParams.BaseView,
+                    PrimaryKeyJoin: commonParams.PrimaryKeyJoin,
                     PrimaryKeyIsNull: entity.PrimaryKeys.map(pk => `ot.${this._dialect.QuoteIdentifier(pk.Name)} IS NULL`).join(' AND ')
                 } }
             ], this.ContextUser);
@@ -365,8 +375,9 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 const quotedTable = this._dialect.QuoteSchema(e.entity.SchemaName, e.entity.BaseView);
                 const sql = `SELECT * FROM ${quotedTable}
                             WHERE ${e.keys.map(k => `(${k.KeyValuePairs.map(kvp => {
-                                    const f = e.entity.Fields.find(f => kvp.FieldName.trim().toLowerCase() === f.Name);
-                                    const quotes = f?.NeedsQuotes ? "'" : "";
+                                    const f = e.entity.Fields.find(f => kvp.FieldName.trim().toLowerCase() === f.Name.trim().toLowerCase());
+                                    const needsQuotes = f?.NeedsQuotes || typeof kvp.Value === 'string';
+                                    const quotes = needsQuotes ? "'" : "";
                                     const quotedField = this._dialect.QuoteIdentifier(kvp.FieldName);
                                     const escapedValue = typeof kvp.Value === 'string' ? kvp.Value.replace(/'/g, "''") : kvp.Value;
                                     return `${quotedField}=${quotes}${escapedValue}${quotes}`
@@ -494,22 +505,29 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      * @returns {Promise<boolean>} - Returns true if all changes are successfully replayed, otherwise false.
      */
     public async ReplayChanges(changes: ChangeDetectionItem[], batchSize: number = 20, staleTimeoutHours: number = 24): Promise<boolean> {
-        let run; // delcare outside of try block so we have access to it in the catch block
+        let run; // declare outside of try block so we have access to it in the catch block
         try {
             if (changes && changes.length > 0) {
-                const md = new Metadata();
-                const results = [];
+                const results: boolean[] = [];
                 run = await this.StartRun(staleTimeoutHours);
                 LogStatus(`Replaying ${changes.length} changes`);
 
+                // Create per-save provider pool: each concurrent save gets its own provider
+                // instance with independent transaction state, sharing the same connection pool.
+                const replayProviders = await this.createReplayProviders(batchSize);
+
                 let numProcessed = 0;
+                const logInterval = Math.max(1, Math.floor(changes.length / 10)); // Log at ~10% intervals
                 for (let i = 0; i < changes.length; i += batchSize) {
                     const batch = changes.slice(i, i + batchSize);
-                    
-                    const batchPromises = batch.map(async (c) => {
-                        const result = await this.ReplayChange(md, c);
+
+                    const batchPromises = batch.map(async (c, index) => {
+                        const provider = replayProviders[index];
+                        const result = await this.ReplayChange(provider, c);
                         numProcessed++;
-                        UpdateCurrentConsoleProgress(`   Replayed ${numProcessed} of ${changes.length} changes`, numProcessed, changes.length);
+                        if (numProcessed % logInterval === 0 || numProcessed === changes.length) {
+                            UpdateCurrentConsoleProgress(`   Replayed ${numProcessed} of ${changes.length} changes`, numProcessed, changes.length);
+                        }
                         return result;
                     });
 
@@ -539,21 +557,34 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         }
     }
 
-    protected async ReplayChange(md: Metadata, change: ChangeDetectionItem): Promise<boolean> {
+    /**
+     * Replays a single change using a dedicated provider instance to isolate
+     * transaction state from other concurrent replays.
+     *
+     * For Create/Update: re-creates the entity on the per-save provider via
+     * LoadFromData (default replaceOldValues=false), which marks the entity as
+     * existing (IsSaved=true) while keeping fields dirty so Save() issues an UPDATE.
+     *
+     * For Delete: creates a fresh entity on the per-save provider, loads by
+     * primary key, then deletes.
+     */
+    protected async ReplayChange(provider: SQLServerDataProvider, change: ChangeDetectionItem): Promise<boolean> {
         try {
             switch (change.Type) {
                 case 'Create':
                 case 'Update':
-                    // for creates and updates we have the latest record already loaded 
-                    // and we have the list of changes, so we just need to save the record
                     if (change.LatestRecord) {
-                        return await change.LatestRecord.Save();
+                        const entity = await provider.GetEntityObject(
+                            change.Entity.Name,
+                            this.ContextUser
+                        );
+                        await entity.LoadFromData(change.LatestRecord.GetAll());
+                        return await entity.Save();
                     }
                     else
                         return false;
                 case 'Delete':
-                    // for deletes we need to load the record and then delete it
-                    const record = await md.GetEntityObject(change.Entity.Name, this.ContextUser);
+                    const record = await provider.GetEntityObject(change.Entity.Name, this.ContextUser);
                     if (await record.InnerLoad(change.PrimaryKey)) {
                         return await record.Delete();
                     }
@@ -567,6 +598,32 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             LogError(e);
             return false;
         }
+    }
+
+    /**
+     * Creates lightweight provider instances that share the singleton's connection pool
+     * but have independent transaction state. This follows the MJServer per-request
+     * provider pattern (see MJServer/src/context.ts:createPerRequestProviders) to
+     * avoid race conditions when concurrent Save() calls interleave transaction
+     * Begin/Commit/Rollback on a shared provider instance.
+     *
+     * Each provider reuses cached metadata (ignoreExistingMetadata=false) so creation
+     * is fast with no DB round trips for metadata loading.
+     */
+    private async createReplayProviders(count: number): Promise<SQLServerDataProvider[]> {
+        const singletonProvider = Metadata.Provider as SQLServerDataProvider;
+        const pool = singletonProvider.DatabaseConnection;
+        const schema = singletonProvider.MJCoreSchemaName;
+
+        const providerPromises = Array.from({ length: count }, async () => {
+            const config = new SQLServerProviderConfigData(
+                pool, schema, 0, undefined, undefined, false
+            );
+            const provider = new SQLServerDataProvider();
+            await provider.Config(config);
+            return provider;
+        });
+        return Promise.all(providerPromises);
     }
 
     protected async StartRun(staleTimeoutHours: number = 24): Promise<MJRecordChangeReplayRunEntity> {

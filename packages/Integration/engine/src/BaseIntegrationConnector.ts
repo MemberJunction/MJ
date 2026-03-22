@@ -71,6 +71,12 @@ export interface FetchContext {
     BatchSize: number;
     /** User context for authorization */
     ContextUser: UserInfo;
+    /** Current page number for page-based pagination (1-based). Passed by engine on subsequent calls. */
+    CurrentPage?: number;
+    /** Current offset for offset-based pagination. Passed by engine on subsequent calls. */
+    CurrentOffset?: number;
+    /** Current cursor for cursor-based pagination. Passed by engine on subsequent calls. */
+    CurrentCursor?: string;
 }
 
 /** Result of a FetchChanges call, containing a batch of records */
@@ -81,6 +87,12 @@ export interface FetchBatchResult {
     HasMore: boolean;
     /** Updated watermark value after this batch */
     NewWatermarkValue?: string;
+    /** Next page number to pass back via FetchContext.CurrentPage on the next call (page-based pagination) */
+    NextPage?: number;
+    /** Next offset to pass back via FetchContext.CurrentOffset on the next call (offset-based pagination) */
+    NextOffset?: number;
+    /** Next cursor to pass back via FetchContext.CurrentCursor on the next call (cursor-based pagination) */
+    NextCursor?: string;
 }
 
 /** Configurable timeout values for connector operations */
@@ -349,10 +361,17 @@ export abstract class BaseIntegrationConnector {
                     ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                 })),
                 PrimaryKeyFields: fields.filter(f => f.IsUniqueKey).map(f => f.Name),
-                Relationships: [],
+                Relationships: fields
+                    .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
+                    .map(f => ({
+                        FieldName: f.Name,
+                        TargetObject: f.ForeignKeyTarget!,
+                        TargetField: 'ID',
+                    })),
             });
         }
 
         return result;
     }
+
 }

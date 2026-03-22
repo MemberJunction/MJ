@@ -1,5 +1,32 @@
 # Change Log - @memberjunction/cli
 
+## 5.12.0
+
+### Patch Changes
+
+- 714e42d: Add diagnostic report generation to `mj doctor` command. `--report` generates a basic diagnostic report (`mj-diagnostic-report.md`) with environment info, install state, and check results. `--report_extended` adds sanitized configuration file snapshots and service startup log capture (`mj-diagnostic-report-extended.md`). Passwords and secrets are automatically redacted. Also fixes process cleanup after service log capture and corrects key file detection for distribution installs.
+- 7def002: Fix ExternalChangeDetection unquoted string IDs and log spam, add /healthcheck endpoint before auth middleware, return TechnicalDescription in CreateQuery/UpdateQuery mutations, and improve MJCLI config validation errors with env var hints
+- Updated dependencies [217bca4]
+- Updated dependencies [21a04c1]
+- Updated dependencies [05f19ff]
+- Updated dependencies [714e42d]
+- Updated dependencies [257512b]
+- Updated dependencies [7def002]
+- Updated dependencies [d92502e]
+- Updated dependencies [1e5d181]
+  - @memberjunction/codegen-lib@5.12.0
+  - @memberjunction/core@5.12.0
+  - @memberjunction/installer@5.12.0
+  - @memberjunction/server-bootstrap-lite@5.12.0
+  - @memberjunction/ai-cli@5.12.0
+  - @memberjunction/db-auto-doc@5.12.0
+  - @memberjunction/metadata-sync@5.12.0
+  - @memberjunction/query-gen@5.12.0
+  - @memberjunction/sqlserver-dataprovider@5.12.0
+  - @memberjunction/testing-cli@5.12.0
+  - @memberjunction/config@5.12.0
+  - @memberjunction/sql-converter@5.12.0
+
 ## 5.11.0
 
 ### Patch Changes
