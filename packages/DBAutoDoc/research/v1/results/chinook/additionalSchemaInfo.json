@@ -1,0 +1,211 @@
+{
+    "Schemas": [
+        {
+            "name": "dbo",
+            "entityNamePrefix": "",
+            "entityNameSuffix": ""
+        }
+    ],
+    "dbo": [
+        {
+            "TableName": "Album",
+            "PrimaryKey": [
+                {
+                    "FieldName": "AlbumId",
+                    "Description": "The unique primary identifier for each album record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ArtistId",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Artist",
+                    "RelatedField": "ArtistId",
+                    "Description": "A reference to the artist or band responsible for the album."
+                }
+            ]
+        },
+        {
+            "TableName": "Artist",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ArtistId",
+                    "Description": "The unique primary identifier for each artist or musical group."
+                }
+            ]
+        },
+        {
+            "TableName": "Customer",
+            "PrimaryKey": [
+                {
+                    "FieldName": "CustomerId",
+                    "Description": "Unique identifier for each customer record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "SupportRepId",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Employee",
+                    "RelatedField": "EmployeeId",
+                    "Description": "Reference to the internal employee assigned to manage this customer's account or provide support."
+                }
+            ]
+        },
+        {
+            "TableName": "Employee",
+            "PrimaryKey": [
+                {
+                    "FieldName": "EmployeeId",
+                    "Description": "A unique internal identifier assigned to each employee."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ReportsTo",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Employee",
+                    "RelatedField": "EmployeeId",
+                    "Description": "The EmployeeId of the individual's direct supervisor or manager, establishing the organizational chart."
+                }
+            ]
+        },
+        {
+            "TableName": "Genre",
+            "PrimaryKey": [
+                {
+                    "FieldName": "GenreId",
+                    "Description": "The unique primary identifier for each genre record."
+                }
+            ]
+        },
+        {
+            "TableName": "Invoice",
+            "PrimaryKey": [
+                {
+                    "FieldName": "InvoiceId",
+                    "Description": "The unique identifier for each invoice record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "CustomerId",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Customer",
+                    "RelatedField": "CustomerId",
+                    "Description": "A reference to the customer who placed the order."
+                }
+            ]
+        },
+        {
+            "TableName": "InvoiceLine",
+            "PrimaryKey": [
+                {
+                    "FieldName": "InvoiceLineId",
+                    "Description": "A unique surrogate primary key for each individual line item in the database."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "InvoiceId",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Invoice",
+                    "RelatedField": "InvoiceId",
+                    "Description": "A foreign key linking the line item to its parent transaction record in the dbo.Invoice table."
+                },
+                {
+                    "FieldName": "TrackId",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Track",
+                    "RelatedField": "TrackId",
+                    "Description": "A foreign key identifying the specific digital media item (song, video, etc.) being purchased."
+                },
+                {
+                    "FieldName": "TrackId",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "PlaylistTrack",
+                    "RelatedField": "TrackId"
+                }
+            ]
+        },
+        {
+            "TableName": "MediaType",
+            "PrimaryKey": [
+                {
+                    "FieldName": "MediaTypeId",
+                    "Description": "The unique primary identifier for a specific media format."
+                }
+            ]
+        },
+        {
+            "TableName": "Playlist",
+            "PrimaryKey": [
+                {
+                    "FieldName": "PlaylistId",
+                    "Description": "The unique primary identifier for each playlist."
+                }
+            ]
+        },
+        {
+            "TableName": "PlaylistTrack",
+            "PrimaryKey": [
+                {
+                    "FieldName": "PlaylistId",
+                    "Description": "The unique identifier for a playlist; part of the composite primary key."
+                },
+                {
+                    "FieldName": "TrackId",
+                    "Description": "The unique identifier for a specific media track; part of the composite primary key."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "PlaylistId",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Playlist",
+                    "RelatedField": "PlaylistId",
+                    "Description": "The unique identifier for a playlist; part of the composite primary key."
+                },
+                {
+                    "FieldName": "TrackId",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Track",
+                    "RelatedField": "TrackId",
+                    "Description": "The unique identifier for a specific media track; part of the composite primary key."
+                }
+            ]
+        },
+        {
+            "TableName": "Track",
+            "PrimaryKey": [
+                {
+                    "FieldName": "TrackId",
+                    "Description": "Unique identifier for each media track."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "AlbumId",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Album",
+                    "RelatedField": "AlbumId",
+                    "Description": "Reference to the album that contains this track."
+                },
+                {
+                    "FieldName": "MediaTypeId",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "MediaType",
+                    "RelatedField": "MediaTypeId",
+                    "Description": "Identifier for the digital format of the track (e.g., MPEG, AAC)."
+                },
+                {
+                    "FieldName": "GenreId",
+                    "SchemaName": "dbo",
+                    "RelatedTable": "Genre",
+                    "RelatedField": "GenreId",
+                    "Description": "Identifier for the musical or content category (e.g., Rock, Jazz)."
+                }
+            ]
+        }
+    ]
+}

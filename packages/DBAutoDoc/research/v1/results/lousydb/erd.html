@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database ERD - LousyDB</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fa;
+            color: #333;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+
+        .metadata {
+            color: #666;
+            font-size: 0.95rem;
+            margin-bottom: 2rem;
+            padding: 1rem;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        .metadata p {
+            margin: 0.3rem 0;
+        }
+
+        .mermaid {
+            background-color: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 2rem 0;
+            overflow: auto;
+        }
+
+        .mermaid svg {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .controls {
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 0.6rem 1.2rem;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #764ba2;
+        }
+
+        .download-link {
+            display: inline-block;
+            padding: 0.6rem 1.2rem;
+            background-color: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .download-link:hover {
+            background-color: #764ba2;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .container {
+                box-shadow: none;
+                padding: 0;
+            }
+
+            .controls {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Database Entity Relationship Diagram</h1>
+        <div class="metadata">
+            <p><strong>Database:</strong> LousyDB</p>
+            <p><strong>Server:</strong> sql-claude</p>
+            <p><strong>Generated:</strong> 3/22/2026, 1:08:27 PM</p>
+            <p><strong>Tables:</strong> 20 | <strong>Columns:</strong> 162</p>
+        </div>
+
+        <div class="controls">
+            <button onclick="downloadMmd()">Download .mmd File</button>
+            <button onclick="window.print()">Print / Save as PDF</button>
+        </div>
+
+        <div class="mermaid">
+%% Entity Relationship Diagram
+%% Database: LousyDB
+%% Server: sql-claude
+%% Generated: 2026-03-22T13:08:27.388Z
+%% Total Schemas: 2
+%% Total Tables: 20
+%% Total Columns: 162
+
+erDiagram
+
+    %% Schema: inv
+
+    adj {
+        int adj_id "PK,NOT_NULL" %% Unique identifier for each inventory adjustment transaction
+        int prd_id "FK" %% Reference to the specific product being adjusted
+        int whs_id "FK" %% Reference to the warehouse location where the adjustment occ
+        date adj_dt %% The date and time when the adjustment was recorded
+        int qty %% The numerical change in stock level; negative values indicat
+        char rsn %% A short category code for the adjustment reason (e.g., STL f
+        nvarchar usr %% The name of the employee or system user who performed the ad
+        nvarchar notes %% A descriptive explanation of the adjustment reason code
+    }
+
+    cat {
+        int cat_id "PK,NOT_NULL" %% Unique identifier for each product category
+        int prnt_id "FK" %% Reference to the parent category ID, establishing a hierarch
+        nvarchar nm %% The short display name of the category (e.g., 'Printers', 'F
+        nvarchar dsc %% A detailed description of the types of products included in 
+        int lvl %% The depth level of the category in the hierarchy (1 for top-
+        int seq %% The display or sort order of the category within its hierarc
+    }
+
+    cnt {
+        int cnt_id "PK,NOT_NULL" %% Unique identifier for each inventory count record
+        int whs_id "FK" %% Identifier for the warehouse where the physical count was co
+        date cnt_dt %% The date the physical inventory count was performed
+        int prd_id "FK" %% Identifier for the specific product being audited
+        int exp_qty %% The theoretical stock quantity expected by the system at the
+        int act_qty %% The actual physical quantity counted by the staff member
+        int var %% The numerical difference (variance) between the actual and e
+        nvarchar usr %% The name of the employee or system user who performed the co
+    }
+
+    po {
+        int po_id "PK,NOT_NULL" %% The unique primary identifier for each purchase order.
+        int sup_id "FK" %% Foreign key referencing the supplier (inv.sup) from whom the
+        date po_dt %% The date the purchase order was created or issued.
+        date exp_dt %% The expected delivery date or expiration date for the purcha
+        char sts %% The current lifecycle status of the purchase order (e.g., 'A
+        decimal tot %% The total monetary value of the purchase order, excluding or
+        decimal ship_amt %% The cost associated with shipping the order; appears to use 
+        nvarchar notes %% Optional free-text field for special instructions or comment
+    }
+
+    po_dtl {
+        int po_id "FK,NOT_NULL" %% Foreign key identifying the parent purchase order header in 
+        int seq "PK,NOT_NULL" %% The sequence or line-item number for the product within a sp
+        int prd_id "FK" %% Foreign key identifying the specific product being ordered, 
+        int qty %% The quantity of the product originally requested or ordered 
+        decimal prc %% The unit price or cost of the product for this specific purc
+        int rcv_qty %% The actual quantity of the product that has been delivered a
+    }
+
+    prd {
+        int prd_id "PK,NOT_NULL" %% Unique internal identifier for each product record
+        int cat_id "FK" %% Reference to the product category (e.g., Furniture, Electron
+        int sup_id "FK" %% Reference to the primary supplier or vendor for the product
+        nvarchar sku %% Stock Keeping Unit; a unique alphanumeric code used for inve
+        nvarchar nm %% The display name of the product
+        nvarchar dsc %% A brief text description of the product's features or specif
+        decimal prc %% The retail or selling price of the product
+        decimal cost %% The wholesale cost or acquisition price paid to the supplier
+        char sts %% The current lifecycle status of the product (e.g., Active, D
+        decimal wgt %% The physical weight of the product, likely in pounds or kilo
+        char uom %% Unit of Measure; defines how the product is packaged or sold
+    }
+
+    rcv {
+        int rcv_id "PK,NOT_NULL" %% Unique identifier for each receiving transaction record
+        int po_id "FK" %% Reference to the purchase order associated with the incoming
+        date rcv_dt %% The date the goods were physically received at the facility
+        int whs_id "FK" %% The specific warehouse or distribution center where the good
+        nvarchar notes %% Internal comments regarding the shipment status, such as dis
+    }
+
+    stk {
+        int prd_id "PK,FK,NOT_NULL" %% Foreign key identifying the specific product being tracked.
+        int whs_id "PK,FK,NOT_NULL" %% Foreign key identifying the physical warehouse or distributi
+        int qty %% The current physical quantity of the product available at th
+        int rsv %% The quantity of stock currently reserved or committed to ope
+        int min_qty %% The minimum stock threshold or safety stock level used to tr
+        int max_qty %% The maximum capacity or target stock level for this product 
+        date lst_cnt %% The date of the last physical inventory count or audit perfo
+        date lst_rcv %% The date when stock for this product was last received into 
+    }
+
+    sup {
+        int sup_id "PK,NOT_NULL" %% Unique identifier for each supplier
+        nvarchar nm %% The legal or trade name of the supplier company
+        char sts %% The current operational status of the supplier account (e.g.
+        char pmt_trm %% Standard payment terms agreed upon with the supplier
+        tinyint rtg %% A numerical performance or quality rating assigned to the su
+        nvarchar cnt_nm %% The name of the primary contact person at the supplier compa
+        nvarchar cnt_phn %% The phone number for the primary contact person
+        nvarchar cnt_eml %% The email address for the primary contact person
+    }
+
+    whs {
+        int whs_id "PK,NOT_NULL" %% Unique surrogate primary key for each warehouse facility
+        char cd %% Short mnemonic code for the warehouse, typically using 3-let
+        nvarchar nm %% The full descriptive name of the warehouse facility
+        nvarchar cty %% The city where the warehouse is physically located
+        char st %% The two-character state abbreviation for the warehouse locat
+        char typ %% Classification code for the warehouse type (e.g., Regional, 
+        int cap %% The storage capacity of the warehouse, likely measured in sq
+        char sts %% The current operational status of the warehouse (e.g., Activ
+    }
+
+    %% Schema: sales
+
+    addr {
+        int addr_id "PK,NOT_NULL" %% The unique primary identifier for each address record.
+        int cst_id "FK" %% Foreign key linking the address to a specific customer in th
+        char typ %% The category or purpose of the address (e.g., Shipping, Bill
+        nvarchar ln1 %% The primary street address line.
+        nvarchar ln2 %% Secondary address information such as suite, apartment, or u
+        nvarchar cty %% The city where the address is located.
+        char st %% The two-character state abbreviation.
+        nvarchar zip %% The postal or ZIP code.
+        char ctry %% The country code for the address.
+        bit dflt %% A boolean flag indicating if this is the primary/default add
+    }
+
+    cst {
+        int cst_id "PK,NOT_NULL" %% Unique identifier for each customer record
+        nvarchar nm %% The full name of the customer or business entity
+        char sts %% The current status of the customer account (e.g., Active, Su
+        date dt %% The date the customer record was created or the account was 
+        char src %% The acquisition source or lead channel for the customer (e.g
+        int rep_id "FK" %% The identifier of the sales representative or account manage
+        char seg %% Market segment classification (e.g., Wholesale, Retail, Ente
+        tinyint rtg %% Internal customer rating or tier (1 to 5 scale)
+        decimal bal %% The current outstanding balance on the customer's account
+        decimal cr_lmt %% The maximum credit limit allowed for the customer
+        date lst_ord %% The date of the most recent order placed by the customer
+    }
+
+    cst_note {
+        int note_id "PK,NOT_NULL" %% A unique surrogate identifier for each note entry.
+        int cst_id "FK" %% The identifier for the customer associated with the note, li
+        date dt %% The date the note was created or the interaction occurred.
+        nvarchar usr %% The name of the staff member or system user who recorded the
+        nvarchar txt %% The detailed content of the note, describing the nature of t
+        char typ %% A category code for the interaction type: M (Meeting), E (Em
+    }
+
+    eml {
+        int eml_id "PK,NOT_NULL" %% Primary key for the email record
+        int cst_id "FK" %% Foreign key referencing the customer who owns this email add
+        char typ %% The category or type of email address (e.g., Work, Personal,
+        nvarchar adr %% The actual email address string
+        bit vrf %% Indicates whether the email address has been verified (e.g.,
+        bit dflt %% Indicates if this is the primary or default email address fo
+    }
+
+    oli {
+        int oli_id "PK,NOT_NULL" %% The unique primary identifier for each individual line item 
+        int ord_id "FK" %% The identifier of the parent sales order this line item belo
+        int prd_id "FK" %% The identifier of the specific product or stock item being p
+        int qty %% The quantity of the product ordered in this specific line it
+        decimal prc %% The unit price or gross price for the line item before disco
+        decimal disc %% The discount amount applied to this specific line item.
+        decimal tax_amt %% The calculated tax amount for this specific line item.
+        int seq %% The sequence or line number of the item within the specific 
+    }
+
+    ord {
+        int ord_id "PK,NOT_NULL" %% The unique primary identifier for each sales order.
+        int cst_id "FK" %% Foreign key referencing the customer who placed the order.
+        date ord_dt %% The date the order was originally placed by the customer.
+        date ship_dt %% The date the order was dispatched to the customer. Contains 
+        char sts %% The current status of the order (e.g., P=Pending, S=Shipped,
+        decimal tot %% The total monetary value of the order.
+        decimal tax %% The amount of tax calculated for the order.
+        decimal ship_amt %% The shipping fee charged to the customer (e.g., 0 for free, 
+        decimal disc_pct %% The percentage discount applied to the order total.
+        char pmt_trm %% The agreed-upon payment terms for the order (e.g., COD=Cash 
+        nvarchar notes %% Internal or customer-facing notes regarding the order, often
+    }
+
+    phn {
+        int phn_id "PK,NOT_NULL" %% The unique primary identifier for each phone record.
+        int cst_id "FK" %% The identifier of the customer to whom the phone number belo
+        char typ %% The category or type of phone number (e.g., W=Work, M=Mobile
+        nvarchar num %% The actual phone number string, stored in various formats.
+        nvarchar ext %% The telephone extension, typically used for work or office n
+        bit dflt %% A boolean flag indicating if this is the primary or default 
+    }
+
+    pmt {
+        int pmt_id "PK,NOT_NULL" %% The unique primary identifier for each payment transaction r
+        int ord_id "FK" %% A reference to the specific sales order that this payment is
+        int cst_id "FK" %% The identifier of the customer who made the payment.
+        date pmt_dt %% The date on which the payment was received or processed.
+        decimal amt %% The monetary value of the payment transaction.
+        char mthd %% The medium used for the payment. Codes likely represent: CC 
+        char sts %% The current processing state of the payment. Likely codes: A
+        nvarchar ref %% A unique reference string or transaction number, likely used
+        nvarchar notes %% Supplemental information about the payment, specifically use
+    }
+
+    rtn {
+        int rtn_id "PK,NOT_NULL" %% The unique primary identifier for each return record.
+        int ord_id "FK" %% Foreign key referencing the original sales order associated 
+        int oli_id "FK" %% Foreign key referencing the specific line item within an ord
+        date rtn_dt %% The date the return was initiated or processed.
+        char rsn %% A short code representing the reason for the return (e.g., W
+        int qty %% The number of units of the specific line item being returned
+        decimal amt %% The monetary value or refund amount associated with the retu
+        char sts %% The current processing status of the return (e.g., Approved,
+        nvarchar notes %% A text description explaining the reason for the return in d
+    }
+
+    shp {
+        int shp_id "PK,NOT_NULL" %% The unique primary identifier for a shipment record.
+        int ord_id "FK" %% The identifier of the sales order being fulfilled by this sh
+        int whs_id "FK" %% The identifier of the warehouse from which the goods were di
+        date ship_dt %% The date the shipment left the warehouse.
+        date dlv_dt %% The date the shipment was confirmed as delivered to the cust
+        nvarchar carr %% The logistics provider or service level used for the shipmen
+        nvarchar trk %% The unique tracking number provided by the carrier for shipm
+        char sts %% The current status of the shipment (e.g., 'D' for Delivered,
+        decimal wgt %% The physical weight of the shipment, likely used for calcula
+        decimal cost %% The monetary cost incurred for the shipping service.
+    }
+
+
+    %% Relationships
+
+    stk ||--o{ adj : "has"
+    rcv ||--o{ adj : "has"
+    whs ||--o{ adj : "has"
+    prd ||--o{ adj : "has"
+    cat ||--o{ cat : "has"
+    rcv ||--o{ cnt : "has"
+    stk ||--o{ cnt : "has"
+    whs ||--o{ cnt : "has"
+    prd ||--o{ cnt : "has"
+    sup ||--o{ po : "has"
+    stk ||--o{ po_dtl : "has"
+    po ||--o{ po_dtl : "has"
+    prd ||--o{ po_dtl : "has"
+    sup ||--o{ prd : "has"
+    cat ||--o{ prd : "has"
+    po ||--o{ rcv : "has"
+    whs ||--o{ rcv : "has"
+    prd ||--o{ stk : "has"
+    whs ||--o{ stk : "has"
+    cst ||--o{ addr : "has"
+    sup ||--o{ cst : "has"
+    cst ||--o{ cst_note : "has"
+    cst ||--o{ eml : "has"
+    ord ||--o{ oli : "has"
+    stk ||--o{ oli : "has"
+    cst ||--o{ ord : "has"
+    cst ||--o{ phn : "has"
+    cst ||--o{ pmt : "has"
+    ord ||--o{ pmt : "has"
+    ord ||--o{ rtn : "has"
+    oli ||--o{ rtn : "has"
+    rcv ||--o{ shp : "has"
+    stk ||--o{ shp : "has"
+    whs ||--o{ shp : "has"
+    ord ||--o{ shp : "has"
+
+    %% Relationship Notation:
+    %% Parent ||--o{ Child : "describes"
+    %% One Parent can have zero or more Children
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: "default", securityLevel: "loose" });
+        mermaid.contentLoaded();
+
+        function downloadMmd() {
+            const content = `%% Entity Relationship Diagram
+%% Database: LousyDB
+%% Server: sql-claude
+%% Generated: 2026-03-22T13:08:27.388Z
+%% Total Schemas: 2
+%% Total Tables: 20
+%% Total Columns: 162
+
+erDiagram
+
+    %% Schema: inv
+
+    adj {
+        int adj_id "PK,NOT_NULL" %% Unique identifier for each inventory adjustment transaction
+        int prd_id "FK" %% Reference to the specific product being adjusted
+        int whs_id "FK" %% Reference to the warehouse location where the adjustment occ
+        date adj_dt %% The date and time when the adjustment was recorded
+        int qty %% The numerical change in stock level; negative values indicat
+        char rsn %% A short category code for the adjustment reason (e.g., STL f
+        nvarchar usr %% The name of the employee or system user who performed the ad
+        nvarchar notes %% A descriptive explanation of the adjustment reason code
+    }
+
+    cat {
+        int cat_id "PK,NOT_NULL" %% Unique identifier for each product category
+        int prnt_id "FK" %% Reference to the parent category ID, establishing a hierarch
+        nvarchar nm %% The short display name of the category (e.g., 'Printers', 'F
+        nvarchar dsc %% A detailed description of the types of products included in 
+        int lvl %% The depth level of the category in the hierarchy (1 for top-
+        int seq %% The display or sort order of the category within its hierarc
+    }
+
+    cnt {
+        int cnt_id "PK,NOT_NULL" %% Unique identifier for each inventory count record
+        int whs_id "FK" %% Identifier for the warehouse where the physical count was co
+        date cnt_dt %% The date the physical inventory count was performed
+        int prd_id "FK" %% Identifier for the specific product being audited
+        int exp_qty %% The theoretical stock quantity expected by the system at the
+        int act_qty %% The actual physical quantity counted by the staff member
+        int var %% The numerical difference (variance) between the actual and e
+        nvarchar usr %% The name of the employee or system user who performed the co
+    }
+
+    po {
+        int po_id "PK,NOT_NULL" %% The unique primary identifier for each purchase order.
+        int sup_id "FK" %% Foreign key referencing the supplier (inv.sup) from whom the
+        date po_dt %% The date the purchase order was created or issued.
+        date exp_dt %% The expected delivery date or expiration date for the purcha
+        char sts %% The current lifecycle status of the purchase order (e.g., 'A
+        decimal tot %% The total monetary value of the purchase order, excluding or
+        decimal ship_amt %% The cost associated with shipping the order; appears to use 
+        nvarchar notes %% Optional free-text field for special instructions or comment
+    }
+
+    po_dtl {
+        int po_id "FK,NOT_NULL" %% Foreign key identifying the parent purchase order header in 
+        int seq "PK,NOT_NULL" %% The sequence or line-item number for the product within a sp
+        int prd_id "FK" %% Foreign key identifying the specific product being ordered, 
+        int qty %% The quantity of the product originally requested or ordered 
+        decimal prc %% The unit price or cost of the product for this specific purc
+        int rcv_qty %% The actual quantity of the product that has been delivered a
+    }
+
+    prd {
+        int prd_id "PK,NOT_NULL" %% Unique internal identifier for each product record
+        int cat_id "FK" %% Reference to the product category (e.g., Furniture, Electron
+        int sup_id "FK" %% Reference to the primary supplier or vendor for the product
+        nvarchar sku %% Stock Keeping Unit; a unique alphanumeric code used for inve
+        nvarchar nm %% The display name of the product
+        nvarchar dsc %% A brief text description of the product's features or specif
+        decimal prc %% The retail or selling price of the product
+        decimal cost %% The wholesale cost or acquisition price paid to the supplier
+        char sts %% The current lifecycle status of the product (e.g., Active, D
+        decimal wgt %% The physical weight of the product, likely in pounds or kilo
+        char uom %% Unit of Measure; defines how the product is packaged or sold
+    }
+
+    rcv {
+        int rcv_id "PK,NOT_NULL" %% Unique identifier for each receiving transaction record
+        int po_id "FK" %% Reference to the purchase order associated with the incoming
+        date rcv_dt %% The date the goods were physically received at the facility
+        int whs_id "FK" %% The specific warehouse or distribution center where the good
+        nvarchar notes %% Internal comments regarding the shipment status, such as dis
+    }
+
+    stk {
+        int prd_id "PK,FK,NOT_NULL" %% Foreign key identifying the specific product being tracked.
+        int whs_id "PK,FK,NOT_NULL" %% Foreign key identifying the physical warehouse or distributi
+        int qty %% The current physical quantity of the product available at th
+        int rsv %% The quantity of stock currently reserved or committed to ope
+        int min_qty %% The minimum stock threshold or safety stock level used to tr
+        int max_qty %% The maximum capacity or target stock level for this product 
+        date lst_cnt %% The date of the last physical inventory count or audit perfo
+        date lst_rcv %% The date when stock for this product was last received into 
+    }
+
+    sup {
+        int sup_id "PK,NOT_NULL" %% Unique identifier for each supplier
+        nvarchar nm %% The legal or trade name of the supplier company
+        char sts %% The current operational status of the supplier account (e.g.
+        char pmt_trm %% Standard payment terms agreed upon with the supplier
+        tinyint rtg %% A numerical performance or quality rating assigned to the su
+        nvarchar cnt_nm %% The name of the primary contact person at the supplier compa
+        nvarchar cnt_phn %% The phone number for the primary contact person
+        nvarchar cnt_eml %% The email address for the primary contact person
+    }
+
+    whs {
+        int whs_id "PK,NOT_NULL" %% Unique surrogate primary key for each warehouse facility
+        char cd %% Short mnemonic code for the warehouse, typically using 3-let
+        nvarchar nm %% The full descriptive name of the warehouse facility
+        nvarchar cty %% The city where the warehouse is physically located
+        char st %% The two-character state abbreviation for the warehouse locat
+        char typ %% Classification code for the warehouse type (e.g., Regional, 
+        int cap %% The storage capacity of the warehouse, likely measured in sq
+        char sts %% The current operational status of the warehouse (e.g., Activ
+    }
+
+    %% Schema: sales
+
+    addr {
+        int addr_id "PK,NOT_NULL" %% The unique primary identifier for each address record.
+        int cst_id "FK" %% Foreign key linking the address to a specific customer in th
+        char typ %% The category or purpose of the address (e.g., Shipping, Bill
+        nvarchar ln1 %% The primary street address line.
+        nvarchar ln2 %% Secondary address information such as suite, apartment, or u
+        nvarchar cty %% The city where the address is located.
+        char st %% The two-character state abbreviation.
+        nvarchar zip %% The postal or ZIP code.
+        char ctry %% The country code for the address.
+        bit dflt %% A boolean flag indicating if this is the primary/default add
+    }
+
+    cst {
+        int cst_id "PK,NOT_NULL" %% Unique identifier for each customer record
+        nvarchar nm %% The full name of the customer or business entity
+        char sts %% The current status of the customer account (e.g., Active, Su
+        date dt %% The date the customer record was created or the account was 
+        char src %% The acquisition source or lead channel for the customer (e.g
+        int rep_id "FK" %% The identifier of the sales representative or account manage
+        char seg %% Market segment classification (e.g., Wholesale, Retail, Ente
+        tinyint rtg %% Internal customer rating or tier (1 to 5 scale)
+        decimal bal %% The current outstanding balance on the customer's account
+        decimal cr_lmt %% The maximum credit limit allowed for the customer
+        date lst_ord %% The date of the most recent order placed by the customer
+    }
+
+    cst_note {
+        int note_id "PK,NOT_NULL" %% A unique surrogate identifier for each note entry.
+        int cst_id "FK" %% The identifier for the customer associated with the note, li
+        date dt %% The date the note was created or the interaction occurred.
+        nvarchar usr %% The name of the staff member or system user who recorded the
+        nvarchar txt %% The detailed content of the note, describing the nature of t
+        char typ %% A category code for the interaction type: M (Meeting), E (Em
+    }
+
+    eml {
+        int eml_id "PK,NOT_NULL" %% Primary key for the email record
+        int cst_id "FK" %% Foreign key referencing the customer who owns this email add
+        char typ %% The category or type of email address (e.g., Work, Personal,
+        nvarchar adr %% The actual email address string
+        bit vrf %% Indicates whether the email address has been verified (e.g.,
+        bit dflt %% Indicates if this is the primary or default email address fo
+    }
+
+    oli {
+        int oli_id "PK,NOT_NULL" %% The unique primary identifier for each individual line item 
+        int ord_id "FK" %% The identifier of the parent sales order this line item belo
+        int prd_id "FK" %% The identifier of the specific product or stock item being p
+        int qty %% The quantity of the product ordered in this specific line it
+        decimal prc %% The unit price or gross price for the line item before disco
+        decimal disc %% The discount amount applied to this specific line item.
+        decimal tax_amt %% The calculated tax amount for this specific line item.
+        int seq %% The sequence or line number of the item within the specific 
+    }
+
+    ord {
+        int ord_id "PK,NOT_NULL" %% The unique primary identifier for each sales order.
+        int cst_id "FK" %% Foreign key referencing the customer who placed the order.
+        date ord_dt %% The date the order was originally placed by the customer.
+        date ship_dt %% The date the order was dispatched to the customer. Contains 
+        char sts %% The current status of the order (e.g., P=Pending, S=Shipped,
+        decimal tot %% The total monetary value of the order.
+        decimal tax %% The amount of tax calculated for the order.
+        decimal ship_amt %% The shipping fee charged to the customer (e.g., 0 for free, 
+        decimal disc_pct %% The percentage discount applied to the order total.
+        char pmt_trm %% The agreed-upon payment terms for the order (e.g., COD=Cash 
+        nvarchar notes %% Internal or customer-facing notes regarding the order, often
+    }
+
+    phn {
+        int phn_id "PK,NOT_NULL" %% The unique primary identifier for each phone record.
+        int cst_id "FK" %% The identifier of the customer to whom the phone number belo
+        char typ %% The category or type of phone number (e.g., W=Work, M=Mobile
+        nvarchar num %% The actual phone number string, stored in various formats.
+        nvarchar ext %% The telephone extension, typically used for work or office n
+        bit dflt %% A boolean flag indicating if this is the primary or default 
+    }
+
+    pmt {
+        int pmt_id "PK,NOT_NULL" %% The unique primary identifier for each payment transaction r
+        int ord_id "FK" %% A reference to the specific sales order that this payment is
+        int cst_id "FK" %% The identifier of the customer who made the payment.
+        date pmt_dt %% The date on which the payment was received or processed.
+        decimal amt %% The monetary value of the payment transaction.
+        char mthd %% The medium used for the payment. Codes likely represent: CC 
+        char sts %% The current processing state of the payment. Likely codes: A
+        nvarchar ref %% A unique reference string or transaction number, likely used
+        nvarchar notes %% Supplemental information about the payment, specifically use
+    }
+
+    rtn {
+        int rtn_id "PK,NOT_NULL" %% The unique primary identifier for each return record.
+        int ord_id "FK" %% Foreign key referencing the original sales order associated 
+        int oli_id "FK" %% Foreign key referencing the specific line item within an ord
+        date rtn_dt %% The date the return was initiated or processed.
+        char rsn %% A short code representing the reason for the return (e.g., W
+        int qty %% The number of units of the specific line item being returned
+        decimal amt %% The monetary value or refund amount associated with the retu
+        char sts %% The current processing status of the return (e.g., Approved,
+        nvarchar notes %% A text description explaining the reason for the return in d
+    }
+
+    shp {
+        int shp_id "PK,NOT_NULL" %% The unique primary identifier for a shipment record.
+        int ord_id "FK" %% The identifier of the sales order being fulfilled by this sh
+        int whs_id "FK" %% The identifier of the warehouse from which the goods were di
+        date ship_dt %% The date the shipment left the warehouse.
+        date dlv_dt %% The date the shipment was confirmed as delivered to the cust
+        nvarchar carr %% The logistics provider or service level used for the shipmen
+        nvarchar trk %% The unique tracking number provided by the carrier for shipm
+        char sts %% The current status of the shipment (e.g., 'D' for Delivered,
+        decimal wgt %% The physical weight of the shipment, likely used for calcula
+        decimal cost %% The monetary cost incurred for the shipping service.
+    }
+
+
+    %% Relationships
+
+    stk ||--o{ adj : "has"
+    rcv ||--o{ adj : "has"
+    whs ||--o{ adj : "has"
+    prd ||--o{ adj : "has"
+    cat ||--o{ cat : "has"
+    rcv ||--o{ cnt : "has"
+    stk ||--o{ cnt : "has"
+    whs ||--o{ cnt : "has"
+    prd ||--o{ cnt : "has"
+    sup ||--o{ po : "has"
+    stk ||--o{ po_dtl : "has"
+    po ||--o{ po_dtl : "has"
+    prd ||--o{ po_dtl : "has"
+    sup ||--o{ prd : "has"
+    cat ||--o{ prd : "has"
+    po ||--o{ rcv : "has"
+    whs ||--o{ rcv : "has"
+    prd ||--o{ stk : "has"
+    whs ||--o{ stk : "has"
+    cst ||--o{ addr : "has"
+    sup ||--o{ cst : "has"
+    cst ||--o{ cst_note : "has"
+    cst ||--o{ eml : "has"
+    ord ||--o{ oli : "has"
+    stk ||--o{ oli : "has"
+    cst ||--o{ ord : "has"
+    cst ||--o{ phn : "has"
+    cst ||--o{ pmt : "has"
+    ord ||--o{ pmt : "has"
+    ord ||--o{ rtn : "has"
+    oli ||--o{ rtn : "has"
+    rcv ||--o{ shp : "has"
+    stk ||--o{ shp : "has"
+    whs ||--o{ shp : "has"
+    ord ||--o{ shp : "has"
+
+    %% Relationship Notation:
+    %% Parent ||--o{ Child : "describes"
+    %% One Parent can have zero or more Children`;
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
+            element.setAttribute('download', 'LousyDB_erd.mmd');
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        }
+    </script>
+</body>
+</html>
