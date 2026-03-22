@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "description": "Sage Intacct Web Services API credentials. Uses a two-layer auth model: Sender credentials (app-level) plus User credentials (session-level).",
+  "properties": {
+    "CompanyId": {
+      "type": "string",
+      "title": "Company ID",
+      "description": "Sage Intacct Company ID (e.g., SoundPostMPP-DEV). Found in Company > Admin.",
+      "isSecret": false,
+      "order": 0
+    },
+    "SenderId": {
+      "type": "string",
+      "title": "Web Services Sender ID",
+      "description": "Sender ID from your Sage Intacct Marketplace Web Services subscription.",
+      "isSecret": false,
+      "order": 1
+    },
+    "SenderPassword": {
+      "type": "string",
+      "title": "Sender Password",
+      "description": "Password associated with the Web Services Sender ID.",
+      "isSecret": true,
+      "order": 2
+    },
+    "UserId": {
+      "type": "string",
+      "title": "User ID",
+      "description": "Sage Intacct user login (ideally a dedicated Web Services user, not a human login).",
+      "isSecret": false,
+      "order": 3
+    },
+    "UserPassword": {
+      "type": "string",
+      "title": "User Password",
+      "description": "Password for the Sage Intacct user.",
+      "isSecret": true,
+      "order": 4
+    },
+    "EntityId": {
+      "type": "string",
+      "title": "Entity ID (Optional)",
+      "description": "For multi-entity shared companies, the specific entity/location to connect to. Leave blank for single-entity companies.",
+      "isSecret": false,
+      "order": 5
+    }
+  },
+  "required": ["CompanyId", "SenderId", "SenderPassword", "UserId", "UserPassword"]
+}
