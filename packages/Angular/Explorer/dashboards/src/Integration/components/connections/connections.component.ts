@@ -892,17 +892,19 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
 
     try {
-      // Collect all source objects that need new tables from discovered objects
-      const objects = this.AvailableSourceObjects.map(obj => ({
-        SourceObjectName: obj.Name,
-        SchemaName: this.AutoMapSelectedSchema || this.NewEntitySchema || 'integration',
-        TableName: obj.Name.replace(/[^A-Za-z0-9_]/g, '_'),
-        EntityName: obj.Label || obj.Name,
+      // Collect source objects from entity maps that need new tables
+      // Use the integration name (lowercase) as the default schema
+      const integrationName = this.SelectedSummary.Integration.Integration?.toLowerCase().replace(/[^a-z0-9_]/g, '_') || 'integration';
+      const objects = this.DetailEntityMaps.map(map => ({
+        SourceObjectName: map.ExternalObjectName,
+        SchemaName: integrationName,
+        TableName: map.ExternalObjectName.replace(/[^A-Za-z0-9_]/g, '_'),
+        EntityName: map.ExternalObjectLabel || map.ExternalObjectName,
       }));
 
       if (objects.length === 0) {
         this.ApplySchemaBatchSuccess = false;
-        this.ApplySchemaBatchMessage = 'No source objects to apply';
+        this.ApplySchemaBatchMessage = 'No entity maps configured. Add maps first.';
         return;
       }
 
