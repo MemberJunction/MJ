@@ -17,7 +17,8 @@
     "@memberjunction/global": "5.14.0",
     "@memberjunction/core": "5.14.0",
     "@memberjunction/sql-dialect": "5.14.0",
-    "@memberjunction/queue": "5.14.0"
+    "@memberjunction/queue": "5.14.0",
+    "@octokit/rest": "^21.1.1"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

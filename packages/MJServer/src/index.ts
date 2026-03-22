@@ -342,6 +342,13 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
             RunInProcess: (skipDB) => runObject.RunInProcess(codegenDataSource, skipDB, rsuWorkDir),
           });
           console.log('RSU in-process CodeGen runner initialized.');
+
+          // Inject CodeGen output paths for targeted git staging
+          const { initializeConfig } = await import('@memberjunction/codegen-lib');
+          const codegenConfig = initializeConfig(rsuWorkDir);
+          const outputPaths = (codegenConfig.output ?? []).map((o: { directory: string }) => o.directory);
+          RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
+          console.log(`RSU CodeGen output paths: ${outputPaths.length} directories configured.`);
         } catch (codegenErr) {
           console.warn(`RSU in-process CodeGen runner setup failed (will fall back to child process): ${(codegenErr as Error).message}`);
         }

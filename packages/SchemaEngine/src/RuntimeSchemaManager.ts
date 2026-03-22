@@ -10,6 +10,7 @@
  */
 import { BaseSingleton } from '@memberjunction/global';
 import { LogError, Metadata, type DatabaseProviderBase } from '@memberjunction/core';
+import { Octokit } from '@octokit/rest';
 import { RSUMetrics } from './RSUMetrics.js';
 import { GetDialect } from './DDLGenerator.js';
 import type { DatabasePlatform } from './interfaces.js';
@@ -37,6 +38,8 @@ class RSUConfig {
     get GitRemote(): string { return process.env.RSU_GIT_REMOTE || 'origin'; }
     get GitUserName(): string | undefined { return process.env.RSU_GIT_USER_NAME; }
     get GitUserEmail(): string | undefined { return process.env.RSU_GIT_USER_EMAIL; }
+    /** GitHub repo in "owner/repo" format for Octokit-only mode (no local .git). */
+    get GitHubRepo(): string | undefined { return process.env.RSU_GITHUB_REPO; }
     get IsDBLockEnabled(): boolean { return process.env.RSU_DB_LOCK_ENABLED === '1'; }
     get IsAuditLogEnabled(): boolean { return process.env.RSU_AUDIT_LOG_ENABLED !== '0'; }
     get ProtectedSchemas(): string[] {
@@ -233,6 +236,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     private _isRunning = false;
     private _ddlProvider: DatabaseProviderBase | null = null;
     private _codeGenRunner: IRSUCodeGenRunner | null = null;
+    private _codeGenOutputPaths: string[] = [];
     private _outOfSync = false;
     private _outOfSyncSince: Date | null = null;
     private _lastRunAt: Date | null = null;
@@ -255,6 +259,14 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      */
     public SetCodeGenRunner(runner: IRSUCodeGenRunner): void {
         this._codeGenRunner = runner;
+    }
+
+    /**
+     * Set the CodeGen output directory paths (from mj.config.cjs output[].directory).
+     * Used by the git step to stage only CodeGen-produced source files.
+     */
+    public SetCodeGenOutputPaths(paths: string[]): void {
+        this._codeGenOutputPaths = paths;
     }
 
     /** Whether RSU is enabled based on ALLOW_RUNTIME_SCHEMA_UPDATE=1. */
@@ -429,14 +441,11 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         if (codegenOk) {
             const compileOk = await this.runStep('CompileTypeScript', () => this.compileTypeScript(), sharedSteps);
             if (compileOk) {
-                if (!inputs.every(i => i.SkipRestart)) {
-                    const restartOk = await this.runStep('RestartMJAPI', () => this.restartMJAPI(), sharedSteps);
-                    if (restartOk) result.ApiRestarted = true;
-                }
                 this.ClearOutOfSync();
             }
         }
 
+        // Git commit + PR before restart — PM2 restart kills this process
         if (!inputs.every(i => i.SkipGitCommit)) {
             const allTables = [...new Set(successfulItems.flatMap(r => r.Input.AffectedTables))];
             const allFiles = successfulItems.map(r => r.FilePath).filter((p): p is string => !!p);
@@ -449,6 +458,12 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
                 result.GitCommitSuccess = true;
                 result.BranchName = gitStep as string;
             }
+        }
+
+        // Restart LAST — PM2 restart kills this process, nothing runs after this
+        if (!inputs.every(i => i.SkipRestart)) {
+            const restartOk = await this.runStep('RestartMJAPI', () => this.restartMJAPI(), sharedSteps);
+            if (restartOk) result.ApiRestarted = true;
         }
 
         return result;
@@ -934,72 +949,250 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         );
     }
 
-    // ─── Phase 2: Git Integration ───────────────────────────────────
+    // ─── Phase 2: Git Integration (@octokit/rest — pure HTTP, no shell-outs) ─
 
     /**
      * Git commit for a CodeGen cycle batch — commits all migration files,
      * CodeGen outputs, and metadata from all requests in the batch.
      * Returns the branch name on success.
+     *
+     * Uses Octokit GitHub API exclusively — no shell-outs, no git binary dependency.
+     * Works in any environment: local dev, Docker, Azure, CI/CD.
      */
     private async gitCommitAndPRForCycle(
         migrationFilePaths: string[],
         affectedTables: string[],
         description: string
     ): Promise<string> {
-        const workDir = rsuConfig.WorkDir;
-        const targetBranch = rsuConfig.GitTargetBranch;
+        return this.gitCommitAndPRViaAPI(migrationFilePaths, affectedTables, description);
+    }
+
+    /**
+     * Git commit and PR using Octokit GitHub API exclusively.
+     * For Docker/CI environments without a local `.git` directory.
+     */
+    private async gitCommitAndPRViaAPI(
+        migrationFilePaths: string[],
+        affectedTables: string[],
+        description: string
+    ): Promise<string> {
+        const octokit = this.createOctokit();
+        const { owner, repo } = this.resolveGitHubOwnerRepo();
         const branchName = this.generateBranchName(affectedTables);
-        const originalBranch = await this.gitCurrentBranch(workDir);
+        const baseBranch = rsuConfig.GitTargetBranch;
 
-        await this.gitExec(workDir, `checkout -b ${branchName}`);
+        this.rsuLog(`Octokit-only mode: creating branch "${branchName}" from "${baseBranch}"`);
 
-        try {
-            await this.configureGitUser(workDir);
+        const baseSha = await this.apiGetBranchSha(octokit, owner, repo, baseBranch);
+        await this.apiCreateBranch(octokit, owner, repo, branchName, baseSha);
 
-            // Stage all changed/new files (migration files, CodeGen outputs, etc.)
-            await this.gitExec(workDir, 'add -A');
+        const filesToCommit = await this.collectAllRSUFiles(migrationFilePaths);
+        this.rsuLog(`Collected ${filesToCommit.length} file(s) to commit via API`);
 
-            const tables = affectedTables.join(', ');
-            const commitMsg = `RSU: ${description}\n\nTables affected: ${tables}\nGenerated by Runtime Schema Update pipeline`;
-            await this.gitCommitWithFile(workDir, commitMsg);
-            const remote = rsuConfig.GitRemote;
-            await this.gitExec(workDir, `push -u ${remote} ${branchName}`);
+        const treeSha = await this.apiCreateTreeFromFiles(octokit, owner, repo, baseSha, filesToCommit);
+        const tables = affectedTables.join(', ');
+        const commitMsg = `RSU: ${description}\n\nTables affected: ${tables}\nGenerated by Runtime Schema Update pipeline`;
+        const commitSha = await this.apiCreateCommit(octokit, owner, repo, commitMsg, treeSha, baseSha);
+        await this.apiUpdateBranchRef(octokit, owner, repo, branchName, commitSha);
 
-            // Create PR
-            const { writeFileSync, unlinkSync } = await import('node:fs');
-            const title = `RSU: ${description}`.substring(0, 70);
-            const body = [
-                '## Runtime Schema Update',
-                '',
-                `**Tables affected:** ${tables}`,
-                `**Migration files:** ${migrationFilePaths.length}`,
-                '',
-                '### What changed',
-                '- Migration SQL executed against the database',
-                '- CodeGen re-generated entity metadata, TypeScript classes, and SQL objects',
-                '- MJAPI restarted with updated schema',
-                '',
-                '### Generated by',
-                'Runtime Schema Update (RSU) pipeline — auto-generated PR.',
-            ].join('\n');
-            const bodyFile = `${workDir}/.rsu_pr_body_${Date.now()}.md`;
-            writeFileSync(bodyFile, body, 'utf-8');
-            try {
-                const { execAsync } = await this.getExecAsync();
-                await execAsync(
-                    `cd ${workDir} && gh pr create --repo $(git remote get-url ${remote}) --base "${targetBranch}" --head "${branchName}" --title "${title}" --body-file "${bodyFile}"`,
-                    { timeout: 30_000 }
-                );
-            } finally {
-                try { unlinkSync(bodyFile); } catch { /* best-effort */ }
+        await this.apiCreatePullRequest(octokit, owner, repo, branchName, baseBranch, migrationFilePaths, tables, description);
+
+        return branchName;
+    }
+
+    /**
+     * Resolve GitHub owner/repo from RSU_GITHUB_REPO env var or by parsing the git remote URL.
+     * In Octokit-only mode, RSU_GITHUB_REPO is required since there's no local git remote.
+     */
+    private resolveGitHubOwnerRepo(): { owner: string; repo: string } {
+        const envRepo = rsuConfig.GitHubRepo;
+        if (envRepo) {
+            const parts = envRepo.split('/');
+            if (parts.length === 2 && parts[0].length > 0 && parts[1].length > 0) {
+                return { owner: parts[0], repo: parts[1] };
             }
-
-            await this.gitExec(workDir, `checkout ${originalBranch}`);
-            return branchName;
-        } catch (err) {
-            try { await this.gitExec(workDir, `checkout ${originalBranch}`); } catch { /* best effort */ }
-            throw err;
+            throw new RSUError('CONFIG', `RSU_GITHUB_REPO must be in "owner/repo" format, got: "${envRepo}"`);
         }
+        throw new RSUError('CONFIG', 'No local .git directory and RSU_GITHUB_REPO is not set. Set RSU_GITHUB_REPO=owner/repo for Octokit-only mode.');
+    }
+
+    /** Get the SHA of the tip of a branch via Octokit. */
+    private async apiGetBranchSha(octokit: Octokit, owner: string, repo: string, branch: string): Promise<string> {
+        const { data } = await octokit.git.getRef({ owner, repo, ref: `heads/${branch}` });
+        return data.object.sha;
+    }
+
+    /** Create a new branch ref via Octokit. */
+    private async apiCreateBranch(octokit: Octokit, owner: string, repo: string, branch: string, sha: string): Promise<void> {
+        await octokit.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha });
+    }
+
+    /** Create blobs for all files and build a tree via Octokit. Returns the tree SHA. */
+    private async apiCreateTreeFromFiles(
+        octokit: Octokit,
+        owner: string,
+        repo: string,
+        baseTreeSha: string,
+        files: Array<{ repoPath: string; absolutePath: string }>
+    ): Promise<string> {
+        const { readFileSync } = await import('node:fs');
+
+        const treeItems: Array<{ path: string; mode: '100644'; type: 'blob'; sha: string }> = [];
+
+        for (const file of files) {
+            const content = readFileSync(file.absolutePath);
+            const base64Content = content.toString('base64');
+            const { data: blob } = await octokit.git.createBlob({
+                owner, repo,
+                content: base64Content,
+                encoding: 'base64',
+            });
+            treeItems.push({ path: file.repoPath, mode: '100644', type: 'blob', sha: blob.sha });
+        }
+
+        const { data: tree } = await octokit.git.createTree({
+            owner, repo,
+            base_tree: baseTreeSha,
+            tree: treeItems,
+        });
+        return tree.sha;
+    }
+
+    /** Create a commit via Octokit. Returns the commit SHA. */
+    private async apiCreateCommit(
+        octokit: Octokit, owner: string, repo: string,
+        message: string, treeSha: string, parentSha: string
+    ): Promise<string> {
+        const commitParams: Parameters<Octokit['git']['createCommit']>[0] = {
+            owner, repo, message, tree: treeSha, parents: [parentSha],
+        };
+
+        const userName = rsuConfig.GitUserName;
+        const userEmail = rsuConfig.GitUserEmail;
+        if (userName && userEmail) {
+            commitParams.author = { name: userName, email: userEmail, date: new Date().toISOString() };
+        }
+
+        const { data: commit } = await octokit.git.createCommit(commitParams);
+        return commit.sha;
+    }
+
+    /** Update a branch ref to point to a new commit SHA via Octokit. */
+    private async apiUpdateBranchRef(
+        octokit: Octokit, owner: string, repo: string, branch: string, sha: string
+    ): Promise<void> {
+        await octokit.git.updateRef({ owner, repo, ref: `heads/${branch}`, sha });
+    }
+
+    /** Create a PR via Octokit (API-only mode). */
+    private async apiCreatePullRequest(
+        octokit: Octokit, owner: string, repo: string,
+        head: string, base: string,
+        migrationFilePaths: string[], tables: string, description: string
+    ): Promise<void> {
+        const title = `RSU: ${description}`.substring(0, 70);
+        const body = this.buildPRBody(tables, migrationFilePaths.length);
+        await octokit.pulls.create({ owner, repo, title, body, base, head });
+    }
+
+    // ─── File Collection for API Mode ───────────────────────────────
+
+    /**
+     * Collect all RSU-produced files that should be committed.
+     * Returns objects with both the absolute path (for reading) and
+     * the repo-relative path (for the git tree).
+     */
+    private async collectAllRSUFiles(
+        migrationFilePaths: string[]
+    ): Promise<Array<{ repoPath: string; absolutePath: string }>> {
+        const { existsSync } = await import('node:fs');
+        const { resolve } = await import('node:path');
+        const workDir = resolve(rsuConfig.WorkDir);
+        const files: Array<{ repoPath: string; absolutePath: string }> = [];
+
+        // Migration files
+        for (const filePath of migrationFilePaths) {
+            if (filePath && existsSync(filePath)) {
+                files.push({ repoPath: this.toRepoRelativePath(filePath, workDir), absolutePath: filePath });
+            }
+        }
+
+        // AdditionalSchemaInfo
+        const schemaInfoPath = resolve(workDir, rsuConfig.AdditionalSchemaInfoPath);
+        if (existsSync(schemaInfoPath)) {
+            files.push({ repoPath: this.toRepoRelativePath(schemaInfoPath, workDir), absolutePath: schemaInfoPath });
+        }
+
+        // CodeGen output directories (recursively collect all files)
+        for (const outputPath of this._codeGenOutputPaths) {
+            const absOutputPath = resolve(workDir, outputPath);
+            if (existsSync(absOutputPath)) {
+                const collected = await this.collectFilesRecursively(absOutputPath);
+                for (const absFile of collected) {
+                    files.push({ repoPath: this.toRepoRelativePath(absFile, workDir), absolutePath: absFile });
+                }
+            }
+        }
+
+        return files;
+    }
+
+    /** Convert an absolute path to a repo-relative path (forward slashes). */
+    private toRepoRelativePath(absolutePath: string, workDir: string): string {
+        const { resolve, relative } = require('node:path') as typeof import('node:path');
+        const resolved = resolve(absolutePath);
+        return relative(workDir, resolved).replace(/\\/g, '/');
+    }
+
+    /** Recursively collect all files in a directory. */
+    private async collectFilesRecursively(dirPath: string): Promise<string[]> {
+        const { readdirSync, statSync } = await import('node:fs');
+        const { join } = await import('node:path');
+        const results: string[] = [];
+
+        const entries = readdirSync(dirPath);
+        for (const entry of entries) {
+            const fullPath = join(dirPath, entry);
+            const stat = statSync(fullPath);
+            if (stat.isDirectory()) {
+                const nested = await this.collectFilesRecursively(fullPath);
+                results.push(...nested);
+            } else if (stat.isFile()) {
+                results.push(fullPath);
+            }
+        }
+
+        return results;
+    }
+
+    /** Build the PR body markdown. */
+    private buildPRBody(tables: string, migrationFileCount: number): string {
+        return [
+            '## Runtime Schema Update',
+            '',
+            `**Tables affected:** ${tables}`,
+            `**Migration files:** ${migrationFileCount}`,
+            '',
+            '### What changed',
+            '- Migration SQL executed against the database',
+            '- CodeGen re-generated entity metadata, TypeScript classes, and SQL objects',
+            '- MJAPI restarted with updated schema',
+            '',
+            '### Generated by',
+            'Runtime Schema Update (RSU) pipeline — auto-generated PR.',
+        ].join('\n');
+    }
+
+    /** Create an authenticated Octokit instance from environment token. */
+    private createOctokit(): Octokit {
+        const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+        if (!token) {
+            throw new RSUError(
+                'GIT',
+                'GitHub token not found. Set GITHUB_TOKEN or GH_TOKEN environment variable for PR creation.'
+            );
+        }
+        return new Octokit({ auth: token });
     }
 
     /**
@@ -1013,46 +1206,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             .map(t => t.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase())
             .join('-');
         return `rsu/${timestamp}-${tableSlug}`;
-    }
-
-    /**
-     * Get the current git branch name.
-     */
-    private async gitCurrentBranch(workDir: string): Promise<string> {
-        const { stdout } = await this.gitExec(workDir, 'rev-parse --abbrev-ref HEAD');
-        return stdout.trim();
-    }
-
-    /**
-     * Commit using a temp file for the message (avoids shell escaping issues).
-     */
-    private async gitCommitWithFile(workDir: string, message: string): Promise<void> {
-        const { writeFileSync, unlinkSync } = await import('node:fs');
-        const msgFile = `${workDir}/.rsu_commit_msg_${Date.now()}.txt`;
-        writeFileSync(msgFile, message, 'utf-8');
-        try {
-            await this.gitExec(workDir, `commit -F "${msgFile}"`);
-        } finally {
-            try { unlinkSync(msgFile); } catch { /* best-effort cleanup */ }
-        }
-    }
-
-    /**
-     * Execute a git command in the work directory.
-     */
-    private async gitExec(workDir: string, gitArgs: string): Promise<{ stdout: string; stderr: string }> {
-        const { execAsync } = await this.getExecAsync();
-        return execAsync(`cd "${workDir}" && git ${gitArgs}`, { timeout: 60_000 });
-    }
-
-    /**
-     * Configure git user name/email if RSU_GIT_USER_NAME/EMAIL are set.
-     */
-    private async configureGitUser(workDir: string): Promise<void> {
-        const userName = rsuConfig.GitUserName;
-        const userEmail = rsuConfig.GitUserEmail;
-        if (userName) await this.gitExec(workDir, `config user.name "${userName}"`);
-        if (userEmail) await this.gitExec(workDir, `config user.email "${userEmail}"`);
     }
 
     // ─── DB-Backed Mutex (Multi-Instance Safety) ──────────────────
