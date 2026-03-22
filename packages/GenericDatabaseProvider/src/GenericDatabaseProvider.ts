@@ -57,12 +57,12 @@ import {
     LogStatusEx,
     StripStopWords,
     QueryCacheManager,
-    QueryPagingEngine,
     DatabasePlatform,
     QueryExecutionSpec,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { QueryPagingEngine } from './queryPagingEngine.js';
 import { QueryParameterProcessor } from '@memberjunction/query-processor';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
