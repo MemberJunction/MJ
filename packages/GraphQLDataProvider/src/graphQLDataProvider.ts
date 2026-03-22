@@ -2263,6 +2263,39 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         return GraphQLDataProvider.Instance.RefreshToken();
     }
 
+    /**
+     * Clears all MJ client-side caches that are tied to a user session.
+     *
+     * Call this on logout to ensure that a subsequent login as a different user
+     * does not see stale metadata or cached data rows from the previous session.
+     *
+     * Specifically clears:
+     * - The `MJ_Metadata` IndexedDB database (entity definitions, RunView/RunQuery/Dataset caches)
+     * - All localStorage keys except those in `preservedKeys`
+     *
+     * @param preservedKeys localStorage keys to keep across logout (e.g. theme preference).
+     *        Defaults to an empty set.
+     */
+    public static async clearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
+        // Clear all localStorage except explicitly preserved keys
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && !preservedKeys.has(key)) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+
+        // Delete the MJ IndexedDB metadata cache
+        await new Promise<void>((resolve) => {
+            const req = indexedDB.deleteDatabase('MJ_Metadata');
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+            req.onblocked = () => resolve();
+        });
+    }
+
     protected CreateNewGraphQLClient(url: string, token: string, sessionId: string, mjAPIKey: string, userAPIKey?: string): GraphQLClient {
         // Enhanced logging to diagnose token issues
         // const tokenPreview = token ? `${token.substring(0, 20)}...${token.substring(token.length - 10)}` : 'NO TOKEN';
