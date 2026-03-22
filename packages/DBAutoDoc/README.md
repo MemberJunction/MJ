@@ -724,7 +724,7 @@ This rich context enables AI to make accurate inferences.
   },
   "ai": {
     "provider": "openai",
-    "model": "gpt-4-turbo-preview",
+    "model": "gpt-5.4-mini",
     "apiKey": "sk-...",
     "temperature": 0.1,
     "maxTokens": 8000,
@@ -849,7 +849,7 @@ This rich context enables AI to make accurate inferences.
   },
   "ai": {
     "provider": "openai",
-    "model": "gpt-4-turbo-preview",
+    "model": "gpt-5.4-mini",
     "apiKey": "sk-...",
     "temperature": 0.1,
     "maxTokens": 8000
@@ -890,7 +890,7 @@ This rich context enables AI to make accurate inferences.
   },
   "ai": {
     "provider": "openai",
-    "model": "gpt-4-turbo-preview",
+    "model": "gpt-5.4-mini",
     "apiKey": "sk-...",
     "temperature": 0.1,
     "maxTokens": 8000
@@ -966,21 +966,21 @@ Use different models for different pipeline phases. A cheaper/faster model for b
 
 ## Supported AI Providers
 
-DBAutoDoc integrates with MemberJunction's AI provider system. Supported providers:
+DBAutoDoc integrates with [MemberJunction's AI provider system](../../packages/AI/). Supported providers:
 
 | Config Provider | Driver Class | Description |
 |-----------------|--------------|-------------|
-| `gemini` (default) | GeminiLLM | Google Gemini |
-| `openai` | OpenAILLM | OpenAI |
-| `anthropic` | AnthropicLLM | Anthropic Claude |
-| `groq` | GroqLLM | Groq |
-| `mistral` | MistralLLM | Mistral AI |
+| `gemini` (default) | [GeminiLLM](../../packages/AI/Providers/Gemini/) | Google Gemini |
+| `openai` | [OpenAILLM](../../packages/AI/Providers/OpenAI/) | OpenAI |
+| `anthropic` | [AnthropicLLM](../../packages/AI/Providers/Anthropic/) | Anthropic Claude |
+| `groq` | [GroqLLM](../../packages/AI/Providers/Groq/) | Groq |
+| `mistral` | [MistralLLM](../../packages/AI/Providers/Mistral/) | Mistral AI |
 | `vertex` | VertexLLM | Google Vertex AI |
 | `azure` | AzureLLM | Azure OpenAI |
-| `cerebras` | CerebrasLLM | Cerebras |
-| `openrouter` | OpenRouterLLM | OpenRouter (multi-model) |
-| `xai` | xAILLM | xAI (Grok) |
-| `bedrock` | BedrockLLM | AWS Bedrock |
+| `cerebras` | [CerebrasLLM](../../packages/AI/Providers/Cerebras/) | Cerebras |
+| `openrouter` | [OpenRouterLLM](../../packages/AI/Providers/OpenRouter/) | OpenRouter (multi-model) |
+| `xai` | [xAILLM](../../packages/AI/Providers/xAI/) | xAI (Grok) |
+| `bedrock` | [BedrockLLM](../../packages/AI/Providers/Bedrock/) | AWS Bedrock |
 
 ### Gemini (Default)
 ```json
@@ -995,7 +995,7 @@ DBAutoDoc integrates with MemberJunction's AI provider system. Supported provide
 ```json
 {
   "provider": "openai",
-  "model": "gpt-4-turbo-preview",
+  "model": "gpt-5.4-mini",
   "apiKey": "sk-..."
 }
 ```
@@ -1004,7 +1004,7 @@ DBAutoDoc integrates with MemberJunction's AI provider system. Supported provide
 ```json
 {
   "provider": "anthropic",
-  "model": "claude-3-5-sonnet-20241022",
+  "model": "claude-sonnet-4-6",
   "apiKey": "sk-ant-..."
 }
 ```
@@ -1013,7 +1013,7 @@ DBAutoDoc integrates with MemberJunction's AI provider system. Supported provide
 ```json
 {
   "provider": "groq",
-  "model": "llama-3.3-70b-versatile",
+  "model": "llama-4-scout-17b-16e-instruct",
   "apiKey": "gsk_..."
 }
 ```
