@@ -117,14 +117,6 @@ export class DDLGenerator {
   }
 
   /**
-   * Generate sp_addextendedproperty calls for table and column descriptions.
-   * @deprecated Use GenerateDescriptions() with a dialect instead.
-   */
-  GenerateExtendedProperties(def: TableDefinition): string[] {
-    return this.GenerateDescriptions(def, GetDialect('sqlserver'));
-  }
-
-  /**
    * Generate ALTER TABLE ADD COLUMN statement.
    */
   GenerateAlterTableAddColumn(schemaName: string, tableName: string, column: ColumnDefinition, platform: DatabasePlatform): string {

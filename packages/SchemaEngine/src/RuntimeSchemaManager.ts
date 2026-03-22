@@ -14,6 +14,9 @@ import { Octokit } from '@octokit/rest';
 import { RSUMetrics } from './RSUMetrics.js';
 import { GetDialect } from './DDLGenerator.js';
 import type { DatabasePlatform } from './interfaces.js';
+import * as nodePath from 'node:path';
+import { appendFileSync } from 'node:fs';
+import * as childProcess from 'node:child_process';
 
 /** Signal string used to detect lock-held condition in database messages. */
 const RSU_LOCK_HELD_SIGNAL = 'RSU_LOCK_HELD';
@@ -76,6 +79,13 @@ export interface RSUPipelineInput {
 
     /** If true, skip MJAPI restart (useful for batching multiple changes). */
     SkipRestart?: boolean;
+
+    /**
+     * Optional files to write to disk before restart. RSU does not read or
+     * interpret these — it simply persists them so they survive the process
+     * restart. The caller is responsible for reading them on the other side.
+     */
+    PostRestartFiles?: Array<{ Path: string; Content: string }>;
 }
 
 /**
@@ -134,8 +144,8 @@ interface PostMigrationResult {
 }
 
 /**
- * Pending work to be completed after MJAPI restarts.
- * Written to disk before restart, read and processed on startup.
+ * @deprecated Use RSUPipelineInput.PostRestartFiles instead. This type is
+ * retained temporarily for backward compatibility with existing callers.
  */
 export interface RSUPendingWork {
     CompanyIntegrationID: string;
@@ -314,6 +324,30 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             this.rsuLog(`Found ${results.length} pending work item(s)`);
         }
         return results;
+    }
+
+    // ─── Generic Post-Restart File Injection ──────────────────────
+
+    /**
+     * Write PostRestartFiles from all pipeline inputs to disk.
+     * RSU does not interpret these — callers provide arbitrary files
+     * that need to survive the process restart.
+     */
+    private async writePostRestartFiles(inputs: RSUPipelineInput[]): Promise<void> {
+        const { writeFileSync, mkdirSync } = await import('node:fs');
+        const { dirname } = await import('node:path');
+
+        let count = 0;
+        for (const input of inputs) {
+            for (const file of input.PostRestartFiles ?? []) {
+                mkdirSync(dirname(file.Path), { recursive: true });
+                writeFileSync(file.Path, file.Content, 'utf-8');
+                count++;
+            }
+        }
+        if (count > 0) {
+            this.rsuLog(`Wrote ${count} post-restart file(s) to disk`);
+        }
     }
 
     /** Whether RSU is enabled based on ALLOW_RUNTIME_SCHEMA_UPDATE=1. */
@@ -506,6 +540,10 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
                 result.BranchName = gitStep as string;
             }
         }
+
+        // Write caller-provided PostRestartFiles to disk before restart.
+        // RSU does not interpret these — it just persists them so they survive the restart.
+        await this.writePostRestartFiles(inputs);
 
         // Restart LAST — PM2 restart kills this process, nothing runs after this
         if (!inputs.every(i => i.SkipRestart)) {
@@ -940,17 +978,32 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         const workDir = rsuConfig.WorkDir;
         const processName = rsuConfig.PM2ProcessName;
 
-        // Check if MJAPI is already managed by PM2
+        // When running inside the MJAPI process that PM2 manages, `pm2 restart`
+        // sends SIGINT to THIS process. We will die before execAsync resolves.
+        // That's fine — the pending-work file (.rsu_pending/) was already written
+        // before this step, and the newly restarted process picks it up on boot.
+        //
+        // Strategy: fire the restart command, catch the inevitable rejection
+        // (our process gets killed mid-flight), and return true. If the process
+        // somehow survives (e.g. running outside PM2), poll until MJAPI is ready.
         const isManaged = await this.isPM2ProcessRunning(processName);
 
-        if (isManaged) {
-            await execAsync(`pm2 restart ${processName}`, { timeout: 30_000 });
-        } else {
-            // First time: start via ecosystem config
-            await execAsync(`cd ${workDir} && pm2 start ecosystem.config.cjs`, { timeout: 30_000 });
+        try {
+            if (isManaged) {
+                await execAsync(`pm2 restart ${processName}`, { timeout: 30_000 });
+            } else {
+                await execAsync(`cd "${workDir}" && pm2 start ecosystem.config.cjs`, { timeout: 30_000 });
+            }
+        } catch {
+            // Expected: pm2 restart killed us and we caught the signal, OR
+            // the command timed out because the process recycled. Either way,
+            // the restart was issued — the new process handles the rest.
+            this.rsuLog('pm2 restart command completed or process was recycled — treating as success');
+            return true;
         }
 
-        // Poll the GraphQL endpoint until MJAPI is ready
+        // If we're still alive (running outside PM2, or PM2 didn't kill us),
+        // poll the endpoint to confirm the server is healthy.
         return this.waitForMJAPI();
     }
 
@@ -1074,7 +1127,13 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         await octokit.git.createRef({ owner, repo, ref: `refs/heads/${branch}`, sha });
     }
 
-    /** Create blobs for all files and build a tree via Octokit. Returns the tree SHA. */
+    /**
+     * Build a git tree from files via Octokit using inline content.
+     * This sends all files in a single createTree call instead of
+     * N+1 individual createBlob calls, avoiding GitHub's secondary rate limit.
+     *
+     * Files > 1 MB fall back to createBlob (GitHub rejects inline content above that).
+     */
     private async apiCreateTreeFromFiles(
         octokit: Octokit,
         owner: string,
@@ -1083,19 +1142,29 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         files: Array<{ repoPath: string; absolutePath: string }>
     ): Promise<string> {
         const { readFileSync } = await import('node:fs');
+        const INLINE_LIMIT = 1_000_000; // 1 MB
 
-        const treeItems: Array<{ path: string; mode: '100644'; type: 'blob'; sha: string }> = [];
+        type TreeItem = { path: string; mode: '100644'; type: 'blob'; content?: string; sha?: string };
+        const treeItems: TreeItem[] = [];
+        let blobCount = 0;
 
         for (const file of files) {
-            const content = readFileSync(file.absolutePath);
-            const base64Content = content.toString('base64');
-            const { data: blob } = await octokit.git.createBlob({
-                owner, repo,
-                content: base64Content,
-                encoding: 'base64',
-            });
-            treeItems.push({ path: file.repoPath, mode: '100644', type: 'blob', sha: blob.sha });
+            const buf = readFileSync(file.absolutePath);
+            if (buf.length <= INLINE_LIMIT) {
+                treeItems.push({ path: file.repoPath, mode: '100644', type: 'blob', content: buf.toString('utf-8') });
+            } else {
+                // Large file — must create blob separately
+                const { data: blob } = await octokit.git.createBlob({
+                    owner, repo,
+                    content: buf.toString('base64'),
+                    encoding: 'base64',
+                });
+                treeItems.push({ path: file.repoPath, mode: '100644', type: 'blob', sha: blob.sha });
+                blobCount++;
+            }
         }
+
+        this.rsuLog(`Creating tree: ${treeItems.length} file(s) (${treeItems.length - blobCount} inline, ${blobCount} blob)`);
 
         const { data: tree } = await octokit.git.createTree({
             owner, repo,
@@ -1149,6 +1218,17 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
      * Returns objects with both the absolute path (for reading) and
      * the repo-relative path (for the git tree).
      */
+    /** Check if a path is gitignored by asking git. */
+    private isGitIgnored(absPath: string, workDir: string): boolean {
+        const { execSync } = childProcess;
+        try {
+            execSync(`git check-ignore -q "${absPath}"`, { cwd: workDir, timeout: 5_000 });
+            return true; // exit 0 = ignored
+        } catch {
+            return false; // exit 1 = not ignored
+        }
+    }
+
     private async collectAllRSUFiles(
         migrationFilePaths: string[]
     ): Promise<Array<{ repoPath: string; absolutePath: string }>> {
@@ -1170,23 +1250,29 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
             files.push({ repoPath: this.toRepoRelativePath(schemaInfoPath, workDir), absolutePath: schemaInfoPath });
         }
 
-        // CodeGen output directories (recursively collect all files)
+        // CodeGen output directories — skip gitignored dirs (SQL build artifacts, schema dumps)
         for (const outputPath of this._codeGenOutputPaths) {
             const absOutputPath = resolve(workDir, outputPath);
-            if (existsSync(absOutputPath)) {
-                const collected = await this.collectFilesRecursively(absOutputPath);
-                for (const absFile of collected) {
-                    files.push({ repoPath: this.toRepoRelativePath(absFile, workDir), absolutePath: absFile });
-                }
+            if (!existsSync(absOutputPath)) continue;
+
+            if (this.isGitIgnored(absOutputPath, workDir)) {
+                this.rsuLog(`Skipping gitignored CodeGen output: ${outputPath}`);
+                continue;
+            }
+
+            const collected = await this.collectFilesRecursively(absOutputPath);
+            for (const absFile of collected) {
+                files.push({ repoPath: this.toRepoRelativePath(absFile, workDir), absolutePath: absFile });
             }
         }
 
+        this.rsuLog(`Collected ${files.length} file(s) to commit via API`);
         return files;
     }
 
     /** Convert an absolute path to a repo-relative path (forward slashes). */
     private toRepoRelativePath(absolutePath: string, workDir: string): string {
-        const { resolve, relative } = require('node:path') as typeof import('node:path');
+        const { resolve, relative } = nodePath;
         const resolved = resolve(absolutePath);
         return relative(workDir, resolved).replace(/\\/g, '/');
     }
@@ -1554,7 +1640,6 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
         const line = `[RSU] ${timestamp}  ${message}`;
         console.log(line);
         try {
-            const { appendFileSync } = require('node:fs');
             const logPath = `${rsuConfig.WorkDir}/rsu-pipeline.log`;
             appendFileSync(logPath, `${line}\n`, 'utf-8');
         } catch {

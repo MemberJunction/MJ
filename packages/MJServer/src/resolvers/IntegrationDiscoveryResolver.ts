@@ -24,7 +24,9 @@ import {
     TypeMapper,
     SchemaBuilderInput,
     TargetTableConfig,
-    TargetColumnConfig
+    TargetColumnConfig,
+    ExistingTableInfo,
+    SchemaEvolution
 } from "@memberjunction/integration-schema-builder";
 import { RuntimeSchemaManager, type RSUPipelineStep, type RSUPipelineInput } from "@memberjunction/schema-engine";
 import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-builder";
@@ -66,6 +68,8 @@ class ApplySchemaBatchItemInput {
 class ApplyAllInput {
     @Field() CompanyIntegrationID: string;
     @Field(() => [String]) SourceObjectNames: string[];
+    @Field({ nullable: true }) CronExpression?: string;
+    @Field({ nullable: true }) ScheduleTimezone?: string;
 }
 
 @ObjectType()
@@ -83,6 +87,7 @@ class ApplyAllOutput {
     @Field(() => [RSUStepOutput], { nullable: true }) Steps?: RSUStepOutput[];
     @Field(() => [ApplyAllEntityMapCreated], { nullable: true }) EntityMapsCreated?: ApplyAllEntityMapCreated[];
     @Field({ nullable: true }) SyncRunID?: string;
+    @Field({ nullable: true }) ScheduledJobID?: string;
     @Field({ nullable: true }) GitCommitSuccess?: boolean;
     @Field({ nullable: true }) APIRestarted?: boolean;
     @Field(() => [String], { nullable: true }) Warnings?: string[];
@@ -106,6 +111,72 @@ class ApplySchemaBatchOutput {
     @Field({ nullable: true }) APIRestarted?: boolean;
 }
 
+// ─── Apply All Batch Input/Output Types ──────────────────────────────────────
+
+@InputType()
+class ApplyAllBatchConnectorInput {
+    @Field() CompanyIntegrationID: string;
+    @Field(() => [String]) SourceObjectNames: string[];
+    /** Optional per-connector schedule. Applied on success. */
+    @Field({ nullable: true }) CronExpression?: string;
+    @Field({ nullable: true }) ScheduleTimezone?: string;
+}
+
+@InputType()
+class ApplyAllBatchInput {
+    @Field(() => [ApplyAllBatchConnectorInput]) Connectors: ApplyAllBatchConnectorInput[];
+}
+
+@ObjectType()
+class ApplyAllBatchConnectorResult {
+    @Field() CompanyIntegrationID: string;
+    @Field() IntegrationName: string;
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [ApplyAllEntityMapCreated], { nullable: true }) EntityMapsCreated?: ApplyAllEntityMapCreated[];
+    @Field({ nullable: true }) SyncRunID?: string;
+    @Field({ nullable: true }) ScheduledJobID?: string;
+    @Field(() => [String], { nullable: true }) Warnings?: string[];
+}
+
+@ObjectType()
+class ApplyAllBatchOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [ApplyAllBatchConnectorResult]) ConnectorResults: ApplyAllBatchConnectorResult[];
+    @Field(() => [RSUStepOutput], { nullable: true }) PipelineSteps?: RSUStepOutput[];
+    @Field({ nullable: true }) GitCommitSuccess?: boolean;
+    @Field({ nullable: true }) APIRestarted?: boolean;
+    @Field() SuccessCount: number;
+    @Field() FailureCount: number;
+}
+
+// ─── Delete Connection Output ────────────────────────────────────────────────
+
+@ObjectType()
+class DeleteConnectionOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field({ nullable: true }) EntityMapsDeleted?: number;
+    @Field({ nullable: true }) FieldMapsDeleted?: number;
+    @Field({ nullable: true }) SchedulesDeleted?: number;
+}
+
+// ─── Schema Evolution Output ─────────────────────────────────────────────────
+
+@ObjectType()
+class SchemaEvolutionOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field() HasChanges: boolean;
+    @Field({ nullable: true }) AddedColumns?: number;
+    @Field({ nullable: true }) ModifiedColumns?: number;
+    @Field(() => [RSUStepOutput], { nullable: true }) Steps?: RSUStepOutput[];
+    @Field({ nullable: true }) GitCommitSuccess?: boolean;
+    @Field({ nullable: true }) APIRestarted?: boolean;
+    @Field(() => [String], { nullable: true }) Warnings?: string[];
+}
+
 // ─── Connector Capabilities Output Type ─────────────────────────────────────
 
 @ObjectType()
@@ -117,6 +188,42 @@ class ConnectorCapabilitiesOutput {
     @Field({ nullable: true }) SupportsUpdate?: boolean;
     @Field({ nullable: true }) SupportsDelete?: boolean;
     @Field({ nullable: true }) SupportsSearch?: boolean;
+}
+
+// --- Connector Discovery Output Types ---
+
+@ObjectType()
+class ConnectorInfoOutput {
+    @Field() IntegrationID: string;
+    @Field() Name: string;
+    @Field({ nullable: true }) Description?: string;
+    @Field({ nullable: true }) ClassName?: string;
+    @Field() IsActive: boolean;
+}
+
+@ObjectType()
+class DiscoverConnectorsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [ConnectorInfoOutput], { nullable: true }) Connectors?: ConnectorInfoOutput[];
+}
+
+// --- Field Map List Output Types ---
+
+@ObjectType()
+class FieldMapSummaryOutput {
+    @Field() ID: string;
+    @Field() EntityMapID: string;
+    @Field({ nullable: true }) SourceFieldName?: string;
+    @Field({ nullable: true }) DestinationFieldName?: string;
+    @Field({ nullable: true }) Status?: string;
+}
+
+@ObjectType()
+class ListFieldMapsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [FieldMapSummaryOutput], { nullable: true }) FieldMaps?: FieldMapSummaryOutput[];
 }
 
 // --- Output Types ---
@@ -323,6 +430,8 @@ class CreateConnectionOutput {
     @Field() Message: string;
     @Field({ nullable: true }) CompanyIntegrationID?: string;
     @Field({ nullable: true }) CredentialID?: string;
+    @Field({ nullable: true }) ConnectionTestSuccess?: boolean;
+    @Field({ nullable: true }) ConnectionTestMessage?: string;
 }
 
 @ObjectType()
@@ -418,12 +527,28 @@ class IntegrationStatusOutput {
     @Field() Message: string;
     @Field({ nullable: true }) IsActive?: boolean;
     @Field({ nullable: true }) IntegrationName?: string;
+    @Field({ nullable: true }) CompanyIntegrationID?: string;
     @Field({ nullable: true }) TotalEntityMaps?: number;
     @Field({ nullable: true }) ActiveEntityMaps?: number;
     @Field({ nullable: true }) LastRunStatus?: string;
     @Field({ nullable: true }) LastRunStartedAt?: string;
     @Field({ nullable: true }) LastRunEndedAt?: string;
     @Field({ nullable: true }) ScheduleEnabled?: boolean;
+    // RSU pipeline state
+    @Field({ nullable: true }) RSUEnabled?: boolean;
+    @Field({ nullable: true }) RSURunning?: boolean;
+    @Field({ nullable: true }) RSUOutOfSync?: boolean;
+    @Field({ nullable: true }) RSULastRunAt?: string;
+    @Field({ nullable: true }) RSULastRunResult?: string;
+}
+
+@ObjectType()
+class SyncRunEntityDetail {
+    @Field() EntityName: string;
+    @Field() InsertCount: number;
+    @Field() UpdateCount: number;
+    @Field() SkipCount: number;
+    @Field() ErrorCount: number;
 }
 
 @ObjectType()
@@ -434,6 +559,7 @@ class SyncRunSummaryOutput {
     @Field({ nullable: true }) EndedAt?: string;
     @Field({ nullable: true }) TotalRecords?: number;
     @Field({ nullable: true }) RunByUserID?: string;
+    @Field(() => [SyncRunEntityDetail], { nullable: true }) EntityDetails?: SyncRunEntityDetail[];
 }
 
 @ObjectType()
@@ -487,6 +613,45 @@ function isValidEntityMapStatus(value: string): value is EntityMapStatus {
  */
 @Resolver()
 export class IntegrationDiscoveryResolver extends ResolverBase {
+
+    /**
+     * Lists all registered integration connectors (active by default).
+     * Useful for populating connector selection UIs.
+     */
+    @Query(() => DiscoverConnectorsOutput)
+    async IntegrationDiscoverConnectors(
+        @Arg("companyID", { nullable: true }) companyID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<DiscoverConnectorsOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const rv = new RunView();
+            const result = await rv.RunView<MJIntegrationEntity>({
+                EntityName: 'MJ: Integrations',
+                ExtraFilter: '',
+                OrderBy: 'Name',
+                ResultType: 'entity_object'
+            }, user);
+
+            if (!result.Success) return { Success: false, Message: result.ErrorMessage || 'Query failed' };
+
+            return {
+                Success: true,
+                Message: `${result.Results.length} connectors available`,
+                Connectors: result.Results
+                    .map(r => ({
+                        IntegrationID: r.ID,
+                        Name: r.Name,
+                        Description: r.Description,
+                        ClassName: r.ClassName,
+                        IsActive: true
+                    }))
+            };
+        } catch (e) {
+            LogError(`IntegrationDiscoverConnectors error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
 
     /**
      * Discovers available objects/tables in the external system.
@@ -663,7 +828,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const validatedPlatform = this.validatePlatform(platform);
 
             // Build target configs from user input + source schema
-            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform);
+            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform, connector);
 
             // Run SchemaBuilder
             const input: SchemaBuilderInput = {
@@ -762,12 +927,20 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     private buildTargetConfigs(
         objects: SchemaPreviewObjectInput[],
         sourceSchema: SourceSchemaInfo,
-        platform: 'sqlserver' | 'postgresql'
+        platform: 'sqlserver' | 'postgresql',
+        connector?: BaseIntegrationConnector
     ): TargetTableConfig[] {
         const mapper = new TypeMapper();
 
+        // Build a lookup from the connector's static metadata for descriptions.
+        // DB entities may not have Description populated yet on first run,
+        // but the connector's GetIntegrationObjects() always has them.
+        const connectorDescriptions = this.buildDescriptionLookup(connector);
+
         return objects.map(obj => {
             const sourceObj = sourceSchema.Objects.find(o => o.ExternalName === obj.SourceObjectName);
+            const objDescriptions = connectorDescriptions.get(obj.SourceObjectName);
+
             const columns: TargetColumnConfig[] = (sourceObj?.Fields ?? []).map(f => ({
                 SourceFieldName: f.Name,
                 TargetColumnName: f.Name.replace(/[^A-Za-z0-9_]/g, '_'),
@@ -777,7 +950,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Precision: f.Precision,
                 Scale: f.Scale,
                 DefaultValue: f.DefaultValue,
-                Description: f.Description,
+                Description: f.Description ?? objDescriptions?.fields.get(f.Name),
             }));
 
             const primaryKeyFields = (sourceObj?.Fields ?? [])
@@ -789,12 +962,28 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 SchemaName: obj.SchemaName,
                 TableName: obj.TableName,
                 EntityName: obj.EntityName,
-                Description: sourceObj?.Description,
+                Description: sourceObj?.Description ?? objDescriptions?.objectDescription,
                 Columns: columns,
                 PrimaryKeyFields: primaryKeyFields.length > 0 ? primaryKeyFields : ['ID'],
                 SoftForeignKeys: []
             };
         });
+    }
+
+    /** Builds a lookup of object name → { objectDescription, fields: fieldName → description } from the connector's static metadata. */
+    private buildDescriptionLookup(connector?: BaseIntegrationConnector): Map<string, { objectDescription?: string; fields: Map<string, string> }> {
+        const result = new Map<string, { objectDescription?: string; fields: Map<string, string> }>();
+        if (!connector) return result;
+
+        const staticObjects = connector.GetIntegrationObjects();
+        for (const obj of staticObjects) {
+            const fieldMap = new Map<string, string>();
+            for (const f of obj.Fields) {
+                if (f.Description) fieldMap.set(f.Name, f.Description);
+            }
+            result.set(obj.Name, { objectDescription: obj.Description, fields: fieldMap });
+        }
+        return result;
     }
 
     private getAuthenticatedUser(ctx: AppContext): UserInfo {
@@ -869,6 +1058,79 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         return platform as 'sqlserver' | 'postgresql';
     }
 
+    // ── CONNECTION TEST HELPERS ────────────────────────────────────────────
+
+    /**
+     * Tests connectivity for a given CompanyIntegration, reusing the same pattern as IntegrationTestConnection.
+     */
+    private async testConnectionForCI(
+        companyIntegrationID: string,
+        user: UserInfo
+    ): Promise<ConnectionTestResult> {
+        const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+        const testFn = connector.TestConnection.bind(connector) as
+            (ci: unknown, u: unknown) => Promise<ConnectionTestResult>;
+        return testFn(companyIntegration, user);
+    }
+
+    /**
+     * Rolls back a freshly created connection by deleting both the CompanyIntegration and Credential records.
+     */
+    private async rollbackCreatedConnection(
+        ci: MJCompanyIntegrationEntity,
+        credential: MJCredentialEntity
+    ): Promise<void> {
+        try { await ci.Delete(); } catch (e) { LogError(`Rollback: failed to delete CompanyIntegration: ${this.formatError(e)}`); }
+        try { await credential.Delete(); } catch (e) { LogError(`Rollback: failed to delete Credential: ${this.formatError(e)}`); }
+    }
+
+    /**
+     * Snapshots the current credential Values for a given credential ID so they can be restored on rollback.
+     */
+    private async snapshotCredentialValues(
+        credentialID: string | undefined,
+        user: UserInfo
+    ): Promise<string | undefined> {
+        if (!credentialID) return undefined;
+        const md = new Metadata();
+        const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
+        const loaded = await credential.InnerLoad(CompositeKey.FromID(credentialID));
+        return loaded ? credential.Values : undefined;
+    }
+
+    /**
+     * Reverts an update to a CompanyIntegration by restoring old configuration, externalSystemID,
+     * and credential values.
+     */
+    private async revertUpdateConnection(
+        ci: MJCompanyIntegrationEntity,
+        oldConfiguration: string | undefined,
+        oldExternalSystemID: string | undefined,
+        oldCredentialValues: string | undefined,
+        user: UserInfo
+    ): Promise<void> {
+        try {
+            // Revert CI fields
+            let dirty = false;
+            if (oldConfiguration !== undefined) { ci.Configuration = oldConfiguration; dirty = true; }
+            if (oldExternalSystemID !== undefined) { ci.ExternalSystemID = oldExternalSystemID; dirty = true; }
+            if (dirty) await ci.Save();
+
+            // Revert credential values
+            if (oldCredentialValues !== undefined && ci.CredentialID) {
+                const md = new Metadata();
+                const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
+                const loaded = await credential.InnerLoad(CompositeKey.FromID(ci.CredentialID));
+                if (loaded) {
+                    credential.Values = oldCredentialValues;
+                    await credential.Save();
+                }
+            }
+        } catch (e) {
+            LogError(`Revert update connection failed: ${this.formatError(e)}`);
+        }
+    }
+
     // ── CONNECTION LIFECYCLE ─────────────────────────────────────────────
 
     /**
@@ -878,12 +1140,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     @Query(() => ListConnectionsOutput)
     async IntegrationListConnections(
         @Arg("activeOnly", { defaultValue: true }) activeOnly: boolean,
+        @Arg("companyID", { nullable: true }) companyID: string,
         @Ctx() ctx: AppContext
     ): Promise<ListConnectionsOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const rv = new RunView();
-            const filter = activeOnly ? `IsActive=1` : '';
+            const filters: string[] = [];
+            if (activeOnly) filters.push('IsActive=1');
+            if (companyID) filters.push(`CompanyID='${companyID}'`);
+            const filter = filters.join(' AND ');
             const result = await rv.RunView<MJCompanyIntegrationEntity>({
                 EntityName: 'MJ: Company Integrations',
                 ExtraFilter: filter,
@@ -925,6 +1191,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     @Mutation(() => CreateConnectionOutput)
     async IntegrationCreateConnection(
         @Arg("input") input: CreateConnectionInput,
+        @Arg("testConnection", () => Boolean, { defaultValue: false }) testConnection: boolean,
         @Ctx() ctx: AppContext
     ): Promise<CreateConnectionOutput> {
         try {
@@ -958,6 +1225,28 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const saved = await ci.Save();
             if (!saved) return { Success: false, Message: 'Failed to save CompanyIntegration' };
 
+            // 3. Optionally test the connection; rollback on failure
+            if (testConnection) {
+                const testResult = await this.testConnectionForCI(ci.ID, user);
+                if (!testResult.Success) {
+                    await this.rollbackCreatedConnection(ci, credential);
+                    return {
+                        Success: false,
+                        Message: `Connection test failed: ${testResult.Message}. Connection was not saved.`,
+                        ConnectionTestSuccess: false,
+                        ConnectionTestMessage: testResult.Message
+                    };
+                }
+                return {
+                    Success: true,
+                    Message: 'Connection created and test passed',
+                    CompanyIntegrationID: ci.ID,
+                    CredentialID: credentialID,
+                    ConnectionTestSuccess: true,
+                    ConnectionTestMessage: testResult.Message
+                };
+            }
+
             return {
                 Success: true,
                 Message: 'Connection created',
@@ -979,6 +1268,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("credentialValues", { nullable: true }) credentialValues: string,
         @Arg("configuration", { nullable: true }) configuration: string,
         @Arg("externalSystemID", { nullable: true }) externalSystemID: string,
+        @Arg("testConnection", () => Boolean, { defaultValue: false }) testConnection: boolean,
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
@@ -987,6 +1277,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             const loaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
             if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
+
+            // Snapshot old values for rollback if testConnection is requested
+            const oldCredentialValues = credentialValues ? await this.snapshotCredentialValues(ci.CredentialID, user) : undefined;
+            const oldConfiguration = ci.Configuration;
+            const oldExternalSystemID = ci.ExternalSystemID;
 
             // Update linked Credential values if provided
             if (credentialValues) {
@@ -1006,6 +1301,17 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (externalSystemID !== undefined && externalSystemID !== null) { ci.ExternalSystemID = externalSystemID; dirty = true; }
 
             if (dirty && !await ci.Save()) return { Success: false, Message: 'Failed to save CompanyIntegration' };
+
+            // Optionally test the connection; revert on failure
+            if (testConnection) {
+                const testResult = await this.testConnectionForCI(companyIntegrationID, user);
+                if (!testResult.Success) {
+                    await this.revertUpdateConnection(ci, oldConfiguration, oldExternalSystemID, oldCredentialValues, user);
+                    return { Success: false, Message: `Connection test failed: ${testResult.Message}. Changes have been reverted.` };
+                }
+                return { Success: true, Message: 'Updated and connection test passed' };
+            }
+
             return { Success: true, Message: 'Updated' };
         } catch (e) {
             LogError(`IntegrationUpdateConnection error: ${e}`);
@@ -1160,7 +1466,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             };
 
             const validatedPlatform = this.validatePlatform(platform);
-            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform);
+            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform, connector);
 
             const input: SchemaBuilderInput = {
                 SourceSchema: filteredSchema,
@@ -1299,21 +1605,32 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Step 2: Build SchemaPreviewObjectInput for each source object
             const objects = this.buildObjectInputsFromNames(input.SourceObjectNames, schemaName);
 
-            // Step 3: Write pending work file BEFORE pipeline runs
-            // After restart, MJAPI reads this and creates entity maps + field maps + starts sync
-            const rsm = RuntimeSchemaManager.Instance;
-            await rsm.WritePendingWork({
-                CompanyIntegrationID: input.CompanyIntegrationID,
-                SourceObjectNames: input.SourceObjectNames,
-                SchemaName: schemaName,
-                CreatedAt: new Date().toISOString(),
-            });
-
-            // Step 4: Build schema and run pipeline (with restart — kills process at the end)
+            // Step 3: Build schema and RSU pipeline input
             const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
                 input.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart
             );
 
+            // Step 4: Inject integration post-restart payload into RSU input.
+            // RSU writes this file to disk before restart — it doesn't read or interpret it.
+            // The integration layer's startup hook picks it up after restart.
+            const { join } = await import('node:path');
+            const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
+            const pendingWorkDir = join(rsuWorkDir, '.rsu_pending');
+            const pendingFilePath = join(pendingWorkDir, `${Date.now()}.json`);
+            const pendingPayload = {
+                CompanyIntegrationID: input.CompanyIntegrationID,
+                SourceObjectNames: input.SourceObjectNames,
+                SchemaName: schemaName,
+                CronExpression: input.CronExpression,
+                ScheduleTimezone: input.ScheduleTimezone,
+                CreatedAt: new Date().toISOString(),
+            };
+            rsuInput.PostRestartFiles = [
+                { Path: pendingFilePath, Content: JSON.stringify(pendingPayload, null, 2) }
+            ];
+
+            // Step 5: Run pipeline (restart kills process at the end)
+            const rsm = RuntimeSchemaManager.Instance;
             const batchResult = await rsm.RunPipelineBatch([rsuInput]);
 
             const migrationSucceeded = batchResult.SuccessCount > 0;
@@ -1321,9 +1638,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message,
             }));
 
-            // If pipeline failed (migration/CodeGen), clean up pending work and return error
+            // If pipeline failed, clean up pending file and return error
             if (!migrationSucceeded) {
-                await rsm.ReadAndClearPendingWork(); // discard
+                try { (await import('node:fs')).unlinkSync(pendingFilePath); } catch { /* may not exist */ }
                 return {
                     Success: false,
                     Message: `Pipeline failed: ${batchResult.Results[0]?.ErrorMessage ?? 'unknown error'}`,
@@ -1341,14 +1658,32 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user
                 );
                 const syncRunID = await this.startSyncAfterApply(input.CompanyIntegrationID, user);
-                await rsm.ReadAndClearPendingWork(); // done, clear it
+
+                // Create schedule if requested
+                let scheduledJobID: string | undefined;
+                if (input.CronExpression) {
+                    try {
+                        scheduledJobID = await this.createScheduleForConnector(
+                            input.CompanyIntegrationID,
+                            companyIntegration.Integration,
+                            input.CronExpression,
+                            input.ScheduleTimezone,
+                            user
+                        ) ?? undefined;
+                    } catch (schedErr) {
+                        console.warn(`[Integration] Schedule creation failed: ${schedErr}`);
+                    }
+                }
+
+                try { (await import('node:fs')).unlinkSync(pendingFilePath); } catch { /* already consumed */ }
 
                 return {
                     Success: true,
-                    Message: `Applied ${objects.length} object(s) — ${entityMapsCreated.length} entity maps created${syncRunID ? ', sync started' : ''}`,
+                    Message: `Applied ${objects.length} object(s) — ${entityMapsCreated.length} entity maps created${syncRunID ? ', sync started' : ''}${scheduledJobID ? ', schedule created' : ''}`,
                     Steps: pipelineSteps,
                     EntityMapsCreated: entityMapsCreated,
                     SyncRunID: syncRunID ?? undefined,
+                    ScheduledJobID: scheduledJobID,
                     GitCommitSuccess: batchResult.Results[0]?.GitCommitSuccess,
                     APIRestarted: false,
                     Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
@@ -1554,7 +1889,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
         };
 
-        const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, platform);
+        const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, platform, connector);
 
         const input: SchemaBuilderInput = {
             SourceSchema: filteredSchema,
@@ -1853,6 +2188,34 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    @Query(() => ListFieldMapsOutput)
+    async IntegrationListFieldMaps(
+        @Arg("entityMapID") entityMapID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<ListFieldMapsOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const rv = new RunView();
+            const result = await rv.RunView<FieldMapSummaryOutput>({
+                EntityName: 'MJ: Company Integration Field Maps',
+                ExtraFilter: `EntityMapID='${entityMapID}'`,
+                OrderBy: 'SourceFieldName',
+                ResultType: 'simple',
+                Fields: ['ID', 'EntityMapID', 'SourceFieldName', 'DestinationFieldName', 'Status']
+            }, user);
+
+            if (!result.Success) return { Success: false, Message: result.ErrorMessage || 'Query failed' };
+            return {
+                Success: true,
+                Message: `${result.Results.length} field maps`,
+                FieldMaps: result.Results
+            };
+        } catch (e) {
+            LogError(`IntegrationListFieldMaps error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
     @Mutation(() => MutationResultOutput)
     async IntegrationUpdateEntityMaps(
         @Arg("updates", () => [EntityMapUpdateInput]) updates: EntityMapUpdateInput[],
@@ -1972,17 +2335,26 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ? runsResult.Results[0] as { ID: string; Status: string; StartedAt: string; EndedAt: string; TotalRecords: number }
                 : null;
 
+            // RSU pipeline state
+            const rsuStatus = RuntimeSchemaManager.Instance.GetStatus();
+
             return {
                 Success: true,
                 Message: 'OK',
                 IsActive: ci.IsActive ?? false,
                 IntegrationName: ci.Integration,
+                CompanyIntegrationID: companyIntegrationID,
                 TotalEntityMaps: maps.length,
                 ActiveEntityMaps: maps.filter(m => m.Status === 'Active').length,
                 LastRunStatus: lastRun?.Status,
                 LastRunStartedAt: lastRun?.StartedAt,
                 LastRunEndedAt: lastRun?.EndedAt,
-                ScheduleEnabled: ci.ScheduleEnabled
+                ScheduleEnabled: ci.ScheduleEnabled,
+                RSUEnabled: rsuStatus.Enabled,
+                RSURunning: rsuStatus.Running,
+                RSUOutOfSync: rsuStatus.OutOfSync,
+                RSULastRunAt: rsuStatus.LastRunAt?.toISOString(),
+                RSULastRunResult: rsuStatus.LastRunResult,
             };
         } catch (e) {
             LogError(`IntegrationGetStatus error: ${e}`);
@@ -2048,6 +2420,510 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         } catch (e) {
             LogError(`IntegrationGetConnectorCapabilities error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    // ── APPLY ALL BATCH ─────────────────────────────────────────────────
+
+    /**
+     * Batch "Apply All" for multiple connectors in a single RSU pipeline run.
+     * For each connector: introspect → build schema → collect RSU input.
+     * Then run ONE pipeline batch for all connectors.
+     * Post-pipeline: create entity/field maps and start sync for each success.
+     */
+    @Mutation(() => ApplyAllBatchOutput)
+    async IntegrationApplyAllBatch(
+        @Arg("input") input: ApplyAllBatchInput,
+        @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
+        @Arg("skipGitCommit", { defaultValue: false }) skipGitCommit: boolean,
+        @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
+        @Ctx() ctx: AppContext
+    ): Promise<ApplyAllBatchOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const validatedPlatform = this.validatePlatform(platform);
+
+            // Phase 1: Build schema for each connector in parallel
+            const buildResults = await Promise.allSettled(
+                input.Connectors.map(async (connInput) => {
+                    const { connector, companyIntegration } = await this.resolveConnector(connInput.CompanyIntegrationID, user);
+                    const schemaName = this.deriveSchemaName(companyIntegration.Integration);
+                    const objects = this.buildObjectInputsFromNames(connInput.SourceObjectNames, schemaName);
+                    const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
+                        connInput.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart
+                    );
+
+                    // Inject post-restart pending work payload
+                    const { join } = await import('node:path');
+                    const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
+                    const pendingWorkDir = join(rsuWorkDir, '.rsu_pending');
+                    const pendingFilePath = join(pendingWorkDir, `${Date.now()}_${connInput.CompanyIntegrationID}.json`);
+                    const pendingPayload = {
+                        CompanyIntegrationID: connInput.CompanyIntegrationID,
+                        SourceObjectNames: connInput.SourceObjectNames,
+                        SchemaName: schemaName,
+                        CronExpression: connInput.CronExpression,
+                        ScheduleTimezone: connInput.ScheduleTimezone,
+                        CreatedAt: new Date().toISOString(),
+                    };
+                    rsuInput.PostRestartFiles = [
+                        { Path: pendingFilePath, Content: JSON.stringify(pendingPayload, null, 2) }
+                    ];
+
+                    return {
+                        connInput,
+                        connector,
+                        companyIntegration,
+                        schemaName,
+                        objects,
+                        schemaOutput,
+                        rsuInput,
+                        pendingFilePath,
+                    };
+                })
+            );
+
+            // Separate successes and failures
+            const successfulBuilds: Array<{
+                connInput: ApplyAllBatchConnectorInput;
+                connector: BaseIntegrationConnector;
+                companyIntegration: MJCompanyIntegrationEntity;
+                schemaName: string;
+                objects: SchemaPreviewObjectInput[];
+                schemaOutput: SchemaBuilderOutput;
+                rsuInput: RSUPipelineInput;
+                pendingFilePath: string;
+            }> = [];
+            const connectorResults: ApplyAllBatchConnectorResult[] = [];
+
+            for (let i = 0; i < buildResults.length; i++) {
+                const result = buildResults[i];
+                const connInput = input.Connectors[i];
+                if (result.status === 'fulfilled') {
+                    successfulBuilds.push(result.value);
+                } else {
+                    LogError(`IntegrationApplyAllBatch: build failed for ${connInput.CompanyIntegrationID}: ${result.reason}`);
+                    connectorResults.push({
+                        CompanyIntegrationID: connInput.CompanyIntegrationID,
+                        IntegrationName: 'Unknown',
+                        Success: false,
+                        Message: result.reason instanceof Error ? result.reason.message : String(result.reason),
+                    });
+                }
+            }
+
+            if (successfulBuilds.length === 0) {
+                return {
+                    Success: false,
+                    Message: 'All connectors failed during schema build phase',
+                    ConnectorResults: connectorResults,
+                    SuccessCount: 0,
+                    FailureCount: connectorResults.length,
+                };
+            }
+
+            // Phase 2: Run all successful RSU inputs through one pipeline batch
+            const pipelineInputs = successfulBuilds.map(b => b.rsuInput);
+            const rsm = RuntimeSchemaManager.Instance;
+            const batchResult = await rsm.RunPipelineBatch(pipelineInputs);
+
+            // Phase 3: Post-pipeline — create entity maps, field maps, schedules for each success
+            for (let i = 0; i < successfulBuilds.length; i++) {
+                const build = successfulBuilds[i];
+                const pipelineResult = batchResult.Results[i];
+                const integrationName = build.companyIntegration.Integration;
+
+                if (!pipelineResult || !pipelineResult.Success) {
+                    connectorResults.push({
+                        CompanyIntegrationID: build.connInput.CompanyIntegrationID,
+                        IntegrationName: integrationName,
+                        Success: false,
+                        Message: pipelineResult?.ErrorMessage ?? 'Pipeline failed',
+                        Warnings: build.schemaOutput.Warnings.length > 0 ? build.schemaOutput.Warnings : undefined,
+                    });
+                    // Clean up pending file on failure
+                    try { (await import('node:fs')).unlinkSync(build.pendingFilePath); } catch { /* may not exist */ }
+                    continue;
+                }
+
+                const connResult: ApplyAllBatchConnectorResult = {
+                    CompanyIntegrationID: build.connInput.CompanyIntegrationID,
+                    IntegrationName: integrationName,
+                    Success: true,
+                    Message: `Applied ${build.objects.length} object(s)`,
+                    Warnings: build.schemaOutput.Warnings.length > 0 ? build.schemaOutput.Warnings : undefined,
+                };
+
+                if (skipRestart) {
+                    // Entity maps, field maps, sync
+                    await Metadata.Provider.Refresh();
+                    const entityMapsCreated = await this.createEntityAndFieldMaps(
+                        build.connInput.CompanyIntegrationID, build.objects, build.connector,
+                        build.companyIntegration, build.schemaName, user
+                    );
+                    connResult.EntityMapsCreated = entityMapsCreated;
+
+                    const syncRunID = await this.startSyncAfterApply(build.connInput.CompanyIntegrationID, user);
+                    if (syncRunID) connResult.SyncRunID = syncRunID;
+
+                    // Create schedule if CronExpression provided
+                    if (build.connInput.CronExpression) {
+                        const scheduleResult = await this.createScheduleForConnector(
+                            build.connInput.CompanyIntegrationID, integrationName,
+                            build.connInput.CronExpression, build.connInput.ScheduleTimezone, user
+                        );
+                        if (scheduleResult) connResult.ScheduledJobID = scheduleResult;
+                    }
+
+                    // Clean up pending file
+                    try { (await import('node:fs')).unlinkSync(build.pendingFilePath); } catch { /* already consumed */ }
+
+                    connResult.Message = `Applied ${build.objects.length} object(s) — ${entityMapsCreated.length} entity maps created${syncRunID ? ', sync started' : ''}`;
+                }
+
+                connectorResults.push(connResult);
+            }
+
+            const pipelineSteps = batchResult.Results[0]?.Steps.map((s: RSUPipelineStep) => ({
+                Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message,
+            }));
+
+            const successCount = connectorResults.filter(r => r.Success).length;
+            const failureCount = connectorResults.filter(r => !r.Success).length;
+
+            return {
+                Success: successCount > 0,
+                Message: `Batch complete: ${successCount} succeeded, ${failureCount} failed`,
+                ConnectorResults: connectorResults,
+                PipelineSteps: pipelineSteps,
+                GitCommitSuccess: batchResult.Results[0]?.GitCommitSuccess,
+                APIRestarted: batchResult.Results[0]?.APIRestarted,
+                SuccessCount: successCount,
+                FailureCount: failureCount,
+            };
+        } catch (e) {
+            LogError(`IntegrationApplyAllBatch error: ${e}`);
+            return {
+                Success: false, Message: this.formatError(e),
+                ConnectorResults: [], SuccessCount: 0, FailureCount: 0,
+            };
+        }
+    }
+
+    /** Helper: creates a schedule for a connector, returns ScheduledJobID or null. */
+    private async createScheduleForConnector(
+        companyIntegrationID: string,
+        integrationName: string,
+        cronExpression: string,
+        timezone: string | undefined,
+        user: UserInfo
+    ): Promise<string | null> {
+        try {
+            const md = new Metadata();
+            const rv = new RunView();
+
+            // Find IntegrationSync job type
+            const jobTypeResult = await rv.RunView<MJScheduledJobTypeEntity>({
+                EntityName: 'MJ: Scheduled Job Types',
+                ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
+                MaxRows: 1,
+                ResultType: 'simple',
+                Fields: ['ID']
+            }, user);
+            if (!jobTypeResult.Success || jobTypeResult.Results.length === 0) {
+                LogError('IntegrationApplyAllBatch: IntegrationSync scheduled job type not found');
+                return null;
+            }
+            const jobTypeID = jobTypeResult.Results[0].ID;
+
+            const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
+            job.NewRecord();
+            job.JobTypeID = jobTypeID;
+            job.Name = `${integrationName} Sync`;
+            job.CronExpression = cronExpression;
+            job.Timezone = timezone || 'UTC';
+            job.Status = 'Active';
+            job.OwnerUserID = user.ID;
+            job.Configuration = JSON.stringify({ CompanyIntegrationID: companyIntegrationID });
+
+            if (!await job.Save()) return null;
+
+            // Link to CompanyIntegration
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            const ciLoaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
+            if (ciLoaded) {
+                ci.ScheduleEnabled = true;
+                ci.ScheduleType = 'Cron';
+                ci.CronExpression = cronExpression;
+                await ci.Save();
+            }
+
+            return job.ID;
+        } catch (e) {
+            LogError(`IntegrationApplyAllBatch: schedule creation failed: ${this.formatError(e)}`);
+            return null;
+        }
+    }
+
+    // ── DELETE CONNECTION ────────────────────────────────────────────────
+
+    /**
+     * Hard-deletes a CompanyIntegration and all associated entity maps, field maps,
+     * and scheduled jobs. Does NOT drop database tables (flagged for future).
+     */
+    @Mutation(() => DeleteConnectionOutput)
+    async IntegrationDeleteConnection(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("deleteData", { defaultValue: false }) deleteData: boolean,
+        @Ctx() ctx: AppContext
+    ): Promise<DeleteConnectionOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const md = new Metadata();
+            const rv = new RunView();
+
+            // Step 1: Load CompanyIntegration
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            const ciLoaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
+            if (!ciLoaded) return { Success: false, Message: 'CompanyIntegration not found' };
+
+            // Step 2: Load all entity maps
+            const entityMapsResult = await rv.RunView<MJCompanyIntegrationEntityMapEntity>({
+                EntityName: 'MJ: Company Integration Entity Maps',
+                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ResultType: 'entity_object'
+            }, user);
+
+            const entityMaps = entityMapsResult.Success ? entityMapsResult.Results : [];
+            let fieldMapsDeleted = 0;
+
+            // Step 3: Delete all field maps for each entity map
+            for (const em of entityMaps) {
+                const fieldMapsResult = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
+                    EntityName: 'MJ: Company Integration Field Maps',
+                    ExtraFilter: `EntityMapID='${em.ID}'`,
+                    ResultType: 'entity_object'
+                }, user);
+
+                if (fieldMapsResult.Success) {
+                    for (const fm of fieldMapsResult.Results) {
+                        if (await fm.Delete()) fieldMapsDeleted++;
+                    }
+                }
+            }
+
+            // Step 4: Delete all entity maps
+            let entityMapsDeleted = 0;
+            for (const em of entityMaps) {
+                if (await em.Delete()) entityMapsDeleted++;
+            }
+
+            // Step 5: Delete scheduled jobs linked to this CompanyIntegration
+            // ScheduledJob stores CompanyIntegrationID in its Configuration JSON
+            const jobsResult = await rv.RunView<MJScheduledJobEntity>({
+                EntityName: 'MJ: Scheduled Jobs',
+                ExtraFilter: `Configuration LIKE '%${companyIntegrationID}%'`,
+                ResultType: 'entity_object'
+            }, user);
+
+            let schedulesDeleted = 0;
+            if (jobsResult.Success) {
+                for (const job of jobsResult.Results) {
+                    // Verify the job's Configuration actually references this CompanyIntegrationID
+                    try {
+                        const config = JSON.parse(job.Configuration || '{}') as Record<string, unknown>;
+                        if (config.CompanyIntegrationID === companyIntegrationID) {
+                            if (await job.Delete()) schedulesDeleted++;
+                        }
+                    } catch {
+                        // If Configuration isn't valid JSON, skip
+                    }
+                }
+            }
+
+            // Step 6: Delete the CompanyIntegration itself
+            if (!await ci.Delete()) {
+                return { Success: false, Message: 'Failed to delete CompanyIntegration' };
+            }
+
+            // Note: deleteData=true does not drop tables yet — flagged for future implementation
+            if (deleteData) {
+                LogError(`IntegrationDeleteConnection: deleteData=true requested but table deletion not yet implemented for ${companyIntegrationID}`);
+            }
+
+            return {
+                Success: true,
+                Message: `Deleted connection and all associated records`,
+                EntityMapsDeleted: entityMapsDeleted,
+                FieldMapsDeleted: fieldMapsDeleted,
+                SchedulesDeleted: schedulesDeleted,
+            };
+        } catch (e) {
+            LogError(`IntegrationDeleteConnection error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    // ── SCHEMA EVOLUTION ────────────────────────────────────────────────
+
+    /**
+     * Detects schema changes (new/modified columns) in the external system and
+     * applies ALTER TABLE migrations via the RSU pipeline.
+     * Compares the current connector introspection against existing MJ entities.
+     */
+    @Mutation(() => SchemaEvolutionOutput)
+    async IntegrationSchemaEvolution(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
+        @Arg("skipGitCommit", { defaultValue: false }) skipGitCommit: boolean,
+        @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
+        @Ctx() ctx: AppContext
+    ): Promise<SchemaEvolutionOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const validatedPlatform = this.validatePlatform(platform);
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+            const schemaName = this.deriveSchemaName(companyIntegration.Integration);
+            const md = new Metadata();
+            const rv = new RunView();
+
+            // Step 1: Get existing entity maps for this CompanyIntegration
+            const entityMapsResult = await rv.RunView<MJCompanyIntegrationEntityMapEntity>({
+                EntityName: 'MJ: Company Integration Entity Maps',
+                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ResultType: 'simple',
+                Fields: ['ID', 'ExternalObjectName', 'EntityID']
+            }, user);
+
+            if (!entityMapsResult.Success || entityMapsResult.Results.length === 0) {
+                return {
+                    Success: false, Message: 'No entity maps found — nothing to evolve',
+                    HasChanges: false,
+                };
+            }
+
+            const sourceObjectNames = entityMapsResult.Results.map(em => em.ExternalObjectName);
+            const objects = this.buildObjectInputsFromNames(sourceObjectNames, schemaName);
+
+            // Step 2: Build ExistingTables from Metadata.Entities matching the schema
+            const existingTables: ExistingTableInfo[] = [];
+            for (const obj of objects) {
+                const entityInfo = md.Entities.find(
+                    e => e.SchemaName.toLowerCase() === schemaName.toLowerCase()
+                      && e.BaseTable.toLowerCase() === obj.TableName.toLowerCase()
+                );
+                if (entityInfo) {
+                    existingTables.push({
+                        SchemaName: entityInfo.SchemaName,
+                        TableName: entityInfo.BaseTable,
+                        Columns: entityInfo.Fields.map(f => ({
+                            Name: f.Name,
+                            SqlType: f.SQLFullType || f.Type,
+                            IsNullable: f.AllowsNull,
+                            MaxLength: f.MaxLength > 0 ? f.MaxLength : null,
+                            Precision: f.Precision > 0 ? f.Precision : null,
+                            Scale: f.Scale > 0 ? f.Scale : null,
+                        })),
+                    });
+                }
+            }
+
+            // Step 3: Introspect current schema from connector
+            const introspect = connector.IntrospectSchema.bind(connector) as
+                (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
+            const sourceSchema = await introspect(companyIntegration, user);
+
+            const requestedNames = new Set(sourceObjectNames);
+            const filteredSchema: SourceSchemaInfo = {
+                Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
+            };
+
+            // Step 4: Build target configs and SchemaBuilder input with ExistingTables
+            const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform, connector);
+
+            const schemaInput: SchemaBuilderInput = {
+                SourceSchema: filteredSchema,
+                TargetConfigs: targetConfigs,
+                Platform: validatedPlatform,
+                MJVersion: process.env.MJ_VERSION ?? '5.11.0',
+                SourceType: companyIntegration.Integration,
+                AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
+                MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/v5',
+                MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
+                ExistingTables: existingTables,
+                EntitySettingsForTargets: {}
+            };
+
+            // Step 5: Build schema — SchemaBuilder handles evolution (ALTER TABLE) internally
+            const builder = new SchemaBuilder();
+            const schemaOutput = builder.BuildSchema(schemaInput);
+
+            if (schemaOutput.Errors.length > 0) {
+                return {
+                    Success: false,
+                    Message: `Schema evolution failed: ${schemaOutput.Errors.join('; ')}`,
+                    HasChanges: false,
+                    Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
+                };
+            }
+
+            // Step 6: Check if any migration SQL was generated
+            if (schemaOutput.MigrationFiles.length === 0) {
+                return {
+                    Success: true,
+                    Message: 'No schema changes detected',
+                    HasChanges: false,
+                    Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
+                };
+            }
+
+            // Step 7: Count added/modified columns by re-diffing
+            let addedColumns = 0;
+            let modifiedColumns = 0;
+            const evolution = new SchemaEvolution();
+            for (const existing of existingTables) {
+                const config = targetConfigs.find(
+                    c => c.SchemaName.toLowerCase() === existing.SchemaName.toLowerCase()
+                      && c.TableName.toLowerCase() === existing.TableName.toLowerCase()
+                );
+                if (!config) continue;
+                const sourceObj = filteredSchema.Objects.find(o => o.ExternalName === config.SourceObjectName);
+                if (!sourceObj) continue;
+                const diff = evolution.DiffSchema(sourceObj, config, existing, validatedPlatform);
+                addedColumns += diff.AddedColumns.length;
+                modifiedColumns += diff.ModifiedColumns.length;
+            }
+
+            // Step 8: Run RSU pipeline
+            const rsuInput = builder.BuildRSUInput(schemaOutput, schemaInput, {
+                SkipGitCommit: skipGitCommit,
+                SkipRestart: skipRestart,
+            });
+
+            const rsm = RuntimeSchemaManager.Instance;
+            const batchResult = await rsm.RunPipelineBatch([rsuInput]);
+
+            const pipelineResult = batchResult.Results[0];
+            const pipelineSteps = pipelineResult?.Steps.map((s: RSUPipelineStep) => ({
+                Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message,
+            }));
+
+            return {
+                Success: pipelineResult?.Success ?? false,
+                Message: pipelineResult?.Success
+                    ? `Schema evolution applied — ${addedColumns} column(s) added, ${modifiedColumns} column(s) modified`
+                    : `Pipeline failed: ${pipelineResult?.ErrorMessage ?? 'unknown error'}`,
+                HasChanges: true,
+                AddedColumns: addedColumns,
+                ModifiedColumns: modifiedColumns,
+                Steps: pipelineSteps,
+                GitCommitSuccess: pipelineResult?.GitCommitSuccess,
+                APIRestarted: pipelineResult?.APIRestarted,
+                Warnings: schemaOutput.Warnings.length > 0 ? schemaOutput.Warnings : undefined,
+            };
+        } catch (e) {
+            LogError(`IntegrationSchemaEvolution error: ${e}`);
+            return { Success: false, Message: this.formatError(e), HasChanges: false };
         }
     }
 
