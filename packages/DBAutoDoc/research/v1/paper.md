@@ -1,5 +1,7 @@
 # DBAutoDoc: Automated Discovery and Documentation of Undocumented Database Schemas via Statistical Analysis and Iterative LLM Refinement
 
+*Technical Report — Preprint (not peer-reviewed)*
+
 **Amith Nagarajan**^1 (corresponding author) . **Thomas Altman**^2
 
 ^1 Founder, Blue Cypress . ^2 Co-Founder, Tasio Labs (a Blue Cypress company)
@@ -24,7 +26,7 @@ On a suite of benchmark databases, DBAutoDoc achieved overall weighted scores of
 
 Relational databases are among the most durable artifacts in enterprise computing, yet they rarely preserve the knowledge of the humans who designed them. Column names like `cust_cd`, `trn_amt_3`, and `flg_b` encode meaning that once lived in the heads of developers who have long since moved on. Primary key declarations were dropped during bulk-load optimizations. Foreign key constraints were removed to improve insert throughput. ERD diagrams, when they existed at all, describe a schema from a decade before the current one.
 
-We use the term *dark databases* to describe production systems with no declared keys, no column or table comments, no associated data dictionary, and no ERD documentation. Dark databases arise routinely in corporate acquisitions, data warehouse consolidation projects, and legacy migrations. Conservative estimates suggest that the majority of production relational databases in enterprise environments have incomplete or absent schema documentation \cite{abedjan2015profiling}. For a database of moderate complexity -- several hundred tables -- manual documentation requires weeks of expert effort at a cost of \$12,000--\$48,000 in professional services.
+We use the term *dark databases* to describe production systems with no declared keys, no column or table comments, no associated data dictionary, and no ERD documentation. Dark databases arise routinely in corporate acquisitions, data warehouse consolidation projects, and legacy migrations. While no large-scale empirical study has quantified the prevalence of undocumented schemas, data profiling research consistently identifies missing or incomplete metadata as a pervasive challenge in enterprise data management \cite{abedjan2015profiling}, and our own experience with enterprise clients (Section 7.5) confirms that completely undocumented production databases are common. For a database of moderate complexity -- several hundred tables -- manual documentation requires weeks of expert effort at a cost of \$12,000--\$48,000 in professional services.
 
 ### 1.2 Why Existing Approaches Fall Short
 
@@ -70,7 +72,7 @@ DBAutoDoc sits at the intersection of several active research areas: schema unde
 
 **LLM-based schema understanding.** \cite{trummer2024succinct} address context-window overflow through succinct schema encoding. DBAutoDoc faces the same pressure but extends this to a *dynamic, iterative* context that evolves across refinement rounds. \cite{liu2025magneto} combine a fine-tuned SLM for candidate generation with an LLM reranker. \cite{seedat2024matchmaker} take a self-improving approach philosophically similar to our iterative refinement, but their refinement targets pairwise column correspondences across schemas, while ours targets semantic coherence within a single schema's dependency graph.
 
-**Automated catalog metadata.** \cite{ragleveraging2025} apply RAG to populating data catalog metadata. This approach is fundamentally single-pass with no cross-element context propagation. DBAutoDoc's key innovation is precisely this propagation: high-confidence annotations flow through the schema graph to inform subsequent LLM calls.
+**Automated catalog metadata.** \cite{ragleveraging2025} apply RAG to populating data catalog metadata, retrieving similar column descriptions from an existing catalog to guide generation for new columns. Their approach is fundamentally single-pass: each column is described independently with no cross-element context propagation, no statistical key discovery, and no iterative refinement. DBAutoDoc differs in three ways: (1) it operates on dark databases with no existing catalog to retrieve from; (2) it discovers relational structure (PKs/FKs) and uses it to order and contextualize analysis; and (3) descriptions are refined iteratively as context propagates through the schema dependency graph.
 
 **Semantic type detection.** \cite{hulsebos2019sherlock} frame semantic type detection as multi-class classification. DBAutoDoc incorporates similar instance-level features but treats semantic type detection as one input to a broader documentation task.
 
@@ -84,7 +86,7 @@ DBAutoDoc sits at the intersection of several active research areas: schema unde
 
 ### 2.3 Foreign Key and Primary Key Discovery
 
-\cite{rostin2009fk} formulate FK discovery as supervised classification over inclusion dependencies. \cite{jiang2020holistic} propose holistic PK/FK detection using joint reasoning. DBAutoDoc adopts a similar joint-reasoning philosophy in its bidirectional feedback loop. \cite{khatiwada2022alite} and \cite{ilyas2004cords} address joinable column discovery and statistical correlation, respectively. FD discovery algorithms (TANE \cite{huhtala1999tane}, FUN \cite{novelli2001fun}, HyFD \cite{papenbrock2016hyfd}) provide signals for PK candidate assessment. IND detection algorithms (SPIDER \cite{bauckmann2007spider}, BINDER \cite{papenbrock2015binder}, S-INDD \cite{demarchi2009sindd}) form the computational backbone of FK candidate generation \cite{dursch2019ind}. The broader data profiling field \cite{abedjan2018book, abedjan2015profiling, naumann2014revisited} systematizes metadata extraction, with Metanome \cite{papenbrock2015metanome} providing a pluggable framework.
+\cite{rostin2009fk} formulate FK discovery as supervised classification over inclusion dependencies. \cite{jiang2020holistic} propose holistic PK/FK detection using joint reasoning. DBAutoDoc adopts a similar joint-reasoning philosophy in its bidirectional feedback loop. \cite{khatiwada2022alite} and \cite{ilyas2004cords} address joinable column discovery and statistical correlation, respectively. FD discovery algorithms (TANE \cite{huhtala1999tane}, FUN \cite{novelli2001fun}, HyFD \cite{papenbrock2016hyfd}) provide signals for PK candidate assessment. IND detection algorithms (SPIDER \cite{bauckmann2007spider}, BINDER \cite{papenbrock2015binder}, S-INDD \cite{demarchi2009sindd}) form the computational backbone of FK candidate generation \cite{dursch2019ind}. The broader data profiling field \cite{abedjan2018book, abedjan2015profiling, naumann2013revisited} systematizes metadata extraction, with Metanome \cite{papenbrock2015metanome} providing a pluggable framework.
 
 DBAutoDoc's principal contribution relative to this body of work is the *bidirectional feedback loop* between statistical discovery and LLM semantic validation, making them mutually reinforcing rather than sequential.
 
@@ -99,6 +101,8 @@ Active learning \cite{settles2009active} selects the most informative examples f
 ---
 
 ## 3. System Architecture
+
+**Terminology.** Throughout this paper, *primary key (PK) discovery* and *foreign key (FK) discovery* refer to inferring key constraints from data characteristics when no declared constraints exist. In the data profiling literature, FK discovery is formalized as *inclusion dependency (IND) detection* \cite{papenbrock2015binder, dursch2019ind}, and PK discovery relates to *unique column combination (UCC) detection* and *functional dependency (FD) discovery* \cite{huhtala1999tane, papenbrock2016hyfd}. We use the terms "PK/FK discovery" for readability, noting the formal equivalences where relevant.
 
 ### 3.1 Overview
 
@@ -412,7 +416,7 @@ Full output artifacts (HTML documentation, ERD diagrams, SQL scripts, CSV export
 
 $$S_{\text{overall}} = 0.35 \cdot F1_{FK} + 0.30 \cdot F1_{PK} + 0.20 \cdot C_{\text{table}} + 0.15 \cdot C_{\text{col}}$$
 
-where $C_{\text{table}}$ and $C_{\text{col}}$ are description coverage fractions. Key discovery (65% combined) is weighted more heavily than description coverage (35%) because structural relationships are prerequisites for meaningful documentation.
+where $C_{\text{table}}$ is the fraction of tables receiving a non-empty description with confidence $\geq 0.5$, and $C_{\text{col}}$ is the fraction of columns receiving a non-empty description with confidence $\geq 0.5$. Description coverage is a necessary-but-not-sufficient proxy for quality; it measures whether the system produced output, not whether the output is correct. We acknowledge this limitation: a formal description quality evaluation with human raters, structured Likert-scale rubrics, and inter-rater reliability measurement is planned as future work (Section 9, item 3). Key discovery (65% combined) is weighted more heavily than description coverage (35%) because structural relationships are objectively verifiable against ground truth and are prerequisites for meaningful documentation.
 
 **Convergence speed.** Iterations until fewer than 5% of descriptions change materially.
 
@@ -564,6 +568,34 @@ The total LLM API cost across all six databases (276 tables, ~5,100 columns) was
 
 Token efficiency varies by model: Sonnet 4.6 / Opus 4.6 used only 471K tokens (7x fewer than Gemini's 3.2M) while achieving equivalent quality, making Anthropic models the most cost-effective option at current pricing.
 
+### 7.7 Reproducibility
+
+All benchmark results can be reproduced using the open-source release. The complete reproduction procedure is:
+
+```bash
+# 1. Install DBAutoDoc
+npm install @memberjunction/db-auto-doc
+
+# 2. Restore a benchmark database (e.g., AdventureWorks2022 stripped)
+#    Database backups and stripping scripts are in research/v1/
+
+# 3. Create a config.json pointing to the database and LLM provider
+#    Example configurations for each benchmark are in research/v1/configs/
+
+# 4. Run analysis
+db-auto-doc analyze --config ./config.json
+
+# 5. Compare results against ground truth
+python3 research/v1/scripts/compare.py ./output/run-1/state.json
+```
+
+The following artifacts are included in the repository at `packages/DBAutoDoc/research/v1/`:
+- Full output artifacts (HTML, Markdown, SQL, CSV, ERD, analysis reports) for all four public benchmarks across all three model families
+- The `compare.py` evaluation script that computes PK/FK precision, recall, and F1 against ground truth constraint declarations
+- All 13 prompt templates used during evaluation (version-controlled in `packages/DBAutoDoc/prompts/`)
+
+Model identifiers and API versions are recorded in each run's `state.json` for traceability. Temperature 0.1 was used for all evaluation runs. Due to non-determinism in LLM inference, exact numerical reproduction may require the same model snapshot; directional results should be stable across model versions.
+
 ---
 
 ## 8. Discussion
@@ -592,9 +624,17 @@ Several limitations bound our claims. (1) LLM hallucination remains an irreducib
 
 **LLM model version sensitivity.** Provider model updates can alter output characteristics without version-number changes. We record model identifiers and API versions for each result, but exact replication may require the same model snapshot. Temperature 0.1 reduces but does not eliminate variance.
 
-### 8.5 Ethical Considerations
+**Domain shift and naming conventions.** All benchmark databases use English column names and Western naming conventions (e.g., `CustomerID`, `OrderDate`). Databases with non-English names, domain-specific abbreviations (e.g., medical coding systems, financial instrument identifiers), or unconventional naming patterns may exhibit lower discovery recall and description quality. The LousyDB benchmark with intentionally cryptic names (e.g., `cst`, `ord`, `inv_ln`) partially addresses this threat but does not cover non-Latin scripts or domain-specific vocabularies.
 
-The primary ethical concern is data privacy: sample values included in LLM prompts may contain sensitive information transmitted to third-party providers. DBAutoDoc provides configurable sample-size limits (including zero to disable value analysis), and planned support for locally-hosted models will enable fully on-premises operation. Users bear responsibility for regulatory compliance.
+**Model context window and pricing claims.** Context window sizes and per-token pricing cited in this paper reflect provider documentation as of Q1 2026. These values are subject to change without notice as providers update models and pricing. We cite specific model identifiers (e.g., "Gemini 3 Flash," "Claude Sonnet 4.6") rather than generic model families to improve traceability.
+
+### 8.5 Ethical Considerations and Data Privacy
+
+The primary ethical concern is data privacy. DBAutoDoc transmits the following information to LLM providers in each prompt: (1) table and column names, (2) data types and nullability constraints, (3) statistical summaries (cardinality, null fraction, min/max values, value frequency distributions), and (4) up to 10 sampled row values per column. Items (3) and (4) may contain personally identifiable information (PII), financial data, or other sensitive values depending on the database contents.
+
+DBAutoDoc provides several configurable controls to mitigate this risk. The `sampleSize` configuration parameter can be set to zero, which disables all value sampling and value-frequency analysis -- reducing prompts to structural metadata only (items 1--2 above), at the cost of reduced description quality. The `cardinalityThreshold` parameter controls which columns receive detailed statistical profiling. Schema and table filters (`schemas.include`, `schemas.exclude`, `tables.exclude`) allow sensitive tables to be excluded entirely from analysis.
+
+For organizations subject to GDPR, HIPAA, or similar regulations, we recommend: (a) setting `sampleSize: 0` for databases containing PII, (b) using schema/table exclusion filters to skip sensitive tables, or (c) deploying locally-hosted LLM models to keep all data on-premises. DBAutoDoc's LLM integration layer supports any provider accessible through MemberJunction's AI abstraction, including local inference servers. Users bear responsibility for evaluating regulatory compliance for their specific deployment context.
 
 ---
 
@@ -748,61 +788,61 @@ All templates are available at `https://github.com/MemberJunction/MJ` in the `pa
 
 ## References
 
-\[1\] **\cite{rahm2001survey}** Rahm, E. and Bernstein, P. A. "A Survey of Approaches to Automatic Schema Matching." *The VLDB Journal* 10(4): 334--350, 2001.
+\[1\] **\cite{rahm2001survey}** Rahm, E. and Bernstein, P. A. "A Survey of Approaches to Automatic Schema Matching." *The VLDB Journal* 10(4): 334--350, 2001. doi:10.1007/s007780100057.
 
-\[2\] **\cite{bellahsene2011matching}** Bellahsene, Z., Bonifati, A., and Rahm, E. (eds.). *Schema Matching and Mapping*. Springer, Berlin, 2011.
+\[2\] **\cite{bellahsene2011matching}** Bellahsene, Z., Bonifati, A., and Rahm, E. (eds.). *Schema Matching and Mapping*. Springer, Berlin, 2011. doi:10.1007/978-3-642-16518-4.
 
-\[3\] **\cite{koutras2021valentine}** Koutras, C., et al. "Valentine: Evaluating Matching Techniques for Dataset Discovery." In *ICDE*, pp. 468--479, 2021.
+\[3\] **\cite{koutras2021valentine}** Koutras, C., et al. "Valentine: Evaluating Matching Techniques for Dataset Discovery." In *ICDE*, pp. 468--479, 2021. doi:10.1109/ICDE51399.2021.00047.
 
-\[4\] **\cite{liu2025magneto}** Liu, T., et al. "Magneto: Combining Small and Large Language Models for Schema Matching." *PVLDB* 18(8): 2681--2694, 2025.
+\[4\] **\cite{liu2025magneto}** Liu, Y., Pena, E. H. M., Santos, A., Wu, E., and Freire, J. "Magneto: Combining Small and Large Language Models for Effective Schema Matching." *PVLDB* 18(8): 2681--2694, 2025.
 
-\[5\] **\cite{seedat2024matchmaker}** Seedat, N. and van der Schaar, M. "Matchmaker: Self-Improving Large Language Model Programs for Schema Matching." In *NeurIPS*, 2024.
+\[5\] **\cite{seedat2024matchmaker}** Seedat, N. and van der Schaar, M. "Matchmaker: Self-Improving Large Language Model Programs for Schema Matching." In *NeurIPS 2024 Workshop on Table Representation Learning*, 2024. OpenReview.
 
-\[6\] **\cite{trummer2024succinct}** Trummer, I. "Generating Succinct Descriptions of Database Schemata for Cost-Efficient Prompting of Large Language Models." *PVLDB* 17(11), 2024.
+\[6\] **\cite{trummer2024succinct}** Trummer, I. "Generating Succinct Descriptions of Database Schemata for Cost-Efficient Prompting of Large Language Models." *PVLDB* 17(11): 3511--3523, 2024. doi:10.14778/3681954.3682017.
 
-\[7\] **\cite{narayan2022foundation}** Narayan, A., et al. "Can Foundation Models Wrangle Your Data?" *PVLDB* 16(4): 738--746, 2022.
+\[7\] **\cite{narayan2022foundation}** Narayan, A., et al. "Can Foundation Models Wrangle Your Data?" *PVLDB* 16(4): 738--746, 2022. doi:10.14778/3574245.3574258.
 
-\[8\] **\cite{hulsebos2019sherlock}** Hulsebos, M., et al. "Sherlock: A Deep Learning Approach to Semantic Data Type Detection." In *KDD*, pp. 1500--1508, 2019.
+\[8\] **\cite{hulsebos2019sherlock}** Hulsebos, M., et al. "Sherlock: A Deep Learning Approach to Semantic Data Type Detection." In *KDD*, pp. 1500--1508, 2019. doi:10.1145/3292500.3330993.
 
-\[9\] **\cite{ragleveraging2025}** "Leveraging Retrieval Augmented Generative LLMs For Automated Metadata Description Generation to Enhance Data Catalogs." arXiv:2503.09003, 2025.
+\[9\] **\cite{ragleveraging2025}** Singh, M., Kumar, A., Donaparthi, S., and Karambelkar, G. "Leveraging Retrieval Augmented Generative LLMs For Automated Metadata Description Generation to Enhance Data Catalogs." arXiv:2503.09003, 2025.
 
-\[10\] **\cite{yu2018spider}** Yu, T., et al. "Spider: A Large-Scale Human-Labeled Dataset for Complex and Cross-Domain Semantic Parsing and Text-to-SQL Task." In *EMNLP*, pp. 3911--3921, 2018.
+\[10\] **\cite{yu2018spider}** Yu, T., et al. "Spider: A Large-Scale Human-Labeled Dataset for Complex and Cross-Domain Semantic Parsing and Text-to-SQL Task." In *EMNLP*, pp. 3911--3921, 2018. doi:10.18653/v1/D18-1425.
 
 \[11\] **\cite{li2023bird}** Li, J., et al. "Can LLM Already Serve as A Database Interface? A BIg Bench for Large-Scale Database Grounded Text-to-SQLs." In *NeurIPS*, 2023.
 
-\[12\] **\cite{gao2024dailsql}** Gao, D., et al. "Text-to-SQL Empowered by Large Language Models: A Benchmark Evaluation." *PVLDB* 17(5): 1132--1145, 2024.
+\[12\] **\cite{gao2024dailsql}** Gao, D., et al. "Text-to-SQL Empowered by Large Language Models: A Benchmark Evaluation." *PVLDB* 17(5): 1132--1145, 2024. doi:10.14778/3641204.3641221.
 
 \[13\] **\cite{pourreza2023dinsql}** Pourreza, M. and Rafiei, D. "DIN-SQL: Decomposed In-Context Learning of Text-to-SQL with Self-Correction." In *NeurIPS*, 2023.
 
 \[14\] **\cite{rostin2009fk}** Rostin, A., et al. "A Machine Learning Approach to Foreign Key Discovery." In *WebDB*, SIGMOD Workshop, 2009.
 
-\[15\] **\cite{jiang2020holistic}** Jiang, L. and Naumann, F. "Holistic Primary Key and Foreign Key Detection." *JIIS* 54(3): 439--461, 2020.
+\[15\] **\cite{jiang2020holistic}** Jiang, L. and Naumann, F. "Holistic Primary Key and Foreign Key Detection." *JIIS* 54(3): 439--461, 2020. doi:10.1007/s10844-019-00562-z.
 
-\[16\] **\cite{khatiwada2022alite}** Khatiwada, A., et al. "ALITE: Comprehensive Data Unification with Full Disjunctions." *PVLDB* 16(4): 932--945, 2022.
+\[16\] **\cite{khatiwada2022alite}** Khatiwada, A., Shraga, R., Gatterbauer, W., and Miller, R. J. "Integrating Data Lake Tables." *PVLDB* 16(4): 932--945, 2022. doi:10.14778/3574245.3574274.
 
-\[17\] **\cite{ilyas2004cords}** Ilyas, I. F., et al. "CORDS: Automatic Discovery of Correlations and Soft Functional Dependencies." In *SIGMOD*, pp. 647--658, 2004.
+\[17\] **\cite{ilyas2004cords}** Ilyas, I. F., et al. "CORDS: Automatic Discovery of Correlations and Soft Functional Dependencies." In *SIGMOD*, pp. 647--658, 2004. doi:10.1145/1007568.1007641.
 
-\[18\] **\cite{huhtala1999tane}** Huhtala, Y., et al. "TANE: An Efficient Algorithm for Discovering Functional and Approximate Dependencies." *The Computer Journal* 42(2): 100--111, 1999.
+\[18\] **\cite{huhtala1999tane}** Huhtala, Y., et al. "TANE: An Efficient Algorithm for Discovering Functional and Approximate Dependencies." *The Computer Journal* 42(2): 100--111, 1999. doi:10.1093/comjnl/42.2.100.
 
-\[19\] **\cite{novelli2001fun}** Novelli, N. and Cicchetti, R. "FUN: An Efficient Algorithm for Mining Functional and Embedded Dependencies." In *ICDT*, pp. 189--203, 2001.
+\[19\] **\cite{novelli2001fun}** Novelli, N. and Cicchetti, R. "FUN: An Efficient Algorithm for Mining Functional and Embedded Dependencies." In *ICDT* (LNCS 1973), pp. 189--203. Springer, 2001. doi:10.1007/3-540-44503-X_13.
 
-\[20\] **\cite{papenbrock2016hyfd}** Papenbrock, T. and Naumann, F. "A Hybrid Approach to Functional Dependency Discovery." In *SIGMOD*, pp. 821--833, 2016.
+\[20\] **\cite{papenbrock2016hyfd}** Papenbrock, T. and Naumann, F. "A Hybrid Approach to Functional Dependency Discovery." In *SIGMOD*, pp. 821--833, 2016. doi:10.1145/2882903.2915203.
 
-\[21\] **\cite{papenbrock2015binder}** Papenbrock, T., et al. "Divide & Conquer-Based Inclusion Dependency Discovery." *PVLDB* 8(7): 774--785, 2015.
+\[21\] **\cite{papenbrock2015binder}** Papenbrock, T., et al. "Divide & Conquer-Based Inclusion Dependency Discovery." *PVLDB* 8(7): 774--785, 2015. doi:10.14778/2752939.2752946.
 
-\[22\] **\cite{bauckmann2007spider}** Bauckmann, J., et al. "Efficiently Detecting Inclusion Dependencies." In *ICDE*, 2007.
+\[22\] **\cite{bauckmann2007spider}** Bauckmann, J., et al. "Efficiently Detecting Inclusion Dependencies." In *ICDE*, pp. 1448--1450, 2007.
 
 \[23\] **\cite{demarchi2009sindd}** De Marchi, F., et al. "Unary and n-ary Inclusion Dependency Discovery in Relational Databases." *JIIS* 32(1): 53--73, 2009.
 
-\[24\] **\cite{dursch2019ind}** Dursch, S., et al. "Inclusion Dependency Discovery: An Experimental Evaluation of Thirteen Algorithms." In *CIKM*, pp. 219--228, 2019.
+\[24\] **\cite{dursch2019ind}** Dürsch, F., et al. "Inclusion Dependency Discovery: An Experimental Evaluation of Thirteen Algorithms." In *CIKM*, pp. 219--228, 2019. doi:10.1145/3357384.3357916.
 
-\[25\] **\cite{abedjan2018book}** Abedjan, Z., et al. *Data Profiling*. Synthesis Lectures on Data Management. Morgan & Claypool, 2018.
+\[25\] **\cite{abedjan2018book}** Abedjan, Z., Golab, L., Naumann, F., and Papenbrock, T. *Data Profiling*. Synthesis Lectures on Data Management. Morgan & Claypool, 2018. doi:10.2200/S00878ED1V01Y201810DTM052.
 
-\[26\] **\cite{abedjan2015profiling}** Abedjan, Z., Golab, L., and Naumann, F. "Profiling Relational Data: A Survey." *The VLDB Journal* 24(4): 557--581, 2015.
+\[26\] **\cite{abedjan2015profiling}** Abedjan, Z., Golab, L., and Naumann, F. "Profiling Relational Data: A Survey." *The VLDB Journal* 24(4): 557--581, 2015. doi:10.1007/s00778-015-0389-y.
 
-\[27\] **\cite{naumann2014revisited}** Naumann, F. "Data Profiling Revisited." *ACM SIGMOD Record* 42(4): 40--49, 2014.
+\[27\] **\cite{naumann2013revisited}** Naumann, F. "Data Profiling Revisited." *ACM SIGMOD Record* 42(4): 40--49, 2013. doi:10.1145/2590989.2590995.
 
-\[28\] **\cite{papenbrock2015metanome}** Papenbrock, T., et al. "Data Profiling with Metanome." *PVLDB* 8(12): 1860--1871, 2015.
+\[28\] **\cite{papenbrock2015metanome}** Papenbrock, T., et al. "Data Profiling with Metanome." *PVLDB* 8(12): 1860--1863, 2015. doi:10.14778/2824032.2824086.
 
 \[29\] **\cite{madaan2023selfrefine}** Madaan, A., et al. "Self-Refine: Iterative Refinement with Self-Feedback." In *NeurIPS*, 2023.
 
@@ -814,7 +854,7 @@ All templates are available at `https://github.com/MemberJunction/MJ` in the `pa
 
 \[33\] **\cite{yao2023tot}** Yao, S., et al. "Tree of Thoughts: Deliberate Problem Solving with Large Language Models." In *NeurIPS*, 2023.
 
-\[34\] **\cite{besta2024got}** Besta, M., et al. "Graph of Thoughts: Solving Elaborate Problems with Large Language Models." In *AAAI*, 2024.
+\[34\] **\cite{besta2024got}** Besta, M., et al. "Graph of Thoughts: Solving Elaborate Problems with Large Language Models." In *AAAI* 38(16): 17682--17690, 2024. doi:10.1609/aaai.v38i16.29720.
 
 \[35\] **\cite{rumelhart1986backprop}** Rumelhart, D. E., Hinton, G. E., and Williams, R. J. "Learning Representations by Back-propagating Errors." *Nature* 323: 533--536, 1986.
 
@@ -822,4 +862,4 @@ All templates are available at `https://github.com/MemberJunction/MJ` in the `pa
 
 \[37\] **\cite{chen2021evaluating}** Chen, M., et al. "Evaluating Large Language Models Trained on Code." arXiv:2107.03374, 2021.
 
-\[38\] **\cite{feng2020codebert}** Feng, Z., et al. "CodeBERT: A Pre-Trained Model for Programming and Natural Languages." In *EMNLP*, 2020.
+\[38\] **\cite{feng2020codebert}** Feng, Z., et al. "CodeBERT: A Pre-Trained Model for Programming and Natural Languages." In *Findings of the Association for Computational Linguistics: EMNLP 2020*, pp. 1536--1547. doi:10.18653/v1/2020.findings-emnlp.139.
