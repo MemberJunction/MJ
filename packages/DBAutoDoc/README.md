@@ -94,6 +94,43 @@ npm install @memberjunction/db-auto-doc
 npm install @memberjunction/db-auto-doc --save
 ```
 
+
+## Benchmark Results
+
+DBAutoDoc has been extensively benchmarked across multiple databases and LLM providers. Full details in the [research paper](research/v1/paper.md).
+
+### AdventureWorks2022 (71 tables, all constraints stripped)
+
+| Model Configuration | PK F1 | FK F1 | Overall |
+|---------------------|-------|-------|---------|
+| Gemini 3 Flash / 3.1 Pro | 95.0% | 94.2% | 96.1% (A+) |
+| Claude Sonnet 4.6 / Opus 4.6 | 95.0% | 93.0% | 96.1% (A+) |
+| GPT-5.4-mini / GPT-5.4 | 89.4% | 77.9% | 87.9% (B+) |
+
+### Cross-Database Results (Gemini Flash)
+
+| Database | Tables | PK F1 | FK F1 | Descriptions |
+|----------|--------|-------|-------|-------------|
+| AdventureWorks | 71 | 95.0% | 94.2% | 99% |
+| Chinook | 11 | 95.2% | 95.2% | 100% |
+| LousyDB (dark DB) | 20 | 97.6% | 77.2% | 100% |
+| Northwind | 13 | 72.7% | 75.0% | 100% |
+
+### Key Discovery Pipeline
+
+DBAutoDoc uses a 4-phase pipeline for relationship discovery:
+
+1. **Statistical Discovery** — PK/FK candidates via uniqueness analysis, value overlap, cardinality ratios. Six deterministic gates filter false positives with zero correct-key loss.
+2. **LLM Iterative Analysis** — The LLM creates new FK/PK proposals based on semantic understanding (89% precision on LLM-created FKs). Cross-table statistics provided in prompt context.
+3. **Ground Truth Locking** — High-confidence keys (≥90%) become immutable to protect correct discoveries.
+4. **Two-Pass Pruning** — A stronger model evaluates remaining candidates per-table, then holistically reviews all proposals.
+
+### Research Paper
+
+See [research/v1/](research/v1/) for the full paper, benchmark results, and comparison scripts:
+- **[Paper](research/v1/paper.md)** — "DBAutoDoc: Automated Discovery and Documentation of Undocumented Database Schemas via Statistical Analysis and Iterative LLM Refinement"
+- **[Results](research/v1/results/)** — Full exports (HTML, Markdown, ERD, SQL, CSV) for all public benchmarks
+
 ## Quick Start
 
 ### 1. Initialize
@@ -498,14 +535,44 @@ Tables and columns marked `userApproved: true` (via ground truth or manual appro
 Resume analysis with fine-grained control:
 
 ```bash
+# Resume from a previous run's state file
+db-auto-doc analyze --resume ./output/run-1/state.json
+
 # Resume and re-analyze tables with confidence below 70%
-db-auto-doc analyze --resume ./state.json --reanalyze-below-confidence 0.7
+db-auto-doc analyze --resume ./state.json --reanalyze-below 0.7
 
 # Resume with a different iteration limit
 db-auto-doc analyze --resume ./state.json --max-iterations 20
+
+# Resume with additional iterations (e.g., ran 5 originally, now want 3 more)
+db-auto-doc analyze --resume ./state.json --max-iterations 3
 ```
 
-The `--reanalyze-below-confidence` flag clears `userApproved` on non-ground-truth tables whose latest confidence is below the threshold, allowing them to be re-analyzed while protecting authoritative descriptions.
+The `--reanalyze-below` flag clears `userApproved` on non-ground-truth tables whose latest confidence is below the threshold, allowing them to be re-analyzed while protecting authoritative descriptions.
+
+### Pruning-Only Mode
+
+Run just the FK pruning pass on an existing state file, skipping discovery and analysis iterations. Useful when you want to apply a stronger model to clean up FK false positives without re-running the full analysis:
+
+```bash
+# Run only the FK pruning pass on an existing state
+db-auto-doc analyze --resume ./output/run-1/state.json --pruning-only
+
+# Combine with a config that specifies a stronger pruning model
+db-auto-doc analyze --resume ./output/run-1/state.json --pruning-only --config ./config-with-pro-pruning.json
+```
+
+Requires `--resume` pointing to a state file that has already completed discovery and at least one analysis iteration. The pruning pass uses the `ai.modelOverrides.fkPruning` config to select a potentially stronger model (e.g., Gemini Pro, Claude Opus) for the precision-critical FK filtering.
+
+### CLI Flags Reference
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--config` | `-c` | Path to config file (default: `./config.json`) |
+| `--resume` | `-r` | Resume from an existing state file |
+| `--max-iterations` | `-n` | Override max iterations from config |
+| `--reanalyze-below` | | Re-analyze tables with confidence below threshold (0-1) |
+| `--pruning-only` | | Skip discovery/iterations, run only FK pruning (requires `--resume`) |
 
 ### CodeGen Integration (Additional Schema Info)
 

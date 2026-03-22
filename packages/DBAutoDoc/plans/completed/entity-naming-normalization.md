@@ -47,7 +47,7 @@ module.exports = {
     // These supplement the built-in English dictionary
     // Useful for industry acronyms and domain terms the splitter might miss
     additionalDomainWords: [],
-    // Example: ['CRM', 'AutoCare', 'SKU', 'UPC', 'MSRP', 'VIN']
+    // Example: ['CRM', 'OrgName', 'SKU', 'UPC', 'MSRP', 'VIN']
   },
 
   // Existing config — no changes needed

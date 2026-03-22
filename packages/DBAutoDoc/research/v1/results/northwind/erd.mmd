@@ -1,0 +1,159 @@
+%% Entity Relationship Diagram
+%% Database: Northwind
+%% Server: sql-claude
+%% Generated: 2026-03-22T13:08:27.779Z
+%% Total Schemas: 1
+%% Total Tables: 13
+%% Total Columns: 88
+
+erDiagram
+
+    %% Schema: dbo
+
+    Categories {
+        int CategoryID "NOT_NULL" %% The unique primary identifier for each product category.
+        nvarchar CategoryName "NOT_NULL" %% The short, descriptive name of the category (e.g., 'Beverage
+        ntext Description %% A detailed explanation of the types of products included wit
+        image Picture %% A binary image file representing the category visually, ofte
+    }
+
+    CustomerCustomerDemo {
+        nchar CustomerID "PK,FK,NOT_NULL" %% The unique identifier of the customer being associated with 
+        nchar CustomerTypeID "PK,FK,NOT_NULL" %% The unique identifier of the demographic category assigned t
+    }
+
+    CustomerDemographics {
+        nchar CustomerTypeID "NOT_NULL" %% The primary unique identifier for a specific customer demogr
+        ntext CustomerDesc %% A detailed explanation or name of the demographic category.
+    }
+
+    Customers {
+        nchar CustomerID "PK,NOT_NULL" %% A unique 5-character alphanumeric code used as the primary i
+        nvarchar CompanyName "NOT_NULL" %% The full legal name of the customer's business entity.
+        nvarchar ContactName %% The name of the primary person responsible for account inter
+        nvarchar ContactTitle %% The job title or role of the primary contact person (e.g., O
+        nvarchar Address %% The street-level address for the customer's primary place of
+        nvarchar City %% The city where the customer is located.
+        nvarchar Region %% The state, province, or region of the customer's location.
+        nvarchar PostalCode %% The postal or ZIP code for the customer's address.
+        nvarchar Country %% The country where the customer is based.
+        nvarchar Phone %% The primary telephone number for the customer.
+        nvarchar Fax %% The facsimile number for the customer.
+    }
+
+    Employees {
+        int EmployeeID "NOT_NULL" %% Unique identifier for each employee
+        nvarchar LastName "NOT_NULL" %% The employee's family name
+        nvarchar FirstName "NOT_NULL" %% The employee's given name
+        nvarchar Title %% The employee's professional job title (e.g., Sales Represent
+        nvarchar TitleOfCourtesy %% Formal prefix used for addressing the employee (e.g., Mr., M
+        datetime BirthDate %% The employee's date of birth
+        datetime HireDate %% The date the employee was officially hired
+        nvarchar Address %% Street address of the employee's residence
+        nvarchar City %% City of the employee's residence
+        nvarchar Region %% State, province, or region of the employee's residence
+        nvarchar PostalCode %% ZIP or postal code for the employee's address
+        nvarchar Country %% Country of the employee's residence
+        nvarchar HomePhone %% The employee's primary home telephone number
+        nvarchar Extension %% Internal office phone extension
+        image Photo %% Binary image data of the employee's portrait
+        ntext Notes %% General biographical information or professional remarks
+        int ReportsTo "FK" %% Identifier of the employee's direct manager
+        nvarchar PhotoPath %% File system path or URL to the employee's photo
+    }
+
+    EmployeeTerritories {
+        int EmployeeID "PK,FK,NOT_NULL" %% The unique identifier of the employee assigned to a specific
+        nvarchar TerritoryID "PK,FK,NOT_NULL" %% The unique identifier (typically a ZIP code) of the geograph
+    }
+
+    Order Details {
+        int OrderID "PK,FK,NOT_NULL" %% A foreign key referencing the parent order header; identifie
+        int ProductID "PK,FK,NOT_NULL" %% A foreign key referencing the product catalog; identifies th
+        money UnitPrice "NOT_NULL" %% The actual selling price per unit for the product in this sp
+        smallint Quantity "NOT_NULL" %% The number of units of the product included in the order lin
+        real Discount "NOT_NULL" %% The percentage discount applied to the line item, expressed 
+    }
+
+    Orders {
+        int OrderID "PK,NOT_NULL" %% Unique identifier for each sales order.
+        nchar CustomerID "FK" %% Reference to the customer who placed the order.
+        int EmployeeID "FK" %% Reference to the employee (sales representative) who process
+        datetime OrderDate %% The date and time the order was originally placed by the cus
+        datetime RequiredDate %% The target date by which the customer expects to receive the
+        datetime ShippedDate %% The date the order was handed over to the shipping carrier.
+        int ShipVia "FK" %% Reference to the shipping company or carrier used to deliver
+        money Freight %% The shipping and handling cost charged for the order.
+        nvarchar ShipName %% The name of the recipient or company at the delivery destina
+        nvarchar ShipAddress %% The street address where the order is to be delivered.
+        nvarchar ShipCity %% The city of the delivery destination.
+        nvarchar ShipRegion %% The state, province, or region of the delivery destination.
+        nvarchar ShipPostalCode %% The postal or ZIP code for the delivery destination.
+        nvarchar ShipCountry %% The country of the delivery destination.
+    }
+
+    Products {
+        int ProductID "PK,NOT_NULL" %% A unique identifier for each product in the catalog.
+        nvarchar ProductName "NOT_NULL" %% The descriptive name of the product as it appears to custome
+        int SupplierID "FK" %% A reference to the external vendor that provides the product
+        int CategoryID "FK" %% A reference to the logical grouping or department the produc
+        nvarchar QuantityPerUnit %% Describes the packaging size, weight, or volume of a single 
+        money UnitPrice %% The current selling price per unit of the product.
+        smallint UnitsInStock %% The current quantity of the product available in the warehou
+        smallint UnitsOnOrder %% The quantity of the product currently requested from supplie
+        smallint ReorderLevel %% The minimum inventory threshold at which a new order should 
+        bit Discontinued "NOT_NULL" %% A flag indicating whether the product is still actively sold
+    }
+
+    Region {
+        int RegionID "PK,NOT_NULL" %% The unique primary identifier for a geographical region.
+        nchar RegionDescription "NOT_NULL" %% The text label for the region (e.g., Northern, Southern, Eas
+    }
+
+    Shippers {
+        int ShipperID "PK,NOT_NULL" %% The unique primary identifier for each shipping company.
+        nvarchar CompanyName "NOT_NULL" %% The legal or trade name of the shipping carrier.
+        nvarchar Phone %% The primary contact phone number for the shipping company.
+    }
+
+    Suppliers {
+        int SupplierID "PK,NOT_NULL" %% Unique identifier for each supplier
+        nvarchar CompanyName "NOT_NULL" %% The legal name of the supplier business
+        nvarchar ContactName %% The name of the primary contact person at the supplier compa
+        nvarchar ContactTitle %% The professional role or job title of the contact person
+        nvarchar Address %% The street address of the supplier's office
+        nvarchar City %% The city where the supplier is located
+        nvarchar Region %% The state, province, or region of the supplier
+        nvarchar PostalCode %% The postal or ZIP code for the supplier's address
+        nvarchar Country %% The country where the supplier is based
+        nvarchar Phone %% The primary telephone number for the supplier
+        nvarchar Fax %% The fax number for the supplier
+        ntext HomePage %% The URL or link to the supplier's official website
+    }
+
+    Territories {
+        nvarchar TerritoryID "PK,NOT_NULL" %% A unique identifier for each territory, formatted as a 5-dig
+        nchar TerritoryDescription "NOT_NULL" %% The name of the territory, usually representing a city or sp
+        int RegionID "PK,FK,NOT_NULL" %% A reference to the broader geographical region (e.g., Easter
+    }
+
+
+    %% Relationships
+
+    Customers ||--o{ CustomerCustomerDemo : "has"
+    CustomerDemographics ||--o{ CustomerCustomerDemo : "has"
+    Employees ||--o{ Employees : "has"
+    Employees ||--o{ EmployeeTerritories : "has"
+    Territories ||--o{ EmployeeTerritories : "has"
+    Orders ||--o{ Order Details : "has"
+    Products ||--o{ Order Details : "has"
+    Customers ||--o{ Orders : "has"
+    Employees ||--o{ Orders : "has"
+    Shippers ||--o{ Orders : "has"
+    Suppliers ||--o{ Products : "has"
+    Categories ||--o{ Products : "has"
+    Region ||--o{ Territories : "has"
+
+    %% Relationship Notation:
+    %% Parent ||--o{ Child : "describes"
+    %% One Parent can have zero or more Children
