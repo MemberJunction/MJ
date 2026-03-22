@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, EntityInfo } from '../generic/entityInfo';
 
 describe('EntityOrganicKeyInfo', () => {
@@ -264,7 +264,7 @@ describe('EntityInfo.BuildOrganicKeyViewParams', () => {
 
             expect(params.EntityName).toBe('Mailchimp Emails Sent');
             expect(params.ExtraFilter).toBe(
-                "[ID] IN (SELECT [EmailSentID] FROM [__mj.vwContactEmailBridge] WHERE LOWER(LTRIM(RTRIM([Email]))) = LOWER(LTRIM(RTRIM('john@acme.com'))))"
+                "[ID] IN (SELECT [EmailSentID] FROM [__mj].[vwContactEmailBridge] WHERE LOWER(LTRIM(RTRIM([Email]))) = LOWER(LTRIM(RTRIM('john@acme.com'))))"
             );
         });
     });

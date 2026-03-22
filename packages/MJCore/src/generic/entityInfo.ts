@@ -2071,7 +2071,9 @@ export class EntityInfo extends BaseInfo {
             ));
         }
 
-        return `[${relatedEntity.RelatedEntityJoinFieldName}] IN (SELECT [${relatedEntity.TransitiveObjectOutputFieldName}] FROM [${relatedEntity.TransitiveObjectName}] WHERE ${conditions.join(' AND ')})`;
+        // TransitiveObjectName is schema-qualified (e.g. "mailchimp.vwBridge") — bracket each part separately
+        const transitiveObject = relatedEntity.TransitiveObjectName!.split('.').map(p => `[${p}]`).join('.');
+        return `[${relatedEntity.RelatedEntityJoinFieldName}] IN (SELECT [${relatedEntity.TransitiveObjectOutputFieldName}] FROM ${transitiveObject} WHERE ${conditions.join(' AND ')})`;
     }
 
     /**
