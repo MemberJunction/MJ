@@ -124,6 +124,7 @@ export * from './resolvers/UserResolver.js';
 export * from './resolvers/UserViewResolver.js';
 export * from './resolvers/VersionHistoryResolver.js';
 export * from './resolvers/CurrentUserContextResolver.js';
+export * from './resolvers/RSUResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
@@ -296,6 +297,65 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     await setupSQLServerClient(config);
     const md = new Metadata();
     console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
+
+    // Set up CodeGen-credentialed provider for RSU DDL operations (CREATE TABLE, CREATE SCHEMA, etc.)
+    const codegenUser = process.env.CODEGEN_DB_USERNAME;
+    const codegenPass = process.env.CODEGEN_DB_PASSWORD;
+    if (codegenUser && codegenPass) {
+      try {
+        const codegenPool = new sql.ConnectionPool({
+          ...createMSSQLConfig(),
+          user: codegenUser,
+          password: codegenPass,
+        });
+        codegenPool.on('error', (err) => {
+          console.error('[ConnectionPool] CodeGen pool connection error:', err.message);
+        });
+        await codegenPool.connect();
+
+        const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
+        const codegenConfig = new SQLServerProviderConfigData(codegenPool, mj_core_schema, cacheRefreshInterval);
+        const codegenProvider = new SQLServerDataProvider();
+        await codegenProvider.Config(codegenConfig);
+        RuntimeSchemaManager.Instance.SetDDLProvider(codegenProvider);
+        console.log('RSU DDL provider initialized with CodeGen credentials.');
+
+        // Set up in-process CodeGen runner for RSU
+        try {
+          const { RunCodeGenBase } = await import('@memberjunction/codegen-lib');
+          const { SQLServerCodeGenConnection } = await import('@memberjunction/codegen-lib/dist/Database/providers/sqlserver/SQLServerCodeGenConnection.js');
+
+          const codegenConnection = new SQLServerCodeGenConnection(codegenPool);
+          const codegenCurrentUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+
+          const codegenDataSource = {
+            provider: codegenProvider,
+            connection: codegenConnection,
+            currentUser: codegenCurrentUser,
+            connectionInfo: `${configInfo.dbHost}:${configInfo.dbPort}/${configInfo.dbDatabase} (CodeGen)`,
+          };
+
+          const runObject = MJGlobal.Instance.ClassFactory.CreateInstance(RunCodeGenBase) as InstanceType<typeof RunCodeGenBase>;
+
+          const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
+          RuntimeSchemaManager.Instance.SetCodeGenRunner({
+            RunInProcess: (skipDB) => runObject.RunInProcess(codegenDataSource, skipDB, rsuWorkDir),
+          });
+          console.log('RSU in-process CodeGen runner initialized.');
+
+          // Inject CodeGen output paths for targeted git staging
+          const { initializeConfig } = await import('@memberjunction/codegen-lib');
+          const codegenConfig = initializeConfig(rsuWorkDir);
+          const outputPaths = (codegenConfig.output ?? []).map((o: { directory: string }) => o.directory);
+          RuntimeSchemaManager.Instance.SetCodeGenOutputPaths(outputPaths);
+          console.log(`RSU CodeGen output paths: ${outputPaths.length} directories configured.`);
+        } catch (codegenErr) {
+          console.warn(`RSU in-process CodeGen runner setup failed (will fall back to child process): ${(codegenErr as Error).message}`);
+        }
+      } catch (err) {
+        console.warn(`RSU DDL provider setup failed (RSU will fall back to default provider): ${(err as Error).message}`);
+      }
+    }
   }
 
   // Store queryDialects config in GlobalObjectStore so MJQueryEntityServer can
@@ -727,6 +787,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   console.log(`📦 Connected to database: ${dbHost}:${dbPort}/${dbDatabase}`);
   console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
 
+  // Process pending RSU work from pre-restart (entity maps, field maps, sync)
+  processRSUPendingWork().catch(err => console.warn(`RSU pending work processing failed: ${err}`));
+
   // Set up graceful shutdown handlers
   const gracefulShutdown = async (signal: string) => {
     console.log(`\n${signal} received, shutting down gracefully...`);
@@ -765,6 +828,145 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     // This is critical for server stability when downstream dependencies fail
   });
 };
+
+/**
+ * Process pending RSU work left from a pre-restart Apply All.
+ * Reads pending work files, creates entity maps + field maps, starts sync.
+ */
+async function processRSUPendingWork(): Promise<void> {
+  const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
+  const rsm = RuntimeSchemaManager.Instance;
+  const pendingItems = await rsm.ReadAndClearPendingWork();
+  if (pendingItems.length === 0) return;
+
+  console.log(`[RSU] Processing ${pendingItems.length} pending work item(s) from pre-restart...`);
+
+  // Wait a moment for metadata to be fully loaded
+  await new Promise(resolve => setTimeout(resolve, 3000));
+
+  for (const item of pendingItems) {
+    try {
+      const { Metadata, RunView } = await import('@memberjunction/core');
+      const md = new Metadata();
+
+      // Get system user for server-side operations
+      const { UserCache } = await import('@memberjunction/sqlserver-dataprovider');
+      const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
+      if (!systemUser) {
+        console.warn(`[RSU] No system user found, skipping pending work for ${item.CompanyIntegrationID}`);
+        continue;
+      }
+
+      await Metadata.Provider.Refresh();
+
+      // Resolve connector
+      const { ConnectorFactory } = await import('@memberjunction/integration-engine');
+      const CoreEntities = await import('@memberjunction/core-entities');
+      type CompanyIntegrationType = InstanceType<typeof CoreEntities.MJCompanyIntegrationEntity>;
+      type IntegrationType = InstanceType<typeof CoreEntities.MJIntegrationEntity>;
+      const rv = new RunView();
+      const ciResult = await rv.RunView<CompanyIntegrationType>({
+        EntityName: 'MJ: Company Integrations',
+        ExtraFilter: `ID='${item.CompanyIntegrationID}'`,
+        ResultType: 'entity_object',
+      }, systemUser);
+      const companyIntegration = ciResult.Results[0];
+      if (!companyIntegration) {
+        console.warn(`[RSU] CompanyIntegration ${item.CompanyIntegrationID} not found`);
+        continue;
+      }
+
+      const integrationName = companyIntegration.Integration;
+      // Resolve the Integration entity for ConnectorFactory
+      const integrationResult = await rv.RunView<IntegrationType>({
+        EntityName: 'MJ: Integrations',
+        ExtraFilter: `Name='${integrationName}'`,
+        ResultType: 'entity_object',
+      }, systemUser);
+      const integrationEntity = integrationResult.Results[0];
+      if (!integrationEntity) {
+        console.warn(`[RSU] Integration entity for ${integrationName} not found`);
+        continue;
+      }
+      const connector = ConnectorFactory.Resolve(integrationEntity);
+      if (!connector) {
+        console.warn(`[RSU] Connector for ${integrationName} not found`);
+        continue;
+      }
+
+      // Create entity maps + field maps for each source object
+      for (const objName of item.SourceObjectNames) {
+        const tableName = objName.replace(/[^A-Za-z0-9_]/g, '_').toLowerCase();
+        const entity = md.Entities.find(
+          e => e.SchemaName.toLowerCase() === item.SchemaName.toLowerCase() &&
+               e.BaseTable.toLowerCase() === tableName
+        );
+        if (!entity) {
+          console.warn(`[RSU] Entity not found for ${item.SchemaName}.${tableName}`);
+          continue;
+        }
+
+        // Create entity map
+        const { MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity } =
+          await import('@memberjunction/core-entities');
+
+        const entityMap = await md.GetEntityObject<typeof MJCompanyIntegrationEntityMapEntity.prototype>(
+          'MJ: Company Integration Entity Maps', systemUser
+        );
+        entityMap.NewRecord();
+        entityMap.CompanyIntegrationID = item.CompanyIntegrationID;
+        entityMap.EntityID = entity.ID;
+        entityMap.ExternalObjectName = objName;
+        entityMap.SyncDirection = 'Pull';
+        entityMap.Status = 'Active';
+        entityMap.SyncEnabled = true;
+        const mapSaved = await entityMap.Save();
+        if (!mapSaved) {
+          console.warn(`[RSU] Failed to save entity map for ${objName}`);
+          continue;
+        }
+
+        // Discover fields and create 1:1 field maps
+        try {
+          const introspect = connector.IntrospectSchema.bind(connector) as
+            (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string }> }> }>;
+          const schema = await introspect(companyIntegration, systemUser);
+          const sourceObj = schema.Objects.find(o => o.ExternalName === objName);
+          let fieldCount = 0;
+
+          for (const field of sourceObj?.Fields ?? []) {
+            const fieldMap = await md.GetEntityObject<typeof MJCompanyIntegrationFieldMapEntity.prototype>(
+              'MJ: Company Integration Field Maps', systemUser
+            );
+            fieldMap.NewRecord();
+            fieldMap.EntityMapID = entityMap.ID;
+            fieldMap.SourceFieldName = field.Name;
+            fieldMap.DestinationFieldName = field.Name.replace(/[^A-Za-z0-9_]/g, '_');
+            fieldMap.Status = 'Active';
+            if (await fieldMap.Save()) fieldCount++;
+          }
+          console.log(`[RSU] Created entity map for ${objName} → ${entity.Name} with ${fieldCount} field maps`);
+        } catch (fieldErr) {
+          console.warn(`[RSU] Field map creation failed for ${objName}: ${fieldErr}`);
+        }
+      }
+
+      // Start sync
+      try {
+        const { IntegrationEngine } = await import('@memberjunction/integration-engine');
+        await IntegrationEngine.Instance.Config(false, systemUser);
+        IntegrationEngine.Instance.RunSync(item.CompanyIntegrationID, systemUser, 'Manual');
+        console.log(`[RSU] Sync started for ${item.CompanyIntegrationID}`);
+      } catch (syncErr) {
+        console.warn(`[RSU] Sync start failed: ${syncErr}`);
+      }
+    } catch (err) {
+      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID}: ${err}`);
+    }
+  }
+
+  console.log(`[RSU] Pending work processing complete`);
+}
 
 /**
  * Creates a MSSQL ConnectionPool-compatible wrapper around a pg.Pool.

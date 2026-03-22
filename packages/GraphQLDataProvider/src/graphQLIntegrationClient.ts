@@ -87,6 +87,57 @@ export interface DefaultConfigResult {
     DefaultObjects?: DefaultObjectConfigResult[];
 }
 
+/** Generic mutation result */
+export interface MutationResult {
+    Success: boolean;
+    Message: string;
+}
+
+/** A single entity map created during Apply All */
+export interface ApplyAllEntityMapCreated {
+    SourceObjectName: string;
+    EntityName: string;
+    EntityMapID: string;
+    FieldMapCount: number;
+}
+
+/** Result of the full automatic Apply All flow */
+export interface ApplyAllResult {
+    Success: boolean;
+    Message: string;
+    Steps?: Array<{ Name: string; Status: string; DurationMs: number; Message: string }>;
+    EntityMapsCreated?: ApplyAllEntityMapCreated[];
+    SyncRunID?: string;
+    GitCommitSuccess?: boolean;
+    APIRestarted?: boolean;
+    Warnings?: string[];
+}
+
+/** Composite integration status for dashboard */
+export interface IntegrationStatusResult {
+    Success: boolean;
+    Message: string;
+    IsActive?: boolean;
+    IntegrationName?: string;
+    TotalEntityMaps?: number;
+    ActiveEntityMaps?: number;
+    LastRunStatus?: string;
+    LastRunStartedAt?: string;
+    LastRunEndedAt?: string;
+    ScheduleEnabled?: boolean;
+}
+
+/** Connector capability flags */
+export interface ConnectorCapabilitiesResult {
+    Success: boolean;
+    Message: string;
+    SupportsGet?: boolean;
+    SupportsCreate?: boolean;
+    SupportsUpdate?: boolean;
+    SupportsDelete?: boolean;
+    SupportsSearch?: boolean;
+}
+
 /** Result of a connection test */
 export interface ConnectionTestGraphQLResult {
     Success: boolean;
@@ -417,6 +468,286 @@ export class GraphQLIntegrationClient {
                 Message: `Error: ${error.message}`
             };
         }
+    }
+
+    // ── Connection Lifecycle ──────────────────────────────────────────
+
+    public async CreateConnection(input: {
+        IntegrationID: string; CompanyID: string; CredentialTypeID: string;
+        CredentialName: string; CredentialValues: string;
+        ExternalSystemID?: string; Configuration?: string;
+    }): Promise<MutationResult & { CompanyIntegrationID?: string; CredentialID?: string }> {
+        try {
+            const query = gql`mutation IntegrationCreateConnection($input: CreateConnectionInput!) {
+                IntegrationCreateConnection(input: $input) { Success Message CompanyIntegrationID CredentialID }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { input });
+            return result?.IntegrationCreateConnection ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    public async UpdateConnection(
+        companyIntegrationID: string, credentialValues?: string, configuration?: string, externalSystemID?: string
+    ): Promise<MutationResult> {
+        try {
+            const query = gql`mutation IntegrationUpdateConnection(
+                $companyIntegrationID: String!, $credentialValues: String, $configuration: String, $externalSystemID: String
+            ) {
+                IntegrationUpdateConnection(companyIntegrationID: $companyIntegrationID, credentialValues: $credentialValues, configuration: $configuration, externalSystemID: $externalSystemID) { Success Message }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID, credentialValues, configuration, externalSystemID });
+            return result?.IntegrationUpdateConnection ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    public async DeactivateConnection(companyIntegrationID: string): Promise<MutationResult> {
+        try {
+            const query = gql`mutation IntegrationDeactivateConnection($companyIntegrationID: String!) {
+                IntegrationDeactivateConnection(companyIntegrationID: $companyIntegrationID) { Success Message }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID });
+            return result?.IntegrationDeactivateConnection ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    // ── Entity Maps ────────────────────────────────────────────────────
+
+    public async CreateEntityMaps(
+        companyIntegrationID: string, entityMaps: Array<{
+            ExternalObjectName: string; EntityName?: string; EntityID?: string;
+            SyncDirection?: string; Priority?: number;
+            FieldMaps?: Array<{ SourceFieldName: string; DestinationFieldName: string; IsKeyField?: boolean; IsRequired?: boolean }>;
+        }>
+    ): Promise<MutationResult & { Created?: Array<{ EntityMapID: string; ExternalObjectName: string; FieldMapCount: number }> }> {
+        try {
+            const query = gql`mutation IntegrationCreateEntityMaps($companyIntegrationID: String!, $entityMaps: [EntityMapInput!]!) {
+                IntegrationCreateEntityMaps(companyIntegrationID: $companyIntegrationID, entityMaps: $entityMaps) {
+                    Success Message Created { EntityMapID ExternalObjectName FieldMapCount }
+                }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID, entityMaps });
+            return result?.IntegrationCreateEntityMaps ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    public async ListEntityMaps(companyIntegrationID: string): Promise<MutationResult & { EntityMaps?: string }> {
+        try {
+            const query = gql`query IntegrationListEntityMaps($companyIntegrationID: String!) {
+                IntegrationListEntityMaps(companyIntegrationID: $companyIntegrationID) { Success Message EntityMaps }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID });
+            return result?.IntegrationListEntityMaps ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    public async UpdateEntityMaps(
+        updates: Array<{ EntityMapID: string; SyncDirection?: string; Priority?: number; Status?: string }>
+    ): Promise<MutationResult> {
+        try {
+            const query = gql`mutation IntegrationUpdateEntityMaps($updates: [EntityMapUpdateInput!]!) {
+                IntegrationUpdateEntityMaps(updates: $updates) { Success Message }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { updates });
+            return result?.IntegrationUpdateEntityMaps ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    public async DeleteEntityMaps(entityMapIDs: string[]): Promise<MutationResult> {
+        try {
+            const query = gql`mutation IntegrationDeleteEntityMaps($entityMapIDs: [String!]!) {
+                IntegrationDeleteEntityMaps(entityMapIDs: $entityMapIDs) { Success Message }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { entityMapIDs });
+            return result?.IntegrationDeleteEntityMaps ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    // ── Schema Pipeline ────────────────────────────────────────────────
+
+    public async ApplySchema(
+        companyIntegrationID: string, objects: SchemaPreviewObjectInput[],
+        platform = 'sqlserver', skipGitCommit = false, skipRestart = false
+    ): Promise<MutationResult & { Steps?: Array<{ Name: string; Status: string; DurationMs: number; Message: string }>; MigrationFilePath?: string; APIRestarted?: boolean; GitCommitSuccess?: boolean }> {
+        try {
+            const query = gql`mutation IntegrationApplySchema(
+                $companyIntegrationID: String!, $objects: [SchemaPreviewObjectInput!]!, $platform: String!, $skipGitCommit: Boolean!, $skipRestart: Boolean!
+            ) {
+                IntegrationApplySchema(companyIntegrationID: $companyIntegrationID, objects: $objects, platform: $platform, skipGitCommit: $skipGitCommit, skipRestart: $skipRestart) {
+                    Success Message Steps { Name Status DurationMs Message } MigrationFilePath APIRestarted GitCommitSuccess
+                }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID, objects, platform, skipGitCommit, skipRestart });
+            return result?.IntegrationApplySchema ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /**
+     * Batch apply schema for multiple connectors in one RSU pipeline run.
+     * Sequential migrations, one CodeGen, one compile, one git PR, one restart.
+     */
+    public async ApplySchemaBatch(
+        items: Array<{ CompanyIntegrationID: string; Objects: SchemaPreviewObjectInput[] }>,
+        platform = 'sqlserver', skipGitCommit = false, skipRestart = false
+    ): Promise<{
+        Success: boolean;
+        Message: string;
+        Items?: Array<{ CompanyIntegrationID: string; Success: boolean; Message: string; Warnings?: string[] }>;
+        Steps?: Array<{ Name: string; Status: string; DurationMs: number; Message: string }>;
+        GitCommitSuccess?: boolean;
+        APIRestarted?: boolean;
+    }> {
+        try {
+            const query = gql`mutation IntegrationApplySchemaBatch(
+                $items: [ApplySchemaBatchItemInput!]!, $platform: String!, $skipGitCommit: Boolean!, $skipRestart: Boolean!
+            ) {
+                IntegrationApplySchemaBatch(items: $items, platform: $platform, skipGitCommit: $skipGitCommit, skipRestart: $skipRestart) {
+                    Success Message
+                    Items { CompanyIntegrationID Success Message Warnings }
+                    Steps { Name Status DurationMs Message }
+                    GitCommitSuccess APIRestarted
+                }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { items, platform, skipGitCommit, skipRestart });
+            return result?.IntegrationApplySchemaBatch ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    /**
+     * Full automatic "Apply All" flow: auto-names schema/tables, runs RSU pipeline,
+     * creates entity maps + field maps, and starts sync.
+     * @param companyIntegrationID - ID of the CompanyIntegration
+     * @param sourceObjectNames - List of source object names to apply
+     * @param platform - Target database platform
+     * @param skipGitCommit - Skip git commit step
+     * @param skipRestart - Skip API restart step
+     */
+    public async ApplyAll(
+        companyIntegrationID: string,
+        sourceObjectNames: string[],
+        platform = 'sqlserver',
+        skipGitCommit = false,
+        skipRestart = false
+    ): Promise<ApplyAllResult> {
+        try {
+            const query = gql`mutation IntegrationApplyAll(
+                $input: ApplyAllInput!, $platform: String!, $skipGitCommit: Boolean!, $skipRestart: Boolean!
+            ) {
+                IntegrationApplyAll(input: $input, platform: $platform, skipGitCommit: $skipGitCommit, skipRestart: $skipRestart) {
+                    Success Message
+                    Steps { Name Status DurationMs Message }
+                    EntityMapsCreated { SourceObjectName EntityName EntityMapID FieldMapCount }
+                    SyncRunID GitCommitSuccess APIRestarted Warnings
+                }
+            }`;
+            const input = { CompanyIntegrationID: companyIntegrationID, SourceObjectNames: sourceObjectNames };
+            const result = await this._dataProvider.ExecuteGQL(query, { input, platform, skipGitCommit, skipRestart });
+            return result?.IntegrationApplyAll ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    // ── Sync Execution ─────────────────────────────────────────────────
+
+    public async StartSync(companyIntegrationID: string, webhookURL?: string): Promise<MutationResult & { RunID?: string }> {
+        try {
+            const query = gql`mutation IntegrationStartSync($companyIntegrationID: String!, $webhookURL: String) {
+                IntegrationStartSync(companyIntegrationID: $companyIntegrationID, webhookURL: $webhookURL) { Success Message RunID }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID, webhookURL });
+            return result?.IntegrationStartSync ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    public async CancelSync(runID: string): Promise<MutationResult> {
+        try {
+            const query = gql`mutation IntegrationCancelSync($runID: String!) {
+                IntegrationCancelSync(runID: $runID) { Success Message }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { runID });
+            return result?.IntegrationCancelSync ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    // ── Scheduling ─────────────────────────────────────────────────────
+
+    public async CreateSchedule(input: {
+        CompanyIntegrationID: string; Name: string; CronExpression: string; Timezone?: string; Description?: string;
+    }): Promise<MutationResult & { ScheduledJobID?: string }> {
+        try {
+            const query = gql`mutation IntegrationCreateSchedule($input: CreateScheduleInput!) {
+                IntegrationCreateSchedule(input: $input) { Success Message ScheduledJobID }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { input });
+            return result?.IntegrationCreateSchedule ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    public async UpdateSchedule(scheduledJobID: string, cronExpression?: string, timezone?: string, name?: string): Promise<MutationResult> {
+        try {
+            const query = gql`mutation IntegrationUpdateSchedule($scheduledJobID: String!, $cronExpression: String, $timezone: String, $name: String) {
+                IntegrationUpdateSchedule(scheduledJobID: $scheduledJobID, cronExpression: $cronExpression, timezone: $timezone, name: $name) { Success Message }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { scheduledJobID, cronExpression, timezone, name });
+            return result?.IntegrationUpdateSchedule ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    public async ToggleSchedule(scheduledJobID: string, enabled: boolean): Promise<MutationResult> {
+        try {
+            const query = gql`mutation IntegrationToggleSchedule($scheduledJobID: String!, $enabled: Boolean!) {
+                IntegrationToggleSchedule(scheduledJobID: $scheduledJobID, enabled: $enabled) { Success Message }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { scheduledJobID, enabled });
+            return result?.IntegrationToggleSchedule ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    public async DeleteSchedule(scheduledJobID: string, companyIntegrationID?: string): Promise<MutationResult> {
+        try {
+            const query = gql`mutation IntegrationDeleteSchedule($scheduledJobID: String!, $companyIntegrationID: String) {
+                IntegrationDeleteSchedule(scheduledJobID: $scheduledJobID, companyIntegrationID: $companyIntegrationID) { Success Message }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { scheduledJobID, companyIntegrationID });
+            return result?.IntegrationDeleteSchedule ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    // ── Status & History ───────────────────────────────────────────────
+
+    public async GetStatus(companyIntegrationID: string): Promise<IntegrationStatusResult> {
+        try {
+            const query = gql`query IntegrationGetStatus($companyIntegrationID: String!) {
+                IntegrationGetStatus(companyIntegrationID: $companyIntegrationID) {
+                    Success Message IsActive IntegrationName TotalEntityMaps ActiveEntityMaps
+                    LastRunStatus LastRunStartedAt LastRunEndedAt ScheduleEnabled
+                }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID });
+            return result?.IntegrationGetStatus ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    public async GetSyncHistory(companyIntegrationID: string, limit = 20): Promise<MutationResult & { Runs?: string }> {
+        try {
+            const query = gql`query IntegrationGetSyncHistory($companyIntegrationID: String!, $limit: Float!) {
+                IntegrationGetSyncHistory(companyIntegrationID: $companyIntegrationID, limit: $limit) { Success Message Runs }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID, limit });
+            return result?.IntegrationGetSyncHistory ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
+    }
+
+    // ── Connector Capabilities ─────────────────────────────────────────
+
+    public async GetConnectorCapabilities(companyIntegrationID: string): Promise<ConnectorCapabilitiesResult> {
+        try {
+            const query = gql`query IntegrationGetConnectorCapabilities($companyIntegrationID: String!) {
+                IntegrationGetConnectorCapabilities(companyIntegrationID: $companyIntegrationID) {
+                    Success Message SupportsGet SupportsCreate SupportsUpdate SupportsDelete SupportsSearch
+                }
+            }`;
+            const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID });
+            return result?.IntegrationGetConnectorCapabilities ?? { Success: false, Message: 'No response' };
+        } catch (e) { return { Success: false, Message: (e as Error).message }; }
     }
 
     private handleError<T>(e: unknown, defaultData: T): DiscoveryResult<T> {

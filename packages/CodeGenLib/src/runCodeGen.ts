@@ -13,7 +13,7 @@ import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { MSSQLConnection, sqlConfig } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
-import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbType, getExternalEntitySchemas } from './Config/config';
+import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbType, getExternalEntitySchemas, initializeConfig } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import * as MJ from '@memberjunction/core';
 import { RunCommandsBase } from './Misc/runCommand';
@@ -44,7 +44,7 @@ const { mjCoreSchema } = configInfo;
  * Result from setupDataSource() providing both the data provider
  * and a CodeGenConnection for database operations.
  */
-interface DataSourceResult {
+export interface DataSourceResult {
   /** The configured data provider (SQL Server or PostgreSQL) */
   provider: IMetadataProvider;
   /** Database-agnostic connection for CodeGen operations */
@@ -156,20 +156,55 @@ export class RunCodeGenBase {
   /**
    * Main entry point for the complete code generation process.
    */
+  /**
+   * Run CodeGen in-process with an existing data source.
+   * Does NOT create a new DB connection or call process.exit().
+   * Designed for use by RuntimeSchemaManager inside a running MJAPI process.
+   */
+  public async RunInProcess(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false, workingDirectory?: string): Promise<boolean> {
+    try {
+      // Re-initialize config from the specified working directory (e.g. repo root)
+      // so CodeGen picks up the correct mj.config.cjs with output directories
+      if (workingDirectory) {
+        initializeConfig(workingDirectory);
+      }
+      return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration);
+    } catch (e) {
+      logError('In-process CodeGen failed: ' + e);
+      return false;
+    }
+  }
+
   public async Run(skipDatabaseGeneration: boolean = false) {
     try {
       const startTime = new Date();
       const platform = dbType();
       startSpinner('Starting MemberJunction CodeGen (' + platform + ') @ ' + startTime.toLocaleString());
 
-      const { provider, connection: conn, currentUser } = await this.setupDataSource();
+      const dataSource = await this.setupDataSource();
+      const success = await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration);
+      process.exit(success ? 0 : 1);
+    } catch (e) {
+      failSpinner('CodeGen failed: ' + e);
+      logError(e as string);
+      process.exit(1);
+    }
+  }
+
+  /**
+   * Core CodeGen pipeline logic shared by Run() and RunInProcess().
+   * Accepts an existing data source — does NOT create connections or call process.exit().
+   */
+  protected async executeCodeGenPipeline(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false): Promise<boolean> {
+      const { provider, connection: conn, currentUser } = dataSource;
+      const startTime = new Date();
 
       const md = new MJ.Metadata();
       if (md.Entities.length === 0) {
-        failSpinner('No entities found in metadata');
-        process.exit(1);
+        logError('No entities found in metadata');
+        return false;
       }
-      succeedSpinner('Loaded ' + md.Entities.length + ' entities from metadata');
+      logStatus('Loaded ' + md.Entities.length + ' entities from metadata');
 
       if (configInfo.advancedGeneration?.enableAdvancedGeneration) {
         startSpinner('Initializing AI Engine for advanced generation...');
@@ -240,7 +275,7 @@ export class RunCodeGenBase {
         const metadataSuccess = await manageMD.loadGeneratedCode(conn, currentUser);
         if (!metadataSuccess) {
           failSpinner('ERROR checking/loading AI Generated Code from Metadata');
-          return;
+          return false;
         } else {
           succeedSpinner('AI Generated Code loaded from Metadata');
         }
@@ -283,7 +318,7 @@ export class RunCodeGenBase {
         const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
         if (!graphQLGenerator.generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities', true)) {
           failSpinner('Error generating GraphQL server code');
-          return;
+          return false;
         } else if (isVerbose) succeedSpinner('CORE Entity GraphQL Resolver Code generated');
       }
 
@@ -291,14 +326,12 @@ export class RunCodeGenBase {
       if (graphqlOutputDir) {
         if (isVerbose) startSpinner('Generating GraphQL Resolver Code...');
         const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
-        // Note: for non-internal entities, generateEntityImports() resolves per-entity via
-        // resolveEntityPackageName(), so this default is only used as an isInternal signal.
         const entityPackageName = typeof configInfo.entityPackageName === 'string'
           ? (configInfo.entityPackageName || 'mj_generatedentities')
           : 'mj_generatedentities';
         if (!graphQLGenerator.generateGraphQLServerCode(nonCoreEntities, graphqlOutputDir, entityPackageName, false)) {
           failSpinner('Error generating GraphQL Resolver code');
-          return;
+          return false;
         } else if (isVerbose) succeedSpinner('GraphQL Resolver Code generated');
       } else if (isVerbose) warnSpinner('GraphQL server output directory NOT found in config file, skipping...');
 
@@ -308,12 +341,10 @@ export class RunCodeGenBase {
         const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
         if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, coreEntities, coreEntitySubClassOutputDir, skipDB)) {
           failSpinner('Error generating entity subclass code');
-          return;
+          return false;
         } else if (isVerbose) succeedSpinner('CORE Entity Subclass Code generated');
       }
 
-      // Filter out entities whose schemas have external packages (from installed OpenApps).
-      // These entities already have generated classes/forms in their respective npm packages.
       const externalSchemas = getExternalEntitySchemas().map(s => s.toLowerCase());
       const localNonCoreEntities = externalSchemas.length > 0
         ? nonCoreEntities.filter(e => !externalSchemas.includes(e.SchemaName.toLowerCase()))
@@ -325,7 +356,7 @@ export class RunCodeGenBase {
         const entitySubClassGeneratorObject = MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
         if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(conn, localNonCoreEntities, entitySubClassOutputDir, skipDB)) {
           failSpinner('Error generating entity subclass code');
-          return;
+          return false;
         } else if (isVerbose) succeedSpinner('Entity Subclass Code generated');
       } else if (isVerbose) warnSpinner('Entity subclass output directory NOT found in config file, skipping...');
 
@@ -335,7 +366,7 @@ export class RunCodeGenBase {
         const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
         if (!(await angularGenerator.generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core', currentUser))) {
           failSpinner('Error generating Angular CORE Entities code');
-          return;
+          return false;
         } else if (isVerbose) succeedSpinner('Angular CORE Entities Code generated');
       }
 
@@ -345,7 +376,7 @@ export class RunCodeGenBase {
         const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
         if (!(await angularGenerator.generateAngularCode(localNonCoreEntities, angularOutputDir, '', currentUser))) {
           failSpinner('Error generating Angular code');
-          return;
+          return false;
         } else if (isVerbose) succeedSpinner('Angular Code generated');
       } else if (isVerbose) warnSpinner('Angular output directory NOT found in config file, skipping...');
 
@@ -365,7 +396,7 @@ export class RunCodeGenBase {
         const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
         if (!(await actionsGenerator.generateActions(ActionEngineBase.Instance.CoreActions, coreActionsOutputDir))) {
           failSpinner('Error generating CORE Actions code');
-          return;
+          return false;
         } else if (isVerbose) succeedSpinner('CORE Actions Code generated');
       }
 
@@ -375,7 +406,7 @@ export class RunCodeGenBase {
         const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
         if (!(await actionsGenerator.generateActions(ActionEngineBase.Instance.NonCoreActions, actionsOutputDir))) {
           failSpinner('Error generating Actions code');
-          return;
+          return false;
         } else if (isVerbose) succeedSpinner('Actions Code generated');
       } else if (isVerbose) warnSpinner('Actions output directory NOT found in config file, skipping...');
 
@@ -402,13 +433,8 @@ export class RunCodeGenBase {
 
       const endTime = new Date();
       const totalSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
-      succeedSpinner('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
-      process.exit(0);
-    } catch (e) {
-      failSpinner('CodeGen failed: ' + e);
-      logError(e as string);
-      process.exit(1);
-    }
+      logStatus('MJ CodeGen Complete! ' + md.Entities.length + ' entities processed in ' + totalSeconds + 's @ ' + endTime.toLocaleString());
+      return true;
   }
 }
 

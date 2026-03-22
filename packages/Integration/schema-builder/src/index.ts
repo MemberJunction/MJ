@@ -20,6 +20,8 @@ export type {
     AccessControlResult,
 } from './interfaces.js';
 
+// NOTE: For RSU types (RSUPipelineInput, RSUPipelineResult, RSUPipelineStep), import directly from '@memberjunction/schema-engine'
+
 // Classes
 export { TypeMapper } from './TypeMapper.js';
 export { DDLGenerator, ValidateIdentifier } from './DDLGenerator.js';

@@ -1,8 +1,8 @@
 {
-  "name": "@memberjunction/integration-schema-builder",
+  "name": "@memberjunction/schema-engine",
   "type": "module",
   "version": "5.14.0",
-  "description": "MemberJunction Integration Schema Builder - file-emission-only DDL generation for integration tables",
+  "description": "MemberJunction Schema Engine - generic, platform-aware DDL generation for any MJ consumer (integrations, agents, developers)",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -15,8 +15,10 @@
   },
   "dependencies": {
     "@memberjunction/global": "5.14.0",
-    "@memberjunction/integration-engine": "5.14.0",
-    "@memberjunction/schema-engine": "5.14.0"
+    "@memberjunction/core": "5.14.0",
+    "@memberjunction/sql-dialect": "5.14.0",
+    "@memberjunction/queue": "5.14.0",
+    "@octokit/rest": "^21.1.1"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

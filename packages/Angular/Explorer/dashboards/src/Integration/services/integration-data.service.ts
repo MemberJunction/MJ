@@ -20,7 +20,8 @@ import {
   ConnectionTestGraphQLResult,
   SchemaPreviewObjectInput,
   SchemaPreviewResult,
-  DefaultConfigResult
+  DefaultConfigResult,
+  ApplyAllResult
 } from '@memberjunction/graphql-dataprovider';
 
 /**
@@ -595,6 +596,69 @@ export class IntegrationDataService {
   ): Promise<SchemaPreviewResult> {
     const client = this.getIntegrationClient();
     return client.SchemaPreview(companyIntegrationID, objects, platform);
+  }
+
+  /** Execute the full RSU pipeline for an integration entity map */
+  async RunSchemaPipeline(
+    companyIntegrationID: string,
+    entityMap: EntityMapRow
+  ): Promise<{ Success: boolean; Message?: string }> {
+    const md = new Metadata();
+    const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityMap.EntityID));
+    if (!entityInfo) {
+      return { Success: false, Message: `Entity not found for ID ${entityMap.EntityID}` };
+    }
+
+    const objects: SchemaPreviewObjectInput[] = [{
+      SourceObjectName: entityMap.ExternalObjectName,
+      SchemaName: entityInfo.SchemaName,
+      TableName: entityInfo.BaseTable,
+      EntityName: entityInfo.Name
+    }];
+
+    const client = this.getIntegrationClient();
+    const result = await client.ApplySchema(companyIntegrationID, objects);
+    return { Success: result.Success, Message: result.Message };
+  }
+
+  /** Execute the RSU pipeline for new entity maps — introspects, generates DDL, runs full pipeline */
+  async ApplySchemaForNewMaps(
+    companyIntegrationID: string,
+    objects: SchemaPreviewObjectInput[]
+  ): Promise<{ Success: boolean; Message: string }> {
+    const client = this.getIntegrationClient();
+    const result = await client.ApplySchema(companyIntegrationID, objects);
+    return { Success: result.Success, Message: result.Message ?? '' };
+  }
+
+  /** Batch apply schema for multiple connectors — one RSU pipeline run */
+  async ApplySchemaBatch(
+    items: Array<{ CompanyIntegrationID: string; Objects: SchemaPreviewObjectInput[] }>
+  ): Promise<{
+    Success: boolean;
+    Message: string;
+    Items?: Array<{ CompanyIntegrationID: string; Success: boolean; Message: string; Warnings?: string[] }>;
+    Steps?: Array<{ Name: string; Status: string; DurationMs: number; Message: string }>;
+    GitCommitSuccess?: boolean;
+    APIRestarted?: boolean;
+  }> {
+    const client = this.getIntegrationClient();
+    return client.ApplySchemaBatch(items);
+  }
+
+  /** Full automatic "Apply All" flow: pipeline + entity maps + field maps + sync */
+  async ApplyAll(
+    companyIntegrationID: string,
+    sourceObjectNames: string[]
+  ): Promise<ApplyAllResult> {
+    const client = this.getIntegrationClient();
+    return client.ApplyAll(companyIntegrationID, sourceObjectNames);
+  }
+
+  /** Start a sync for a company integration */
+  async StartSync(companyIntegrationID: string): Promise<{ Success: boolean; Message: string; RunID?: string }> {
+    const client = this.getIntegrationClient();
+    return client.StartSync(companyIntegrationID);
   }
 
   /** Get the connector's default configuration for quick setup */

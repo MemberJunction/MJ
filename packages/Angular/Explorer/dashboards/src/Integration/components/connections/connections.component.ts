@@ -7,6 +7,7 @@ import { ResourceData, MJCompanyIntegrationEntity, MJCredentialEntity, MJIntegra
 import { CredentialDialogResult } from '@memberjunction/ng-credentials';
 import { TreeBranchConfig, TreeLeafConfig, TreeNode, TreeDropdownComponent } from '@memberjunction/ng-trees';
 import { SchemaPreviewObjectInput, SchemaPreviewResult } from '@memberjunction/graphql-dataprovider';
+import { DiscoveredObjectResult } from '@memberjunction/graphql-dataprovider';
 import {
   IntegrationDataService,
   ResolveIntegrationIcon,
@@ -174,6 +175,22 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   DDLPreviewWarnings: string[] = [];
   IsGeneratingDDL = false;
   IsCreatingEntity = false;
+
+  // Apply Schema (RSU Pipeline) state
+  IsApplyingSchema = false;
+  ApplySchemaMessage = '';
+  ApplySchemaSuccess = false;
+
+  // Batch Apply Schema state
+  IsApplyingSchemaBatch = false;
+  ApplySchemaBatchMessage = '';
+  ApplySchemaBatchSuccess = false;
+  ApplySchemaBatchSteps: Array<{ Name: string; Status: string; DurationMs: number; Message: string }> = [];
+
+  // Apply All: discovered source objects + selection
+  DiscoveredSourceObjects: DiscoveredObjectResult[] = [];
+  IsLoadingDiscoveredObjects = false;
+  SelectedSourceObjects = new Set<string>();
 
   // Auto-map schema state
   ShowAutoMapPanel = false;
@@ -545,13 +562,16 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.SelectedSummary = summary;
     this.DetailSearchTerm = '';
     this.ScheduledJobID = null;
+    this.DiscoveredSourceObjects = [];
+    this.SelectedSourceObjects.clear();
     this.IsDetailLoading = true;
     this.cdr.detectChanges();
 
     try {
       const [maps] = await Promise.all([
         this.loadEntityMapsForIntegration(summary.Integration.ID),
-        this.loadScheduledJobForIntegration(summary.Integration.ID)
+        this.loadScheduledJobForIntegration(summary.Integration.ID),
+        this.LoadDiscoveredObjects()
       ]);
       this.DetailEntityMaps = maps;
       this.DetailFilteredMaps = maps;
@@ -619,8 +639,16 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       const md = new Metadata();
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(companyIntegrationID);
-      const scheduledJobID = ci.Get('ScheduledJobID') as string | null;
-      this.ScheduledJobID = scheduledJobID ?? null;
+      // ScheduledJobID is not a typed property on MJCompanyIntegrationEntity.
+      // Look up the scheduled job via a RunView query instead.
+      const rv2 = new RunView();
+      const jobResult = await rv2.RunView<{ ID: string }>({
+        EntityName: 'MJ: Scheduled Jobs',
+        ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+        Fields: ['ID'],
+        ResultType: 'simple'
+      });
+      this.ScheduledJobID = (jobResult.Success && jobResult.Results.length > 0) ? jobResult.Results[0].ID : null;
 
       // Also look up the Integration Sync job type ID for pre-populating new schedules
       if (!this.integrationSyncJobTypeID) {
@@ -827,6 +855,151 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       this.DDLPreview = `-- Failed to generate DDL: ${msg}`;
     } finally {
       this.IsGeneratingDDL = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  async ApplySchema(): Promise<void> {
+    if (!this.SelectedSummary || !this.AddMapSourceObjectName || !this.NewEntitySchema || !this.NewEntityTable) return;
+
+    this.IsApplyingSchema = true;
+    this.ApplySchemaMessage = '';
+    this.cdr.detectChanges();
+
+    try {
+      const result = await this.dataService.ApplySchemaForNewMaps(
+        this.SelectedSummary.Integration.ID,
+        [{
+          SourceObjectName: this.AddMapSourceObjectName,
+          SchemaName: this.NewEntitySchema.trim(),
+          TableName: this.NewEntityTable.trim(),
+          EntityName: this.NewEntityName
+        }]
+      );
+
+      this.ApplySchemaSuccess = result.Success;
+      this.ApplySchemaMessage = result.Message;
+    } catch (e) {
+      this.ApplySchemaSuccess = false;
+      this.ApplySchemaMessage = `Apply schema failed: ${(e as Error).message}`;
+    } finally {
+      this.IsApplyingSchema = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Source object discovery + selection for Apply All
+  // ---------------------------------------------------------------------------
+
+  async LoadDiscoveredObjects(): Promise<void> {
+    if (!this.SelectedSummary) return;
+    this.IsLoadingDiscoveredObjects = true;
+    this.DiscoveredSourceObjects = [];
+    this.SelectedSourceObjects.clear();
+    this.cdr.detectChanges();
+
+    try {
+      const result = await this.dataService.DiscoverObjects(this.SelectedSummary.Integration.ID);
+      if (result.Success) {
+        this.DiscoveredSourceObjects = result.Data;
+      } else {
+        console.error('[IntegrationConnections] Discover objects failed:', result.Message);
+      }
+    } catch (err) {
+      console.error('[IntegrationConnections] Discover objects error:', err);
+    } finally {
+      this.IsLoadingDiscoveredObjects = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  ToggleSourceObjectSelection(name: string): void {
+    if (this.SelectedSourceObjects.has(name)) {
+      this.SelectedSourceObjects.delete(name);
+    } else {
+      this.SelectedSourceObjects.add(name);
+    }
+    this.cdr.detectChanges();
+  }
+
+  IsSourceObjectSelected(name: string): boolean {
+    return this.SelectedSourceObjects.has(name);
+  }
+
+  SelectAllSourceObjects(): void {
+    for (const obj of this.DiscoveredSourceObjects) {
+      this.SelectedSourceObjects.add(obj.Name);
+    }
+    this.cdr.detectChanges();
+  }
+
+  DeselectAllSourceObjects(): void {
+    this.SelectedSourceObjects.clear();
+    this.cdr.detectChanges();
+  }
+
+  get AllSourceObjectsSelected(): boolean {
+    return this.DiscoveredSourceObjects.length > 0
+      && this.SelectedSourceObjects.size === this.DiscoveredSourceObjects.length;
+  }
+
+  get SomeSourceObjectsSelected(): boolean {
+    return this.SelectedSourceObjects.size > 0
+      && this.SelectedSourceObjects.size < this.DiscoveredSourceObjects.length;
+  }
+
+  ToggleSelectAllSourceObjects(): void {
+    if (this.AllSourceObjectsSelected) {
+      this.DeselectAllSourceObjects();
+    } else {
+      this.SelectAllSourceObjects();
+    }
+  }
+
+  /**
+   * Full automatic "Apply All" flow: discovers objects, runs RSU pipeline,
+   * creates entity maps + field maps, starts sync.
+   * Uses selected source objects from the discovered objects list.
+   */
+  async ApplySchemaBatch(): Promise<void> {
+    if (!this.SelectedSummary) return;
+
+    const selectedNames = Array.from(this.SelectedSourceObjects);
+    if (selectedNames.length === 0) {
+      this.ApplySchemaBatchSuccess = false;
+      this.ApplySchemaBatchMessage = 'No source objects selected. Select objects from the discovered list first.';
+      this.cdr.detectChanges();
+      return;
+    }
+
+    this.IsApplyingSchemaBatch = true;
+    this.ApplySchemaBatchMessage = '';
+    this.ApplySchemaBatchSteps = [];
+    this.cdr.detectChanges();
+
+    try {
+      const result = await this.dataService.ApplyAll(
+        this.SelectedSummary.Integration.ID,
+        selectedNames
+      );
+
+      this.ApplySchemaBatchSuccess = result.Success;
+      this.ApplySchemaBatchMessage = result.Message;
+      this.ApplySchemaBatchSteps = result.Steps ?? [];
+
+      // Refresh entity maps after successful apply
+      if (result.Success && this.SelectedSummary) {
+        const maps = await this.loadEntityMapsForIntegration(this.SelectedSummary.Integration.ID);
+        this.DetailEntityMaps = maps;
+        this.DetailFilteredMaps = this.applyDetailFilter();
+        this.EntityMapCounts = this.countMapsByIntegration(await this.loadAllEntityMaps());
+      }
+    } catch (e) {
+      this.ApplySchemaBatchSuccess = false;
+      this.ApplySchemaBatchMessage = `Apply All failed: ${(e as Error).message}`;
+    } finally {
+      this.IsApplyingSchemaBatch = false;
       this.cdr.detectChanges();
     }
   }
