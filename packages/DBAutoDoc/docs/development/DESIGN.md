@@ -621,7 +621,7 @@ All prompts stored as `.md` files in `prompts/` directory.
   },
   "ai": {
     "provider": "openai",
-    "model": "gpt-4-turbo-preview",
+    "model": "gemini-3-flash-preview",
     "apiKey": "sk-...",
     "temperature": 0.1,
     "maxTokens": 4000

@@ -246,6 +246,31 @@ Sanity checks detect semantic inconsistencies at three granularities: dependency
 
 ### 5.5 Context Propagation: The Backward Pass
 
+
+```mermaid
+graph LR
+    subgraph "Iteration 1"
+        direction TB
+        A1["Level 0: Products ⭐<br/>Initial description"] --> B1["Level 1: Orders<br/>Uses Products context"]
+        B1 --> C1["Level 2: OrderDetails<br/>Uses Orders + Products"]
+    end
+
+    subgraph "Iteration 2"
+        direction TB
+        A2["Level 0: Products ⭐⭐<br/>Refined by Orders insight"] --> B2["Level 1: Orders<br/>Better with refined Products"]
+        B2 --> C2["Level 2: OrderDetails<br/>Converged description"]
+    end
+
+    C1 -.->|"Child insights<br/>propagate back"| A2
+
+    style A1 fill:#ffe0b2
+    style A2 fill:#c8e6c9
+    style C1 fill:#ffe0b2
+    style C2 fill:#c8e6c9
+```
+
+Each iteration refines descriptions by incorporating updated neighbor context. Level 0 tables (no dependencies) are analyzed first, providing context for Level 1 tables. Insights from child tables propagate back to parent descriptions in subsequent iterations — the "backward pass" of our analogy.
+
 The `BackpropagationEngine` implements insight accumulation, parent revision, and cascading propagation. After each level completes, insights from child tables are accumulated per parent. For each parent with non-empty insights and non-immutable description, a revision prompt presents the current description, accumulated insights with confidence scores, sanity-check violations, and seed context. The LLM returns `{needsRevision, revisedDescription, reasoning, confidence}`, allowing explicit determination that the current description is already correct.
 
 Cascading propagation across iterations means a single pass propagates insights upward by exactly one dependency level; deeper corrections are realized in subsequent iterations. The number of iterations for full convergence is bounded by the dependency depth $d$. Ground truth tables are never revised, serving as fixed semantic anchors.
@@ -453,6 +478,19 @@ We frame the pipeline's development iterations as an ablation study, isolating t
 
 **Table 6: FK Detection Ablation on AdventureWorks2022**
 
+```mermaid
+graph LR
+    S["Stats Only<br/>F1: 30%"] -->|"+LLM"| SL["Stats + LLM<br/>F1: 71.7%"]
+    SL -->|"+Gates"| SLG["+ Det. Gates<br/>F1: 87.0%"]
+    SLG -->|"+Pruning"| FULL["Full Pipeline<br/>F1: 94.2%"]
+
+    style S fill:#ffcdd2
+    style SL fill:#fff9c4
+    style SLG fill:#c8e6c9
+    style FULL fill:#a5d6a7,stroke:#2e7d32,stroke-width:2px
+```
+
+
 | Configuration | FK Correct | FK F1 | What it measures |
 |---|---|---|---|
 | Statistical discovery only (no LLM) | 15/91 | ~30% | Baseline deterministic capability |
@@ -460,6 +498,19 @@ We frame the pipeline's development iterations as an ablation study, isolating t
 | Stats + LLM (no gates, no pruning) | 90/91 | 71.7% | Combined recall, poor precision |
 | Stats + LLM + deterministic gates | 87/91 | 87.0% | Gates improve precision (+15 F1 points) |
 | Full pipeline (stats + LLM + gates + pruning) | 90/91 | 94.2% | Pruning recovers precision (+7 F1 points) |
+
+```mermaid
+graph LR
+    S["Stats Only<br/>F1: 30%"] -->|"+LLM"| SL["Stats + LLM<br/>F1: 71.7%"]
+    SL -->|"+Gates"| SLG["+ Det. Gates<br/>F1: 87.0%"]
+    SLG -->|"+Pruning"| FULL["Full Pipeline<br/>F1: 94.2%"]
+
+    style S fill:#ffcdd2
+    style SL fill:#fff9c4
+    style SLG fill:#c8e6c9
+    style FULL fill:#a5d6a7,stroke:#2e7d32,stroke-width:2px
+```
+
 
 **Key insight.** The LLM contributes most of the *recall* (finding correct FKs), while the deterministic pipeline contributes most of the *precision* (removing false positives). Neither alone achieves the full pipeline's 94.2% F1. The deterministic gates account for a **23-point F1 improvement** over LLM-only detection (71.7% to 94.2%), demonstrating that the pipeline's contribution is substantial and independent of the LLM's pre-training knowledge.
 
