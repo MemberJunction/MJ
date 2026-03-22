@@ -1,6 +1,6 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDialect, PostgreSQLDialect, type SQLDialect } from "@memberjunction/sql-dialect";
-import { MJSQLParser } from "@memberjunction/sql-parser";
+import { SQLParser } from "@memberjunction/sql-parser";
 import { Metadata, QueryInfo, DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
 
 /**
@@ -126,7 +126,7 @@ export class QueryCompositionEngine {
     public HasCompositionTokens(sql: string): boolean {
         if (!sql) return false;
         const stripped = this.stripSQLComments(sql);
-        const tokens = MJSQLParser.Tokenize(stripped);
+        const tokens = SQLParser.Tokenize(stripped);
         return tokens.some(t => t.type === 'MJ_COMPOSITION_REF');
     }
 
@@ -145,7 +145,7 @@ export class QueryCompositionEngine {
         if (!sql) return [];
 
         const stripped = this.stripSQLComments(sql);
-        const refs = MJSQLParser.ExtractCompositionRefs(stripped);
+        const refs = SQLParser.ExtractCompositionRefs(stripped);
 
         return refs.map(ref => {
             const categorySegments = ref.categoryPath
@@ -357,7 +357,7 @@ export class QueryCompositionEngine {
     }
 
     // parseTokenContent and splitParams removed — composition token parsing
-    // is now handled by MJLexer via MJSQLParser.ExtractCompositionRefs()
+    // is now handled by MJLexer via SQLParser.ExtractCompositionRefs()
 
     /**
      * Looks up a query by category path + name, checking inline dependencies first,
@@ -649,7 +649,7 @@ export class QueryCompositionEngine {
     /**
      * Extracts inner CTE definitions from SQL that starts with a WITH clause.
      *
-     * Delegates to {@link MJSQLParser.ExtractCTEs} which uses AST parsing first
+     * Delegates to {@link SQLParser.ExtractCTEs} which uses AST parsing first
      * (via node-sql-parser), falling back to a paren-depth regex approach when
      * AST parsing fails (e.g. SQL contains Nunjucks template tokens).
      *
@@ -658,7 +658,7 @@ export class QueryCompositionEngine {
      */
     private hoistInnerCTEs(sql: string, platform: DatabasePlatform): { innerCTEDefinitions: string[]; mainSelect: string } {
         const dialect = platform === 'postgresql' ? 'PostgresQL' : 'TransactSQL';
-        const extraction = MJSQLParser.ExtractCTEs(sql, dialect);
+        const extraction = SQLParser.ExtractCTEs(sql, dialect);
 
         if (!extraction) {
             // Should not happen since caller already verified WITH prefix,
@@ -724,7 +724,7 @@ export class QueryCompositionEngine {
         if (directResult !== null) return directResult;
 
         // Check for MJ extensions using MJLexer (replaces regex check)
-        const mjParse = MJSQLParser.Analyze(sql);
+        const mjParse = SQLParser.Analyze(sql);
         if (mjParse.hasMJExtensions) {
             return this.tryNunjucksAwareStrip(sql, parserDialect);
         }
@@ -737,8 +737,8 @@ export class QueryCompositionEngine {
      */
     private tryASTStrip(sql: string, parserDialect: string): string | null {
         try {
-            // Use MJSQLParser.ParseSQL for FOR XML multi-directive workaround
-            const ast = MJSQLParser.ParseSQL(sql, parserDialect);
+            // Use SQLParser.ParseSQL for FOR XML multi-directive workaround
+            const ast = SQLParser.ParseSQL(sql, parserDialect);
             if (!ast) return null;
 
             const stmt = Array.isArray(ast) ? ast[0] : ast;
@@ -750,7 +750,7 @@ export class QueryCompositionEngine {
             if (this.isOrderByLegalInCTE(orderByStmt)) return sql;
 
             orderByStmt.orderby = null;
-            return MJSQLParser.SqlifyAST(Array.isArray(ast) ? ast : [stmt], parserDialect);
+            return SQLParser.SqlifyAST(Array.isArray(ast) ? ast : [stmt], parserDialect);
         } catch {
             return null;
         }
@@ -775,7 +775,7 @@ export class QueryCompositionEngine {
         const preprocessed = this.preprocessNunjucks(sql);
 
         try {
-            const ast = MJSQLParser.ParseSQL(preprocessed, parserDialect);
+            const ast = SQLParser.ParseSQL(preprocessed, parserDialect);
             if (!ast) return null;
             const stmt = Array.isArray(ast) ? ast[0] : ast;
             if (!stmt) return sql;
@@ -828,7 +828,7 @@ export class QueryCompositionEngine {
      * respecting SQL string literals and comments.
      */
     private findTopLevelOrderByPositions(sql: string): number[] {
-        const tokens = MJSQLParser.Tokenize(sql);
+        const tokens = SQLParser.Tokenize(sql);
         const positions: number[] = [];
         let parenDepth = 0;
 
@@ -888,7 +888,7 @@ export class QueryCompositionEngine {
      * Uses MJPlaceholderSubstitution for context-aware placeholder generation.
      */
     private preprocessNunjucks(sql: string): string {
-        return MJSQLParser.Substitute(sql).cleanSQL;
+        return SQLParser.Substitute(sql).cleanSQL;
     }
 
     /**

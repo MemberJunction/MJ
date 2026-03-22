@@ -21,7 +21,7 @@ import {
     removeCollate,
 } from "@memberjunction/sql-converter";
 import { EmbedTextLocalHelper } from "./util";
-import { MJSQLParser } from "@memberjunction/sql-parser";
+import { SQLParser } from "@memberjunction/sql-parser";
 import type { MJParameterInfo } from "@memberjunction/sql-parser";
 
 interface ExtractedParameter {
@@ -263,9 +263,9 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 return;
             }
 
-            // ── Deterministic analysis via MJSQLParser (source of truth) ──
-            const analysis = MJSQLParser.Analyze(this.SQL);
-            const deterministicParams = MJSQLParser.ExtractParameterInfo(this.SQL);
+            // ── Deterministic analysis via SQLParser (source of truth) ──
+            const analysis = SQLParser.Analyze(this.SQL);
+            const deterministicParams = SQLParser.ExtractParameterInfo(this.SQL);
             const hasTemplateParameters = analysis.hasTemplateExpressions && deterministicParams.length > 0;
 
             // Extract entity metadata deterministically (for LLM context and entity sync)
@@ -277,7 +277,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
             // ── Merge: deterministic structure + LLM descriptions ──
             const syncPromises: Promise<void>[] = [];
 
-            // Parameters: MJSQLParser provides name, type, isRequired, defaultValue.
+            // Parameters: SQLParser provides name, type, isRequired, defaultValue.
             // LLM provides description and sampleValue as enrichment.
             if (hasTemplateParameters) {
                 const enrichedParams = this.mergeParametersWithLLM(deterministicParams, llmResult);
@@ -353,9 +353,9 @@ export class MJQueryEntityServer extends MJQueryEntity {
     }
 
     /**
-     * Merges deterministic parameter extraction (MJSQLParser) with LLM enrichment.
+     * Merges deterministic parameter extraction (SQLParser) with LLM enrichment.
      *
-     * MJSQLParser is the authority for: name, type, isRequired, defaultValue
+     * SQLParser is the authority for: name, type, isRequired, defaultValue
      * LLM provides: description, sampleValue (with heuristic fallbacks if LLM unavailable)
      */
     private mergeParametersWithLLM(
@@ -419,7 +419,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
     
     /**
      * Extracts entity metadata from the SQL to provide context to the LLM for parameter type inference.
-     * Uses MJSQLParser for robust SQL parsing with MJ template support.
+     * Uses SQLParser for robust SQL parsing with MJ template support.
      */
     private async extractEntityMetadataFromSQL(): Promise<Array<{
         name: string;
@@ -438,8 +438,8 @@ export class MJQueryEntityServer extends MJQueryEntity {
         if (!this.SQL) return results;
 
         try {
-            const tableRefs = MJSQLParser.ExtractTableRefs(this.SQL);
-            const columnRefs = MJSQLParser.ExtractColumnRefs(this.SQL);
+            const tableRefs = SQLParser.ExtractTableRefs(this.SQL);
+            const columnRefs = SQLParser.ExtractColumnRefs(this.SQL);
 
             for (const tableRef of tableRefs) {
                 const matchingEntity = md.Entities.find(e =>
@@ -575,7 +575,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 newParam.DefaultValue = param.defaultValue;
                 newParam.Description = param.description;
                 newParam.SampleValue = param.sampleValue;
-                newParam.DetectionMethod = 'AI'; // Structure from MJSQLParser AST, descriptions enriched by LLM
+                newParam.DetectionMethod = 'AI'; // Structure from SQLParser AST, descriptions enriched by LLM
                 promises.push(newParam.Save());
             }
             
@@ -695,7 +695,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
         const md = this.ProviderToUse as unknown as IMetadataProvider;
 
         try {
-            const tableRefs = MJSQLParser.ExtractTableRefs(this.SQL);
+            const tableRefs = SQLParser.ExtractTableRefs(this.SQL);
             const expandedFields: ExtractedField[] = [];
 
             for (const tableRef of tableRefs) {
@@ -725,7 +725,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
 
             // Also check for {{query:"..."}} composition tokens in FROM clause
             if (expandedFields.length === 0) {
-                const compositionRefs = MJSQLParser.ExtractCompositionRefs(this.SQL);
+                const compositionRefs = SQLParser.ExtractCompositionRefs(this.SQL);
                 for (const ref of compositionRefs) {
                     const referencedQuery = Metadata.Provider.Queries.find(q =>
                         q.Name.toLowerCase() === ref.queryName.toLowerCase()

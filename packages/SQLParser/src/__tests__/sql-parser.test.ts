@@ -1,37 +1,37 @@
 import { describe, it, expect } from 'vitest';
-import { MJSQLParser } from '../mj-sql-parser.js';
+import { SQLParser } from '../mj-sql-parser.js';
 
-describe('MJSQLParser', () => {
+describe('SQLParser', () => {
     // ================================================================
     // ExtractTableRefs
     // ================================================================
     describe('ExtractTableRefs', () => {
         it('should extract table references from a simple SELECT', () => {
-            const tables = MJSQLParser.ExtractTableRefs('SELECT ID, Name FROM Users WHERE Active = 1');
+            const tables = SQLParser.ExtractTableRefs('SELECT ID, Name FROM Users WHERE Active = 1');
             expect(tables.length).toBeGreaterThanOrEqual(1);
             expect(tables[0].TableName).toBe('Users');
         });
 
         it('should extract table references from a JOIN query', () => {
-            const tables = MJSQLParser.ExtractTableRefs('SELECT u.ID, r.Name FROM Users u INNER JOIN Roles r ON u.RoleID = r.ID');
+            const tables = SQLParser.ExtractTableRefs('SELECT u.ID, r.Name FROM Users u INNER JOIN Roles r ON u.RoleID = r.ID');
             expect(tables.length).toBe(2);
             const tableNames = tables.map(t => t.TableName).sort();
             expect(tableNames).toEqual(['Roles', 'Users']);
         });
 
         it('should extract schema-qualified table references', () => {
-            const tables = MJSQLParser.ExtractTableRefs('SELECT ID FROM __mj.AIAgentRun');
+            const tables = SQLParser.ExtractTableRefs('SELECT ID FROM __mj.AIAgentRun');
             expect(tables.length).toBe(1);
             expect(tables[0].TableName).toBe('AIAgentRun');
             expect(tables[0].SchemaName).toBe('__mj');
         });
 
         it('should return empty for empty SQL', () => {
-            expect(MJSQLParser.ExtractTableRefs('')).toEqual([]);
+            expect(SQLParser.ExtractTableRefs('')).toEqual([]);
         });
 
         it('should extract tables from SQL with Nunjucks templates', () => {
-            const tables = MJSQLParser.ExtractTableRefs(
+            const tables = SQLParser.ExtractTableRefs(
                 "SELECT ID FROM Users WHERE Region = {{ Region | sqlString }}"
             );
             expect(tables.length).toBe(1);
@@ -44,17 +44,17 @@ describe('MJSQLParser', () => {
 WHERE Active = 1
 {% endif %}
 ORDER BY Name`;
-            const tables = MJSQLParser.ExtractTableRefs(sql);
+            const tables = SQLParser.ExtractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(1);
         });
 
         it('should accept PostgreSQL dialect', () => {
-            const tables = MJSQLParser.ExtractTableRefs('SELECT id FROM users', 'PostgresQL');
+            const tables = SQLParser.ExtractTableRefs('SELECT id FROM users', 'PostgresQL');
             expect(tables.length).toBe(1);
         });
 
         it('should handle SQL Server TOP clause', () => {
-            const tables = MJSQLParser.ExtractTableRefs('SELECT TOP 10 ID FROM Users');
+            const tables = SQLParser.ExtractTableRefs('SELECT TOP 10 ID FROM Users');
             expect(tables.length).toBe(1);
         });
     });
@@ -64,7 +64,7 @@ ORDER BY Name`;
     // ================================================================
     describe('ExtractColumnRefs', () => {
         it('should extract column references from simple SQL', () => {
-            const columns = MJSQLParser.ExtractColumnRefs('SELECT ID, Name FROM Users WHERE Active = 1');
+            const columns = SQLParser.ExtractColumnRefs('SELECT ID, Name FROM Users WHERE Active = 1');
             expect(columns.length).toBeGreaterThanOrEqual(2);
             const colNames = columns.map(c => c.ColumnName);
             expect(colNames).toContain('ID');
@@ -72,13 +72,13 @@ ORDER BY Name`;
         });
 
         it('should extract qualified column references', () => {
-            const columns = MJSQLParser.ExtractColumnRefs('SELECT u.Name, r.Title FROM Users u JOIN Roles r ON u.RoleID = r.ID');
+            const columns = SQLParser.ExtractColumnRefs('SELECT u.Name, r.Title FROM Users u JOIN Roles r ON u.RoleID = r.ID');
             const qualified = columns.filter(c => c.TableQualifier !== null);
             expect(qualified.length).toBeGreaterThan(0);
         });
 
         it('should return empty for empty SQL', () => {
-            expect(MJSQLParser.ExtractColumnRefs('')).toEqual([]);
+            expect(SQLParser.ExtractColumnRefs('')).toEqual([]);
         });
     });
 
@@ -87,12 +87,12 @@ ORDER BY Name`;
     // ================================================================
     describe('ExtractCTEs', () => {
         it('should return null for SQL without a WITH clause', () => {
-            expect(MJSQLParser.ExtractCTEs('SELECT * FROM Users')).toBeNull();
+            expect(SQLParser.ExtractCTEs('SELECT * FROM Users')).toBeNull();
         });
 
         it('should extract a single CTE', () => {
             const sql = 'WITH Active AS (SELECT ID FROM Users WHERE Active = 1) SELECT * FROM Active';
-            const result = MJSQLParser.ExtractCTEs(sql);
+            const result = SQLParser.ExtractCTEs(sql);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(1);
@@ -102,7 +102,7 @@ ORDER BY Name`;
 
         it('should extract multiple CTEs', () => {
             const sql = 'WITH A AS (SELECT 1 AS x), B AS (SELECT 2 AS y) SELECT A.x, B.y FROM A, B';
-            const result = MJSQLParser.ExtractCTEs(sql);
+            const result = SQLParser.ExtractCTEs(sql);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(2);
@@ -112,7 +112,7 @@ ORDER BY Name`;
 
         it('should handle CTEs with nested parentheses', () => {
             const sql = "WITH Agg AS (SELECT MemberID, COUNT(DISTINCT ChapterID) AS Total FROM (SELECT * FROM Memberships WHERE Status = 'Active') sub GROUP BY MemberID) SELECT * FROM Agg";
-            const result = MJSQLParser.ExtractCTEs(sql);
+            const result = SQLParser.ExtractCTEs(sql);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(1);
@@ -121,7 +121,7 @@ ORDER BY Name`;
 
         it('should handle CTEs with string literals containing parentheses', () => {
             const sql = "WITH Filtered AS (SELECT * FROM T WHERE Name = 'Test (Dept)') SELECT * FROM Filtered";
-            const result = MJSQLParser.ExtractCTEs(sql);
+            const result = SQLParser.ExtractCTEs(sql);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(1);
@@ -130,7 +130,7 @@ ORDER BY Name`;
 
         it('should handle SQL with Nunjucks templates (regex fallback)', () => {
             const sql = "WITH Filtered AS (SELECT * FROM T WHERE x = {{ someParam }}) SELECT * FROM Filtered";
-            const result = MJSQLParser.ExtractCTEs(sql);
+            const result = SQLParser.ExtractCTEs(sql);
 
             expect(result).not.toBeNull();
             expect(result!.UsedASTParsing).toBe(false);
@@ -140,7 +140,7 @@ ORDER BY Name`;
 
         it('should accept a dialect parameter', () => {
             const sql = 'WITH A AS (SELECT 1) SELECT * FROM A';
-            const result = MJSQLParser.ExtractCTEs(sql, 'PostgresQL');
+            const result = SQLParser.ExtractCTEs(sql, 'PostgresQL');
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(1);
@@ -178,7 +178,7 @@ WHERE TotalActivityCount >= {{ MinActivityCount | sqlNumber }}
 {% endif %}
 ORDER BY TotalActivityCount DESC`;
 
-            const result = MJSQLParser.ExtractCTEs(sql);
+            const result = SQLParser.ExtractCTEs(sql);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(1);
@@ -212,7 +212,7 @@ FROM ChapterMembers chmem
 LEFT JOIN ChapterEventActivity chev ON chmem.ChapterID = chev.ChapterID
 LEFT JOIN ChapterCourseActivity chcr ON chmem.ChapterID = chcr.ChapterID`;
 
-            const result = MJSQLParser.ExtractCTEs(sql);
+            const result = SQLParser.ExtractCTEs(sql);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(3);
@@ -238,7 +238,7 @@ FROM current_members m
 INNER JOIN nams.vwAccounts a ON a.Id = m.NU__Account__c
 ORDER BY a.LastName, a.FirstName`;
 
-            const result = MJSQLParser.ExtractCTEs(sql);
+            const result = SQLParser.ExtractCTEs(sql);
 
             expect(result).not.toBeNull();
             expect(result!.CTEDefinitions).toHaveLength(2);
@@ -260,7 +260,7 @@ INNER JOIN [AssociationDemo].[vwMembers] m ON ms.MemberID = m.ID
 WHERE ms.Status = 'Active'
 GROUP BY mt.Name`;
 
-            expect(MJSQLParser.ExtractCTEs(sql)).toBeNull();
+            expect(SQLParser.ExtractCTEs(sql)).toBeNull();
         });
 
         it('should return null for query with subquery in JOIN (no CTE)', () => {
@@ -272,7 +272,7 @@ LEFT JOIN (
     GROUP BY li.RelatedEntityID
 ) rev ON e.ID = rev.EventID`;
 
-            expect(MJSQLParser.ExtractCTEs(sql)).toBeNull();
+            expect(SQLParser.ExtractCTEs(sql)).toBeNull();
         });
 
         it('should return null for Nunjucks query without CTE', () => {
@@ -283,7 +283,7 @@ FROM [AssociationDemo].[vwEvents] e
 {% endif %}
 GROUP BY YEAR(e.StartDate)`;
 
-            expect(MJSQLParser.ExtractCTEs(sql)).toBeNull();
+            expect(SQLParser.ExtractCTEs(sql)).toBeNull();
         });
     });
 
@@ -292,13 +292,13 @@ GROUP BY YEAR(e.StartDate)`;
     // ================================================================
     describe('Astify', () => {
         it('should parse plain SQL into AST', () => {
-            const result = MJSQLParser.Astify('SELECT Name FROM Users WHERE Active = 1');
+            const result = SQLParser.Astify('SELECT Name FROM Users WHERE Active = 1');
             expect(result.astParsed).toBe(true);
             expect(result.mjParse.hasMJExtensions).toBe(false);
         });
 
         it('should parse MJ SQL with placeholder substitution', () => {
-            const result = MJSQLParser.Astify('SELECT Name FROM Users WHERE Region = {{ Region | sqlString }}');
+            const result = SQLParser.Astify('SELECT Name FROM Users WHERE Region = {{ Region | sqlString }}');
             expect(result.mjParse.hasMJExtensions).toBe(true);
             expect(result.mjParse.hasTemplateExpressions).toBe(true);
             expect(result.positionMap.size).toBe(1);
@@ -307,16 +307,16 @@ GROUP BY YEAR(e.StartDate)`;
 
     describe('Sqlify', () => {
         it('should reconstruct plain SQL through AST', () => {
-            const result = MJSQLParser.Astify('SELECT Name FROM Users WHERE Active = 1');
-            const sql = MJSQLParser.Sqlify(result);
+            const result = SQLParser.Astify('SELECT Name FROM Users WHERE Active = 1');
+            const sql = SQLParser.Sqlify(result);
             expect(sql.toLowerCase()).toContain('select');
             expect(sql.toLowerCase()).toContain('from');
         });
 
         it('should reconstruct MJ SQL from tokens (verbatim)', () => {
             const original = "SELECT Name FROM Users WHERE Region = {{ Region | sqlString }}";
-            const result = MJSQLParser.Astify(original);
-            expect(MJSQLParser.Sqlify(result)).toBe(original);
+            const result = SQLParser.Astify(original);
+            expect(SQLParser.Sqlify(result)).toBe(original);
         });
     });
 
@@ -325,23 +325,23 @@ GROUP BY YEAR(e.StartDate)`;
     // ================================================================
     describe('Analyze', () => {
         it('should detect no MJ extensions in plain SQL', () => {
-            const result = MJSQLParser.Analyze('SELECT * FROM Users');
+            const result = SQLParser.Analyze('SELECT * FROM Users');
             expect(result.hasMJExtensions).toBe(false);
         });
 
         it('should detect template expressions', () => {
-            const result = MJSQLParser.Analyze('WHERE x = {{ val | sqlString }}');
+            const result = SQLParser.Analyze('WHERE x = {{ val | sqlString }}');
             expect(result.hasMJExtensions).toBe(true);
             expect(result.hasTemplateExpressions).toBe(true);
         });
 
         it('should detect composition refs', () => {
-            const result = MJSQLParser.Analyze('FROM {{query:"Path/Query"}} q');
+            const result = SQLParser.Analyze('FROM {{query:"Path/Query"}} q');
             expect(result.hasCompositionRefs).toBe(true);
         });
 
         it('should detect conditional blocks', () => {
-            const result = MJSQLParser.Analyze('{% if A %}x{% endif %}');
+            const result = SQLParser.Analyze('{% if A %}x{% endif %}');
             expect(result.hasConditionalBlocks).toBe(true);
         });
     });
@@ -351,19 +351,19 @@ GROUP BY YEAR(e.StartDate)`;
     // ================================================================
     describe('Substitute', () => {
         it('should return unchanged SQL for plain SQL', () => {
-            const result = MJSQLParser.Substitute('SELECT * FROM Users');
+            const result = SQLParser.Substitute('SELECT * FROM Users');
             expect(result.cleanSQL).toBe('SELECT * FROM Users');
             expect(result.positionMap.size).toBe(0);
         });
 
         it('should replace sqlString with string placeholder', () => {
-            const result = MJSQLParser.Substitute("WHERE x = {{ Region | sqlString }}");
+            const result = SQLParser.Substitute("WHERE x = {{ Region | sqlString }}");
             expect(result.cleanSQL).toContain("'__MJT_001__'");
             expect(result.positionMap.size).toBe(1);
         });
 
         it('should replace sqlNumber with numeric placeholder', () => {
-            const result = MJSQLParser.Substitute("WHERE x >= {{ Min | sqlNumber }}");
+            const result = SQLParser.Substitute("WHERE x >= {{ Min | sqlNumber }}");
             expect(result.cleanSQL).toContain('42001');
         });
     });
@@ -373,12 +373,12 @@ GROUP BY YEAR(e.StartDate)`;
     // ================================================================
     describe('ParseSQL — FOR XML Workaround', () => {
         it('should parse SQL with FOR XML PATH (single arg — already works)', () => {
-            const ast = MJSQLParser.ParseSQL("SELECT Name FROM T FOR XML PATH('M')");
+            const ast = SQLParser.ParseSQL("SELECT Name FROM T FOR XML PATH('M')");
             expect(ast).not.toBeNull();
         });
 
         it('should parse SQL with FOR XML PATH + ROOT (multi-directive — workaround)', () => {
-            const ast = MJSQLParser.ParseSQL("SELECT Name FROM T FOR XML PATH('Member'), ROOT('Members')");
+            const ast = SQLParser.ParseSQL("SELECT Name FROM T FOR XML PATH('Member'), ROOT('Members')");
             expect(ast).not.toBeNull();
 
             // The AST should have a FOR clause
@@ -387,17 +387,17 @@ GROUP BY YEAR(e.StartDate)`;
         });
 
         it('should parse SQL with FOR XML PATH + ROOT + TYPE', () => {
-            const ast = MJSQLParser.ParseSQL("SELECT Name FROM T FOR XML PATH('M'), ROOT('R'), TYPE");
+            const ast = SQLParser.ParseSQL("SELECT Name FROM T FOR XML PATH('M'), ROOT('R'), TYPE");
             expect(ast).not.toBeNull();
         });
 
         it('should parse SQL with FOR XML RAW + ROOT', () => {
-            const ast = MJSQLParser.ParseSQL("SELECT Name FROM T FOR XML RAW('Row'), ROOT('Data')");
+            const ast = SQLParser.ParseSQL("SELECT Name FROM T FOR XML RAW('Row'), ROOT('Data')");
             expect(ast).not.toBeNull();
         });
 
         it('should parse SQL with ORDER BY + FOR XML PATH + ROOT', () => {
-            const ast = MJSQLParser.ParseSQL(
+            const ast = SQLParser.ParseSQL(
                 "SELECT Name FROM T ORDER BY Name FOR XML PATH('M'), ROOT('Members')"
             );
             expect(ast).not.toBeNull();
@@ -409,7 +409,7 @@ GROUP BY YEAR(e.StartDate)`;
         });
 
         it('should extract tables from SQL with FOR XML PATH + ROOT', () => {
-            const tables = MJSQLParser.ExtractTableRefs(
+            const tables = SQLParser.ExtractTableRefs(
                 "SELECT m.Name, m.Email FROM [__mj].[Members] m ORDER BY m.Name FOR XML PATH('Member'), ROOT('Members')"
             );
             expect(tables.length).toBeGreaterThanOrEqual(1);
@@ -417,12 +417,12 @@ GROUP BY YEAR(e.StartDate)`;
         });
 
         it('should still return null for truly unparseable SQL', () => {
-            const ast = MJSQLParser.ParseSQL("SELECT FROM WHERE (((( BROKEN SYNTAX");
+            const ast = SQLParser.ParseSQL("SELECT FROM WHERE (((( BROKEN SYNTAX");
             expect(ast).toBeNull();
         });
 
         it('Astify should handle FOR XML PATH + ROOT', () => {
-            const result = MJSQLParser.Astify(
+            const result = SQLParser.Astify(
                 "SELECT Name FROM T ORDER BY Name FOR XML PATH('M'), ROOT('R')"
             );
             expect(result.astParsed).toBe(true);

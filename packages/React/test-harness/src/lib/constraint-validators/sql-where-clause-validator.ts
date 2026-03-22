@@ -2,7 +2,7 @@
  * SQL WHERE Clause Validator
  *
  * Validates SQL WHERE clauses for syntax and field references.
- * Uses MJSQLParser for accurate AST-based validation with regex fallback.
+ * Uses SQLParser for accurate AST-based validation with regex fallback.
  *
  * This validator is essential for catching errors like:
  * ```jsx
@@ -44,7 +44,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseConstraintValidator } from './base-constraint-validator';
 import { ValidationContext } from './validation-context';
 import { PropValueExtractor } from '../prop-value-extractor';
-import { MJSQLParser } from '@memberjunction/sql-parser';
+import { SQLParser } from '@memberjunction/sql-parser';
 
 /**
  * Validates SQL WHERE clauses for syntax and field references
@@ -56,7 +56,7 @@ import { MJSQLParser } from '@memberjunction/sql-parser';
  * - RunView ExtraFilter parameter
  * - Custom components with SQL filtering
  *
- * **Implementation**: Uses MJSQLParser for accurate AST-based validation
+ * **Implementation**: Uses SQLParser for accurate AST-based validation
  * with regex fallback for edge cases.
  */
 @RegisterClass(BaseConstraintValidator, 'sql-where-clause')
@@ -167,7 +167,7 @@ export class SqlWhereClauseValidator extends BaseConstraintValidator {
   /**
    * Validate WHERE clause using AST parsing (Level 1: Field existence)
    *
-   * Uses MJSQLParser to accurately extract column references.
+   * Uses SQLParser to accurately extract column references.
    *
    * @param whereClause - SQL WHERE clause
    * @param entityName - Entity name for context
@@ -189,8 +189,8 @@ export class SqlWhereClauseValidator extends BaseConstraintValidator {
   ): ConstraintViolation[] {
     const violations: ConstraintViolation[] = [];
 
-    // Parse WHERE clause using MJSQLParser (wraps node-sql-parser with FOR XML workaround)
-    const ast = MJSQLParser.ParseSQL(`SELECT * FROM t WHERE ${whereClause}`);
+    // Parse WHERE clause using SQLParser (wraps node-sql-parser with FOR XML workaround)
+    const ast = SQLParser.ParseSQL(`SELECT * FROM t WHERE ${whereClause}`);
     if (!ast) {
       throw new Error('Failed to parse WHERE clause');
     }

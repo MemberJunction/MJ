@@ -1,5 +1,5 @@
 /**
- * MJSQLParser — Unified parser for MemberJunction's SQL superset
+ * SQLParser — Unified parser for MemberJunction's SQL superset
  *
  * Parses SQL that may contain Nunjucks templates ({{ }}, {% %}), composition
  * tokens ({{query:"..."}}), and standard SQL into a structured AST.
@@ -95,8 +95,29 @@ export interface MJParameterInfo {
     usageLocations: string[];
 }
 
+/**
+ * Combined result of parsing SQL for table and column references.
+ * This is the original SQLParser.Parse() return type, preserved for backward compatibility.
+ */
+export interface SQLParseResult {
+    /** All table/view references found (FROM, JOIN, subqueries, CTEs) */
+    Tables: SQLTableReference[];
+    /** All column references found (SELECT, WHERE, JOIN ON, GROUP BY, ORDER BY) */
+    Columns: SQLColumnReference[];
+    /** Whether parsing succeeded via AST (true) or fell back to regex (false) */
+    UsedASTParsing: boolean;
+}
+
+/** Options for Parse() and ParseWithTemplatePreprocessing() methods */
+export interface SQLParseOptions {
+    /** The SQL string to parse */
+    sql: string;
+    /** SQL dialect (default: 'TransactSQL') */
+    dialect?: string;
+}
+
 // ═══════════════════════════════════════════════════
-// MJSQLParser class
+// SQLParser class
 // ═══════════════════════════════════════════════════
 
 /**
@@ -108,7 +129,7 @@ export interface MJParameterInfo {
  *
  * All methods are static — no instance state is needed.
  */
-export class MJSQLParser {
+export class SQLParser {
     // ─── Core Pipeline ─────────────────────────────────
 
     /**
@@ -126,7 +147,7 @@ export class MJSQLParser {
         const mjParse = MJLexer.Parse(sql);
 
         if (!mjParse.hasMJExtensions) {
-            const ast = MJSQLParser.parseSQL(sql, dialect);
+            const ast = SQLParser.parseSQL(sql, dialect);
             return {
                 ast,
                 mjParse,
@@ -139,7 +160,7 @@ export class MJSQLParser {
         }
 
         const { cleanSQL, positionMap, strippedTokens } = MJPlaceholderSubstitution.Substitute(sql);
-        const ast = MJSQLParser.parseSQL(cleanSQL, dialect);
+        const ast = SQLParser.parseSQL(cleanSQL, dialect);
 
         return {
             ast,
@@ -176,7 +197,7 @@ export class MJSQLParser {
      * Returns null if parsing fails.
      */
     static ParseSQL(sql: string, dialect: string = 'TransactSQL'): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
-        return MJSQLParser.parseSQL(sql, dialect);
+        return SQLParser.parseSQL(sql, dialect);
     }
 
     /**
@@ -242,6 +263,60 @@ export class MJSQLParser {
         return MJPlaceholderSubstitution.Substitute(sql);
     }
 
+    // ─── Backward-Compatible API ─────────────────────────
+    // These methods preserve the original SQLParser interface for downstream
+    // consumers (mj-forge, migration toolchain). They delegate to the new
+    // extraction methods internally.
+
+    /**
+     * Parse SQL and extract table + column references.
+     * This is the original SQLParser.Parse() method signature.
+     * Automatically handles MJ Nunjucks templates via placeholder substitution.
+     *
+     * @param options Parse options, or just a SQL string for backward compatibility
+     */
+    static Parse(options: SQLParseOptions | string, dialect?: string): SQLParseResult {
+        const { sql, parserDialect } = SQLParser.resolveParseArgs(options, dialect);
+        if (!sql || sql.trim().length === 0) {
+            return { Tables: [], Columns: [], UsedASTParsing: false };
+        }
+
+        const cleanSQL = SQLParser.getCleanSQL(sql);
+        const tables = SQLParser.extractTablesViaAST(cleanSQL, parserDialect);
+        const usedAST = tables !== null;
+
+        const tableAliasMap = new Map<string, { schemaName: string; tableName: string }>();
+        const columnRefs = new Set<string>();
+
+        if (usedAST) {
+            try {
+                const parser = new Parser();
+                const ast = parser.astify(cleanSQL, { database: parserDialect });
+                const statements = Array.isArray(ast) ? ast : [ast];
+                for (const stmt of statements) {
+                    SQLParser.walkAST(stmt as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
+                }
+            } catch { /* columns will be empty */ }
+        }
+
+        return {
+            Tables: tables || SQLParser.extractTablesViaRegex(cleanSQL),
+            Columns: SQLParser.buildColumnRefs(columnRefs),
+            UsedASTParsing: usedAST,
+        };
+    }
+
+    /**
+     * Parse SQL with MJ Nunjucks template preprocessing.
+     * This is the original SQLParser.ParseWithTemplatePreprocessing() signature.
+     * Now equivalent to Parse() since all methods handle templates automatically.
+     *
+     * @param options Parse options, or just a SQL string for backward compatibility
+     */
+    static ParseWithTemplatePreprocessing(options: SQLParseOptions | string, dialect?: string): SQLParseResult {
+        return SQLParser.Parse(options, dialect);
+    }
+
     // ─── Table & Column Extraction ─────────────────────
 
     /**
@@ -251,11 +326,11 @@ export class MJSQLParser {
     static ExtractTableRefs(sql: string, dialect: string = 'TransactSQL'): SQLTableReference[] {
         if (!sql || sql.trim().length === 0) return [];
 
-        const cleanSQL = MJSQLParser.getCleanSQL(sql);
-        const astResult = MJSQLParser.extractTablesViaAST(cleanSQL, dialect);
+        const cleanSQL = SQLParser.getCleanSQL(sql);
+        const astResult = SQLParser.extractTablesViaAST(cleanSQL, dialect);
         if (astResult) return astResult;
 
-        return MJSQLParser.extractTablesViaRegex(cleanSQL);
+        return SQLParser.extractTablesViaRegex(cleanSQL);
     }
 
     /**
@@ -265,7 +340,7 @@ export class MJSQLParser {
     static ExtractColumnRefs(sql: string, dialect: string = 'TransactSQL'): SQLColumnReference[] {
         if (!sql || sql.trim().length === 0) return [];
 
-        const cleanSQL = MJSQLParser.getCleanSQL(sql);
+        const cleanSQL = SQLParser.getCleanSQL(sql);
         const tableAliasMap = new Map<string, { schemaName: string; tableName: string }>();
         const columnRefs = new Set<string>();
 
@@ -274,9 +349,9 @@ export class MJSQLParser {
             const ast = parser.astify(cleanSQL, { database: dialect });
             const statements = Array.isArray(ast) ? ast : [ast];
             for (const statement of statements) {
-                MJSQLParser.walkAST(statement as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
+                SQLParser.walkAST(statement as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
             }
-            return MJSQLParser.buildColumnRefs(columnRefs);
+            return SQLParser.buildColumnRefs(columnRefs);
         } catch {
             return [];
         }
@@ -297,10 +372,10 @@ export class MJSQLParser {
         const trimmed = sql.trimStart();
         if (!/^WITH\s/i.test(trimmed)) return null;
 
-        const astResult = MJSQLParser.extractCTEsViaAST(trimmed, dialect);
+        const astResult = SQLParser.extractCTEsViaAST(trimmed, dialect);
         if (astResult) return astResult;
 
-        return MJSQLParser.extractCTEsViaRegex(trimmed);
+        return SQLParser.extractCTEsViaRegex(trimmed);
     }
 
     // ─── MJ Template Extraction ────────────────────────
@@ -400,7 +475,7 @@ export class MJSQLParser {
                     if (current && current.branches.length > 0) {
                         const lastBranch = current.branches[current.branches.length - 1];
                         lastBranch.body.raw += token.raw;
-                        MJSQLParser.addNodeToFragment(token, lastBranch);
+                        SQLParser.addNodeToFragment(token, lastBranch);
                         current.raw += token.raw;
                     }
                 }
@@ -426,9 +501,9 @@ export class MJSQLParser {
                 if (!paramMap.has(varName)) {
                     paramMap.set(varName, {
                         name: varName,
-                        type: MJSQLParser.inferTypeFromFilters(parsed.filters),
+                        type: SQLParser.inferTypeFromFilters(parsed.filters),
                         isRequired: true,
-                        defaultValue: MJSQLParser.extractDefaultValue(parsed.filters),
+                        defaultValue: SQLParser.extractDefaultValue(parsed.filters),
                         filters: parsed.filters,
                         usageLocations: [],
                     });
@@ -438,7 +513,7 @@ export class MJSQLParser {
             }
         }
 
-        const conditionalVars = MJSQLParser.findConditionalVariables(tokens);
+        const conditionalVars = SQLParser.findConditionalVariables(tokens);
         for (const [varName, param] of paramMap) {
             if (conditionalVars.onlyInConditional.has(varName)) {
                 param.isRequired = false;
@@ -481,10 +556,10 @@ export class MJSQLParser {
         const stmt = (Array.isArray(result.ast) ? result.ast[0] : result.ast) as unknown as Record<string, unknown>;
 
         if (stmt) {
-            MJSQLParser.walkASTNode(stmt, '', 'unknown', result.positionMap, annotations);
+            SQLParser.walkASTNode(stmt, '', 'unknown', result.positionMap, annotations);
         }
 
-        return MJSQLParser.buildWalkResult(annotations);
+        return SQLParser.buildWalkResult(annotations);
     }
 
     // ═══════════════════════════════════════════════════
@@ -504,16 +579,16 @@ export class MJSQLParser {
         if (!node || typeof node !== 'object') return;
 
         // Walk standard SQL AST clauses with appropriate context
-        if (node.columns) MJSQLParser.walkASTValue(node.columns, `${path}columns`, 'select', positionMap, annotations, node);
-        if (node.from) MJSQLParser.walkASTValue(node.from, `${path}from`, 'from', positionMap, annotations, node);
-        if (node.where) MJSQLParser.walkASTValue(node.where, `${path}where`, 'where', positionMap, annotations, node);
+        if (node.columns) SQLParser.walkASTValue(node.columns, `${path}columns`, 'select', positionMap, annotations, node);
+        if (node.from) SQLParser.walkASTValue(node.from, `${path}from`, 'from', positionMap, annotations, node);
+        if (node.where) SQLParser.walkASTValue(node.where, `${path}where`, 'where', positionMap, annotations, node);
         if (node.groupby) {
             const groupby = node.groupby as Record<string, unknown>;
             const groupItems = groupby.columns || node.groupby;
-            MJSQLParser.walkASTValue(groupItems, `${path}groupby`, 'group_by', positionMap, annotations, node);
+            SQLParser.walkASTValue(groupItems, `${path}groupby`, 'group_by', positionMap, annotations, node);
         }
-        if (node.having) MJSQLParser.walkASTValue(node.having, `${path}having`, 'having', positionMap, annotations, node);
-        if (node.orderby) MJSQLParser.walkASTValue(node.orderby, `${path}orderby`, 'order_by', positionMap, annotations, node);
+        if (node.having) SQLParser.walkASTValue(node.having, `${path}having`, 'having', positionMap, annotations, node);
+        if (node.orderby) SQLParser.walkASTValue(node.orderby, `${path}orderby`, 'order_by', positionMap, annotations, node);
 
         // Walk CTEs
         if (node.with && Array.isArray(node.with)) {
@@ -522,7 +597,7 @@ export class MJSQLParser {
                 if (cte.stmt) {
                     const stmtRecord = cte.stmt as Record<string, unknown>;
                     const cteAst = (stmtRecord.ast || stmtRecord) as Record<string, unknown>;
-                    MJSQLParser.walkASTNode(cteAst, `${path}with[${i}].`, 'cte', positionMap, annotations);
+                    SQLParser.walkASTNode(cteAst, `${path}with[${i}].`, 'cte', positionMap, annotations);
                 }
             }
         }
@@ -532,14 +607,14 @@ export class MJSQLParser {
             for (let i = 0; i < node.from.length; i++) {
                 const fromItem = node.from[i] as Record<string, unknown>;
                 if (fromItem?.on) {
-                    MJSQLParser.walkASTValue(fromItem.on, `${path}from[${i}].on`, 'join_on', positionMap, annotations, fromItem);
+                    SQLParser.walkASTValue(fromItem.on, `${path}from[${i}].on`, 'join_on', positionMap, annotations, fromItem);
                 }
                 // Walk subqueries in FROM
                 if (fromItem?.expr) {
                     const exprRecord = fromItem.expr as Record<string, unknown>;
                     const subAst = (exprRecord.ast || exprRecord) as Record<string, unknown>;
                     if (subAst.type === 'select' || subAst.columns) {
-                        MJSQLParser.walkASTNode(subAst, `${path}from[${i}].expr.`, 'subquery', positionMap, annotations);
+                        SQLParser.walkASTNode(subAst, `${path}from[${i}].expr.`, 'subquery', positionMap, annotations);
                     }
                 }
             }
@@ -547,7 +622,7 @@ export class MJSQLParser {
 
         // Walk UNION/EXCEPT chain
         if (node._next) {
-            MJSQLParser.walkASTNode(node._next as Record<string, unknown>, `${path}_next.`, context, positionMap, annotations);
+            SQLParser.walkASTNode(node._next as Record<string, unknown>, `${path}_next.`, context, positionMap, annotations);
         }
     }
 
@@ -566,20 +641,20 @@ export class MJSQLParser {
 
         // Check string values against placeholders
         if (typeof value === 'string') {
-            MJSQLParser.checkPlaceholder(value, path, context, positionMap, annotations, parentNode);
+            SQLParser.checkPlaceholder(value, path, context, positionMap, annotations, parentNode);
             return;
         }
 
         // Check number values (sqlNumber placeholders are numeric)
         if (typeof value === 'number') {
-            MJSQLParser.checkPlaceholder(String(value), path, context, positionMap, annotations, parentNode);
+            SQLParser.checkPlaceholder(String(value), path, context, positionMap, annotations, parentNode);
             return;
         }
 
         // Walk arrays
         if (Array.isArray(value)) {
             for (let i = 0; i < value.length; i++) {
-                MJSQLParser.walkASTValue(value[i], `${path}[${i}]`, context, positionMap, annotations, parentNode);
+                SQLParser.walkASTValue(value[i], `${path}[${i}]`, context, positionMap, annotations, parentNode);
             }
             return;
         }
@@ -591,8 +666,8 @@ export class MJSQLParser {
             // Check column_ref nodes — the column name or table.column might be a placeholder
             if (obj.type === 'column_ref') {
                 const col = obj.column as string;
-                if (col) MJSQLParser.checkPlaceholder(col, `${path}.column`, context, positionMap, annotations, obj);
-                if (obj.table) MJSQLParser.checkPlaceholder(obj.table as string, `${path}.table`, context, positionMap, annotations, obj);
+                if (col) SQLParser.checkPlaceholder(col, `${path}.column`, context, positionMap, annotations, obj);
+                if (obj.table) SQLParser.checkPlaceholder(obj.table as string, `${path}.table`, context, positionMap, annotations, obj);
                 return;
             }
 
@@ -600,7 +675,7 @@ export class MJSQLParser {
             if (obj.type === 'single_quote_string' || obj.type === 'string') {
                 if (typeof obj.value === 'string') {
                     // String placeholder includes the quotes: '__MJT_001__'
-                    MJSQLParser.checkPlaceholder(`'${obj.value}'`, `${path}.value`, context, positionMap, annotations, obj);
+                    SQLParser.checkPlaceholder(`'${obj.value}'`, `${path}.value`, context, positionMap, annotations, obj);
                 }
                 return;
             }
@@ -608,32 +683,32 @@ export class MJSQLParser {
             // Check number literal values
             if (obj.type === 'number') {
                 if (typeof obj.value === 'number') {
-                    MJSQLParser.checkPlaceholder(String(obj.value), `${path}.value`, context, positionMap, annotations, obj);
+                    SQLParser.checkPlaceholder(String(obj.value), `${path}.value`, context, positionMap, annotations, obj);
                 }
                 return;
             }
 
             // Recurse into expression nodes
-            if (obj.left) MJSQLParser.walkASTValue(obj.left, `${path}.left`, context, positionMap, annotations, obj);
-            if (obj.right) MJSQLParser.walkASTValue(obj.right, `${path}.right`, context, positionMap, annotations, obj);
-            if (obj.expr) MJSQLParser.walkASTValue(obj.expr, `${path}.expr`, context, positionMap, annotations, obj);
+            if (obj.left) SQLParser.walkASTValue(obj.left, `${path}.left`, context, positionMap, annotations, obj);
+            if (obj.right) SQLParser.walkASTValue(obj.right, `${path}.right`, context, positionMap, annotations, obj);
+            if (obj.expr) SQLParser.walkASTValue(obj.expr, `${path}.expr`, context, positionMap, annotations, obj);
             if (obj.args) {
                 const args = (obj.args as Record<string, unknown>).value || obj.args;
-                MJSQLParser.walkASTValue(args, `${path}.args`, context, positionMap, annotations, obj);
+                SQLParser.walkASTValue(args, `${path}.args`, context, positionMap, annotations, obj);
             }
 
             // Walk CASE WHEN
             if (obj.type === 'case' && Array.isArray(obj.args)) {
                 for (let i = 0; i < (obj.args as unknown[]).length; i++) {
                     const caseArg = (obj.args as Record<string, unknown>[])[i];
-                    if (caseArg.cond) MJSQLParser.walkASTValue(caseArg.cond, `${path}.args[${i}].cond`, context, positionMap, annotations, obj);
-                    if (caseArg.result) MJSQLParser.walkASTValue(caseArg.result, `${path}.args[${i}].result`, context, positionMap, annotations, obj);
+                    if (caseArg.cond) SQLParser.walkASTValue(caseArg.cond, `${path}.args[${i}].cond`, context, positionMap, annotations, obj);
+                    if (caseArg.result) SQLParser.walkASTValue(caseArg.result, `${path}.args[${i}].result`, context, positionMap, annotations, obj);
                 }
             }
 
             // Walk subqueries in expressions (EXISTS, IN)
             if (obj.ast) {
-                MJSQLParser.walkASTNode(obj.ast as Record<string, unknown>, `${path}.ast.`, 'subquery', positionMap, annotations);
+                SQLParser.walkASTNode(obj.ast as Record<string, unknown>, `${path}.ast.`, 'subquery', positionMap, annotations);
             }
         }
     }
@@ -733,19 +808,30 @@ export class MJSQLParser {
      * `FOR XML PATH('M')` fine but chokes on the comma-separated directives.
      * We strip the extra directives before parsing and restore them on the AST's `for` property.
      */
+
+    /** Resolves overloaded Parse() args: (string, dialect?) or (options) */
+    private static resolveParseArgs(
+        options: SQLParseOptions | string,
+        dialect?: string
+    ): { sql: string; parserDialect: string } {
+        if (typeof options === 'string') {
+            return { sql: options, parserDialect: dialect || 'TransactSQL' };
+        }
+        return { sql: options.sql, parserDialect: options.dialect || 'TransactSQL' };
+    }
     private static parseSQL(sql: string, dialect: string): NodeSqlParser.AST | NodeSqlParser.AST[] | null {
         try {
             const parser = new Parser();
             return parser.astify(sql, { database: dialect });
         } catch {
             // If direct parse fails, try with FOR XML workaround
-            const forXmlResult = MJSQLParser.stripForXmlDirectives(sql);
+            const forXmlResult = SQLParser.stripForXmlDirectives(sql);
             if (forXmlResult) {
                 try {
                     const parser = new Parser();
                     const ast = parser.astify(forXmlResult.cleanedSQL, { database: dialect });
                     // Restore the original FOR XML clause on the AST
-                    MJSQLParser.restoreForXmlOnAST(ast, forXmlResult.originalForXml);
+                    SQLParser.restoreForXmlOnAST(ast, forXmlResult.originalForXml);
                     return ast;
                 } catch {
                     return null;
@@ -838,10 +924,10 @@ export class MJSQLParser {
 
             const statements = Array.isArray(ast) ? ast : [ast];
             for (const statement of statements) {
-                MJSQLParser.walkAST(statement as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
+                SQLParser.walkAST(statement as unknown as Record<string, unknown>, tableAliasMap, columnRefs);
             }
 
-            return MJSQLParser.deduplicateTables(tableAliasMap);
+            return SQLParser.deduplicateTables(tableAliasMap);
         } catch {
             return null;
         }
@@ -861,7 +947,7 @@ export class MJSQLParser {
             }
         }
 
-        return MJSQLParser.deduplicateTables(tableAliasMap);
+        return SQLParser.deduplicateTables(tableAliasMap);
     }
 
     private static deduplicateTables(
@@ -932,7 +1018,7 @@ export class MJSQLParser {
         const len = withStripped.length;
 
         while (pos < len) {
-            pos = MJSQLParser.skipWhitespace(withStripped, pos);
+            pos = SQLParser.skipWhitespace(withStripped, pos);
             if (pos >= len) break;
 
             const remaining = withStripped.substring(pos);
@@ -943,12 +1029,12 @@ export class MJSQLParser {
             pos += cteHeaderMatch[0].length;
 
             const bodyStart = pos;
-            pos = MJSQLParser.findMatchingCloseParen(withStripped, pos);
+            pos = SQLParser.findMatchingCloseParen(withStripped, pos);
             const cteBody = withStripped.substring(bodyStart, pos);
             cteDefinitions.push(`${cteName} AS (\n${cteBody}\n)`);
             pos++;
 
-            pos = MJSQLParser.skipWhitespace(withStripped, pos);
+            pos = SQLParser.skipWhitespace(withStripped, pos);
             if (pos < len && withStripped[pos] === ',') pos++;
         }
 
@@ -1013,7 +1099,7 @@ export class MJSQLParser {
                 if (cteRecord.stmt) {
                     const stmtRecord = cteRecord.stmt as Record<string, unknown>;
                     const cteAst = (stmtRecord.ast || stmtRecord) as Record<string, unknown>;
-                    MJSQLParser.walkAST(cteAst, tableAliasMap, columnRefs);
+                    SQLParser.walkAST(cteAst, tableAliasMap, columnRefs);
                 }
             }
         }
@@ -1021,7 +1107,7 @@ export class MJSQLParser {
         if (node.from) {
             const fromItems = Array.isArray(node.from) ? node.from : [node.from];
             for (const fromItem of fromItems) {
-                MJSQLParser.walkFromItem(fromItem as Record<string, unknown>, tableAliasMap, columnRefs);
+                SQLParser.walkFromItem(fromItem as Record<string, unknown>, tableAliasMap, columnRefs);
             }
         }
 
@@ -1031,13 +1117,13 @@ export class MJSQLParser {
                 if (col === '*') continue;
                 const colRecord = col as Record<string, unknown>;
                 if (colRecord.expr) {
-                    MJSQLParser.walkExpression(colRecord.expr as Record<string, unknown>, columnRefs, tableAliasMap);
+                    SQLParser.walkExpression(colRecord.expr as Record<string, unknown>, columnRefs, tableAliasMap);
                 }
             }
         }
 
         if (node.where) {
-            MJSQLParser.walkExpression(node.where as Record<string, unknown>, columnRefs, tableAliasMap);
+            SQLParser.walkExpression(node.where as Record<string, unknown>, columnRefs, tableAliasMap);
         }
 
         if (node.groupby) {
@@ -1045,7 +1131,7 @@ export class MJSQLParser {
             const groupItems = groupbyRecord.columns || node.groupby;
             const items = Array.isArray(groupItems) ? groupItems : [groupItems];
             for (const group of items) {
-                MJSQLParser.walkExpression(group as Record<string, unknown>, columnRefs, tableAliasMap);
+                SQLParser.walkExpression(group as Record<string, unknown>, columnRefs, tableAliasMap);
             }
         }
 
@@ -1053,12 +1139,12 @@ export class MJSQLParser {
             const orders = Array.isArray(node.orderby) ? node.orderby : [node.orderby];
             for (const order of orders) {
                 const orderRecord = order as Record<string, unknown>;
-                MJSQLParser.walkExpression((orderRecord.expr || orderRecord) as Record<string, unknown>, columnRefs, tableAliasMap);
+                SQLParser.walkExpression((orderRecord.expr || orderRecord) as Record<string, unknown>, columnRefs, tableAliasMap);
             }
         }
 
         if (node._next) {
-            MJSQLParser.walkAST(node._next as Record<string, unknown>, tableAliasMap, columnRefs);
+            SQLParser.walkAST(node._next as Record<string, unknown>, tableAliasMap, columnRefs);
         }
     }
 
@@ -1080,11 +1166,11 @@ export class MJSQLParser {
         if (fromItem.expr) {
             const exprRecord = fromItem.expr as Record<string, unknown>;
             const subqueryAst = (exprRecord.ast || exprRecord) as Record<string, unknown>;
-            MJSQLParser.walkAST(subqueryAst, tableAliasMap, columnRefs);
+            SQLParser.walkAST(subqueryAst, tableAliasMap, columnRefs);
         }
 
         if (fromItem.on) {
-            MJSQLParser.walkExpression(fromItem.on as Record<string, unknown>, columnRefs, tableAliasMap);
+            SQLParser.walkExpression(fromItem.on as Record<string, unknown>, columnRefs, tableAliasMap);
         }
 
         if (fromItem.using) {
@@ -1112,20 +1198,20 @@ export class MJSQLParser {
         }
 
         if (expr.ast && tableAliasMap) {
-            MJSQLParser.walkAST(expr.ast as Record<string, unknown>, tableAliasMap, columnRefs);
+            SQLParser.walkAST(expr.ast as Record<string, unknown>, tableAliasMap, columnRefs);
         }
 
-        if (expr.left) MJSQLParser.walkExpression(expr.left as Record<string, unknown>, columnRefs, tableAliasMap);
-        if (expr.right) MJSQLParser.walkExpression(expr.right as Record<string, unknown>, columnRefs, tableAliasMap);
+        if (expr.left) SQLParser.walkExpression(expr.left as Record<string, unknown>, columnRefs, tableAliasMap);
+        if (expr.right) SQLParser.walkExpression(expr.right as Record<string, unknown>, columnRefs, tableAliasMap);
         if (expr.args) {
             const argsRecord = expr.args as Record<string, unknown>;
             const args = argsRecord.value || expr.args;
             const argList = Array.isArray(args) ? args : [args];
             for (const arg of argList) {
-                MJSQLParser.walkExpression(arg as Record<string, unknown>, columnRefs, tableAliasMap);
+                SQLParser.walkExpression(arg as Record<string, unknown>, columnRefs, tableAliasMap);
             }
         }
-        if (expr.expr) MJSQLParser.walkExpression(expr.expr as Record<string, unknown>, columnRefs, tableAliasMap);
+        if (expr.expr) SQLParser.walkExpression(expr.expr as Record<string, unknown>, columnRefs, tableAliasMap);
     }
 
     // ═══════════════════════════════════════════════════
@@ -1172,10 +1258,10 @@ export class MJSQLParser {
             switch (token.type) {
                 case 'MJ_IF_OPEN':
                     conditionalDepth++;
-                    MJSQLParser.addConditionVariables(token, insideConditional);
+                    SQLParser.addConditionVariables(token, insideConditional);
                     break;
                 case 'MJ_ELIF':
-                    MJSQLParser.addConditionVariables(token, insideConditional);
+                    SQLParser.addConditionVariables(token, insideConditional);
                     break;
                 case 'MJ_ENDIF':
                     conditionalDepth = Math.max(0, conditionalDepth - 1);

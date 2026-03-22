@@ -1,18 +1,18 @@
 /**
- * Tests for MJSQLParser.WalkAST — the AST annotation walker.
+ * Tests for SQLParser.WalkAST — the AST annotation walker.
  *
  * Verifies that MJ template expressions and composition references
  * are correctly located within the SQL AST and annotated with their
  * clause context (SELECT, WHERE, FROM, ORDER BY, etc.).
  */
 import { describe, it, expect } from 'vitest';
-import { MJSQLParser } from '../mj-sql-parser.js';
+import { SQLParser } from '../mj-sql-parser.js';
 
-describe('MJSQLParser.WalkAST', () => {
+describe('SQLParser.WalkAST', () => {
     describe('Basic functionality', () => {
         it('should return empty result for plain SQL (no MJ extensions)', () => {
-            const result = MJSQLParser.Astify('SELECT Name FROM Users WHERE Active = 1');
-            const walk = MJSQLParser.WalkAST(result);
+            const result = SQLParser.Astify('SELECT Name FROM Users WHERE Active = 1');
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.annotations).toHaveLength(0);
             expect(walk.templateExprs).toHaveLength(0);
@@ -20,8 +20,8 @@ describe('MJSQLParser.WalkAST', () => {
         });
 
         it('should return empty result when AST parsing failed', () => {
-            const result = MJSQLParser.Astify('SELECT FROM WHERE (((( BROKEN');
-            const walk = MJSQLParser.WalkAST(result);
+            const result = SQLParser.Astify('SELECT FROM WHERE (((( BROKEN');
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.annotations).toHaveLength(0);
         });
@@ -29,10 +29,10 @@ describe('MJSQLParser.WalkAST', () => {
 
     describe('Template expressions in WHERE clause', () => {
         it('should find sqlString expression in WHERE', () => {
-            const result = MJSQLParser.Astify(
+            const result = SQLParser.Astify(
                 "SELECT Name FROM Users WHERE Region = {{ Region | sqlString }}"
             );
-            const walk = MJSQLParser.WalkAST(result);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.templateExprs).toHaveLength(1);
             expect(walk.templateExprs[0].clauseContext).toBe('where');
@@ -41,10 +41,10 @@ describe('MJSQLParser.WalkAST', () => {
         });
 
         it('should find sqlNumber expression in WHERE', () => {
-            const result = MJSQLParser.Astify(
+            const result = SQLParser.Astify(
                 "SELECT ID FROM Members WHERE Score >= {{ MinScore | sqlNumber }}"
             );
-            const walk = MJSQLParser.WalkAST(result);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.templateExprs).toHaveLength(1);
             expect(walk.templateExprs[0].clauseContext).toBe('where');
@@ -53,10 +53,10 @@ describe('MJSQLParser.WalkAST', () => {
         });
 
         it('should find multiple expressions in WHERE', () => {
-            const result = MJSQLParser.Astify(
+            const result = SQLParser.Astify(
                 "SELECT ID FROM Members WHERE Region = {{ Region | sqlString }} AND Score >= {{ MinScore | sqlNumber }}"
             );
-            const walk = MJSQLParser.WalkAST(result);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.templateExprs).toHaveLength(2);
             const variables = walk.templateExprs.map(a => a.templateExpr!.variable).sort();
@@ -67,10 +67,10 @@ describe('MJSQLParser.WalkAST', () => {
 
     describe('Template expressions in SELECT clause', () => {
         it('should find sqlIdentifier in SELECT column', () => {
-            const result = MJSQLParser.Astify(
+            const result = SQLParser.Astify(
                 "SELECT {{ DynamicCol | sqlIdentifier }} FROM Users"
             );
-            const walk = MJSQLParser.WalkAST(result);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.templateExprs).toHaveLength(1);
             expect(walk.templateExprs[0].clauseContext).toBe('select');
@@ -80,10 +80,10 @@ describe('MJSQLParser.WalkAST', () => {
 
     describe('Template expressions in ORDER BY', () => {
         it('should find sqlIdentifier in ORDER BY', () => {
-            const result = MJSQLParser.Astify(
+            const result = SQLParser.Astify(
                 "SELECT ID, Name FROM Users ORDER BY {{ SortCol | sqlIdentifier }}"
             );
-            const walk = MJSQLParser.WalkAST(result);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.templateExprs).toHaveLength(1);
             expect(walk.templateExprs[0].clauseContext).toBe('order_by');
@@ -93,10 +93,10 @@ describe('MJSQLParser.WalkAST', () => {
 
     describe('Template expressions in GROUP BY', () => {
         it('should find sqlIdentifier in GROUP BY', () => {
-            const result = MJSQLParser.Astify(
+            const result = SQLParser.Astify(
                 "SELECT COUNT(*) FROM Users GROUP BY {{ GroupCol | sqlIdentifier }}"
             );
-            const walk = MJSQLParser.WalkAST(result);
+            const walk = SQLParser.WalkAST(result);
 
             const groupByAnnotations = walk.byClause.get('group_by') || [];
             expect(groupByAnnotations.length).toBeGreaterThanOrEqual(1);
@@ -105,10 +105,10 @@ describe('MJSQLParser.WalkAST', () => {
 
     describe('Expressions across multiple clauses', () => {
         it('should annotate expressions in different clauses', () => {
-            const result = MJSQLParser.Astify(
+            const result = SQLParser.Astify(
                 "SELECT {{ Col | sqlIdentifier }} FROM Users WHERE Status = {{ Status | sqlString }} ORDER BY {{ Sort | sqlIdentifier }}"
             );
-            const walk = MJSQLParser.WalkAST(result);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.templateExprs.length).toBeGreaterThanOrEqual(3);
 
@@ -124,10 +124,10 @@ describe('MJSQLParser.WalkAST', () => {
 
     describe('CTE context', () => {
         it('should annotate expressions inside CTEs', () => {
-            const result = MJSQLParser.Astify(
+            const result = SQLParser.Astify(
                 "WITH Filtered AS (SELECT ID FROM Users WHERE Status = {{ Status | sqlString }}) SELECT * FROM Filtered"
             );
-            const walk = MJSQLParser.WalkAST(result);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.templateExprs).toHaveLength(1);
             // The expression is inside the CTE's WHERE clause
@@ -139,10 +139,10 @@ describe('MJSQLParser.WalkAST', () => {
 
     describe('Subquery context', () => {
         it('should annotate expressions inside subqueries in FROM', () => {
-            const result = MJSQLParser.Astify(
+            const result = SQLParser.Astify(
                 "SELECT * FROM (SELECT ID FROM Users WHERE Score > {{ Min | sqlNumber }}) sub"
             );
-            const walk = MJSQLParser.WalkAST(result);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.templateExprs.length).toBeGreaterThanOrEqual(1);
             const minAnnotation = walk.templateExprs.find(a => a.templateExpr!.variable === 'Min');
@@ -152,10 +152,10 @@ describe('MJSQLParser.WalkAST', () => {
 
     describe('byClause index', () => {
         it('should group annotations by clause context', () => {
-            const result = MJSQLParser.Astify(
+            const result = SQLParser.Astify(
                 "SELECT Name FROM Users WHERE Region = {{ Region | sqlString }} AND Year = {{ Year | sqlNumber }} ORDER BY {{ Sort | sqlIdentifier }}"
             );
-            const walk = MJSQLParser.WalkAST(result);
+            const walk = SQLParser.WalkAST(result);
 
             const whereAnnotations = walk.byClause.get('where') || [];
             const orderAnnotations = walk.byClause.get('order_by') || [];
@@ -167,10 +167,10 @@ describe('MJSQLParser.WalkAST', () => {
 
     describe('byPlaceholder index', () => {
         it('should index annotations by placeholder string', () => {
-            const result = MJSQLParser.Astify(
+            const result = SQLParser.Astify(
                 "SELECT Name FROM Users WHERE Region = {{ Region | sqlString }}"
             );
-            const walk = MJSQLParser.WalkAST(result);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.byPlaceholder.size).toBe(1);
             const entry = Array.from(walk.byPlaceholder.values())[0];
@@ -180,20 +180,20 @@ describe('MJSQLParser.WalkAST', () => {
 
     describe('Placeholder context types', () => {
         it('should identify string placeholder context', () => {
-            const result = MJSQLParser.Astify("SELECT * FROM T WHERE x = {{ v | sqlString }}");
-            const walk = MJSQLParser.WalkAST(result);
+            const result = SQLParser.Astify("SELECT * FROM T WHERE x = {{ v | sqlString }}");
+            const walk = SQLParser.WalkAST(result);
             expect(walk.templateExprs[0].placeholderContext).toBe('string');
         });
 
         it('should identify number placeholder context', () => {
-            const result = MJSQLParser.Astify("SELECT * FROM T WHERE x = {{ v | sqlNumber }}");
-            const walk = MJSQLParser.WalkAST(result);
+            const result = SQLParser.Astify("SELECT * FROM T WHERE x = {{ v | sqlNumber }}");
+            const walk = SQLParser.WalkAST(result);
             expect(walk.templateExprs[0].placeholderContext).toBe('number');
         });
 
         it('should identify identifier placeholder context', () => {
-            const result = MJSQLParser.Astify("SELECT * FROM T ORDER BY {{ v | sqlIdentifier }}");
-            const walk = MJSQLParser.WalkAST(result);
+            const result = SQLParser.Astify("SELECT * FROM T ORDER BY {{ v | sqlIdentifier }}");
+            const walk = SQLParser.WalkAST(result);
             expect(walk.templateExprs[0].placeholderContext).toBe('identifier');
         });
     });
@@ -205,8 +205,8 @@ WHERE YEAR(m.JoinDate) = {{ JoinYear | sqlNumber }}
   AND m.Status = {{ MembershipType | sqlString }}
 ORDER BY m.Name`;
 
-            const result = MJSQLParser.Astify(sql);
-            const walk = MJSQLParser.WalkAST(result);
+            const result = SQLParser.Astify(sql);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.templateExprs).toHaveLength(2);
 
@@ -227,8 +227,8 @@ ORDER BY m.Name`;
 WHERE uj.Name LIKE {{ StaffMemberName | sqlString }}
 ORDER BY inst.Name`;
 
-            const result = MJSQLParser.Astify(sql);
-            const walk = MJSQLParser.WalkAST(result);
+            const result = SQLParser.Astify(sql);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.templateExprs).toHaveLength(1);
             expect(walk.templateExprs[0].clauseContext).toBe('where');
@@ -242,8 +242,8 @@ WHERE Status = {{ Status | sqlString }}
   AND Score > {{ MinScore | sqlNumber }}
 ORDER BY {{ SortCol | sqlIdentifier }}`;
 
-            const result = MJSQLParser.Astify(sql);
-            const walk = MJSQLParser.WalkAST(result);
+            const result = SQLParser.Astify(sql);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.templateExprs.length).toBeGreaterThanOrEqual(4);
 
@@ -260,8 +260,8 @@ ORDER BY {{ SortCol | sqlIdentifier }}`;
 FROM Users u
 INNER JOIN Roles r ON u.RoleID = r.ID AND r.Level = {{ MinLevel | sqlNumber }}`;
 
-            const result = MJSQLParser.Astify(sql);
-            const walk = MJSQLParser.WalkAST(result);
+            const result = SQLParser.Astify(sql);
+            const walk = SQLParser.WalkAST(result);
 
             expect(walk.templateExprs).toHaveLength(1);
             expect(walk.templateExprs[0].clauseContext).toBe('join_on');

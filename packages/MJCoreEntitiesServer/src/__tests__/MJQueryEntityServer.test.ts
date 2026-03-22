@@ -2,19 +2,19 @@
  * Unit tests for MJQueryEntityServer deterministic extraction.
  *
  * Tests the parameter merge logic and description heuristics that don't
- * require a database connection. The MJSQLParser provides the deterministic
+ * require a database connection. The SQLParser provides the deterministic
  * structure; these tests verify the merge with LLM enrichment and fallbacks.
  */
 import { describe, it, expect } from 'vitest';
-import { MJSQLParser } from '@memberjunction/sql-parser';
+import { SQLParser } from '@memberjunction/sql-parser';
 import type { MJParameterInfo } from '@memberjunction/sql-parser';
 
 // ═══════════════════════════════════════════════════
-// Test the deterministic extraction via MJSQLParser
+// Test the deterministic extraction via SQLParser
 // (these are the inputs to the merge logic)
 // ═══════════════════════════════════════════════════
 
-describe('MJSQLParser Extraction for Query Entity', () => {
+describe('SQLParser Extraction for Query Entity', () => {
     describe('Parameter extraction from real-world queries', () => {
         it('should extract parameters from member-activity-counts', () => {
             const sql = `WITH MemberActivities AS (
@@ -33,7 +33,7 @@ WHERE 1=1
 {% endif %}
 ORDER BY TotalActivityCount DESC`;
 
-            const params = MJSQLParser.ExtractParameterInfo(sql);
+            const params = SQLParser.ExtractParameterInfo(sql);
 
             expect(params).toHaveLength(2);
 
@@ -61,7 +61,7 @@ WHERE c.IsActive = 1
   AND e.EnrollmentDate < {{ EndDate | sqlDate }}
 {% endif %}`;
 
-            const params = MJSQLParser.ExtractParameterInfo(sql);
+            const params = SQLParser.ExtractParameterInfo(sql);
 
             expect(params).toHaveLength(3);
             expect(params.find(p => p.name === 'Category')!.isRequired).toBe(false);
@@ -74,7 +74,7 @@ WHERE c.IsActive = 1
 WHERE Year = {{ Year }}
   AND Sal_Bach_Min < {{ SalaryThreshold }}`;
 
-            const params = MJSQLParser.ExtractParameterInfo(sql);
+            const params = SQLParser.ExtractParameterInfo(sql);
             expect(params).toHaveLength(2);
             expect(params.every(p => p.isRequired)).toBe(true);
         });
@@ -90,7 +90,7 @@ WHERE co_dist_code = @co_dist_code
   AND CAST(year AS INT) > {{ CurrentYear }} - {{ LookbackYears }}
 GROUP BY year`;
 
-            const params = MJSQLParser.ExtractParameterInfo(sql);
+            const params = SQLParser.ExtractParameterInfo(sql);
             expect(params).toHaveLength(3);
             const names = params.map(p => p.name).sort();
             expect(names).toEqual(['CurrentYear', 'DistrictName', 'LookbackYears']);
@@ -103,7 +103,7 @@ FROM Members m
 WHERE m.Active = 1
 ORDER BY m.Name`;
 
-            const params = MJSQLParser.ExtractParameterInfo(sql);
+            const params = SQLParser.ExtractParameterInfo(sql);
             expect(params).toHaveLength(0);
         });
 
@@ -116,7 +116,7 @@ WHERE m.Year__c = {{ CurrentYear }}
       WHERE p.Year__c = {{ CurrentYear }} - 1
   )`;
 
-            const params = MJSQLParser.ExtractParameterInfo(sql);
+            const params = SQLParser.ExtractParameterInfo(sql);
             expect(params).toHaveLength(1);
             expect(params[0].name).toBe('CurrentYear');
             expect(params[0].usageLocations).toHaveLength(2);
@@ -127,7 +127,7 @@ WHERE m.Year__c = {{ CurrentYear }}
 WHERE Limit = {{ Limit | default(25) | sqlNumber }}
   AND Region = {{ Region | default('US') | sqlString }}`;
 
-            const params = MJSQLParser.ExtractParameterInfo(sql);
+            const params = SQLParser.ExtractParameterInfo(sql);
             const limit = params.find(p => p.name === 'Limit')!;
             expect(limit.defaultValue).toBe(25);
             expect(limit.type).toBe('number');
@@ -149,7 +149,7 @@ WHERE Limit = {{ Limit | default(25) | sqlNumber }}
 )
 SELECT * FROM ChapterMembers`;
 
-            const tables = MJSQLParser.ExtractTableRefs(sql);
+            const tables = SQLParser.ExtractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(1);
             const tableNames = tables.map(t => t.TableName);
             expect(tableNames).toContain('vwChapters');
@@ -161,12 +161,12 @@ FROM [AssociationDemo].[vwMembers] m
 LEFT JOIN [AssociationDemo].[vwMemberships] ms ON ms.MemberID = m.ID
 INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID`;
 
-            const tables = MJSQLParser.ExtractTableRefs(sql);
+            const tables = SQLParser.ExtractTableRefs(sql);
             expect(tables.length).toBeGreaterThanOrEqual(3);
         });
 
         it('should extract schema names correctly', () => {
-            const tables = MJSQLParser.ExtractTableRefs('SELECT * FROM nams.vwAccounts a');
+            const tables = SQLParser.ExtractTableRefs('SELECT * FROM nams.vwAccounts a');
             expect(tables.length).toBe(1);
             expect(tables[0].SchemaName).toBe('nams');
             expect(tables[0].TableName).toBe('vwAccounts');
@@ -179,7 +179,7 @@ INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.
 FROM {{query:"Engagement Analytics/Member Activity Counts(MinActivityCount=MinActivityCount)"}} mac
 LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID`;
 
-            const refs = MJSQLParser.ExtractCompositionRefs(sql);
+            const refs = SQLParser.ExtractCompositionRefs(sql);
             expect(refs).toHaveLength(1);
             expect(refs[0].queryName).toBe('Member Activity Counts');
             expect(refs[0].categoryPath).toBe('Engagement Analytics');
@@ -187,25 +187,25 @@ LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID`;
         });
 
         it('should return empty for SQL without composition refs', () => {
-            const refs = MJSQLParser.ExtractCompositionRefs('SELECT * FROM Users');
+            const refs = SQLParser.ExtractCompositionRefs('SELECT * FROM Users');
             expect(refs).toHaveLength(0);
         });
     });
 
     describe('Analyze (template detection)', () => {
         it('should detect templates in SQL with Nunjucks', () => {
-            const result = MJSQLParser.Analyze('WHERE x = {{ val | sqlString }}');
+            const result = SQLParser.Analyze('WHERE x = {{ val | sqlString }}');
             expect(result.hasMJExtensions).toBe(true);
             expect(result.hasTemplateExpressions).toBe(true);
         });
 
         it('should not flag plain SQL as having templates', () => {
-            const result = MJSQLParser.Analyze('SELECT * FROM Users WHERE Active = 1');
+            const result = SQLParser.Analyze('SELECT * FROM Users WHERE Active = 1');
             expect(result.hasMJExtensions).toBe(false);
         });
 
         it('should distinguish composition refs from template expressions', () => {
-            const result = MJSQLParser.Analyze('FROM {{query:"Path/Q"}} q');
+            const result = SQLParser.Analyze('FROM {{query:"Path/Q"}} q');
             expect(result.hasCompositionRefs).toBe(true);
             expect(result.hasTemplateExpressions).toBe(false);
         });

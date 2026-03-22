@@ -1,5 +1,5 @@
 import { DatabasePlatform } from '@memberjunction/core';
-import { MJSQLParser } from '@memberjunction/sql-parser';
+import { SQLParser } from '@memberjunction/sql-parser';
 
 /**
  * Result of wrapping SQL with paging directives.
@@ -74,7 +74,7 @@ export class QueryPagingEngine {
     ): PagingWrappedSQL | null {
         const parserDialect = platform === 'postgresql' ? 'PostgresQL' : 'TransactSQL';
         try {
-            const ast = MJSQLParser.ParseSQL(sql, parserDialect);
+            const ast = SQLParser.ParseSQL(sql, parserDialect);
             if (!ast) return null;
 
             const stmt = (Array.isArray(ast) ? ast[0] : ast) as unknown as Record<string, unknown>;
@@ -103,7 +103,7 @@ export class QueryPagingEngine {
 
             // Get main SELECT without CTEs or ORDER BY
             stmt.with = null;
-            const mainSelectSQL = MJSQLParser.SqlifyAST(stmt as unknown as Parameters<typeof MJSQLParser.SqlifyAST>[0], parserDialect);
+            const mainSelectSQL = SQLParser.SqlifyAST(stmt as unknown as Parameters<typeof SQLParser.SqlifyAST>[0], parserDialect);
 
             // Assemble paged query (skip string-based remapping — already done via AST)
             const pagingCTEName = QueryPagingEngine.quoteIdentifier('__paged', platform);
@@ -155,7 +155,7 @@ export class QueryPagingEngine {
             }
 
             // Last resort: convert via ExprToSQL (will have correct quoting at least)
-            return MJSQLParser.ExprToSQL(orderTerm.expr, parserDialect) + direction;
+            return SQLParser.ExprToSQL(orderTerm.expr, parserDialect) + direction;
         });
 
         return remappedTerms.join(', ');
@@ -232,7 +232,7 @@ export class QueryPagingEngine {
         return ctes.map(cte => {
             const cteRecord = cte as { name: { value: string }; stmt: { ast: unknown } };
             const quotedName = QueryPagingEngine.quoteIdentifier(cteRecord.name.value, platform);
-            const bodySQL = MJSQLParser.SqlifyAST(cteRecord.stmt.ast as Parameters<typeof MJSQLParser.SqlifyAST>[0], parserDialect);
+            const bodySQL = SQLParser.SqlifyAST(cteRecord.stmt.ast as Parameters<typeof SQLParser.SqlifyAST>[0], parserDialect);
             return `${quotedName} AS (\n${bodySQL}\n)`;
         });
     }
