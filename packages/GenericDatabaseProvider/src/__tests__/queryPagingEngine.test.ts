@@ -354,3 +354,240 @@ SELECT * FROM Active ORDER BY ID;`;
         expect(result.CountSQL).not.toContain(';');
     });
 });
+
+// ═══════════════════════════════════════════════════
+// Real-world E2E Regression Tests
+// These test the exact SQL patterns that caused production failures.
+// ═══════════════════════════════════════════════════
+
+describe('QueryPagingEngine.WrapWithPaging — Real-World Regressions', () => {
+    describe('Backtick quoting bug (ExprToSQL dialect awareness)', () => {
+        it('should produce bracket-quoted ORDER BY for SQL Server (member-activity-counts pattern)', () => {
+            // This is the exact pattern that broke: CTE → SELECT * → ORDER BY column alias
+            // The AST path used to produce ORDER BY `TotalActivityCount` DESC (backtick = MySQL)
+            // instead of ORDER BY [TotalActivityCount] DESC or ORDER BY TotalActivityCount DESC
+            const sql = `WITH MemberActivities AS (
+    SELECT m.ID AS MemberID, m.FirstName,
+        (COALESCE(evt.EventsAttended, 0) + COALESCE(crs.CoursesCompleted, 0)) AS TotalActivityCount
+    FROM [AssociationDemo].[vwMembers] m
+    LEFT JOIN (
+        SELECT er.MemberID, SUM(CASE WHEN er.Status = 'Attended' THEN 1 ELSE 0 END) AS EventsAttended
+        FROM [AssociationDemo].[vwEventRegistrations] er
+        GROUP BY er.MemberID
+    ) evt ON m.ID = evt.MemberID
+    LEFT JOIN (
+        SELECT en.MemberID, SUM(CASE WHEN en.Status = 'Completed' THEN 1 ELSE 0 END) AS CoursesCompleted
+        FROM [AssociationDemo].[vwEnrollments] en
+        GROUP BY en.MemberID
+    ) crs ON m.ID = crs.MemberID
+)
+SELECT * FROM MemberActivities
+ORDER BY TotalActivityCount DESC`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            // Must NOT contain backtick-quoted identifiers (MySQL syntax)
+            expect(result.DataSQL).not.toContain('`');
+            // Must contain valid OFFSET/FETCH
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+            // ORDER BY should reference the projected column name without backticks
+            expect(result.DataSQL).toMatch(/ORDER BY.*TotalActivityCount.*DESC/i);
+            // The CTE should be present
+            expect(result.DataSQL).toMatch(/MemberActivities/i);
+            // Count query should work
+            expect(result.CountSQL).toContain('TotalRowCount');
+        });
+    });
+
+    describe('Table-qualified ORDER BY bug (remap to projected names)', () => {
+        it('should strip table qualifier from ORDER BY when wrapping in __paged CTE (chapter-engagement pattern)', () => {
+            // This is the exact pattern that broke: 3 CTEs with table-aliased ORDER BY
+            // The outer query is SELECT * FROM [__paged] where "chmem" doesn't exist
+            const sql = `WITH ChapterMembers AS (
+    SELECT c.ID AS ChapterID, c.Name AS ChapterName, c.ChapterType, c.Region, c.State,
+        COUNT(DISTINCT cm.MemberID) AS ActiveMemberCount,
+        AVG(DATEDIFF(DAY, cm.JoinDate, GETDATE())) AS AvgMemberTenureDays
+    FROM [AssociationDemo].[vwChapters] c
+    LEFT JOIN [AssociationDemo].[vwChapterMemberships] cm ON c.ID = cm.ChapterID AND cm.Status = 'Active'
+    WHERE c.IsActive = 1
+    GROUP BY c.ID, c.Name, c.ChapterType, c.Region, c.State
+),
+ChapterEventActivity AS (
+    SELECT cm.ChapterID, COUNT(DISTINCT er.EventID) AS UniqueEventsAttended
+    FROM [AssociationDemo].[vwChapterMemberships] cm
+    LEFT JOIN [AssociationDemo].[vwEventRegistrations] er ON cm.MemberID = er.MemberID
+    WHERE cm.Status = 'Active'
+    GROUP BY cm.ChapterID
+),
+ChapterCourseActivity AS (
+    SELECT cm.ChapterID, COUNT(DISTINCT en.CourseID) AS UniqueCoursesEnrolled
+    FROM [AssociationDemo].[vwChapterMemberships] cm
+    LEFT JOIN [AssociationDemo].[vwEnrollments] en ON cm.MemberID = en.MemberID
+    WHERE cm.Status = 'Active'
+    GROUP BY cm.ChapterID
+)
+SELECT chmem.ChapterID, chmem.ChapterName, chmem.ActiveMemberCount,
+    COALESCE(chev.UniqueEventsAttended, 0) AS UniqueEventsAttended,
+    COALESCE(chcr.UniqueCoursesEnrolled, 0) AS UniqueCoursesEnrolled
+FROM ChapterMembers chmem
+LEFT JOIN ChapterEventActivity chev ON chmem.ChapterID = chev.ChapterID
+LEFT JOIN ChapterCourseActivity chcr ON chmem.ChapterID = chcr.ChapterID
+ORDER BY chmem.ActiveMemberCount DESC`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            // The ORDER BY must NOT reference "chmem." — that alias is inside __paged CTE
+            expect(result.DataSQL).not.toMatch(/ORDER BY.*chmem\./i);
+            expect(result.DataSQL).not.toMatch(/ORDER BY.*\[chmem\]\./i);
+            // It should use the projected column name
+            expect(result.DataSQL).toMatch(/ORDER BY.*ActiveMemberCount.*DESC/i);
+            // Must not have backticks
+            expect(result.DataSQL).not.toContain('`');
+            // Paging clause present
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+            // All 3 original CTEs + __paged should be present
+            expect(result.DataSQL).toMatch(/ChapterMembers/i);
+            expect(result.DataSQL).toMatch(/ChapterEventActivity/i);
+            expect(result.DataSQL).toMatch(/ChapterCourseActivity/i);
+            expect(result.DataSQL).toContain('[__paged]');
+        });
+
+        it('should handle COALESCE in ORDER BY with table qualifier (event-revenue pattern)', () => {
+            // ORDER BY COALESCE(rev.TotalRevenue, 0) DESC — complex expression with table qualifier
+            const sql = `SELECT e.ID AS EventID, e.Name AS EventName,
+    COUNT(DISTINCT er.ID) AS TotalRegistrations,
+    COALESCE(rev.TotalRevenue, 0) AS TotalRevenue
+FROM [AssociationDemo].[vwEvents] e
+LEFT JOIN [AssociationDemo].[vwEventRegistrations] er ON e.ID = er.EventID
+LEFT JOIN (
+    SELECT li.RelatedEntityID AS EventID, SUM(li.Amount) AS TotalRevenue
+    FROM [AssociationDemo].[vwInvoiceLineItems] li
+    GROUP BY li.RelatedEntityID
+) rev ON e.ID = rev.EventID
+GROUP BY e.ID, e.Name, rev.TotalRevenue
+ORDER BY COALESCE(rev.TotalRevenue, 0) DESC`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 50, 'sqlserver');
+
+            // Should use projected name TotalRevenue, not COALESCE(rev.TotalRevenue, 0)
+            expect(result.DataSQL).toMatch(/ORDER BY.*TotalRevenue.*DESC/i);
+            expect(result.DataSQL).not.toContain('`');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY');
+        });
+
+        it('should handle multiple ORDER BY terms with table qualifiers', () => {
+            // ORDER BY m.LastName, m.FirstName — both need qualifier stripping
+            const sql = `SELECT m.ID, m.FirstName, m.LastName, m.Email
+FROM [AssociationDemo].[vwMembers] m
+ORDER BY m.LastName, m.FirstName`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, 'sqlserver');
+
+            // Table qualifiers should be stripped from both terms
+            expect(result.DataSQL).not.toMatch(/ORDER BY.*\bm\./i);
+            expect(result.DataSQL).not.toMatch(/ORDER BY.*\[m\]\./i);
+            expect(result.DataSQL).toMatch(/ORDER BY.*LastName/i);
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY');
+        });
+    });
+
+    describe('Nunjucks-templated queries after composition', () => {
+        it('should handle fully-resolved SQL that originally had Nunjucks (member-lifetime-revenue)', () => {
+            // After Nunjucks rendering, the SQL is plain — this tests the post-rendering paging
+            const sql = `WITH CurrentMembership AS (
+    SELECT ms.MemberID, mt.Name AS MembershipType,
+        ROW_NUMBER() OVER (PARTITION BY ms.MemberID ORDER BY ms.StartDate DESC) AS rn
+    FROM [AssociationDemo].[vwMemberships] ms
+    INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID
+    WHERE ms.Status = 'Active'
+),
+MemberRevenue AS (
+    SELECT i.MemberID, COUNT(DISTINCT i.ID) AS InvoiceCount, SUM(li.Amount) AS TotalRevenue
+    FROM [AssociationDemo].[vwInvoices] i
+    INNER JOIN [AssociationDemo].[vwInvoiceLineItems] li ON i.ID = li.InvoiceID
+    WHERE i.Status NOT IN ('Cancelled', 'Refunded')
+    GROUP BY i.MemberID
+)
+SELECT m.ID AS MemberID, m.FirstName, m.LastName,
+    COALESCE(rev.TotalRevenue, 0) AS TotalRevenue,
+    COALESCE(rev.InvoiceCount, 0) AS InvoiceCount
+FROM [AssociationDemo].[vwMembers] m
+LEFT JOIN CurrentMembership cm ON m.ID = cm.MemberID AND cm.rn = 1
+LEFT JOIN MemberRevenue rev ON m.ID = rev.MemberID
+WHERE YEAR(m.JoinDate) = 2024
+ORDER BY COALESCE(rev.TotalRevenue, 0) DESC`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            expect(result.DataSQL).toMatch(/ORDER BY.*TotalRevenue.*DESC/i);
+            expect(result.DataSQL).not.toContain('`');
+            expect(result.DataSQL).not.toMatch(/ORDER BY.*rev\./i);
+            expect(result.DataSQL).not.toMatch(/ORDER BY.*\[rev\]\./i);
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+            // Both original CTEs + __paged
+            expect(result.DataSQL).toMatch(/CurrentMembership/i);
+            expect(result.DataSQL).toMatch(/MemberRevenue/i);
+        });
+    });
+
+    describe('Simple queries without CTEs', () => {
+        it('should handle active-members-by-membership-type (GROUP BY, no CTE)', () => {
+            const sql = `SELECT mt.Name AS MembershipType, mt.AnnualDues,
+    COUNT(DISTINCT m.ID) AS ActiveMemberCount,
+    ROUND(COUNT(DISTINCT m.ID) * 100.0 / SUM(COUNT(DISTINCT m.ID)) OVER (), 1) AS PercentageOfTotal
+FROM [AssociationDemo].[vwMemberships] ms
+INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID
+INNER JOIN [AssociationDemo].[vwMembers] m ON ms.MemberID = m.ID
+WHERE ms.Status = 'Active'
+GROUP BY mt.Name, mt.AnnualDues
+ORDER BY ActiveMemberCount DESC`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            expect(result.DataSQL).toMatch(/ORDER BY.*ActiveMemberCount.*DESC/i);
+            expect(result.DataSQL).not.toContain('`');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+        });
+
+        it('should handle quarterly-event-attendance-trends (DATEPART, CONCAT)', () => {
+            const sql = `SELECT YEAR(e.StartDate) AS EventYear,
+    DATEPART(QUARTER, e.StartDate) AS EventQuarter,
+    CONCAT(YEAR(e.StartDate), ' Q', DATEPART(QUARTER, e.StartDate)) AS YearQuarter,
+    COUNT(DISTINCT e.ID) AS UniqueEvents,
+    COUNT(DISTINCT er.ID) AS TotalRegistrations,
+    SUM(CASE WHEN er.Status = 'Attended' THEN 1 ELSE 0 END) AS TotalAttended
+FROM [AssociationDemo].[vwEvents] e
+INNER JOIN [AssociationDemo].[vwEventRegistrations] er ON e.ID = er.EventID
+WHERE e.Status NOT IN ('Draft', 'Cancelled')
+GROUP BY YEAR(e.StartDate), DATEPART(QUARTER, e.StartDate)
+ORDER BY EventYear, EventQuarter`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            expect(result.DataSQL).toMatch(/ORDER BY.*EventYear/i);
+            expect(result.DataSQL).not.toContain('`');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+        });
+    });
+
+    describe('PostgreSQL paging with real-world patterns', () => {
+        it('should produce valid PostgreSQL paging for member-activity-counts pattern', () => {
+            const sql = `WITH MemberActivities AS (
+    SELECT m.ID AS MemberID, m.FirstName,
+        (COALESCE(evt.EventsAttended, 0) + COALESCE(crs.CoursesCompleted, 0)) AS TotalActivityCount
+    FROM vwMembers m
+    LEFT JOIN (SELECT er.MemberID, COUNT(*) AS EventsAttended FROM vwEventRegistrations er GROUP BY er.MemberID) evt ON m.ID = evt.MemberID
+    LEFT JOIN (SELECT en.MemberID, COUNT(*) AS CoursesCompleted FROM vwEnrollments en GROUP BY en.MemberID) crs ON m.ID = crs.MemberID
+)
+SELECT * FROM MemberActivities
+ORDER BY TotalActivityCount DESC`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 50, 'postgresql');
+
+            expect(result.DataSQL).toContain('LIMIT 50 OFFSET 0');
+            expect(result.DataSQL).not.toContain('`');
+            expect(result.DataSQL).not.toContain('FETCH NEXT');
+            expect(result.DataSQL).toMatch(/ORDER BY.*TotalActivityCount.*DESC/i);
+        });
+    });
+});

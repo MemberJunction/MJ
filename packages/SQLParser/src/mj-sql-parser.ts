@@ -191,10 +191,23 @@ export class MJSQLParser {
     /**
      * Convert a single AST expression node to a SQL string.
      * Useful for extracting ORDER BY terms, column expressions, etc.
+     *
+     * node-sql-parser's exprToSQL always produces backtick-quoted identifiers
+     * regardless of dialect. This method converts to the appropriate quoting:
+     * - TransactSQL: backticks → square brackets
+     * - PostgresQL: backticks → double quotes
      */
-    static ExprToSQL(expr: unknown): string {
+    static ExprToSQL(expr: unknown, dialect: string = 'TransactSQL'): string {
         const parser = new Parser();
-        return parser.exprToSQL(expr);
+        const sql = parser.exprToSQL(expr);
+
+        if (dialect === 'TransactSQL') {
+            return sql.replace(/`([^`]+)`/g, '[$1]');
+        }
+        if (dialect === 'PostgresQL') {
+            return sql.replace(/`([^`]+)`/g, '"$1"');
+        }
+        return sql;
     }
 
     // ─── Tokenization ──────────────────────────────────

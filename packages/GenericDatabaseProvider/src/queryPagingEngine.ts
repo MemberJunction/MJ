@@ -83,9 +83,17 @@ export class QueryPagingEngine {
             // Extract CTEs via AST
             const cteDefs = QueryPagingEngine.extractCTEsFromAST(stmt, parserDialect, platform);
 
-            // Find and extract ORDER BY (walks UNION chain)
+            // Extract ORDER BY and remap to projected column names via AST.
+            // The outer query is SELECT * FROM [__paged], so table aliases from the
+            // inner query don't exist. We match ORDER BY expressions against SELECT
+            // columns to find the projected name (AS alias or bare column name).
             const orderByStmt = QueryPagingEngine.findOrderByStatement(stmt);
-            const orderBySQL = QueryPagingEngine.extractOrderByFromAST(orderByStmt);
+            const selectColumns = (stmt.columns && Array.isArray(stmt.columns))
+                ? stmt.columns as Array<{ expr: Record<string, unknown>; as: string | null }>
+                : [];
+            const remappedOrderBy = QueryPagingEngine.remapOrderByViaAST(
+                orderByStmt, selectColumns, parserDialect
+            );
             if (orderByStmt?.orderby) {
                 orderByStmt.orderby = null;
             }
@@ -97,13 +105,122 @@ export class QueryPagingEngine {
             stmt.with = null;
             const mainSelectSQL = MJSQLParser.SqlifyAST(stmt as unknown as Parameters<typeof MJSQLParser.SqlifyAST>[0], parserDialect);
 
-            // Assemble paged query
-            return QueryPagingEngine.assemblePagingResult(
-                cteDefs, mainSelectSQL, orderBySQL, startRow, maxRows, platform
-            );
+            // Assemble paged query (skip string-based remapping — already done via AST)
+            const pagingCTEName = QueryPagingEngine.quoteIdentifier('__paged', platform);
+            const allCTEs = [...cteDefs, `${pagingCTEName} AS (\n${mainSelectSQL}\n)`];
+            const cteChain = `WITH ${allCTEs.join(',\n')}`;
+
+            const outerOrderBy = remappedOrderBy || QueryPagingEngine.defaultOrderBy(platform);
+            const pagingClause = QueryPagingEngine.buildPagingClause(startRow, maxRows, platform);
+            const dataSQL = `${cteChain}\nSELECT * FROM ${pagingCTEName}\nORDER BY ${outerOrderBy}\n${pagingClause}`;
+            const countSQL = `${cteChain}\nSELECT COUNT(*) AS TotalRowCount FROM ${pagingCTEName}`;
+
+            return { DataSQL: dataSQL, CountSQL: countSQL, Offset: startRow, PageSize: maxRows };
         } catch {
             return null;
         }
+    }
+
+    /**
+     * Remaps ORDER BY terms to projected column names using AST comparison.
+     *
+     * For each ORDER BY expression, checks the SELECT column list for a match:
+     * 1. If the SELECT column has an AS alias, use the alias
+     * 2. If the SELECT column is a bare column_ref, use the column name
+     * 3. If the ORDER BY is a simple column_ref, strip the table qualifier
+     *
+     * This is more robust than string-based remapping because it works directly
+     * with the parsed AST structure — no regex needed for quoting or prefix stripping.
+     */
+    private static remapOrderByViaAST(
+        orderByStmt: Record<string, unknown> | null,
+        selectColumns: Array<{ expr: Record<string, unknown>; as: string | null }>,
+        parserDialect: string
+    ): string | null {
+        if (!orderByStmt?.orderby || !Array.isArray(orderByStmt.orderby)) return null;
+
+        const orderByTerms = orderByStmt.orderby as Array<{ expr: Record<string, unknown>; type: string }>;
+
+        const remappedTerms = orderByTerms.map(orderTerm => {
+            const direction = orderTerm.type === 'DESC' ? ' DESC' : '';
+            const projectedName = QueryPagingEngine.resolveOrderByExpr(orderTerm.expr, selectColumns);
+
+            if (projectedName) {
+                return projectedName + direction;
+            }
+
+            // Fallback: if it's a simple column_ref, strip the table qualifier
+            if (orderTerm.expr.type === 'column_ref') {
+                return (orderTerm.expr.column as string) + direction;
+            }
+
+            // Last resort: convert via ExprToSQL (will have correct quoting at least)
+            return MJSQLParser.ExprToSQL(orderTerm.expr, parserDialect) + direction;
+        });
+
+        return remappedTerms.join(', ');
+    }
+
+    /**
+     * Resolves an ORDER BY expression to its projected column name by matching
+     * against the SELECT column list at the AST level.
+     */
+    private static resolveOrderByExpr(
+        orderExpr: Record<string, unknown>,
+        selectColumns: Array<{ expr: Record<string, unknown>; as: string | null }>
+    ): string | null {
+        for (const col of selectColumns) {
+            if (!col.expr) continue;
+
+            // Check if the ORDER BY expression matches this SELECT column's expression
+            if (QueryPagingEngine.astExprsMatch(orderExpr, col.expr)) {
+                // If the column has an AS alias, use it
+                if (col.as) return col.as;
+                // If it's a bare column_ref, use the column name
+                if (col.expr.type === 'column_ref') return col.expr.column as string;
+            }
+
+            // Also check: ORDER BY references a column by name that matches an AS alias
+            if (orderExpr.type === 'column_ref' && col.as) {
+                const orderCol = orderExpr.column as string;
+                if (orderCol.toLowerCase() === col.as.toLowerCase()) {
+                    return col.as;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Compares two AST expression nodes for structural equality.
+     * Handles column_ref (with table qualifier matching), aggregates, and functions.
+     */
+    private static astExprsMatch(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+        if (!a || !b) return false;
+        if (a.type !== b.type) return false;
+
+        // column_ref: match by column name (ignore table qualifier — the whole point
+        // of remapping is that table qualifiers don't exist in the outer query)
+        if (a.type === 'column_ref') {
+            return (a.column as string)?.toLowerCase() === (b.column as string)?.toLowerCase() &&
+                   (a.table as string | null)?.toLowerCase() === (b.table as string | null)?.toLowerCase();
+        }
+
+        // For aggregate functions (COUNT, SUM, etc.), compare name and args
+        if (a.type === 'aggr_func') {
+            if (a.name !== b.name) return false;
+            return JSON.stringify(a.args) === JSON.stringify(b.args);
+        }
+
+        // For regular functions, compare name and args
+        if (a.type === 'function') {
+            return JSON.stringify(a.name) === JSON.stringify(b.name) &&
+                   JSON.stringify(a.args) === JSON.stringify(b.args);
+        }
+
+        // Generic fallback: JSON deep equality (works for simple expressions)
+        return JSON.stringify(a) === JSON.stringify(b);
     }
 
     private static extractCTEsFromAST(
@@ -118,18 +235,6 @@ export class QueryPagingEngine {
             const bodySQL = MJSQLParser.SqlifyAST(cteRecord.stmt.ast as Parameters<typeof MJSQLParser.SqlifyAST>[0], parserDialect);
             return `${quotedName} AS (\n${bodySQL}\n)`;
         });
-    }
-
-    private static extractOrderByFromAST(
-        orderByStmt: Record<string, unknown> | null
-    ): string | null {
-        if (!orderByStmt?.orderby || !Array.isArray(orderByStmt.orderby)) return null;
-
-        const terms = (orderByStmt.orderby as Array<{ expr: unknown; type: string }>).map(o => {
-            const exprSQL = MJSQLParser.ExprToSQL(o.expr);
-            return o.type === 'DESC' ? `${exprSQL} DESC` : exprSQL;
-        });
-        return terms.join(', ');
     }
 
     private static findOrderByStatement(stmt: Record<string, unknown>): Record<string, unknown> | null {
@@ -159,34 +264,6 @@ export class QueryPagingEngine {
         const rawOrderBy = orderByClause || QueryPagingEngine.defaultOrderBy(platform);
         const outerOrderBy = orderByClause
             ? QueryPagingEngine.remapOrderByToProjectedNames(rawOrderBy, cleanSelect)
-            : rawOrderBy;
-
-        const pagingClause = QueryPagingEngine.buildPagingClause(startRow, maxRows, platform);
-        const dataSQL = `${cteChain}\nSELECT * FROM ${pagingCTEName}\nORDER BY ${outerOrderBy}\n${pagingClause}`;
-        const countSQL = `${cteChain}\nSELECT COUNT(*) AS TotalRowCount FROM ${pagingCTEName}`;
-
-        return { DataSQL: dataSQL, CountSQL: countSQL, Offset: startRow, PageSize: maxRows };
-    }
-
-    // ════════════════════════════════════════════════════════════════════
-    // Shared assembly
-    // ════════════════════════════════════════════════════════════════════
-
-    private static assemblePagingResult(
-        cteDefs: string[],
-        mainSelectSQL: string,
-        orderBySQL: string | null,
-        startRow: number,
-        maxRows: number,
-        platform: DatabasePlatform,
-    ): PagingWrappedSQL {
-        const pagingCTEName = QueryPagingEngine.quoteIdentifier('__paged', platform);
-        const allCTEs = [...cteDefs, `${pagingCTEName} AS (\n${mainSelectSQL}\n)`];
-        const cteChain = `WITH ${allCTEs.join(',\n')}`;
-
-        const rawOrderBy = orderBySQL || QueryPagingEngine.defaultOrderBy(platform);
-        const outerOrderBy = orderBySQL
-            ? QueryPagingEngine.remapOrderByToProjectedNames(rawOrderBy, mainSelectSQL)
             : rawOrderBy;
 
         const pagingClause = QueryPagingEngine.buildPagingClause(startRow, maxRows, platform);
@@ -306,18 +383,27 @@ export class QueryPagingEngine {
             const dirMatch = trimmed.match(/\s+(ASC|DESC)(\s+NULLS\s+(FIRST|LAST))?\s*$/i);
             const expr = dirMatch ? trimmed.substring(0, dirMatch.index!).trim() : trimmed;
             const direction = dirMatch ? dirMatch[0] : '';
-            const normalizedExpr = expr.replace(/\s+/g, ' ').trim();
 
+            // Strip bracket/backtick/double-quote quoting for normalized matching.
+            // The AST path produces [bracket]-quoted identifiers, while the alias map
+            // may use either quoted or unquoted forms.
+            const unquoted = expr.replace(/\[([^\]]+)\]/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/"([^"]+)"/g, '$1');
+            const normalizedExpr = unquoted.replace(/\s+/g, ' ').trim();
+
+            // 1. Try exact match against SELECT expressions
             const exactMatch = aliasMap.get(normalizedExpr.toUpperCase());
             if (exactMatch) return exactMatch + direction;
 
+            // 2. Strip table alias prefixes (handles both quoted and unquoted)
             const stripped = normalizedExpr.replace(/\b[a-zA-Z_]\w*\./g, '');
             const strippedMatch = aliasMap.get(stripped.toUpperCase());
             if (strippedMatch) return strippedMatch + direction;
 
-            const dotMatch = expr.match(/^[a-zA-Z_]\w*\.([a-zA-Z_]\w*)$/);
+            // 3. Simple table.column — return just the column name
+            const dotMatch = normalizedExpr.match(/^[a-zA-Z_]\w*\.([a-zA-Z_]\w*)$/);
             if (dotMatch) return dotMatch[1] + direction;
 
+            // 4. Fallback: return stripped expression
             return stripped + direction;
         });
 
