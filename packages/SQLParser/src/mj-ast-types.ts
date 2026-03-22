@@ -277,3 +277,52 @@ export interface MJParseResult {
     /** Whether the SQL contains loop blocks */
     hasLoopBlocks: boolean;
 }
+
+// ═══════════════════════════════════════════════════
+// AST Annotation types (from AST Walker)
+// ═══════════════════════════════════════════════════
+
+/** The SQL clause where an MJ node was found */
+export type SQLClauseContext =
+    | 'select'       // In the SELECT column list
+    | 'from'         // In the FROM clause (table position)
+    | 'where'        // In the WHERE condition
+    | 'join_on'      // In a JOIN ON condition
+    | 'group_by'     // In GROUP BY
+    | 'order_by'     // In ORDER BY
+    | 'having'       // In HAVING
+    | 'cte'          // Inside a CTE body
+    | 'subquery'     // Inside a subquery
+    | 'unknown';     // Could not determine context
+
+/** An annotation mapping a placeholder in the AST to its original MJ node */
+export interface MJASTAnnotation {
+    /** Dot-separated path in the AST (e.g., "where.right", "columns[0].expr") */
+    path: string;
+    /** The placeholder value found in the AST */
+    placeholder: string;
+    /** The SQL clause context where this placeholder appears */
+    clauseContext: SQLClauseContext;
+    /** The resolved MJ template expression (if this is a template expr placeholder) */
+    templateExpr: MJTemplateExpr | null;
+    /** The resolved MJ composition ref (if this is a composition ref placeholder) */
+    compositionRef: MJCompositionRef | null;
+    /** The placeholder context type (string, number, identifier, etc.) */
+    placeholderContext: PlaceholderContext;
+    /** The raw AST node that contains the placeholder */
+    astNode: Record<string, unknown>;
+}
+
+/** Result of walking the AST to annotate MJ placeholder positions */
+export interface MJASTWalkResult {
+    /** All annotations found, in walk order */
+    annotations: MJASTAnnotation[];
+    /** Annotations grouped by SQL clause context */
+    byClause: Map<SQLClauseContext, MJASTAnnotation[]>;
+    /** Annotations indexed by placeholder string for quick lookup */
+    byPlaceholder: Map<string, MJASTAnnotation>;
+    /** Annotations for template expressions only */
+    templateExprs: MJASTAnnotation[];
+    /** Annotations for composition refs only */
+    compositionRefs: MJASTAnnotation[];
+}

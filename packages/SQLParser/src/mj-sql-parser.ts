@@ -30,6 +30,9 @@ import {
     PlaceholderEntry,
     PlaceholderSubstitutionResult,
     MJParseResult,
+    SQLClauseContext,
+    MJASTAnnotation,
+    MJASTWalkResult,
 } from './mj-ast-types.js';
 
 // ═══════════════════════════════════════════════════
@@ -430,6 +433,279 @@ export class MJSQLParser {
         }
 
         return Array.from(paramMap.values());
+    }
+
+    // ─── AST Walker ──────────────────────────────────────
+
+    /**
+     * Walk the AST from an Astify result and annotate where MJ placeholders appear.
+     *
+     * Returns an MJASTWalkResult with annotations mapping each placeholder to its
+     * SQL clause context (SELECT, WHERE, ORDER BY, etc.) and the resolved MJ node.
+     *
+     * This enables queries like:
+     * - "Which template expressions appear in the WHERE clause?"
+     * - "What composition ref is in the FROM clause?"
+     * - "Does the ORDER BY reference an MJ token?"
+     *
+     * @param result The MJAstifyResult from Astify()
+     * @returns Walk result with annotations, or empty result if AST parsing failed
+     */
+    static WalkAST(result: MJAstifyResult): MJASTWalkResult {
+        const emptyResult: MJASTWalkResult = {
+            annotations: [],
+            byClause: new Map(),
+            byPlaceholder: new Map(),
+            templateExprs: [],
+            compositionRefs: [],
+        };
+
+        if (!result.astParsed || !result.ast || result.positionMap.size === 0) {
+            return emptyResult;
+        }
+
+        const annotations: MJASTAnnotation[] = [];
+        const stmt = (Array.isArray(result.ast) ? result.ast[0] : result.ast) as unknown as Record<string, unknown>;
+
+        if (stmt) {
+            MJSQLParser.walkASTNode(stmt, '', 'unknown', result.positionMap, annotations);
+        }
+
+        return MJSQLParser.buildWalkResult(annotations);
+    }
+
+    // ═══════════════════════════════════════════════════
+    // Private: AST Walker
+    // ═══════════════════════════════════════════════════
+
+    /**
+     * Recursively walks an AST node, checking values against the placeholder map.
+     */
+    private static walkASTNode(
+        node: Record<string, unknown>,
+        path: string,
+        context: SQLClauseContext,
+        positionMap: Map<string, PlaceholderEntry>,
+        annotations: MJASTAnnotation[]
+    ): void {
+        if (!node || typeof node !== 'object') return;
+
+        // Walk standard SQL AST clauses with appropriate context
+        if (node.columns) MJSQLParser.walkASTValue(node.columns, `${path}columns`, 'select', positionMap, annotations, node);
+        if (node.from) MJSQLParser.walkASTValue(node.from, `${path}from`, 'from', positionMap, annotations, node);
+        if (node.where) MJSQLParser.walkASTValue(node.where, `${path}where`, 'where', positionMap, annotations, node);
+        if (node.groupby) {
+            const groupby = node.groupby as Record<string, unknown>;
+            const groupItems = groupby.columns || node.groupby;
+            MJSQLParser.walkASTValue(groupItems, `${path}groupby`, 'group_by', positionMap, annotations, node);
+        }
+        if (node.having) MJSQLParser.walkASTValue(node.having, `${path}having`, 'having', positionMap, annotations, node);
+        if (node.orderby) MJSQLParser.walkASTValue(node.orderby, `${path}orderby`, 'order_by', positionMap, annotations, node);
+
+        // Walk CTEs
+        if (node.with && Array.isArray(node.with)) {
+            for (let i = 0; i < node.with.length; i++) {
+                const cte = node.with[i] as Record<string, unknown>;
+                if (cte.stmt) {
+                    const stmtRecord = cte.stmt as Record<string, unknown>;
+                    const cteAst = (stmtRecord.ast || stmtRecord) as Record<string, unknown>;
+                    MJSQLParser.walkASTNode(cteAst, `${path}with[${i}].`, 'cte', positionMap, annotations);
+                }
+            }
+        }
+
+        // Walk JOIN ON conditions
+        if (Array.isArray(node.from)) {
+            for (let i = 0; i < node.from.length; i++) {
+                const fromItem = node.from[i] as Record<string, unknown>;
+                if (fromItem?.on) {
+                    MJSQLParser.walkASTValue(fromItem.on, `${path}from[${i}].on`, 'join_on', positionMap, annotations, fromItem);
+                }
+                // Walk subqueries in FROM
+                if (fromItem?.expr) {
+                    const exprRecord = fromItem.expr as Record<string, unknown>;
+                    const subAst = (exprRecord.ast || exprRecord) as Record<string, unknown>;
+                    if (subAst.type === 'select' || subAst.columns) {
+                        MJSQLParser.walkASTNode(subAst, `${path}from[${i}].expr.`, 'subquery', positionMap, annotations);
+                    }
+                }
+            }
+        }
+
+        // Walk UNION/EXCEPT chain
+        if (node._next) {
+            MJSQLParser.walkASTNode(node._next as Record<string, unknown>, `${path}_next.`, context, positionMap, annotations);
+        }
+    }
+
+    /**
+     * Walks any AST value (node, array, or primitive) checking for placeholder matches.
+     */
+    private static walkASTValue(
+        value: unknown,
+        path: string,
+        context: SQLClauseContext,
+        positionMap: Map<string, PlaceholderEntry>,
+        annotations: MJASTAnnotation[],
+        parentNode: Record<string, unknown>
+    ): void {
+        if (value === null || value === undefined) return;
+
+        // Check string values against placeholders
+        if (typeof value === 'string') {
+            MJSQLParser.checkPlaceholder(value, path, context, positionMap, annotations, parentNode);
+            return;
+        }
+
+        // Check number values (sqlNumber placeholders are numeric)
+        if (typeof value === 'number') {
+            MJSQLParser.checkPlaceholder(String(value), path, context, positionMap, annotations, parentNode);
+            return;
+        }
+
+        // Walk arrays
+        if (Array.isArray(value)) {
+            for (let i = 0; i < value.length; i++) {
+                MJSQLParser.walkASTValue(value[i], `${path}[${i}]`, context, positionMap, annotations, parentNode);
+            }
+            return;
+        }
+
+        // Walk objects recursively
+        if (typeof value === 'object') {
+            const obj = value as Record<string, unknown>;
+
+            // Check column_ref nodes — the column name or table.column might be a placeholder
+            if (obj.type === 'column_ref') {
+                const col = obj.column as string;
+                if (col) MJSQLParser.checkPlaceholder(col, `${path}.column`, context, positionMap, annotations, obj);
+                if (obj.table) MJSQLParser.checkPlaceholder(obj.table as string, `${path}.table`, context, positionMap, annotations, obj);
+                return;
+            }
+
+            // Check string literal values
+            if (obj.type === 'single_quote_string' || obj.type === 'string') {
+                if (typeof obj.value === 'string') {
+                    // String placeholder includes the quotes: '__MJT_001__'
+                    MJSQLParser.checkPlaceholder(`'${obj.value}'`, `${path}.value`, context, positionMap, annotations, obj);
+                }
+                return;
+            }
+
+            // Check number literal values
+            if (obj.type === 'number') {
+                if (typeof obj.value === 'number') {
+                    MJSQLParser.checkPlaceholder(String(obj.value), `${path}.value`, context, positionMap, annotations, obj);
+                }
+                return;
+            }
+
+            // Recurse into expression nodes
+            if (obj.left) MJSQLParser.walkASTValue(obj.left, `${path}.left`, context, positionMap, annotations, obj);
+            if (obj.right) MJSQLParser.walkASTValue(obj.right, `${path}.right`, context, positionMap, annotations, obj);
+            if (obj.expr) MJSQLParser.walkASTValue(obj.expr, `${path}.expr`, context, positionMap, annotations, obj);
+            if (obj.args) {
+                const args = (obj.args as Record<string, unknown>).value || obj.args;
+                MJSQLParser.walkASTValue(args, `${path}.args`, context, positionMap, annotations, obj);
+            }
+
+            // Walk CASE WHEN
+            if (obj.type === 'case' && Array.isArray(obj.args)) {
+                for (let i = 0; i < (obj.args as unknown[]).length; i++) {
+                    const caseArg = (obj.args as Record<string, unknown>[])[i];
+                    if (caseArg.cond) MJSQLParser.walkASTValue(caseArg.cond, `${path}.args[${i}].cond`, context, positionMap, annotations, obj);
+                    if (caseArg.result) MJSQLParser.walkASTValue(caseArg.result, `${path}.args[${i}].result`, context, positionMap, annotations, obj);
+                }
+            }
+
+            // Walk subqueries in expressions (EXISTS, IN)
+            if (obj.ast) {
+                MJSQLParser.walkASTNode(obj.ast as Record<string, unknown>, `${path}.ast.`, 'subquery', positionMap, annotations);
+            }
+        }
+    }
+
+    /**
+     * Checks if a value matches a placeholder and creates an annotation if so.
+     */
+    private static checkPlaceholder(
+        value: string,
+        path: string,
+        context: SQLClauseContext,
+        positionMap: Map<string, PlaceholderEntry>,
+        annotations: MJASTAnnotation[],
+        astNode: Record<string, unknown>
+    ): void {
+        const entry = positionMap.get(value);
+        if (!entry) return;
+
+        const originalToken = entry.originalToken;
+        let templateExpr: MJTemplateExpr | null = null;
+        let compositionRef: MJCompositionRef | null = null;
+
+        if (originalToken.type === 'MJ_TEMPLATE_EXPR') {
+            const parsed = originalToken.parsed as MJTemplateExprContent;
+            templateExpr = {
+                type: 'mj_template_expr',
+                variable: parsed.variable,
+                filters: parsed.filters,
+                raw: originalToken.raw,
+            };
+        } else if (originalToken.type === 'MJ_COMPOSITION_REF') {
+            const parsed = originalToken.parsed as MJCompositionRefContent;
+            compositionRef = {
+                type: 'mj_composition_ref',
+                categoryPath: parsed.categoryPath,
+                queryName: parsed.queryName,
+                parameters: parsed.parameters,
+                raw: originalToken.raw,
+            };
+        }
+
+        annotations.push({
+            path,
+            placeholder: value,
+            clauseContext: context,
+            templateExpr,
+            compositionRef,
+            placeholderContext: entry.context,
+            astNode,
+        });
+    }
+
+    /**
+     * Builds the MJASTWalkResult from a flat list of annotations.
+     */
+    private static buildWalkResult(annotations: MJASTAnnotation[]): MJASTWalkResult {
+        // Deduplicate — keep the first (most specific) annotation per placeholder.
+        // Subqueries can be reached via multiple AST walk paths, producing duplicates.
+        const seen = new Set<string>();
+        const deduped = annotations.filter(ann => {
+            if (seen.has(ann.placeholder)) return false;
+            seen.add(ann.placeholder);
+            return true;
+        });
+
+        const byClause = new Map<SQLClauseContext, MJASTAnnotation[]>();
+        const byPlaceholder = new Map<string, MJASTAnnotation>();
+        const templateExprs: MJASTAnnotation[] = [];
+        const compositionRefs: MJASTAnnotation[] = [];
+
+        for (const ann of deduped) {
+            // Index by clause
+            const clauseList = byClause.get(ann.clauseContext) || [];
+            clauseList.push(ann);
+            byClause.set(ann.clauseContext, clauseList);
+
+            // Index by placeholder
+            byPlaceholder.set(ann.placeholder, ann);
+
+            // Categorize
+            if (ann.templateExpr) templateExprs.push(ann);
+            if (ann.compositionRef) compositionRefs.push(ann);
+        }
+
+        return { annotations: deduped, byClause, byPlaceholder, templateExprs, compositionRefs };
     }
 
     // ═══════════════════════════════════════════════════

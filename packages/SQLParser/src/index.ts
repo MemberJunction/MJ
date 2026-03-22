@@ -37,4 +37,8 @@ export type {
     PlaceholderSubstitutionResult,
     // Parse result
     MJParseResult,
+    // AST Walker types
+    SQLClauseContext,
+    MJASTAnnotation,
+    MJASTWalkResult,
 } from './mj-ast-types.js';
