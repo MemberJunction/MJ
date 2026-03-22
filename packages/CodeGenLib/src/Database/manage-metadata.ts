@@ -1141,7 +1141,7 @@ export class ManageMetadataBase {
          IsForeignKey: boolean;
       }>;
    }> {
-      const parseResult = SQLParser.Parse(viewDefinition);
+      const tableRefs = SQLParser.ExtractTableRefs(viewDefinition);
       const md = new Metadata();
       const sourceEntities: Array<{
          Name: string;
@@ -1158,7 +1158,7 @@ export class ManageMetadataBase {
 
       const seen = new Set<string>();
 
-      for (const tableRef of parseResult.Tables) {
+      for (const tableRef of tableRefs) {
          // Match against MJ entities by BaseTable/BaseView + SchemaName
          const matchingEntity = md.Entities.find(e =>
             (e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase() ||
