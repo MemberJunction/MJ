@@ -861,8 +861,11 @@ async function processRSUPendingWork(): Promise<void> {
 
       // Resolve connector
       const { ConnectorFactory } = await import('@memberjunction/integration-engine');
+      const CoreEntities = await import('@memberjunction/core-entities');
+      type CompanyIntegrationType = InstanceType<typeof CoreEntities.MJCompanyIntegrationEntity>;
+      type IntegrationType = InstanceType<typeof CoreEntities.MJIntegrationEntity>;
       const rv = new RunView();
-      const ciResult = await rv.RunView({
+      const ciResult = await rv.RunView<CompanyIntegrationType>({
         EntityName: 'MJ: Company Integrations',
         ExtraFilter: `ID='${item.CompanyIntegrationID}'`,
         ResultType: 'entity_object',
@@ -873,9 +876,9 @@ async function processRSUPendingWork(): Promise<void> {
         continue;
       }
 
-      const integrationName = (companyIntegration as Record<string, string>).Integration;
+      const integrationName = companyIntegration.Integration;
       // Resolve the Integration entity for ConnectorFactory
-      const integrationResult = await rv.RunView({
+      const integrationResult = await rv.RunView<IntegrationType>({
         EntityName: 'MJ: Integrations',
         ExtraFilter: `Name='${integrationName}'`,
         ResultType: 'entity_object',
@@ -885,7 +888,7 @@ async function processRSUPendingWork(): Promise<void> {
         console.warn(`[RSU] Integration entity for ${integrationName} not found`);
         continue;
       }
-      const connector = ConnectorFactory.Resolve(integrationEntity as Parameters<typeof ConnectorFactory.Resolve>[0]);
+      const connector = ConnectorFactory.Resolve(integrationEntity);
       if (!connector) {
         console.warn(`[RSU] Connector for ${integrationName} not found`);
         continue;

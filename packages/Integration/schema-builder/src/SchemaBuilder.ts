@@ -27,6 +27,7 @@ import {
 } from '@memberjunction/schema-engine';
 import { SoftFKConfigEmitter } from './SoftFKConfigEmitter.js';
 import { MetadataEmitter } from './MetadataEmitter.js';
+import { existsSync, readFileSync } from 'node:fs';
 import { SchemaEvolution } from './SchemaEvolution.js';
 import { IsIntegrationWriteAllowed } from './AccessControl.js';
 
@@ -312,9 +313,8 @@ export class SchemaBuilder {
      */
     private ReadFileIfExists(filePath: string): string | null {
         try {
-            const fs = require('node:fs');
-            if (fs.existsSync(filePath)) {
-                return fs.readFileSync(filePath, 'utf-8');
+            if (existsSync(filePath)) {
+                return readFileSync(filePath, 'utf-8');
             }
         } catch { /* file doesn't exist yet */ }
         return null;
