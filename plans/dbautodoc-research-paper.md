@@ -972,7 +972,7 @@ Table 6 reports token consumption and estimated API cost across benchmark databa
 
 ### 7.5 Case Studies
 
-#### 7.5.1 OrgA: Professional Association in the Education Sector
+#### 7.5.1 OrgA: Professional Membership Association
 
 **Database profile.** OrgA is a professional membership association that uses a cloud-based CRM/AMS platform as its primary membership and operations system. The database snapshot contained 36 tables, 1,807 columns, spread across 4 schemas. Critically, the database was *completely undocumented*: no primary keys were declared, no foreign key constraints existed, and no table or column descriptions were present in the schema metadata. This represents the most challenging operating condition for DBAutoDoc — a true "dark database" with zero structural hints.
 
@@ -994,7 +994,7 @@ Table 6 reports token consumption and estimated API cost across benchmark databa
 
 **Significance.** This case study demonstrates DBAutoDoc's ability to operate on a completely undocumented database and produce actionable documentation. The system's capacity to recognize platform-specific architectural patterns (platform-managed packages, Person Account model) and domain-specific structures (association membership, committee governance) from raw schema and data analysis alone — without any human hints — validates the iterative context propagation approach in a real-world setting where no quantitative ground truth is available for comparison.
 
-#### 7.5.2 OrgB: Trade Association in the Automotive Aftermarket
+#### 7.5.2 OrgB: Trade Association
 
 **Database profile.** OrgB is a trade association that operates a custom .NET application with a SQL Server backend. The database snapshot contained 125 tables, 2,347 columns, spread across 10 schemas organized by business function (CRM, Shopping, Purchasing, Accounting, Awards, Exhibits, Speakers, App, among others). Like OrgA, this database was *completely undocumented*: no primary keys were declared, no foreign key constraints existed, and no table or column descriptions were present in the schema metadata. At 3.5x the table count of OrgA, this case study tests DBAutoDoc's scalability on a significantly larger undocumented enterprise schema.
 

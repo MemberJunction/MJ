@@ -364,8 +364,8 @@ We evaluate DBAutoDoc on four public benchmark databases plus two private enterp
 | [Chinook](results/chinook/) | 11 | 64 | Music store | Full (stripped for eval) |
 | [Northwind](results/northwind/) | 13 | 88 | Order management | Full (stripped for eval) |
 | [LousyDB](results/lousydb/) | 20 | 162 | Synthetic (dark DB) | None by design |
-| OrgA | 36 | 1,807 | Education association | None (dark DB) |
-| OrgB | 125 | 2,347 | Automotive trade assoc. | None (dark DB) |
+| OrgA | 36 | 1,807 | Professional membership assoc. | None (dark DB) |
+| OrgB | 125 | 2,347 | Trade association | None (dark DB) |
 
 **AdventureWorks2022** is the primary stress-test: 71 tables across five schemas with 91 declared FK relationships. For discovery experiments, all constraints and descriptions are stripped; originals serve as ground truth.
 
@@ -473,7 +473,7 @@ Across all benchmark databases, DBAutoDoc converges within 2 iterations at media
 
 ### 7.5 Enterprise Case Studies
 
-#### 7.5.1 OrgA: Professional Association in the Education Sector
+#### 7.5.1 OrgA: Professional Membership Association
 
 **Database profile.** A professional association using a Salesforce-based CRM/AMS platform. The snapshot contained 36 tables, 1,807 columns across 4 schemas -- a completely undocumented dark database with zero declared constraints.
 
@@ -485,7 +485,7 @@ Across all benchmark databases, DBAutoDoc converges within 2 iterations at media
 
 **Processing.** 2 iterations, 1.1M tokens, ~1.5 hours, fully autonomous.
 
-#### 7.5.2 OrgB: Trade Association in the Automotive Aftermarket
+#### 7.5.2 OrgB: Trade Association
 
 **Database profile.** A custom .NET application with SQL Server backend: 125 tables, 2,347 columns across 10 schemas -- completely undocumented.
 
