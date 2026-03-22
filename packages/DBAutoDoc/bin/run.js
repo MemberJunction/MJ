@@ -10,7 +10,7 @@ dotenvConfig({ path: resolve(__dirname, '../../../.env') });
 dotenvConfig();
 
 // Commands that need the full MJ server bootstrap (database connectivity, AI providers, etc.)
-const heavyCommands = ['analyze', 'generate-queries', 'export-sample-queries'];
+const heavyCommands = ['analyze', 'generate-queries', 'export-sample-queries', 'prune'];
 const commandArg = process.argv[2];
 const needsBootstrap = heavyCommands.includes(commandArg);
 
