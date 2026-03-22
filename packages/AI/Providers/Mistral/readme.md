@@ -1,6 +1,8 @@
+[Back to AI Framework Overview](../../README.md) | [All Providers](../README.md)
+
 # @memberjunction/ai-mistral
 
-MemberJunction AI provider for Mistral AI. This package provides both LLM and embedding capabilities using Mistral's models, implementing `BaseLLM` and `BaseEmbeddings` from `@memberjunction/ai`.
+MemberJunction AI provider for Mistral AI. Provides both LLM and embedding capabilities, implementing `BaseLLM` and `BaseEmbeddings` from `@memberjunction/ai`.
 
 ## Architecture
 
@@ -27,7 +29,7 @@ graph TD
 
 ## Features
 
-- **Chat Completions**: Conversational AI with Mistral Large, Medium, Small, and open models
+- **Chat Completions**: Conversational AI with Mistral Large, Medium, Small, and Codestral models
 - **Streaming**: Real-time response streaming support
 - **Text Embeddings**: Vector embeddings via Mistral's embedding models
 - **Thinking/Reasoning**: Extraction of thinking content from reasoning models
@@ -45,16 +47,16 @@ npm install @memberjunction/ai-mistral
 ### Chat Completion
 
 ```typescript
-import { MistralLLM } from '@memberjunction/ai-mistral';
+import { MistralLLM } from "@memberjunction/ai-mistral";
 
-const llm = new MistralLLM('your-mistral-api-key');
+const llm = new MistralLLM("your-mistral-api-key");
 
 const result = await llm.ChatCompletion({
-    model: 'mistral-large-latest',
+    model: "mistral-large-latest",
     messages: [
-        { role: 'user', content: 'Explain transformers in machine learning.' }
+        { role: "user", content: "Explain transformers in machine learning." },
     ],
-    temperature: 0.7
+    temperature: 0.7,
 });
 
 if (result.success) {
@@ -66,26 +68,26 @@ if (result.success) {
 
 ```typescript
 const result = await llm.ChatCompletion({
-    model: 'mistral-small-latest',
-    messages: [{ role: 'user', content: 'Write a poem.' }],
+    model: "mistral-small-latest",
+    messages: [{ role: "user", content: "Write a poem." }],
     streaming: true,
     streamingCallbacks: {
         OnContent: (content) => process.stdout.write(content),
-        OnComplete: () => console.log('\nDone!')
-    }
+        OnComplete: () => console.log("\nDone!"),
+    },
 });
 ```
 
 ### Embeddings
 
 ```typescript
-import { MistralEmbedding } from '@memberjunction/ai-mistral';
+import { MistralEmbedding } from "@memberjunction/ai-mistral";
 
-const embedder = new MistralEmbedding('your-mistral-api-key');
+const embedder = new MistralEmbedding("your-mistral-api-key");
 
 const result = await embedder.EmbedText({
-    text: 'Sample text for embedding',
-    model: 'mistral-embed'
+    text: "Sample text for embedding",
+    model: "mistral-embed",
 });
 
 console.log(`Dimensions: ${result.vector.length}`);

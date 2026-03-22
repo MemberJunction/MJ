@@ -1,6 +1,8 @@
+[Back to AI Framework Overview](../../README.md) | [All Providers](../README.md)
+
 # @memberjunction/ai-anthropic
 
-MemberJunction AI provider for Anthropic's Claude models. This package implements the `BaseLLM` interface from `@memberjunction/ai`, enabling integration with Claude 3 and later model families including Opus, Sonnet, and Haiku variants.
+MemberJunction AI provider for Anthropic's Claude models. Implements the `BaseLLM` interface from `@memberjunction/ai`, supporting the Claude 4, Claude 3.5, and Claude 3 model families including Opus, Sonnet, and Haiku variants.
 
 ## Architecture
 
@@ -30,7 +32,7 @@ graph TD
 - **Streaming**: Real-time response streaming with thinking block extraction
 - **Prompt Caching**: Automatic ephemeral cache control on content blocks for reduced latency and cost
 - **Multimodal Input**: Support for text, images (base64 and URL), and content block arrays
-- **Thinking/Reasoning Models**: Extraction of thinking content from Claude's extended thinking responses
+- **Thinking/Reasoning**: Extraction of thinking content from Claude's extended thinking responses
 - **Error Analysis**: Integrated error analysis via `ErrorAnalyzer`
 
 ## Installation
@@ -42,18 +44,17 @@ npm install @memberjunction/ai-anthropic
 ## Usage
 
 ```typescript
-import { AnthropicLLM } from '@memberjunction/ai-anthropic';
+import { AnthropicLLM } from "@memberjunction/ai-anthropic";
 
-const llm = new AnthropicLLM('your-anthropic-api-key');
+const llm = new AnthropicLLM("your-anthropic-api-key");
 
-// Non-streaming chat
 const result = await llm.ChatCompletion({
-    model: 'claude-sonnet-4-20250514',
+    model: "claude-sonnet-4-20250514",
     messages: [
-        { role: 'user', content: 'Explain quantum computing in simple terms.' }
+        { role: "user", content: "Explain quantum computing in simple terms." },
     ],
     temperature: 0.7,
-    maxOutputTokens: 1024
+    maxOutputTokens: 1024,
 });
 
 console.log(result.data.choices[0].message.content);
@@ -63,14 +64,28 @@ console.log(result.data.choices[0].message.content);
 
 ```typescript
 const result = await llm.ChatCompletion({
-    model: 'claude-sonnet-4-20250514',
-    messages: [{ role: 'user', content: 'Write a short story.' }],
+    model: "claude-sonnet-4-20250514",
+    messages: [{ role: "user", content: "Write a short story." }],
     streaming: true,
     streamingCallbacks: {
         OnContent: (content) => process.stdout.write(content),
-        OnComplete: (result) => console.log('\nDone!')
-    }
+        OnComplete: (result) => console.log("\nDone!"),
+    },
 });
+```
+
+### Extended Thinking
+
+```typescript
+const result = await llm.ChatCompletion({
+    model: "claude-opus-4-20250514",
+    messages: [{ role: "user", content: "Solve this step by step: ..." }],
+    effortLevel: "80",
+});
+
+// Access thinking content alongside the response
+console.log("Thinking:", result.data.choices[0].message.thinking);
+console.log("Answer:", result.data.choices[0].message.content);
 ```
 
 ## Supported Parameters
