@@ -15,7 +15,8 @@
   },
   "dependencies": {
     "@memberjunction/global": "5.15.0",
-    "@memberjunction/integration-engine": "5.15.0"
+    "@memberjunction/integration-engine": "5.15.0",
+    "@memberjunction/schema-engine": "5.15.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
