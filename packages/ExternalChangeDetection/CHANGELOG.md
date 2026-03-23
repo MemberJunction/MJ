@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/external-change-detection
 
+## 5.15.0
+
+### Patch Changes
+
+- 2488c5c: Fix External Change Detection OOM crashes by replacing unbounded OR-clause record fetching with paginated detection queries (ot.\* + ORDER BY), interleaved per-entity detect-replay to bound memory, and dynamic concurrency based on table row counts. Adds production safety mechanisms: circuit breaker, cooldown pause, and heap guard.
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/sqlserver-dataprovider@5.15.0
+  - @memberjunction/global@5.15.0
+  - @memberjunction/sql-dialect@5.15.0
+
 ## 5.14.0
 
 ### Patch Changes

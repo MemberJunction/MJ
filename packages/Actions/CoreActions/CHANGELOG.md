@@ -1,5 +1,43 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.15.0
+
+### Patch Changes
+
+- d01f697: MJ SQL Parser: unified parser for SQL + Nunjucks templates + composition tokens. Replaces fragmented regex-based SQL parsing across 6 packages with a single MJSQLParser class providing AST-based tokenization, placeholder substitution, CTE extraction, ORDER BY remapping, and deterministic parameter/field extraction. Moves QueryPagingEngine from MJCore to GenericDatabaseProvider with AST-based paging. Fixes backtick quoting, table-qualified ORDER BY remapping, trailing semicolon, and FOR XML parsing bugs.
+- 2488c5c: Fix External Change Detection OOM crashes by replacing unbounded OR-clause record fetching with paginated detection queries (ot.\* + ORDER BY), interleaved per-entity detect-replay to bound memory, and dynamic concurrency based on table row counts. Adds production safety mechanisms: circuit breaker, cooldown pause, and heap guard.
+- Updated dependencies [662d56b]
+- Updated dependencies [5e85b29]
+- Updated dependencies [d01f697]
+- Updated dependencies [2488c5c]
+- Updated dependencies [c3e8b94]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/generic-database-provider@5.15.0
+  - @memberjunction/core-entities-server@5.15.0
+  - @memberjunction/external-change-detection@5.15.0
+  - @memberjunction/ai@5.15.0
+  - @memberjunction/ai-core-plus@5.15.0
+  - @memberjunction/ai-prompts@5.15.0
+  - @memberjunction/ai-betty-bot@5.15.0
+  - @memberjunction/ai-agent-manager@5.15.0
+  - @memberjunction/ai-agents@5.15.0
+  - @memberjunction/ai-engine-base@5.15.0
+  - @memberjunction/aiengine@5.15.0
+  - @memberjunction/ai-mcp-client@5.15.0
+  - @memberjunction/ai-vector-sync@5.15.0
+  - @memberjunction/actions-base@5.15.0
+  - @memberjunction/code-execution@5.15.0
+  - @memberjunction/actions@5.15.0
+  - @memberjunction/communication-types@5.15.0
+  - @memberjunction/communication-engine@5.15.0
+  - @memberjunction/content-autotagging@5.15.0
+  - @memberjunction/integration-engine@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/storage@5.15.0
+  - @memberjunction/sqlserver-dataprovider@5.15.0
+  - @memberjunction/export-engine@5.15.0
+  - @memberjunction/global@5.15.0
+
 ## 5.14.0
 
 ### Minor Changes

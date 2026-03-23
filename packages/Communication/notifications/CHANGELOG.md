@@ -1,5 +1,19 @@
 # @memberjunction/notifications
 
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/communication-types@5.15.0
+  - @memberjunction/communication-engine@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/sqlserver-dataprovider@5.15.0
+  - @memberjunction/templates@5.15.0
+  - @memberjunction/global@5.15.0
+
 ## 5.14.0
 
 ### Patch Changes
