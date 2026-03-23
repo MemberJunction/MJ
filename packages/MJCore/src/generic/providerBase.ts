@@ -2833,6 +2833,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType> {
         // first see if we have anything in cache at all, no reason to check server dates if we dont
         if (await this.IsDatasetCached(datasetName, itemFilters)) {
+            // FastStartupMode: on warm loads, trust the cached dataset without server validation.
+            // Same pattern as FastStartupMode for RunViews — serve from IndexedDB immediately.
+            if (ProviderBase.FastStartupMode && !this.TrustLocalCacheCompletely) {
+                LogStatusEx({
+                    message: `⚡ [Fast-Start] Serving cached dataset "${datasetName}" from local cache — skipping server validation`,
+                    verboseOnly: false
+                });
+                return this.GetCachedDataset(datasetName, itemFilters);
+            }
+
             // compare the local version, if exists to the server version dates
             if (await this.IsDatasetCacheUpToDate(datasetName, itemFilters)) {
                 // we're up to date, all we need to do is get the local cache and return it
