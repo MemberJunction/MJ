@@ -2125,6 +2125,26 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Capture the hard-refresh flag before resetting it — when true, we must bypass all
         // caching (including LocalCacheManager) so GetDatasetByName hits the actual database.
         const hardRefresh = this._refresh;
+
+        // ── Fast-start from cached metadata ──────────────────────────────────
+        // On warm loads (page refresh), try loading metadata from IndexedDB/localStorage
+        // BEFORE checking with the server. If cached metadata exists, use it immediately
+        // so the app can start initializing (engines, UI) while we validate in the background.
+        // This is a stale-while-revalidate pattern: serve cached data instantly, then
+        // refresh if the server says it's outdated.
+        if (!hardRefresh && !this._localMetadata?.AllEntities?.length) {
+            await this.LoadLocalMetadataFromStorage();
+            if (this._localMetadata?.AllEntities?.length) {
+                LogStatusEx({ message: `⚡ [Fast-Start] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — deferring server validation`, verboseOnly: false });
+
+                // Kick off background validation — if metadata is stale, it will
+                // be atomically swapped when the server response arrives.
+                this.backgroundValidateAndRefresh(providerToUse);
+
+                return true; // App can proceed immediately with cached metadata
+            }
+        }
+
         if (hardRefresh || await this.CheckToSeeIfRefreshNeeded(providerToUse)) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
 
@@ -2154,6 +2174,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         return true;
+    }
+
+    /**
+     * Background validation for the stale-while-revalidate fast-start pattern.
+     * Checks if local metadata is still current; if stale, fetches fresh metadata
+     * and atomically swaps it in. The app continues operating on cached data
+     * during this process — no blocking.
+     */
+    private async backgroundValidateAndRefresh(providerToUse?: IMetadataProvider): Promise<void> {
+        try {
+            const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
+            if (needsRefresh) {
+                LogStatusEx({ message: `⚡ [Fast-Start] Background check: metadata is stale — refreshing...`, verboseOnly: false });
+                const start = Date.now();
+                const res = await this.GetAllMetadata(providerToUse, false);
+                const elapsed = Date.now() - start;
+                if (res) {
+                    this.UpdateLocalMetadata(res);
+                    this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps;
+                    await this.SaveLocalMetadataToStorage();
+                    LogStatusEx({ message: `⚡ [Fast-Start] Background refresh complete (${elapsed}ms) — metadata updated in place`, verboseOnly: false });
+                }
+            } else {
+                LogStatusEx({ message: `⚡ [Fast-Start] Background check: metadata is current — no refresh needed`, verboseOnly: false });
+            }
+        } catch (e) {
+            LogError(`[Fast-Start] Background validation failed: ${e}`);
+            // Not critical — app continues with cached metadata
+        }
     }
 
     protected CloneAllMetadata(toClone: AllMetadata): AllMetadata {
