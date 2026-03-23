@@ -853,7 +853,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 MJVersion: process.env.MJ_VERSION ?? '5.11.0',
                 SourceType: companyIntegration.Integration,
                 AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
-                MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/v5',
+                MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/rsu',
                 MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
                 ExistingTables: [],
                 EntitySettingsForTargets: {}
@@ -1593,7 +1593,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 MJVersion: process.env.MJ_VERSION ?? '5.11.0',
                 SourceType: companyIntegration.Integration,
                 AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
-                MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/v5',
+                MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/rsu',
                 MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
                 ExistingTables: [],
                 EntitySettingsForTargets: {}
@@ -2037,7 +2037,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             MJVersion: process.env.MJ_VERSION ?? '5.11.0',
             SourceType: companyIntegration.Integration,
             AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
-            MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/v5',
+            MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/rsu',
             MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
             ExistingTables: [],
             EntitySettingsForTargets: {}
@@ -3098,7 +3098,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 MJVersion: process.env.MJ_VERSION ?? '5.11.0',
                 SourceType: companyIntegration.Integration,
                 AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
-                MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/v5',
+                MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/rsu',
                 MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
                 ExistingTables: existingTables,
                 EntitySettingsForTargets: {}
