@@ -1,12 +1,14 @@
-# Visualization & Artifact Layer Design Plan
+# Visualization & Artifact Layer — MJ Foundation Design Plan
 
 ## Document Purpose
 
-This document captures the complete design vision for the Visualization and Artifact Layer, spanning MemberJunction (MJ) as the open-source foundation and Skip as the commercial AI product built on top of it. It incorporates all analysis from the initial briefing, architectural discussions, and detailed design decisions around separation of concerns, artifact types, dataset interoperability, and the rendering pipeline.
+This document defines the **open-source foundation layer** for the Visualization and Artifact system in MemberJunction. It covers the artifact type system, the `IDataSet` data interchange abstraction, the rendering pipeline, and the base package structure. These are framework-level constructs available to **any** application built on MJ.
+
+The foundation is intentionally minimal and extensible — it provides the structural primitives and registry patterns that leave room for commercial products to stack on top of the core bits. Products like Skip can add AI-driven visualization intelligence, polished renderers, and product-specific integrations without modifying any MJ code — they simply register higher-priority renderers and add their own artifact types. See the corresponding product-layer design documents for those details.
 
 ---
 
-## Part 1: Strategic Context — What is MJ, What is Skip, What is Research Agent?
+## Part 1: MemberJunction's Role in the Visualization Story
 
 ### MemberJunction (MJ) — The Open-Source Foundation
 
@@ -19,50 +21,17 @@ MemberJunction is a **metadata-driven application framework** that provides:
 - An extensible action/AI framework with provider-based abstractions (LLM providers, vector DB providers, etc.)
 - A plugin/library architecture where functionality is delivered as independently versioned npm packages
 
-**MJ's role in the visualization story**: MJ provides the **base artifact type system**, the **dataset abstraction (`IDataSet`)**, and **generic rendering infrastructure**. These are framework-level constructs that any application built on MJ can use — not just Skip. A hypothetical "MJ CRM" or "MJ ERP" or any third-party product built on MJ would have access to the same artifact system.
+**MJ's role in the visualization story**: MJ provides the **base artifact type system**, the **dataset abstraction (`IDataSet`)**, and **generic rendering infrastructure**. These are framework-level constructs that any application built on MJ can use. A hypothetical "MJ CRM" or "MJ ERP" or any third-party product built on MJ would have access to the same artifact system.
 
-### Skip — The Commercial AI Product
-
-Skip is the **commercial AI-powered business intelligence and data analysis product** built on MemberJunction. Skip provides:
-
-- A conversational interface where business users ask questions in natural language
-- An AI pipeline that translates questions into SQL, executes against the user's database, and presents results
-- Smart visualizations that automatically select the best chart/table/report type for the data
-- A conversation management system with history, follow-ups, and context threading
-- Data source configuration, user management, and organizational features
-- The **Skip Angular application** — a full product UI with branding, navigation, dashboards, etc.
-
-**Skip's role in the visualization story**: Skip is where the **intelligent visualization selection logic** lives — the AI-driven decisions about "given this data shape and this user question, what chart type best communicates the answer?" Skip also provides the **polished, product-grade rendering components** that go beyond MJ's generic base, and the **conversation-integrated artifact experience** (artifacts appearing inline in chat, being saveable, shareable, etc.).
-
-### Research Agent — The Autonomous Research System
-
-The Research Agent is a **specialized autonomous agent capability** within Skip that performs multi-step research tasks:
-
-- Breaks complex questions into sub-queries
-- Executes multiple data retrievals in sequence or parallel
-- Synthesizes findings across multiple result sets
-- Produces structured research reports with citations to underlying data
-- Can generate artifacts (charts, tables, reports) as part of its output
-
-**Research Agent's role in the visualization story**: The Research Agent is a **producer of artifacts**. It needs to create artifact specifications as part of its research output. It doesn't need to know how artifacts render — it just needs to produce well-formed artifact descriptors that the rendering layer picks up. This is a clean separation: the Research Agent focuses on *what* to show, the artifact/rendering system handles *how* to show it.
-
----
-
-## Part 2: Why This Separation Matters
-
-### The Layered Architecture Value Proposition
+### The Layered Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
-│              Skip Product UI                     │
+│        Commercial Products (e.g. Skip)           │
 │   (AI viz selection, polished components,        │
 │    conversation integration, dashboards)         │
 ├─────────────────────────────────────────────────┤
-│           Research Agent                         │
-│   (Multi-step research, artifact production,     │
-│    synthesis, report generation)                 │
-├─────────────────────────────────────────────────┤
-│        MemberJunction Framework                  │
+│        MemberJunction Framework  ← THIS PLAN     │
 │   (Artifact types, IDataSet, base rendering,     │
 │    metadata, entities, API, code gen)            │
 └─────────────────────────────────────────────────┘
@@ -72,43 +41,24 @@ The Research Agent is a **specialized autonomous agent capability** within Skip 
 
 By placing the artifact type system and dataset abstraction in MJ (open source), we enable:
 
-1. **Any MJ-based application** can define and render artifacts — not just Skip
+1. **Any MJ-based application** can define and render artifacts — not just a single product
 2. **Third-party developers** can build their own visualization products on MJ's foundation
 3. **Community contributions** to base artifact types benefit the entire ecosystem
 4. **Standard interfaces** (`IDataSet`, `IArtifact`, `IArtifactRenderer`) create a shared vocabulary
 5. **Interoperability** — artifacts produced by one MJ-based app can be consumed by another
 
-### Commercialization Opportunities for Skip
-
-The separation creates clear commercial value:
-
-1. **Skip's AI visualization intelligence** — the "smart" layer that knows *which* chart to pick and *how* to configure it based on natural language context — is proprietary product value. This is hard to replicate and represents genuine IP.
-2. **Skip's polished rendering components** — production-quality, branded, interactive chart components that go far beyond basic rendering. These are the "last mile" that makes the difference between a developer tool and a business product.
-3. **Skip's conversation integration** — artifacts living inside a chat experience, with follow-up questions, drill-down, sharing, and collaboration features.
-4. **Research Agent capabilities** — the autonomous multi-step research pipeline is a premium feature that demonstrates Skip's AI depth.
-
-### Commercialization Opportunities for Third Parties
-
-Third parties building on MJ benefit from:
-
-1. **Pre-built artifact foundation** — they don't have to design an artifact system from scratch
-2. **Dataset interoperability** — `IDataSet` gives them a standard way to feed data into any renderer
-3. **Extensible type system** — they can register their own artifact types via MJ's provider pattern
-4. **Mix-and-match** — use MJ's base renderers for some types, build custom renderers for others
-5. **Ecosystem compatibility** — artifacts created in their app are structurally compatible with Skip's, enabling potential integration paths
-
 ---
 
-## Part 3: Core Technical Architecture
+## Part 2: Core Technical Architecture
 
-### 3.1 The Artifact Type System (MJ Layer)
+### 2.1 The Artifact Type System
 
 The artifact type system lives in MemberJunction as a **provider-based, extensible registry** of artifact types. Each artifact type represents a category of visual or structured output (chart, table, report, dashboard, etc.).
 
 #### Base Artifact Interface
 
 ```typescript
-// @memberjunction/global — or a new @memberjunction/artifacts package
+// @memberjunction/artifacts-core
 
 /**
  * Core artifact descriptor. This is the "specification" of what to render,
@@ -160,7 +110,7 @@ interface IArtifact {
  * Supports multiple modes of data binding.
  */
 interface IArtifactData {
-    /** Inline row data — the most common case for Skip query results */
+    /** Inline row data — the most common case for query results */
     Rows?: Record<string, any>[];
 
     /** Column metadata — types, display names, formatting hints */
@@ -265,7 +215,7 @@ if (artifact.SupportsDataSet) {
 | Free-text / Markdown | `false` | No structured data |
 | Image / Media | `false` | Binary content, not tabular |
 
-**Error behavior when not supported:**
+**Base class implementation:**
 
 ```typescript
 class BaseArtifact implements IArtifact {
@@ -291,7 +241,7 @@ class BaseArtifact implements IArtifact {
 }
 ```
 
-### 3.2 Artifact Type Registry (MJ Layer)
+### 2.2 Artifact Type Registry
 
 MJ provides a registry where artifact types are registered, following MJ's existing provider/class-factory patterns.
 
@@ -347,9 +297,9 @@ interface IArtifactSubType {
 }
 ```
 
-### 3.3 The Rendering Pipeline
+### 2.3 The Rendering Pipeline
 
-#### Renderer Interface (MJ Layer — Base)
+#### Renderer Interface (Base)
 
 ```typescript
 /**
@@ -386,7 +336,7 @@ interface IRenderOptions {
 }
 ```
 
-#### Renderer Registry (MJ Layer)
+#### Renderer Registry
 
 ```typescript
 class ArtifactRendererRegistry {
@@ -408,205 +358,11 @@ class ArtifactRendererRegistry {
 }
 ```
 
----
-
-## Part 4: The Skip Layer — AI-Driven Visualization Intelligence
-
-### 4.1 Where Skip Adds Value on Top of MJ
-
-MJ provides the **what** (artifact types, dataset abstraction, rendering interfaces). Skip provides the **intelligence**:
-
-#### Visualization Selection Engine (Skip-Proprietary)
-
-The core commercial differentiator. Given a user's natural language question and the resulting dataset, Skip's AI determines the optimal visualization:
-
-```typescript
-/**
- * Skip-proprietary visualization intelligence.
- * This is the "brain" that decides what artifact type best communicates
- * the answer to a user's question.
- */
-interface IVisualizationSelector {
-    /**
-     * Given the context of a conversation turn, select the best
-     * artifact type and configure it optimally.
-     */
-    SelectVisualization(context: IVisualizationContext): Promise<IArtifactRecommendation>;
-}
-
-interface IVisualizationContext {
-    /** The user's original question */
-    UserQuestion: string;
-
-    /** The SQL that was generated */
-    GeneratedSQL: string;
-
-    /** The result data */
-    DataSet: IDataSet;
-
-    /** Conversation history for context */
-    ConversationHistory?: IConversationTurn[];
-
-    /** User preferences (preferred chart types, color schemes, etc.) */
-    UserPreferences?: IUserVisualizationPreferences;
-}
-
-interface IArtifactRecommendation {
-    /** The recommended artifact type */
-    ArtifactType: string;
-
-    /** Sub-type if applicable (e.g., 'bar' for chart type) */
-    SubType?: string;
-
-    /** Pre-configured Config object ready to pass to artifact creation */
-    Config: Record<string, any>;
-
-    /** Confidence score (0-1) for this recommendation */
-    Confidence: number;
-
-    /** Alternative recommendations ranked by fitness */
-    Alternatives?: IArtifactRecommendation[];
-
-    /** Human-readable explanation of why this visualization was chosen */
-    Reasoning: string;
-}
-```
-
-#### Skip's Smart Heuristics
-
-Before even hitting an LLM, Skip applies data-shape heuristics:
-
-```
-Data Shape Analysis:
-├── Single value → KPI Card
-├── Single row, multiple columns → Detail Card / Scorecard
-├── Multiple rows, 1-2 columns → Simple Table or List
-├── Multiple rows, categorical + numeric → Bar/Column Chart
-├── Multiple rows, temporal + numeric → Line/Area Chart
-├── Multiple rows, 2 numeric columns → Scatter Plot
-├── Proportional data (parts of whole) → Pie/Donut Chart
-├── Geographic data detected → Map Visualization
-├── Hierarchical structure → Tree/Treemap
-└── Large row count (>100) → Paginated Table with optional chart
-```
-
-These heuristics provide instant recommendations without LLM latency, with the LLM used for refinement, edge cases, and respecting the nuance of the user's question.
-
-### 4.2 Skip's Enhanced Renderers
-
-Skip registers its own high-priority renderers that override MJ's base renderers:
-
-```typescript
-// Skip registers enhanced renderers at a higher priority than MJ defaults
-ArtifactRendererRegistry.Register({
-    SupportedTypes: ['chart'],
-    Priority: 100,  // Higher than MJ's default (e.g., 10)
-    CanRender: (artifact) => artifact.ArtifactType === 'chart',
-    Render: (artifact, container, options) => {
-        // Skip's polished chart rendering with:
-        // - Branded color palettes
-        // - Smooth animations
-        // - Interactive tooltips with drill-down
-        // - Responsive sizing
-        // - Accessibility compliance
-        // - Export to PNG/PDF
-        // - "Ask a follow-up" integration
-    }
-});
-```
-
-This means:
-- **In Skip**: the enhanced renderer is used automatically (higher priority)
-- **In a plain MJ app**: the base MJ renderer is used (lower priority, but functional)
-- **In a third-party app**: they can register their own renderers at any priority level
-
-### 4.3 Conversation-Integrated Artifacts
-
-Skip's unique value includes how artifacts live within the conversation flow:
-
-```typescript
-/**
- * Skip-specific extension that wraps an IArtifact with conversation context.
- */
-interface IConversationArtifact {
-    /** The underlying MJ artifact */
-    Artifact: IArtifact;
-
-    /** The conversation turn that produced this artifact */
-    ConversationTurnID: string;
-
-    /** The conversation this belongs to */
-    ConversationID: string;
-
-    /** Whether the user has "pinned" / saved this artifact */
-    IsPinned: boolean;
-
-    /** User annotations / notes on this artifact */
-    Annotations?: string[];
-
-    /** Actions available on this artifact */
-    AvailableActions: IArtifactAction[];
-}
-
-interface IArtifactAction {
-    Key: string;          // 'export-csv', 'export-png', 'change-chart-type', 'drill-down', 'ask-followup'
-    DisplayName: string;
-    Icon?: string;
-    Execute(artifact: IArtifact, params?: any): Promise<any>;
-}
-```
-
-### 4.4 Research Agent as Artifact Producer
-
-The Research Agent produces artifacts as part of its multi-step research output:
-
-```typescript
-/**
- * A research report section that may include an artifact.
- * The Research Agent doesn't render anything — it produces specifications.
- */
-interface IResearchSection {
-    /** Section title */
-    Title: string;
-
-    /** Narrative text (markdown) */
-    Narrative: string;
-
-    /** Optional artifact specification for this section */
-    Artifact?: IArtifact;
-
-    /** Data citations — which queries/sources informed this section */
-    Citations: IDataCitation[];
-}
-
-interface IResearchReport {
-    /** Overall report title */
-    Title: string;
-
-    /** Executive summary */
-    Summary: string;
-
-    /** Ordered sections */
-    Sections: IResearchSection[];
-
-    /** All datasets used across the report */
-    DataSets: IDataSet[];
-}
-```
-
-The clean separation means:
-1. Research Agent focuses on **analysis and synthesis** — its core competency
-2. It outputs **artifact specifications** (`IArtifact` objects) describing what should be shown
-3. The **rendering pipeline** (MJ base + Skip enhanced renderers) handles how to show it
-4. The **conversation layer** (Skip) handles where to show it (inline in chat, in a report view, etc.)
+The priority-based registry is key to the extensibility model: commercial products or third-party apps register their own renderers at higher priority, and the registry automatically selects the best available renderer for any artifact.
 
 ---
 
-## Part 5: Package & Repository Structure
-
-### 5.1 Where Code Lives
-
-#### In MemberJunction (Open Source)
+## Part 3: MJ Package Structure
 
 | Package | Contents |
 |---------|----------|
@@ -615,29 +371,9 @@ The clean separation means:
 | `@memberjunction/artifacts-renderers-angular` | Base Angular renderers for each artifact type — functional but basic |
 | `@memberjunction/artifacts-renderers-react` *(future)* | Base React renderers |
 
-#### In Skip (Commercial / Proprietary)
-
-| Package / Module | Contents |
-|---------|----------|
-| `@skip-brain/visualization-engine` | `IVisualizationSelector`, data-shape heuristics, LLM-driven viz selection, `IArtifactRecommendation` |
-| `@skip-brain/artifact-renderers` | Enhanced Angular renderers — polished charts, interactive tables, branded components |
-| `@skip-brain/conversation-artifacts` | `IConversationArtifact`, artifact actions, pinning, export, follow-up integration |
-| `@skip-brain/research-artifacts` | `IResearchReport`, `IResearchSection`, Research Agent artifact production logic |
-
-### 5.2 Dependency Flow
+### Dependency Flow for Third-Party Apps
 
 ```
-Skip Application
-  ├── @skip-brain/visualization-engine
-  │     └── @memberjunction/artifacts-core
-  ├── @skip-brain/artifact-renderers
-  │     ├── @memberjunction/artifacts-core
-  │     └── @memberjunction/artifacts-renderers-angular (extends base)
-  ├── @skip-brain/conversation-artifacts
-  │     └── @memberjunction/artifacts-core
-  └── @skip-brain/research-artifacts
-        └── @memberjunction/artifacts-core
-
 Third-Party MJ App
   ├── @memberjunction/artifacts-core
   ├── @memberjunction/artifacts-types
@@ -646,16 +382,16 @@ Third-Party MJ App
 
 ---
 
-## Part 6: Implementation Phases
+## Part 4: Implementation Phases
 
-### Phase 1: Foundation (MJ)
+### Phase 1: Foundation
 1. Create `@memberjunction/artifacts-core` package
 2. Implement `IArtifact`, `IArtifactData`, `IDataSet` interfaces
 3. Implement `BaseArtifact` class with `SupportsDataSet` / `ToDataSet()` pattern
 4. Implement `ArtifactTypeRegistry` and `ArtifactRendererRegistry`
 5. Write comprehensive unit tests for dataset conversion and registry
 
-### Phase 2: Built-in Types (MJ)
+### Phase 2: Built-in Types
 1. Implement `ChartArtifact` with sub-types (bar, line, pie, scatter, area, donut)
 2. Implement `TableArtifact` with column config, sorting, pagination support
 3. Implement `KPIArtifact` for single-value / scorecard display
@@ -663,35 +399,15 @@ Third-Party MJ App
 5. Implement `DashboardArtifact` as an artifact container (SupportsDataSet = false)
 6. Each type implements `BuildDataSet()` for types where SupportsDataSet = true
 
-### Phase 3: Base Renderers (MJ)
+### Phase 3: Base Renderers
 1. Create `@memberjunction/artifacts-renderers-angular` package
 2. Implement base Angular components for chart, table, KPI rendering
 3. Create a generic `<mj-artifact>` component that auto-selects renderer
-4. Ensure renderers work standalone (no Skip dependency)
-
-### Phase 4: Skip Intelligence Layer
-1. Build `IVisualizationSelector` with data-shape heuristics
-2. Integrate LLM-based visualization refinement
-3. Build enhanced Skip renderers (polished, branded, interactive)
-4. Integrate artifacts into conversation flow (`IConversationArtifact`)
-5. Build artifact actions (export, drill-down, chart type switching, follow-up)
-
-### Phase 5: Research Agent Integration
-1. Define `IResearchReport` / `IResearchSection` structures
-2. Update Research Agent to produce `IArtifact` specifications in its output
-3. Build report rendering view that renders multi-section research with inline artifacts
-4. Enable dataset cross-referencing across research sections
-
-### Phase 6: Polish & Advanced Features
-1. Dashboard builder — compose multiple artifacts into layouts
-2. Artifact persistence — save/load artifacts to/from database
-3. Sharing — generate shareable links to artifact views
-4. Theming system — customizable color palettes, fonts, branding per organization
-5. Server-side rendering for PDF/image export
+4. Ensure renderers work standalone (no product-layer dependency)
 
 ---
 
-## Part 7: Key Design Decisions & Rationale
+## Part 5: Key Design Decisions & Rationale
 
 ### Why `SupportsDataSet` as a boolean getter instead of just try/catch?
 
@@ -707,7 +423,7 @@ Third-Party MJ App
 ### Why registries instead of hard-coded mappings?
 
 **Extensibility without modification.** Following MJ's established ClassFactory and provider patterns, registries allow:
-- Skip to add enhanced renderers without modifying MJ code
+- Products to add enhanced renderers without modifying MJ code
 - Third parties to add custom artifact types without forking
 - Runtime configuration — different deployments can have different renderers registered
 - Priority-based selection — graceful fallback from enhanced → base renderers
@@ -716,61 +432,9 @@ Third-Party MJ App
 
 **Artifacts deal with query results, not entity records.** MJ entities have metadata, permissions, relationships, change tracking, and lifecycle management. A dataset is simpler — it's tabular data with column descriptors. Many artifact data sources are arbitrary SQL result sets, aggregations, or computed data that don't map to a single entity. `IDataSet` is the right abstraction for this "just data" use case while `EntityInfo` / `BaseEntity` remain the right abstraction for entity-oriented operations.
 
-### Why does the Research Agent produce artifact specs, not rendered output?
-
-**Separation of concerns at its purest.** The Research Agent's job is to *think* — to analyze data, draw conclusions, and decide what information should be presented. It should not need to know whether the consumer is an Angular app, a React app, a PDF renderer, or a CLI. By producing platform-agnostic `IArtifact` specifications, the Research Agent remains testable, portable, and focused on its core competency.
-
 ---
 
-## Appendix A: Example End-to-End Flow
-
-### User asks: "How has revenue trended by quarter this year?"
-
-1. **Skip Conversation Layer** receives the question
-2. **Skip SQL Agent** generates: `SELECT Quarter, SUM(Revenue) as Revenue FROM Sales WHERE Year = 2026 GROUP BY Quarter ORDER BY Quarter`
-3. **Skip executes query**, receives 4 rows of data
-4. **Skip Visualization Selector** analyzes:
-   - Temporal dimension (Quarter) + numeric measure (Revenue) → Line Chart recommended
-   - Confidence: 0.92
-   - Alternative: Bar Chart (confidence 0.85)
-5. **Skip creates an IArtifact**:
-   ```json
-   {
-     "ID": "artifact-uuid",
-     "ArtifactType": "chart",
-     "Title": "Revenue by Quarter (2026)",
-     "Config": {
-       "chartType": "line",
-       "xAxis": { "field": "Quarter", "label": "Quarter" },
-       "yAxis": { "field": "Revenue", "label": "Revenue", "format": "currency" },
-       "showDataLabels": true
-     },
-     "Data": {
-       "Rows": [
-         { "Quarter": "Q1", "Revenue": 1250000 },
-         { "Quarter": "Q2", "Revenue": 1480000 },
-         { "Quarter": "Q3", "Revenue": 1320000 },
-         { "Quarter": "Q4", "Revenue": 1590000 }
-       ],
-       "Columns": [
-         { "Name": "Quarter", "DataType": "string" },
-         { "Name": "Revenue", "DataType": "number", "Format": "currency" }
-       ]
-     }
-   }
-   ```
-6. **Artifact Renderer Registry** finds Skip's enhanced chart renderer (Priority 100)
-7. **Skip Chart Renderer** renders an interactive line chart with:
-   - Branded color palette
-   - Hover tooltips showing exact values
-   - Smooth animation on load
-   - Action bar: Export PNG | Export CSV | Change Chart Type | Ask Follow-up
-8. **Conversation layer** wraps it as `IConversationArtifact` with the turn context
-9. **User clicks "Export CSV"** → artifact action calls `artifact.ToDataSet()` (SupportsDataSet = true), converts to CSV
-
----
-
-## Appendix B: Glossary
+## Glossary
 
 | Term | Definition |
 |------|-----------|
@@ -778,8 +442,5 @@ Third-Party MJ App
 | **Artifact Type** | A registered category of artifact (chart, table, KPI, report, dashboard) |
 | **IDataSet** | A standardized tabular data format for interchange between artifact types and consumers |
 | **Renderer** | A platform-specific component that takes an IArtifact and produces visual output |
-| **Visualization Selector** | Skip's AI-driven engine that recommends the best artifact type for a given question and dataset |
-| **Conversation Artifact** | A Skip-specific wrapper adding conversation context, actions, and persistence to an artifact |
-| **Research Report** | A multi-section output from the Research Agent, potentially containing multiple artifacts |
 | **SupportsDataSet** | Boolean getter on IArtifact indicating whether ToDataSet() can be called |
 | **ToDataSet()** | Method that converts an artifact's data into the standard IDataSet format |
