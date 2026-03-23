@@ -318,9 +318,10 @@ export class AnalysisOrchestrator {
           }
 
           // Dependency-level sanity check
-          if (this.config.analysis.sanityChecks.dependencyLevel && levels[levelNum].length > 0) {
-            await analysisEngine.performDependencyLevelSanityCheck(state, run, levelNum, levels[levelNum]);
-          }
+          // FUTURE FEATURE: Sanity checks disabled pending LLM 10M+ token context support.
+          // if (this.config.analysis.sanityChecks.dependencyLevel && levels[levelNum].length > 0) {
+          //   await analysisEngine.performDependencyLevelSanityCheck(state, run, levelNum, levels[levelNum]);
+          // }
 
           // Backpropagation
           if (levelResult.triggers.length > 0 && this.config.analysis.backpropagation.enabled) {
@@ -342,16 +343,40 @@ export class AnalysisOrchestrator {
       }
 
       // Sanity checks
-      if (this.config.analysis.sanityChecks.schemaLevel) {
-        this.onProgress('Performing schema-level sanity checks');
-        for (const schema of state.schemas) {
-          await analysisEngine.performSchemaLevelSanityCheck(state, run, schema);
+      // FUTURE FEATURE: Schema/cross-schema sanity checks disabled.
+      // Pending LLM 10M+ token context support.
+      // if (this.config.analysis.sanityChecks.schemaLevel) {
+      // this.onProgress('Performing schema-level sanity checks');
+      // for (const schema of state.schemas) {
+      // await analysisEngine.performSchemaLevelSanityCheck(state, run, schema);
+      // }
+      // }
+
+      // if (this.config.analysis.sanityChecks.crossSchema && state.schemas.length > 1) {
+      // this.onProgress('Performing cross-schema sanity check');
+      // await analysisEngine.performCrossSchemaSanityCheck(state, run);
+      // }
+
+      // PK pruning: lock high-confidence PKs as interim ground truth, then prune the rest
+      if (state.phases.keyDetection && this.config.ai.modelOverrides?.['fkPruning']) {
+        const { locked: pkLocked, unlocked: pkUnlocked } = analysisEngine.lockInterimPKGroundTruth(state);
+        if (pkUnlocked > 0) {
+          const { removed: pkRemoved, kept: pkKept } = await analysisEngine.prunePrimaryKeys(state, run);
+          this.onProgress('PK pruning results', { locked: pkLocked, removed: pkRemoved, kept: pkKept });
         }
+        stateManager.updateSummary(state);
+        await stateManager.save(state);
       }
 
-      if (this.config.analysis.sanityChecks.crossSchema && state.schemas.length > 1) {
-        this.onProgress('Performing cross-schema sanity check');
-        await analysisEngine.performCrossSchemaSanityCheck(state, run);
+      // FK pruning: lock high-confidence FKs as interim ground truth, then prune the rest
+      if (state.phases.keyDetection && this.config.ai.modelOverrides?.['fkPruning']) {
+        const { locked, unlocked } = analysisEngine.lockInterimGroundTruth(state);
+        if (unlocked > 0) {
+          const { removed, kept } = await analysisEngine.pruneForeignKeys(state, run);
+          this.onProgress('FK pruning results', { locked, removed, kept });
+        }
+        stateManager.updateSummary(state);
+        await stateManager.save(state);
       }
 
       // Complete run

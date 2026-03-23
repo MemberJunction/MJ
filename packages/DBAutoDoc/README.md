@@ -94,6 +94,43 @@ npm install @memberjunction/db-auto-doc
 npm install @memberjunction/db-auto-doc --save
 ```
 
+
+## Benchmark Results
+
+DBAutoDoc has been extensively benchmarked across multiple databases and LLM providers. Full details in the [research paper](research/v1/paper.md).
+
+### AdventureWorks2022 (71 tables, all constraints stripped)
+
+| Model Configuration | PK F1 | FK F1 | Overall |
+|---------------------|-------|-------|---------|
+| Gemini 3 Flash / 3.1 Pro | 95.0% | 94.2% | 96.1% (A+) |
+| Claude Sonnet 4.6 / Opus 4.6 | 95.0% | 93.0% | 96.1% (A+) |
+| GPT-5.4-mini / GPT-5.4 | 89.4% | 77.9% | 87.9% (B+) |
+
+### Cross-Database Results (Gemini Flash)
+
+| Database | Tables | PK F1 | FK F1 | Descriptions |
+|----------|--------|-------|-------|-------------|
+| AdventureWorks | 71 | 95.0% | 94.2% | 99% |
+| Chinook | 11 | 95.2% | 95.2% | 100% |
+| LousyDB (dark DB) | 20 | 97.6% | 77.2% | 100% |
+| Northwind | 13 | 72.7% | 75.0% | 100% |
+
+### Key Discovery Pipeline
+
+DBAutoDoc uses a 4-phase pipeline for relationship discovery:
+
+1. **Statistical Discovery** — PK/FK candidates via uniqueness analysis, value overlap, cardinality ratios. Six deterministic gates filter false positives with zero correct-key loss.
+2. **LLM Iterative Analysis** — The LLM creates new FK/PK proposals based on semantic understanding (89% precision on LLM-created FKs). Cross-table statistics provided in prompt context.
+3. **Ground Truth Locking** — High-confidence keys (≥90%) become immutable to protect correct discoveries.
+4. **Two-Pass Pruning** — A stronger model evaluates remaining candidates per-table, then holistically reviews all proposals.
+
+### Research Paper
+
+See [research/v1/](research/v1/) for the full paper, benchmark results, and comparison scripts:
+- **[Paper](research/v1/paper.md)** — "DBAutoDoc: Automated Discovery and Documentation of Undocumented Database Schemas via Statistical Analysis and Iterative LLM Refinement"
+- **[Results](research/v1/results/)** — Full exports (HTML, Markdown, ERD, SQL, CSV) for all public benchmarks
+
 ## Quick Start
 
 ### 1. Initialize
@@ -219,7 +256,7 @@ Generate SQL
   - Custom value - Generate queries for top N tables
 
 - **`tokenBudget`**: Controls LLM token usage and cost
-  - `100000` (default) - Limit to 100K tokens (~$0.50-1.00 with GPT-4o)
+  - `100000` (default) - Limit to 100K tokens (~$0.50-1.00 with Gemini Flash)
   - `0` - **Unlimited** token budget (useful with `maxTables: 0`)
   - Custom value - Set specific token limit for cost control
 
@@ -249,11 +286,11 @@ Generate SQL
 }
 ```
 
-**Model Recommendations:**
-- ✅ **GPT-4o** - Best balance of speed, cost, and quality (~$6-10 for 50 tables)
-- ✅ **Claude 3.5 Sonnet** - High quality, good reasoning about alignment
-- ⚠️ **GPT-5** - Very slow (reasoning model), doesn't support JSON format, expensive
-- ⚠️ **Groq** - Fast and cheap but may struggle with complex alignment
+**Model Recommendations (based on benchmark results):**
+- ✅ **Gemini 3 Flash** — Best overall: 96.1% (A+) on AdventureWorks, 1M context window, lowest cost (~$0.50/100 tables). Recommended default.
+- ✅ **Claude Sonnet 4.6** — Highest token efficiency: 96.1% (A+) with only 471K tokens, 100% description coverage. Best quality-per-token.
+- ⚠️ **GPT-5.4-mini** — Good but limited: 87.9% (B+), 272K context window causes FK misses on large tables.
+- 💡 **For pruning**: Use a stronger model (Gemini 3.1 Pro, Claude Opus 4.6, or GPT-5.4) via `modelOverrides` config for the precision-critical pruning pass.
 
 ### 4. Export
 
@@ -498,14 +535,69 @@ Tables and columns marked `userApproved: true` (via ground truth or manual appro
 Resume analysis with fine-grained control:
 
 ```bash
+# Resume from a previous run's state file
+db-auto-doc analyze --resume ./output/run-1/state.json
+
 # Resume and re-analyze tables with confidence below 70%
-db-auto-doc analyze --resume ./state.json --reanalyze-below-confidence 0.7
+db-auto-doc analyze --resume ./state.json --reanalyze-below 0.7
 
 # Resume with a different iteration limit
 db-auto-doc analyze --resume ./state.json --max-iterations 20
+
+# Resume with additional iterations (e.g., ran 5 originally, now want 3 more)
+db-auto-doc analyze --resume ./state.json --max-iterations 3
 ```
 
-The `--reanalyze-below-confidence` flag clears `userApproved` on non-ground-truth tables whose latest confidence is below the threshold, allowing them to be re-analyzed while protecting authoritative descriptions.
+The `--reanalyze-below` flag clears `userApproved` on non-ground-truth tables whose latest confidence is below the threshold, allowing them to be re-analyzed while protecting authoritative descriptions.
+
+### Pruning-Only Mode
+
+Run just the FK pruning pass on an existing state file, skipping discovery and analysis iterations. Useful when you want to apply a stronger model to clean up FK false positives without re-running the full analysis:
+
+```bash
+# Run only the FK pruning pass on an existing state
+db-auto-doc analyze --resume ./output/run-1/state.json --pruning-only
+
+# Combine with a config that specifies a stronger pruning model
+db-auto-doc analyze --resume ./output/run-1/state.json --pruning-only --config ./config-with-pro-pruning.json
+```
+
+Requires `--resume` pointing to a state file that has already completed discovery and at least one analysis iteration. The pruning pass uses the `ai.modelOverrides.fkPruning` config to select a potentially stronger model (e.g., Gemini Pro, Claude Opus) for the precision-critical FK filtering.
+
+### CLI Flags Reference
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--config` | `-c` | Path to config file (default: `./config.json`) |
+| `--resume` | `-r` | Resume from an existing state file |
+| `--max-iterations` | `-n` | Override max iterations from config |
+| `--reanalyze-below` | | Re-analyze tables with confidence below threshold (0-1) |
+| `--pruning-only` | | Skip discovery/iterations, run only PK/FK pruning (requires `--resume`) |
+
+
+### Standalone Pruning Command
+
+The `prune` command runs PK/FK pruning on an existing state file without re-running analysis. It provides interactive confirmation before applying changes.
+
+```bash
+# Interactive mode (shows proposals, asks for confirmation)
+db-auto-doc prune --state ./output/run-1/state.json --config ./config.json
+
+# Silent mode (applies all pruning automatically)
+db-auto-doc prune --state ./output/run-1/state.json --config ./config.json --silent
+
+# PK-only or FK-only pruning
+db-auto-doc prune --state ./output/run-1/state.json --config ./config.json --pk-only
+db-auto-doc prune --state ./output/run-1/state.json --config ./config.json --fk-only
+```
+
+| Flag | Description |
+|------|-------------|
+| `--state` | Path to existing state.json file (required) |
+| `--config` | Path to config file with AI settings (required) |
+| `--silent` | Skip interactive confirmation |
+| `--pk-only` | Only prune primary keys |
+| `--fk-only` | Only prune foreign keys |
 
 ### CodeGen Integration (Additional Schema Info)
 
@@ -632,7 +724,7 @@ This rich context enables AI to make accurate inferences.
   },
   "ai": {
     "provider": "openai",
-    "model": "gpt-4-turbo-preview",
+    "model": "gpt-5.4-mini",
     "apiKey": "sk-...",
     "temperature": 0.1,
     "maxTokens": 8000,
@@ -757,7 +849,7 @@ This rich context enables AI to make accurate inferences.
   },
   "ai": {
     "provider": "openai",
-    "model": "gpt-4-turbo-preview",
+    "model": "gpt-5.4-mini",
     "apiKey": "sk-...",
     "temperature": 0.1,
     "maxTokens": 8000
@@ -798,7 +890,7 @@ This rich context enables AI to make accurate inferences.
   },
   "ai": {
     "provider": "openai",
-    "model": "gpt-4-turbo-preview",
+    "model": "gpt-5.4-mini",
     "apiKey": "sk-...",
     "temperature": 0.1,
     "maxTokens": 8000
@@ -824,23 +916,71 @@ This rich context enables AI to make accurate inferences.
 }
 ```
 
+
+### Retry and Rate Limiting
+
+```json
+{
+  "ai": {
+    "retry": {
+      "maxRetries": 5,
+      "initialDelayMs": 30000,
+      "maxDelayMs": 480000,
+      "backoffMultiplier": 2
+    },
+    "rateLimits": {
+      "requestsPerMinute": 60,
+      "maxParallelRequests": 1
+    }
+  }
+}
+```
+
+Handles 429 (rate limit) and transient network errors with exponential backoff. Configure based on your API provider's limits.
+
+
+### Multi-Model Configuration
+
+Use different models for different pipeline phases. A cheaper/faster model for bulk analysis, a stronger model for precision-critical pruning:
+
+```json
+{
+  "ai": {
+    "provider": "gemini",
+    "model": "gemini-3-flash-preview",
+    "modelOverrides": {
+      "fkPruning": {
+        "model": "gemini-3.1-pro-preview",
+        "temperature": 0.05,
+        "maxTokens": 16000
+      },
+      "pkPruning": {
+        "model": "gemini-3.1-pro-preview",
+        "temperature": 0.05
+      }
+    }
+  }
+}
+```
+
+
 ## Supported AI Providers
 
-DBAutoDoc integrates with MemberJunction's AI provider system. Supported providers:
+DBAutoDoc integrates with [MemberJunction's AI provider system](../../packages/AI/). Supported providers:
 
 | Config Provider | Driver Class | Description |
 |-----------------|--------------|-------------|
-| `gemini` (default) | GeminiLLM | Google Gemini |
-| `openai` | OpenAILLM | OpenAI |
-| `anthropic` | AnthropicLLM | Anthropic Claude |
-| `groq` | GroqLLM | Groq |
-| `mistral` | MistralLLM | Mistral AI |
+| `gemini` (default) | [GeminiLLM](../../packages/AI/Providers/Gemini/) | Google Gemini |
+| `openai` | [OpenAILLM](../../packages/AI/Providers/OpenAI/) | OpenAI |
+| `anthropic` | [AnthropicLLM](../../packages/AI/Providers/Anthropic/) | Anthropic Claude |
+| `groq` | [GroqLLM](../../packages/AI/Providers/Groq/) | Groq |
+| `mistral` | [MistralLLM](../../packages/AI/Providers/Mistral/) | Mistral AI |
 | `vertex` | VertexLLM | Google Vertex AI |
 | `azure` | AzureLLM | Azure OpenAI |
-| `cerebras` | CerebrasLLM | Cerebras |
-| `openrouter` | OpenRouterLLM | OpenRouter (multi-model) |
-| `xai` | xAILLM | xAI (Grok) |
-| `bedrock` | BedrockLLM | AWS Bedrock |
+| `cerebras` | [CerebrasLLM](../../packages/AI/Providers/Cerebras/) | Cerebras |
+| `openrouter` | [OpenRouterLLM](../../packages/AI/Providers/OpenRouter/) | OpenRouter (multi-model) |
+| `xai` | [xAILLM](../../packages/AI/Providers/xAI/) | xAI (Grok) |
+| `bedrock` | [BedrockLLM](../../packages/AI/Providers/Bedrock/) | AWS Bedrock |
 
 ### Gemini (Default)
 ```json
@@ -855,7 +995,7 @@ DBAutoDoc integrates with MemberJunction's AI provider system. Supported provide
 ```json
 {
   "provider": "openai",
-  "model": "gpt-4-turbo-preview",
+  "model": "gpt-5.4-mini",
   "apiKey": "sk-..."
 }
 ```
@@ -864,7 +1004,7 @@ DBAutoDoc integrates with MemberJunction's AI provider system. Supported provide
 ```json
 {
   "provider": "anthropic",
-  "model": "claude-3-5-sonnet-20241022",
+  "model": "claude-sonnet-4-6",
   "apiKey": "sk-ant-..."
 }
 ```
@@ -873,7 +1013,7 @@ DBAutoDoc integrates with MemberJunction's AI provider system. Supported provide
 ```json
 {
   "provider": "groq",
-  "model": "llama-3.3-70b-versatile",
+  "model": "llama-4-scout-17b-16e-instruct",
   "apiKey": "gsk_..."
 }
 ```
@@ -1050,7 +1190,7 @@ const schemaInfo = schemaInfoGen.generate(state, {
 
 Typical costs (will vary by database size and complexity):
 
-| Database Size | Tables | Iterations | Tokens | Cost (GPT-4) | Cost (Groq) |
+| Database Size | Tables | Iterations | Tokens | Cost (Gemini Flash) | Cost (Sonnet 4.6) |
 |---------------|--------|------------|--------|--------------|-------------|
 | Small | 10-20 | 2-3 | ~50K | $0.50 | $0.02 |
 | Medium | 50-100 | 3-5 | ~200K | $2.00 | $0.08 |
@@ -1059,7 +1199,7 @@ Typical costs (will vary by database size and complexity):
 
 **With Relationship Discovery**: Add 25-40% to token/cost estimates for databases with missing constraints.
 
-**With Sample Query Generation** (5 queries/table, GPT-4o):
+**With Sample Query Generation** (5 queries/table, Gemini Flash):
 
 | Database Size | Tables | Additional Tokens | Additional Cost |
 |---------------|--------|-------------------|-----------------|
@@ -1081,13 +1221,13 @@ Note: Sample query generation uses ~6× more API calls than description generati
 6. **Filter exports** - Use `--confidence-threshold` to only apply high-confidence descriptions
 7. **Iterate** - Run analysis multiple times if first pass isn't satisfactory
 8. **Resume from checkpoints** - Save costs by continuing previous runs
-9. **Use appropriate models** - Balance cost vs. quality (GPT-4 vs. Groq)
+9. **Use appropriate models** - Balance cost vs. quality (see benchmark results)
 10. **Export multiple formats** - HTML for browsing, CSV for analysis, SQL for database
 
 ### Sample Query Generation Best Practices
 
 **Configuration:**
-1. **Use GPT-4o or Claude 3.5** - Best balance of quality, speed, and cost
+1. **Use Gemini 3 Flash or Claude Sonnet 4.6** - Best balance of quality, speed, and cost (see benchmark results)
 2. **Set token budget** - Prevents runaway costs (default: 100K tokens)
 3. **Start with 5 queries/table** - Good balance of coverage and cost
 4. **Enable query fix** (`enableQueryFix: true`, default) - Auto-fixes broken queries (up to 3 attempts)
@@ -1134,7 +1274,7 @@ Note: Sample query generation uses ~6× more API calls than description generati
 - Enable guardrails with appropriate limits
 - Reduce `maxTokens` per prompt
 - Filter schemas/tables to focus on subset
-- Use cheaper model (Groq instead of GPT-4)
+- Use cheaper model (Gemini Flash is already very cost-effective)
 - Disable relationship discovery if not needed
 
 ### "Guardrail limits exceeded"

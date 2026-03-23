@@ -67,6 +67,8 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJVersionLabelItems', sectionName: 'Version Label Items', isExpanded: false },
             { sectionKey: 'mJEntityAIActionsEntityID', sectionName: 'Entity AI Actions (Entity ID)', isExpanded: false },
             { sectionKey: 'mJEntityRelationshipsRelatedEntityID', sectionName: 'Entity Relationships (Related Entity ID)', isExpanded: false },
+            { sectionKey: 'mJEntityOrganicKeyRelatedEntities', sectionName: 'Entity Organic Key Related Entities', isExpanded: false },
+            { sectionKey: 'mJEntityOrganicKeys', sectionName: 'Entity Organic Keys', isExpanded: false },
             { sectionKey: 'mJGeneratedCodes', sectionName: 'Generated Codes', isExpanded: false },
             { sectionKey: 'mJRecordLinksSourceEntityID', sectionName: 'Record Links (Source Entity ID)', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationEntityMaps', sectionName: 'Company Integration Entity Maps', isExpanded: false },

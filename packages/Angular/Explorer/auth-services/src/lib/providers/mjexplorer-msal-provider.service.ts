@@ -180,7 +180,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     });
   }
 
-  async logout(): Promise<void> {
+  protected async logoutInternal(): Promise<void> {
     await this.ensureInitialized();
     this.auth.logoutRedirect().subscribe(() => {
       // Logout will trigger a redirect

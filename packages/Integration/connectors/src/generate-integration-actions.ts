@@ -7,13 +7,17 @@
  * mj-sync compatible action JSON files.
  *
  * Usage:
- *   npx tsx src/generate-integration-actions.ts [connector-name] [--output-dir <path>]
+ *   npx tsx src/generate-integration-actions.ts [-- connector-name] [--output-dir <path>]
  *
  * Examples:
- *   npx tsx src/generate-integration-actions.ts              # All connectors
- *   npx tsx src/generate-integration-actions.ts hubspot      # HubSpot only
- *   npx tsx src/generate-integration-actions.ts rasa         # Rasa.io only
- *   npx tsx src/generate-integration-actions.ts ym           # YourMembership only
+ *   npx tsx src/generate-integration-actions.ts                # All connectors
+ *   npx tsx src/generate-integration-actions.ts -- hubspot     # HubSpot only
+ *   npx tsx src/generate-integration-actions.ts -- salesforce  # Salesforce only
+ *   npx tsx src/generate-integration-actions.ts -- rasa        # Rasa.io only
+ *   npx tsx src/generate-integration-actions.ts -- ym          # YourMembership only
+ *
+ * Note: The `--` separator is required before the connector name so `npx` passes
+ * it as a script argument rather than interpreting it as an npx option.
  */
 
 import * as fs from 'fs';
@@ -25,16 +29,30 @@ import {
 } from '@memberjunction/integration-engine';
 import { HubSpotConnector } from './HubSpotConnector.js';
 import { RasaConnector } from './RasaConnector.js';
+import { SalesforceConnector } from './SalesforceConnector.js';
 import { YourMembershipConnector } from './YourMembershipConnector.js';
+import { SageIntacctConnector } from './SageIntacctConnector.js';
+import { QuickBooksConnector } from './QuickBooksConnector.js';
+
+/** Shape of an mj-sync record with optional primaryKey/sync populated by `mj sync pull`. */
+interface MjSyncRecord {
+    fields: Record<string, unknown>;
+    primaryKey?: Record<string, string>;
+    sync?: { lastModified: string; checksum: string };
+    relatedEntities?: Record<string, MjSyncRecord[]>;
+}
 
 /**
  * Registry of known connector aliases → connector instance + output filename.
  * To add a new connector, add an entry here and import the connector class above.
  */
 const CONNECTOR_REGISTRY: Record<string, { Connector: BaseIntegrationConnector; FileName: string }> = {
-    hubspot:  { Connector: new HubSpotConnector(),           FileName: '.hubspot-actions.json' },
-    rasa:     { Connector: new RasaConnector(),               FileName: '.rasa-actions.json' },
-    ym:       { Connector: new YourMembershipConnector(),     FileName: '.ym-actions.json' },
+    hubspot:     { Connector: new HubSpotConnector(),           FileName: '.hubspot-actions.json' },
+    rasa:        { Connector: new RasaConnector(),               FileName: '.rasa-actions.json' },
+    salesforce:  { Connector: new SalesforceConnector(),         FileName: '.salesforce-actions.json' },
+    ym:              { Connector: new YourMembershipConnector(),     FileName: '.ym-actions.json' },
+    'sage-intacct':  { Connector: new SageIntacctConnector(),       FileName: '.sage-intacct-actions.json' },
+    quickbooks:      { Connector: new QuickBooksConnector(),        FileName: '.quickbooks-actions.json' },
 };
 
 // ─── Main ────────────────────────────────────────────────────────────
@@ -60,7 +78,7 @@ function main(): void {
 
     const generator = new ActionMetadataGenerator();
     let totalActions = 0;
-    const allCategoryRecords: { fields: Record<string, unknown> }[] = [];
+    const allCategoryRecords: MjSyncRecord[] = [];
 
     for (const alias of targetAliases) {
         const entry = CONNECTOR_REGISTRY[alias];
@@ -77,9 +95,14 @@ function main(): void {
 
         const result = generator.Generate(config);
 
-        // Write action records
+        // Merge with existing file to preserve primaryKey/sync from prior mj-sync pulls
         const actionsPath = path.join(actionsDir, entry.FileName);
-        fs.writeFileSync(actionsPath, JSON.stringify(result.ActionRecords, null, 2) + '\n');
+        let existingActions: MjSyncRecord[] = [];
+        if (fs.existsSync(actionsPath)) {
+            existingActions = JSON.parse(fs.readFileSync(actionsPath, 'utf-8')) as MjSyncRecord[];
+        }
+        const mergedActions = mergeActionRecords(existingActions, result.ActionRecords as MjSyncRecord[]);
+        fs.writeFileSync(actionsPath, JSON.stringify(mergedActions, null, 2) + '\n');
         console.log(`${config.IntegrationName}: generated ${result.ActionRecords.length} actions → ${entry.FileName}`);
         totalActions += result.ActionRecords.length;
 
@@ -102,9 +125,9 @@ function main(): void {
     // Write integration category records (merge with existing file if present)
     if (allCategoryRecords.length > 0) {
         const categoryFile = path.join(categoriesDir, '.integration-categories.json');
-        let existingRecords: Record<string, unknown>[] = [];
+        let existingRecords: MjSyncRecord[] = [];
         if (fs.existsSync(categoryFile)) {
-            existingRecords = JSON.parse(fs.readFileSync(categoryFile, 'utf-8')) as Record<string, unknown>[];
+            existingRecords = JSON.parse(fs.readFileSync(categoryFile, 'utf-8')) as MjSyncRecord[];
         }
         // Merge: preserve existing records with primaryKeys, replace/add by category Name
         const merged = mergeCategories(existingRecords, allCategoryRecords);
@@ -115,34 +138,98 @@ function main(): void {
     console.log(`\nTotal: ${totalActions} actions generated`);
 }
 
+/**
+ * Merges newly generated action records with existing ones, preserving primaryKey/sync
+ * blocks that were populated by a prior `mj sync pull`. Matches actions by Name.
+ * Also preserves primaryKey/sync on nested relatedEntities (e.g., Action Params).
+ */
+function mergeActionRecords(
+    existing: MjSyncRecord[],
+    incoming: MjSyncRecord[]
+): MjSyncRecord[] {
+    const existingByName = buildNameIndex(existing);
+
+    return incoming.map(newRec => {
+        const name = newRec.fields['Name'] as string | undefined;
+        if (!name) return newRec;
+
+        const oldRec = existingByName.get(name.toLowerCase());
+        if (!oldRec) return newRec;
+
+        const merged: MjSyncRecord = { ...newRec };
+        if (oldRec.primaryKey) merged.primaryKey = oldRec.primaryKey;
+        if (oldRec.sync) merged.sync = oldRec.sync;
+
+        // Merge relatedEntities (preserving primaryKey/sync on child records like Action Params)
+        if (newRec.relatedEntities && oldRec.relatedEntities) {
+            const mergedRelated: Record<string, MjSyncRecord[]> = {};
+            for (const [entityName, newChildren] of Object.entries(newRec.relatedEntities)) {
+                const oldChildren = oldRec.relatedEntities[entityName];
+                if (!oldChildren) {
+                    mergedRelated[entityName] = newChildren;
+                    continue;
+                }
+                mergedRelated[entityName] = mergeChildRecords(oldChildren, newChildren);
+            }
+            merged.relatedEntities = mergedRelated;
+        }
+
+        return merged;
+    });
+}
+
+/** Merges child records (e.g., Action Params) by matching on Name field. */
+function mergeChildRecords(
+    existing: MjSyncRecord[],
+    incoming: MjSyncRecord[]
+): MjSyncRecord[] {
+    const existingByName = buildNameIndex(existing);
+
+    return incoming.map(newRec => {
+        const name = newRec.fields['Name'] as string | undefined;
+        if (!name) return newRec;
+
+        const oldRec = existingByName.get(name.toLowerCase());
+        if (!oldRec) return newRec;
+
+        const merged: MjSyncRecord = { ...newRec };
+        if (oldRec.primaryKey) merged.primaryKey = oldRec.primaryKey;
+        if (oldRec.sync) merged.sync = oldRec.sync;
+        return merged;
+    });
+}
+
 /** Merges new category records into existing ones, preserving primaryKey/sync for matches by Name. */
 function mergeCategories(
-    existing: Record<string, unknown>[],
-    incoming: Record<string, unknown>[]
-): Record<string, unknown>[] {
-    const byName = new Map<string, Record<string, unknown>>();
-    for (const rec of existing) {
-        const fields = rec['fields'] as Record<string, unknown> | undefined;
-        const name = fields?.['Name'] as string | undefined;
-        if (name) byName.set(name.toLowerCase(), rec);
-    }
+    existing: MjSyncRecord[],
+    incoming: MjSyncRecord[]
+): MjSyncRecord[] {
+    const byName = buildNameIndex(existing);
     for (const rec of incoming) {
-        const fields = rec['fields'] as Record<string, unknown> | undefined;
-        const name = fields?.['Name'] as string | undefined;
+        const name = rec.fields['Name'] as string | undefined;
         if (!name) continue;
         const key = name.toLowerCase();
         const old = byName.get(key);
         if (old) {
-            // Preserve primaryKey and sync from existing, update fields
-            const merged: Record<string, unknown> = { fields };
-            if (old['primaryKey']) merged['primaryKey'] = old['primaryKey'];
-            if (old['sync']) merged['sync'] = old['sync'];
+            const merged: MjSyncRecord = { fields: rec.fields };
+            if (old.primaryKey) merged.primaryKey = old.primaryKey;
+            if (old.sync) merged.sync = old.sync;
             byName.set(key, merged);
         } else {
             byName.set(key, rec);
         }
     }
     return Array.from(byName.values());
+}
+
+/** Builds a Map from lowercase Name → record for quick lookup. */
+function buildNameIndex(records: MjSyncRecord[]): Map<string, MjSyncRecord> {
+    const index = new Map<string, MjSyncRecord>();
+    for (const rec of records) {
+        const name = rec.fields['Name'] as string | undefined;
+        if (name) index.set(name.toLowerCase(), rec);
+    }
+    return index;
 }
 
 main();

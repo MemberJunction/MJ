@@ -17,10 +17,11 @@ The result is a system where connectors only need to describe their object model
 | Integration | Objects (Action-Enabled) | Total Objects | Write-Back | Verbs per Object |
 |---|---|---|---|---|
 | **HubSpot** | 6 (Contacts, Companies, Deals, Tasks, Tickets, Products) | 13 | Yes (all 6) | Get, Create, Update, Delete, Search, List |
+| **Salesforce** | 8 (Account, Contact, Lead, Opportunity, Task, Event, Case, Campaign) | 9 | Yes (all 8) | Get, Create, Update, Delete, Search |
 | **Rasa.io** | 4 (Persons, Posts, Insight Actions, Insight Topics) | 4 | No (read-only) | Get, Search, List |
 | **YourMembership** | 9 (Members, Events, Event Registrations, Event Sessions, Groups, Invoice Items, Dues Transactions, Donations, Career Openings) | 9 | No (read-only) | Get, Search, List |
 
-Additional connectors exist for **Salesforce**, **Wicket**, **Relational DB**, and **File Feed** data sources. These support data synchronization today and will gain action generation as their object models are formalized.
+Additional connectors exist for **Wicket**, **Relational DB**, and **File Feed** data sources. These support data synchronization today and will gain action generation as their object models are formalized.
 
 ## Architecture
 

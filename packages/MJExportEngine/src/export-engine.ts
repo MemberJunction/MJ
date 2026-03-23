@@ -7,7 +7,6 @@ import {
   WorkbookMetadata
 } from './types';
 import { BaseExporter } from './base-exporter';
-import { ExcelExporter } from './excel-exporter';
 import { CSVExporter } from './csv-exporter';
 import { JSONExporter } from './json-exporter';
 
@@ -26,7 +25,7 @@ export class ExportEngine {
     data: ExportData,
     options: Partial<ExportOptions> = {}
   ): Promise<ExportResult> {
-    const exporter = this.createExporter(options.format || 'excel', options);
+    const exporter = await this.CreateExporterAsync(options.format || 'excel', options);
     return exporter.export(data);
   }
 
@@ -95,6 +94,7 @@ export class ExportEngine {
       calcOnSave?: boolean;
     } = {}
   ): Promise<ExportResult> {
+    const { ExcelExporter } = await import('./excel-exporter');
     const exporter = new ExcelExporter({
       format: 'excel',
       sheets,
@@ -110,12 +110,31 @@ export class ExportEngine {
   }
 
   /**
-   * Create an exporter instance for the specified format
+   * Create an exporter instance asynchronously (supports all formats including Excel)
+   */
+  static async CreateExporterAsync(format: ExportFormat, options: Partial<ExportOptions> = {}): Promise<BaseExporter> {
+    switch (format) {
+      case 'excel': {
+        const { ExcelExporter } = await import('./excel-exporter');
+        return new ExcelExporter(options);
+      }
+      case 'csv':
+        return new CSVExporter(options);
+      case 'json':
+        return new JSONExporter(options);
+      default:
+        throw new Error(`Unsupported export format: ${format}`);
+    }
+  }
+
+  /**
+   * Create an exporter instance for the specified format (sync - csv/json only)
+   * For Excel format, use CreateExporterAsync() instead.
    */
   static createExporter(format: ExportFormat, options: Partial<ExportOptions> = {}): BaseExporter {
     switch (format) {
       case 'excel':
-        return new ExcelExporter(options);
+        throw new Error('Excel export requires async initialization. Use CreateExporterAsync() instead.');
       case 'csv':
         return new CSVExporter(options);
       case 'json':
@@ -136,6 +155,7 @@ export class ExportEngine {
    * Get MIME type for a format
    */
   static getMimeType(format: ExportFormat): string {
+    if (format === 'excel') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     const exporter = this.createExporter(format);
     return exporter.getMimeType();
   }
@@ -144,6 +164,7 @@ export class ExportEngine {
    * Get file extension for a format
    */
   static getFileExtension(format: ExportFormat): string {
+    if (format === 'excel') return 'xlsx';
     const exporter = this.createExporter(format);
     return exporter.getFileExtension();
   }

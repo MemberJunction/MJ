@@ -90,7 +90,7 @@ export class ConfigLoader {
         includeStatistics: true,
         includePatternAnalysis: true,
         convergence: {
-          maxIterations: 10,
+          maxIterations: 5,
           stabilityWindow: 2,
           confidenceThreshold: 0.85
         },
@@ -130,7 +130,7 @@ export class ConfigLoader {
       config.tables = { exclude: ['sysdiagrams', '__MigrationHistory'] };
     }
     if (!config.analysis.convergence) {
-      config.analysis.convergence = { maxIterations: 10, stabilityWindow: 2, confidenceThreshold: 0.85 };
+      config.analysis.convergence = { maxIterations: 5, stabilityWindow: 2, confidenceThreshold: 0.85 };
     }
     if (!config.analysis.backpropagation) {
       config.analysis.backpropagation = { enabled: true, maxDepth: 3 };

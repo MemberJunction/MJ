@@ -869,7 +869,23 @@
                                             {{ record.Seed !== null && record.Seed !== undefined ? record.Seed : '—' }}
                                         </div>
                                     </div>
-                                    
+
+                                    <div class="detail-field">
+                                        <label>Stop Sequences</label>
+                                        <div class="detail-value" [class.null-value]="!record.StopSequences">
+                                            <i class="fa-solid fa-stop-circle"></i>
+                                            {{ record.StopSequences || '—' }}
+                                        </div>
+                                    </div>
+
+                                    <div class="detail-field">
+                                        <label>Assistant Prefill</label>
+                                        <div class="detail-value" [class.null-value]="!record.AssistantPrefill">
+                                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                            {{ record.AssistantPrefill || '—' }}
+                                        </div>
+                                    </div>
+
                                     @if (record.RunAt) {
                                         <div class="detail-field">
                                             <label>Started At</label>
