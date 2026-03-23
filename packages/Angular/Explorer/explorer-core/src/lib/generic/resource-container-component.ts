@@ -1,10 +1,11 @@
-import { Component, ComponentRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
+import { Component, ComponentRef, EventEmitter, inject, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseEntity, LogError } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
+import { LazyModuleRegistry } from '../services/lazy-module-registry';
 
 @Component({
   standalone: false,
@@ -31,7 +32,8 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
   @ViewChild(Container, { static: true }) resourceContainer!: Container;
 
   private _loaded: boolean = false;
-  private _componentRef: ComponentRef<any> | null = null; 
+  private _componentRef: ComponentRef<any> | null = null;
+  private lazyRegistry = inject(LazyModuleRegistry);
 
   constructor(public sharedService: SharedService) { }
 
@@ -50,10 +52,19 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
     }
   }
 
-  loadComponent() {
+  async loadComponent() {
     try {
       this._loaded = true;
-      const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, this.Data.ResourceType); 
+      let resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, this.Data.ResourceType);
+
+      if (!resourceReg) {
+        // Try lazy loading the feature module containing this resource type
+        const loaded = await this.lazyRegistry.Load(this.Data.ResourceType);
+        if (loaded) {
+          resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, this.Data.ResourceType);
+        }
+      }
+
       if (!resourceReg) {
         throw new Error(`Unable to find resource registration for ${this.Data.ResourceType}`);
       }
@@ -65,7 +76,7 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
 
       viewContainerRef.clear();
       const componentRef = viewContainerRef.createComponent<typeof resourceReg.SubClass>(resourceReg.SubClass);
-      
+
       // Track the component reference for cleanup
       this._componentRef = componentRef;
 

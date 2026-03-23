@@ -3,12 +3,12 @@
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: var(--mj-brand-primary);
     padding: 1rem;
 }
 
 .oauth-callback-card {
-    background: white;
+    background: var(--mj-bg-surface);
     padding: 3rem;
     border-radius: 1rem;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
@@ -32,7 +32,7 @@
 
 .oauth-status p {
     margin: 0;
-    color: #64748b;
+    color: var(--mj-text-muted);
     line-height: 1.6;
 }
 
@@ -52,34 +52,34 @@
 }
 
 .success-icon {
-    background: #dcfce7;
+    background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
 }
 
 .success-icon i {
-    color: #22c55e;
+    color: var(--mj-status-success);
 }
 
 .error-icon {
-    background: #fee2e2;
+    background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
 }
 
 .error-icon i {
-    color: #ef4444;
+    color: var(--mj-status-error);
 }
 
 /* Success state */
 .oauth-status.success h2 {
-    color: #22c55e;
+    color: var(--mj-status-success);
 }
 
 /* Error state */
 .oauth-status.error h2 {
-    color: #ef4444;
+    color: var(--mj-status-error);
 }
 
 .error-code {
-    background: #fef2f2;
-    color: #991b1b;
+    background: color-mix(in srgb, var(--mj-status-error) 5%, var(--mj-bg-surface));
+    color: var(--mj-status-error);
     padding: 0.5rem 1rem;
     border-radius: 0.5rem;
     font-family: monospace;
@@ -87,11 +87,11 @@
 }
 
 .error-message {
-    background: #f1f5f9;
+    background: var(--mj-bg-surface-sunken);
     padding: 1rem;
     border-radius: 0.5rem;
     font-size: 0.9rem;
-    color: #475569;
+    color: var(--mj-text-secondary);
     width: 100%;
 }
 

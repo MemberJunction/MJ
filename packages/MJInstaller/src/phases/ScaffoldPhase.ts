@@ -299,14 +299,27 @@ export class ScaffoldPhase {
     const tempDir = await this.fileSystem.CreateTempDir();
     const zipPath = path.join(tempDir, `${version.Tag}.zip`);
 
+    let downloadedMB = 0;
     try {
       await this.github.DownloadRelease(version.DownloadUrl, zipPath, (percent) => {
-        emitter.Emit('step:progress', {
-          Type: 'step:progress',
-          Phase: 'scaffold',
-          Message: `Downloading ${version.Tag}... ${percent}%`,
-          Percent: percent,
-        });
+        if (percent >= 0) {
+          // Determinate progress — server provided Content-Length
+          emitter.Emit('step:progress', {
+            Type: 'step:progress',
+            Phase: 'scaffold',
+            Message: `Downloading ${version.Tag}... ${percent}%`,
+            Percent: percent,
+          });
+        } else {
+          // Indeterminate progress — no Content-Length (API zipball fallback)
+          downloadedMB++;
+          emitter.Emit('step:progress', {
+            Type: 'step:progress',
+            Phase: 'scaffold',
+            Message: `Downloading ${version.Tag}... (data received)`,
+            Percent: -1,
+          });
+        }
       });
     } catch (err) {
       throw new InstallerError(

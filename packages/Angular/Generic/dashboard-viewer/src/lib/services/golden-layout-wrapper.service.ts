@@ -283,7 +283,7 @@ export class GoldenLayoutWrapperService {
             // LAZY LOADING: Show loading placeholder initially
             // Actual content is created when panel is first shown (visible)
             wrapper.innerHTML = `
-                <div class="panel-loading" style="display: flex; align-items: center; justify-content: center; height: 100%; color: #888;">
+                <div class="panel-loading" style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--mj-text-secondary);">
                     <i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px;"></i>
                     Loading...
                 </div>

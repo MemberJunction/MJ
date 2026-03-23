@@ -18,8 +18,8 @@ describe('getTSQLToPostgresRules', () => {
   const rules = getTSQLToPostgresRules();
 
   describe('rule count', () => {
-    it('should return exactly 13 rules', () => {
-      expect(rules).toHaveLength(13);
+    it('should return exactly 14 rules', () => {
+      expect(rules).toHaveLength(14);
     });
   });
 
@@ -32,7 +32,7 @@ describe('getTSQLToPostgresRules', () => {
 
     it('should have specific priority values', () => {
       const priorities = rules.map(r => r.Priority);
-      expect(priorities).toEqual([10, 15, 20, 30, 35, 40, 50, 52, 55, 60, 70, 80, 90]);
+      expect(priorities).toEqual([10, 15, 20, 30, 35, 40, 50, 52, 53, 55, 60, 70, 80, 90]);
     });
   });
 

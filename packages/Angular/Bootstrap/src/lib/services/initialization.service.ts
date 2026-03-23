@@ -11,7 +11,7 @@
 import { Injectable, Inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { Metadata } from '@memberjunction/core';
-import { setupGraphQLClient, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
+import { setupGraphQLClient, GraphQLProviderConfigData, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { SharedService } from '@memberjunction/ng-shared';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJStartupValidationService, MJ_STARTUP_VALIDATION } from '../bootstrap.types';
@@ -58,6 +58,13 @@ export class MJInitializationService {
     await setupGraphQLClient(config);
     const end = Date.now();
     console.log(`✓ GraphQL Client Setup Complete: ${end - start}ms`);
+
+    // Subscribe to cross-server cache invalidation events via GraphQL WebSocket
+    // This enables real-time data refresh when other servers modify entities
+    if (GraphQLDataProvider.Instance) {
+        GraphQLDataProvider.Instance.SubscribeToCacheInvalidation();
+        console.log('✓ Cache invalidation subscription active');
+    }
   }
 
   /**

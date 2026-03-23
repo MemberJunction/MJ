@@ -3,28 +3,7 @@
    iPhone-inspired UX with Circular Buttons
    =================================== */
 
-/* MD3 Color Tokens */
 :host {
-  /* Primary - MJ Blue */
-  --mj-blue: #0076B6;
-  --mj-blue-hover: #3395C8;
-  --mj-blue-active: #4BA5D4;
-  --mj-blue-light: #AAE7FD;
-
-  /* Surface Colors */
-  --surface: #FAFCFF;
-  --surface-container: #EDF0F4;
-  --surface-container-low: #F3F5F9;
-  --on-surface: #191C20;
-  --on-surface-variant: #43474E;
-  --outline: #74777F;
-  --outline-variant: #C4C6D0;
-
-  /* Elevation */
-  --elevation-1: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
-  --elevation-2: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.08);
-  --elevation-3: 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.08);
-
   display: block;
   width: 100%;
   height: 100%;
@@ -38,9 +17,9 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--surface);
+  background: var(--mj-bg-surface-card);
   border-radius: 12px;
-  box-shadow: var(--elevation-1);
+  box-shadow: var(--mj-shadow-sm);
   overflow: hidden;
 }
 
@@ -49,8 +28,8 @@
    =================================== */
 
 .notifications-header {
-  background: linear-gradient(to bottom, #FFFFFF, var(--surface-container-low));
-  border-bottom: 1px solid var(--outline-variant);
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
   padding: 0;
   flex-shrink: 0;
 }
@@ -73,12 +52,12 @@
 .title-icon {
   width: 48px;
   height: 48px;
-  background: linear-gradient(135deg, var(--mj-blue) 0%, #0091d5 100%);
+  background: var(--mj-brand-primary);
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 118, 182, 0.3);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -94,7 +73,7 @@
 .header-title h1 {
   font-size: 1.75rem;
   font-weight: 700;
-  color: var(--on-surface);
+  color: var(--mj-text-primary);
   margin: 0;
   letter-spacing: -0.02em;
 }
@@ -117,7 +96,7 @@
   border-radius: 9999px;  /* Circular design */
   font-size: 14px;
   font-weight: 600;
-  border: 2px solid var(--mj-blue);
+  border: 2px solid var(--mj-brand-primary);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   min-height: 44px;
@@ -135,34 +114,34 @@
 
 /* Ghost Button - White Background (Mark All Read) */
 .action-btn-ghost {
-  background: white;
-  color: var(--mj-blue);
-  border-color: var(--mj-blue);
+  background: var(--mj-bg-surface);
+  color: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
 }
 
 .action-btn-ghost:hover {
-  background: var(--mj-blue);
+  background: var(--mj-brand-primary);
   color: white;
-  border-color: var(--mj-blue);
-  box-shadow: var(--elevation-2);
+  border-color: var(--mj-brand-primary);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .action-btn-ghost:active {
-  background: var(--mj-blue-active);
+  background: var(--mj-brand-primary);
   transform: scale(0.98);
 }
 
 /* Secondary Button */
 .action-btn-secondary {
-  background: white;
-  color: var(--mj-blue);
-  border-color: var(--mj-blue);
+  background: var(--mj-bg-surface);
+  color: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
 }
 
 .action-btn-secondary:hover {
-  background: var(--mj-blue);
+  background: var(--mj-brand-primary);
   color: white;
-  border-color: var(--mj-blue);
+  border-color: var(--mj-brand-primary);
 }
 
 .action-btn-secondary:active {
@@ -177,8 +156,8 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: var(--surface-container-low);
-  border-top: 1px solid var(--outline-variant);
+  background: var(--mj-bg-surface-card);
+  border-top: 1px solid var(--mj-border-default);
 }
 
 .filters-slider {
@@ -224,8 +203,8 @@
   gap: 8px;
   padding: 10px 20px;
   border-radius: 9999px;  /* Circular design */
-  border: 2px solid var(--mj-blue);
-  background: white;
+  border: 2px solid var(--mj-brand-primary);
+  background: var(--mj-bg-surface);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: inherit;
@@ -233,17 +212,17 @@
 }
 
 .stat-pill:hover:not(.active) {
-  background: var(--surface-container-low);
-  border-color: var(--mj-blue-hover);
+  background: var(--mj-bg-surface-card);
+  border-color: var(--mj-brand-primary);
   transform: translateY(-1px);
 }
 
 /* Active State - MJ Blue */
 .stat-pill.active {
-  background: var(--mj-blue);
-  border-color: var(--mj-blue);
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
   color: white;
-  box-shadow: 0 4px 12px rgba(0, 118, 182, 0.35);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
   transform: translateY(-1px);
 }
 
@@ -257,8 +236,8 @@
   font-weight: 700;
   padding: 4px 10px;
   border-radius: 9999px;
-  background: var(--surface-container);
-  color: var(--on-surface);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
   min-width: 28px;
   text-align: center;
   transition: all 0.2s ease;
@@ -270,13 +249,13 @@
 }
 
 .stat-count.unread-count {
-  background: var(--mj-blue-light);
-  color: var(--mj-blue);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
   font-weight: 700;
 }
 
 .stat-pill.has-unread:not(.active) {
-  border-color: var(--mj-blue);
+  border-color: var(--mj-brand-primary);
 }
 
 /* ===================================
@@ -310,12 +289,12 @@
 .type-select {
   width: 100%;
   padding: 10px 16px;
-  border: 2px solid var(--mj-blue);
+  border: 2px solid var(--mj-brand-primary);
   border-radius: 9999px;  /* Circular design */
   font-size: 14px;
   font-weight: 500;
-  color: var(--on-surface);
-  background: white;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: inherit;
@@ -327,14 +306,14 @@
 }
 
 .type-select:hover {
-  border-color: var(--mj-blue-hover);
-  background-color: var(--surface-container-low);
+  border-color: var(--mj-brand-primary);
+  background-color: var(--mj-bg-surface-card);
 }
 
 .type-select:focus {
   outline: none;
-  border-color: var(--mj-blue);
-  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.15);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
 }
 
 .search-container {
@@ -348,7 +327,7 @@
   left: 16px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--on-surface-variant);
+  color: var(--mj-text-secondary);
   font-size: 14px;
   pointer-events: none;
   transition: color 0.2s ease;
@@ -357,34 +336,34 @@
 .search-input {
   width: 100%;
   padding: 10px 16px 10px 44px;
-  border: 2px solid var(--mj-blue);
+  border: 2px solid var(--mj-brand-primary);
   border-radius: 9999px;  /* Circular design */
   font-size: 14px;
   font-weight: 500;
-  background: white;
-  color: var(--on-surface);
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: inherit;
 }
 
 .search-input::placeholder {
-  color: var(--on-surface-variant);
+  color: var(--mj-text-secondary);
 }
 
 .search-input:hover {
-  border-color: var(--mj-blue-hover);
-  background: var(--surface-container-low);
+  border-color: var(--mj-brand-primary);
+  background: var(--mj-bg-surface-card);
 }
 
 .search-input:focus {
   outline: none;
-  border-color: var(--mj-blue);
-  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.15);
-  background: white;
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+  background: var(--mj-bg-surface);
 }
 
 .search-container:focus-within .search-icon {
-  color: var(--mj-blue);
+  color: var(--mj-brand-primary);
 }
 
 .filter-badge {
@@ -392,12 +371,12 @@
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  background: var(--mj-blue-light);
-  color: var(--mj-blue);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
   border-radius: 9999px;  /* Circular design */
   font-size: 13px;
   font-weight: 600;
-  border: 1px solid var(--mj-blue);
+  border: 1px solid var(--mj-brand-primary);
 }
 
 .filter-badge i {
@@ -421,16 +400,16 @@
 }
 
 .notifications-content::-webkit-scrollbar-track {
-  background: var(--surface-container-low);
+  background: var(--mj-bg-surface-card);
 }
 
 .notifications-content::-webkit-scrollbar-thumb {
-  background: var(--outline-variant);
+  background: var(--mj-border-default);
   border-radius: 4px;
 }
 
 .notifications-content::-webkit-scrollbar-thumb:hover {
-  background: var(--outline);
+  background: var(--mj-text-muted);
 }
 
 /* ===================================
@@ -449,7 +428,7 @@
 .empty-icon {
   width: 96px;
   height: 96px;
-  background: var(--surface-container);
+  background: var(--mj-bg-surface-sunken);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -459,19 +438,19 @@
 
 .empty-icon i {
   font-size: 40px;
-  color: var(--outline);
+  color: var(--mj-text-muted);
 }
 
 .empty-state h3 {
   font-size: 20px;
   font-weight: 700;
-  color: var(--on-surface);
+  color: var(--mj-text-primary);
   margin: 0 0 8px;
 }
 
 .empty-state p {
   font-size: 15px;
-  color: var(--on-surface-variant);
+  color: var(--mj-text-secondary);
   margin: 0;
   max-width: 320px;
   line-height: 1.5;
@@ -495,8 +474,8 @@
   gap: 14px;
   align-items: start;
   padding: 16px 20px;
-  background: white;
-  border-bottom: 1px solid var(--outline-variant);
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
 }
@@ -506,7 +485,7 @@
 }
 
 .notification-card:hover {
-  background: var(--surface-container-low);
+  background: var(--mj-bg-surface-card);
 }
 
 .notification-card.clickable {
@@ -514,17 +493,17 @@
 }
 
 .notification-card.clickable:active {
-  background: var(--surface-container);
+  background: var(--mj-bg-surface-sunken);
   transform: scale(0.995);
 }
 
 /* Unread State with Blue Highlight */
 .notification-card.unread {
-  background: linear-gradient(90deg, rgba(170, 231, 253, 0.3) 0%, white 60%);
+  background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
 }
 
 .notification-card.unread:hover {
-  background: linear-gradient(90deg, rgba(170, 231, 253, 0.4) 0%, var(--surface-container-low) 60%);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface-card));
 }
 
 /* Card Indicator - Blue Bar for Unread */
@@ -539,8 +518,8 @@
 }
 
 .notification-card.unread .card-indicator {
-  background: var(--mj-blue);
-  box-shadow: 0 0 8px rgba(0, 118, 182, 0.5);
+  background: var(--mj-brand-primary);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
 }
 
 /* Card Icon - Larger and More Prominent */
@@ -580,7 +559,7 @@
 .card-title {
   font-size: 16px;
   font-weight: 500;
-  color: var(--on-surface);
+  color: var(--mj-text-primary);
   margin: 0;
   line-height: 1.4;
   word-wrap: break-word;
@@ -588,11 +567,11 @@
 
 .card-title-unread {
   font-weight: 700;
-  color: var(--on-surface);
+  color: var(--mj-text-primary);
 }
 
 .notification-card.clickable .card-title {
-  color: var(--mj-blue);
+  color: var(--mj-brand-primary);
 }
 
 .notification-card.clickable:hover .card-title {
@@ -604,7 +583,7 @@
   align-items: center;
   gap: 5px;
   font-size: 13px;
-  color: var(--on-surface-variant);
+  color: var(--mj-text-secondary);
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -632,7 +611,7 @@
 /* Card Message */
 .card-message {
   font-size: 15px;
-  color: var(--on-surface-variant);
+  color: var(--mj-text-secondary);
   line-height: 1.5;
   margin: 0;
   display: -webkit-box;
@@ -657,9 +636,9 @@
   border-radius: 9999px;  /* Circular design */
   font-size: 13px;
   font-weight: 600;
-  border: 2px solid var(--mj-blue);
-  background: white;
-  color: var(--mj-blue);
+  border: 2px solid var(--mj-brand-primary);
+  background: var(--mj-bg-surface);
+  color: var(--mj-brand-primary);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
@@ -667,11 +646,11 @@
 }
 
 .card-action-btn:hover {
-  background: var(--mj-blue);
-  border-color: var(--mj-blue);
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
   color: white;
   transform: translateY(-1px);
-  box-shadow: var(--elevation-2);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .card-action-btn:active {
@@ -708,7 +687,7 @@
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid var(--mj-blue);
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 

@@ -91,6 +91,10 @@ export {
   type LastInstallInfo,
 } from './models/Diagnostics.js';
 
+// Logging (exported for testing and extension use)
+export { EventLogger, type LogEntry, type LogLevel } from './logging/EventLogger.js';
+export { ReportGenerator, type ReportData } from './logging/ReportGenerator.js';
+
 // Adapters (exported for testing and extension use)
 export { GitHubReleaseProvider } from './adapters/GitHubReleaseProvider.js';
 export { FileSystemAdapter } from './adapters/FileSystemAdapter.js';

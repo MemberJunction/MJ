@@ -1,13 +1,18 @@
-import { createMockProcessRunner } from './mocks/adapters.js';
+import { createMockProcessRunner, createMockFileSystem } from './mocks/adapters.js';
 import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { samplePartialConfig } from './mocks/fixtures.js';
 import { InstallerError } from '../errors/InstallerError.js';
 
 // ---------------------------------------------------------------------------
-// Adapter mocks — MigratePhase creates ProcessRunner via `new`
+// Adapter mocks — MigratePhase creates ProcessRunner and FileSystemAdapter via `new`
 // ---------------------------------------------------------------------------
 
 const mockRunner = createMockProcessRunner();
+const mockFs = createMockFileSystem();
+
+vi.mock('../adapters/FileSystemAdapter.js', () => ({
+  FileSystemAdapter: vi.fn(function () { return mockFs; }),
+}));
 
 vi.mock('../adapters/ProcessRunner.js', () => {
   return {
@@ -97,15 +102,33 @@ describe('MigratePhase', () => {
   // -----------------------------------------------------------------------
 
   describe('command invocation', () => {
-    it('should run npx with args [mj, migrate, --verbose]', async () => {
+    it('should use local CLI binary when it exists', async () => {
+      mockFs.FileExists.mockResolvedValueOnce(true);
       const ctx = makeContext({ Dir: '/some/dir' });
 
       await phase.Run(ctx);
 
       expect(mockRunner.Run).toHaveBeenCalledTimes(1);
       const [cmd, args] = mockRunner.Run.mock.calls[0];
+      expect(cmd).toBe('node');
+      expect(args[0]).toContain('cli');
+      expect(args[0]).toContain('run.js');
+      expect(args).toContain('migrate');
+      expect(args).toContain('--verbose');
+    });
+
+    it('should fall back to npx with version-pinned CLI when local binary is missing', async () => {
+      mockFs.FileExists.mockResolvedValueOnce(false);
+      const ctx = makeContext({ Dir: '/some/dir', VersionTag: 'v5.9.0' });
+
+      await phase.Run(ctx);
+
+      expect(mockRunner.Run).toHaveBeenCalledTimes(1);
+      const [cmd, args] = mockRunner.Run.mock.calls[0];
       expect(cmd).toBe('npx');
-      expect(args).toEqual(['mj', 'migrate', '--verbose']);
+      expect(args[0]).toBe('@memberjunction/cli@5.9.0');
+      expect(args).toContain('migrate');
+      expect(args).toContain('--verbose');
     });
 
     it('should pass correct Cwd from context.Dir', async () => {

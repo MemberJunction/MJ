@@ -6,18 +6,22 @@
 import {
     UserInfo,
     Metadata,
+    IMetadataProvider,
     LogError,
     LogStatusEx,
-    IsVerboseLoggingEnabled
+    IsVerboseLoggingEnabled,
+    BaseEntity
 } from '@memberjunction/core';
 import {
     MJTestEntity,
     MJTestRunEntity,
     MJTestSuiteEntity,
     MJTestSuiteRunEntity,
-    MJTestTypeEntity
+    MJTestSuiteTestEntity,
+    MJTestTypeEntity,
+    MJTestRubricEntity
 } from '@memberjunction/core-entities';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 import { BaseTestDriver } from '../drivers/BaseTestDriver';
 import { IOracle } from '../oracles/IOracle';
@@ -46,8 +50,9 @@ import { VariableResolver, VariableResolutionError } from '../utils/variable-res
 /**
  * Main testing engine that orchestrates test execution.
  *
- * Extends TestEngineBase (UI-safe metadata cache) with execution capabilities.
- * Follows singleton pattern like SchedulingEngine.
+ * Uses composition to delegate metadata operations to TestEngineBase while
+ * adding execution capabilities. This avoids duplicate entity registration
+ * that occurs with inheritance.
  *
  * Responsibilities:
  * - Load and instantiate test drivers via ClassFactory
@@ -66,10 +71,11 @@ import { VariableResolver, VariableResolutionError } from '../utils/variable-res
  * console.log(`Test ${result.status}: Score ${result.score}`);
  * ```
  */
-export class TestEngine extends TestEngineBase {
+export class TestEngine extends BaseSingleton<TestEngine> {
     private _driverCache = new Map<string, BaseTestDriver>();
     private _oracleRegistry = new Map<string, IOracle>();
     private _variableResolver = new VariableResolver();
+    private _oraclesRegistered = false;
 
     /**
      * Get singleton instance
@@ -79,24 +85,141 @@ export class TestEngine extends TestEngineBase {
     }
 
     /**
-     * Private constructor for singleton
+     * Access the contained TestEngineBase instance for metadata operations.
      */
-    private constructor() {
-        super();
+    protected get Base(): TestEngineBase {
+        return TestEngineBase.Instance;
     }
 
-    protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
-        try {
-            await super.AdditionalLoading(contextUser);
+    // ========================================================================
+    // DELEGATED METADATA PROPERTIES AND METHODS
+    // ========================================================================
 
-            // Register built-in oracles
+    /** Whether the base engine has been loaded/configured. */
+    public get Loaded(): boolean {
+        return this.Base.Loaded;
+    }
+
+    /** All loaded test types. */
+    public get TestTypes(): MJTestTypeEntity[] {
+        return this.Base.TestTypes;
+    }
+
+    /** All loaded tests. */
+    public get Tests(): MJTestEntity[] {
+        return this.Base.Tests;
+    }
+
+    /** All loaded test suites. */
+    public get TestSuites(): MJTestSuiteEntity[] {
+        return this.Base.TestSuites;
+    }
+
+    /** All loaded test suite tests. */
+    public get TestSuiteTests(): MJTestSuiteTestEntity[] {
+        return this.Base.TestSuiteTests;
+    }
+
+    /** All loaded test rubrics. */
+    public get TestRubrics(): MJTestRubricEntity[] {
+        return this.Base.TestRubrics;
+    }
+
+    /** All loaded test run output types. */
+    public get TestOutputTypes(): BaseEntity[] {
+        return this.Base.TestOutputTypes;
+    }
+
+    /** Get test type by ID. */
+    public GetTestTypeByID(id: string): MJTestTypeEntity | undefined {
+        return this.Base.GetTestTypeByID(id);
+    }
+
+    /** Get test type by name. */
+    public GetTestTypeByName(name: string): MJTestTypeEntity | undefined {
+        return this.Base.GetTestTypeByName(name);
+    }
+
+    /** Get test by ID. */
+    public GetTestByID(id: string): MJTestEntity | undefined {
+        return this.Base.GetTestByID(id);
+    }
+
+    /** Get test by name. */
+    public GetTestByName(name: string): MJTestEntity | undefined {
+        return this.Base.GetTestByName(name);
+    }
+
+    /** Get test suite by ID. */
+    public GetTestSuiteByID(id: string): MJTestSuiteEntity | undefined {
+        return this.Base.GetTestSuiteByID(id);
+    }
+
+    /** Get test suite by name. */
+    public GetTestSuiteByName(name: string): MJTestSuiteEntity | undefined {
+        return this.Base.GetTestSuiteByName(name);
+    }
+
+    /** Get test rubric by ID. */
+    public GetTestRubricByID(id: string): MJTestRubricEntity | undefined {
+        return this.Base.GetTestRubricByID(id);
+    }
+
+    /** Get test rubric by name. */
+    public GetTestRubricByName(name: string): MJTestRubricEntity | undefined {
+        return this.Base.GetTestRubricByName(name);
+    }
+
+    /** Get tests by type. */
+    public GetTestsByType(typeId: string): MJTestEntity[] {
+        return this.Base.GetTestsByType(typeId);
+    }
+
+    /** Get tests by tag. */
+    public GetTestsByTag(tag: string): MJTestEntity[] {
+        return this.Base.GetTestsByTag(tag);
+    }
+
+    /** Returns all tests associated with a given test suite, sorted by sequence. */
+    public GetTestsForSuite(suiteId: string): MJTestEntity[] {
+        return this.Base.GetTestsForSuite(suiteId);
+    }
+
+    /** Get active tests (Status = 'Active'). */
+    public GetActiveTests(): MJTestEntity[] {
+        return this.Base.GetActiveTests();
+    }
+
+    /** Get active test suites (Status = 'Active'). */
+    public GetActiveTestSuites(): MJTestSuiteEntity[] {
+        return this.Base.GetActiveTestSuites();
+    }
+
+    // ========================================================================
+    // CONFIG
+    // ========================================================================
+
+    /**
+     * Configure and load metadata, then register built-in oracles.
+     *
+     * @param forceRefresh - Force reload even if already loaded
+     * @param contextUser - User context for data access
+     * @param provider - Optional metadata provider
+     */
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        await this.Base.Config(forceRefresh, contextUser, provider);
+
+        // Register built-in oracles once after first config
+        if (!this._oraclesRegistered) {
             await this.registerBuiltInOracles();
-
+            this._oraclesRegistered = true;
             this.log('TestEngine configured successfully');
-        } catch (error) {
-            this.logError('Failed to configure TestEngine', error as Error);
         }
     }
+
+    // ========================================================================
+    // EXECUTION METHODS
+    // ========================================================================
 
     /**
      * Run a single test.
@@ -222,7 +345,6 @@ export class TestEngine extends TestEngineBase {
                     // Continue with remaining tests
                 } finally {
                     // Always increment sequence, even if test throws exception
-                    // This ensures each test gets a unique sequence number in conversation names
                     testSequence++;
                 }
             }
@@ -408,10 +530,6 @@ export class TestEngine extends TestEngineBase {
 
     /**
      * Filter tests based on suite run options.
-     * Supports filtering by:
-     * - selectedTestIds: Run only specific tests by ID
-     * - sequenceStart/sequenceEnd: Run tests within a sequence range
-     * - sequence: Run tests at specific sequence positions
      * @private
      */
     private filterTestsForExecution(
@@ -488,11 +606,7 @@ export class TestEngine extends TestEngineBase {
             testRun.TestSuiteRunID = suiteRunId;
         }
 
-        // Set sequence if provided (for suite test order or repeat iterations)
-        // sequence will be:
-        // - Suite test position (1, 2, 3...) for tests in a suite
-        // - Iteration number (1, 2, 3...) for repeated tests
-        // - null for standalone, non-repeated tests
+        // Set sequence if provided
         if (sequence != null) {
             testRun.Sequence = sequence;
         }

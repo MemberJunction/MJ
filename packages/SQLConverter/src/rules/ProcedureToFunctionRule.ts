@@ -36,7 +36,7 @@ export class ProcedureToFunctionRule implements IConversionRule {
     }
 
     if (!procMatch) {
-      return `-- TODO: Manual conversion needed for procedure\n-- ${sql.slice(0, 200).replace(/\n/g, '\n-- ')}...\n`;
+      return `-- SKIPPED: procedure (auto-conversion not supported)\n-- ${sql.slice(0, 200).replace(/\n/g, '\n-- ')}...\n`;
     }
 
     const procName = procMatch[1];

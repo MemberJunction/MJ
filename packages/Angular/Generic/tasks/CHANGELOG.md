@@ -1,5 +1,98 @@
 # @memberjunction/ng-tasks
 
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+- Updated dependencies [c3e8b94]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/ai-core-plus@5.15.0
+  - @memberjunction/ai-engine-base@5.15.0
+  - @memberjunction/ng-shared-generic@5.15.0
+  - @memberjunction/core-entities@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/ai-engine-base@5.14.0
+  - @memberjunction/ai-core-plus@5.14.0
+  - @memberjunction/core-entities@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/ai-engine-base@5.13.0
+  - @memberjunction/ai-core-plus@5.13.0
+  - @memberjunction/core-entities@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- a57b8d5: Migrate all hardcoded CSS colors to design tokens for dark mode and white-label support. Introduces `--mj-*` semantic CSS custom properties in `_tokens.scss` with full `[data-theme="dark"]` overrides. Migrates 1,544 of 1,659 hardcoded hex values (93%) across 72+ CSS files to semantic tokens. Adds logo token system (`--mj-logo-mark`, `--mj-logo-color`) for themeable branding. Fixes dark mode theming for CodeMirror, AG Grid v35, and Kendo popups. No API or behavioral changes — CSS only.
+- e87d153: design tokens phase 1
+- Updated dependencies [05f19ff]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/ai-engine-base@5.12.0
+  - @memberjunction/ai-core-plus@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/ai-engine-base@5.11.0
+  - @memberjunction/ai-core-plus@5.11.0
+  - @memberjunction/core-entities@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.10.1
+- @memberjunction/ai-core-plus@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/ai-engine-base@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ai-engine-base@5.9.0
+  - @memberjunction/ai-core-plus@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

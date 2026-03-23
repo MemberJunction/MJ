@@ -46,7 +46,7 @@ describe('ConfigLoader', () => {
     it('should set convergence defaults', () => {
       const config = ConfigLoader.createDefault();
 
-      expect(config.analysis.convergence.maxIterations).toBe(10);
+      expect(config.analysis.convergence.maxIterations).toBe(5);
       expect(config.analysis.convergence.stabilityWindow).toBe(2);
       expect(config.analysis.convergence.confidenceThreshold).toBe(0.85);
     });

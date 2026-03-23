@@ -69,38 +69,58 @@ vi.mock('@memberjunction/core-entities', () => ({
     }
 }));
 
-vi.mock('@memberjunction/global', () => ({
-    MJGlobal: {
-        Instance: {
-            ClassFactory: {
-                CreateInstance: vi.fn()
+// Shared singleton store
+const singletonStore: Record<string, unknown> = {};
+
+vi.mock('@memberjunction/global', () => {
+    class BaseSingleton<T> {
+        protected static getInstance<T>(this: new () => T): T {
+            const key = this.name;
+            if (!singletonStore[key]) {
+                singletonStore[key] = new this();
             }
+            return singletonStore[key] as T;
         }
     }
-}));
+
+    return {
+        BaseSingleton,
+        MJGlobal: {
+            Instance: {
+                ClassFactory: {
+                    CreateInstance: vi.fn()
+                }
+            }
+        },
+        UUIDsEqual: (a: string, b: string) => a === b
+    };
+});
 
 vi.mock('@memberjunction/scheduling-base-types', () => ({
     ScheduledJobResult: class {},
     NotificationChannel: {}
 }));
 
-vi.mock('@memberjunction/scheduling-engine-base', () => ({
-    SchedulingEngineBase: class {
-        private static _instances = new Map<Function, unknown>();
-        static getInstance<T>(): T {
-            const ctor = this as unknown as new () => T;
-            if (!this._instances.has(ctor)) {
-                this._instances.set(ctor, new ctor());
-            }
-            return this._instances.get(ctor) as T;
+vi.mock('@memberjunction/scheduling-engine-base', () => {
+    const fakeBase = {
+        ScheduledJobs: [] as Array<Record<string, unknown>>,
+        ScheduledJobTypes: [] as Array<Record<string, unknown>>,
+        ScheduledJobRuns: [] as Array<Record<string, unknown>>,
+        ActivePollingInterval: 60000 as number | null,
+        Config: vi.fn().mockResolvedValue(true),
+        UpdatePollingInterval: vi.fn(),
+        GetJobTypeByName: vi.fn(),
+        GetJobTypeByDriverClass: vi.fn(),
+        GetJobsByType: vi.fn().mockReturnValue([]),
+        GetRunsForJob: vi.fn().mockReturnValue([])
+    };
+
+    return {
+        SchedulingEngineBase: {
+            get Instance() { return fakeBase; }
         }
-        ScheduledJobs: Array<Record<string, unknown>> = [];
-        ScheduledJobTypes: Array<Record<string, unknown>> = [];
-        ActivePollingInterval: number | null = 60000;
-        Config = vi.fn().mockResolvedValue(undefined);
-        UpdatePollingInterval = vi.fn();
-    }
-}));
+    };
+});
 
 vi.mock('../CronExpressionHelper', () => ({
     CronExpressionHelper: {
@@ -116,9 +136,12 @@ vi.mock('../NotificationManager', () => ({
 }));
 
 import { SchedulingEngine } from '../ScheduledJobEngine';
+import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
 
 describe('SchedulingEngine', () => {
     let engine: SchedulingEngine;
+    // Access the mock base for setting up test state
+    const mockBase = SchedulingEngineBase.Instance as Record<string, unknown>;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -189,7 +212,7 @@ describe('SchedulingEngine', () => {
     describe('ExecuteScheduledJobs', () => {
         it('should return an empty array when no jobs are due', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.ExecuteScheduledJobs>[0];
-            engine.ScheduledJobs = [];
+            mockBase.ScheduledJobs = [];
             const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
             const runs = await engine.ExecuteScheduledJobs(mockUser);
             expect(runs).toEqual([]);
@@ -198,26 +221,26 @@ describe('SchedulingEngine', () => {
 
         it('should call Config before executing', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.ExecuteScheduledJobs>[0];
-            engine.ScheduledJobs = [];
+            mockBase.ScheduledJobs = [];
             const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
             await engine.ExecuteScheduledJobs(mockUser);
-            expect(engine.Config).toHaveBeenCalledWith(false, mockUser);
+            expect(mockBase.Config).toHaveBeenCalledWith(false, mockUser, undefined, false, false);
             consoleSpy.mockRestore();
         });
 
         it('should update polling interval after execution', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.ExecuteScheduledJobs>[0];
-            engine.ScheduledJobs = [];
+            mockBase.ScheduledJobs = [];
             const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
             await engine.ExecuteScheduledJobs(mockUser);
-            expect(engine.UpdatePollingInterval).toHaveBeenCalled();
+            expect(mockBase.UpdatePollingInterval).toHaveBeenCalled();
             consoleSpy.mockRestore();
         });
 
         it('should accept a custom evalTime', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.ExecuteScheduledJobs>[0];
             const evalTime = new Date('2025-06-15T12:00:00Z');
-            engine.ScheduledJobs = [];
+            mockBase.ScheduledJobs = [];
             const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
             const runs = await engine.ExecuteScheduledJobs(mockUser, evalTime);
             expect(runs).toEqual([]);
@@ -228,7 +251,7 @@ describe('SchedulingEngine', () => {
     describe('ExecuteScheduledJob', () => {
         it('should throw when job is not found', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.ExecuteScheduledJob>[1];
-            engine.ScheduledJobs = [];
+            mockBase.ScheduledJobs = [];
             await expect(
                 engine.ExecuteScheduledJob('nonexistent-id', mockUser)
             ).rejects.toThrow('not found or not active');
@@ -236,7 +259,7 @@ describe('SchedulingEngine', () => {
 
         it('should throw with the job ID in the error message', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.ExecuteScheduledJob>[1];
-            engine.ScheduledJobs = [];
+            mockBase.ScheduledJobs = [];
             await expect(
                 engine.ExecuteScheduledJob('abc-123', mockUser)
             ).rejects.toThrow('abc-123');
@@ -247,13 +270,13 @@ describe('SchedulingEngine', () => {
         it('should reload configuration', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.OnJobChanged>[0];
             await engine.OnJobChanged(mockUser);
-            expect(engine.Config).toHaveBeenCalledWith(true, mockUser);
+            expect(mockBase.Config).toHaveBeenCalledWith(true, mockUser, undefined, false, false);
         });
 
         it('should recalculate polling interval', async () => {
             const mockUser = { ID: 'user-1' } as Parameters<typeof engine.OnJobChanged>[0];
             await engine.OnJobChanged(mockUser);
-            expect(engine.UpdatePollingInterval).toHaveBeenCalled();
+            expect(mockBase.UpdatePollingInterval).toHaveBeenCalled();
         });
     });
 });

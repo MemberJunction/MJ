@@ -1,6 +1,23 @@
 import type { UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
-import type { ExternalRecord, DefaultFieldMapping, SourceSchemaInfo } from './types.js';
+import type {
+    IntegrationObjectInfo,
+    ActionGeneratorConfig,
+} from './ActionMetadataGenerator.js';
+import type {
+    ExternalRecord,
+    DefaultFieldMapping,
+    SourceSchemaInfo,
+    CreateRecordContext,
+    UpdateRecordContext,
+    DeleteRecordContext,
+    GetRecordContext,
+    CRUDResult,
+    SearchContext,
+    SearchResult,
+    ListContext,
+    ListResult,
+} from './types.js';
 
 /** Result of testing a connection to an external system */
 export interface ConnectionTestResult {
@@ -18,6 +35,8 @@ export interface ExternalObjectSchema {
     Name: string;
     /** Human-readable label */
     Label: string;
+    /** Human-readable description of the object's purpose */
+    Description?: string;
     /** Whether this object supports incremental sync via watermarks */
     SupportsIncrementalSync: boolean;
     /** Whether this object can be created/updated from MJ (push) */
@@ -30,6 +49,8 @@ export interface ExternalFieldSchema {
     Name: string;
     /** Human-readable label */
     Label: string;
+    /** Human-readable description of the field's purpose */
+    Description?: string;
     /** Field data type in the external system */
     DataType: string;
     /** Whether the field is required */
@@ -38,6 +59,10 @@ export interface ExternalFieldSchema {
     IsUniqueKey: boolean;
     /** Whether the field is read-only */
     IsReadOnly: boolean;
+    /** Whether this field is a foreign key */
+    IsForeignKey?: boolean;
+    /** If FK, which source object it references */
+    ForeignKeyTarget?: string | null;
 }
 
 /** Context passed to FetchChanges for incremental data retrieval */
@@ -52,6 +77,12 @@ export interface FetchContext {
     BatchSize: number;
     /** User context for authorization */
     ContextUser: UserInfo;
+    /** Current page number for page-based pagination (1-based). Passed by engine on subsequent calls. */
+    CurrentPage?: number;
+    /** Current offset for offset-based pagination. Passed by engine on subsequent calls. */
+    CurrentOffset?: number;
+    /** Current cursor for cursor-based pagination. Passed by engine on subsequent calls. */
+    CurrentCursor?: string;
 }
 
 /** Result of a FetchChanges call, containing a batch of records */
@@ -62,6 +93,12 @@ export interface FetchBatchResult {
     HasMore: boolean;
     /** Updated watermark value after this batch */
     NewWatermarkValue?: string;
+    /** Next page number to pass back via FetchContext.CurrentPage on the next call (page-based pagination) */
+    NextPage?: number;
+    /** Next offset to pass back via FetchContext.CurrentOffset on the next call (offset-based pagination) */
+    NextOffset?: number;
+    /** Next cursor to pass back via FetchContext.CurrentCursor on the next call (cursor-based pagination) */
+    NextCursor?: string;
 }
 
 /** Configurable timeout values for connector operations */
@@ -117,12 +154,120 @@ export async function WithTimeout<T>(
     }
 }
 
+/** Proposed default configuration for a quick-start setup */
+export interface DefaultObjectConfig {
+    /** Source object name in the external system */
+    SourceObjectName: string;
+    /** Proposed target table name in the MJ database */
+    TargetTableName: string;
+    /** Proposed MJ entity name */
+    TargetEntityName: string;
+    /** Whether to enable sync by default */
+    SyncEnabled: boolean;
+    /** Proposed field mappings */
+    FieldMappings: DefaultFieldMapping[];
+}
+
+/** Full default configuration returned by a connector for quick setup */
+export interface DefaultIntegrationConfig {
+    /** Proposed DB schema name for new tables (e.g., "YourMembership", "HubSpot") */
+    DefaultSchemaName: string;
+    /** Objects to sync by default with proposed table/entity names */
+    DefaultObjects: DefaultObjectConfig[];
+}
+
 /**
  * Abstract base class for integration connectors.
  * Each external system (HubSpot, Salesforce, etc.) implements this class
  * to provide system-specific data access and discovery.
+ *
+ * Subclasses declare their capabilities via the `SupportsX` getters.
+ * Callers can interrogate a connector instance to determine which
+ * operations it supports before attempting them.
  */
 export abstract class BaseIntegrationConnector {
+
+    // ─── Capability Getters ──────────────────────────────────────────
+    // Override in subclasses to declare which operations the connector supports.
+    // All connectors support Get (read/FetchChanges) by default.
+
+    /** Whether this connector supports reading/fetching records. Always true. */
+    public get SupportsGet(): boolean { return true; }
+
+    /** Whether this connector supports creating new records in the external system. */
+    public get SupportsCreate(): boolean { return false; }
+
+    /** Whether this connector supports updating existing records in the external system. */
+    public get SupportsUpdate(): boolean { return false; }
+
+    /** Whether this connector supports deleting records from the external system. */
+    public get SupportsDelete(): boolean { return false; }
+
+    /** Whether this connector supports searching/querying records with filters. */
+    public get SupportsSearch(): boolean { return false; }
+
+    /** Whether this connector supports paginated listing of records. */
+    public get SupportsListing(): boolean { return false; }
+
+    // ─── Standard CRUD Operations ────────────────────────────────────
+    // Default implementations throw if not supported. Subclasses override
+    // both the capability getter AND the method to enable the operation.
+
+    /**
+     * Creates a new record in the external system.
+     * Override in subclasses that support write operations.
+     * Check `SupportsCreate` before calling.
+     */
+    public async CreateRecord(_ctx: CreateRecordContext): Promise<CRUDResult> {
+        throw new Error(`CreateRecord is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Updates an existing record in the external system.
+     * Override in subclasses that support write operations.
+     * Check `SupportsUpdate` before calling.
+     */
+    public async UpdateRecord(_ctx: UpdateRecordContext): Promise<CRUDResult> {
+        throw new Error(`UpdateRecord is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Deletes a record from the external system.
+     * Override in subclasses that support delete operations.
+     * Check `SupportsDelete` before calling.
+     */
+    public async DeleteRecord(_ctx: DeleteRecordContext): Promise<CRUDResult> {
+        throw new Error(`DeleteRecord is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Retrieves a single record by ID from the external system.
+     * Override in subclasses that support direct record retrieval.
+     */
+    public async GetRecord(_ctx: GetRecordContext): Promise<ExternalRecord | null> {
+        throw new Error(`GetRecord is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Searches for records matching the given filters.
+     * Override in subclasses that support search/query operations.
+     * Check `SupportsSearch` before calling.
+     */
+    public async SearchRecords(_ctx: SearchContext): Promise<SearchResult> {
+        throw new Error(`SearchRecords is not supported by ${this.constructor.name}`);
+    }
+
+    /**
+     * Lists records with cursor-based pagination.
+     * Override in subclasses that support paginated listing.
+     * Check `SupportsListing` before calling.
+     */
+    public async ListRecords(_ctx: ListContext): Promise<ListResult> {
+        throw new Error(`ListRecords is not supported by ${this.constructor.name}`);
+    }
+
+    // ─── Core Abstract Methods ───────────────────────────────────────
+
     /**
      * Tests connectivity to the external system.
      * @param companyIntegration - The company integration entity with connection credentials
@@ -178,6 +323,68 @@ export abstract class BaseIntegrationConnector {
     }
 
     /**
+     * Returns a proposed default configuration for quick setup.
+     * Override in subclasses to provide connector-specific defaults
+     * including schema name, objects to sync, and field mappings.
+     * Returns null by default (no quick setup available).
+     */
+    public GetDefaultConfiguration(): DefaultIntegrationConfig | null {
+        return null;
+    }
+
+    // ─── Action Metadata Generation ─────────────────────────────────
+
+    /**
+     * Returns the integration objects and their fields that this connector
+     * supports, for use by the ActionMetadataGenerator. This is static
+     * metadata that does NOT require a live connection — it describes the
+     * connector's known object model.
+     *
+     * Override in subclasses to provide connector-specific objects/fields.
+     * Returns an empty array by default (no action generation available).
+     */
+    public GetIntegrationObjects(): IntegrationObjectInfo[] {
+        return [];
+    }
+
+    /**
+     * Returns the ActionGeneratorConfig for this connector, combining the
+     * integration name, category, icon, and objects into a ready-to-use
+     * configuration for ActionMetadataGenerator.Generate().
+     *
+     * Override in subclasses to customize the config (e.g., icon, category).
+     * Returns null by default if GetIntegrationObjects() returns empty.
+     */
+    public GetActionGeneratorConfig(): ActionGeneratorConfig | null {
+        const allObjects = this.GetIntegrationObjects();
+        // Only include objects that opt-in to action generation (default: true)
+        const objects = allObjects.filter(o => o.IncludeInActionGeneration !== false);
+        if (objects.length === 0) return null;
+
+        return {
+            IntegrationName: this.IntegrationName,
+            CategoryName: this.IntegrationName,
+            IconClass: 'fa-solid fa-plug',
+            Objects: objects,
+            IncludeSearch: this.SupportsSearch,
+            IncludeList: this.SupportsListing,
+        };
+    }
+
+    /**
+     * The canonical integration name (e.g., "HubSpot", "Rasa.io").
+     * Used by GetActionGeneratorConfig() and IntegrationActionExecutor
+     * to match connectors to action Config.IntegrationName.
+     *
+     * Override in subclasses. Defaults to the class name.
+     */
+    public get IntegrationName(): string {
+        return this.constructor.name;
+    }
+
+    // ─── Schema Introspection ────────────────────────────────────────
+
+    /**
      * Introspects the source system's schema — returns metadata about available
      * objects, their fields, primary keys, and foreign key relationships.
      * Used by the Schema Builder to generate local DDL.
@@ -197,13 +404,22 @@ export abstract class BaseIntegrationConnector {
         const result: SourceSchemaInfo = { Objects: [] };
 
         for (const obj of objects) {
-            const fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
+            let fields: ExternalFieldSchema[];
+            try {
+                fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                console.warn(`WARNING: Skipping object "${obj.Name}" — DiscoverFields failed: ${msg}`);
+                continue;
+            }
             result.Objects.push({
                 ExternalName: obj.Name,
                 ExternalLabel: obj.Label,
+                Description: obj.Description,
                 Fields: fields.map(f => ({
                     Name: f.Name,
                     Label: f.Label,
+                    Description: f.Description,
                     SourceType: f.DataType,
                     IsRequired: f.IsRequired,
                     MaxLength: null,
@@ -211,14 +427,21 @@ export abstract class BaseIntegrationConnector {
                     Scale: null,
                     DefaultValue: null,
                     IsPrimaryKey: f.IsUniqueKey,
-                    IsForeignKey: false,
-                    ForeignKeyTarget: null,
+                    IsForeignKey: f.IsForeignKey ?? false,
+                    ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                 })),
                 PrimaryKeyFields: fields.filter(f => f.IsUniqueKey).map(f => f.Name),
-                Relationships: [],
+                Relationships: fields
+                    .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
+                    .map(f => ({
+                        FieldName: f.Name,
+                        TargetObject: f.ForeignKeyTarget!,
+                        TargetField: 'ID',
+                    })),
             });
         }
 
         return result;
     }
+
 }

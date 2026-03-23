@@ -2824,7 +2824,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             // Create the HTML with a placeholder div that we'll replace with the code editor
             const html = `
                 <div class="inline-json-editor" data-editor-id="${editorId}" data-json-content="${this.escapeHtmlAttribute(formattedJson)}">
-                    <div class="json-editor-container" style="height: 300px; width: 100%; border: 1px solid #e0e0e0; border-radius: 4px; overflow: hidden;">
+                    <div class="json-editor-container" style="height: 300px; width: 100%; border: 1px solid var(--mj-border-default); border-radius: 4px; overflow: hidden;">
                         <pre style="margin: 0; padding: 12px; font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; overflow: auto; height: 100%;">${this.escapeHtml(formattedJson)}</pre>
                     </div>
                 </div>
@@ -2835,7 +2835,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             return this.sanitizer.bypassSecurityTrustHtml(html);
         } catch {
             // If JSON parsing fails, show as plain text
-            const html = `<pre style="margin: 0; padding: 12px; font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; overflow: auto; background: #f8f9fa; border-radius: 4px;">${this.escapeHtml(jsonStr)}</pre>`;
+            const html = `<pre style="margin: 0; padding: 12px; font-family: 'Fira Code', 'Consolas', monospace; font-size: 13px; overflow: auto; background: var(--mj-bg-surface-card); border-radius: 4px;">${this.escapeHtml(jsonStr)}</pre>`;
             return this.sanitizer.bypassSecurityTrustHtml(html);
         }
     }

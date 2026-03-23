@@ -16,6 +16,7 @@ import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/c
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { SuggestedResponse } from '../../models/conversation-state.model';
@@ -444,36 +445,32 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  private renderFormHTML(content: any): string {
+  private renderFormHTML(content: { title?: string; fields?: Array<{ name?: string; value: unknown; label?: string; type?: string; displayValue?: string }> }): string {
     if (!content.fields || content.fields.length === 0) {
-      return this.escapeHtml(JSON.stringify(content));
+      return FormResponseUtils.EscapeHtml(JSON.stringify(content));
     }
 
     // Filter out fields with empty/null/undefined values (optional fields not provided)
-    const nonEmptyFields = content.fields.filter((f: any) => {
+    const nonEmptyFields = content.fields.filter(f => {
       const value = f.value;
       return value != null && value !== '' && !(Array.isArray(value) && value.length === 0);
     });
 
     if (nonEmptyFields.length === 0) {
-      return this.escapeHtml(JSON.stringify(content));
+      return FormResponseUtils.EscapeHtml(JSON.stringify(content));
     }
 
     if (nonEmptyFields.length === 1) {
       // Single field - simple inline pill
       const field = nonEmptyFields[0];
-      // Use displayValue (friendly option label) if available, otherwise fall back to raw value
-      const value = this.escapeHtml(String(field.displayValue || field.value));
-
-      // Just show the value if it's a single simple response
-      // This handles cases like "Choose an option: weather" -> just show "weather"
+      const value = this.formatFieldValueHtml(field);
       return `<span class="form-response-pill single-field"><i class="fa fa-check" aria-hidden="true"></i>${value}</span>`;
     } else {
-      // Multiple fields - vertical question/answer layout for complex forms
-      const title = content.title ? this.escapeHtml(content.title) : 'Form Response';
-      const fieldsHTML = nonEmptyFields.map((f: any) => {
-        const label = this.escapeHtml(f.label || f.name);
-        const value = this.formatFieldValue(f);
+      // Multiple fields - vertical question/answer layout
+      const title = content.title ? FormResponseUtils.EscapeHtml(content.title) : 'Form Response';
+      const fieldsHTML = nonEmptyFields.map(f => {
+        const label = FormResponseUtils.EscapeHtml(f.label || f.name || '');
+        const value = this.formatFieldValueHtml(f);
         return `<div class="pill-field">
           <div class="field-question">${label}</div>
           <div class="field-answer">${value}</div>
@@ -490,123 +487,26 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
-  private formatFieldValue(field: { name?: string; value: any; label?: string; type?: string; displayValue?: string }): string {
-    // Handle null/undefined
-    if (field.value == null) {
-      return this.escapeHtml('');
-    }
+  /**
+   * Format a field value for HTML display using the shared FormResponseUtils.
+   * This handles the inline-HTML context where values need HTML escaping.
+   */
+  private formatFieldValueHtml(field: { name?: string; value: unknown; label?: string; type?: string; displayValue?: string }): string {
+    if (field.value == null) return '';
 
-    // For choice types (buttongroup, radio, dropdown, checkbox), use displayValue if available
+    // For choice types with displayValue, use it directly
     const choiceTypes = ['buttongroup', 'radio', 'dropdown', 'checkbox'];
     if (field.type && choiceTypes.includes(field.type) && field.displayValue) {
-      return this.escapeHtml(field.displayValue);
+      return FormResponseUtils.EscapeHtml(field.displayValue);
     }
 
-    const stringValue = String(field.value);
-
-    // Format based on field type
-    switch (field.type) {
-      case 'date':
-        // Date-only: "May 1, 2024"
-        return this.formatDate(stringValue, false);
-
-      case 'datetime':
-        // Date and time: "May 1, 2024 at 6:00 AM"
-        return this.formatDate(stringValue, true);
-
-      case 'time':
-        // Time-only: "2:30 PM"
-        return this.formatTime(stringValue);
-
-      case 'daterange':
-        // Parse object: { start: '...', end: '...' }
-        return this.formatDateRange(field.value);
-
-      case 'slider':
-        // Value with optional suffix
-        return this.escapeHtml(stringValue);
-
-      default:
-        // Try auto-detect ISO date (for backward compatibility)
-        if (stringValue.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/)) {
-          // Legacy: guess based on time component
-          const date = new Date(stringValue);
-          const hasMidnight = date.getUTCHours() === 0 && date.getUTCMinutes() === 0 && date.getUTCSeconds() === 0;
-          return this.formatDate(stringValue, !hasMidnight);
-        }
-
-        return this.escapeHtml(stringValue);
-    }
-  }
-
-  private formatDate(value: string, includeTime: boolean): string {
-    try {
-      const date = new Date(value);
-      if (isNaN(date.getTime())) return this.escapeHtml(value);
-
-      if (includeTime) {
-        return this.escapeHtml(date.toLocaleString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        }));
-      } else {
-        return this.escapeHtml(date.toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric'
-        }));
-      }
-    } catch (e) {
-      return this.escapeHtml(value);
-    }
-  }
-
-  private formatTime(value: string): string {
-    // Handle "HH:mm" or "HH:mm:ss" format
-    try {
-      const [hours, minutes] = value.split(':').map(Number);
-      const date = new Date();
-      date.setHours(hours, minutes, 0);
-
-      return this.escapeHtml(date.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      }));
-    } catch (e) {
-      return this.escapeHtml(value);
-    }
-  }
-
-  private formatDateRange(value: any): string {
-    if (typeof value === 'object' && value.start && value.end) {
-      const start = this.formatDate(value.start, false);
-      const end = this.formatDate(value.end, false);
-      // Remove HTML encoding temporarily to avoid double encoding
-      const startText = start.replace(/&[^;]+;/g, m => {
-        const map: any = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&#039;': "'" };
-        return map[m] || m;
-      });
-      const endText = end.replace(/&[^;]+;/g, m => {
-        const map: any = { '&lt;': '<', '&gt;': '>', '&amp;': '&', '&quot;': '"', '&#039;': "'" };
-        return map[m] || m;
-      });
-      return this.escapeHtml(`${startText} to ${endText}`);
-    }
-    return this.escapeHtml(JSON.stringify(value));
+    // Delegate type-aware formatting to shared utility (no schema question available here)
+    const formatted = FormResponseUtils.FormatValue(field.value, null, field.type || null);
+    return FormResponseUtils.EscapeHtml(formatted);
   }
 
   private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+    return FormResponseUtils.EscapeHtml(text);
   }
 
   public get isInProgressAIMessage(): boolean {

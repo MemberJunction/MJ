@@ -50,6 +50,8 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
         const md = new Metadata();
         const userId = contextUser?.ID || md.CurrentUser?.ID;
 
+        console.debug(`[UserViewEngine] Config() called: loaded=${this.Loaded}, forceRefresh=${forceRefresh}, viewCount=${this._views?.length ?? 0}`);
+
         // Store the context user ID for filtering
         this._contextUserId = userId || null;
 
@@ -63,6 +65,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
         ];
 
         await super.Load(configs, provider, forceRefresh, contextUser);
+        console.debug(`[UserViewEngine] Config() complete: viewCount=${this._views?.length ?? 0}`);
     }
 
     // ========================================================================

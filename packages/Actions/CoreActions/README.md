@@ -157,7 +157,7 @@ Parse, transform, aggregate, and explore structured data.
 | `Aggregate Data` | `AggregateDataAction` | Group-by aggregation (sum, avg, count, min, max) with having clauses |
 | `Data Mapper` | `DataMapperAction` | Map fields between data structures using template expressions |
 | `Explore Database Schema` | `ExploreDatabaseSchemaAction` | Retrieve entity metadata and schema information |
-| `Execute Research Query` | `ExecuteResearchQueryAction` | Execute research-style queries against entity data |
+| `Run Ad-hoc Query` | `RunAdhocQueryAction` | Execute ad-hoc SQL queries against entity data |
 
 ### File Operations (8 actions)
 

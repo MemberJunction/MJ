@@ -34,6 +34,18 @@ export class AlterTableRule implements IConversionRule {
       return `-- Constraint enable (no-op in PostgreSQL)\n-- ${result.slice(0, 200)}\n`;
     }
 
+    // Convert ALTER COLUMN ... TYPE NOT NULL → ALTER COLUMN ... SET NOT NULL
+    result = this.convertAlterColumnNotNull(result);
+
+    // Convert DEFAULT (val) FOR col → ALTER COLUMN col SET DEFAULT val
+    result = this.convertDefaultFor(result);
+
+    // Remove inline FOREIGN KEY keyword in ADD COLUMN (keep just REFERENCES)
+    result = this.removeInlineForeignKey(result);
+
+    // Convert multi-column ADD to PG ADD COLUMN syntax
+    result = this.convertMultiColumnAdd(result);
+
     // Make FK constraints DEFERRABLE INITIALLY DEFERRED
     if (/FOREIGN\s+KEY/i.test(result)) {
       // Remove WITH NOCHECK (PG doesn't support it)
@@ -46,7 +58,9 @@ export class AlterTableRule implements IConversionRule {
     // CHECK constraints: add NOT VALID to skip validation of existing rows.
     // SQL Server's case-insensitive collation and CHAR padding can produce data
     // that violates PG's case-sensitive CHECK constraints.
-    if (/\bCHECK\b/i.test(result) && !/FOREIGN\s+KEY/i.test(result)) {
+    // Only match ADD CONSTRAINT ... CHECK patterns, not any occurrence of CHECK
+    // (e.g. WITH CHECK CHECK CONSTRAINT or column names containing "check").
+    if (/\bADD\s+CONSTRAINT\b[^;]*\bCHECK\s*\(/i.test(result) && !/FOREIGN\s+KEY/i.test(result)) {
       result = result.trimEnd().replace(/;?\s*$/, '');
       result += ' NOT VALID';
     }
@@ -154,5 +168,126 @@ export class AlterTableRule implements IConversionRule {
     sql = sql.replace(/\bNEWSEQUENTIALID\s*\(\s*\)/gi, 'gen_random_uuid()');
     sql = sql.replace(/\bNEWID\s*\(\s*\)/gi, 'gen_random_uuid()');
     return sql;
+  }
+
+  /**
+   * Convert ALTER COLUMN col TYPE NOT NULL → ALTER COLUMN "col" SET NOT NULL
+   * SQL Server: ALTER TABLE t ALTER COLUMN col TYPE NOT NULL
+   * PostgreSQL: ALTER TABLE t ALTER COLUMN "col" SET NOT NULL
+   */
+  private convertAlterColumnNotNull(sql: string): string {
+    return sql.replace(
+      /ALTER\s+COLUMN\s+("?\w+"?)\s+\w+(?:\s*\([^)]*\))?\s+NOT\s+NULL/gi,
+      (_match, col: string) => {
+        const quotedCol = col.startsWith('"') ? col : `"${col}"`;
+        return `ALTER COLUMN ${quotedCol} SET NOT NULL`;
+      }
+    );
+  }
+
+  /**
+   * Convert ADD CONSTRAINT name DEFAULT (val) FOR col
+   * → ALTER COLUMN "col" SET DEFAULT val
+   * SQL Server uses DEFAULT...FOR to set a named default constraint.
+   * PostgreSQL uses ALTER COLUMN...SET DEFAULT.
+   */
+  private convertDefaultFor(sql: string): string {
+    const m = sql.match(
+      /^(ALTER\s+TABLE\s+\S+)\s+ADD\s+CONSTRAINT\s+\S+\s+DEFAULT\s+\(?([^)]*?)\)?\s+FOR\s+("?\w+"?)\s*;?\s*$/i
+    );
+    if (!m) return sql;
+    const tableClause = m[1];
+    const defaultVal = m[2].trim();
+    const col = m[3].startsWith('"') ? m[3] : `"${m[3]}"`;
+    return `${tableClause}\nALTER COLUMN ${col} SET DEFAULT ${defaultVal}`;
+  }
+
+  /**
+   * Remove inline FOREIGN KEY keyword in ADD COLUMN with constraint.
+   * SQL Server: ADD col TYPE CONSTRAINT name FOREIGN KEY REFERENCES t(c)
+   * PostgreSQL: ADD col TYPE CONSTRAINT name REFERENCES t(c)
+   * The FOREIGN KEY keyword is only valid in table-level constraints, not inline.
+   */
+  private removeInlineForeignKey(sql: string): string {
+    // Match: ADD "col" TYPE ... CONSTRAINT "name" FOREIGN KEY REFERENCES ...
+    // Remove just the "FOREIGN KEY" between CONSTRAINT name and REFERENCES
+    return sql.replace(
+      /(ADD\s+(?:COLUMN\s+)?"?\w+"?\s+\w+(?:\s+(?:NOT\s+)?NULL)?)\s+(CONSTRAINT\s+"?\w+"?\s+)FOREIGN\s+KEY\s+(REFERENCES\b)/gi,
+      '$1\n    $2$3'
+    );
+  }
+
+  /**
+   * Convert multi-column ADD to PostgreSQL ADD COLUMN syntax.
+   * SQL Server: ALTER TABLE t ADD col1 TYPE, col2 TYPE
+   * PostgreSQL: ALTER TABLE t ADD COLUMN "col1" TYPE, ADD COLUMN "col2" TYPE
+   * Only applies when there's no CONSTRAINT keyword (those are handled separately).
+   */
+  private convertMultiColumnAdd(sql: string): string {
+    // Match ALTER TABLE ... ADD (non-anchored to handle leading comments)
+    const addMatch = sql.match(/(ALTER\s+TABLE\s+\S+)\s+ADD\s+/i);
+    if (!addMatch || addMatch.index === undefined) return sql;
+    // Skip if this is a constraint addition (ADD CONSTRAINT)
+    if (/\bADD\s+CONSTRAINT\b/i.test(sql)) return sql;
+    // Skip if already has ADD COLUMN
+    if (/\bADD\s+COLUMN\b/i.test(sql)) return sql;
+
+    const prefix = sql.slice(0, addMatch.index);
+    const tableClause = addMatch[1];
+    const afterAdd = sql.slice(addMatch.index + addMatch[0].length);
+
+    // Split by comma at top level (respecting parentheses for DEFAULT (...) etc)
+    const columns = this.splitTopLevelCommas(afterAdd);
+    if (columns.length === 0) return sql;
+
+    // Check that each part looks like a column definition (starts with an identifier + type)
+    const colDefs = columns.map(c => {
+      const trimmed = c.trim().replace(/;?\s*$/, '');
+      if (!trimmed) return null;
+      // Quote the column name if it's a PascalCase bare identifier
+      const colMatch = trimmed.match(/^("?\w+"?)(\s+.*)$/s);
+      if (!colMatch) return null;
+      let colName = colMatch[1];
+      const rest = colMatch[2];
+      if (!colName.startsWith('"') && /[A-Z]/.test(colName)) {
+        colName = `"${colName}"`;
+      }
+      return `ADD COLUMN ${colName}${rest}`;
+    });
+
+    if (colDefs.some(d => d === null)) return sql;
+
+    return `${prefix}${tableClause}\n ${colDefs.join(',\n ')}`;
+  }
+
+  /** Split on commas at depth 0, respecting parens and string literals */
+  private splitTopLevelCommas(str: string): string[] {
+    const parts: string[] = [];
+    let current = '';
+    let depth = 0;
+    let inString = false;
+    for (let i = 0; i < str.length; i++) {
+      const ch = str[i];
+      if (inString) {
+        current += ch;
+        if (ch === "'" && i + 1 < str.length && str[i + 1] === "'") {
+          current += str[++i];
+        } else if (ch === "'") {
+          inString = false;
+        }
+        continue;
+      }
+      if (ch === "'") { inString = true; current += ch; continue; }
+      if (ch === '(') { depth++; current += ch; continue; }
+      if (ch === ')') { depth--; current += ch; continue; }
+      if (ch === ',' && depth === 0) {
+        parts.push(current);
+        current = '';
+        continue;
+      }
+      current += ch;
+    }
+    if (current.trim()) parts.push(current);
+    return parts;
   }
 }

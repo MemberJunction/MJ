@@ -1,5 +1,5 @@
 /**
- * SoftFKConfigEmitter — reads/merges additionalSchemaInfo JSON for soft foreign keys.
+ * SoftFKConfigEmitter — reads/merges additionalSchemaInfo JSON for soft PKs and FKs.
  * File-emission only — produces updated JSON content, never writes to disk directly.
  */
 import type { EmittedFile, SoftFKEntry, SourceSchemaInfo, TargetTableConfig } from './interfaces.js';
@@ -7,7 +7,7 @@ import type { EmittedFile, SoftFKEntry, SourceSchemaInfo, TargetTableConfig } fr
 /** Shape of one table entry in additionalSchemaInfo. */
 interface SchemaInfoTableEntry {
     TableName: string;
-    PrimaryKey?: Array<{ FieldName: string }>;
+    PrimaryKey?: Array<{ FieldName: string; Description?: string }>;
     ForeignKeys?: Array<{
         FieldName: string;
         SchemaName: string;
@@ -20,7 +20,7 @@ interface SchemaInfoTableEntry {
 type AdditionalSchemaInfo = Record<string, SchemaInfoTableEntry[]>;
 
 /**
- * Manages soft FK definitions in the additionalSchemaInfo JSON file.
+ * Manages soft PK and FK definitions in the additionalSchemaInfo JSON file.
  */
 export class SoftFKConfigEmitter {
     /**
@@ -80,8 +80,41 @@ export class SoftFKConfigEmitter {
     }
 
     /**
+     * Add soft PK entries for integration tables.
+     * Uses the natural PK field name(s) from the source system. Supports composite PKs.
+     */
+    MergeSoftPKs(existing: AdditionalSchemaInfo, targetConfigs: TargetTableConfig[]): AdditionalSchemaInfo {
+        const result: AdditionalSchemaInfo = JSON.parse(JSON.stringify(existing));
+
+        for (const config of targetConfigs) {
+            if (config.PrimaryKeyFields.length === 0) continue;
+
+            if (!result[config.SchemaName]) {
+                result[config.SchemaName] = [];
+            }
+
+            const schemaEntries = result[config.SchemaName];
+            let tableEntry = schemaEntries.find(t => t.TableName === config.TableName);
+
+            if (!tableEntry) {
+                tableEntry = { TableName: config.TableName };
+                schemaEntries.push(tableEntry);
+            }
+
+            // Set soft PK to the natural PK field(s) from the source system
+            tableEntry.PrimaryKey = config.PrimaryKeyFields.map(fieldName => ({
+                FieldName: fieldName,
+                Description: `Primary key from source system`,
+            }));
+        }
+
+        return result;
+    }
+
+    /**
      * Extract soft FK entries from source schema relationships + target configs.
      * Maps source relationship field names → target column names using the target config.
+     * FKs point to the natural PK field on target tables (first PK field for composite keys).
      */
     GenerateConfigEntries(
         sourceSchema: SourceSchemaInfo,
@@ -115,13 +148,17 @@ export class SoftFKConfigEmitter {
                 const columnConfig = targetConfig.Columns.find(c => c.SourceFieldName === rel.FieldName);
                 const columnName = columnConfig ? columnConfig.TargetColumnName : rel.FieldName;
 
+                // FK points to the natural PK field on the target table
+                const targetPKField = targetOfFK.PrimaryKeyFields[0];
+                if (!targetPKField) continue; // Target has no PK — skip FK
+
                 const entry: SoftFKEntry = {
                     SchemaName: targetConfig.SchemaName,
                     TableName: targetConfig.TableName,
                     FieldName: columnName,
                     TargetSchemaName: targetOfFK.SchemaName,
                     TargetTableName: targetOfFK.TableName,
-                    TargetFieldName: 'ID', // Always reference the MJ-generated PK
+                    TargetFieldName: targetPKField,
                 };
 
                 // Deduplicate against already-added entries
@@ -145,8 +182,8 @@ export class SoftFKConfigEmitter {
     EmitConfigFile(configPath: string, mergedConfig: AdditionalSchemaInfo): EmittedFile {
         return {
             FilePath: configPath,
-            Content: JSON.stringify(mergedConfig, null, 2) + '\n',
-            Description: 'Updated additionalSchemaInfo with soft FK definitions for integration tables',
+            Content: JSON.stringify(mergedConfig, null, 4) + '\n',
+            Description: 'Updated additionalSchemaInfo with soft PK and FK definitions for integration tables',
         };
     }
 }

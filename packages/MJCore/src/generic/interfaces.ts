@@ -5,8 +5,9 @@ import { RunViewParams } from "../views/runView";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
-import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
+import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
 import { RunQueryParams } from "./runQuery";
+import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { LibraryInfo } from "./libraryInfo";
 import { CompositeKey } from "./compositeKey";
 import { ExplorerNavigationItem } from "./explorerNavigationItem";
@@ -454,6 +455,8 @@ export interface IMetadataProvider {
 
     get QueryParameters(): QueryParameterInfo[]
 
+    get QueryDependencies(): QueryDependencyInfo[]
+
     get SQLDialects(): SQLDialectInfo[]
 
     get QuerySQLs(): QuerySQLInfo[]
@@ -598,11 +601,16 @@ export interface IMetadataProvider {
     RemoveLocalMetadataFromStorage(): Promise<void>
 
     /**
-     * Always retrieves data from the server - this method does NOT check cache. To use cached local values if available, call GetAndCacheDatasetByName() instead
-     * @param datasetName 
-     * @param itemFilters 
+     * Retrieves a dataset by name. When `forceRefresh` is true, bypasses any in-memory or local cache
+     * and fetches directly from the database. When false (default), server-side providers may serve
+     * from LocalCacheManager if `TrustLocalCacheCompletely` is true.
+     * @param datasetName
+     * @param itemFilters
+     * @param contextUser
+     * @param providerToUse
+     * @param forceRefresh When true, bypasses all caching and fetches fresh data from the database
      */
-    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType>;
+    GetDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider, forceRefresh?: boolean): Promise<DatasetResultType>;
     /**
      * Retrieves the date status information for a dataset and all its items from the server. This method will match the datasetName and itemFilters to the server's dataset and item filters to determine a match
      * @param datasetName 
@@ -746,6 +754,23 @@ export type RunViewResult<T = any> = {
      * Only present if Aggregates were requested.
      */
     AggregateExecutionTime?: number;
+
+    /**
+     * If an `OnDataChanged` callback was provided in {@link RunViewParams}, this function
+     * unregisters that callback. Call this during cleanup (e.g., Angular `ngOnDestroy`,
+     * React effect cleanup) to prevent memory leaks.
+     *
+     * For long-lived callers like engines, this is typically not needed — the callback
+     * persists for the process lifetime.
+     *
+     * @example
+     * ```typescript
+     * const result = await rv.RunView({ EntityName: 'Users', OnDataChanged: (e) => { ... } });
+     * // Later:
+     * result.Unsubscribe?.();
+     * ```
+     */
+    Unsubscribe?: () => void;
 }
 
 /**
@@ -905,6 +930,16 @@ export type RunQueryResult = {
      * Only differs from RowCount when StartRow or MaxRows are used.
      */
     TotalRowCount: number;
+    /**
+     * The page number returned (1-based). Derived from StartRow and MaxRows.
+     * Undefined when paging is not active.
+     */
+    PageNumber?: number;
+    /**
+     * The page size used for this result.
+     * Undefined when paging is not active.
+     */
+    PageSize?: number;
     ExecutionTime: number;
     ErrorMessage: string;
     /**
@@ -1050,6 +1085,16 @@ export interface IRunQueryProvider {
      * @returns Response containing status and fresh data only for stale caches
      */
     RunQueriesWithCacheCheck?<T = unknown>(params: RunQueryWithCacheCheckParams[], contextUser?: UserInfo): Promise<RunQueriesWithCacheCheckResponse<T>>
+
+    /**
+     * Executes a query from a `QueryExecutionSpec` — the lower-layer interface-based entry point.
+     * Runs the full pipeline: composition resolution → Nunjucks template processing → SQL execution.
+     * Used for both saved queries (upper layer maps QueryInfo to spec) and transient test queries.
+     * @param spec - The execution spec describing the query, parameters, and inline dependencies
+     * @param contextUser - Optional user context for permissions (required server-side)
+     * @returns Query results including data rows and execution metadata
+     */
+    ExecuteQueryFromSpec(spec: QueryExecutionSpec, contextUser?: UserInfo): Promise<RunQueryResult>
 }
 
 /**
@@ -1168,6 +1213,7 @@ export class AllMetadata {
     AllQueryPermissions: QueryPermissionInfo[] = [];
     AllQueryEntities: QueryEntityInfo[] = [];
     AllQueryParameters: QueryParameterInfo[] = [];
+    AllQueryDependencies: QueryDependencyInfo[] = [];
     AllSQLDialects: SQLDialectInfo[] = [];
     AllQuerySQLs: QuerySQLInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];

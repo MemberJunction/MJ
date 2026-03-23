@@ -480,6 +480,7 @@ export class SaveQueryPanelComponent {
   @Input() QueryName = '';
   @Input() QueryDescription = '';
   @Input() SQL = '';
+  @Input() Plan = '';
 
   @Output() Saved = new EventEmitter<SaveQueryResult>();
   @Output() Cancelled = new EventEmitter<void>();
@@ -663,6 +664,9 @@ export class SaveQueryPanelComponent {
 
       if (this.Description?.trim()) {
         query.Description = this.Description.trim();
+      }
+      if (this.Plan?.trim()) {
+        query.TechnicalDescription = this.Plan.trim();
       }
       if (this.selectedCategoryId) {
         query.CategoryID = this.selectedCategoryId;

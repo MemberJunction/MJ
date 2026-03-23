@@ -103,7 +103,7 @@ export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, Af
                 category: {
                     name: 'Other',
                     icon: 'fa-ellipsis-h',
-                    color: '#6c757d'
+                    color: 'var(--mj-text-muted)'
                 },
                 placeholders: uncategorized
             });

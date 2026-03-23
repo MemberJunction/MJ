@@ -15,7 +15,7 @@
 import { DataContext } from '@memberjunction/data-context';
 import type { SkipMessage } from './conversation-types';
 import type { SkipEntityInfo } from './entity-metadata-types';
-import type { SkipQueryInfo } from './query-types';
+import type { SkipQueryInfo, SkipQueryCatalogEntry } from './query-types';
 import type { SkipAPIRequestAPIKey } from './auth-types';
 import type { SkipAPIArtifact } from './artifact-types';
 import type { SkipAPIAgentNote, SkipAPIAgentNoteType } from './agent-types';
@@ -147,6 +147,15 @@ export class SkipAPIRequest {
     queries: SkipQueryInfo[];
 
     /**
+     * Lightweight catalog of ALL query names and category paths (regardless of status).
+     * Always populated regardless of the includeQueries flag, enabling accurate
+     * collision detection without the overhead of full query metadata.
+     * Includes all statuses because the database enforces name+category uniqueness
+     * across all queries, not just approved ones.
+     */
+    queryCatalog?: SkipQueryCatalogEntry[];
+
+    /**
      * The conversation ID
      */
     conversationID: string;
@@ -212,6 +221,13 @@ export class SkipAPIRequest {
      * The payload is separate from artifacts - it represents work-in-progress data that hasn't been finalized yet.
      */
     payload?: Record<string, any>;
+
+    /**
+     * Optional reference ID from the calling system. When the MJ API proxies a request
+     * to Skip, this contains the MJ-side Agent Run ID, enabling correlation between
+     * the caller's execution tracking and Skip's execution tracking.
+     */
+    externalReferenceID?: string;
 }
 
 /**

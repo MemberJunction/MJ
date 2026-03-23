@@ -77,10 +77,6 @@ const codegenConfig = {
     }
   ],
   customSQLScripts: [
-    {
-      scriptFile: './SQL Scripts/MJ_BASE_BEFORE_SQL.sql',
-      when: 'before-all',
-    },
   ],
   dbSchemaJSONOutput: {
     excludeEntities: [],

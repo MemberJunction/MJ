@@ -294,6 +294,18 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
+## Human-in-the-Loop (HITL)
+
+MemberJunction agents support **human-in-the-loop feedback requests** — a mechanism for agents to pause execution and request human input before proceeding. This enables approval workflows, quality review gates, and collaborative decision-making between agents and humans.
+
+Key capabilities:
+- **Assignment strategies**: 5-level resolution chain (per-invocation → agent type → category tree → request type → fallback) determines who receives each request
+- **Agent categories**: Hierarchical category tree with inherited assignment strategies
+- **Request types**: Configurable request types (Approval, Review, Input, Escalation, Custom) with response schemas
+- **Request lifecycle**: Pending → Assigned → In Progress → Completed/Expired/Cancelled with full audit trail
+
+For the complete guide including architecture diagrams, integration examples, and API reference, see [HUMAN_IN_THE_LOOP.md](./HUMAN_IN_THE_LOOP.md).
+
 ## Architecture Documentation
 
 For multi-tenant memory scoping (notes/examples), see [AGENT_MEMORY_SCOPING.md](./AGENT_MEMORY_SCOPING.md).

@@ -30,11 +30,11 @@
 // Ensure button groups have correct colors (override any conflicting styles)
 kendo-buttongroup button,
 kendo-buttongroup .k-button {
-    color: var(--navy) !important;
+    color: var(--mj-brand-secondary) !important;
     
     &[aria-pressed="true"],
     &.k-selected {
-        color: var(--white-color) !important;
+        color: var(--mj-text-inverse) !important;
     }
 }
 

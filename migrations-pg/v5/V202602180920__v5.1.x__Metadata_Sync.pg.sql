@@ -21,21 +21,6 @@ UPDATE pg_cast SET castcontext = 'i'
 WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 
 
--- ===================== DDL: Tables, PKs, Indexes =====================
-
-
--- ===================== Helper Functions (fn*) =====================
-
-
--- ===================== Views =====================
-
-
--- ===================== Stored Procedures (sp*) =====================
-
-
--- ===================== Triggers =====================
-
-
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
 -- SQL Logging Session
@@ -812,12 +797,3 @@ BEGIN
   p_ID_df9042ed := '23F8423E-F36B-1410-8D9C-00021F8B792E';
   PERFORM __mj."spUpdateQuery"(p_Name := p_Name_df9042ed, p_CategoryID := p_CategoryID_df9042ed, p_UserQuestion := p_UserQuestion_df9042ed, p_Description := p_Description_df9042ed, p_SQL := p_SQL_df9042ed, p_TechnicalDescription := p_TechnicalDescription_df9042ed, p_OriginalSQL := p_OriginalSQL_df9042ed, p_Feedback := p_Feedback_df9042ed, p_Status := p_Status_df9042ed, p_QualityRank := p_QualityRank_df9042ed, p_ExecutionCostRank := p_ExecutionCostRank_df9042ed, p_UsesTemplate := p_UsesTemplate_df9042ed, p_AuditQueryRuns := p_AuditQueryRuns_df9042ed, p_CacheEnabled := p_CacheEnabled_df9042ed, p_CacheTTLMinutes := p_CacheTTLMinutes_df9042ed, p_CacheMaxSize := p_CacheMaxSize_df9042ed, p_EmbeddingVector := p_EmbeddingVector_df9042ed, p_EmbeddingModelID := p_EmbeddingModelID_df9042ed, p_CacheValidationSQL := p_CacheValidationSQL_df9042ed, p_ID := p_ID_df9042ed);
 END $$;
-
-
--- ===================== FK & CHECK Constraints =====================
-
-
--- ===================== Grants =====================
-
-
--- ===================== Comments =====================

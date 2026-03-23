@@ -136,13 +136,11 @@
 
         <!-- Agent Response Form (shown only for last message by owner) -->
         @if (isLastMessageInConversation && isConversationOwner && responseForm) {
-          <mj-agent-response-form
-            [responseForm]="responseForm"
-            [disabled]="isProcessing"
-            [isLastMessage]="isLastMessageInConversation"
-            [isConversationOwner]="isConversationOwner"
-            (formSubmitted)="onFormSubmitted($event)">
-          </mj-agent-response-form>
+          <mj-dynamic-form
+            [FormDefinition]="responseForm"
+            [Disabled]="isProcessing"
+            (FormSubmitted)="onFormSubmitted($event)">
+          </mj-dynamic-form>
         }
 
         <!-- Actionable Commands (shown only for last message by owner) -->

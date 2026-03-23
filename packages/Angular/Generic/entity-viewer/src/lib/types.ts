@@ -430,6 +430,19 @@ export interface QuickSaveEvent {
 }
 
 /**
+ * Data emitted by QuickSaveDialog when user clicks "Customize columns, filters & sorting..."
+ * Carries the partially-filled form data so the config panel can continue the new-view creation.
+ */
+export interface QuickSaveAdvancedEvent {
+  /** View name entered so far */
+  Name: string;
+  /** View description entered so far */
+  Description: string;
+  /** Whether the view should be shared */
+  IsShared: boolean;
+}
+
+/**
  * Result of a view save operation (for notification display)
  */
 export interface ViewSaveResult {

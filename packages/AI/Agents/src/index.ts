@@ -23,6 +23,7 @@ export * from './AgentDataPreloader';
 export * from './agent-context-injector';
 export * from './memory-manager-agent';
 export * from './query-builder-agent';
+export * from './MJAIAgentRequestEntityServer';
 
 // Re-export from ai-reranker for backward compatibility
 export {

@@ -868,6 +868,7 @@ Unhandled promise rejections are caught and logged without crashing the server.
 - [@memberjunction/server-bootstrap](../ServerBootstrap/README.md) -- Pre-built class registration manifest for tree-shaking prevention
 - [MJAPI](../../MJAPI/README.md) -- Reference server application that consumes this package
 - [@memberjunction/core](../MJCore/README.md) -- Core framework that MJServer exposes via API
+- [Caching & Pub/Sub Guide](/guides/CACHING_AND_PUBSUB_GUIDE.md) -- Comprehensive guide to caching architecture, Redis cross-server sync, and GraphQL cache invalidation subscriptions
 
 ## Troubleshooting
 

@@ -112,6 +112,23 @@ export interface RunOptions {
 export interface DoctorOptions {
   /** Show detailed diagnostic output. */
   Verbose?: boolean;
+  /**
+   * Generate a diagnostic report file (`mj-diagnostic-report.md`)
+   * in the target directory. The report contains environment info, install state,
+   * sanitized config, diagnostic checks, key file existence, and the full event log.
+   * Passwords and secrets are redacted automatically.
+   */
+  Report?: boolean;
+  /**
+   * Generate an extended diagnostic report that includes everything from
+   * `Report` plus: sanitized config file snapshots (`.env`, `environment.ts`,
+   * `mj.config.cjs`), auth cross-file validation, and service startup log
+   * capture (briefly starts MJAPI and Explorer to detect runtime errors).
+   *
+   * This is slower than `Report` (~60s extra) due to service startup capture.
+   * Implies `Report: true`.
+   */
+  ReportExtended?: boolean;
 }
 
 /**

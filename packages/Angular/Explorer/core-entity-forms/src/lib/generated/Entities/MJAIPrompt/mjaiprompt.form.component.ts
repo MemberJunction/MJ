@@ -32,8 +32,8 @@ export class MJAIPromptFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIPromptModels', sectionName: 'AI Prompt Models', isExpanded: false },
             { sectionKey: 'mJAIAgentSteps', sectionName: 'AI Agent Steps', isExpanded: false },
             { sectionKey: 'mJAIPromptRunsPromptID', sectionName: 'AI Prompt Runs (Prompt)', isExpanded: false },
-            { sectionKey: 'mJAIPromptRunsChildPromptID', sectionName: 'AI Prompt Runs (Child Prompt ID)', isExpanded: false },
-            { sectionKey: 'mJAIPromptRunsJudgeID', sectionName: 'AI Prompt Runs (Judge ID)', isExpanded: false },
+            { sectionKey: 'mJAIPromptRunsChildPromptID', sectionName: 'AI Prompt Runs (Child Prompt)', isExpanded: false },
+            { sectionKey: 'mJAIPromptRunsJudgeID', sectionName: 'AI Prompt Runs (Judge)', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
             { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false }
         ]);

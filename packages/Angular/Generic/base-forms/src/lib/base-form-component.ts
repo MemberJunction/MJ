@@ -7,7 +7,8 @@ import {
 import { Subject, Subscription, debounceTime } from 'rxjs';
 import {
   EntityInfo, ValidationResult, BaseEntity, EntityPermissionType,
-  EntityRelationshipInfo, Metadata, RunViewParams, LogError,
+  EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo,
+  Metadata, RunViewParams, LogError,
   RecordDependency, BaseEntityEvent, CompositeKey, RunView, RunViewResult
 } from '@memberjunction/core';
 import { MJEventType, MJGlobal, ValidationErrorInfo } from '@memberjunction/global';
@@ -493,6 +494,67 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return relatedEntities && relatedEntities.length > 0;
     }
     return false;
+  }
+
+  // #endregion
+
+  // #region Organic Key Helpers
+
+  /**
+   * Returns all active organic keys for the current entity, or an empty array if none.
+   */
+  public get OrganicKeys(): EntityOrganicKeyInfo[] {
+    if (this.record) {
+      return (<BaseEntity>this.record).EntityInfo.OrganicKeys || [];
+    }
+    return [];
+  }
+
+  /**
+   * Whether the current entity has any active organic keys with related entities configured.
+   */
+  public get HasOrganicKeys(): boolean {
+    return this.OrganicKeys.some(ok => ok.RelatedEntities.length > 0);
+  }
+
+  /**
+   * Returns all organic key related entities across all organic keys, flattened and sorted.
+   */
+  public get AllOrganicKeyRelatedEntities(): { OrganicKey: EntityOrganicKeyInfo; RelatedEntity: EntityOrganicKeyRelatedEntityInfo }[] {
+    const result: { OrganicKey: EntityOrganicKeyInfo; RelatedEntity: EntityOrganicKeyRelatedEntityInfo }[] = [];
+    for (const ok of this.OrganicKeys) {
+      for (const re of ok.RelatedEntities) {
+        result.push({ OrganicKey: ok, RelatedEntity: re });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Builds RunViewParams for a specific organic key related entity.
+   */
+  public BuildOrganicKeyViewParams(
+    organicKeyRelatedEntity: EntityOrganicKeyRelatedEntityInfo,
+    organicKey: EntityOrganicKeyInfo
+  ): RunViewParams {
+    if (this.record) {
+      return EntityInfo.BuildOrganicKeyViewParams(this.record, organicKeyRelatedEntity, organicKey);
+    }
+    return {};
+  }
+
+  /**
+   * Convenience method to build organic key view params by organic key name and related entity name.
+   */
+  public BuildOrganicKeyViewParamsByNames(organicKeyName: string, relatedEntityName: string): RunViewParams {
+    const ok = this.OrganicKeys.find(k => k.Name.trim().toLowerCase() === organicKeyName.trim().toLowerCase());
+    if (ok) {
+      const re = ok.RelatedEntities.find(r => r.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase());
+      if (re) {
+        return this.BuildOrganicKeyViewParams(re, ok);
+      }
+    }
+    return {};
   }
 
   // #endregion

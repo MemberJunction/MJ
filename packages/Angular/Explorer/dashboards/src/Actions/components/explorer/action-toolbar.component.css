@@ -3,8 +3,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: var(--kendo-color-surface);
-  border-bottom: 1px solid var(--kendo-color-border);
+  background: var(--mj-bg-surface-card);
+  border-bottom: 1px solid var(--mj-border-default);
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -38,7 +38,7 @@
 
 .search-container i.fa-search {
   font-size: 13px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 
 /* Dropdown Container */
@@ -53,8 +53,8 @@
 }
 
 .dropdown-container > button.active {
-  border-color: var(--kendo-color-primary);
-  background: var(--kendo-color-primary-subtle);
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 .dropdown-container > button i:last-child {
@@ -63,8 +63,8 @@
 }
 
 .filter-badge {
-  background: var(--kendo-color-primary);
-  color: white;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
   font-size: 10px;
   font-weight: 600;
   padding: 2px 6px;
@@ -78,8 +78,8 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  background: var(--kendo-color-surface);
-  border: 1px solid var(--kendo-color-border);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   z-index: 100;
@@ -98,7 +98,7 @@
 }
 
 .dropdown-section:not(:last-child) {
-  border-bottom: 1px solid var(--kendo-color-border);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .section-header {
@@ -109,7 +109,7 @@
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
   letter-spacing: 0.5px;
 }
 
@@ -136,11 +136,11 @@
 }
 
 .filter-option:hover {
-  background: var(--kendo-color-base-hover);
+  background: var(--mj-bg-surface-hover);
 }
 
 .filter-option.selected {
-  background: var(--kendo-color-primary-subtle);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 .filter-option input[type="checkbox"] {
@@ -150,11 +150,11 @@
 .filter-option i {
   font-size: 13px;
   width: 18px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 
 .filter-option.selected i {
-  color: var(--kendo-color-primary);
+  color: var(--mj-brand-primary);
 }
 
 .status-dot {
@@ -164,20 +164,20 @@
 }
 
 .status-dot[data-status="Active"] {
-  background: var(--kendo-color-success);
+  background: var(--mj-status-success);
 }
 
 .status-dot[data-status="Pending"] {
-  background: var(--kendo-color-warning);
+  background: var(--mj-status-warning);
 }
 
 .status-dot[data-status="Disabled"] {
-  background: var(--kendo-color-error);
+  background: var(--mj-status-error);
 }
 
 .dropdown-footer {
   padding: 8px 12px;
-  border-top: 1px solid var(--kendo-color-border);
+  border-top: 1px solid var(--mj-border-default);
 }
 
 .dropdown-footer button {
@@ -200,21 +200,21 @@
 }
 
 .sort-option:hover {
-  background: var(--kendo-color-base-hover);
+  background: var(--mj-bg-surface-hover);
 }
 
 .sort-option.selected {
-  background: var(--kendo-color-primary-subtle);
-  color: var(--kendo-color-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 .sort-option i:first-child {
   width: 18px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 
 .sort-option.selected i:first-child {
-  color: var(--kendo-color-primary);
+  color: var(--mj-brand-primary);
 }
 
 .sort-option .direction-icon {
@@ -239,13 +239,13 @@
   align-items: baseline;
   gap: 4px;
   font-size: 13px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
   white-space: nowrap;
 }
 
 .results-count .count {
   font-weight: 600;
-  color: var(--kendo-color-on-app-surface);
+  color: var(--mj-text-primary);
   font-size: 14px;
 }
 
@@ -256,7 +256,7 @@
 /* View Toggle */
 .view-toggle {
   display: flex;
-  border: 1px solid var(--kendo-color-border);
+  border: 1px solid var(--mj-border-default);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -268,7 +268,7 @@
 }
 
 .view-toggle button:not(:last-child) {
-  border-right: 1px solid var(--kendo-color-border);
+  border-right: 1px solid var(--mj-border-default);
 }
 
 /* Responsive */

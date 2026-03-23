@@ -300,6 +300,10 @@ export class SQLCodeGenBase {
                 succeedSpinner(`Permissions applied (${(new Date().getTime() - step4StartTime.getTime())/1000}s)`);
             }
 
+            // STEP 4.5 - Emit sp_refreshview for modified custom base view entities into the
+            // migration log file so other environments pick up schema changes automatically.
+            this.emitCustomBaseViewRefreshes();
+
             // STEP 5 - execute any custom SQL scripts that should run afterwards
             startSpinner('Running post-generation SQL scripts...');
             const step5StartTime: Date = new Date();
@@ -688,6 +692,57 @@ export class SQLCodeGenBase {
         logIf(configInfo.verboseOutput, `SQL Generated for ${entity.Name}: ${description}`);
     }
 
+    /**
+     * Emits sp_refreshview statements into the migration log file for modified custom base view
+     * entities (BaseViewGenerated === false). This ensures that when the migration runs on other
+     * environments, custom base views affected by schema changes get refreshed automatically.
+     * Only entities in the modified or new entity lists are included.
+     */
+    protected emitCustomBaseViewRefreshes(): void {
+        if (!this._dbProvider.NeedsViewRefresh) {
+            return; // PostgreSQL doesn't need view refreshes
+        }
+
+        const qualifyingEntities = this.getModifiedCustomBaseViewEntities();
+        if (qualifyingEntities.length === 0) {
+            return;
+        }
+
+        const refreshSQL = this.buildCustomBaseViewRefreshSQL(qualifyingEntities);
+        SQLLogging.appendToSQLLogFile(
+            refreshSQL,
+            'Refresh custom base views for modified entities so schema changes are picked up'
+        );
+    }
+
+    /**
+     * Returns entities from the modified and new entity lists that have custom base views
+     * (BaseViewGenerated === false), are included in the API, and are not virtual.
+     */
+    protected getModifiedCustomBaseViewEntities(): EntityInfo[] {
+        const md = new Metadata();
+        const modifiedOrNewNames = [
+            ...ManageMetadataBase.modifiedEntityList,
+            ...ManageMetadataBase.newEntityList,
+        ];
+
+        return md.Entities.filter(e =>
+            modifiedOrNewNames.includes(e.Name) &&
+            !e.BaseViewGenerated &&
+            e.IncludeInAPI &&
+            !e.VirtualEntity
+        );
+    }
+
+    /**
+     * Builds a combined SQL string of sp_refreshview statements for the given entities.
+     */
+    protected buildCustomBaseViewRefreshSQL(entities: EntityInfo[]): string {
+        return entities
+            .map(e => this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.BaseView))
+            .join('\n');
+    }
+
     public async generateSingleEntitySQLToSeparateFiles(options: {
         pool: CodeGenConnection, 
         entity: EntityInfo, 
@@ -794,8 +849,16 @@ export class SQLCodeGenBase {
 
             // now, append the permissions to the return string IF we did NOT generate the base view - because if we generated the base view, that
             // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
-            if (!options.entity.BaseViewGenerated)
+            if (!options.entity.BaseViewGenerated) {
+                // For custom base views (BaseViewGenerated=false), emit sp_refreshview before permissions
+                // so that SQL Server picks up schema changes (new columns from migrations) before we
+                // grant permissions. Developers no longer need to remember to add this manually.
+                if (this._dbProvider.NeedsViewRefresh && !options.entity.VirtualEntity) {
+                    const refreshSQL = this._dbProvider.generateViewRefreshSQL(options.entity.SchemaName, options.entity.BaseView);
+                    sRet += refreshSQL + '\n' + this._dbProvider.BatchSeparator + '\n';
+                }
                 sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
+            }
 
             // CREATE SP
             if (options.entity.AllowCreateAPI && !options.entity.VirtualEntity) {

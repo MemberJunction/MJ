@@ -37,7 +37,15 @@ export interface TargetTableConfig {
     TableName: string;
     /** MJ entity display name (e.g., "HubSpot Deal", "YM Member"). */
     EntityName: string;
-    /** Column configurations. */
+    /** Human-readable description for the table (emitted as sp_addextendedproperty). */
+    Description?: string;
+    /**
+     * Primary key field name(s) from the source system.
+     * These columns get a UNIQUE constraint and are registered as soft PKs.
+     * Supports composite PKs (multiple fields). Must be a subset of Columns.
+     */
+    PrimaryKeyFields: string[];
+    /** Column configurations (includes PK fields — they are regular columns). */
     Columns: TargetColumnConfig[];
     /** Soft FK relationships to configure. */
     SoftForeignKeys: SoftFKEntry[];
@@ -61,6 +69,8 @@ export interface TargetColumnConfig {
     Scale: number | null;
     /** Default value SQL expression (null if none). */
     DefaultValue: string | null;
+    /** Human-readable description for the column (emitted as sp_addextendedproperty). */
+    Description?: string;
 }
 
 // ─── Soft Foreign Keys ──────────────────────────────────────────────

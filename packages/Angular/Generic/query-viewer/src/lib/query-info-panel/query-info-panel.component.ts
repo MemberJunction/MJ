@@ -12,7 +12,8 @@ import {
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { QueryInfo, QueryFieldInfo, QueryParameterInfo } from '@memberjunction/core';
+import { QueryInfo, QueryFieldInfo, QueryParameterInfo, QueryDependencyInfo } from '@memberjunction/core';
+import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 
 /**
@@ -77,6 +78,7 @@ export class QueryInfoPanelComponent implements OnInit, OnDestroy {
 
     @Output() Close = new EventEmitter<void>();
     @Output() OpenRecord = new EventEmitter<OpenQueryRecordEvent>();
+    @Output() CompositionTokenClick = new EventEmitter<CompositionTokenClickEvent>();
 
     // ========================================
     // Internal State
@@ -131,6 +133,24 @@ export class QueryInfoPanelComponent implements OnInit, OnDestroy {
 
     public OnClose(): void {
         this.Close.emit();
+    }
+
+    public OnCompositionTokenClick(event: CompositionTokenClickEvent): void {
+        this.CompositionTokenClick.emit(event);
+    }
+
+    public OnDependentQueryClick(dep: QueryDependencyInfo): void {
+        // Navigate to the dependent (referencing) query
+        const depQuery = dep.QueryInfo;
+        const categoryPath = depQuery?.CategoryPath?.replace(/^\/|\/$/g, '') || '';
+        const fullPath = categoryPath ? `${categoryPath}/${dep.Query}` : dep.Query;
+        this.CompositionTokenClick.emit({
+            FullToken: `{{query:"${fullPath}"}}`,
+            QueryName: dep.Query,
+            CategorySegments: categoryPath ? categoryPath.split('/') : [],
+            FullPath: fullPath,
+            MouseEvent: new MouseEvent('click')
+        });
     }
 
     public OnOpenRecord(): void {

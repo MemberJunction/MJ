@@ -87,15 +87,15 @@ export class LoadingComponent {
    * CSS color for the loading text.
    * Accepts any valid CSS color value.
    */
-  @Input() textColor = '#757575';
+  @Input() textColor = '';
 
   /**
    * CSS color for the logo (solid color).
    * Accepts any valid CSS color value.
-   * Default is MJ blue (#264FAF).
+   * When empty, uses --mj-logo-color CSS variable (adapts to light/dark theme).
    * Ignored if logoGradient is provided.
    */
-  @Input() logoColor = '#264FAF';
+  @Input() logoColor = '';
 
   /**
    * Gradient configuration for the logo.
@@ -125,18 +125,19 @@ export class LoadingComponent {
   }
 
   get textStyle(): string {
-    return `color: ${this.textColor}`;
+    return this.textColor ? `color: ${this.textColor}` : '';
   }
 
   /**
    * Get the fill value for the SVG paths.
-   * Returns a gradient URL reference if gradient is set, otherwise the solid color.
+   * Returns a gradient URL reference if gradient is set, the explicit logoColor if provided,
+   * or null to let the CSS variable (--mj-logo-color) take effect.
    */
-  get logoFill(): string {
+  get logoFill(): string | null {
     if (this.logoGradient) {
       return `url(#${this.gradientId})`;
     }
-    return this.logoColor;
+    return this.logoColor || null;
   }
 
   /**

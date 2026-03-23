@@ -162,13 +162,13 @@ export interface TestFeedbackDialogData {
     .feedback-label {
       font-weight: 600;
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .optional-hint {
       font-weight: 400;
       font-size: 12px;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
     }
 
     .rating-scale {
@@ -185,10 +185,10 @@ export interface TestFeedbackDialogData {
     .rating-button {
       width: 40px;
       height: 40px;
-      border: 2px solid #e2e8f0;
+      border: 2px solid var(--mj-border-default);
       border-radius: 8px;
-      background: #f8fafc;
-      color: #64748b;
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-muted);
       font-size: 14px;
       font-weight: 600;
       cursor: pointer;
@@ -198,82 +198,82 @@ export interface TestFeedbackDialogData {
     .rating-button:hover,
     .rating-button.hover {
       transform: scale(1.1);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--mj-shadow-md);
     }
 
     .rating-button.low:hover,
     .rating-button.low.hover {
-      border-color: #ef4444;
-      background: #fef2f2;
-      color: #ef4444;
+      border-color: var(--mj-status-error);
+      background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     .rating-button.mid:hover,
     .rating-button.mid.hover {
-      border-color: #f59e0b;
-      background: #fffbeb;
-      color: #f59e0b;
+      border-color: var(--mj-status-warning);
+      background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
     }
 
     .rating-button.high:hover,
     .rating-button.high.hover {
-      border-color: #10b981;
-      background: #ecfdf5;
-      color: #10b981;
+      border-color: var(--mj-status-success);
+      background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .rating-button.selected {
       transform: scale(1.1);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      box-shadow: var(--mj-shadow-md);
     }
 
     .rating-button.selected.low {
-      border-color: #ef4444;
-      background: #ef4444;
-      color: white;
+      border-color: var(--mj-status-error);
+      background: var(--mj-status-error);
+      color: var(--mj-text-inverse);
     }
 
     .rating-button.selected.mid {
-      border-color: #f59e0b;
-      background: #f59e0b;
-      color: white;
+      border-color: var(--mj-status-warning);
+      background: var(--mj-status-warning);
+      color: var(--mj-text-inverse);
     }
 
     .rating-button.selected.high {
-      border-color: #10b981;
-      background: #10b981;
-      color: white;
+      border-color: var(--mj-status-success);
+      background: var(--mj-status-success);
+      color: var(--mj-text-inverse);
     }
 
     .rating-labels {
       display: flex;
       justify-content: space-between;
       font-size: 11px;
-      color: #94a3b8;
+      color: var(--mj-text-disabled);
       text-transform: uppercase;
       letter-spacing: 0.5px;
       padding: 0 4px;
     }
 
-    .label-low { color: #ef4444; }
-    .label-mid { color: #f59e0b; }
-    .label-high { color: #10b981; }
+    .label-low { color: var(--mj-status-error); }
+    .label-mid { color: var(--mj-status-warning); }
+    .label-high { color: var(--mj-status-success); }
 
     .rating-description {
       display: flex;
       align-items: center;
       gap: 8px;
       padding: 10px 14px;
-      background: #f1f5f9;
+      background: var(--mj-bg-surface-sunken);
       border-radius: 8px;
       font-size: 14px;
-      color: #64748b;
+      color: var(--mj-text-muted);
     }
 
     .rating-value {
       font-size: 20px;
       font-weight: 700;
-      color: #1e293b;
+      color: var(--mj-text-primary);
     }
 
     .rating-label {
@@ -296,7 +296,7 @@ export interface TestFeedbackDialogData {
       gap: 8px;
       cursor: pointer;
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .radio-option input[type="radio"] {
@@ -308,7 +308,7 @@ export interface TestFeedbackDialogData {
     .feedback-textarea {
       width: 100%;
       padding: 12px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 14px;
       font-family: inherit;
@@ -318,8 +318,8 @@ export interface TestFeedbackDialogData {
 
     .feedback-textarea:focus {
       outline: none;
-      border-color: #2196f3;
-      box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+      border-color: var(--mj-brand-primary);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
     }
 
     .feedback-info {
@@ -327,9 +327,9 @@ export interface TestFeedbackDialogData {
       align-items: center;
       gap: 8px;
       padding: 12px;
-      background: #e3f2fd;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
       border-radius: 4px;
-      color: #1976d2;
+      color: var(--mj-brand-primary);
       font-size: 14px;
     }
 
@@ -338,9 +338,9 @@ export interface TestFeedbackDialogData {
       align-items: center;
       gap: 8px;
       padding: 12px;
-      background: #ffebee;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
       border-radius: 4px;
-      color: #c62828;
+      color: var(--mj-status-error);
       font-size: 14px;
     }
   `]

@@ -1,5 +1,6 @@
-import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult, SQLDialectInfo } from "@memberjunction/core";
-import { MJQueryEntity, MJQueryParameterEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQuerySQLEntity } from "@memberjunction/core-entities";
+import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult, SQLDialectInfo, TypeScriptTypeFromSQLType } from "@memberjunction/core";
+import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
+import { MJQueryEntity, MJQueryParameterEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQuerySQLEntity, MJQueryDependencyEntity } from "@memberjunction/core-entities";
 import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
@@ -20,7 +21,8 @@ import {
     removeCollate,
 } from "@memberjunction/sql-converter";
 import { EmbedTextLocalHelper } from "./util";
-import { SQLParser } from "./sql-parser";
+import { SQLParser } from "@memberjunction/sql-parser";
+import type { MJParameterInfo } from "@memberjunction/sql-parser";
 
 interface ExtractedParameter {
     name: string;
@@ -82,22 +84,58 @@ export class MJQueryEntityServer extends MJQueryEntity {
     protected override async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult> {
         return EmbedTextLocalHelper(this, textToEmbed);
     }
-    
+
+    /**
+     * Generates an embedding from composite text (Name + UserQuestion + Description) for richer semantic search.
+     * Stores the vector in EmbeddingVector and the model reference in EmbeddingModelID.
+     */
+    protected async GenerateCompositeEmbedding(): Promise<void> {
+        const parts = [
+            this.Name || '',
+            this.UserQuestion || '',
+            this.Description || ''
+        ].filter(p => p.trim().length > 0);
+
+        if (parts.length === 0) {
+            this.EmbeddingVector = null;
+            this.EmbeddingModelID = null;
+            return;
+        }
+
+        const compositeText = parts.join(' | ');
+        const result = await this.EmbedTextLocal(compositeText);
+        if (result && result.vector && result.vector.length > 0) {
+            this.EmbeddingVector = JSON.stringify(result.vector);
+            this.EmbeddingModelID = result.modelID;
+        }
+    }
+
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         try {
             // Check if this is a new record or if SQL/Description has changed
             const sqlField = this.GetFieldByName('SQL');
+            const nameField = this.GetFieldByName('Name');
             const descriptionField = this.GetFieldByName('Description');
+            const userQuestionField = this.GetFieldByName('UserQuestion');
             const shouldExtractData = !this.IsSaved || sqlField.Dirty;
-            const shouldGenerateEmbedding = !this.IsSaved || descriptionField.Dirty;
+            const shouldGenerateEmbedding = !this.IsSaved || nameField.Dirty || descriptionField.Dirty || userQuestionField.Dirty;
 
-            // Generate embedding for Description if needed, before saving
+            // Generate embedding from composite text (Name + UserQuestion + Description) for better semantic search
             if (shouldGenerateEmbedding) {
-                await this.GenerateEmbeddingByFieldName("Description", "EmbeddingVector", "EmbeddingModelID");
+                await this.GenerateCompositeEmbedding();
             } else if (!this.Description || this.Description.trim().length === 0) {
                 // Clear embedding if description is empty
                 this.EmbeddingVector = null;
                 this.EmbeddingModelID = null;
+            }
+
+            // Auto-set Reusable=true for queries in Golden-Queries/ categories.
+            // Golden Queries are composable building blocks, so they should always be reusable.
+            if (this.CategoryID) {
+                const categoryPath = this.buildCategoryPathFromID(this.CategoryID);
+                if (categoryPath.toLowerCase().startsWith('golden-queries/') || categoryPath.toLowerCase() === 'golden-queries') {
+                    this.Reusable = true;
+                }
             }
 
             // Save the query first without AI processing (no transaction needed for basic save)
@@ -151,6 +189,25 @@ export class MJQueryEntityServer extends MJQueryEntity {
     }
      
     /**
+     * Builds a category path string from a CategoryID by walking up the category hierarchy.
+     * Returns a path like "Golden-Queries/Sales" or "Golden-Queries".
+     */
+    private buildCategoryPathFromID(categoryID: string): string {
+        const categories = Metadata.Provider.QueryCategories;
+        const segments: string[] = [];
+        let currentID: string | null = categoryID;
+
+        while (currentID) {
+            const cat = categories.find(c => c.ID.toLowerCase() === currentID!.toLowerCase());
+            if (!cat) break;
+            segments.unshift(cat.Name);
+            currentID = cat.ParentID;
+        }
+
+        return segments.join('/');
+    }
+
+    /**
      * Asynchronous version of extractAndSyncData that runs outside the main save operation
      * to prevent connection pool exhaustion
      */
@@ -201,102 +258,168 @@ export class MJQueryEntityServer extends MJQueryEntity {
     
     private async extractAndSyncData(): Promise<void> {
         try {
-            // Check if SQL contains Nunjucks syntax (determines if query uses templates/parameters)
-            const hasNunjucksSyntax = this.SQL && (
-                this.SQL.includes('{{') ||
-                this.SQL.includes('{%') ||
-                this.SQL.includes('{#')
-            );
+            if (!this.SQL) {
+                this.UsesTemplate = false;
+                return;
+            }
 
-            // Ensure AIEngine is configured
-            await AIEngine.Instance.Config(false, this.ContextCurrentUser, this.ProviderToUse as any as IMetadataProvider);
+            // ── Deterministic analysis via SQLParser (source of truth) ──
+            const analysis = SQLParser.Analyze(this.SQL);
+            const deterministicParams = SQLParser.ExtractParameterInfo(this.SQL);
+            const hasTemplateParameters = analysis.hasTemplateExpressions && deterministicParams.length > 0;
 
-            // Find the SQL Query Parameter Extraction prompt
+            // Extract entity metadata deterministically (for LLM context and entity sync)
+            const entityMetadata = await this.extractEntityMetadataFromSQL();
+
+            // ── LLM enrichment (descriptions and sample values only) ──
+            const llmResult = await this.runLLMEnrichment(entityMetadata);
+
+            // ── Merge: deterministic structure + LLM descriptions ──
+            const syncPromises: Promise<void>[] = [];
+
+            // Parameters: SQLParser provides name, type, isRequired, defaultValue.
+            // LLM provides description and sampleValue as enrichment.
+            if (hasTemplateParameters) {
+                const enrichedParams = this.mergeParametersWithLLM(deterministicParams, llmResult);
+                syncPromises.push(this.syncQueryParameters(enrichedParams));
+            } else {
+                syncPromises.push(this.removeAllQueryParameters());
+            }
+
+            // Fields: deterministic for SELECT *, LLM for explicit column lists
+            const selectStarFields = this.buildFieldsForSelectStar();
+            if (selectStarFields) {
+                syncPromises.push(this.syncQueryFields(selectStarFields));
+            } else if (llmResult?.selectClause && Array.isArray(llmResult.selectClause) && llmResult.selectClause.length > 0) {
+                syncPromises.push(this.syncQueryFields(llmResult.selectClause));
+            }
+
+            // Entities: deterministic SQL parsing (more reliable than LLM)
+            if (entityMetadata.length > 0) {
+                syncPromises.push(this.syncQueryEntities(entityMetadata));
+            }
+
+            // Dependencies: deterministic composition token parsing (no LLM)
+            syncPromises.push(this.extractAndSyncQueryDependencies());
+
+            await Promise.all(syncPromises);
+
+            this.UsesTemplate = hasTemplateParameters;
+
+        } catch (e) {
+            LogError(`Query "${this.Name}" extraction error:`, e);
+            this.UsesTemplate = false;
+        }
+    }
+
+    /**
+     * Runs the LLM enrichment prompt to get descriptions and sample values.
+     * Returns null if the LLM is unavailable or fails (non-fatal).
+     */
+    private async runLLMEnrichment(
+        entityMetadata: Array<{ name: string; schemaName: string; baseView: string; fields: Array<{ name: string; type: string; isPrimaryKey: boolean }> }>
+    ): Promise<ParameterExtractionResult | null> {
+        try {
+            await AIEngine.Instance.Config(false, this.ContextCurrentUser, this.ProviderToUse as unknown as IMetadataProvider);
+
             const aiPrompt = AIEngine.Instance.Prompts.find(p =>
                 p.Name === 'SQL Query Parameter Extraction' &&
                 p.Category === 'MJ: System'
             );
 
             if (!aiPrompt) {
-                // Prompt not configured, non-fatal, just warn and return
-                console.warn('AI prompt for SQL Query Parameter Extraction not found. Skipping query metadata extraction.');
-                this.UsesTemplate = false;
-                return;
+                console.warn('AI prompt for SQL Query Parameter Extraction not found. Descriptions will use heuristics.');
+                return null;
             }
 
-            // First, do a quick parse to identify entities from the SQL
-            // We'll use this to provide entity metadata to the LLM for better type inference
-            const entityMetadata = await this.extractEntityMetadataFromSQL();
-
-            // Prepare prompt data - we'll send the SQL as templateText since the prompt
-            // is designed to extract both parameters (if any) and query fields/entities
-            const promptData = {
-                templateText: this.SQL,
-                entities: entityMetadata
-            };
-
-            // Execute the prompt using AIPromptRunner
             const promptRunner = new AIPromptRunner();
             const params = new AIPromptParams();
             params.prompt = aiPrompt;
-            params.data = promptData;
+            params.data = { templateText: this.SQL, entities: entityMetadata };
             params.contextUser = this.ContextCurrentUser;
 
             const result = await promptRunner.ExecutePrompt<ParameterExtractionResult>(params);
 
             if (!result.success || !result.result) {
-                // AI extraction failed - log details for debugging
-                console.warn(`Query "${this.Name}" - AI query metadata extraction failed:`, {
-                    success: result.success,
-                    status: result.status,
-                    errorMessage: result.errorMessage,
-                    hasResult: !!result.result
-                });
-                this.UsesTemplate = false;
-                return;
+                console.warn(`Query "${this.Name}" - LLM enrichment failed, using heuristic descriptions.`);
+                return null;
             }
 
-            // Process the extracted data in parallel
-            const syncPromises: Promise<void>[] = [];
-
-            // Sync parameters if we have Nunjucks syntax and parameters were extracted
-            // For non-templated queries, ensure any stale parameters are removed
-            if (hasNunjucksSyntax && result.result.parameters && Array.isArray(result.result.parameters)) {
-                syncPromises.push(this.syncQueryParameters(result.result.parameters));
-            } else {
-                // No Nunjucks syntax - remove any existing parameters
-                syncPromises.push(this.removeAllQueryParameters());
-            }
-
-            // Always sync query fields if we got a selectClause back
-            if (result.result.selectClause && Array.isArray(result.result.selectClause) && result.result.selectClause.length > 0) {
-                syncPromises.push(this.syncQueryFields(result.result.selectClause));
-            }
-
-            // Use deterministic SQL parsing for entity extraction instead of LLM
-            // entityMetadata is already extracted above and is more reliable than LLM extraction
-            if (entityMetadata.length > 0) {
-                syncPromises.push(this.syncQueryEntities(entityMetadata));
-            }
-
-            await Promise.all(syncPromises);
-
-            // Update UsesTemplate flag based on whether Nunjucks syntax exists and parameters were found
-            this.UsesTemplate = hasNunjucksSyntax &&
-                result.result.parameters &&
-                Array.isArray(result.result.parameters) &&
-                result.result.parameters.length > 0;
-
+            return result.result;
         } catch (e) {
-            // Unexpected error during extraction - log for debugging but don't fail the save
-            LogError(`Query "${this.Name}" AI extraction error:`, e);
-            this.UsesTemplate = false;
+            console.warn(`Query "${this.Name}" - LLM enrichment error, using heuristic descriptions:`, e);
+            return null;
+        }
+    }
+
+    /**
+     * Merges deterministic parameter extraction (SQLParser) with LLM enrichment.
+     *
+     * SQLParser is the authority for: name, type, isRequired, defaultValue
+     * LLM provides: description, sampleValue (with heuristic fallbacks if LLM unavailable)
+     */
+    private mergeParametersWithLLM(
+        deterministicParams: MJParameterInfo[],
+        llmResult: ParameterExtractionResult | null
+    ): ExtractedParameter[] {
+        const llmParams = llmResult?.parameters ?? [];
+
+        return deterministicParams.map(dp => {
+            // Find matching LLM parameter by name (case-insensitive)
+            const llmMatch = llmParams.find(lp => lp.name.toLowerCase() === dp.name.toLowerCase());
+
+            return {
+                name: dp.name,
+                type: dp.type === 'unknown' ? (llmMatch?.type ?? 'string') : dp.type,
+                isRequired: dp.isRequired,
+                description: llmMatch?.description ?? this.generateParameterDescription(dp),
+                usage: llmMatch?.usage ?? dp.usageLocations,
+                defaultValue: dp.defaultValue !== null ? String(dp.defaultValue) : (llmMatch?.defaultValue ?? null),
+                sampleValue: llmMatch?.sampleValue ?? this.generateSampleValue(dp),
+            };
+        });
+    }
+
+    /**
+     * Generates a deterministic description for a parameter when LLM is unavailable.
+     * Uses the parameter name, type, and filter information to create a meaningful description.
+     */
+    private generateParameterDescription(param: MJParameterInfo): string {
+        const typeDescriptions: Record<string, string> = {
+            'string': 'text value',
+            'number': 'numeric value',
+            'date': 'date value',
+            'boolean': 'true/false flag',
+            'array': 'list of values',
+        };
+
+        const typeDesc = typeDescriptions[param.type] || 'value';
+        const requiredDesc = param.isRequired ? 'Required' : 'Optional';
+        const humanName = param.name.replace(/([A-Z])/g, ' $1').trim();
+        const defaultDesc = param.defaultValue !== null ? ` (default: ${param.defaultValue})` : '';
+
+        return `${requiredDesc} ${typeDesc} for ${humanName}${defaultDesc}`;
+    }
+
+    /**
+     * Generates a deterministic sample value based on the parameter type.
+     */
+    private generateSampleValue(param: MJParameterInfo): string | null {
+        if (param.defaultValue !== null) return String(param.defaultValue);
+
+        switch (param.type) {
+            case 'string': return 'Example';
+            case 'number': return '10';
+            case 'date': return '2024-01-01';
+            case 'boolean': return 'true';
+            case 'array': return 'Value1,Value2';
+            default: return null;
         }
     }
     
     /**
      * Extracts entity metadata from the SQL to provide context to the LLM for parameter type inference.
-     * Uses node-sql-parser for robust SQL parsing after pre-processing Nunjucks templates.
+     * Uses SQLParser for robust SQL parsing with MJ template support.
      */
     private async extractEntityMetadataFromSQL(): Promise<Array<{
         name: string;
@@ -315,11 +438,10 @@ export class MJQueryEntityServer extends MJQueryEntity {
         if (!this.SQL) return results;
 
         try {
-            // Use the shared SQLParser with Nunjucks preprocessing
-            const parseResult = SQLParser.ParseWithTemplatePreprocessing(this.SQL);
+            const tableRefs = SQLParser.ExtractTableRefs(this.SQL);
+            const columnRefs = SQLParser.ExtractColumnRefs(this.SQL);
 
-            // Cross-reference parsed tables against entity metadata
-            for (const tableRef of parseResult.Tables) {
+            for (const tableRef of tableRefs) {
                 const matchingEntity = md.Entities.find(e =>
                     (e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase() ||
                      e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase()) &&
@@ -327,14 +449,12 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 );
 
                 if (matchingEntity) {
-                    // Filter to fields that are actually referenced in the SQL
                     const relevantFields = matchingEntity.Fields
                         .filter(f => {
                             const fieldLower = f.Name.toLowerCase();
-                            for (const colRef of parseResult.Columns) {
+                            for (const colRef of columnRefs) {
                                 const colLower = colRef.ColumnName.toLowerCase();
                                 if (colLower === fieldLower) return true;
-                                // Check if column qualifier matches table alias or name
                                 if (colRef.TableQualifier) {
                                     const qualLower = colRef.TableQualifier.toLowerCase();
                                     if ((qualLower === tableRef.Alias.toLowerCase() ||
@@ -344,7 +464,6 @@ export class MJQueryEntityServer extends MJQueryEntity {
                                     }
                                 }
                             }
-                            // Also include primary keys as they're always useful context
                             return f.IsPrimaryKey;
                         })
                         .slice(0, 20)
@@ -373,6 +492,17 @@ export class MJQueryEntityServer extends MJQueryEntity {
     }
 
     private async syncQueryParameters(extractedParams: ExtractedParameter[]): Promise<void> {
+        // Filter out any parameter named "query" that came from {{query:"..."}} composition tokens.
+        // The AI extraction prompt should skip these, but this is a safety net.
+        const compositionTokenRegex = /\{\{query:"[^"]+"\}\}/;
+        const filteredParams = extractedParams.filter(p => {
+            if (p.name === 'query' && this.SQL && compositionTokenRegex.test(this.SQL)) {
+                return false;
+            }
+            return true;
+        });
+        extractedParams = filteredParams;
+
         // Use the entity's provider instead of creating new Metadata instance
         // Use same casting pattern as RefreshRelatedMetadata method
         const md = this.ProviderToUse as any as IMetadataProvider;
@@ -445,7 +575,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 newParam.DefaultValue = param.defaultValue;
                 newParam.Description = param.description;
                 newParam.SampleValue = param.sampleValue;
-                newParam.DetectionMethod = 'AI'; // Indicate this was found via AI
+                newParam.DetectionMethod = 'AI'; // Structure from SQLParser AST, descriptions enriched by LLM
                 promises.push(newParam.Save());
             }
             
@@ -551,58 +681,159 @@ export class MJQueryEntityServer extends MJQueryEntity {
     }
     
     /**
+     * Detects if the SQL uses SELECT * and if so, builds the complete field list deterministically
+     * from entity metadata without relying on the AI (which can't enumerate * columns).
+     * Returns null if the SQL doesn't use SELECT * or if entities can't be resolved.
+     */
+    private buildFieldsForSelectStar(): ExtractedField[] | null {
+        if (!this.SQL) return null;
+
+        // Check if SELECT clause contains * (possibly with table alias like "a.*")
+        const selectStarRegex = /\bSELECT\s+(?:(?:TOP\s+\d+|DISTINCT)\s+)?(\*|[\w.]+\.\*)\s+FROM\b/i;
+        if (!selectStarRegex.test(this.SQL)) return null;
+
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
+
+        try {
+            const tableRefs = SQLParser.ExtractTableRefs(this.SQL);
+            const expandedFields: ExtractedField[] = [];
+
+            for (const tableRef of tableRefs) {
+                const matchingEntity = md.Entities.find(e =>
+                    (e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase() ||
+                     e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase()) &&
+                    e.SchemaName.toLowerCase() === tableRef.SchemaName.toLowerCase()
+                );
+
+                if (matchingEntity) {
+                    for (const entityField of matchingEntity.Fields) {
+                        if (!expandedFields.some(f => f.name === entityField.Name)) {
+                            expandedFields.push({
+                                name: entityField.Name,
+                                description: entityField.Description || `${entityField.Name} field from ${matchingEntity.Name}`,
+                                type: TypeScriptTypeFromSQLType(entityField.Type).toLowerCase() as ExtractedField['type'],
+                                optional: false,
+                                sourceEntity: matchingEntity.Name,
+                                sourceFieldName: entityField.Name,
+                                isComputed: false,
+                                isSummary: false
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Also check for {{query:"..."}} composition tokens in FROM clause
+            if (expandedFields.length === 0) {
+                const compositionRefs = SQLParser.ExtractCompositionRefs(this.SQL);
+                for (const ref of compositionRefs) {
+                    const referencedQuery = Metadata.Provider.Queries.find(q =>
+                        q.Name.toLowerCase() === ref.queryName.toLowerCase()
+                    );
+
+                    if (referencedQuery && referencedQuery.Fields.length > 0) {
+                        for (const qField of referencedQuery.Fields) {
+                            if (!expandedFields.some(f => f.name === qField.Name)) {
+                                expandedFields.push({
+                                    name: qField.Name,
+                                    description: qField.Description || `${qField.Name} from query "${referencedQuery.Name}"`,
+                                    type: TypeScriptTypeFromSQLType(qField.SQLBaseType).toLowerCase() as ExtractedField['type'],
+                                    optional: false,
+                                    sourceEntity: qField.SourceEntityID ? md.Entities.find(e => UUIDsEqual(e.ID, qField.SourceEntityID))?.Name || null : null,
+                                    sourceFieldName: qField.SourceFieldName || null,
+                                    isComputed: qField.IsComputed || false,
+                                    isSummary: qField.IsSummary || false
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            return expandedFields.length > 0 ? expandedFields : null;
+        } catch (error) {
+            console.warn(`Query "${this.Name}" - Error in buildFieldsForSelectStar:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Finds an entity by name, checking both Name (which may have "MJ: " prefix) and DisplayName.
+     * The AI often returns entity names without the "MJ: " prefix, so we need to match both.
+     */
+    private findEntityByName(md: IMetadataProvider, name: string): ReturnType<typeof md.Entities.find> {
+        const lower = name.toLowerCase();
+        return md.Entities.find(e =>
+            e.Name.toLowerCase() === lower || (e.DisplayName && e.DisplayName.toLowerCase() === lower)
+        );
+    }
+
+    /**
      * Expands wildcard (*) entries in the extracted fields list.
-     * When AI returns a field with sourceFieldName="*", it indicates a SELECT table.* pattern.
-     * We expand this into individual field entries by looking up the entity's fields from metadata.
+     * When AI returns a field with name="*" or sourceFieldName="*", we expand it into
+     * individual field entries by looking up the source from metadata.
+     * If the AI didn't provide a sourceEntity, we parse the SQL's FROM clause to find it.
      */
     private expandWildcardFields(extractedFields: ExtractedField[], md: IMetadataProvider): ExtractedField[] {
+        // Check if any field is a wildcard that needs expansion
+        const hasWildcard = extractedFields.some(f => f.name === '*' || f.sourceFieldName === '*');
+        if (!hasWildcard) return extractedFields;
+
         const expandedFields: ExtractedField[] = [];
 
         for (const field of extractedFields) {
-            // Check if this is a wildcard entry: sourceFieldName is "*" and sourceEntity is set
-            if (field.sourceFieldName === '*' && field.sourceEntity) {
-                // Look up the entity in metadata
-                const sourceEntityInfo = md.Entities.find(e =>
-                    e.Name.toLowerCase() === field.sourceEntity!.toLowerCase()
-                );
+            const isWildcard = field.name === '*' || field.sourceFieldName === '*';
+            if (!isWildcard) {
+                expandedFields.push(field);
+                continue;
+            }
+
+            // If we have a sourceEntity, try to resolve from it
+            if (field.sourceEntity) {
+                const sourceEntityInfo = this.findEntityByName(md, field.sourceEntity!);
 
                 if (sourceEntityInfo) {
-                    // Expand the wildcard into individual fields from the entity
                     for (const entityField of sourceEntityInfo.Fields) {
-                        // Map SQL type to our simplified type system
-                        let fieldType: 'number' | 'string' | 'date' | 'boolean' = 'string';
-                        const sqlTypeLower = entityField.Type.toLowerCase();
-                        if (sqlTypeLower.includes('int') || sqlTypeLower.includes('decimal') ||
-                            sqlTypeLower.includes('numeric') || sqlTypeLower.includes('float') ||
-                            sqlTypeLower.includes('real') || sqlTypeLower.includes('money')) {
-                            fieldType = 'number';
-                        } else if (sqlTypeLower.includes('date') || sqlTypeLower.includes('time')) {
-                            fieldType = 'date';
-                        } else if (sqlTypeLower.includes('bit')) {
-                            fieldType = 'boolean';
-                        }
-
                         expandedFields.push({
-                            name: entityField.Name, // SQL Server returns original column names for *
-                            description: entityField.Description || `${entityField.Name} field from ${field.sourceEntity}`,
-                            type: fieldType,
-                            optional: field.optional, // Inherit from the wildcard entry
-                            sourceEntity: field.sourceEntity,
+                            name: entityField.Name,
+                            description: entityField.Description || `${entityField.Name} field from ${sourceEntityInfo.Name}`,
+                            type: TypeScriptTypeFromSQLType(entityField.Type).toLowerCase() as ExtractedField['type'],
+                            optional: field.optional,
+                            sourceEntity: sourceEntityInfo.Name,
                             sourceFieldName: entityField.Name,
                             isComputed: false,
                             isSummary: false
                         });
                     }
-                } else {
-                    // Entity not found in metadata - keep the original entry as-is
-                    // but log a warning
-                    console.warn(`Query "${this.Name}" - Could not expand wildcard for entity "${field.sourceEntity}" - entity not found in metadata`);
-                    expandedFields.push(field);
+                    continue;
                 }
-            } else {
-                // Not a wildcard entry - keep as-is
+
+                // sourceEntity didn't match an entity — try as a query name
+                const composedQuery = Metadata.Provider.Queries.find(q =>
+                    q.Name.toLowerCase() === field.sourceEntity!.toLowerCase()
+                );
+                if (composedQuery && composedQuery.Fields.length > 0) {
+                    for (const qField of composedQuery.Fields) {
+                        expandedFields.push({
+                            name: qField.Name,
+                            description: qField.Description || `${qField.Name} from query "${composedQuery.Name}"`,
+                            type: TypeScriptTypeFromSQLType(qField.SQLBaseType).toLowerCase() as ExtractedField['type'],
+                            optional: field.optional,
+                            sourceEntity: qField.SourceEntityID ? md.Entities.find(e => UUIDsEqual(e.ID, qField.SourceEntityID))?.Name || null : null,
+                            sourceFieldName: qField.SourceFieldName || null,
+                            isComputed: qField.IsComputed || false,
+                            isSummary: qField.IsSummary || false
+                        });
+                    }
+                    continue;
+                }
+
                 expandedFields.push(field);
+                continue;
             }
+
+            // No sourceEntity and no match — keep the raw entry as-is
+            expandedFields.push(field);
         }
 
         return expandedFields;
@@ -690,10 +921,8 @@ export class MJQueryEntityServer extends MJQueryEntity {
 
                 // Set source entity tracking
                 if (field.sourceEntity) {
-                    // Look up entity ID from entity name
-                    const sourceEntityInfo = md.Entities.find(e =>
-                        e.Name.toLowerCase() === field.sourceEntity!.toLowerCase()
-                    );
+                    // Look up entity ID from entity name (check both Name and DisplayName for "MJ: " prefix)
+                    const sourceEntityInfo = this.findEntityByName(md, field.sourceEntity);
                     if (sourceEntityInfo) {
                         newField.SourceEntityID = sourceEntityInfo.ID;
                     }
@@ -733,9 +962,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
 
                     // Update source entity tracking
                     if (extractedField.sourceEntity) {
-                        const sourceEntityInfo = md.Entities.find(e =>
-                            e.Name.toLowerCase() === extractedField.sourceEntity!.toLowerCase()
-                        );
+                        const sourceEntityInfo = this.findEntityByName(md, extractedField.sourceEntity);
                         if (sourceEntityInfo && !UUIDsEqual(existingField.SourceEntityID, sourceEntityInfo.ID)) {
                             existingField.SourceEntityID = sourceEntityInfo.ID;
                             hasChanges = true;
@@ -771,7 +998,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
             if (promises.length > 0) {
                 await Promise.all(promises);
             }
-            
+
         } catch (e) {
             LogError(`Query "${this.Name}" - Failed to sync fields:`, e);
             throw e;
@@ -916,6 +1143,344 @@ export class MJQueryEntityServer extends MJQueryEntity {
             
         } catch (e) {
             LogError('Failed to remove query entities:', e);
+            throw e;
+        }
+    }
+
+    /**
+     * Deterministically extracts {{query:"..."}} composition references from this query's SQL
+     * and syncs the QueryDependency records accordingly. No LLM needed — uses regex parsing.
+     */
+    private async extractAndSyncQueryDependencies(): Promise<void> {
+        const compositionEngine = new QueryCompositionEngine();
+        const sql = this.SQL;
+
+        if (!sql || !compositionEngine.HasCompositionTokens(sql)) {
+            // No composition tokens — remove any stale dependency records
+            await this.removeAllQueryDependencies();
+            return;
+        }
+
+        // Parse all {{query:"..."}} tokens
+        const tokens = compositionEngine.ParseCompositionTokens(sql);
+        if (tokens.length === 0) {
+            await this.removeAllQueryDependencies();
+            return;
+        }
+
+        // Resolve each token to a QueryInfo to get its ID
+        const extractedDeps = this.resolveTokensToQueryDependencies(tokens);
+
+        // Check for cycles before syncing
+        const cycleError = await this.detectDependencyCycles(extractedDeps);
+        if (cycleError) {
+            LogError(`Query "${this.Name}" creates circular dependency: ${cycleError}. Dependencies will not be synced.`);
+            return;
+        }
+
+        await this.syncQueryDependencies(extractedDeps);
+    }
+
+    /**
+     * Resolves parsed composition tokens to dependency records with QueryIDs.
+     */
+    private resolveTokensToQueryDependencies(tokens: ReturnType<QueryCompositionEngine['ParseCompositionTokens']>): Array<{
+        dependsOnQueryID: string;
+        referencePath: string;
+        alias: string | null;
+        parameterMapping: Record<string, string> | null;
+    }> {
+        const allQueries = Metadata.Provider.Queries;
+        const deps: Array<{
+            dependsOnQueryID: string;
+            referencePath: string;
+            alias: string | null;
+            parameterMapping: Record<string, string> | null;
+        }> = [];
+
+        for (const token of tokens) {
+            const queryName = token.QueryName.toLowerCase();
+
+            // Try category-qualified lookup first
+            let matchedQuery: typeof allQueries[number] | undefined;
+            if (token.CategorySegments.length > 0) {
+                const expectedPath = `/${token.CategorySegments.join('/')}/`;
+                matchedQuery = allQueries.find(q =>
+                    q.Name.toLowerCase() === queryName &&
+                    q.CategoryPath.toLowerCase() === expectedPath.toLowerCase()
+                );
+            }
+
+            // Fall back to name-only
+            if (!matchedQuery) {
+                const nameMatches = allQueries.filter(q => q.Name.toLowerCase() === queryName);
+                if (nameMatches.length === 1) {
+                    matchedQuery = nameMatches[0];
+                }
+            }
+
+            if (!matchedQuery) {
+                LogError(`Query "${this.Name}": Referenced query not found: "${token.FullPath}". Dependency will not be tracked.`);
+                continue;
+            }
+
+            // Validate the referenced query is marked Reusable
+            if (!matchedQuery.Reusable) {
+                throw new Error(
+                    `Query "${this.Name}" references "${token.FullPath}" via composition syntax, ` +
+                    `but "${matchedQuery.Name}" is not marked as Reusable. ` +
+                    `Set Reusable=true on "${matchedQuery.Name}" before using it in {{query:"..."}} references.`
+                );
+            }
+
+            // Extract alias from SQL context (look for the token followed by whitespace + identifier)
+            const alias = this.extractAliasFromSQL(token.FullToken);
+
+            // Build parameter mapping
+            let parameterMapping: Record<string, string> | null = null;
+            if (token.Parameters.length > 0) {
+                parameterMapping = {};
+                for (const param of token.Parameters) {
+                    if (param.StaticValue !== null) {
+                        parameterMapping[param.Name] = param.StaticValue;
+                    } else if (param.PassThroughName !== null) {
+                        parameterMapping[param.Name] = `@${param.PassThroughName}`;
+                    }
+                }
+            }
+
+            deps.push({
+                dependsOnQueryID: matchedQuery.ID,
+                referencePath: token.FullPath,
+                alias,
+                parameterMapping
+            });
+        }
+
+        return deps;
+    }
+
+    /**
+     * Extracts the SQL alias following a {{query:"..."}} token from this query's SQL.
+     */
+    private extractAliasFromSQL(fullToken: string): string | null {
+        if (!this.SQL) return null;
+
+        const tokenIndex = this.SQL.indexOf(fullToken);
+        if (tokenIndex < 0) return null;
+
+        const afterToken = this.SQL.substring(tokenIndex + fullToken.length);
+        const aliasMatch = /^\s+(\w+)/i.exec(afterToken);
+
+        // Make sure it's not a SQL keyword
+        if (aliasMatch) {
+            const keywords = new Set(['ON', 'WHERE', 'AND', 'OR', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'FULL', 'GROUP', 'ORDER', 'HAVING', 'UNION', 'EXCEPT', 'INTERSECT', 'LIMIT', 'OFFSET', 'FETCH']);
+            if (!keywords.has(aliasMatch[1].toUpperCase())) {
+                return aliasMatch[1];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Detects circular dependencies by walking the dependency graph.
+     * Returns a descriptive error string if a cycle is found, or null if clean.
+     */
+    private async detectDependencyCycles(
+        proposedDeps: Array<{ dependsOnQueryID: string }>
+    ): Promise<string | null> {
+        const allDependencies = Metadata.Provider.QueryDependencies;
+
+        const visited = new Set<string>();
+        const stack = new Set<string>();
+
+        const hasCycle = (queryID: string, path: string[]): string | null => {
+            if (stack.has(queryID)) {
+                const queryName = Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, queryID))?.Name || queryID;
+                return [...path, queryName].join(' → ');
+            }
+            if (visited.has(queryID)) return null;
+
+            visited.add(queryID);
+            stack.add(queryID);
+            const queryName = Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, queryID))?.Name || queryID;
+            path.push(queryName);
+
+            // Get existing dependencies for this query
+            const deps = allDependencies.filter(d => d.QueryID === queryID);
+            for (const dep of deps) {
+                const result = hasCycle(dep.DependsOnQueryID, [...path]);
+                if (result) return result;
+            }
+
+            stack.delete(queryID);
+            return null;
+        };
+
+        // Check each proposed dependency
+        for (const dep of proposedDeps) {
+            // Simulate: dep.dependsOnQueryID → (its dependencies) → ... → back to this.ID?
+            const visited2 = new Set<string>();
+            const stack2 = new Set<string>([this.ID]);
+
+            const checkFromDep = (queryID: string, path: string[]): string | null => {
+                if (UUIDsEqual(queryID, this.ID)) {
+                    return [...path, this.Name].join(' → ');
+                }
+                if (visited2.has(queryID)) return null;
+                visited2.add(queryID);
+
+                const queryName = Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, queryID))?.Name || queryID;
+                path.push(queryName);
+
+                const deps = allDependencies.filter(d => d.QueryID === queryID);
+                for (const d of deps) {
+                    const result = checkFromDep(d.DependsOnQueryID, [...path]);
+                    if (result) return result;
+                }
+
+                return null;
+            };
+
+            const result = checkFromDep(dep.dependsOnQueryID, [this.Name]);
+            if (result) return result;
+        }
+
+        return null;
+    }
+
+    /**
+     * Syncs extracted query dependencies against existing QueryDependency records.
+     * Follows the same add/update/delete pattern as syncQueryParameters/Fields/Entities.
+     */
+    private async syncQueryDependencies(extractedDeps: Array<{
+        dependsOnQueryID: string;
+        referencePath: string;
+        alias: string | null;
+        parameterMapping: Record<string, string> | null;
+    }>): Promise<void> {
+        const md = new Metadata();
+
+        try {
+            const existingDeps: MJQueryDependencyEntity[] = [];
+            if (this.IsSaved) {
+                const rv = this.RunViewProviderToUse;
+                const existingResult = await rv.RunView<MJQueryDependencyEntity>({
+                    EntityName: 'MJ: Query Dependencies',
+                    ExtraFilter: `QueryID='${this.ID}'`,
+                    ResultType: 'entity_object'
+                }, this.ContextCurrentUser);
+
+                if (!existingResult.Success) {
+                    throw new Error(`Failed to load existing query dependencies: ${existingResult.ErrorMessage}`);
+                }
+                existingDeps.push(...(existingResult.Results || []));
+            }
+
+            // Compare: match on DependsOnQueryID + ReferencePath for uniqueness
+            const depsToAdd = extractedDeps.filter(d =>
+                !existingDeps.some(ed =>
+                    UUIDsEqual(ed.DependsOnQueryID, d.dependsOnQueryID) &&
+                    ed.ReferencePath === d.referencePath
+                )
+            );
+
+            const depsToUpdate = existingDeps.filter(ed =>
+                extractedDeps.some(d =>
+                    UUIDsEqual(ed.DependsOnQueryID, d.dependsOnQueryID) &&
+                    ed.ReferencePath === d.referencePath
+                )
+            );
+
+            const depsToRemove = existingDeps.filter(ed =>
+                !extractedDeps.some(d =>
+                    UUIDsEqual(ed.DependsOnQueryID, d.dependsOnQueryID) &&
+                    ed.ReferencePath === d.referencePath
+                )
+            );
+
+            const promises: Promise<boolean>[] = [];
+
+            // Add new dependencies
+            for (const dep of depsToAdd) {
+                const newDep = await md.GetEntityObject<MJQueryDependencyEntity>('MJ: Query Dependencies', this.ContextCurrentUser);
+                newDep.QueryID = this.ID;
+                newDep.DependsOnQueryID = dep.dependsOnQueryID;
+                newDep.ReferencePath = dep.referencePath;
+                newDep.Alias = dep.alias;
+                newDep.ParameterMapping = dep.parameterMapping ? JSON.stringify(dep.parameterMapping) : null;
+                newDep.DetectionMethod = 'Auto';
+                promises.push(newDep.Save());
+            }
+
+            // Update existing dependencies (check for changes)
+            for (const existingDep of depsToUpdate) {
+                const extractedDep = extractedDeps.find(d =>
+                    UUIDsEqual(existingDep.DependsOnQueryID, d.dependsOnQueryID) &&
+                    existingDep.ReferencePath === d.referencePath
+                );
+                if (extractedDep) {
+                    let hasChanges = false;
+
+                    if (existingDep.Alias !== extractedDep.alias) {
+                        existingDep.Alias = extractedDep.alias;
+                        hasChanges = true;
+                    }
+
+                    const newMapping = extractedDep.parameterMapping ? JSON.stringify(extractedDep.parameterMapping) : null;
+                    if (existingDep.ParameterMapping !== newMapping) {
+                        existingDep.ParameterMapping = newMapping;
+                        hasChanges = true;
+                    }
+
+                    if (hasChanges) {
+                        promises.push(existingDep.Save());
+                    }
+                }
+            }
+
+            // Remove stale dependencies
+            for (const depToRemove of depsToRemove) {
+                promises.push(depToRemove.Delete());
+            }
+
+            if (promises.length > 0) {
+                await Promise.all(promises);
+            }
+
+        } catch (e) {
+            LogError(`Query "${this.Name}" - Failed to sync dependencies:`, e);
+            throw e;
+        }
+    }
+
+    /**
+     * Removes all QueryDependency records for this query.
+     */
+    private async removeAllQueryDependencies(): Promise<void> {
+        try {
+            if (!this.IsSaved) return;
+
+            const rv = this.RunViewProviderToUse;
+            const existingResult = await rv.RunView({
+                EntityName: 'MJ: Query Dependencies',
+                ExtraFilter: `QueryID='${this.ID}'`,
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+
+            if (!existingResult.Success) {
+                throw new Error(`Failed to load existing query dependencies: ${existingResult.ErrorMessage}`);
+            }
+
+            const existingDeps = existingResult.Results || [];
+            const deletePromises = existingDeps.map(dep => dep.Delete());
+
+            if (deletePromises.length > 0) {
+                await Promise.all(deletePromises);
+            }
+        } catch (e) {
+            LogError('Failed to remove query dependencies:', e);
             throw e;
         }
     }

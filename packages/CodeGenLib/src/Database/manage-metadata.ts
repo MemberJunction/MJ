@@ -7,8 +7,8 @@ import { MJApplicationEntity } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus } from "../Misc/status_logging";
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
-import { SQLParser } from "@memberjunction/core-entities-server";
-import { convertCamelCaseToHaveSpaces, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
+import { SQLParser } from "@memberjunction/sql-parser";
+import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
 
 import * as fs from 'fs';
@@ -124,6 +124,76 @@ export interface EntityConfig {
    SchemaName: string;
    /** Any additional Entity-table columns to set, keyed by column name */
    [key: string]: unknown;
+}
+
+/**
+ * Configuration for a transitive bridge view that CodeGen will create automatically.
+ * The view bridges two entities that share an organic key but don't have a direct relationship.
+ */
+export interface OrganicKeyTransitiveViewConfig {
+   /** The name for the view (e.g., "vwSubscriberCampaignSendBridge") */
+   Name: string;
+   /** The schema to create the view in (defaults to the related entity's schema if not specified) */
+   SchemaName?: string;
+   /** Raw SQL for the view body (the SELECT statement). CodeGen emits CREATE OR ALTER VIEW wrapping this. */
+   SQL: string;
+}
+
+/**
+ * Configuration for a related entity target within an organic key.
+ * Supports both direct field matching and transitive matching via a SQL view.
+ */
+export interface OrganicKeyRelatedEntityConfig {
+   /** Schema of the related entity */
+   SchemaName: string;
+   /** Table name of the related entity */
+   TableName: string;
+
+   // Direct match (mutually exclusive with Transitive* fields)
+   /** Field names in the related entity, positionally aligned with the parent key's MatchFieldNames */
+   RelatedFieldNames?: string[];
+
+   // Transitive match (mutually exclusive with RelatedFieldNames)
+   /** Schema-qualified name of existing bridge view/table, OR auto-populated from TransitiveView config */
+   TransitiveObject?: string;
+   /** Field names in the transitive object matching the organic key fields */
+   TransitiveMatchFieldNames?: string[];
+   /** Output field in the transitive object that joins to the related entity */
+   TransitiveOutputFieldName?: string;
+   /** Field in the related entity that matches TransitiveOutputFieldName */
+   RelatedEntityJoinFieldName?: string;
+   /** Declarative view definition — CodeGen creates the view and auto-sets TransitiveObject */
+   TransitiveView?: OrganicKeyTransitiveViewConfig;
+
+   // Display
+   /** Tab/section label override. If omitted, uses the related entity's display name. */
+   DisplayName?: string;
+   /** Where to render: 'After Field Tabs' (default) or 'Before Field Tabs' */
+   DisplayLocation?: 'After Field Tabs' | 'Before Field Tabs';
+   /** Ordering within this organic key's related entities (auto-assigned from array index if omitted) */
+   Sequence?: number;
+}
+
+/**
+ * Configuration for an organic key on an entity in the additionalSchemaInfo config file.
+ * Organic keys enable cross-entity relationships based on shared business data
+ * (email, phone, domain, etc.) rather than foreign key constraints.
+ */
+export interface OrganicKeyConfig {
+   /** Human-readable name for this key (e.g., "Email Match", "Domain Match") */
+   Name: string;
+   /** Optional description of the key's purpose */
+   Description?: string;
+   /** Field names on the owning entity that constitute the key */
+   MatchFieldNames: string[];
+   /** Normalization strategy for comparison. Default: 'LowerCaseTrim' */
+   NormalizationStrategy?: 'LowerCaseTrim' | 'Trim' | 'ExactMatch' | 'Custom';
+   /** SQL expression template when NormalizationStrategy is 'Custom'. Uses {{FieldName}} placeholder. */
+   CustomNormalizationExpression?: string;
+   /** Ordering when an entity has multiple organic keys (auto-assigned from array index if omitted) */
+   Sequence?: number;
+   /** Related entities to show on the form when viewing a record matched by this key */
+   RelatedEntities: OrganicKeyRelatedEntityConfig[];
 }
 
 /**
@@ -385,7 +455,7 @@ export class ManageMetadataBase {
       }
 
       // Schema-as-key format: iterate over keys, skip metadata and special section keys
-      const metadataKeys = new Set(['$schema', 'description', 'version', 'VirtualEntities', 'ISARelationships', 'Entities', 'Tables']);
+      const metadataKeys = new Set(['$schema', 'description', 'version', 'VirtualEntities', 'ISARelationships', 'Entities', 'Tables', 'Schemas']);
       for (const key of Object.keys(config)) {
          if (metadataKeys.has(key)) continue;
 
@@ -454,6 +524,223 @@ export class ManageMetadataBase {
       return entities
          .filter((e: Record<string, unknown>) => typeof e.BaseTable === 'string' && typeof e.SchemaName === 'string')
          .map((e: Record<string, unknown>) => ({ ...e, BaseTable: e.BaseTable as string, SchemaName: e.SchemaName as string }));
+   }
+
+   /**
+    * Extracts organic key configurations from the additionalSchemaInfo config file.
+    * Walks all schema-keyed table arrays and collects OrganicKeys arrays with their
+    * owning schema and table name.
+    */
+   protected extractOrganicKeysFromConfig(config: Record<string, unknown>): { SchemaName: string; TableName: string; OrganicKeys: OrganicKeyConfig[] }[] {
+      const results: { SchemaName: string; TableName: string; OrganicKeys: OrganicKeyConfig[] }[] = [];
+
+      for (const [key, value] of Object.entries(config)) {
+         // Skip top-level non-schema keys (ISARelationships, VirtualEntities, Entities)
+         if (!Array.isArray(value)) continue;
+         if (['ISARelationships', 'VirtualEntities', 'Entities'].includes(key)) continue;
+
+         const schemaName = key;
+         for (const tableConfig of value as Record<string, unknown>[]) {
+            if (!tableConfig.TableName || !Array.isArray(tableConfig.OrganicKeys)) continue;
+
+            const organicKeys: OrganicKeyConfig[] = (tableConfig.OrganicKeys as Record<string, unknown>[]).map((ok, okIndex) => ({
+               Name: ok.Name as string,
+               Description: (ok.Description as string) || undefined,
+               MatchFieldNames: ok.MatchFieldNames as string[],
+               NormalizationStrategy: (ok.NormalizationStrategy as OrganicKeyConfig['NormalizationStrategy']) || 'LowerCaseTrim',
+               CustomNormalizationExpression: (ok.CustomNormalizationExpression as string) || undefined,
+               Sequence: (ok.Sequence as number) ?? okIndex,
+               RelatedEntities: Array.isArray(ok.RelatedEntities)
+                  ? (ok.RelatedEntities as Record<string, unknown>[]).map((re, reIndex) => ({
+                     SchemaName: re.SchemaName as string,
+                     TableName: re.TableName as string,
+                     RelatedFieldNames: re.RelatedFieldNames as string[] | undefined,
+                     TransitiveObject: re.TransitiveObject as string | undefined,
+                     TransitiveMatchFieldNames: re.TransitiveMatchFieldNames as string[] | undefined,
+                     TransitiveOutputFieldName: re.TransitiveOutputFieldName as string | undefined,
+                     RelatedEntityJoinFieldName: re.RelatedEntityJoinFieldName as string | undefined,
+                     TransitiveView: re.TransitiveView as OrganicKeyTransitiveViewConfig | undefined,
+                     DisplayName: re.DisplayName as string | undefined,
+                     DisplayLocation: (re.DisplayLocation as OrganicKeyRelatedEntityConfig['DisplayLocation']) || 'After Field Tabs',
+                     Sequence: (re.Sequence as number) ?? reIndex,
+                  }))
+                  : [],
+            }));
+
+            results.push({ SchemaName: schemaName, TableName: tableConfig.TableName as string, OrganicKeys: organicKeys });
+         }
+      }
+
+      return results;
+   }
+
+   /**
+    * Processes organic key configurations from additionalSchemaInfo.
+    * For each configured organic key:
+    * 1. Creates transitive bridge views if TransitiveView is defined
+    * 2. Upserts EntityOrganicKey records (matched on EntityID + Name)
+    * 3. Upserts EntityOrganicKeyRelatedEntity records (matched on EntityOrganicKeyID + RelatedEntityID)
+    *
+    * All SQL is executed AND logged via LogSQLAndExecute for complete CI/CD traceability.
+    * Must run AFTER entities are created.
+    */
+   protected async processOrganicKeyConfig(pool: CodeGenConnection): Promise<{ success: boolean; createdCount: number; updatedCount: number }> {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return { success: true, createdCount: 0, updatedCount: 0 };
+
+      const allOrganicKeys = this.extractOrganicKeysFromConfig(config as Record<string, unknown>);
+      if (allOrganicKeys.length === 0) return { success: true, createdCount: 0, updatedCount: 0 };
+
+      const schema = mj_core_schema();
+      let createdCount = 0;
+      let updatedCount = 0;
+
+      for (const tableConfig of allOrganicKeys) {
+         // Resolve the owning entity
+         const ownerResult = await this.runQueryWithParams(pool, `
+            ${this.selectTop(1, 'ID, Name',
+               `FROM ${this.qs(schema, 'vwEntities')}
+            WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
+               OR Name = @TableName`,
+               'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
+         `, { 'TableName': tableConfig.TableName, 'SchemaName': tableConfig.SchemaName });
+
+         if (ownerResult.recordset.length === 0) {
+            logError(`    > Organic keys config: entity "${tableConfig.SchemaName}.${tableConfig.TableName}" not found — skipping`);
+            continue;
+         }
+
+         const ownerEntityId = ownerResult.recordset[0].ID;
+         const ownerEntityName = ownerResult.recordset[0].Name;
+
+         for (const okConfig of tableConfig.OrganicKeys) {
+            try {
+               // Step 1: Create transitive views if defined
+               for (const re of okConfig.RelatedEntities) {
+                  if (re.TransitiveView) {
+                     const viewSchema = re.TransitiveView.SchemaName || re.SchemaName;
+                     const viewFullName = `${viewSchema}.${re.TransitiveView.Name}`;
+
+                     const viewSQL = `CREATE OR ALTER VIEW ${this.qs(viewSchema, re.TransitiveView.Name)} AS\n${re.TransitiveView.SQL}`;
+                     await this.LogSQLAndExecute(pool, viewSQL,
+                        `Create transitive bridge view ${viewFullName} for organic key "${okConfig.Name}" on ${ownerEntityName}`);
+
+                     // Auto-populate TransitiveObject from the view definition
+                     re.TransitiveObject = viewFullName;
+                  }
+               }
+
+               // Step 2: Upsert EntityOrganicKey (match on EntityID + Name)
+               const existingKey = await this.runQueryWithParams(pool,
+                  `SELECT ID FROM ${this.qs(schema, 'EntityOrganicKey')} WHERE EntityID = @EntityID AND Name = @Name`,
+                  { 'EntityID': ownerEntityId, 'Name': okConfig.Name });
+
+               let organicKeyId: string;
+               const matchFieldNames = okConfig.MatchFieldNames.join(',');
+
+               if (existingKey.recordset.length > 0) {
+                  // Update existing
+                  organicKeyId = existingKey.recordset[0].ID;
+                  const updateSQL = `UPDATE ${this.qs(schema, 'EntityOrganicKey')} SET
+                     MatchFieldNames = '${matchFieldNames}',
+                     NormalizationStrategy = '${okConfig.NormalizationStrategy || 'LowerCaseTrim'}',
+                     ${okConfig.CustomNormalizationExpression ? `CustomNormalizationExpression = '${okConfig.CustomNormalizationExpression.replace(/'/g, "''")}',` : ''}
+                     ${okConfig.Description ? `Description = '${okConfig.Description.replace(/'/g, "''")}',` : ''}
+                     Sequence = ${okConfig.Sequence ?? 0},
+                     Status = 'Active'
+                     WHERE ID = '${organicKeyId}'`;
+                  await this.LogSQLAndExecute(pool, updateSQL,
+                     `Update organic key "${okConfig.Name}" on ${ownerEntityName}`);
+                  updatedCount++;
+                  logStatus(`    > Organic key: Updated "${okConfig.Name}" on ${ownerEntityName}`);
+               } else {
+                  // Insert new — generate a deterministic UUID based on entity+name for idempotency
+                  const insertSQL = `INSERT INTO ${this.qs(schema, 'EntityOrganicKey')}
+                     (EntityID, Name, ${okConfig.Description ? 'Description, ' : ''}MatchFieldNames, NormalizationStrategy, ${okConfig.CustomNormalizationExpression ? 'CustomNormalizationExpression, ' : ''}Sequence, Status)
+                     VALUES ('${ownerEntityId}', '${okConfig.Name}', ${okConfig.Description ? `'${okConfig.Description.replace(/'/g, "''")}', ` : ''}'${matchFieldNames}', '${okConfig.NormalizationStrategy || 'LowerCaseTrim'}', ${okConfig.CustomNormalizationExpression ? `'${okConfig.CustomNormalizationExpression.replace(/'/g, "''")}', ` : ''}${okConfig.Sequence ?? 0}, 'Active')`;
+                  await this.LogSQLAndExecute(pool, insertSQL,
+                     `Insert organic key "${okConfig.Name}" on ${ownerEntityName}`);
+                  createdCount++;
+                  logStatus(`    > Organic key: Created "${okConfig.Name}" on ${ownerEntityName}`);
+
+                  // Fetch the new ID
+                  const newKey = await this.runQueryWithParams(pool,
+                     `SELECT ID FROM ${this.qs(schema, 'EntityOrganicKey')} WHERE EntityID = @EntityID AND Name = @Name`,
+                     { 'EntityID': ownerEntityId, 'Name': okConfig.Name });
+                  organicKeyId = newKey.recordset[0].ID;
+               }
+
+               // Step 3: Upsert EntityOrganicKeyRelatedEntity for each related entity
+               for (const reConfig of okConfig.RelatedEntities) {
+                  const relResult = await this.runQueryWithParams(pool, `
+                     ${this.selectTop(1, 'ID, Name',
+                        `FROM ${this.qs(schema, 'vwEntities')}
+                     WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
+                        OR Name = @TableName`,
+                        'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
+                  `, { 'TableName': reConfig.TableName, 'SchemaName': reConfig.SchemaName });
+
+                  if (relResult.recordset.length === 0) {
+                     logError(`    > Organic key "${okConfig.Name}": related entity "${reConfig.SchemaName}.${reConfig.TableName}" not found — skipping`);
+                     continue;
+                  }
+
+                  const relEntityId = relResult.recordset[0].ID;
+                  const relEntityName = relResult.recordset[0].Name;
+
+                  // Check if this related entity mapping already exists
+                  const existingRel = await this.runQueryWithParams(pool,
+                     `SELECT ID FROM ${this.qs(schema, 'EntityOrganicKeyRelatedEntity')} WHERE EntityOrganicKeyID = @KeyID AND RelatedEntityID = @RelEntityID`,
+                     { 'KeyID': organicKeyId, 'RelEntityID': relEntityId });
+
+                  // Build field values
+                  const isDirect = reConfig.RelatedFieldNames && reConfig.RelatedFieldNames.length > 0;
+                  const relFieldNames = isDirect ? reConfig.RelatedFieldNames!.join(',') : null;
+                  const transitiveObject = reConfig.TransitiveObject || null;
+                  const transitiveMatchFields = reConfig.TransitiveMatchFieldNames ? reConfig.TransitiveMatchFieldNames.join(',') : null;
+
+                  if (existingRel.recordset.length > 0) {
+                     const relId = existingRel.recordset[0].ID;
+                     const updateRelSQL = `UPDATE ${this.qs(schema, 'EntityOrganicKeyRelatedEntity')} SET
+                        RelatedEntityFieldNames = ${relFieldNames ? `'${relFieldNames}'` : 'NULL'},
+                        TransitiveObjectName = ${transitiveObject ? `'${transitiveObject}'` : 'NULL'},
+                        TransitiveObjectMatchFieldNames = ${transitiveMatchFields ? `'${transitiveMatchFields}'` : 'NULL'},
+                        TransitiveObjectOutputFieldName = ${reConfig.TransitiveOutputFieldName ? `'${reConfig.TransitiveOutputFieldName}'` : 'NULL'},
+                        RelatedEntityJoinFieldName = ${reConfig.RelatedEntityJoinFieldName ? `'${reConfig.RelatedEntityJoinFieldName}'` : 'NULL'},
+                        DisplayName = ${reConfig.DisplayName ? `'${reConfig.DisplayName.replace(/'/g, "''")}'` : 'NULL'},
+                        DisplayLocation = '${reConfig.DisplayLocation || 'After Field Tabs'}',
+                        Sequence = ${reConfig.Sequence ?? 0}
+                        WHERE ID = '${relId}'`;
+                     await this.LogSQLAndExecute(pool, updateRelSQL,
+                        `Update organic key related entity: "${okConfig.Name}" → ${relEntityName}`);
+                  } else {
+                     const insertRelSQL = `INSERT INTO ${this.qs(schema, 'EntityOrganicKeyRelatedEntity')}
+                        (EntityOrganicKeyID, RelatedEntityID, RelatedEntityFieldNames,
+                         TransitiveObjectName, TransitiveObjectMatchFieldNames, TransitiveObjectOutputFieldName, RelatedEntityJoinFieldName,
+                         DisplayName, DisplayLocation, Sequence)
+                        VALUES ('${organicKeyId}', '${relEntityId}',
+                         ${relFieldNames ? `'${relFieldNames}'` : 'NULL'},
+                         ${transitiveObject ? `'${transitiveObject}'` : 'NULL'},
+                         ${transitiveMatchFields ? `'${transitiveMatchFields}'` : 'NULL'},
+                         ${reConfig.TransitiveOutputFieldName ? `'${reConfig.TransitiveOutputFieldName}'` : 'NULL'},
+                         ${reConfig.RelatedEntityJoinFieldName ? `'${reConfig.RelatedEntityJoinFieldName}'` : 'NULL'},
+                         ${reConfig.DisplayName ? `'${reConfig.DisplayName.replace(/'/g, "''")}'` : 'NULL'},
+                         '${reConfig.DisplayLocation || 'After Field Tabs'}',
+                         ${reConfig.Sequence ?? 0})`;
+                     await this.LogSQLAndExecute(pool, insertRelSQL,
+                        `Insert organic key related entity: "${okConfig.Name}" → ${relEntityName}`);
+                  }
+
+                  logStatus(`    > Organic key "${okConfig.Name}": ${existingRel.recordset.length > 0 ? 'updated' : 'created'} → ${relEntityName} (${isDirect ? 'direct' : 'transitive'})`);
+               }
+            } catch (err) {
+               const errMessage = err instanceof Error ? err.message : String(err);
+               logError(`    > Organic key config: Failed to process "${okConfig.Name}" on ${ownerEntityName}: ${errMessage}`);
+            }
+         }
+      }
+
+      return { success: true, createdCount, updatedCount };
    }
 
    /**
@@ -729,6 +1016,11 @@ export class ManageMetadataBase {
       }
       logStatus(`    > Loaded SchemaInfo records in ${(new Date().getTime() - start.getTime()) / 1000} seconds`);
 
+      // Apply schema prefixes from additionalSchemaInfo.json (if configured)
+      // This enriches SchemaInfo records with entity name prefix/suffix rules
+      // derived from DBAutoDoc analysis, before new entity creation uses them.
+      this.applySchemaPrefixesFromConfig();
+
       start = new Date();
       logStatus('   Creating new entities...');
       if (! await this.createNewEntities(pool, currentUser)) {
@@ -822,6 +1114,13 @@ export class ManageMetadataBase {
       const entityConfigResult = await this.processEntityConfigs(pool);
       if (entityConfigResult.updatedCount > 0) {
          logStatus(`    > Updated attributes on ${entityConfigResult.updatedCount} entit${entityConfigResult.updatedCount === 1 ? 'y' : 'ies'} from config`);
+      }
+
+      // Config-driven organic key setup — create bridge views and upsert organic key metadata
+      // Must run AFTER entities exist
+      const organicKeyResult = await this.processOrganicKeyConfig(pool);
+      if (organicKeyResult.createdCount > 0 || organicKeyResult.updatedCount > 0) {
+         logStatus(`    > Organic keys: ${organicKeyResult.createdCount} created, ${organicKeyResult.updatedCount} updated from config`);
       }
 
       start = new Date();
@@ -1136,7 +1435,7 @@ export class ManageMetadataBase {
          IsForeignKey: boolean;
       }>;
    }> {
-      const parseResult = SQLParser.Parse(viewDefinition);
+      const tableRefs = SQLParser.ExtractTableRefs(viewDefinition);
       const md = new Metadata();
       const sourceEntities: Array<{
          Name: string;
@@ -1153,7 +1452,7 @@ export class ManageMetadataBase {
 
       const seen = new Set<string>();
 
-      for (const tableRef of parseResult.Tables) {
+      for (const tableRef of tableRefs) {
          // Match against MJ entities by BaseTable/BaseView + SchemaName
          const matchingEntity = md.Entities.find(e =>
             (e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase() ||
@@ -1721,9 +2020,16 @@ export class ManageMetadataBase {
     * Builds SQL to INSERT a new EntityRelationship record for a discovered FK field.
     */
    protected buildInsertRelationshipSQL(f: Record<string, unknown>, md: Metadata, relationshipCountMap: Map<number, number>): string {
-      const e = md.Entities.find(e => UUIDsEqual(e.ID, (f.EntityID as string)))!;
+      const e = md.Entities.find(e => UUIDsEqual(e.ID, (f.EntityID as string)));
+      if (!e) {
+         logError(`      > buildInsertRelationshipSQL: child entity not found in metadata — EntityID=${f.EntityID}, field=${f.Name}, RelatedEntityID=${f.RelatedEntityID}. This can happen when a new entity was just created and metadata hasn't been refreshed yet. Skipping relationship creation.`);
+         return '';
+      }
       const parentEntity = md.Entities.find(e => UUIDsEqual(e.ID, (f.RelatedEntityID as string)));
-      const parentEntityName = parentEntity ? parentEntity.Name : String(f.RelatedEntityID);
+      if (!parentEntity) {
+         logError(`      > buildInsertRelationshipSQL: parent entity not found in metadata — RelatedEntityID=${f.RelatedEntityID}, child entity=${e.Name}, field=${f.Name}. Skipping relationship creation.`);
+         return '';
+      }
       const relCount = relationshipCountMap.get(f.EntityID as number) || 0;
       const sequence = relCount + 1;
       const newEntityRelationshipUUID = this.createNewUUID();
@@ -1732,7 +2038,7 @@ export class ManageMetadataBase {
                     VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', ${this.boolLit(true)}, ${this.boolLit(true)}, ${sequence}, ${this.utcNow()}, ${this.utcNow()})`;
       relationshipCountMap.set(f.EntityID as number, sequence);
       return `
-/* Create Entity Relationship: ${parentEntityName} -> ${e.Name} (One To Many via ${f.Name}) */
+/* Create Entity Relationship: ${parentEntity.Name} -> ${e.Name} (One To Many via ${f.Name}) */
    ${this.dbProvider.conditionalInsertSQL(checkQuery, insertSQL)};
                     `;
    }
@@ -2326,7 +2632,15 @@ export class ManageMetadataBase {
          if (!currentFieldData) {
             // field doesn't exist, let's create it
             const sql = this.dbProvider.addColumnSQL(entity.SchemaName, entity.BaseTable, fieldName, this.timestampType, allowNull, allowNull ? undefined : this.utcNow());
-            await this.LogSQLAndExecute(pool, sql, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`);
+            // addColumnSQL may return multiple statements separated by ;\n (e.g. the Azure-safe
+            // DATETIMEOFFSET NOT NULL path: ADD NULL → UPDATE → ALTER NOT NULL → ADD CONSTRAINT).
+            // SQL Server compiles an entire batch before executing, so later statements that
+            // reference the newly-added column fail with "Invalid column name". Execute each
+            // statement in its own batch to avoid this.
+            const statements = sql.split(';\n').filter(s => s.trim().length > 0);
+            for (const stmt of statements) {
+               await this.LogSQLAndExecute(pool, stmt, `SQL text to add special date field ${fieldName} to entity ${entity.SchemaName}.${entity.BaseTable}`);
+            }
          }
          else {
             // field does exist, let's first check the data type/nullability
@@ -2471,7 +2785,8 @@ export class ManageMetadataBase {
          const fields = fieldsResult.recordset;
          if (fields && fields.length > 0)
             for (const field of fields) {
-               const sDisplayName = stripTrailingChars(convertCamelCaseToHaveSpaces(field.Name), 'ID', true).trim()
+               const namingOptions = configInfo.entityNaming?.normalizeFieldNames !== false ? this.getEntityNamingOptions() : undefined;
+               const sDisplayName = stripTrailingChars(createDisplayName(field.Name, namingOptions), 'ID', true).trim()
                if (sDisplayName.length > 0 && sDisplayName.toLowerCase().trim() !== field.Name.toLowerCase().trim()) {
                   const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')} SET ${EntityInfo.UpdatedAtFieldName}=${this.utcNow()}, DisplayName = '${sDisplayName}' WHERE ID = '${field.ID}'`
                   await this.LogSQLAndExecute(pool, sSQL, `SQL text to update display name for field ${field.Name}`);
@@ -2549,7 +2864,7 @@ export class ManageMetadataBase {
                fieldDisplayName = "Deleted At";
                break;
             default:
-               fieldDisplayName = convertCamelCaseToHaveSpaces(n.FieldName).trim();
+               fieldDisplayName = createDisplayName(n.FieldName).trim();
                break;
       }
       const parsedDefaultValue = this.parseDefaultValue(n.DefaultValue);
@@ -2811,6 +3126,59 @@ export class ManageMetadataBase {
       }
    }
 
+   /**
+    * Applies schema-level entity name prefix/suffix rules from additionalSchemaInfo.json.
+    * The file may contain a top-level "Schemas" array with entries like:
+    * ```json
+    * { "name": "CRM", "entityNamePrefix": "CRM: ", "entityNameSuffix": "" }
+    * ```
+    * These are merged into the cached SchemaInfo records so that `getNewEntityNameRule()`
+    * can resolve them during entity creation. Config-file rules (mj.config.cjs) still
+    * take priority over these — this just provides a fallback from DBAutoDoc output.
+    */
+   protected applySchemaPrefixesFromConfig(): void {
+      const config = ManageMetadataBase.getSoftPKFKConfig();
+      if (!config) return;
+
+      const schemas = config.Schemas;
+      if (!Array.isArray(schemas) || schemas.length === 0) return;
+
+      let applied = 0;
+      for (const schemaDef of schemas) {
+         const schemaName = schemaDef.name as string;
+         const prefix = (schemaDef.entityNamePrefix as string) ?? '';
+         const suffix = (schemaDef.entityNameSuffix as string) ?? '';
+
+         if (!schemaName || (prefix === '' && suffix === '')) continue;
+
+         // Check if this schema already has a prefix/suffix in the cached records
+         const existing = ManageMetadataBase._schemaInfoRecords.find(
+            s => s.SchemaName.trim().toLowerCase() === schemaName.trim().toLowerCase()
+         );
+
+         if (existing) {
+            // Only apply if the existing record doesn't already have prefix/suffix set
+            if (existing.EntityNamePrefix == null && existing.EntityNameSuffix == null) {
+               existing.EntityNamePrefix = prefix;
+               existing.EntityNameSuffix = suffix;
+               applied++;
+            }
+         } else {
+            // Schema not in cache yet — add it
+            ManageMetadataBase._schemaInfoRecords.push({
+               SchemaName: schemaName,
+               EntityNamePrefix: prefix,
+               EntityNameSuffix: suffix,
+            });
+            applied++;
+         }
+      }
+
+      if (applied > 0) {
+         logStatus(`   > Applied ${applied} schema name prefix/suffix rules from additionalSchemaInfo.json`);
+      }
+   }
+
    protected async deleteUnneededEntityFields(pool: CodeGenConnection, excludeSchemas: string[]): Promise<boolean> {
       try   {
          const sSQL = this.dbProvider.callRoutineSQL(mj_core_schema(), 'spDeleteUnneededEntityFields', [`'${excludeSchemas.join(',')}'`], ['ExcludedSchemaNames']);
@@ -2840,7 +3208,7 @@ export class ManageMetadataBase {
          const resultResult = await this.runQuery(pool, sSQL);
          const result = resultResult.recordset;
 
-         const efvSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'EntityFieldValue')}`;
+         const efvSQL = `SELECT * FROM ${this.qs(mj_core_schema(), 'EntityFieldValue')} ORDER BY EntityFieldID, Sequence`;
          const allEntityFieldValuesResult = await this.runQuery(pool, efvSQL);
          const allEntityFieldValues = allEntityFieldValuesResult.recordset;
 
@@ -3051,7 +3419,10 @@ export class ManageMetadataBase {
             let numUpdated = 0;
             for (const v of possibleValues) {
                const ev = existingValues.find((ev: { Value: string; }) => ev.Value === v);
-               if (ev && ev.Sequence !== 1 + possibleValues.indexOf(v)) {
+
+               // NOTE: We are using != below for comparing Sequence instead of strict !== in case the 
+               //       DB returns a string for Sequence instead of a number.
+               if (ev && ev.Sequence != 1 + possibleValues.indexOf(v)) {
                   // update the sequence to match the order in the possible values list, if it doesn't already match
                   const sSQLUpdate = `UPDATE ${this.qs(mj_core_schema(), 'EntityFieldValue')} SET Sequence=${1 + possibleValues.indexOf(v)} WHERE ID='${ev.ID}'`;
                   await this.LogSQLAndExecute(ds, sSQLUpdate, `SQL text to update entity field value sequence`);
@@ -3346,9 +3717,21 @@ export class ManageMetadataBase {
    }
    
    protected simpleNewEntityName(schemaName: string, tableName: string): string {
-      const convertedTableName = convertCamelCaseToHaveSpaces(tableName);
+      const convertedTableName = createDisplayName(tableName, this.getEntityNamingOptions());
       const pluralName = generatePluralName(convertedTableName, {capitalizeFirstLetterOnly: true});
       return this.markupEntityName(schemaName, pluralName);
+   }
+
+   /**
+    * Returns EntityNamingOptions derived from the entityNaming config section.
+    * These control ALL CAPS normalization and compound word splitting behavior.
+    */
+   protected getEntityNamingOptions(): import("@memberjunction/global").EntityNamingOptions {
+      return {
+         normalizeAllCaps: configInfo.entityNaming?.normalizeAllCaps ?? true,
+         splitCompoundWords: configInfo.entityNaming?.splitCompoundWords ?? true,
+         additionalDomainWords: configInfo.entityNaming?.additionalDomainWords,
+      };
    }
 
    /**

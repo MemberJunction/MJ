@@ -80,7 +80,7 @@ export class TriggerRule implements IConversionRule {
       );
     }
     if (!m) {
-      return `-- TODO: Trigger conversion failed\n-- ${sql.slice(0, 200)}\n`;
+      return `-- SKIPPED: trigger (auto-conversion not supported)\n-- ${sql.slice(0, 200)}\n`;
     }
 
     const triggerName = m[1];

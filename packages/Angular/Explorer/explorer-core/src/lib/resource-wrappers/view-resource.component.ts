@@ -73,10 +73,10 @@ import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
             align-items: center;
             gap: 6px;
             padding: 8px 16px;
-            border: 1px solid #d4d4d4;
+            border: 1px solid var(--mj-border-default);
             border-radius: 6px;
-            background: white;
-            color: #333;
+            background: var(--mj-bg-surface-card);
+            color: var(--mj-text-primary);
             font-size: 0.875rem;
             font-weight: 500;
             cursor: pointer;
@@ -84,8 +84,8 @@ import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
             white-space: nowrap;
         }
         .action-button:hover:not(:disabled) {
-            background: #f5f5f5;
-            border-color: #b4b4b4;
+            background: var(--mj-bg-surface-sunken);
+            border-color: var(--mj-border-default);
         }
         .action-button:disabled {
             opacity: 0.5;
@@ -95,17 +95,17 @@ import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
             font-size: 0.875rem;
         }
         .create-button {
-            background: #1976d2;
+            background: var(--mj-brand-primary);
             color: white;
-            border-color: #1976d2;
+            border-color: var(--mj-brand-primary);
         }
         .create-button:hover:not(:disabled) {
-            background: #1565c0;
-            border-color: #1565c0;
+            background: var(--mj-brand-primary-hover);
+            border-color: var(--mj-brand-primary-hover);
         }
         .export-button:hover:not(:disabled) {
-            color: #1976d2;
-            border-color: #1976d2;
+            color: var(--mj-brand-primary);
+            border-color: var(--mj-brand-primary);
         }
         .view-loading-state,
         .view-error-state {

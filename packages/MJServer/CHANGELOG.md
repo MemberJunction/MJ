@@ -1,5 +1,554 @@
 # Change Log - @memberjunction/server
 
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [5e85b29]
+- Updated dependencies [d01f697]
+- Updated dependencies [95a7b8e]
+- Updated dependencies [2488c5c]
+- Updated dependencies [c3e8b94]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/generic-database-provider@5.15.0
+  - @memberjunction/core-entities-server@5.15.0
+  - @memberjunction/core-actions@5.15.0
+  - @memberjunction/actions-bizapps-crm@5.15.0
+  - @memberjunction/external-change-detection@5.15.0
+  - @memberjunction/ai@5.15.0
+  - @memberjunction/ai-core-plus@5.15.0
+  - @memberjunction/ai-prompts@5.15.0
+  - @memberjunction/ai-provider-bundle@5.15.0
+  - @memberjunction/ai-vectors-pinecone@5.15.0
+  - @memberjunction/ai-agent-manager-actions@5.15.0
+  - @memberjunction/ai-agent-manager@5.15.0
+  - @memberjunction/ai-agents@5.15.0
+  - @memberjunction/aiengine@5.15.0
+  - @memberjunction/ai-mcp-client@5.15.0
+  - @memberjunction/computer-use-engine@5.15.0
+  - @memberjunction/api-keys@5.15.0
+  - @memberjunction/actions-apollo@5.15.0
+  - @memberjunction/actions-base@5.15.0
+  - @memberjunction/actions-bizapps-accounting@5.15.0
+  - @memberjunction/actions-bizapps-formbuilders@5.15.0
+  - @memberjunction/actions-bizapps-lms@5.15.0
+  - @memberjunction/actions-bizapps-social@5.15.0
+  - @memberjunction/actions@5.15.0
+  - @memberjunction/communication-types@5.15.0
+  - @memberjunction/entity-communications-base@5.15.0
+  - @memberjunction/entity-communications-server@5.15.0
+  - @memberjunction/notifications@5.15.0
+  - @memberjunction/communication-ms-graph@5.15.0
+  - @memberjunction/communication-sendgrid@5.15.0
+  - @memberjunction/component-registry-client-sdk@5.15.0
+  - @memberjunction/doc-utils@5.15.0
+  - @memberjunction/encryption@5.15.0
+  - @memberjunction/graphql-dataprovider@5.15.0
+  - @memberjunction/integration-engine@5.15.0
+  - @memberjunction/interactive-component-types@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/data-context@5.15.0
+  - @memberjunction/data-context-server@5.15.0
+  - @memberjunction/queue@5.15.0
+  - @memberjunction/storage@5.15.0
+  - @memberjunction/postgresql-dataprovider@5.15.0
+  - @memberjunction/redis-provider@5.15.0
+  - @memberjunction/sqlserver-dataprovider@5.15.0
+  - @memberjunction/scheduling-actions@5.15.0
+  - @memberjunction/scheduling-engine-base@5.15.0
+  - @memberjunction/scheduling-engine@5.15.0
+  - @memberjunction/skip-types@5.15.0
+  - @memberjunction/templates@5.15.0
+  - @memberjunction/testing-engine@5.15.0
+  - @memberjunction/testing-engine-base@5.15.0
+  - @memberjunction/version-history@5.15.0
+  - @memberjunction/integration-schema-builder@5.15.0
+  - @memberjunction/config@5.15.0
+  - @memberjunction/global@5.15.0
+  - @memberjunction/sql-dialect@5.15.0
+  - @memberjunction/scheduling-base-types@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- 69b5af4: Add TestQuerySQL resolver and client method for query execution testing, refactor CreateQueryResolver into QuerySystemUserResolver composing CodeGen-generated MJQuery\_ types, add lightweight query catalog for collision detection, unit tests for transitive template composition and ORDER BY stripping, and updated class registration manifests
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+- Updated dependencies [6489cd8]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/generic-database-provider@5.14.0
+  - @memberjunction/graphql-dataprovider@5.14.0
+  - @memberjunction/skip-types@5.14.0
+  - @memberjunction/integration-engine@5.14.0
+  - @memberjunction/actions-base@5.14.0
+  - @memberjunction/core-actions@5.14.0
+  - @memberjunction/actions@5.14.0
+  - @memberjunction/ai-agent-manager-actions@5.14.0
+  - @memberjunction/ai-agent-manager@5.14.0
+  - @memberjunction/ai-agents@5.14.0
+  - @memberjunction/ai-core-plus@5.14.0
+  - @memberjunction/aiengine@5.14.0
+  - @memberjunction/ai-mcp-client@5.14.0
+  - @memberjunction/computer-use-engine@5.14.0
+  - @memberjunction/ai-prompts@5.14.0
+  - @memberjunction/ai-vectors-pinecone@5.14.0
+  - @memberjunction/api-keys@5.14.0
+  - @memberjunction/actions-apollo@5.14.0
+  - @memberjunction/actions-bizapps-accounting@5.14.0
+  - @memberjunction/actions-bizapps-crm@5.14.0
+  - @memberjunction/actions-bizapps-formbuilders@5.14.0
+  - @memberjunction/actions-bizapps-lms@5.14.0
+  - @memberjunction/actions-bizapps-social@5.14.0
+  - @memberjunction/communication-types@5.14.0
+  - @memberjunction/entity-communications-base@5.14.0
+  - @memberjunction/entity-communications-server@5.14.0
+  - @memberjunction/notifications@5.14.0
+  - @memberjunction/communication-ms-graph@5.14.0
+  - @memberjunction/communication-sendgrid@5.14.0
+  - @memberjunction/component-registry-client-sdk@5.14.0
+  - @memberjunction/doc-utils@5.14.0
+  - @memberjunction/encryption@5.14.0
+  - @memberjunction/external-change-detection@5.14.0
+  - @memberjunction/interactive-component-types@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/core-entities-server@5.14.0
+  - @memberjunction/data-context@5.14.0
+  - @memberjunction/data-context-server@5.14.0
+  - @memberjunction/queue@5.14.0
+  - @memberjunction/storage@5.14.0
+  - @memberjunction/postgresql-dataprovider@5.14.0
+  - @memberjunction/redis-provider@5.14.0
+  - @memberjunction/sqlserver-dataprovider@5.14.0
+  - @memberjunction/scheduling-actions@5.14.0
+  - @memberjunction/scheduling-engine-base@5.14.0
+  - @memberjunction/scheduling-engine@5.14.0
+  - @memberjunction/templates@5.14.0
+  - @memberjunction/testing-engine@5.14.0
+  - @memberjunction/testing-engine-base@5.14.0
+  - @memberjunction/version-history@5.14.0
+  - @memberjunction/integration-schema-builder@5.14.0
+  - @memberjunction/ai-provider-bundle@5.14.0
+  - @memberjunction/ai@5.14.0
+  - @memberjunction/config@5.14.0
+  - @memberjunction/global@5.14.0
+  - @memberjunction/sql-dialect@5.14.0
+  - @memberjunction/scheduling-base-types@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- f72b538: Replace HookRegistry and DynamicPackageLoader with @RegisterClass + ClassFactory middleware pattern, and add GetResolverPaths() to BaseServerMiddleware for auto-discovery of middleware-contributed GraphQL resolvers
+- Updated dependencies [9474e4a]
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/external-change-detection@5.13.0
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/core-actions@5.13.0
+  - @memberjunction/ai-agent-manager-actions@5.13.0
+  - @memberjunction/ai-agent-manager@5.13.0
+  - @memberjunction/ai-agents@5.13.0
+  - @memberjunction/ai-core-plus@5.13.0
+  - @memberjunction/aiengine@5.13.0
+  - @memberjunction/ai-mcp-client@5.13.0
+  - @memberjunction/computer-use-engine@5.13.0
+  - @memberjunction/ai-prompts@5.13.0
+  - @memberjunction/ai-vectors-pinecone@5.13.0
+  - @memberjunction/api-keys@5.13.0
+  - @memberjunction/actions-apollo@5.13.0
+  - @memberjunction/actions-base@5.13.0
+  - @memberjunction/actions-bizapps-accounting@5.13.0
+  - @memberjunction/actions-bizapps-crm@5.13.0
+  - @memberjunction/actions-bizapps-formbuilders@5.13.0
+  - @memberjunction/actions-bizapps-lms@5.13.0
+  - @memberjunction/actions-bizapps-social@5.13.0
+  - @memberjunction/actions@5.13.0
+  - @memberjunction/communication-types@5.13.0
+  - @memberjunction/entity-communications-base@5.13.0
+  - @memberjunction/entity-communications-server@5.13.0
+  - @memberjunction/notifications@5.13.0
+  - @memberjunction/communication-ms-graph@5.13.0
+  - @memberjunction/communication-sendgrid@5.13.0
+  - @memberjunction/component-registry-client-sdk@5.13.0
+  - @memberjunction/doc-utils@5.13.0
+  - @memberjunction/encryption@5.13.0
+  - @memberjunction/generic-database-provider@5.13.0
+  - @memberjunction/graphql-dataprovider@5.13.0
+  - @memberjunction/integration-engine@5.13.0
+  - @memberjunction/interactive-component-types@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/core-entities-server@5.13.0
+  - @memberjunction/data-context@5.13.0
+  - @memberjunction/data-context-server@5.13.0
+  - @memberjunction/queue@5.13.0
+  - @memberjunction/storage@5.13.0
+  - @memberjunction/postgresql-dataprovider@5.13.0
+  - @memberjunction/redis-provider@5.13.0
+  - @memberjunction/sqlserver-dataprovider@5.13.0
+  - @memberjunction/scheduling-actions@5.13.0
+  - @memberjunction/scheduling-engine-base@5.13.0
+  - @memberjunction/scheduling-engine@5.13.0
+  - @memberjunction/skip-types@5.13.0
+  - @memberjunction/templates@5.13.0
+  - @memberjunction/testing-engine@5.13.0
+  - @memberjunction/testing-engine-base@5.13.0
+  - @memberjunction/version-history@5.13.0
+  - @memberjunction/ai@5.13.0
+  - @memberjunction/integration-schema-builder@5.13.0
+  - @memberjunction/scheduling-base-types@5.13.0
+  - @memberjunction/ai-provider-bundle@5.13.0
+  - @memberjunction/config@5.13.0
+  - @memberjunction/sql-dialect@5.13.0
+
+## 5.12.0
+
+### Minor Changes
+
+- 05f19ff: Add composable query system with semantic catalog search, CTE composition engine, server-side paging, query caching with TTL/dependency invalidation, and agent directive surfacing. Includes QueryCacheManager wrapper over LocalCacheManager, QueryPagingEngine for SQL-level OFFSET/FETCH paging, QueryCompositionEngine for platform-aware CTE generation, and SearchQueryCatalog action for vector-based query discovery. Renames PaginationComponent to DataPagerComponent and extracts into shared module.
+- 1567293: migration
+
+### Patch Changes
+
+- 7def002: Fix ExternalChangeDetection unquoted string IDs and log spam, add /healthcheck endpoint before auth middleware, return TechnicalDescription in CreateQuery/UpdateQuery mutations, and improve MJCLI config validation errors with env var hints
+- Updated dependencies [6f9350c]
+- Updated dependencies [05f19ff]
+- Updated dependencies [257512b]
+- Updated dependencies [7def002]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [8ca8698]
+- Updated dependencies [1e5d181]
+  - @memberjunction/integration-engine@5.12.0
+  - @memberjunction/integration-schema-builder@5.12.0
+  - @memberjunction/core@5.12.0
+  - @memberjunction/core-actions@5.12.0
+  - @memberjunction/core-entities-server@5.12.0
+  - @memberjunction/aiengine@5.12.0
+  - @memberjunction/ai-agents@5.12.0
+  - @memberjunction/skip-types@5.12.0
+  - @memberjunction/generic-database-provider@5.12.0
+  - @memberjunction/external-change-detection@5.12.0
+  - @memberjunction/graphql-dataprovider@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/postgresql-dataprovider@5.12.0
+  - @memberjunction/scheduling-engine@5.12.0
+  - @memberjunction/ai-agent-manager-actions@5.12.0
+  - @memberjunction/ai-agent-manager@5.12.0
+  - @memberjunction/ai-core-plus@5.12.0
+  - @memberjunction/ai-mcp-client@5.12.0
+  - @memberjunction/computer-use-engine@5.12.0
+  - @memberjunction/ai-prompts@5.12.0
+  - @memberjunction/ai-vectors-pinecone@5.12.0
+  - @memberjunction/api-keys@5.12.0
+  - @memberjunction/actions-apollo@5.12.0
+  - @memberjunction/actions-base@5.12.0
+  - @memberjunction/actions-bizapps-accounting@5.12.0
+  - @memberjunction/actions-bizapps-crm@5.12.0
+  - @memberjunction/actions-bizapps-formbuilders@5.12.0
+  - @memberjunction/actions-bizapps-lms@5.12.0
+  - @memberjunction/actions-bizapps-social@5.12.0
+  - @memberjunction/actions@5.12.0
+  - @memberjunction/communication-types@5.12.0
+  - @memberjunction/entity-communications-base@5.12.0
+  - @memberjunction/entity-communications-server@5.12.0
+  - @memberjunction/notifications@5.12.0
+  - @memberjunction/communication-ms-graph@5.12.0
+  - @memberjunction/communication-sendgrid@5.12.0
+  - @memberjunction/component-registry-client-sdk@5.12.0
+  - @memberjunction/doc-utils@5.12.0
+  - @memberjunction/encryption@5.12.0
+  - @memberjunction/interactive-component-types@5.12.0
+  - @memberjunction/data-context@5.12.0
+  - @memberjunction/data-context-server@5.12.0
+  - @memberjunction/queue@5.12.0
+  - @memberjunction/storage@5.12.0
+  - @memberjunction/redis-provider@5.12.0
+  - @memberjunction/sqlserver-dataprovider@5.12.0
+  - @memberjunction/scheduling-actions@5.12.0
+  - @memberjunction/scheduling-engine-base@5.12.0
+  - @memberjunction/templates@5.12.0
+  - @memberjunction/testing-engine@5.12.0
+  - @memberjunction/testing-engine-base@5.12.0
+  - @memberjunction/version-history@5.12.0
+  - @memberjunction/ai-provider-bundle@5.12.0
+  - @memberjunction/ai@5.12.0
+  - @memberjunction/config@5.12.0
+  - @memberjunction/global@5.12.0
+  - @memberjunction/sql-dialect@5.12.0
+  - @memberjunction/scheduling-base-types@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+- Updated dependencies [0dca9db]
+  - @memberjunction/generic-database-provider@5.11.0
+  - @memberjunction/graphql-dataprovider@5.11.0
+  - @memberjunction/core@5.11.0
+  - @memberjunction/postgresql-dataprovider@5.11.0
+  - @memberjunction/sqlserver-dataprovider@5.11.0
+  - @memberjunction/ai-agents@5.11.0
+  - @memberjunction/ai-agent-manager-actions@5.11.0
+  - @memberjunction/ai-agent-manager@5.11.0
+  - @memberjunction/ai-core-plus@5.11.0
+  - @memberjunction/aiengine@5.11.0
+  - @memberjunction/ai-mcp-client@5.11.0
+  - @memberjunction/computer-use-engine@5.11.0
+  - @memberjunction/ai-prompts@5.11.0
+  - @memberjunction/ai-vectors-pinecone@5.11.0
+  - @memberjunction/api-keys@5.11.0
+  - @memberjunction/actions-apollo@5.11.0
+  - @memberjunction/actions-base@5.11.0
+  - @memberjunction/actions-bizapps-accounting@5.11.0
+  - @memberjunction/actions-bizapps-crm@5.11.0
+  - @memberjunction/actions-bizapps-formbuilders@5.11.0
+  - @memberjunction/actions-bizapps-lms@5.11.0
+  - @memberjunction/actions-bizapps-social@5.11.0
+  - @memberjunction/core-actions@5.11.0
+  - @memberjunction/actions@5.11.0
+  - @memberjunction/communication-types@5.11.0
+  - @memberjunction/entity-communications-base@5.11.0
+  - @memberjunction/entity-communications-server@5.11.0
+  - @memberjunction/notifications@5.11.0
+  - @memberjunction/communication-ms-graph@5.11.0
+  - @memberjunction/communication-sendgrid@5.11.0
+  - @memberjunction/component-registry-client-sdk@5.11.0
+  - @memberjunction/doc-utils@5.11.0
+  - @memberjunction/encryption@5.11.0
+  - @memberjunction/external-change-detection@5.11.0
+  - @memberjunction/integration-engine@5.11.0
+  - @memberjunction/interactive-component-types@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/core-entities-server@5.11.0
+  - @memberjunction/data-context@5.11.0
+  - @memberjunction/data-context-server@5.11.0
+  - @memberjunction/queue@5.11.0
+  - @memberjunction/storage@5.11.0
+  - @memberjunction/redis-provider@5.11.0
+  - @memberjunction/scheduling-actions@5.11.0
+  - @memberjunction/scheduling-engine-base@5.11.0
+  - @memberjunction/scheduling-engine@5.11.0
+  - @memberjunction/skip-types@5.11.0
+  - @memberjunction/templates@5.11.0
+  - @memberjunction/testing-engine@5.11.0
+  - @memberjunction/testing-engine-base@5.11.0
+  - @memberjunction/version-history@5.11.0
+  - @memberjunction/ai-provider-bundle@5.11.0
+  - @memberjunction/integration-schema-builder@5.11.0
+  - @memberjunction/ai@5.11.0
+  - @memberjunction/config@5.11.0
+  - @memberjunction/global@5.11.0
+  - @memberjunction/sql-dialect@5.11.0
+  - @memberjunction/scheduling-base-types@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager-actions@5.10.1
+- @memberjunction/ai-agent-manager@5.10.1
+- @memberjunction/ai-agents@5.10.1
+- @memberjunction/ai@5.10.1
+- @memberjunction/ai-core-plus@5.10.1
+- @memberjunction/aiengine@5.10.1
+- @memberjunction/ai-mcp-client@5.10.1
+- @memberjunction/computer-use-engine@5.10.1
+- @memberjunction/ai-prompts@5.10.1
+- @memberjunction/ai-provider-bundle@5.10.1
+- @memberjunction/ai-vectors-pinecone@5.10.1
+- @memberjunction/api-keys@5.10.1
+- @memberjunction/actions-apollo@5.10.1
+- @memberjunction/actions-base@5.10.1
+- @memberjunction/actions-bizapps-accounting@5.10.1
+- @memberjunction/actions-bizapps-crm@5.10.1
+- @memberjunction/actions-bizapps-formbuilders@5.10.1
+- @memberjunction/actions-bizapps-lms@5.10.1
+- @memberjunction/actions-bizapps-social@5.10.1
+- @memberjunction/core-actions@5.10.1
+- @memberjunction/actions@5.10.1
+- @memberjunction/communication-types@5.10.1
+- @memberjunction/entity-communications-base@5.10.1
+- @memberjunction/entity-communications-server@5.10.1
+- @memberjunction/notifications@5.10.1
+- @memberjunction/communication-ms-graph@5.10.1
+- @memberjunction/communication-sendgrid@5.10.1
+- @memberjunction/component-registry-client-sdk@5.10.1
+- @memberjunction/config@5.10.1
+- @memberjunction/doc-utils@5.10.1
+- @memberjunction/encryption@5.10.1
+- @memberjunction/external-change-detection@5.10.1
+- @memberjunction/generic-database-provider@5.10.1
+- @memberjunction/graphql-dataprovider@5.10.1
+- @memberjunction/integration-engine@5.10.1
+- @memberjunction/integration-schema-builder@5.10.1
+- @memberjunction/interactive-component-types@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/core-entities-server@5.10.1
+- @memberjunction/data-context@5.10.1
+- @memberjunction/data-context-server@5.10.1
+- @memberjunction/global@5.10.1
+- @memberjunction/queue@5.10.1
+- @memberjunction/storage@5.10.1
+- @memberjunction/postgresql-dataprovider@5.10.1
+- @memberjunction/redis-provider@5.10.1
+- @memberjunction/sql-dialect@5.10.1
+- @memberjunction/sqlserver-dataprovider@5.10.1
+- @memberjunction/scheduling-actions@5.10.1
+- @memberjunction/scheduling-engine-base@5.10.1
+- @memberjunction/scheduling-base-types@5.10.1
+- @memberjunction/scheduling-engine@5.10.1
+- @memberjunction/skip-types@5.10.1
+- @memberjunction/templates@5.10.1
+- @memberjunction/testing-engine@5.10.1
+- @memberjunction/testing-engine-base@5.10.1
+- @memberjunction/version-history@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+- 4e298b7: Add TenantContext auto-sync from server to client via CurrentUserTenantContext resolver and dynamic headers API
+- 5ce18ff: no migration
+- Updated dependencies [f2df653]
+- Updated dependencies [4e298b7]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/skip-types@5.10.0
+  - @memberjunction/graphql-dataprovider@5.10.0
+  - @memberjunction/ai-agent-manager-actions@5.10.0
+  - @memberjunction/ai-agent-manager@5.10.0
+  - @memberjunction/ai-agents@5.10.0
+  - @memberjunction/ai-core-plus@5.10.0
+  - @memberjunction/aiengine@5.10.0
+  - @memberjunction/ai-mcp-client@5.10.0
+  - @memberjunction/computer-use-engine@5.10.0
+  - @memberjunction/ai-prompts@5.10.0
+  - @memberjunction/ai-vectors-pinecone@5.10.0
+  - @memberjunction/api-keys@5.10.0
+  - @memberjunction/actions-apollo@5.10.0
+  - @memberjunction/actions-base@5.10.0
+  - @memberjunction/actions-bizapps-accounting@5.10.0
+  - @memberjunction/actions-bizapps-crm@5.10.0
+  - @memberjunction/actions-bizapps-formbuilders@5.10.0
+  - @memberjunction/actions-bizapps-lms@5.10.0
+  - @memberjunction/actions-bizapps-social@5.10.0
+  - @memberjunction/core-actions@5.10.0
+  - @memberjunction/actions@5.10.0
+  - @memberjunction/communication-types@5.10.0
+  - @memberjunction/entity-communications-base@5.10.0
+  - @memberjunction/entity-communications-server@5.10.0
+  - @memberjunction/notifications@5.10.0
+  - @memberjunction/communication-ms-graph@5.10.0
+  - @memberjunction/communication-sendgrid@5.10.0
+  - @memberjunction/component-registry-client-sdk@5.10.0
+  - @memberjunction/doc-utils@5.10.0
+  - @memberjunction/encryption@5.10.0
+  - @memberjunction/external-change-detection@5.10.0
+  - @memberjunction/generic-database-provider@5.10.0
+  - @memberjunction/integration-engine@5.10.0
+  - @memberjunction/interactive-component-types@5.10.0
+  - @memberjunction/core-entities-server@5.10.0
+  - @memberjunction/data-context@5.10.0
+  - @memberjunction/data-context-server@5.10.0
+  - @memberjunction/queue@5.10.0
+  - @memberjunction/storage@5.10.0
+  - @memberjunction/postgresql-dataprovider@5.10.0
+  - @memberjunction/redis-provider@5.10.0
+  - @memberjunction/sqlserver-dataprovider@5.10.0
+  - @memberjunction/scheduling-actions@5.10.0
+  - @memberjunction/scheduling-engine-base@5.10.0
+  - @memberjunction/scheduling-engine@5.10.0
+  - @memberjunction/templates@5.10.0
+  - @memberjunction/testing-engine@5.10.0
+  - @memberjunction/testing-engine-base@5.10.0
+  - @memberjunction/version-history@5.10.0
+  - @memberjunction/ai-provider-bundle@5.10.0
+  - @memberjunction/integration-schema-builder@5.10.0
+  - @memberjunction/ai@5.10.0
+  - @memberjunction/config@5.10.0
+  - @memberjunction/global@5.10.0
+  - @memberjunction/sql-dialect@5.10.0
+  - @memberjunction/scheduling-base-types@5.10.0
+
+## 5.9.0
+
+### Minor Changes
+
+- 194ddf2: Add Redis-backed ILocalStorageProvider with cross-server cache invalidation via pub/sub
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [89b6abe]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-actions@5.9.0
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/integration-engine@5.9.0
+  - @memberjunction/integration-schema-builder@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/generic-database-provider@5.9.0
+  - @memberjunction/redis-provider@5.9.0
+  - @memberjunction/sqlserver-dataprovider@5.9.0
+  - @memberjunction/postgresql-dataprovider@5.9.0
+  - @memberjunction/ai-agent-manager-actions@5.9.0
+  - @memberjunction/ai-agent-manager@5.9.0
+  - @memberjunction/ai-agents@5.9.0
+  - @memberjunction/ai-core-plus@5.9.0
+  - @memberjunction/aiengine@5.9.0
+  - @memberjunction/ai-mcp-client@5.9.0
+  - @memberjunction/computer-use-engine@5.9.0
+  - @memberjunction/ai-prompts@5.9.0
+  - @memberjunction/api-keys@5.9.0
+  - @memberjunction/actions-apollo@5.9.0
+  - @memberjunction/actions-base@5.9.0
+  - @memberjunction/actions-bizapps-accounting@5.9.0
+  - @memberjunction/actions-bizapps-crm@5.9.0
+  - @memberjunction/actions-bizapps-formbuilders@5.9.0
+  - @memberjunction/actions-bizapps-lms@5.9.0
+  - @memberjunction/actions-bizapps-social@5.9.0
+  - @memberjunction/actions@5.9.0
+  - @memberjunction/communication-types@5.9.0
+  - @memberjunction/entity-communications-base@5.9.0
+  - @memberjunction/entity-communications-server@5.9.0
+  - @memberjunction/notifications@5.9.0
+  - @memberjunction/communication-ms-graph@5.9.0
+  - @memberjunction/communication-sendgrid@5.9.0
+  - @memberjunction/doc-utils@5.9.0
+  - @memberjunction/encryption@5.9.0
+  - @memberjunction/external-change-detection@5.9.0
+  - @memberjunction/graphql-dataprovider@5.9.0
+  - @memberjunction/core-entities-server@5.9.0
+  - @memberjunction/data-context@5.9.0
+  - @memberjunction/queue@5.9.0
+  - @memberjunction/storage@5.9.0
+  - @memberjunction/scheduling-actions@5.9.0
+  - @memberjunction/scheduling-engine-base@5.9.0
+  - @memberjunction/scheduling-engine@5.9.0
+  - @memberjunction/templates@5.9.0
+  - @memberjunction/testing-engine@5.9.0
+  - @memberjunction/testing-engine-base@5.9.0
+  - @memberjunction/version-history@5.9.0
+  - @memberjunction/ai@5.9.0
+  - @memberjunction/ai-vectors-pinecone@5.9.0
+  - @memberjunction/component-registry-client-sdk@5.9.0
+  - @memberjunction/data-context-server@5.9.0
+  - @memberjunction/scheduling-base-types@5.9.0
+  - @memberjunction/interactive-component-types@5.9.0
+  - @memberjunction/skip-types@5.9.0
+  - @memberjunction/ai-provider-bundle@5.9.0
+  - @memberjunction/config@5.9.0
+  - @memberjunction/sql-dialect@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

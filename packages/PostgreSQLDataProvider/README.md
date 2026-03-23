@@ -12,6 +12,7 @@ Key capabilities:
 - Full CRUD operations through generated PL/pgSQL functions
 - CodeGen provider that produces PostgreSQL-native DDL from MemberJunction metadata
 - Type conversion for booleans, dates, UUIDs, numbers, and binary data
+- Pluggable cache backend inherited from `GenericDatabaseProvider` — default in-memory, with optional [Redis support](../RedisProvider/) for shared, persistent caching
 
 ## Architecture
 

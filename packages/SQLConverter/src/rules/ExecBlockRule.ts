@@ -109,7 +109,7 @@ export class ExecBlockRule implements IConversionRule {
     const exec = this.parseExec(execSection);
 
     if (!exec || declareVars.length === 0) {
-      return `-- TODO: Review EXEC block (could not parse)\n${block.split('\n').map(l => `-- ${l}`).join('\n')}\n`;
+      return `-- SKIPPED: EXEC block (auto-conversion not supported)\n${block.split('\n').map(l => `-- ${l}`).join('\n')}\n`;
     }
 
     return this.generateDoBlock(comments, declareVars, assignments, exec);
@@ -201,43 +201,59 @@ export class ExecBlockRule implements IConversionRule {
 
   /**
    * Split the body (after DECLARE) into SET section and EXEC section.
-   * Uses string-literal-aware scanning to avoid false positives from
-   * SET or EXEC keywords inside string data.
+   * Uses string-literal-aware scanning to find EXEC anywhere in the text
+   * (not just at line start), handling the common MetadataSync pattern
+   * where the last SET value and EXEC call are on the same line.
    */
   private findSetsAndExec(body: string): { setSection: string; execSection: string } {
-    const lines = body.split('\n');
-    let inString = false;
-    let execStartLine = -1;
+    const declareEnd = this.findDeclareEnd(body);
+    const afterDeclare = body.slice(declareEnd);
 
-    // Skip past the DECLARE section first
-    let pastDeclare = false;
-    for (let i = 0; i < lines.length; i++) {
-      const trimmed = lines[i].trim();
-      if (!pastDeclare) {
-        if (/^SET\b/i.test(trimmed) && !inString) pastDeclare = true;
-        else {
-          inString = this.updateStringState(lines[i], inString);
-          continue;
+    // Find EXEC keyword position outside string literals
+    const execPos = this.findExecPosition(afterDeclare);
+    if (execPos < 0) {
+      return { setSection: afterDeclare, execSection: '' };
+    }
+
+    return {
+      setSection: afterDeclare.slice(0, execPos),
+      execSection: afterDeclare.slice(execPos),
+    };
+  }
+
+  /**
+   * Find the character position of the EXEC keyword outside string literals.
+   * Returns the offset into `text`, or -1 if not found.
+   * Handles EXEC mid-line (e.g., after a SET value on the same line).
+   */
+  private findExecPosition(text: string): number {
+    let inString = false;
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === "'") {
+        if (inString) {
+          if (i + 1 < text.length && text[i + 1] === "'") {
+            i++; // skip escaped quote
+            continue;
+          }
+          inString = false;
+        } else {
+          inString = true;
+        }
+        continue;
+      }
+      if (inString) continue;
+
+      // Check for EXEC as a standalone word (case-insensitive)
+      const ch = text[i];
+      if ((ch === 'E' || ch === 'e') && (i === 0 || !/\w/.test(text[i - 1]))) {
+        if (i + 4 <= text.length &&
+            /^EXEC$/i.test(text.substring(i, i + 4)) &&
+            (i + 4 >= text.length || !/\w/.test(text[i + 4]))) {
+          return i;
         }
       }
-
-      if (!inString && /^EXEC\b/i.test(trimmed)) {
-        execStartLine = i;
-        break;
-      }
-      inString = this.updateStringState(lines[i], inString);
     }
-
-    if (execStartLine < 0) {
-      // No EXEC found — everything after DECLARE is SET section
-      const declareEnd = this.findDeclareEnd(body);
-      return { setSection: body.slice(declareEnd), execSection: '' };
-    }
-
-    const declareEnd = this.findDeclareEnd(body);
-    const setSection = lines.slice(0, execStartLine).join('\n').slice(declareEnd);
-    const execSection = lines.slice(execStartLine).join('\n');
-    return { setSection, execSection };
+    return -1;
   }
 
   // ─── SET parsing ──────────────────────────────────────────────────

@@ -18,8 +18,8 @@ table {
 }
  
 table th {
-    background-color: #f2f2f2; /* Light gray background for headers */
-    color: black; /* Black text color for headers */
+    background-color: var(--mj-bg-surface-sunken); /* Light gray background for headers */
+    color: var(--mj-text-primary); /* Text color for headers */
     font-weight: bold; /* Bold font weight for headers */
     text-align: left;
 }
@@ -59,7 +59,7 @@ table tr {
 }
 
 table tr:hover {
-    background-color: #e7f4ff; /* Light blue for even rows */
+    background-color: var(--mj-brand-primary-subtle); /* Light blue for even rows */
 }
 
 .sticky-header {

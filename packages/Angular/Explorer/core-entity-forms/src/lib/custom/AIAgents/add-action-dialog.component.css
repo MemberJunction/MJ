@@ -21,8 +21,8 @@
   align-items: center;
   gap: 1rem;
   padding: 1rem 1.5rem;
-  border-bottom: 1px solid #e0e0e0;
-  background: #f8f9fa;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
 }
 
 .add-action-dialog .dialog-header .search-section {
@@ -44,12 +44,12 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   font-size: 0.9rem;
 }
 
 .add-action-dialog .dialog-header .header-actions .stats .stat-item i {
-  color: #28a745;
+  color: var(--mj-status-success);
 }
 
 /* === Main Content === */
@@ -62,26 +62,26 @@
 /* === Category Sidebar === */
 .add-action-dialog .category-sidebar {
   width: 250px;
-  background: #f8f9fa;
-  border-right: 1px solid #e0e0e0;
+  background: var(--mj-bg-surface-card);
+  border-right: 1px solid var(--mj-border-default);
   overflow-y: auto;
 }
 
 .add-action-dialog .category-sidebar .sidebar-header {
   padding: 1rem;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .add-action-dialog .category-sidebar .sidebar-header h4 {
   margin: 0;
-  color: #495057;
+  color: var(--mj-text-secondary);
   font-size: 1rem;
   font-weight: 600;
 }
 
 .add-action-dialog .category-sidebar .sidebar-header h4 i {
   margin-right: 0.5rem;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 
 .add-action-dialog .category-sidebar .category-list {
@@ -98,24 +98,24 @@
 }
 
 .add-action-dialog .category-sidebar .category-list .category-item:hover {
-  background: #e9ecef;
+  background: var(--mj-bg-surface-sunken);
 }
 
 .add-action-dialog .category-sidebar .category-list .category-item.selected {
-  background: #e3f2fd;
-  border-left-color: #2196f3;
-  color: #1976d2;
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+  border-left-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
 }
 
 .add-action-dialog .category-sidebar .category-list .category-item.selected .category-icon {
-  color: #1976d2;
+  color: var(--mj-brand-primary);
 }
 
 .add-action-dialog .category-sidebar .category-list .category-item .category-icon {
   width: 16px;
   text-align: center;
   margin-right: 0.75rem;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 
 .add-action-dialog .category-sidebar .category-list .category-item .category-name {
@@ -124,8 +124,8 @@
 }
 
 .add-action-dialog .category-sidebar .category-list .category-item .category-count {
-  background: #dee2e6;
-  color: #495057;
+  background: var(--mj-border-default);
+  color: var(--mj-text-secondary);
   padding: 0.25rem 0.5rem;
   border-radius: 12px;
   font-size: 0.8rem;
@@ -135,8 +135,8 @@
 }
 
 .add-action-dialog .category-sidebar .category-list .category-item.selected .category-count {
-  background: #bbdefb;
-  color: #1976d2;
+  background: color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 /* === Actions Container === */
@@ -144,7 +144,7 @@
   flex: 1;
   padding: 1.5rem;
   overflow-y: auto;
-  background: white;
+  background: var(--mj-bg-surface);
 }
 
 /* Loading State */
@@ -154,7 +154,7 @@
   align-items: center;
   justify-content: center;
   height: 200px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 
 .add-action-dialog .actions-container .loading-state .loading-spinner {
@@ -162,7 +162,7 @@
 }
 
 .add-action-dialog .actions-container .loading-state .loading-spinner i {
-  color: #2196f3;
+  color: var(--mj-brand-primary);
 }
 
 .add-action-dialog .actions-container .loading-state p {
@@ -177,19 +177,19 @@
   align-items: center;
   justify-content: center;
   height: 300px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   text-align: center;
 }
 
 .add-action-dialog .actions-container .empty-state i {
   font-size: 3rem;
   margin-bottom: 1rem;
-  color: #dee2e6;
+  color: var(--mj-border-default);
 }
 
 .add-action-dialog .actions-container .empty-state h3 {
   margin: 0 0 0.5rem 0;
-  color: #495057;
+  color: var(--mj-text-secondary);
 }
 
 .add-action-dialog .actions-container .empty-state p {
@@ -205,8 +205,8 @@
 
 .add-action-dialog .actions-container .actions-grid .action-card {
   position: relative;
-  background: white;
-  border: 2px solid #e0e0e0;
+  background: var(--mj-bg-surface);
+  border: 2px solid var(--mj-border-default);
   border-radius: 8px;
   padding: 1.5rem;
   cursor: pointer;
@@ -215,24 +215,24 @@
 }
 
 .add-action-dialog .actions-container .actions-grid .action-card:hover {
-  border-color: #2196f3;
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.15);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
   transform: translateY(-2px);
 }
 
 .add-action-dialog .actions-container .actions-grid .action-card.selected {
-  border-color: #28a745;
-  background: #f8fff9;
-  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.15);
+  border-color: var(--mj-status-success);
+  background: color-mix(in srgb, var(--mj-status-success) 4%, var(--mj-bg-surface));
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-status-success) 15%, transparent);
 }
 
 .add-action-dialog .actions-container .actions-grid .action-card.selected .selection-indicator i {
-  color: #28a745;
+  color: var(--mj-status-success);
 }
 
 .add-action-dialog .actions-container .actions-grid .action-card.existing {
-  border-color: #6c757d;
-  background: #f8f9fa;
+  border-color: var(--mj-text-muted);
+  background: var(--mj-bg-surface-card);
   cursor: default;
   opacity: 0.7;
 }
@@ -250,7 +250,7 @@
 
 .add-action-dialog .actions-container .actions-grid .action-card .selection-indicator i {
   font-size: 1.25rem;
-  color: #dee2e6;
+  color: var(--mj-border-default);
   transition: color 0.2s ease;
 }
 
@@ -263,7 +263,7 @@
 .add-action-dialog .actions-container .actions-grid .action-card .card-header .action-icon {
   width: 40px;
   height: 40px;
-  background: #e3f2fd;
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -273,20 +273,20 @@
 
 .add-action-dialog .actions-container .actions-grid .action-card .card-header .action-icon i {
   font-size: 1.25rem;
-  color: #1976d2;
+  color: var(--mj-brand-primary);
 }
 
 .add-action-dialog .actions-container .actions-grid .action-card .card-header .action-name {
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
-  color: #212529;
+  color: var(--mj-text-primary);
   line-height: 1.2;
 }
 
 .add-action-dialog .actions-container .actions-grid .action-card .card-body .action-description {
   margin: 0 0 1rem 0;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   line-height: 1.4;
   font-size: 0.9rem;
 }
@@ -296,8 +296,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  background: #f8f9fa;
-  color: #495057;
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-size: 0.8rem;
@@ -312,8 +312,8 @@
 }
 
 .add-action-dialog .actions-container .actions-grid .action-card .card-body .type-badge {
-  background: #fff3cd;
-  color: #856404;
+  background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-warning);
 }
 
 .add-action-dialog .actions-container .actions-grid .action-card .existing-overlay {
@@ -322,8 +322,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(108, 117, 125, 0.9);
-  color: white;
+  background: color-mix(in srgb, var(--mj-text-muted) 90%, transparent);
+  color: var(--mj-text-inverse);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -346,10 +346,10 @@
   grid-template-columns: 40px 1fr 150px 100px 2fr 120px;
   gap: 1rem;
   padding: 1rem;
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-card);
   border-radius: 6px;
   font-weight: 600;
-  color: #495057;
+  color: var(--mj-text-secondary);
   margin-bottom: 0.5rem;
   font-size: 0.9rem;
 }
@@ -359,7 +359,7 @@
   grid-template-columns: 40px 1fr 150px 100px 2fr 120px;
   gap: 1rem;
   padding: 1rem;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--mj-border-default);
   border-radius: 6px;
   margin-bottom: 0.5rem;
   cursor: pointer;
@@ -368,33 +368,33 @@
 }
 
 .add-action-dialog .actions-container .actions-list .list-item:hover {
-  background: #f8f9fa;
-  border-color: #2196f3;
+  background: var(--mj-bg-surface-card);
+  border-color: var(--mj-brand-primary);
 }
 
 .add-action-dialog .actions-container .actions-list .list-item.selected {
-  background: #f8fff9;
-  border-color: #28a745;
+  background: color-mix(in srgb, var(--mj-status-success) 4%, var(--mj-bg-surface));
+  border-color: var(--mj-status-success);
 }
 
 .add-action-dialog .actions-container .actions-list .list-item.selected .col-select i {
-  color: #28a745;
+  color: var(--mj-status-success);
 }
 
 .add-action-dialog .actions-container .actions-list .list-item.existing {
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-card);
   opacity: 0.7;
   cursor: default;
 }
 
 .add-action-dialog .actions-container .actions-list .list-item.existing:hover {
-  background: #f8f9fa;
-  border-color: #e0e0e0;
+  background: var(--mj-bg-surface-card);
+  border-color: var(--mj-border-default);
 }
 
 .add-action-dialog .actions-container .actions-list .list-item .col-select i {
   font-size: 1.25rem;
-  color: #dee2e6;
+  color: var(--mj-border-default);
 }
 
 .add-action-dialog .actions-container .actions-list .list-item .col-name {
@@ -405,11 +405,11 @@
 }
 
 .add-action-dialog .actions-container .actions-list .list-item .col-name .action-icon {
-  color: #1976d2;
+  color: var(--mj-brand-primary);
 }
 
 .add-action-dialog .actions-container .actions-list .list-item .col-description {
-  color: #6c757d;
+  color: var(--mj-text-muted);
   font-size: 0.9rem;
 }
 
@@ -424,32 +424,32 @@
 }
 
 .add-action-dialog .actions-container .actions-list .list-item .status-badge.existing {
-  background: #6c757d;
-  color: white;
+  background: var(--mj-text-muted);
+  color: var(--mj-text-inverse);
 }
 
 .add-action-dialog .actions-container .actions-list .list-item .status-badge.available {
-  background: #d4edda;
-  color: #155724;
+  background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-success);
 }
 
 /* === Selection Summary === */
 .add-action-dialog .selection-summary {
   padding: 1rem 1.5rem;
-  background: #d4edda;
-  border-top: 1px solid #c3e6cb;
+  background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+  border-top: 1px solid color-mix(in srgb, var(--mj-status-success) 25%, var(--mj-bg-surface));
 }
 
 .add-action-dialog .selection-summary .summary-content {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #155724;
+  color: var(--mj-status-success);
   font-weight: 500;
 }
 
 .add-action-dialog .selection-summary .summary-content i {
-  color: #28a745;
+  color: var(--mj-status-success);
 }
 
 /* === Dialog Footer === */
@@ -458,8 +458,8 @@
   justify-content: flex-end;
   gap: 1rem;
   padding: 1rem 1.5rem;
-  border-top: 1px solid #e0e0e0;
-  background: #f8f9fa;
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
 }
 
 .add-action-dialog .dialog-footer button[kendoButton] {

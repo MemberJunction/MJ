@@ -4,7 +4,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--mj-bg-overlay);
   z-index: 1000;
   display: flex;
   justify-content: flex-end;
@@ -14,7 +14,7 @@
   width: 500px;
   max-width: 100%;
   height: 100%;
-  background: var(--kendo-color-surface);
+  background: var(--mj-bg-surface-card);
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
@@ -25,7 +25,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid var(--kendo-color-border);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .panel-header h2 {
@@ -35,11 +35,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: var(--kendo-color-on-app-surface);
+  color: var(--mj-text-primary);
 }
 
 .panel-header h2 i {
-  color: var(--kendo-color-primary);
+  color: var(--mj-brand-primary);
 }
 
 .panel-content {
@@ -53,8 +53,8 @@
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: var(--kendo-color-error-subtle);
-  color: var(--kendo-color-error);
+  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+  color: var(--mj-status-error);
   border-radius: 8px;
   margin-bottom: 20px;
   font-size: 14px;
@@ -73,12 +73,12 @@
   margin-bottom: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--kendo-color-on-app-surface);
+  color: var(--mj-text-primary);
 }
 
 .form-label.required::after {
   content: ' *';
-  color: var(--kendo-color-error);
+  color: var(--mj-status-error);
 }
 
 /* Type Selector */
@@ -93,22 +93,22 @@
   align-items: center;
   gap: 14px;
   padding: 14px 16px;
-  border: 2px solid var(--kendo-color-border);
+  border: 2px solid var(--mj-border-default);
   border-radius: 10px;
-  background: var(--kendo-color-surface);
+  background: var(--mj-bg-surface-card);
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: left;
 }
 
 .type-option:hover {
-  border-color: var(--kendo-color-primary-subtle);
-  background: var(--kendo-color-base-hover);
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  background: var(--mj-bg-surface-hover);
 }
 
 .type-option.selected {
-  border-color: var(--kendo-color-primary);
-  background: var(--kendo-color-primary-subtle);
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 .type-icon {
@@ -118,21 +118,21 @@
   width: 44px;
   height: 44px;
   border-radius: 10px;
-  background: var(--kendo-color-base-subtle);
+  background: var(--mj-bg-surface-sunken);
   flex-shrink: 0;
 }
 
 .type-option.selected .type-icon {
-  background: var(--kendo-color-primary);
+  background: var(--mj-brand-primary);
 }
 
 .type-icon i {
   font-size: 18px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 
 .type-option.selected .type-icon i {
-  color: white;
+  color: var(--mj-text-inverse);
 }
 
 .type-info {
@@ -145,16 +145,16 @@
 .type-label {
   font-size: 14px;
   font-weight: 600;
-  color: var(--kendo-color-on-app-surface);
+  color: var(--mj-text-primary);
 }
 
 .type-description {
   font-size: 12px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 
 .check-icon {
-  color: var(--kendo-color-primary);
+  color: var(--mj-brand-primary);
   font-size: 16px;
 }
 
@@ -168,14 +168,14 @@
 .form-group kendo-textbox.invalid,
 .form-group kendo-textarea.invalid,
 .form-group kendo-dropdownlist.invalid {
-  border-color: var(--kendo-color-error);
+  border-color: var(--mj-status-error);
 }
 
 .error-text {
   display: block;
   margin-top: 4px;
   font-size: 12px;
-  color: var(--kendo-color-error);
+  color: var(--mj-status-error);
 }
 
 /* Info Box */
@@ -183,13 +183,13 @@
   display: flex;
   gap: 12px;
   padding: 14px 16px;
-  background: var(--kendo-color-info-subtle);
+  background: color-mix(in srgb, var(--mj-status-info) 10%, var(--mj-bg-surface));
   border-radius: 8px;
   margin-top: 24px;
 }
 
 .info-box i {
-  color: var(--kendo-color-info);
+  color: var(--mj-status-info);
   font-size: 16px;
   flex-shrink: 0;
   margin-top: 2px;
@@ -198,7 +198,7 @@
 .info-box p {
   margin: 0;
   font-size: 13px;
-  color: var(--kendo-color-on-app-surface);
+  color: var(--mj-text-primary);
   line-height: 1.5;
 }
 
@@ -206,8 +206,8 @@
   display: flex;
   gap: 12px;
   padding: 16px 24px;
-  border-top: 1px solid var(--kendo-color-border);
-  background: var(--kendo-color-app-surface);
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-page);
 }
 
 .panel-footer button {

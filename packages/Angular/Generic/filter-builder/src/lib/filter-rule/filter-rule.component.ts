@@ -67,6 +67,10 @@ export class FilterRuleComponent implements OnInit, OnChanges {
   public requiresValue: boolean = true;
 
   // Dropdown state
+
+  // Fixed-position style for the active dropdown (escapes overflow clipping)
+  public dropdownMenuStyle: Record<string, string> = {};
+
   public fieldDropdownOpen = false;
   public operatorDropdownOpen = false;
   public valueDropdownOpen = false;
@@ -121,6 +125,47 @@ export class FilterRuleComponent implements OnInit, OnChanges {
   }
 
   // ========================================
+  // DROPDOWN POSITIONING
+  // ========================================
+
+  /**
+   * Calculate fixed-position style for a dropdown menu based on its trigger button.
+   * Uses position:fixed so the menu escapes any overflow:hidden/auto ancestors.
+   * Accounts for CSS transform on ancestors (which change the containing block for fixed positioning).
+   */
+  private calculateDropdownPosition(triggerBtn: ElementRef<HTMLButtonElement> | undefined): void {
+    if (!triggerBtn?.nativeElement) {
+      this.dropdownMenuStyle = {};
+      return;
+    }
+    const rect = triggerBtn.nativeElement.getBoundingClientRect();
+    const offset = this.getTransformAncestorOffset(triggerBtn.nativeElement);
+    this.dropdownMenuStyle = {
+      position: 'fixed',
+      top: `${rect.bottom + 4 - offset.top}px`,
+      left: `${rect.left - offset.left}px`,
+      width: `${rect.width}px`
+    };
+  }
+
+  /**
+   * Find the nearest ancestor with a CSS transform, which creates a new
+   * containing block for position:fixed elements per CSS spec.
+   */
+  private getTransformAncestorOffset(element: HTMLElement): { top: number; left: number } {
+    let el: HTMLElement | null = element.parentElement;
+    while (el) {
+      const transform = getComputedStyle(el).transform;
+      if (transform && transform !== 'none') {
+        const ancestorRect = el.getBoundingClientRect();
+        return { top: ancestorRect.top, left: ancestorRect.left };
+      }
+      el = el.parentElement;
+    }
+    return { top: 0, left: 0 };
+  }
+
+  // ========================================
   // DROPDOWN TOGGLE METHODS
   // ========================================
 
@@ -130,7 +175,7 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     this.closeAllDropdowns();
     this.fieldDropdownOpen = !wasOpen;
     if (this.fieldDropdownOpen) {
-      // Ensure button retains focus for keyboard events (Safari fix)
+      this.calculateDropdownPosition(this.fieldDropdownBtn);
       setTimeout(() => this.fieldDropdownBtn?.nativeElement?.focus(), 0);
     }
   }
@@ -141,7 +186,7 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     this.closeAllDropdowns();
     this.operatorDropdownOpen = !wasOpen;
     if (this.operatorDropdownOpen) {
-      // Ensure button retains focus for keyboard events (Safari fix)
+      this.calculateDropdownPosition(this.operatorDropdownBtn);
       setTimeout(() => this.operatorDropdownBtn?.nativeElement?.focus(), 0);
     }
   }
@@ -152,7 +197,7 @@ export class FilterRuleComponent implements OnInit, OnChanges {
     this.closeAllDropdowns();
     this.valueDropdownOpen = !wasOpen;
     if (this.valueDropdownOpen) {
-      // Ensure button retains focus for keyboard events (Safari fix)
+      this.calculateDropdownPosition(this.valueDropdownBtn);
       setTimeout(() => this.valueDropdownBtn?.nativeElement?.focus(), 0);
     }
   }

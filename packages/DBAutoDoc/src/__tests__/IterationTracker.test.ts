@@ -16,6 +16,8 @@ function createMockRun(): AnalysisRun {
     vendor: 'google',
     temperature: 0.1,
     totalTokensUsed: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
     estimatedCost: 0,
     warnings: [],
     errors: [],
@@ -252,18 +254,22 @@ describe('IterationTracker', () => {
   describe('addTokenUsage', () => {
     it('should accumulate token usage', () => {
       const run = createMockRun();
-      tracker.addTokenUsage(run, 500, 0.01);
-      tracker.addTokenUsage(run, 300, 0.005);
+      tracker.addTokenUsage(run, 500, 0.01, 400, 100);
+      tracker.addTokenUsage(run, 300, 0.005, 200, 100);
 
       expect(run.totalTokensUsed).toBe(800);
+      expect(run.totalInputTokens).toBe(600);
+      expect(run.totalOutputTokens).toBe(200);
       expect(run.estimatedCost).toBeCloseTo(0.015);
     });
 
-    it('should work without cost parameter', () => {
+    it('should work without cost or input/output parameters', () => {
       const run = createMockRun();
       tracker.addTokenUsage(run, 500);
 
       expect(run.totalTokensUsed).toBe(500);
+      expect(run.totalInputTokens).toBe(0);
+      expect(run.totalOutputTokens).toBe(0);
       expect(run.estimatedCost).toBe(0);
     });
   });

@@ -2,8 +2,8 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--kendo-color-surface);
-  border-right: 1px solid var(--kendo-color-border);
+  background: var(--mj-bg-surface-card);
+  border-right: 1px solid var(--mj-border-default);
   position: relative;
   min-width: 180px;
   max-width: 450px;
@@ -11,7 +11,7 @@
 
 .tree-header {
   padding: 12px 16px;
-  border-bottom: 1px solid var(--kendo-color-border);
+  border-bottom: 1px solid var(--mj-border-default);
   flex-shrink: 0;
 }
 
@@ -26,14 +26,14 @@
   margin: 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--kendo-color-on-app-surface);
+  color: var(--mj-text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .tree-header h3 i {
-  color: var(--kendo-color-primary);
+  color: var(--mj-brand-primary);
 }
 
 .tree-header .header-actions {
@@ -61,7 +61,7 @@
 
 .tree-search i {
   font-size: 12px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 
 .tree-content {
@@ -78,10 +78,11 @@
   transition: all 0.15s ease;
   gap: 8px;
   position: relative;
+  color: var(--mj-text-primary);
 }
 
 .tree-item:hover {
-  background: var(--kendo-color-base-hover);
+  background: var(--mj-bg-surface-hover);
   padding-right: 40px; /* Make room for the action button */
 }
 
@@ -90,12 +91,12 @@
 }
 
 .tree-item.selected {
-  background: var(--kendo-color-primary-subtle);
-  color: var(--kendo-color-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 .tree-item.selected .item-icon i {
-  color: var(--kendo-color-primary);
+  color: var(--mj-brand-primary);
 }
 
 .tree-item.root-item,
@@ -113,7 +114,7 @@
 }
 
 .tree-item.uncategorized-item .item-icon i {
-  color: var(--kendo-color-warning);
+  color: var(--mj-status-warning);
 }
 
 .tree-node {
@@ -136,12 +137,12 @@
 }
 
 .expand-btn:hover {
-  background: var(--kendo-color-base-active);
+  background: var(--mj-bg-surface-active);
 }
 
 .expand-btn i {
   font-size: 10px;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 
 .expand-placeholder {
@@ -159,7 +160,7 @@
 
 .item-icon i {
   font-size: 14px;
-  color: var(--kendo-color-warning);
+  color: var(--mj-status-warning);
 }
 
 .item-name {
@@ -172,16 +173,16 @@
 
 .item-count {
   font-size: 11px;
-  color: var(--kendo-color-subtle);
-  background: var(--kendo-color-base-subtle);
+  color: var(--mj-text-muted);
+  background: var(--mj-bg-surface-sunken);
   padding: 2px 8px;
   border-radius: 10px;
   flex-shrink: 0;
 }
 
 .tree-item.selected .item-count {
-  background: var(--kendo-color-primary);
-  color: white;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
 }
 
 .item-actions {
@@ -212,7 +213,7 @@
 
 .tree-footer {
   padding: 12px 16px;
-  border-top: 1px solid var(--kendo-color-border);
+  border-top: 1px solid var(--mj-border-default);
   flex-shrink: 0;
 }
 
@@ -235,7 +236,7 @@
 
 .resize-handle:hover,
 .resize-handle:active {
-  background: var(--kendo-color-primary);
+  background: var(--mj-brand-primary);
 }
 
 /* Collapsed State */
@@ -244,8 +245,8 @@
   flex-direction: column;
   align-items: center;
   padding: 8px 4px;
-  background: var(--kendo-color-surface);
-  border-right: 1px solid var(--kendo-color-border);
+  background: var(--mj-bg-surface-card);
+  border-right: 1px solid var(--mj-border-default);
   width: 44px;
   gap: 4px;
 }
@@ -255,8 +256,8 @@
 }
 
 .tree-panel-collapsed button.selected {
-  background: var(--kendo-color-primary-subtle);
-  color: var(--kendo-color-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 /* Scrollbar Styling */
@@ -269,12 +270,12 @@
 }
 
 .tree-content::-webkit-scrollbar-thumb {
-  background: var(--kendo-color-border);
+  background: var(--mj-border-default);
   border-radius: 3px;
 }
 
 .tree-content::-webkit-scrollbar-thumb:hover {
-  background: var(--kendo-color-subtle);
+  background: var(--mj-text-muted);
 }
 
 /* Mobile Responsiveness */

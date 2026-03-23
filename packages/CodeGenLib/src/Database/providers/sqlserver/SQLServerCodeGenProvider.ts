@@ -770,11 +770,24 @@ GO
 
     // ─── TIMESTAMP COLUMNS ───────────────────────────────────────────────
 
-    /** @inheritdoc */
+    /**
+     * @inheritdoc
+     * NOTE: Currently unused in production — timestamp columns are added individually via
+     * ensureSpecialDateFieldExistsAndHasCorrectDefaultValue() → addColumnSQL(). This method
+     * exists to satisfy the abstract contract. Uses the same defensive multi-step pattern as
+     * addColumnSQL() to remain safe if ever called on tables with existing rows on SQL Azure.
+     */
     generateTimestampColumns(schema: string, tableName: string): string {
-        return `ALTER TABLE [${schema}].[${tableName}] ADD
-    [${EntityInfo.CreatedAtFieldName}] DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),
-    [${EntityInfo.UpdatedAtFieldName}] DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE();`;
+        const createdAt = EntityInfo.CreatedAtFieldName;
+        const updatedAt = EntityInfo.UpdatedAtFieldName;
+        return [
+            `ALTER TABLE [${schema}].[${tableName}] ADD [${createdAt}] DATETIMEOFFSET NULL, [${updatedAt}] DATETIMEOFFSET NULL`,
+            `UPDATE [${schema}].[${tableName}] SET [${createdAt}] = GETUTCDATE(), [${updatedAt}] = GETUTCDATE() WHERE [${createdAt}] IS NULL`,
+            `ALTER TABLE [${schema}].[${tableName}] ALTER COLUMN [${createdAt}] DATETIMEOFFSET NOT NULL`,
+            `ALTER TABLE [${schema}].[${tableName}] ALTER COLUMN [${updatedAt}] DATETIMEOFFSET NOT NULL`,
+            `ALTER TABLE [${schema}].[${tableName}] ADD CONSTRAINT [DF_${schema}_${CodeNameFromString(tableName)}_${createdAt}] DEFAULT GETUTCDATE() FOR [${createdAt}]`,
+            `ALTER TABLE [${schema}].[${tableName}] ADD CONSTRAINT [DF_${schema}_${CodeNameFromString(tableName)}_${updatedAt}] DEFAULT GETUTCDATE() FOR [${updatedAt}]`,
+        ].join(';\n');
     }
 
     // ─── PARAMETER / FIELD HELPERS ───────────────────────────────────────
@@ -1132,19 +1145,36 @@ GO
     addColumnSQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean, defaultExpression?: string): string {
         const nullClause = nullable ? 'NULL' : 'NOT NULL';
         const defaultClause = defaultExpression ? ` DEFAULT ${defaultExpression}` : '';
-        return `ALTER TABLE [${schema}].[${tableName}] ADD ${columnName} ${dataType} ${nullClause}${defaultClause}`;
+
+        if (!nullable && defaultExpression && dataType.toUpperCase() === 'DATETIMEOFFSET') {
+            // SQL Azure evaluates DEFAULT through a sql_variant intermediate when backfilling
+            // existing rows during ALTER TABLE ADD ... NOT NULL DEFAULT. Implicit conversion from
+            // sql_variant to datetimeoffset is not allowed, causing the operation to fail.
+            // The defensive workaround (add NULL → UPDATE → ALTER NOT NULL → ADD CONSTRAINT)
+            // works on both Azure and regular SQL Server, so we always use it for DATETIMEOFFSET
+            // to ensure CodeGen output is portable across environments.
+            const constraintName = `DF_${schema}_${CodeNameFromString(tableName)}_${columnName}`;
+            return [
+                `ALTER TABLE [${schema}].[${tableName}] ADD [${columnName}] ${dataType} NULL`,
+                `UPDATE [${schema}].[${tableName}] SET [${columnName}] = ${defaultExpression} WHERE [${columnName}] IS NULL`,
+                `ALTER TABLE [${schema}].[${tableName}] ALTER COLUMN [${columnName}] ${dataType} NOT NULL`,
+                `ALTER TABLE [${schema}].[${tableName}] ADD CONSTRAINT [${constraintName}] DEFAULT ${defaultExpression} FOR [${columnName}]`,
+            ].join(';\n');
+        }
+
+        return `ALTER TABLE [${schema}].[${tableName}] ADD [${columnName}] ${dataType} ${nullClause}${defaultClause}`;
     }
 
     /** @inheritdoc */
     alterColumnTypeAndNullabilitySQL(schema: string, tableName: string, columnName: string, dataType: string, nullable: boolean): string {
         const nullClause = nullable ? 'NULL' : 'NOT NULL';
-        return `ALTER TABLE [${schema}].[${tableName}] ALTER COLUMN ${columnName} ${dataType} ${nullClause}`;
+        return `ALTER TABLE [${schema}].[${tableName}] ALTER COLUMN [${columnName}] ${dataType} ${nullClause}`;
     }
 
     /** @inheritdoc */
     addDefaultConstraintSQL(schema: string, tableName: string, columnName: string, defaultExpression: string): string {
         const constraintName = `DF_${schema}_${CodeNameFromString(tableName)}_${columnName}`;
-        return `ALTER TABLE [${schema}].[${tableName}] ADD CONSTRAINT ${constraintName} DEFAULT ${defaultExpression} FOR [${columnName}]`;
+        return `ALTER TABLE [${schema}].[${tableName}] ADD CONSTRAINT [${constraintName}] DEFAULT ${defaultExpression} FOR [${columnName}]`;
     }
 
     /**

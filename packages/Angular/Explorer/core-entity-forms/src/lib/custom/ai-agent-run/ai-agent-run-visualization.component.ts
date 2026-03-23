@@ -302,7 +302,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     
     const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     polygon.setAttribute('points', '0 0, 10 3.5, 0 7');
-    polygon.setAttribute('fill', '#4a90e2');
+    polygon.setAttribute('class', 'arrowhead-polygon');
     marker.appendChild(polygon);
     defs.appendChild(marker);
     svg.appendChild(defs);
@@ -466,7 +466,8 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('class', 'step-node');
     g.setAttribute('data-step-id', step.ID);
-    
+    g.setAttribute('data-type', this.getStepDataType(step.StepType));
+
     // Add event handlers
     g.addEventListener('click', (e) => this.onNodeClick(e, step));
     g.addEventListener('mousedown', (e) => this.onNodeMouseDown(e, step.ID));
@@ -480,7 +481,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     rect.setAttribute('width', nodeWidth.toString());
     rect.setAttribute('height', nodeHeight.toString());
     rect.setAttribute('rx', '8');
-    rect.setAttribute('fill', 'white');
+    rect.setAttribute('class', 'node-bg');
     rect.setAttribute('stroke', this.getStepColor(step));
     rect.setAttribute('stroke-width', '2');
     g.appendChild(rect);
@@ -508,7 +509,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     title.setAttribute('y', '20');
     title.setAttribute('font-size', '14');
     title.setAttribute('font-weight', '600');
-    title.setAttribute('fill', '#2c3e50');
+    title.setAttribute('class', 'node-title');
     title.textContent = this.truncateText(step.StepName || `Step ${step.StepNumber}`, 15);
     g.appendChild(title);
     
@@ -517,7 +518,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     type.setAttribute('x', '12');
     type.setAttribute('y', '40');
     type.setAttribute('font-size', '12');
-    type.setAttribute('fill', '#6c757d');
+    type.setAttribute('class', 'node-subtitle');
     type.textContent = step.StepType;
     g.appendChild(type);
     
@@ -529,7 +530,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
         model.setAttribute('x', '12');
         model.setAttribute('y', '55');
         model.setAttribute('font-size', '11');
-        model.setAttribute('fill', '#868e96');
+        model.setAttribute('class', 'node-meta');
         model.textContent = `${promptRun.Model || 'Unknown'}`;
         g.appendChild(model);
       }
@@ -542,7 +543,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       durationText.setAttribute('x', '12');
       durationText.setAttribute('y', '70');
       durationText.setAttribute('font-size', '11');
-      durationText.setAttribute('fill', '#868e96');
+      durationText.setAttribute('class', 'node-meta');
       durationText.textContent = `⏱️ ${duration}`;
       g.appendChild(durationText);
     }
@@ -564,8 +565,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     bg.setAttribute('width', scopeWidth.toString());
     bg.setAttribute('height', scopeHeight.toString());
     bg.setAttribute('rx', '12');
-    bg.setAttribute('fill', '#f8f9fa');
-    bg.setAttribute('stroke', '#4a90e2');
+    bg.setAttribute('class', 'scope-bg');
     bg.setAttribute('stroke-width', '2');
     bg.setAttribute('stroke-dasharray', '5,5');
     g.appendChild(bg);
@@ -575,7 +575,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     headerBg.setAttribute('width', scopeWidth.toString());
     headerBg.setAttribute('height', headerHeight.toString());
     headerBg.setAttribute('rx', '12');
-    headerBg.setAttribute('fill', '#e3f2fd');
+    headerBg.setAttribute('class', 'scope-header');
     g.appendChild(headerBg);
     
     // Fix bottom corners
@@ -583,7 +583,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     headerFix.setAttribute('y', (headerHeight - 12).toString());
     headerFix.setAttribute('width', scopeWidth.toString());
     headerFix.setAttribute('height', '12');
-    headerFix.setAttribute('fill', '#e3f2fd');
+    headerFix.setAttribute('class', 'scope-header');
     g.appendChild(headerFix);
     
     // Robot icon
@@ -600,7 +600,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     title.setAttribute('y', '26');
     title.setAttribute('font-size', '14');
     title.setAttribute('font-weight', '600');
-    title.setAttribute('fill', '#1976d2');
+    title.setAttribute('class', 'scope-title');
     title.textContent = subRun?.Agent || 'Sub-Agent';
     g.appendChild(title);
     
@@ -614,8 +614,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     expandBg.setAttribute('cx', '10');
     expandBg.setAttribute('cy', '10');
     expandBg.setAttribute('r', '10');
-    expandBg.setAttribute('fill', 'white');
-    expandBg.setAttribute('stroke', '#4a90e2');
+    expandBg.setAttribute('class', 'expand-bg');
     expandBtn.appendChild(expandBg);
     
     const expandIcon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -623,7 +622,7 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     expandIcon.setAttribute('y', '15');
     expandIcon.setAttribute('text-anchor', 'middle');
     expandIcon.setAttribute('font-size', '12');
-    expandIcon.setAttribute('fill', '#4a90e2');
+    expandIcon.setAttribute('class', 'expand-icon');
     expandIcon.textContent = '+';
     expandBtn.appendChild(expandIcon);
     
@@ -741,10 +740,9 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
         const d = `M ${fromX} ${fromY} L ${toX} ${toY}`;
         path.setAttribute('d', d);
         path.setAttribute('fill', 'none');
-        path.setAttribute('stroke', '#4a90e2');
+        path.setAttribute('class', 'connection-line');
         path.setAttribute('stroke-width', '2');
         path.setAttribute('marker-end', 'url(#arrowhead-viz)');
-        path.setAttribute('opacity', '0.6');
         
         connectionsGroup.appendChild(path);
         conn.path = path;
@@ -798,7 +796,20 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
     };
     return colorMap[status] || '#9e9e9e';
   }
-  
+
+  private getStepDataType(stepType: string): string {
+    const typeMap: Record<string, string> = {
+      'Prompt': 'prompt',
+      'Actions': 'action',
+      'Sub-Agent': 'subagent',
+      'Tool': 'tool',
+      'Decision': 'decision',
+      'ForEach': 'foreach',
+      'While': 'while'
+    };
+    return typeMap[stepType] || 'default';
+  }
+
   private truncateText(text: string, maxLength: number): string {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength - 3) + '...';

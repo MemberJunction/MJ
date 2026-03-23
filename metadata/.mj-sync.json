@@ -25,6 +25,8 @@
     "prompts",
     "templates",
     "notifications",
+    "agent-categories",
+    "agent-request-types",
     "agent-types",
     "agents",
     "scheduled-jobs",
@@ -47,7 +49,8 @@
     "outputDirectory": "./sql_logging",
     "filterPatterns": ["*spCreateAIPromptRun*", "*spUpdateAIPromptRun*"],
     "filterType": "exclude",
-    "formatAsMigration": true
+    "formatAsMigration": true,
+    "variableBatchThreshold": 200
   },
   "emitSyncNotes": false
 }

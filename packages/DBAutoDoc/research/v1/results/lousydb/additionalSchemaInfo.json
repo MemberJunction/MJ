@@ -1,0 +1,496 @@
+{
+    "Schemas": [
+        {
+            "name": "inv",
+            "entityNamePrefix": "Inv: ",
+            "entityNameSuffix": ""
+        },
+        {
+            "name": "sales",
+            "entityNamePrefix": "Sales: ",
+            "entityNameSuffix": ""
+        }
+    ],
+    "inv": [
+        {
+            "TableName": "adj",
+            "PrimaryKey": [
+                {
+                    "FieldName": "adj_id",
+                    "Description": "Unique identifier for each inventory adjustment transaction"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "prd_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "prd",
+                    "RelatedField": "prd_id",
+                    "Description": "Reference to the specific product being adjusted"
+                },
+                {
+                    "FieldName": "whs_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "whs",
+                    "RelatedField": "whs_id",
+                    "Description": "Reference to the warehouse location where the adjustment occurred"
+                },
+                {
+                    "FieldName": "prd_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "stk",
+                    "RelatedField": "prd_id"
+                },
+                {
+                    "FieldName": "whs_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "rcv",
+                    "RelatedField": "whs_id"
+                },
+                {
+                    "FieldName": "whs_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "stk",
+                    "RelatedField": "whs_id"
+                }
+            ]
+        },
+        {
+            "TableName": "cat",
+            "PrimaryKey": [
+                {
+                    "FieldName": "cat_id",
+                    "Description": "Unique identifier for each product category"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "prnt_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "cat",
+                    "RelatedField": "cat_id",
+                    "Description": "Reference to the parent category ID, establishing a hierarchy"
+                }
+            ]
+        },
+        {
+            "TableName": "cnt",
+            "PrimaryKey": [
+                {
+                    "FieldName": "cnt_id",
+                    "Description": "Unique identifier for each inventory count record"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "whs_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "whs",
+                    "RelatedField": "whs_id",
+                    "Description": "Identifier for the warehouse where the physical count was conducted"
+                },
+                {
+                    "FieldName": "prd_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "prd",
+                    "RelatedField": "prd_id",
+                    "Description": "Identifier for the specific product being audited"
+                },
+                {
+                    "FieldName": "whs_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "rcv",
+                    "RelatedField": "whs_id"
+                },
+                {
+                    "FieldName": "whs_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "stk",
+                    "RelatedField": "whs_id"
+                },
+                {
+                    "FieldName": "prd_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "stk",
+                    "RelatedField": "prd_id"
+                }
+            ]
+        },
+        {
+            "TableName": "po",
+            "PrimaryKey": [
+                {
+                    "FieldName": "po_id",
+                    "Description": "The unique primary identifier for each purchase order."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "sup_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "sup",
+                    "RelatedField": "sup_id",
+                    "Description": "Foreign key referencing the supplier (inv.sup) from whom the goods are being ordered."
+                }
+            ]
+        },
+        {
+            "TableName": "po_dtl",
+            "PrimaryKey": [
+                {
+                    "FieldName": "seq",
+                    "Description": "The sequence or line-item number for the product within a specific purchase order."
+                },
+                {
+                    "FieldName": "po_id",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "po_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "po",
+                    "RelatedField": "po_id",
+                    "Description": "Foreign key identifying the parent purchase order header in inv.po."
+                },
+                {
+                    "FieldName": "prd_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "stk",
+                    "RelatedField": "prd_id",
+                    "Description": "Foreign key identifying the specific product being ordered, referencing the product master."
+                },
+                {
+                    "FieldName": "prd_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "prd",
+                    "RelatedField": "prd_id"
+                }
+            ]
+        },
+        {
+            "TableName": "prd",
+            "PrimaryKey": [
+                {
+                    "FieldName": "prd_id",
+                    "Description": "Unique internal identifier for each product record"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "cat_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "cat",
+                    "RelatedField": "cat_id",
+                    "Description": "Reference to the product category (e.g., Furniture, Electronics)"
+                },
+                {
+                    "FieldName": "sup_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "sup",
+                    "RelatedField": "sup_id",
+                    "Description": "Reference to the primary supplier or vendor for the product"
+                }
+            ]
+        },
+        {
+            "TableName": "rcv",
+            "PrimaryKey": [
+                {
+                    "FieldName": "rcv_id",
+                    "Description": "Unique identifier for each receiving transaction record"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "po_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "po",
+                    "RelatedField": "po_id",
+                    "Description": "Reference to the purchase order associated with the incoming shipment"
+                },
+                {
+                    "FieldName": "whs_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "whs",
+                    "RelatedField": "whs_id",
+                    "Description": "The specific warehouse or distribution center where the goods were delivered"
+                }
+            ]
+        },
+        {
+            "TableName": "stk",
+            "PrimaryKey": [
+                {
+                    "FieldName": "prd_id",
+                    "Description": "Foreign key identifying the specific product being tracked."
+                },
+                {
+                    "FieldName": "whs_id",
+                    "Description": "Foreign key identifying the physical warehouse or distribution center where the stock is located."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "prd_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "prd",
+                    "RelatedField": "prd_id",
+                    "Description": "Foreign key identifying the specific product being tracked."
+                },
+                {
+                    "FieldName": "whs_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "whs",
+                    "RelatedField": "whs_id",
+                    "Description": "Foreign key identifying the physical warehouse or distribution center where the stock is located."
+                }
+            ]
+        },
+        {
+            "TableName": "sup",
+            "PrimaryKey": [
+                {
+                    "FieldName": "sup_id",
+                    "Description": "Unique identifier for each supplier"
+                }
+            ]
+        },
+        {
+            "TableName": "whs",
+            "PrimaryKey": [
+                {
+                    "FieldName": "whs_id",
+                    "Description": "Unique surrogate primary key for each warehouse facility"
+                }
+            ]
+        }
+    ],
+    "sales": [
+        {
+            "TableName": "addr",
+            "PrimaryKey": [
+                {
+                    "FieldName": "addr_id",
+                    "Description": "The unique primary identifier for each address record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "cst_id",
+                    "SchemaName": "sales",
+                    "RelatedTable": "cst",
+                    "RelatedField": "cst_id",
+                    "Description": "Foreign key linking the address to a specific customer in the sales.cst table."
+                }
+            ]
+        },
+        {
+            "TableName": "cst",
+            "PrimaryKey": [
+                {
+                    "FieldName": "cst_id",
+                    "Description": "Unique identifier for each customer record"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "rep_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "sup",
+                    "RelatedField": "sup_id",
+                    "Description": "The identifier of the sales representative or account manager assigned to the customer"
+                }
+            ]
+        },
+        {
+            "TableName": "cst_note",
+            "PrimaryKey": [
+                {
+                    "FieldName": "note_id",
+                    "Description": "A unique surrogate identifier for each note entry."
+                },
+                {
+                    "FieldName": "cst_id",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "cst_id",
+                    "SchemaName": "sales",
+                    "RelatedTable": "cst",
+                    "RelatedField": "cst_id",
+                    "Description": "The identifier for the customer associated with the note, linking to sales.cst."
+                }
+            ]
+        },
+        {
+            "TableName": "eml",
+            "PrimaryKey": [
+                {
+                    "FieldName": "eml_id",
+                    "Description": "Primary key for the email record"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "cst_id",
+                    "SchemaName": "sales",
+                    "RelatedTable": "cst",
+                    "RelatedField": "cst_id",
+                    "Description": "Foreign key referencing the customer who owns this email address"
+                }
+            ]
+        },
+        {
+            "TableName": "oli",
+            "PrimaryKey": [
+                {
+                    "FieldName": "oli_id",
+                    "Description": "The unique primary identifier for each individual line item in an order."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ord_id",
+                    "SchemaName": "sales",
+                    "RelatedTable": "ord",
+                    "RelatedField": "ord_id",
+                    "Description": "The identifier of the parent sales order this line item belongs to."
+                },
+                {
+                    "FieldName": "prd_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "stk",
+                    "RelatedField": "prd_id",
+                    "Description": "The identifier of the specific product or stock item being purchased."
+                }
+            ]
+        },
+        {
+            "TableName": "ord",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ord_id",
+                    "Description": "The unique primary identifier for each sales order."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "cst_id",
+                    "SchemaName": "sales",
+                    "RelatedTable": "cst",
+                    "RelatedField": "cst_id",
+                    "Description": "Foreign key referencing the customer who placed the order."
+                }
+            ]
+        },
+        {
+            "TableName": "phn",
+            "PrimaryKey": [
+                {
+                    "FieldName": "phn_id",
+                    "Description": "The unique primary identifier for each phone record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "cst_id",
+                    "SchemaName": "sales",
+                    "RelatedTable": "cst",
+                    "RelatedField": "cst_id",
+                    "Description": "The identifier of the customer to whom the phone number belongs."
+                }
+            ]
+        },
+        {
+            "TableName": "pmt",
+            "PrimaryKey": [
+                {
+                    "FieldName": "pmt_id",
+                    "Description": "The unique primary identifier for each payment transaction record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ord_id",
+                    "SchemaName": "sales",
+                    "RelatedTable": "ord",
+                    "RelatedField": "ord_id",
+                    "Description": "A reference to the specific sales order that this payment is intended to satisfy. The 10% null rate suggests that some payments are unallocated or represent general account credits."
+                },
+                {
+                    "FieldName": "cst_id",
+                    "SchemaName": "sales",
+                    "RelatedTable": "cst",
+                    "RelatedField": "cst_id",
+                    "Description": "The identifier of the customer who made the payment."
+                }
+            ]
+        },
+        {
+            "TableName": "rtn",
+            "PrimaryKey": [
+                {
+                    "FieldName": "rtn_id",
+                    "Description": "The unique primary identifier for each return record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ord_id",
+                    "SchemaName": "sales",
+                    "RelatedTable": "ord",
+                    "RelatedField": "ord_id",
+                    "Description": "Foreign key referencing the original sales order associated with the return."
+                },
+                {
+                    "FieldName": "oli_id",
+                    "SchemaName": "sales",
+                    "RelatedTable": "oli",
+                    "RelatedField": "oli_id",
+                    "Description": "Foreign key referencing the specific line item within an order that is being returned."
+                }
+            ]
+        },
+        {
+            "TableName": "shp",
+            "PrimaryKey": [
+                {
+                    "FieldName": "shp_id",
+                    "Description": "The unique primary identifier for a shipment record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ord_id",
+                    "SchemaName": "sales",
+                    "RelatedTable": "ord",
+                    "RelatedField": "ord_id",
+                    "Description": "The identifier of the sales order being fulfilled by this shipment."
+                },
+                {
+                    "FieldName": "whs_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "whs",
+                    "RelatedField": "whs_id",
+                    "Description": "The identifier of the warehouse from which the goods were dispatched."
+                },
+                {
+                    "FieldName": "whs_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "rcv",
+                    "RelatedField": "whs_id"
+                },
+                {
+                    "FieldName": "whs_id",
+                    "SchemaName": "inv",
+                    "RelatedTable": "stk",
+                    "RelatedField": "whs_id"
+                }
+            ]
+        }
+    ]
+}

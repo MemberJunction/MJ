@@ -529,7 +529,7 @@ export class GoldenLayoutManager {
           top: 50%;
           transform: translateY(-50%) rotate(45deg);
           font-size: 9px;
-          color: #9e9e9e;
+          color: var(--mj-text-muted);
           width: 16px;
           height: 16px;
           display: flex;

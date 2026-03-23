@@ -2,10 +2,10 @@ import dotenv from 'dotenv';
 
 dotenv.config({ quiet: true });
 
-import { expressMiddleware } from '@apollo/server/express4';
+import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
@@ -19,12 +19,13 @@ import { fileURLToPath } from 'node:url';
 import { sep } from 'node:path';
 import 'reflect-metadata';
 import { ReplaySubject } from 'rxjs';
-import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp } from 'type-graphql';
+import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp, PubSubEngine } from 'type-graphql';
+import { PubSub } from 'graphql-subscriptions';
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import buildApolloServer from './apolloServer/index.js';
 import { configInfo, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
-import { contextFunction, getUserPayload } from './context.js';
+import { contextFunction, createUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
@@ -38,6 +39,10 @@ import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 import { LocalCacheManager, StartupManager, TelemetryManager, TelemetryLevel } from '@memberjunction/core';
 import { getSystemUser } from './auth/index.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
+import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
+import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+import { PubSubManager } from './generic/PubSubManager.js';
+import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -72,6 +77,8 @@ export {
 export * from './auth/APIKeyScopeAuth.js';
 
 export * from './generic/PushStatusResolver.js';
+export * from './generic/PubSubManager.js';
+export * from './generic/CacheInvalidationResolver.js';
 export * from './generic/ResolverBase.js';
 export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
@@ -92,13 +99,14 @@ export * from './resolvers/EntityRecordNameResolver.js';
 export * from './resolvers/MergeRecordsResolver.js';
 export * from './resolvers/ReportResolver.js';
 export * from './resolvers/QueryResolver.js';
+export * from './resolvers/TestQuerySQLResolver.js';
 export * from './resolvers/SqlLoggingConfigResolver.js';
 export * from './resolvers/SyncRolesUsersResolver.js';
 export * from './resolvers/SyncDataResolver.js';
 export * from './resolvers/GetDataResolver.js';
 export * from './resolvers/GetDataContextDataResolver.js';
 export * from './resolvers/TransactionGroupResolver.js';
-export * from './resolvers/CreateQueryResolver.js';
+export * from './resolvers/QuerySystemUserResolver.js';
 export * from './resolvers/TelemetryResolver.js';
 export * from './resolvers/APIKeyResolver.js';
 export * from './resolvers/MCPResolver.js';
@@ -115,10 +123,18 @@ export * from './resolvers/UserFavoriteResolver.js';
 export * from './resolvers/UserResolver.js';
 export * from './resolvers/UserViewResolver.js';
 export * from './resolvers/VersionHistoryResolver.js';
+export * from './resolvers/CurrentUserContextResolver.js';
 export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, GetReadOnlyProvider } from './util.js';
 
 export * from './generated/generated.js';
+export * from './multiTenancy/index.js';
+export * from './middleware/index.js';
 
+import { RegisterDataHook } from '@memberjunction/core';
+import type { RequestHandler, ErrorRequestHandler } from 'express';
+import type { ApolloServerPlugin } from '@apollo/server';
+import type { GraphQLSchema } from 'graphql';
+import { BaseServerMiddleware } from './middleware/BaseServerMiddleware.js';
 
 export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;
@@ -301,9 +317,53 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     console.log('Server telemetry disabled');
   }
 
-  // Initialize LocalCacheManager with the server-side storage provider (in-memory)
-  await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
-  console.log('LocalCacheManager initialized');
+  // Optionally inject Redis as the shared storage provider for cross-server cache invalidation
+  if (process.env.REDIS_URL) {
+    const redisProvider = new RedisLocalStorageProvider({
+      url: process.env.REDIS_URL,
+      keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
+      enablePubSub: true,
+      enableLogging: true,
+    });
+    (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider);
+    await redisProvider.StartListening();
+
+    // Connect Redis pub/sub events to LocalCacheManager callback dispatch
+    // so cross-server cache invalidation messages are routed to registered callbacks
+    redisProvider.OnCacheChanged((event) => {
+        const sourceShort = event.SourceServerId ? event.SourceServerId.substring(0, 8) : 'unknown';
+        console.log(`[MJAPI] Redis pub/sub → DispatchCacheChange: ${event.Action} for "${event.CacheKey}" from server ${sourceShort}`);
+        LocalCacheManager.Instance.DispatchCacheChange(event);
+
+        // Also broadcast to connected browser clients via GraphQL subscription
+        // Extract entity name from the cache key (format: EntityName|Filter|OrderBy|...)
+        const entityName = event.CacheKey ? event.CacheKey.split('|')[0] : '';
+        if (entityName) {
+            PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
+                entityName,
+                primaryKeyValues: null, // entity-level invalidation
+                action: event.Action || 'save',
+                sourceServerId: event.SourceServerId || 'unknown',
+                timestamp: new Date(),
+            });
+        }
+    });
+
+    console.log(`Redis cache provider connected: ${process.env.REDIS_URL}`);
+  }
+
+  // If Redis is available, swap LocalCacheManager's storage provider to Redis.
+  // LocalCacheManager may have already been initialized (with in-memory provider)
+  // during engine loading. SetStorageProvider migrates cached data to Redis.
+  if (process.env.REDIS_URL) {
+    await LocalCacheManager.Instance.SetStorageProvider(Metadata.Provider.LocalStorageProvider);
+    console.log('LocalCacheManager: storage provider swapped to Redis');
+  }
+  // Ensure LocalCacheManager is initialized (no-op if already done during engine loading)
+  if (!LocalCacheManager.Instance.IsInitialized) {
+    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider);
+    console.log('LocalCacheManager initialized');
+  }
 
   // Initialize APIKeyEngine singleton — reads apiKeyGeneration from mj.config.cjs automatically
   // This must happen before any request handler calls GetAPIKeyEngine()
@@ -342,19 +402,141 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     Object.values(module).filter((value) => typeof value === 'function')
   ) as BuildSchemaOptions['resolvers'];
 
+  // ─── Discover all server middleware via ClassFactory ─────────────────────
+  const allRegistrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseServerMiddleware);
+
+  // Deduplicate by key (same key -> highest priority wins).
+  // This is the replacement mechanism: if BCSaaS registers with the same
+  // key as MJ's built-in tenant filter, ClassFactory's priority system
+  // ensures only the higher-priority one is used.
+  const uniqueKeys = new Set(
+      allRegistrations.map(r => r.Key?.trim().toLowerCase()).filter((k): k is string => k != null)
+  );
+
+  const winnerRegistrations: typeof allRegistrations = [];
+  for (const key of uniqueKeys) {
+      const winner = MJGlobal.Instance.ClassFactory.GetRegistration(BaseServerMiddleware, key);
+      if (winner) winnerRegistrations.push(winner);
+  }
+
+  // Instantiate and filter by Enabled
+  const middlewares: BaseServerMiddleware[] = [];
+  for (const reg of winnerRegistrations) {
+      const MwClass = reg.SubClass as new () => BaseServerMiddleware;
+      const mw = new MwClass();
+      if (mw.Enabled) {
+          middlewares.push(mw);
+      }
+  }
+
+  // Initialize all middleware
+  for (const mw of middlewares) {
+      await mw.Initialize();
+      console.log(`  [Middleware] ${mw.Label}`);
+  }
+
+  // Collect middleware contributions for each pipeline stage
+  const mwPreAuth: RequestHandler[] = [];
+  const mwPostAuth: RequestHandler[] = [];
+  const mwPostRoute: (RequestHandler | ErrorRequestHandler)[] = [];
+  const mwApolloPlugins: ApolloServerPlugin[] = [];
+  const mwSchemaTransformers: ((schema: GraphQLSchema) => GraphQLSchema)[] = [];
+  const mwResolverPaths: string[] = [];
+
+  for (const mw of middlewares) {
+      mwPreAuth.push(...mw.GetPreAuthMiddleware());
+      mwPostAuth.push(...mw.GetPostAuthMiddleware());
+      mwPostRoute.push(...mw.GetPostRouteMiddleware());
+      mwApolloPlugins.push(...mw.GetApolloPlugins());
+      mwSchemaTransformers.push(...mw.GetSchemaTransformers());
+      mwResolverPaths.push(...mw.GetResolverPaths());
+
+      // Express app configuration escape hatch
+      if (mw.ConfigureExpressApp) {
+          await mw.ConfigureExpressApp(app);
+      }
+
+      // Extract hook methods and register in the global hook store
+      // (ProviderBase/BaseEntity will read these via GetDataHooks())
+      RegisterDataHook('PreRunView', mw.PreRunView.bind(mw));
+      RegisterDataHook('PostRunView', mw.PostRunView.bind(mw));
+      RegisterDataHook('PreSave', mw.PreSave.bind(mw));
+  }
+
+  // ─── Resolve middleware-contributed resolver paths and merge into resolvers ───
+  let allResolvers = resolvers;
+  if (mwResolverPaths.length > 0) {
+      const mwGlobs = mwResolverPaths.flatMap((p) => (isWindows ? p.replace(/\\/g, '/') : p));
+      const mwResolverFiles = fg.globSync(mwGlobs);
+      if (mwResolverFiles.length > 0) {
+          const mwModules = await Promise.all(
+              mwResolverFiles.map((modulePath) => {
+                  try {
+                      return import(isWindows ? `file://${modulePath}` : modulePath);
+                  } catch (e) {
+                      console.error(`Error loading middleware resolver at '${modulePath}'`, e);
+                      throw e;
+                  }
+              })
+          );
+          const mwResolvers = mwModules.flatMap((module) =>
+              Object.values(module).filter((value) => typeof value === 'function')
+          );
+          allResolvers = [...resolvers, ...mwResolvers] as BuildSchemaOptions['resolvers'];
+          console.log(`  [Middleware Resolvers] Loaded ${mwResolverFiles.length} resolver file(s) from middleware`);
+      }
+  }
+
+  // Create an explicit PubSub instance so we can reference it outside of resolvers
+  // graphql-subscriptions v3 renamed asyncIterator→asyncIterableIterator, but
+  // type-graphql still calls asyncIterator. Shim for compatibility.
+  const pubSub = new PubSub() as unknown as Record<string, unknown>;
+  if (!pubSub.asyncIterator && typeof pubSub.asyncIterableIterator === 'function') {
+    pubSub.asyncIterator = pubSub.asyncIterableIterator;
+  }
+  PubSubManager.Instance.SetPubSubEngine(pubSub as unknown as PubSubEngine);
+
+  // Global listener: broadcast CACHE_INVALIDATION to all browser clients whenever
+  // ANY BaseEntity save/delete occurs on this server — regardless of whether it
+  // originated from a GraphQL mutation or internal server-side code (agents, actions,
+  // task orchestrator, etc.).  This closes the gap where server-internal saves were
+  // invisible to browser BaseEngine caches.
+  MJGlobal.Instance.GetEventListener(false).subscribe((event) => {
+    if (event.event === MJEventType.ComponentEvent && event.eventCode === BaseEntity.BaseEventCode) {
+      const beEvent = event.args as BaseEntityEvent;
+      if (beEvent.type === 'save' || beEvent.type === 'delete') {
+        PubSubManager.Instance.Publish(CACHE_INVALIDATION_TOPIC, {
+          entityName: beEvent.baseEntity.EntityInfo.Name,
+          primaryKeyValues: JSON.stringify(beEvent.baseEntity.PrimaryKey.KeyValuePairs),
+          action: beEvent.type,
+          sourceServerId: MJGlobal.Instance.ProcessUUID,
+          timestamp: new Date(),
+          originSessionId: null,
+          recordData: beEvent.type === 'save' ? JSON.stringify(beEvent.baseEntity.GetAll()) : undefined,
+        });
+      }
+    }
+  });
+
   let schema = mergeSchemas({
     schemas: [
       buildSchemaSync({
-        resolvers,
+        resolvers: allResolvers,
         validate: false,
         scalarsMap: [{ type: Date, scalar: GraphQLTimestamp }],
         emitSchemaFile: websiteRunFromPackage !== 1,
+        pubSub,
       }),
     ],
     typeDefs: [requireSystemUserDirective.typeDefs, publicDirective.typeDefs],
   });
   schema = requireSystemUserDirective.transformer(schema);
   schema = publicDirective.transformer(schema);
+
+  // Apply middleware-contributed schema transformers (after built-in directive transformers)
+  for (const transformer of mwSchemaTransformers) {
+    schema = transformer(schema);
+  }
 
   const httpServer = createServer(app);
 
@@ -385,7 +567,11 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     webSocketServer
   );
 
-  const apolloServer = buildApolloServer({ schema }, { httpServer, serverCleanup });
+  const apolloServer = buildApolloServer(
+    { schema },
+    { httpServer, serverCleanup },
+    mwApolloPlugins.length > 0 ? mwApolloPlugins : undefined
+  );
   await apolloServer.start();
   
   // Fix #8: Add compression for better throughput performance
@@ -409,72 +595,73 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     level: 6
   }));
 
-  // Setup REST API endpoints BEFORE GraphQL (since graphqlRootPath may be '/' which catches all routes)
-  const authMiddleware = async (req, res, next) => {
-    try {
-      const sessionIdRaw = req.headers['x-session-id'];
-      const requestDomain = new URL(req.headers.origin || '').hostname;
-      const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
-      const bearerToken = req.headers.authorization ?? '';
-      const apiKey = String(req.headers['x-mj-api-key']);
+  // Health check endpoint - registered before auth middleware so cloud
+  // platform probes (Azure App Service, AWS ALB, k8s, etc.) don't
+  // generate noisy auth errors in the logs.
+  app.get('/healthcheck', (_req, res) => {
+    res.status(200).json({ status: 'ok' });
+  });
 
-      const userPayload = await getUserPayload(bearerToken, sessionId, dataSources, requestDomain, apiKey);
-      if (!userPayload) {
-        return res.status(401).json({ error: 'Invalid token' });
-      }
+  // Apply middleware-contributed pre-auth handlers (after compression, before routes)
+  for (const mw of mwPreAuth) {
+    app.use(mw);
+  }
 
-      // Set both req.user (standard Express convention) and req['mjUser'] (MJ REST convention)
-      // Note: userPayload contains { userRecord: UserInfo, email, sessionId }
-      // The mjUser property expects the UserInfo directly (userRecord)
-      req.user = userPayload;
-      req['mjUser'] = userPayload.userRecord;
-      next();
-    } catch (error) {
-      console.error('Auth error:', error);
-      return res.status(401).json({ error: 'Authentication failed' });
-    }
-  };
-
-  // Build public URL for OAuth callbacks
+  // ─── OAuth callback routes (unauthenticated, registered BEFORE auth) ─────
   const oauthPublicUrl = configInfo.publicUrl || `${configInfo.baseUrl}:${configInfo.graphqlPort}${configInfo.graphqlRootPath || ''}`;
   console.log(`[OAuth] publicUrl: ${oauthPublicUrl}`);
 
-  // Set up OAuth callback routes at /oauth (independent of REST API)
-  // These must be registered BEFORE GraphQL middleware since graphqlRootPath may be '/'
+  let oauthAuthenticatedRouter: ReturnType<typeof createOAuthCallbackHandler>['authenticatedRouter'] | undefined;
   if (oauthPublicUrl) {
     const { callbackRouter, authenticatedRouter } = createOAuthCallbackHandler({
       publicUrl: oauthPublicUrl,
-      // TODO: These should be configurable to point to the MJ Explorer UI
       successRedirectUrl: `${oauthPublicUrl}/oauth/success`,
       errorRedirectUrl: `${oauthPublicUrl}/oauth/error`
     });
+    oauthAuthenticatedRouter = authenticatedRouter;
 
-    // Create CORS middleware for OAuth routes (needed for cross-origin requests from frontend)
     const oauthCors = cors<cors.CorsRequest>();
 
     // OAuth callback is unauthenticated (called by external auth server)
     app.use('/oauth', oauthCors, callbackRouter);
     console.log('[OAuth] Callback route registered at /oauth/callback');
+  }
 
-    // OAuth status, initiate, and exchange endpoints require authentication
-    // Must also have CORS for frontend requests and JSON body parsing
-    app.use('/oauth', oauthCors, BodyParser.json(), authMiddleware, authenticatedRouter);
+  // ─── Global CORS (before auth so 401 responses include CORS headers) ─────
+  // Without this, the browser blocks 401 responses from the auth middleware
+  // because they lack Access-Control-Allow-Origin headers, preventing the
+  // client from reading the error code and triggering token refresh.
+  app.use(cors<cors.CorsRequest>());
+
+  // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
+  app.use(createUnifiedAuthMiddleware(dataSources));
+
+  // ─── Post-auth middleware from BaseServerMiddleware plugins ─────
+  // Middleware here has access to the authenticated user via req.userPayload.
+  // Contributions come from @RegisterClass(BaseServerMiddleware, key) classes
+  // (e.g., MJTenantFilterMiddleware for multi-tenancy, BCSaaSMiddleware for org context).
+  for (const mw of mwPostAuth) {
+    app.use(mw);
+  }
+
+  // ─── OAuth authenticated routes (auth already handled by unified middleware) ─────
+  if (oauthAuthenticatedRouter) {
+    const oauthCors = cors<cors.CorsRequest>();
+    app.use('/oauth', oauthCors, BodyParser.json(), oauthAuthenticatedRouter);
     console.log('[OAuth] Authenticated routes registered at /oauth/status, /oauth/initiate, and /oauth/exchange');
   }
 
-  // Get REST API configuration
+  // ─── REST API endpoints (auth already handled by unified middleware) ─────
   const restApiConfig = {
     enabled: configInfo.restApiOptions?.enabled ?? false,
     includeEntities: configInfo.restApiOptions?.includeEntities,
     excludeEntities: configInfo.restApiOptions?.excludeEntities,
   };
 
-  // Apply options from server options if provided (these override the config file)
   if (options?.restApiOptions) {
     Object.assign(restApiConfig, options.restApiOptions);
   }
 
-  // Get REST API configuration from environment variables if present (env vars override everything)
   if (process.env.MJ_REST_API_ENABLED !== undefined) {
     restApiConfig.enabled = process.env.MJ_REST_API_ENABLED === 'true';
     if (restApiConfig.enabled) {
@@ -490,12 +677,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     restApiConfig.excludeEntities = process.env.MJ_REST_API_EXCLUDE_ENTITIES.split(',').map(e => e.trim());
   }
 
-  // Set up REST endpoints with the configured options and auth middleware
-  setupRESTEndpoints(app, restApiConfig, authMiddleware);
+  // No per-route authMiddleware needed — unified auth middleware already ran
+  setupRESTEndpoints(app, restApiConfig);
 
-  // GraphQL middleware (after REST so /api/v1/* routes are handled first)
-  // Note: Type assertion needed due to @apollo/server bundling older @types/express types
-  // that are incompatible with Express 5.x types (missing 'param' property)
+  // ─── GraphQL middleware (contextFunction reads req.userPayload, no re-auth) ─────
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>(),
@@ -509,8 +694,13 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
                                  dataSource: extendConnectionPoolWithQuery(dataSources[0].dataSource), // default read-write data source
                                  dataSources // all data source
                                }),
-    }) as unknown as express.RequestHandler
+    })
   );
+
+  // ─── Post-route middleware (error handlers, catch-alls) ─────
+  for (const mw of mwPostRoute) {
+    app.use(mw);
+  }
 
   // Initialize and start scheduled jobs service if enabled
   let scheduledJobsService: ScheduledJobsService | null = null;
@@ -524,6 +714,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       // Don't throw - allow server to start even if scheduled jobs fail
     }
   }
+
+  // Data hooks are now registered via BaseServerMiddleware classes above
+  // (e.g., MJTenantFilterMiddleware registers PreRunView and PreSave hooks).
+  // No config-bag hook registration needed.
 
   if (options?.onBeforeServe) {
     await Promise.resolve(options.onBeforeServe());

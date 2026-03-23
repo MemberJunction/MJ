@@ -1,5 +1,5 @@
 /* ============================================
-   RECORD FORM CONTAINER
+   RECORD FORM CONTAINER — uses global --mj-* design tokens
    Top-level wrapper: toolbar + scrollable content
    ============================================ */
 mj-record-form-container {
@@ -28,7 +28,7 @@ mj-record-form-container {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  background: #eef0f3;
+  background: var(--mj-bg-page);
 }
 
 /* ============================================
@@ -90,8 +90,8 @@ mj-record-form-container {
 .mj-forms-empty-search-icon {
   width: 80px;
   height: 80px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-bg-surface-sunken);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -100,33 +100,33 @@ mj-record-form-container {
 
 .mj-forms-empty-search-icon i {
   font-size: 32px;
-  color: #9ca3af;
+  color: var(--mj-text-muted);
 }
 
 .mj-forms-empty-search-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: var(--mj-text-xl);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
   margin: 0 0 12px 0;
 }
 
 .mj-forms-empty-search-message {
-  font-size: 14px;
-  color: #6b7280;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-secondary);
   line-height: 1.6;
   max-width: 400px;
   margin: 0;
 }
 
 .mj-forms-empty-search-message strong {
-  color: #374151;
-  font-weight: 600;
+  color: var(--mj-text-primary);
+  font-weight: var(--mj-font-semibold);
 }
 
 .mj-forms-empty-search-link {
-  color: #667eea;
+  color: var(--mj-brand-primary);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: var(--mj-font-medium);
 }
 
 .mj-forms-empty-search-link:hover {

@@ -26,7 +26,7 @@ export class AppNavComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private _app: BaseApplication | null = null;
   private _cachedNavItems: NavItem[] = [];
-  private _cachedAppColor: string = '#1976d2';
+  private _cachedAppColor: string = 'var(--mj-brand-primary)';
   private _servicesInjected = false;
 
   /**
@@ -130,10 +130,10 @@ export class AppNavComponent implements OnInit, OnDestroy {
       // Only show items with Status 'Active' or undefined (default to Active)
       this._cachedNavItems = items.filter(item => !item.Status || item.Status === 'Active');
 
-      this._cachedAppColor = this._app.GetColor() || '#1976d2';
+      this._cachedAppColor = this._app.GetColor() || 'var(--mj-brand-primary)';
     } else {
       this._cachedNavItems = [];
-      this._cachedAppColor = '#1976d2';
+      this._cachedAppColor = 'var(--mj-brand-primary)';
     }
 
     // Update active states after nav items change

@@ -129,6 +129,8 @@ describe('ConfigurePhase', () => {
       expect(configContent).toContain("host: 'myhost'");
       expect(configContent).toContain('port: 1500');
       expect(configContent).toContain("database: 'MyDB'");
+      expect(configContent).toContain('encryptionKeys: {');
+      expect(configContent).toContain('MJ_BASE_ENCRYPTION_KEY: process.env.MJ_BASE_ENCRYPTION_KEY ||');
     });
   });
 
@@ -187,7 +189,7 @@ describe('ConfigurePhase', () => {
   // ─── Existing file preservation ────────────────────────────────────
 
   describe('existing file preservation', () => {
-    it('should not overwrite existing .env', async () => {
+    it('should preserve existing .env values and append MJ_BASE_ENCRYPTION_KEY when missing', async () => {
       mockFs.FileExists.mockImplementation(async (path: string) => {
         if (path.endsWith('.env')) return true; // .env exists
         return false;
@@ -200,9 +202,14 @@ describe('ConfigurePhase', () => {
       const ctx = makeContext({ Yes: true });
       const result = await phase.Run(ctx);
 
-      // Root .env should NOT be in FilesWritten (preserved)
       const rootEnvWritten = result.FilesWritten.some(f => f.endsWith('.env') && !f.includes('MJAPI'));
-      expect(rootEnvWritten).toBe(false);
+      expect(rootEnvWritten).toBe(true);
+
+      const rootEnvContent = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.endsWith('.env') && !p.includes('MJAPI')
+      )?.[1];
+      expect(rootEnvContent).toContain('EXISTING_CONTENT=true');
+      expect(rootEnvContent).toContain("MJ_BASE_ENCRYPTION_KEY='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='");
     });
 
     it('should copy root .env to MJAPI when root exists but MJAPI does not', async () => {
@@ -226,7 +233,8 @@ describe('ConfigurePhase', () => {
       const mjapiEnvContent = mockFs.WriteText.mock.calls.find(
         ([p]: [string, string]) => p.includes('MJAPI') && p.endsWith('.env')
       )?.[1];
-      expect(mjapiEnvContent).toBe('DB_HOST=localhost');
+      expect(mjapiEnvContent).toContain('DB_HOST=localhost');
+      expect(mjapiEnvContent).toContain("MJ_BASE_ENCRYPTION_KEY='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='");
     });
 
     it('should not overwrite existing mj.config.cjs', async () => {
@@ -235,7 +243,7 @@ describe('ConfigurePhase', () => {
         return false;
       });
       mockFs.DirectoryExists.mockResolvedValue(true);
-      mockFs.ReadText.mockResolvedValue('module.exports = { settings: {} };');
+      mockFs.ReadText.mockResolvedValue('module.exports = { settings: {}, encryptionKeys: { MJ_BASE_ENCRYPTION_KEY: process.env.MJ_BASE_ENCRYPTION_KEY || "" } };');
       mockFs.ListFiles.mockResolvedValue([]);
 
       const ctx = makeContext({ Yes: true });
@@ -244,6 +252,47 @@ describe('ConfigurePhase', () => {
       // mj.config.cjs should NOT be in FilesWritten (preserved)
       const configWritten = result.FilesWritten.some(f => f.endsWith('mj.config.cjs'));
       expect(configWritten).toBe(false);
+    });
+
+    it('should patch MJ_BASE_ENCRYPTION_KEY into existing .env when missing', async () => {
+      mockFs.FileExists.mockImplementation(async (filePath: string) => {
+        if (filePath.endsWith('.env')) return true;
+        return false;
+      });
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.ReadText.mockResolvedValue('DB_HOST=localhost');
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      await phase.Run(makeContext({ Yes: true }));
+
+      const envWriteCall = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.endsWith('.env') && !p.includes('MJAPI')
+      );
+      expect(envWriteCall).toBeDefined();
+      expect(envWriteCall?.[1]).toContain("MJ_BASE_ENCRYPTION_KEY='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='");
+    });
+
+    it('should patch encryptionKeys into existing mj.config.cjs when missing', async () => {
+      mockFs.FileExists.mockImplementation(async (filePath: string) => {
+        if (filePath.endsWith('mj.config.cjs')) return true;
+        return false;
+      });
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.ReadText.mockResolvedValue(`module.exports = {
+  settings: { host: 'localhost', port: 1433, database: 'MJ' },
+  output: [],
+};
+`);
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      await phase.Run(makeContext({ Yes: true }));
+
+      const configWriteCall = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.endsWith('mj.config.cjs')
+      );
+      expect(configWriteCall).toBeDefined();
+      expect(configWriteCall?.[1]).toContain('encryptionKeys: {');
+      expect(configWriteCall?.[1]).toContain('MJ_BASE_ENCRYPTION_KEY: process.env.MJ_BASE_ENCRYPTION_KEY ||');
     });
 
     it('should patch CreateNewUser into existing mj.config.cjs', async () => {
@@ -478,6 +527,15 @@ describe('ConfigurePhase', () => {
       expect(envContent).toContain("AI_VENDOR_API_KEY__MistralLLM='sk-mistral-test'");
     });
 
+    it('should include MJ_BASE_ENCRYPTION_KEY', async () => {
+      const ctx = makeContext({ Yes: true });
+      await phase.Run(ctx);
+
+      const envContent = findWrittenContent('.env');
+      expect(envContent).toBeDefined();
+      expect(envContent).toContain("MJ_BASE_ENCRYPTION_KEY='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='");
+    });
+
     it('should include DB_TRUST_SERVER_CERTIFICATE when TrustCert is true', async () => {
       const config = sampleConfig();
       config.DatabaseTrustCert = true;
@@ -502,6 +560,16 @@ describe('ConfigurePhase', () => {
       expect(result.Config.DatabasePort).toBe(config.DatabasePort);
       expect(result.Config.DatabaseName).toBe(config.DatabaseName);
       expect(result.Config.AuthProvider).toBe(config.AuthProvider);
+    });
+
+    it('should generate a base encryption key when one is not provided', async () => {
+      const config = sampleConfig();
+      delete config.BaseEncryptionKey;
+
+      const result = await phase.Run(makeContext({ Config: config, Yes: true }));
+
+      expect(result.Config.BaseEncryptionKey).toBeDefined();
+      expect(result.Config.BaseEncryptionKey).toMatch(/^[A-Za-z0-9+/]+=*$/);
     });
   });
 });

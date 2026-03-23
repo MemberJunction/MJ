@@ -311,7 +311,7 @@ END`;
       const sql = `IF SOME_RANDOM_CONDITION = 1
 SET @var = 'value'`;
       const result = convert(sql);
-      expect(result).toContain('-- TODO: Review conditional DDL');
+      expect(result).toContain('-- SKIPPED: conditional DDL (auto-conversion not supported)');
       expect(result).toContain('--');
     });
   });

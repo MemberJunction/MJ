@@ -1,5 +1,5 @@
 
-export * from './generated/entity_subclasses'
+export * from './generated/entity_subclasses.js'
 
 export * from "./custom/MJUserViewEntityExtended";
 export * from './custom/MJDashboardEntityExtended';

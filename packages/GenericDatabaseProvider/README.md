@@ -83,6 +83,32 @@ export class MyDatabaseProvider extends GenericDatabaseProvider {
 }
 ```
 
+## Server-Side Cache Backend
+
+`GenericDatabaseProvider` owns the `LocalStorageProvider` property that all database providers (SQL Server, PostgreSQL) inherit. This is the cache backend used by `LocalCacheManager`, metadata persistence, and all server-side caching operations.
+
+By default, it uses `InMemoryLocalStorageProvider` — data stored in a `Map` inside the Node.js process. For production deployments, swap it to a Redis-backed provider for shared, persistent caching across multiple MJAPI instances.
+
+```typescript
+import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
+import { Metadata } from '@memberjunction/core';
+import type { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
+
+// During server startup:
+const redis = new RedisLocalStorageProvider({
+    url: process.env.REDIS_URL ?? 'redis://localhost:6379',
+    defaultTTLSeconds: 300,
+});
+(Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redis);
+```
+
+| Method | Description |
+|--------|-------------|
+| `LocalStorageProvider` (getter) | Returns the active `ILocalStorageProvider`, lazily creating an `InMemoryLocalStorageProvider` if none has been set |
+| `SetLocalStorageProvider(provider)` | Replaces the active provider at runtime (e.g., to swap in Redis after configuration is loaded) |
+
+See the [`@memberjunction/redis-provider` README](../RedisProvider/) for full configuration options, cloud provider examples (Azure Managed Redis, AWS ElastiCache), and production recommendations.
+
 ## SQL Logging
 
 The SQL logging subsystem lives in GenericDatabaseProvider so it is available to all platform-specific providers (SQL Server, PostgreSQL, etc.). Sessions capture executed SQL statements to files with filtering, formatting, and Flyway migration support.

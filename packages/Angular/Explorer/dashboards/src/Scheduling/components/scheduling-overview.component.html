@@ -24,7 +24,7 @@
       <div class="health-banner" [style.border-color]="GetHealthColor()">
         <div class="health-ring">
           <svg viewBox="0 0 80 80" class="health-svg">
-            <circle cx="40" cy="40" r="36" fill="none" stroke="#e5e7eb" stroke-width="6"/>
+            <circle cx="40" cy="40" r="36" fill="none" class="health-ring-track" stroke-width="6"/>
             <circle cx="40" cy="40" r="36" fill="none"
               [attr.stroke]="GetHealthColor()"
               stroke-width="6"
@@ -37,9 +37,9 @@
         <div class="health-details">
           <div class="health-title">System Health</div>
           <div class="health-stats">
-            <span><i class="fa-solid fa-check-circle" style="color:#10b981"></i> {{Kpis.totalActiveJobs}} active</span>
-            <span><i class="fa-solid fa-lock" style="color:#f59e0b"></i> {{Kpis.lockedJobs}} locked</span>
-            <span><i class="fa-solid fa-xmark-circle" style="color:#ef4444"></i> {{Kpis.totalFailures7d}} failures (7d)</span>
+            <span><i class="fa-solid fa-check-circle status-success"></i> {{Kpis.totalActiveJobs}} active</span>
+            <span><i class="fa-solid fa-lock status-warning"></i> {{Kpis.lockedJobs}} locked</span>
+            <span><i class="fa-solid fa-xmark-circle status-error"></i> {{Kpis.totalFailures7d}} failures (7d)</span>
           </div>
         </div>
       </div>

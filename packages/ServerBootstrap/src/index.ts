@@ -9,10 +9,12 @@
  * - Resolver discovery and registration
  * - Generated package auto-loading
  * - Server startup with proper lifecycle hooks
+ *
+ * Middleware discovery uses the @RegisterClass(BaseServerMiddleware, key) pattern.
+ * See BaseServerMiddleware for details.
  */
 
 import { serve, MJServerOptions } from '@memberjunction/server';
-import { DynamicPackageLoader, type DynamicPackageLoad } from '@memberjunction/global';
 import { cosmiconfigSync } from 'cosmiconfig';
 
 /**
@@ -54,31 +56,34 @@ export interface MJServerConfig {
  *
  * @param config - The loaded MemberJunction configuration
  */
-async function discoverAndLoadGeneratedPackages(configResult: any): Promise<void> {
-  if (!configResult?.config?.codeGeneration?.packages) {
+async function discoverAndLoadGeneratedPackages(configResult: { config: Record<string, unknown> }): Promise<void> {
+  const codeGeneration = configResult.config?.codeGeneration as Record<string, Record<string, string>> | undefined;
+  if (!codeGeneration?.packages) {
     console.warn('No codeGeneration.packages configuration found - skipping auto-import of generated packages');
     return;
   }
 
-  const packages = configResult.config.codeGeneration.packages;
+  const packages = codeGeneration.packages;
 
   // Attempt to import each configured generated package
   // These imports trigger class registration via @RegisterClass decorators
   const packageTypes = ['entities', 'actions', 'angularForms', 'graphqlResolvers'];
 
   for (const pkgType of packageTypes) {
-    if (packages[pkgType]?.name) {
-      const pkgName = packages[pkgType].name;
+    const pkgConfig = packages[pkgType] as unknown as Record<string, string> | undefined;
+    if (pkgConfig?.name) {
+      const pkgName = pkgConfig.name;
       try {
         // Dynamic import to trigger side effects (class registration)
         await import(pkgName);
-        console.log(`✓ Loaded generated package: ${pkgName}`);
-      } catch (error: any) {
+        console.log(`  Loaded generated package: ${pkgName}`);
+      } catch (error: unknown) {
         // Not finding a package is expected in some cases (e.g., no forms generated yet)
-        if (error.code === 'ERR_MODULE_NOT_FOUND') {
-          console.log(`ℹ Generated package not found (may not exist yet): ${pkgName}`);
+        const errObj = error as { code?: string };
+        if (errObj.code === 'ERR_MODULE_NOT_FOUND') {
+          console.log(`  Generated package not found (may not exist yet): ${pkgName}`);
         } else {
-          console.warn(`⚠ Error loading generated package ${pkgName}:`, error);
+          console.warn(`  Error loading generated package ${pkgName}:`, error);
         }
       }
     }
@@ -86,44 +91,14 @@ async function discoverAndLoadGeneratedPackages(configResult: any): Promise<void
 }
 
 /**
- * Loads dynamic packages from installed Open Apps.
- *
- * Reads the `dynamicPackages.server` array from mj.config.cjs and uses
- * DynamicPackageLoader to import each enabled package at runtime. This allows
- * Open App server packages to register their classes via @RegisterClass
- * decorators without requiring manual import statements.
- *
- * @param configResult - The loaded configuration result
- */
-async function loadDynamicOpenAppPackages(configResult: { config: Record<string, unknown> }): Promise<void> {
-  const dynamicPackages = configResult.config?.dynamicPackages as { server?: DynamicPackageLoad[] } | undefined;
-  const serverPackages = dynamicPackages?.server;
-
-  if (!serverPackages || serverPackages.length === 0) {
-    return;
-  }
-
-  console.log('Loading Open App dynamic packages...');
-  const results = await DynamicPackageLoader.LoadPackages(serverPackages);
-
-  for (const result of results) {
-    if (result.Success) {
-      console.log(`  ✓ Loaded Open App package: ${result.PackageName}`);
-    } else {
-      console.error(`  ✗ Failed to load Open App package ${result.PackageName}: ${result.Error}`);
-    }
-  }
-  console.log('');
-}
-
-/**
  * Creates and starts a MemberJunction API server with minimal configuration.
  *
  * This is the primary entry point for MJ 3.0 applications. It:
  * 1. Loads configuration from mj.config.cjs (or specified path)
- * 2. Auto-discovers and imports generated packages
- * 3. Builds the GraphQL schema with all registered resolvers
- * 4. Starts the server with proper lifecycle hooks
+ * 2. Auto-discovers and imports generated packages (triggering @RegisterClass decorators)
+ * 3. Middleware is discovered via ClassFactory from @RegisterClass(BaseServerMiddleware, key) classes
+ * 4. Builds the GraphQL schema with all registered resolvers
+ * 5. Starts the server with proper lifecycle hooks
  *
  * @param options - Configuration options for the server
  *
@@ -164,9 +139,8 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
   const configSearchResult = explorer.search(options.configPath || process.cwd());
 
-  // Create a result object for backward compatibility with discoverAndLoadGeneratedPackages
   const configResult = {
-    config: configSearchResult?.config || {},
+    config: (configSearchResult?.config ?? {}) as Record<string, unknown>,
     hasUserConfig: configSearchResult && !configSearchResult.isEmpty,
     configFilePath: configSearchResult?.filepath
   };
@@ -176,9 +150,6 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
   console.log('Loading generated packages...');
   await discoverAndLoadGeneratedPackages(configResult);
   console.log('');
-
-  // Load dynamic packages from installed Open Apps
-  await loadDynamicOpenAppPackages(configResult);
 
   // Build resolver paths - auto-discover standard locations if not provided
   // This enables truly minimal MJAPI files without needing to specify paths
@@ -196,16 +167,19 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
     console.log('');
   }
 
-  // Build server options
+  // Build server options.
+  // All extensibility (middleware, hooks, plugins, schema transformers) is now
+  // handled by @RegisterClass(BaseServerMiddleware, key) classes discovered by serve().
   const serverOptions: MJServerOptions = {
     onBeforeServe: options.beforeStart,
-    restApiOptions: options.restApiOptions
+    restApiOptions: options.restApiOptions,
   };
 
   // Start the MJ Server
   // The serve() function from @memberjunction/server handles:
   // - Database connection pooling
   // - GraphQL schema building from resolvers
+  // - Middleware discovery via ClassFactory (BaseServerMiddleware)
   // - WebSocket setup for subscriptions
   // - REST API endpoint registration
   // - Graceful shutdown handling
@@ -220,3 +194,5 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
 
 // Re-export types from @memberjunction/server for convenience
 export type { MJServerOptions } from '@memberjunction/server';
+// Convenience re-export so consumers can subclass middleware from this package
+export { BaseServerMiddleware } from '@memberjunction/server';

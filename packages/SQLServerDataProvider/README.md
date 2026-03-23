@@ -81,6 +81,7 @@ graph TB
 - **Metadata Refresh** -- Automatic and on-demand metadata refresh with configurable intervals
 - **Field Encryption** -- Transparent encryption and decryption of sensitive entity fields
 - **DateTime Offset Handling** -- Automatic detection and adjustment for SQL Server timezone behavior
+- **Pluggable Cache Backend** -- Default in-memory caching inherited from `GenericDatabaseProvider`, with optional [Redis support](../RedisProvider/) for shared, persistent caching across multiple server instances
 
 ## Installation
 

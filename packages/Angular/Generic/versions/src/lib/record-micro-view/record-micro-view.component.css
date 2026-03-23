@@ -5,14 +5,14 @@
 .micro-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0);
+    background: transparent;
     z-index: 1100;
     transition: background 0.25s ease;
     pointer-events: none;
 }
 
 .micro-backdrop.visible {
-    background: rgba(0, 0, 0, 0.15);
+    background: var(--mj-bg-overlay);
     pointer-events: auto;
 }
 
@@ -23,8 +23,8 @@
     width: 480px;
     max-width: 90vw;
     height: 100vh;
-    background: var(--card-background, #ffffff);
-    box-shadow: -6px 0 24px rgba(0, 0, 0, 0.1);
+    background: var(--mj-bg-surface);
+    box-shadow: var(--mj-shadow-lg);
     z-index: 1101;
     display: flex;
     flex-direction: column;
@@ -52,7 +52,7 @@
     justify-content: space-between;
     gap: 16px;
     padding: 16px 24px;
-    border-bottom: 1px solid var(--border-color, #e5e7eb);
+    border-bottom: 1px solid var(--mj-border-default);
     flex-shrink: 0;
 }
 
@@ -76,7 +76,7 @@
     align-items: flex-start;
     justify-content: space-between;
     padding: 16px 20px;
-    border-bottom: 1px solid var(--border-color, #e5e7eb);
+    border-bottom: 1px solid var(--mj-border-default);
     flex-shrink: 0;
 }
 
@@ -100,16 +100,16 @@
     gap: 8px;
     font-size: 15px;
     font-weight: 600;
-    color: var(--text-primary, #1f2937);
+    color: var(--mj-text-primary);
 }
 
 .micro-entity-icon {
-    color: #3b82f6;
+    color: var(--mj-brand-primary);
 }
 
 /* Record display name shown prominently next to entity name */
 .micro-record-name {
-    color: #6366f1;
+    color: var(--mj-brand-primary);
     font-weight: 700;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -121,7 +121,7 @@
     align-items: center;
     gap: 6px;
     font-size: 12px;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-disabled);
     font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
@@ -135,10 +135,10 @@
     align-items: center;
     gap: 5px;
     padding: 6px 12px;
-    background: var(--card-background, #ffffff);
-    border: 1px solid var(--border-color, #e5e7eb);
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
     border-radius: 6px;
-    color: #3b82f6;
+    color: var(--mj-brand-primary);
     font-size: 12px;
     font-weight: 600;
     cursor: pointer;
@@ -148,9 +148,9 @@
 }
 
 .micro-open-btn:hover {
-    background: #3b82f6;
-    color: white;
-    border-color: #3b82f6;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-brand-primary);
 }
 
 .micro-open-btn i {
@@ -166,7 +166,7 @@
     background: none;
     border: none;
     border-radius: 6px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     cursor: pointer;
     transition: all 0.15s ease;
     font-size: 14px;
@@ -174,8 +174,8 @@
 }
 
 .micro-close:hover {
-    background: var(--hover-background, #f3f4f6);
-    color: var(--text-primary, #1f2937);
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-primary);
 }
 
 /* ================================================================= */
@@ -194,11 +194,11 @@
     gap: 10px;
     padding: 12px 20px;
     margin: 0 20px;
-    background: rgba(239, 68, 68, 0.06);
-    border: 1px solid rgba(239, 68, 68, 0.15);
+    background: color-mix(in srgb, var(--mj-status-error) 6%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-status-error) 15%, transparent);
     border-radius: 8px;
     font-size: 13px;
-    color: #ef4444;
+    color: var(--mj-status-error);
 }
 
 /* Null toggle toolbar */
@@ -206,7 +206,7 @@
     display: flex;
     align-items: center;
     padding: 8px 20px;
-    border-bottom: 1px solid var(--border-color, #f3f4f6);
+    border-bottom: 1px solid var(--mj-border-default);
 }
 
 .null-toggle {
@@ -215,14 +215,14 @@
     gap: 6px;
     cursor: pointer;
     font-size: 12px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     user-select: none;
 }
 
 .null-toggle input[type="checkbox"] {
     width: 14px;
     height: 14px;
-    accent-color: #6366f1;
+    accent-color: var(--mj-brand-primary);
     cursor: pointer;
 }
 
@@ -241,13 +241,13 @@
     padding: 8px 20px;
     font-size: 11px;
     font-weight: 600;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-disabled);
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    border-bottom: 1px solid var(--border-color, #e5e7eb);
+    border-bottom: 1px solid var(--mj-border-default);
     position: sticky;
     top: 0;
-    background: var(--card-background, #ffffff);
+    background: var(--mj-bg-surface);
     z-index: 1;
 }
 
@@ -260,36 +260,36 @@
     grid-template-columns: 180px 1fr;
     padding: 7px 20px;
     align-items: baseline;
-    border-bottom: 1px solid var(--border-color, #f3f4f6);
+    border-bottom: 1px solid var(--mj-border-default);
     transition: background 0.1s ease;
 }
 
 .micro-field-row:hover {
-    background: var(--hover-background, #f9fafb);
+    background: var(--mj-bg-surface-card);
 }
 
 .micro-field-row.odd {
-    background: var(--hover-background, #fafafa);
+    background: var(--mj-bg-surface-card);
 }
 
 .micro-field-row.odd:hover {
-    background: #f3f4f6;
+    background: var(--mj-bg-surface-sunken);
 }
 
 /* Diff styling */
 .micro-field-row.diff-added {
-    background: rgba(16, 185, 129, 0.04) !important;
-    border-left: 3px solid #10b981;
+    background: color-mix(in srgb, var(--mj-status-success) 4%, var(--mj-bg-surface)) !important;
+    border-left: 3px solid var(--mj-status-success);
 }
 
 .micro-field-row.diff-modified {
-    background: rgba(245, 158, 11, 0.04) !important;
-    border-left: 3px solid #f59e0b;
+    background: color-mix(in srgb, var(--mj-status-warning) 4%, var(--mj-bg-surface)) !important;
+    border-left: 3px solid var(--mj-status-warning);
 }
 
 .micro-field-row.diff-removed {
-    background: rgba(239, 68, 68, 0.04) !important;
-    border-left: 3px solid #ef4444;
+    background: color-mix(in srgb, var(--mj-status-error) 4%, var(--mj-bg-surface)) !important;
+    border-left: 3px solid var(--mj-status-error);
 }
 
 .micro-field-row:has(.mf-col-old) {
@@ -305,7 +305,7 @@
 }
 
 .mf-type-icon {
-    color: var(--text-tertiary, #d1d5db);
+    color: var(--mj-border-strong);
     font-size: 11px;
     width: 14px;
     text-align: center;
@@ -314,7 +314,7 @@
 
 .mf-field-name {
     font-weight: 500;
-    color: var(--text-primary, #1f2937);
+    color: var(--mj-text-primary);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -323,7 +323,7 @@
 .mf-col-value,
 .mf-col-old,
 .mf-col-new {
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     word-break: break-word;
     line-height: 1.4;
     font-family: 'SF Mono', 'Fira Code', monospace;
@@ -331,13 +331,13 @@
 }
 
 .mf-col-old {
-    color: #ef4444;
+    color: var(--mj-status-error);
     opacity: 0.7;
     text-decoration: line-through;
 }
 
 .mf-col-new {
-    color: #10b981;
+    color: var(--mj-status-success);
 }
 
 /* ================================================================= */
@@ -350,18 +350,18 @@
 }
 
 .mf-bool-true {
-    color: #10b981;
+    color: var(--mj-status-success);
 }
 
 .mf-bool-false {
-    color: var(--text-tertiary, #d1d5db);
+    color: var(--mj-border-strong);
 }
 
 .mf-bool-label {
     margin-left: 6px;
     font-family: inherit;
     font-size: 12px;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
 }
 
 /* ================================================================= */
@@ -369,7 +369,7 @@
 /* ================================================================= */
 
 .mf-fk-link {
-    color: #3b82f6;
+    color: var(--mj-brand-primary);
     cursor: pointer;
     text-decoration: none;
     font-family: inherit;
@@ -381,12 +381,12 @@
 }
 
 .mf-fk-link:hover {
-    color: #2563eb;
+    color: var(--mj-brand-primary-hover);
     text-decoration: underline;
 }
 
 .mf-fk-id {
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-disabled);
     font-size: 10px;
     font-family: 'SF Mono', 'Fira Code', monospace;
 }
@@ -408,13 +408,13 @@
 .mf-json-value {
     margin: 0;
     padding: 8px 10px;
-    background: var(--hover-background, #f9fafb);
-    border: 1px solid var(--border-color, #e5e7eb);
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
     border-radius: 6px;
     font-family: 'SF Mono', 'Fira Code', monospace;
     font-size: 11px;
     line-height: 1.5;
-    color: var(--text-secondary, #6b7280);
+    color: var(--mj-text-secondary);
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 200px;
@@ -431,7 +431,7 @@
 
 .micro-empty p {
     font-size: 14px;
-    color: var(--text-tertiary, #9ca3af);
+    color: var(--mj-text-disabled);
     margin: 0;
 }
 

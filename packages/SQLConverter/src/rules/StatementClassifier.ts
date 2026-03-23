@@ -27,12 +27,19 @@ export function classifyBatch(batch: string): StatementType {
   // Strip leading comments to detect the real SQL keyword
   const upper = stripLeadingComments(batch).trimStart().toUpperCase() || rawUpper;
 
-  // Session settings to skip
+  // Session settings: strip them from the batch start and re-classify the remainder.
+  // Previously we returned SKIP_SESSION for the entire batch, but that caused real
+  // DML statements after SET NOCOUNT ON to be silently dropped.
   const sessionPattern = new RegExp(
-    `^SET\\s+(${SESSION_SETTINGS.join('|')})\\b`, 'i'
+    `^SET\\s+(${SESSION_SETTINGS.join('|')})\\b[^\\n]*;?`, 'i'
   );
   if (sessionPattern.test(upper)) {
-    return 'SKIP_SESSION';
+    const remainder = stripSessionSettings(batch);
+    if (!remainder.trim()) {
+      return 'SKIP_SESSION';
+    }
+    // Re-classify the remainder (which no longer starts with a session setting)
+    return classifyBatch(remainder);
   }
 
   // Error handling to skip
@@ -74,7 +81,12 @@ export function classifyBatch(batch: string): StatementType {
     if (/\bEXEC\s+\[?\w+\]?\s*\.\s*\[?\w+\]?\s/i.test(upper)) {
       return 'EXEC_BLOCK';
     }
-    // DECLARE blocks without EXEC → SQL Server-specific variable declarations
+    // DECLARE blocks with DML (UPDATE/INSERT/DELETE) → need conversion to DO $$ block
+    // Example: DECLARE @var; SELECT @var = ...; UPDATE ... WHERE col = @var;
+    if (/\b(?:UPDATE\s+\w+|INSERT\s+INTO\b|DELETE\s+FROM\b)/i.test(upper)) {
+      return 'DECLARE_DML_BLOCK';
+    }
+    // DECLARE blocks without EXEC or DML → SQL Server-specific variable declarations
     return 'SKIP_SQLSERVER';
   }
 
@@ -88,19 +100,25 @@ export function classifyBatch(batch: string): StatementType {
     return 'CREATE_VIEW';
   }
 
-  // CREATE PROCEDURE (both full and short form)
-  if (/^CREATE\s+PROC(?:EDURE)?\s/i.test(upper)) {
+  // CREATE/ALTER PROCEDURE (both full and short form)
+  // ALTER PROCEDURE is treated the same as CREATE — PG uses CREATE OR REPLACE FUNCTION
+  if (/^(?:CREATE|ALTER)\s+PROC(?:EDURE)?\s/i.test(upper)) {
     return classifyProcedure(batch, upper);
   }
 
-  // CREATE FUNCTION
-  if (/^CREATE\s+FUNCTION\s/i.test(upper)) {
+  // CREATE/ALTER FUNCTION — PG uses CREATE OR REPLACE FUNCTION
+  if (/^(?:CREATE|ALTER)\s+FUNCTION\s/i.test(upper)) {
     return 'CREATE_FUNCTION';
   }
 
   // CREATE TRIGGER
   if (/^CREATE\s+TRIGGER\s/i.test(upper)) {
     return 'CREATE_TRIGGER';
+  }
+
+  // ALTER VIEW — PG uses CREATE OR REPLACE VIEW
+  if (/^ALTER\s+VIEW\s/i.test(upper)) {
+    return 'CREATE_VIEW';
   }
 
   // CREATE TYPE — table types don't exist in PG
@@ -121,6 +139,16 @@ export function classifyBatch(batch: string): StatementType {
   // CREATE INDEX
   if (/^CREATE\s+(?:UNIQUE\s+)?(?:NONCLUSTERED\s+)?INDEX\s/i.test(upper)) {
     return 'CREATE_INDEX';
+  }
+
+  // ;WITH CTE ... DML — T-SQL idiom where ;WITH is used to safely terminate the prior statement
+  // Classify based on the DML statement that follows the CTE definition
+  if (/^;?\s*WITH\s+\w+\s+AS\s*\(/i.test(upper)) {
+    if (/\bDELETE\s/i.test(upper)) return 'DELETE';
+    if (/\bINSERT\s/i.test(upper)) return 'INSERT';
+    if (/\bUPDATE\s/i.test(upper)) return 'UPDATE';
+    // SELECT-only CTE — treat as a query (skip)
+    return 'SKIP_SQLSERVER';
   }
 
   // DML — but skip table variable operations (INSERT INTO @var, SELECT FROM @var)
@@ -167,8 +195,14 @@ export function classifyBatch(batch: string): StatementType {
     return 'CONDITIONAL_DDL';
   }
 
-  // Orphaned control flow fragments from sub-splitting
-  if (/^(END|ELSE\s+IF|ELSE)\b/i.test(upper)) {
+  // ALTER ROLE ... ADD/DROP MEMBER — valid in PostgreSQL, treat as GRANT
+  if (/^ALTER\s+ROLE\s/i.test(upper)) {
+    return 'GRANT';
+  }
+
+  // Orphaned control flow fragments from sub-splitting, and standalone BEGIN blocks
+  // (T-SQL transaction/control flow blocks without IF wrapper)
+  if (/^(BEGIN\b|END|ELSE\s+IF|ELSE)\b/i.test(upper)) {
     return 'SKIP_SQLSERVER';
   }
 
@@ -224,6 +258,22 @@ function stripLeadingComments(sql: string): string {
     }
   }
   return s;
+}
+
+/** Strip leading comments and SET session-setting lines from a batch, returning the remainder */
+function stripSessionSettings(batch: string): string {
+  const sessionPattern = new RegExp(
+    `^\\s*SET\\s+(${SESSION_SETTINGS.join('|')})\\b[^\\n]*;?\\s*`, 'i'
+  );
+  // First strip leading comments so we can find the session settings
+  let result = stripLeadingComments(batch);
+  // Strip one session setting line at a time (there may be several stacked)
+  while (sessionPattern.test(result)) {
+    result = result.replace(sessionPattern, '');
+    // Strip any comments between session settings
+    result = stripLeadingComments(result);
+  }
+  return result.trim();
 }
 
 /** Check if batch is comment-only (no SQL after removing comments) */

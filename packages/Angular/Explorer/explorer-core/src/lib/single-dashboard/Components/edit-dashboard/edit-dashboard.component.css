@@ -9,7 +9,7 @@
     width: auto;
     height: 40px;
     border-top: 1px solid rgba(0, 0, 0, 0.08);
-    background: #FFF;
+    background: var(--mj-bg-surface);
     padding: 8px 16px;
 }
 .custom-dialog-body {
@@ -30,5 +30,5 @@ flex: 1;
     padding: 0;
 }
 .custom-dialog-body .dialog-content .k-tilelayout {
-    background: #fff;
+    background: var(--mj-bg-surface);
 }

@@ -1,18 +1,18 @@
 .message-input-box-container {
   display: flex;
   flex-direction: column;
-  background: white;
-  border: 2px solid var(--border-color, #e0e0e0);
+  background: var(--mj-bg-surface-card);
+  border: 2px solid var(--mj-border-default);
   border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--mj-shadow-sm);
   transition: all 0.2s ease;
   overflow: visible;
   position: relative;
   cursor: text;
 }
 .message-input-box-container:focus-within {
-  border-color: var(--primary-color, #007bff);
-  box-shadow: 0 4px 16px rgba(0, 123, 255, 0.15);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
 }
 
 .input-wrapper {
@@ -42,15 +42,16 @@
   line-height: 1.5;
   resize: vertical;
   background: transparent;
+  color: var(--mj-text-primary);
   border: 0 !important;
 }
 .message-input-box-textarea::placeholder {
-  color: var(--text-tertiary, #999);
+  color: var(--mj-text-muted);
 }
 .message-input-box-textarea:disabled {
   cursor: not-allowed;
   opacity: 0.6;
-  background: var(--background-disabled, #f5f5f5);
+  background: var(--mj-bg-surface-sunken);
 }
 .message-input-box-textarea:focus, .message-input-box-textarea:active, .message-input-box-textarea:focus-visible {
   outline: 0 !important;
@@ -66,8 +67,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--primary-color, #007bff);
-  color: white;
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -78,15 +79,15 @@
   font-size: 1rem;
 }
 .send-button-icon:hover:not(:disabled) {
-  background: var(--primary-color-dark, #0056b3);
+  background: var(--mj-brand-primary-hover);
   transform: scale(1.05);
 }
 .send-button-icon:active:not(:disabled) {
   transform: scale(0.95);
 }
 .send-button-icon:disabled {
-  background: var(--background-disabled, #d0d0d0);
-  color: var(--text-disabled, #999);
+  background: var(--mj-border-default);
+  color: var(--mj-text-muted);
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -102,7 +103,7 @@
   align-items: center;
   justify-content: center;
   background: transparent;
-  color: var(--text-secondary, #666);
+  color: var(--mj-text-secondary);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -113,15 +114,15 @@
   font-size: 1rem;
 }
 .attach-button-icon:hover:not(:disabled) {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--primary-color, #007bff);
+  background: color-mix(in srgb, var(--mj-text-primary) 5%, transparent);
+  color: var(--mj-brand-primary);
   transform: scale(1.05);
 }
 .attach-button-icon:active:not(:disabled) {
   transform: scale(0.95);
 }
 .attach-button-icon:disabled {
-  color: var(--text-disabled, #999);
+  color: var(--mj-text-muted);
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -130,7 +131,7 @@
 @media (max-width: 768px) {
   .message-input-box-container {
     border-radius: 10px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-text-primary) 6%, transparent);
   }
   .message-input-box-textarea {
     min-height: 80px;

@@ -16,6 +16,7 @@ import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJS
 import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
+import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
 import { DialogService } from '@progress/kendo-angular-dialog';
 import { Subject } from 'rxjs';
@@ -55,7 +56,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   @Input() conversation: MJConversationEntity | null = null;
   @Input() threadId: string | null = null;
-  @Input() isNewConversation: boolean = false;
+
+  private _isNewConversation: boolean = false;
+  @Input()
+  set isNewConversation(value: boolean) {
+    this._isNewConversation = value;
+    if (value) {
+      this.focusEmptyStateInput();
+    }
+  }
+  get isNewConversation(): boolean {
+    return this._isNewConversation;
+  }
 
   // Using getter/setter to ensure correct type handling
   private _pendingMessage: string | null = null;
@@ -112,6 +124,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
   @ViewChildren('messageInput') private messageInputComponents!: QueryList<MessageInputComponent>;
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
+  @ViewChild(ConversationEmptyStateComponent) private emptyStateComponent?: ConversationEmptyStateComponent;
 
   public messages: MJConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
@@ -510,6 +523,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
+   * Focus the message input inside the empty state component.
+   * Uses a delay to allow Angular to render the empty state if it's being created.
+   */
+  private focusEmptyStateInput(): void {
+    setTimeout(() => {
+      if (this.emptyStateComponent) {
+        this.emptyStateComponent.FocusInput();
+      }
+    }, 150);
+  }
+
+  /**
    * Get the message input component for the current conversation.
    * Since we cache multiple message-input instances (one per visited conversation),
    * we need to find the one that matches the current conversationId.
@@ -904,7 +929,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     if (existingAgentRun?.ID) {
       // Refresh the SAME object by calling Load() - preserves all references
-      await existingAgentRun.Load(existingAgentRun.ID);
+      // duck type check to see if we have a BaseEntity or not
+      if (!!existingAgentRun.Load) {
+        await existingAgentRun.Load(existingAgentRun.ID);        
+      }
+      else {
+        // we do NOT have an existingAgentRun base entity, but rather a simple JSON object so we need to create an object here
+        const md = new Metadata();
+        const newEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
+        newEntity.LoadFromData(existingAgentRun);
+        // swap the map entry to have this object now
+        this.agentRunsByDetailId.set(event.conversationDetailId, newEntity);
+      }
 
       // Trigger re-render to show updated status
       this.messages = [...this.messages];

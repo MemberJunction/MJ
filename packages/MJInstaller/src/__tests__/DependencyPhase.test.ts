@@ -1,12 +1,13 @@
-import { createMockProcessRunner } from './mocks/adapters.js';
+import { createMockProcessRunner, createMockFileSystem } from './mocks/adapters.js';
 import { createMockEmitter, emittedEvents } from './mocks/emitter.js';
 import { InstallerError } from '../errors/InstallerError.js';
 
 // ---------------------------------------------------------------------------
-// Adapter mocks — DependencyPhase creates ProcessRunner via `new`
+// Adapter mocks — DependencyPhase creates ProcessRunner and FileSystemAdapter via `new`
 // ---------------------------------------------------------------------------
 
 const mockRunner = createMockProcessRunner();
+const mockFs = createMockFileSystem();
 
 vi.mock('../adapters/ProcessRunner.js', () => {
   return {
@@ -19,6 +20,10 @@ vi.mock('../adapters/ProcessRunner.js', () => {
     },
   };
 });
+
+vi.mock('../adapters/FileSystemAdapter.js', () => ({
+  FileSystemAdapter: vi.fn(function () { return mockFs; }),
+}));
 
 // ---------------------------------------------------------------------------
 // Import the phase under test AFTER mocks are set up
@@ -34,6 +39,7 @@ function makeContext(overrides?: Partial<DependencyContext>): DependencyContext 
   const { emitter } = createMockEmitter();
   return {
     Dir: '/test/install',
+    Tag: 'v5.9.0',
     Emitter: emitter,
     ...overrides,
   };
@@ -61,6 +67,8 @@ describe('DependencyPhase', () => {
 
     // Clear call history and reset implementation (each test configures its own chain)
     mockRunner.Run.mockClear().mockReset();
+    mockFs.ReadJSON.mockClear().mockResolvedValue({});
+    mockFs.WriteJSON.mockClear().mockResolvedValue(undefined);
   });
 
   // -----------------------------------------------------------------------
@@ -227,10 +235,44 @@ describe('DependencyPhase', () => {
   });
 
   describe('build partial (codegen-only failures)', () => {
-    it('should return BuildPartial=true when only codegen-managed packages fail', async () => {
+    it('should return BuildPartial=true when only scoped codegen-managed packages fail', async () => {
       const buildOutput = [
         'Failed:    @memberjunction/ng-core-entity-forms#build',
         'Failed:    @memberjunction/server-bootstrap#build',
+      ].join('\n');
+
+      mockRunner.Run
+        .mockResolvedValueOnce(ok())   // install
+        .mockResolvedValueOnce(fail({ Stdout: buildOutput, Stderr: '' })); // build partial
+
+      const ctx = makeContext();
+      const result = await phase.Run(ctx);
+
+      expect(result.BuildPartial).toBe(true);
+      expect(result.BuildSuccess).toBe(false);
+    });
+
+    it('should return BuildPartial=true when unscoped generated packages fail', async () => {
+      const buildOutput = [
+        'Failed:    mj_generatedentities#build',
+        'Failed:    mj_generatedactions#build',
+      ].join('\n');
+
+      mockRunner.Run
+        .mockResolvedValueOnce(ok())   // install
+        .mockResolvedValueOnce(fail({ Stdout: buildOutput, Stderr: '' })); // build partial
+
+      const ctx = makeContext();
+      const result = await phase.Run(ctx);
+
+      expect(result.BuildPartial).toBe(true);
+      expect(result.BuildSuccess).toBe(false);
+    });
+
+    it('should return BuildPartial=true when mix of scoped and unscoped codegen packages fail', async () => {
+      const buildOutput = [
+        'Failed:    mj_generatedentities#build',
+        'Failed:    @memberjunction/ng-core-entity-forms#build',
       ].join('\n');
 
       mockRunner.Run

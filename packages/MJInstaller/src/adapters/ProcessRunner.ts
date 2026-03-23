@@ -66,6 +66,12 @@ export interface ProcessOptions {
    * Used by phases to emit verbose log events for diagnostic output.
    */
   OnStderr?: (line: string) => void;
+  /**
+   * Callback invoked once the child process has spawned, providing the PID.
+   * Useful when the caller needs to kill the process tree externally
+   * (e.g., service log capture after detecting readiness).
+   */
+  OnSpawn?: (pid: number) => void;
 }
 
 /**
@@ -130,6 +136,10 @@ export class ProcessRunner {
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
       });
+
+      if (child.pid && options?.OnSpawn) {
+        options.OnSpawn(child.pid);
+      }
 
       let stdout = '';
       let stderr = '';

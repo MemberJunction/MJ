@@ -99,7 +99,7 @@ interface CollectionNode {
                         [disabled]="node.alreadyContainsArtifact"
                         (click)="$event.stopPropagation(); toggleSelection(node)">
                     </div>
-                    <i class="fas fa-folder collection-icon" [style.color]="node.collection.Color || '#0076B6'"></i>
+                    <i class="fas fa-folder collection-icon" [style.color]="node.collection.Color || 'var(--mj-brand-primary)'"></i>
                     <span class="collection-name">{{ node.collection.Name }}</span>
                     @if (node.alreadyContainsArtifact) {
                       <span class="already-added-badge">
@@ -207,8 +207,8 @@ interface CollectionNode {
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       overflow-x: auto;
     }
@@ -221,18 +221,18 @@ interface CollectionNode {
       background: transparent;
       border: none;
       border-radius: 4px;
-      color: #0076B6;
+      color: var(--mj-brand-primary);
       cursor: pointer;
       white-space: nowrap;
       font-size: 14px;
     }
 
     .breadcrumb-btn:hover {
-      background: #E5E7EB;
+      background: var(--mj-border-default);
     }
 
     .breadcrumb-separator {
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       font-size: 12px;
     }
 
@@ -245,7 +245,7 @@ interface CollectionNode {
     .search-icon {
       position: absolute;
       left: 12px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       pointer-events: none;
     }
 
@@ -257,7 +257,7 @@ interface CollectionNode {
     .collections-list {
       flex: 1;
       overflow-y: auto;
-      border: 1px solid #E5E7EB;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       min-height: 250px;
       max-height: 350px;
@@ -268,13 +268,13 @@ interface CollectionNode {
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
-      border-bottom: 1px solid #F3F4F6;
+      border-bottom: 1px solid var(--mj-border-default);
       cursor: pointer;
       transition: background 0.2s;
     }
 
     .collection-item:hover {
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .collection-item:last-child {
@@ -282,13 +282,13 @@ interface CollectionNode {
     }
 
     .collection-item.already-added {
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
       opacity: 0.7;
       cursor: not-allowed;
     }
 
     .collection-item.already-added:hover {
-      background: #F9FAFB;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .collection-checkbox {
@@ -310,7 +310,7 @@ interface CollectionNode {
     .collection-name {
       flex: 1;
       font-size: 14px;
-      color: #1F2937;
+      color: var(--mj-text-primary);
     }
 
     .already-added-badge {
@@ -318,10 +318,10 @@ interface CollectionNode {
       align-items: center;
       gap: 4px;
       padding: 4px 8px;
-      background: #DBEAFE;
-      border: 1px solid #93C5FD;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
       border-radius: 12px;
-      color: #1E40AF;
+      color: var(--mj-brand-primary);
       font-size: 12px;
       font-weight: 500;
       white-space: nowrap;
@@ -329,23 +329,23 @@ interface CollectionNode {
 
     .already-added-badge i {
       font-size: 12px;
-      color: #2563EB;
+      color: var(--mj-brand-primary);
     }
 
     .drill-down-btn {
       padding: 6px 10px;
       background: transparent;
-      border: 1px solid #D1D5DB;
+      border: 1px solid var(--mj-border-strong);
       border-radius: 4px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       cursor: pointer;
       transition: all 0.2s;
     }
 
     .drill-down-btn:hover {
-      background: #F3F4F6;
-      border-color: #9CA3AF;
-      color: #374151;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-text-disabled);
+      color: var(--mj-text-secondary);
     }
 
     .empty-state {
@@ -354,7 +354,7 @@ interface CollectionNode {
       align-items: center;
       justify-content: center;
       padding: 48px 24px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
       text-align: center;
     }
 
@@ -371,7 +371,7 @@ interface CollectionNode {
 
     .empty-state .hint {
       font-size: 13px;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
     }
 
     .loading-state, .error-state {
@@ -381,7 +381,7 @@ interface CollectionNode {
       justify-content: center;
       padding: 48px 24px;
       gap: 12px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .error-state i {
@@ -389,7 +389,7 @@ interface CollectionNode {
     }
 
     .error-state {
-      color: #DC2626;
+      color: var(--mj-status-error);
     }
 
     .selected-summary {
@@ -397,16 +397,16 @@ interface CollectionNode {
       align-items: center;
       gap: 8px;
       padding: 12px 16px;
-      background: #DBEAFE;
-      border: 1px solid #93C5FD;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
       border-radius: 6px;
-      color: #1E40AF;
+      color: var(--mj-brand-primary);
       font-size: 14px;
       font-weight: 500;
     }
 
     .selected-summary i {
-      color: #2563EB;
+      color: var(--mj-brand-primary);
     }
 
     .create-section {
@@ -419,7 +419,7 @@ interface CollectionNode {
       display: flex;
       align-items: center;
       text-align: center;
-      color: #9CA3AF;
+      color: var(--mj-text-disabled);
       font-size: 12px;
       font-weight: 500;
     }
@@ -428,7 +428,7 @@ interface CollectionNode {
     .divider::after {
       content: '';
       flex: 1;
-      border-bottom: 1px solid #E5E7EB;
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .divider span {
@@ -441,10 +441,10 @@ interface CollectionNode {
       justify-content: center;
       gap: 8px;
       padding: 10px 16px;
-      background: #F9FAFB;
-      border: 2px dashed #D1D5DB;
+      background: var(--mj-bg-surface-sunken);
+      border: 2px dashed var(--mj-border-strong);
       border-radius: 6px;
-      color: #0076B6;
+      color: var(--mj-brand-primary);
       font-size: 14px;
       font-weight: 500;
       cursor: pointer;
@@ -452,8 +452,8 @@ interface CollectionNode {
     }
 
     .btn-create-collection:hover {
-      background: #F3F4F6;
-      border-color: #0076B6;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-brand-primary);
     }
 
     .btn-create-collection i {
@@ -465,8 +465,8 @@ interface CollectionNode {
       flex-direction: column;
       gap: 12px;
       padding: 16px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
     }
 

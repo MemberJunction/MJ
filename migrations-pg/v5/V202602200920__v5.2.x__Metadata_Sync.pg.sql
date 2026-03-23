@@ -21,21 +21,6 @@ UPDATE pg_cast SET castcontext = 'i'
 WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 
 
--- ===================== DDL: Tables, PKs, Indexes =====================
-
-
--- ===================== Helper Functions (fn*) =====================
-
-
--- ===================== Views =====================
-
-
--- ===================== Stored Procedures (sp*) =====================
-
-
--- ===================== Triggers =====================
-
-
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
 -- SQL Logging Session
@@ -685,7 +670,7 @@ erDiagram
 ```
 
 ## Filters & Conditions
-- Runs filtered to last 30 days (`StartedAt >= DATEADD(DAY, -30, GETDATE())`)
+- Runs filtered to last 30 days (`StartedAt >= DATEADD(DAY, -30, NOW())`)
 - Grouped by agent name
 - Sorted by total runs descending
 ````
@@ -941,7 +926,7 @@ FROM [__mj].vwAIAgents a
         ON r."AgentID" = a."ID"
 
 WHERE
-    r."StartedAt" >= DATEADD(DAY, -30, GETDATE())   -- Last 30 days
+    r."StartedAt" >= DATEADD(DAY, -30, NOW())   -- Last 30 days
 
 GROUP BY
     a."Name"
@@ -2455,12 +2440,3 @@ BEGIN
   p_ID_d42a2cd2 := '23F8423E-F36B-1410-8D9C-00021F8B792E';
   PERFORM __mj."spUpdateQuery"(p_Name := p_Name_d42a2cd2, p_CategoryID := p_CategoryID_d42a2cd2, p_UserQuestion := p_UserQuestion_d42a2cd2, p_Description := p_Description_d42a2cd2, p_SQL := p_SQL_d42a2cd2, p_TechnicalDescription := p_TechnicalDescription_d42a2cd2, p_OriginalSQL := p_OriginalSQL_d42a2cd2, p_Feedback := p_Feedback_d42a2cd2, p_Status := p_Status_d42a2cd2, p_QualityRank := p_QualityRank_d42a2cd2, p_ExecutionCostRank := p_ExecutionCostRank_d42a2cd2, p_UsesTemplate := p_UsesTemplate_d42a2cd2, p_AuditQueryRuns := p_AuditQueryRuns_d42a2cd2, p_CacheEnabled := p_CacheEnabled_d42a2cd2, p_CacheTTLMinutes := p_CacheTTLMinutes_d42a2cd2, p_CacheMaxSize := p_CacheMaxSize_d42a2cd2, p_EmbeddingVector := p_EmbeddingVector_d42a2cd2, p_EmbeddingModelID := p_EmbeddingModelID_d42a2cd2, p_CacheValidationSQL := p_CacheValidationSQL_d42a2cd2, p_ID := p_ID_d42a2cd2);
 END $$;
-
-
--- ===================== FK & CHECK Constraints =====================
-
-
--- ===================== Grants =====================
-
-
--- ===================== Comments =====================

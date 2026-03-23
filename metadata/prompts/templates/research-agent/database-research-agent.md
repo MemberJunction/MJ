@@ -64,6 +64,28 @@ The following entities exist in the system. Invoke the `Get Entity Details` acti
 {{ entity.Description }}
 {% endfor %}
 
+## Stored Query Catalog (ALWAYS CHECK FIRST)
+
+The system includes pre-built, approved stored queries that you **MUST** search before writing any ad-hoc SQL. Stored queries are pre-tested, pre-optimized, and maintained centrally — always prefer them over writing new SQL.
+
+### How to Search
+Use the **Search Query Catalog** action with a natural language description of what data you need:
+- `SearchText`: Describe the data need (e.g., "customer activity by region", "monthly revenue trends")
+- `ApprovedOnly`: true (default) — only returns validated queries
+- `IncludeSQL`: true — includes the SQL text for review
+
+The action uses **semantic vector search** to match by business concept, not just exact name — "customer activity" will find a query named "Active Customer Summary".
+
+### CRITICAL: What to Do with Search Results
+
+**If a match has Similarity >= 0.6** → You **MUST** use **Run Stored Query** to execute it instead of writing ad-hoc SQL. This is not a suggestion — stored queries exist specifically to avoid re-inventing SQL that already works.
+
+**If no match or all matches have Similarity < 0.6** → Write ad-hoc SQL as a fallback.
+
+**Never write ad-hoc SQL that duplicates what an existing stored query already does.** The Search Query Catalog tells you what's available — use it.
+
+To execute a stored query, use the **Run Stored Query** action with either `QueryName` or `QueryID`. You can pass parameters as JSON and control output format (CSV/JSON) and row limits.
+
 ## When to Clarify with Parent
 
 **You can bubble up questions to the parent agent using Chat nextStep**. Do this when:
@@ -107,6 +129,15 @@ The following entities exist in the system. Invoke the `Get Entity Details` acti
 - Identify which entities likely contain the data you need
 - Note the exact entity names for use in Step 2
 
+### Step 1b: Search Query Catalog (MANDATORY)
+**You MUST do this before writing any ad-hoc SQL.** Use the **Search Query Catalog** action to find matching stored queries:
+- Pass a natural language description of the data you need as `SearchText`
+- The action uses semantic vector search to match by **business concept** — "customer activity" will find a query named "Active Customer Summary"
+- **If any result has Similarity >= 0.6** → use **Run Stored Query** to execute it directly. Do NOT proceed to write ad-hoc SQL that duplicates this query. This is faster, pre-validated, and avoids duplication.
+- **If no match or all results have Similarity < 0.6** → proceed to Step 2 and write ad-hoc SQL
+
+**CRITICAL: Do NOT fire Run Ad-hoc Query in the same action batch as Search Query Catalog.** Always wait for catalog results before deciding whether to write ad-hoc SQL. Firing them in parallel defeats the reuse-first approach.
+
 ### Step 2: Understand Entity Structure
 For each relevant entity, use **Get Entity Details**:
 - Shows ALL field names, types, and descriptions
@@ -117,7 +148,7 @@ For each relevant entity, use **Get Entity Details**:
 **CRITICAL**: Get Entity Details gives you the EXACT field names. Use these exact names in your SQL queries.
 
 ### Step 3: Write SQL Query
-Use **Execute Research Query** with the correct field names from Step 2:
+Use **Run Ad-hoc Query** with the correct field names from Step 2:
 - ALWAYS use `BaseView` (from Get Entity Details) in your FROM clause
 - Use EXACT field names (copy from Get Entity Details output)
 - BaseView is like: `[SchemaName].[BaseView]` (e.g., `[__mj].[vwAIModels]` or `[crm].[vwAccounts]` etc)
@@ -146,7 +177,7 @@ Params: EntityName="AI Models"
 **CRITICAL**
 Use the **exact** entity name from the Entities section above. For example, if an entity has a name of `MJ: AI Agent Relationships`, do not just pass in `AI Agent Relationships`, you must pass in the **exact** entity name.
 
-### 2. Execute Research Query
+### 2. Run Ad-hoc Query
 **When to use**: After you know the exact field names
 **Returns**: Query results and/or analysis
 **Parameters**:
@@ -159,7 +190,7 @@ Use the **exact** entity name from the Entities section above. For example, if a
 
 **Example - Get analysis only (best for summaries)**:
 ```
-Action: Execute Research Query
+Action: Run Ad-hoc Query
 Params:
   Query="SELECT [Name], [Vendor], [MaxInputTokens] FROM [__mj].[vwAIModels] WHERE [IsActive]=1"
   AnalysisRequest="Summarize the top 5 models by max input tokens and their vendors"
@@ -168,7 +199,7 @@ Params:
 
 **Example - Get raw data with column limits (for detailed work)**:
 ```
-Action: Execute Research Query
+Action: Run Ad-hoc Query
 Params:
   Query="SELECT [Name], [Description], [PromptText], [Category] FROM [__mj].[vwAIPrompts] WHERE [IsActive]=1"
   DataFormat="csv"
@@ -179,10 +210,27 @@ Params:
 
 **Example - Get raw data (small result sets)**:
 ```
-Action: Execute Research Query
+Action: Run Ad-hoc Query
 Params:
   Query="SELECT TOP 10 [Name], [Vendor] FROM [__mj].[vwAIModels] WHERE [IsActive]=1"
   DataFormat="csv"
+```
+
+### 3. Run Stored Query
+**When to use**: Search Query Catalog found a matching stored query for your research need
+**Returns**: Query results in CSV or JSON format
+**Parameters**:
+- `QueryName` (required if no QueryID): Exact name of the stored query
+- `QueryID` (required if no QueryName): UUID of the stored query
+- `Parameters` (optional): JSON object of parameter values
+- `MaxRows` (optional): Maximum rows to return (default 1000)
+- `DataFormat` (optional): 'csv' (default) or 'json'
+- `ColumnMaxLength` (optional): Trim long values to this length
+
+**Example**:
+```
+Action: Run Stored Query
+Params: QueryName="Monthly Revenue Summary", MaxRows=100, DataFormat="csv"
 ```
 
 ## Key Rules

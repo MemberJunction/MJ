@@ -84,11 +84,11 @@ import { UUIDsEqual } from '@memberjunction/global';
       display: block;
       margin-bottom: 8px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .required {
-      color: #DC2626;
+      color: var(--mj-status-error);
     }
 
     .form-control {
@@ -100,14 +100,14 @@ import { UUIDsEqual } from '@memberjunction/global';
       align-items: center;
       gap: 8px;
       padding: 8px 12px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
-      color: #6B7280;
+      color: var(--mj-text-muted);
     }
 
     .parent-info i {
-      color: #1e40af;
+      color: var(--mj-brand-primary);
     }
 
     .form-error {
@@ -115,10 +115,10 @@ import { UUIDsEqual } from '@memberjunction/global';
       align-items: center;
       gap: 8px;
       padding: 12px;
-      background: #FEE2E2;
-      border: 1px solid #FCA5A5;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-bg-surface));
       border-radius: 6px;
-      color: #DC2626;
+      color: var(--mj-status-error);
       font-size: 14px;
     }
 

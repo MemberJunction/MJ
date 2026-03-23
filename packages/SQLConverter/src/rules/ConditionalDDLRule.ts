@@ -16,7 +16,7 @@
  *   END $$;
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
-import { convertIdentifiers, removeCollate } from './ExpressionHelpers.js';
+import { convertIdentifiers, removeCollate, convertCommonFunctions } from './ExpressionHelpers.js';
 
 export class ConditionalDDLRule implements IConversionRule {
   Name = 'ConditionalDDLRule';
@@ -43,6 +43,10 @@ export class ConditionalDDLRule implements IConversionRule {
 
     // Remove N prefix from string literals
     result = result.replace(/(?<![a-zA-Z])N'/g, "'");
+
+    // Convert common SQL Server functions BEFORE PascalCase quoting
+    // (prevents GETUTCDATE from being quoted as "GETUTCDATE" before conversion to NOW())
+    result = convertCommonFunctions(result);
 
     // Try CREATE INDEX IF NOT EXISTS pattern first (no BEGIN/END wrapper)
     const indexResult = this.tryConvertConditionalIndex(result);
@@ -96,10 +100,38 @@ export class ConditionalDDLRule implements IConversionRule {
     return `${keyword} IF NOT EXISTS "${indexName}" ON ${tableName} (${columns})${whereClause ? ' ' + whereClause : ''};`;
   }
 
-  /** Find matching close paren at depth 0 */
+  /** Find matching close paren at depth 0, respecting string literals and comments */
   private static findCloseParen(sql: string, openPos: number): number {
     let depth = 0;
+    let inString = false;
     for (let i = openPos; i < sql.length; i++) {
+      // Skip -- line comments (they may contain apostrophes like "we're")
+      if (!inString && sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
+        const lineEnd = sql.indexOf('\n', i);
+        if (lineEnd < 0) return -1; // comment runs to end of text
+        i = lineEnd; // will be incremented by the loop
+        continue;
+      }
+      // Skip /* block comments */
+      if (!inString && sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
+        const blockEnd = sql.indexOf('*/', i + 2);
+        if (blockEnd < 0) return -1;
+        i = blockEnd + 1; // skip past */
+        continue;
+      }
+      if (sql[i] === "'") {
+        if (inString) {
+          if (i + 1 < sql.length && sql[i + 1] === "'") {
+            i++; // skip escaped quote
+            continue;
+          }
+          inString = false;
+        } else {
+          inString = true;
+        }
+        continue;
+      }
+      if (inString) continue;
       if (sql[i] === '(') depth++;
       else if (sql[i] === ')') {
         depth--;
@@ -133,22 +165,53 @@ export class ConditionalDDLRule implements IConversionRule {
   }
 
   private convertToDoBlock(sql: string): string {
-    // Match: IF NOT EXISTS (...) BEGIN ... END
-    const match = sql.match(
-      /IF\s+NOT\s+EXISTS\s*\(([\s\S]*?)\)\s*\n\s*BEGIN\s*\n([\s\S]*?)\bEND\b/i
-    );
-
-    if (!match) {
-      // Fallback: comment out entire block to prevent syntax errors
+    // Find the IF NOT EXISTS opening paren using depth-counting
+    const ifMatch = sql.match(/IF\s+NOT\s+EXISTS\s*\(/i);
+    if (!ifMatch || ifMatch.index === undefined) {
       const commented = sql.split('\n').map(l => `-- ${l}`).join('\n');
-      return `-- TODO: Review conditional DDL\n${commented}\n`;
+      return `-- SKIPPED: conditional DDL (auto-conversion not supported)\n${commented}\n`;
     }
 
-    let condition = match[1].trim();
-    let body = match[2].trim().replace(/;\s*$/, '');
+    const openPos = sql.indexOf('(', ifMatch.index);
+    const closePos = ConditionalDDLRule.findCloseParen(sql, openPos);
+    if (closePos < 0) {
+      const commented = sql.split('\n').map(l => `-- ${l}`).join('\n');
+      return `-- SKIPPED: conditional DDL (auto-conversion not supported)\n${commented}\n`;
+    }
+
+    // Extract condition (inside the outer parens)
+    let condition = sql.substring(openPos + 1, closePos).trim();
+
+    // Get text after the closing paren — look for BEGIN...END or single statement
+    const rest = sql.slice(closePos + 1);
+
+    // Find BEGIN (may be on same line or next line)
+    const beginMatch = rest.match(/^\s*BEGIN\b/i);
+    let body: string;
+
+    if (beginMatch) {
+      // Block form: IF NOT EXISTS (...) BEGIN ... END
+      // Strip all trailing comments and whitespace before matching END
+      const afterBegin = rest.slice(beginMatch[0].length);
+      const stripped = ConditionalDDLRule.stripTrailingComments(afterBegin);
+      const endMatch = stripped.match(/\bEND\b\s*;?\s*$/i);
+      if (!endMatch || endMatch.index === undefined) {
+        const commented = sql.split('\n').map(l => `-- ${l}`).join('\n');
+        return `-- SKIPPED: conditional DDL (auto-conversion not supported)\n${commented}\n`;
+      }
+      body = stripped.slice(0, endMatch.index).trim().replace(/;\s*$/, '');
+    } else {
+      // Single-statement form: IF NOT EXISTS (...) <statement>;
+      // Strip all trailing comments and whitespace before extracting body
+      const stripped = ConditionalDDLRule.stripTrailingComments(rest);
+      body = stripped.trim().replace(/;\s*$/, '');
+      if (!body) {
+        const commented = sql.split('\n').map(l => `-- ${l}`).join('\n');
+        return `-- SKIPPED: conditional DDL (auto-conversion not supported)\n${commented}\n`;
+      }
+    }
 
     // Quote PascalCase column names that aren't already quoted
-    // These reference baseline tables with quoted PascalCase columns
     condition = this.quoteColumnNames(condition);
     body = this.quoteColumnNames(body);
 
@@ -167,6 +230,26 @@ export class ConditionalDDLRule implements IConversionRule {
       '    END IF;',
       'END $$;',
     ].join('\n');
+  }
+
+  /**
+   * Repeatedly strip trailing block comments, line comments, and dashed
+   * separator lines from the end of a SQL string until only code remains.
+   */
+  private static stripTrailingComments(sql: string): string {
+    let s = sql;
+    let prev = '';
+    while (s !== prev) {
+      prev = s;
+      s = s.trimEnd();
+      // Strip trailing line comments (-- ...)
+      s = s.replace(/--[^\n]*$/g, '').trimEnd();
+      // Strip trailing block comments (/* ... */)
+      s = s.replace(/\/\*[\s\S]*?\*\/\s*$/g, '').trimEnd();
+      // Strip trailing dashed separator lines (--------...)
+      s = s.replace(/-{3,}\s*$/g, '').trimEnd();
+    }
+    return s;
   }
 
   /** SQL keywords that should NOT be quoted by quoteColumnNames */

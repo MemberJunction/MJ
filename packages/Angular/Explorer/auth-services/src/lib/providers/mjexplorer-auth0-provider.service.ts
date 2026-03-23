@@ -129,8 +129,15 @@ export class MJAuth0Provider extends MJAuthBase {
     this.auth.loginWithRedirect(options);
   }
 
-  async logout(): Promise<void> {
-    this.auth.logout({ logoutParams: { returnTo: document.location.origin } });
+  protected async logoutInternal(): Promise<void> {
+    // Subscribe to the Observable so Auth0 Angular SDK v2's authState.refresh() fires.
+    try {
+      await firstValueFrom(
+        this.auth.logout({ logoutParams: { returnTo: document.location.origin } })
+      );
+    } catch {
+      // Expected when Auth0 redirects the browser before the Observable completes.
+    }
   }
 
   async handleCallback(): Promise<void> {

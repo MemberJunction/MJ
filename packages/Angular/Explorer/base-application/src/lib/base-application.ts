@@ -100,7 +100,7 @@ export class BaseApplication {
    * Override in subclass for dynamic color based on context.
    */
   GetColor(): string {
-    return this.Color || '#757575';
+    return this.Color || 'var(--mj-text-muted)';
   }
 
   /**

@@ -161,23 +161,23 @@ export type EvaluationBadgeMode = 'compact' | 'expanded' | 'inline';
       font-size: 11px;
     }
 
-    .eval-item.exec.success { color: #22c55e; }
-    .eval-item.exec.error { color: #ef4444; }
-    .eval-item.exec.timeout { color: #f97316; }
-    .eval-item.exec.running { color: #3b82f6; }
-    .eval-item.exec.pending { color: #9ca3af; }
-    .eval-item.exec.skipped { color: #a1a1aa; }
+    .eval-item.exec.success { color: var(--mj-status-success); }
+    .eval-item.exec.error { color: var(--mj-status-error); }
+    .eval-item.exec.timeout { color: var(--mj-status-warning); }
+    .eval-item.exec.running { color: var(--mj-brand-primary); }
+    .eval-item.exec.pending { color: var(--mj-text-disabled); }
+    .eval-item.exec.skipped { color: var(--mj-text-disabled); }
 
     .eval-item.human {
-      background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-      border: 1px solid #f59e0b;
-      color: #92400e;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      border: 1px solid var(--mj-status-warning);
+      color: var(--mj-text-secondary);
     }
 
     .eval-item.human.pending {
-      background: #f3f4f6;
-      border: 1px solid #d1d5db;
-      color: #6b7280;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px solid var(--mj-border-strong);
+      color: var(--mj-text-muted);
     }
 
     .eval-item.human .value {
@@ -190,25 +190,25 @@ export type EvaluationBadgeMode = 'compact' | 'expanded' | 'inline';
     }
 
     .correctness-icon.incorrect {
-      color: #ef4444;
+      color: var(--mj-status-error);
     }
 
     .eval-item.auto {
-      background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-      border: 1px solid #93c5fd;
-      color: #1d4ed8;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      border: 1px solid var(--mj-brand-primary);
+      color: var(--mj-brand-primary-hover);
     }
 
     .eval-item.auto.high {
-      background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-      border: 1px solid #86efac;
-      color: #166534;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      border: 1px solid var(--mj-status-success);
+      color: var(--mj-status-success);
     }
 
     .eval-item.auto.low {
-      background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-      border: 1px solid #fca5a5;
-      color: #991b1b;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border: 1px solid var(--mj-status-error);
+      color: var(--mj-status-error);
     }
 
     .eval-item.auto .value {
@@ -220,9 +220,9 @@ export type EvaluationBadgeMode = 'compact' | 'expanded' | 'inline';
       flex-direction: column;
       gap: 8px;
       padding: 12px;
-      background: #f8fafc;
+      background: var(--mj-bg-surface-card);
       border-radius: 8px;
-      border: 1px solid #e2e8f0;
+      border: 1px solid var(--mj-border-default);
     }
 
     .eval-row {
@@ -235,7 +235,7 @@ export type EvaluationBadgeMode = 'compact' | 'expanded' | 'inline';
     .eval-row .label {
       font-size: 11px;
       font-weight: 600;
-      color: #64748b;
+      color: var(--mj-text-muted);
       text-transform: uppercase;
       width: 70px;
       flex-shrink: 0;
@@ -248,12 +248,12 @@ export type EvaluationBadgeMode = 'compact' | 'expanded' | 'inline';
       flex: 1;
     }
 
-    .eval-row .value-wrap.success { color: #22c55e; }
-    .eval-row .value-wrap.error { color: #ef4444; }
-    .eval-row .value-wrap.timeout { color: #f97316; }
-    .eval-row .value-wrap.running { color: #3b82f6; }
-    .eval-row .value-wrap.pending { color: #9ca3af; }
-    .eval-row .value-wrap.na { color: #9ca3af; }
+    .eval-row .value-wrap.success { color: var(--mj-status-success); }
+    .eval-row .value-wrap.error { color: var(--mj-status-error); }
+    .eval-row .value-wrap.timeout { color: var(--mj-status-warning); }
+    .eval-row .value-wrap.running { color: var(--mj-brand-primary); }
+    .eval-row .value-wrap.pending { color: var(--mj-text-disabled); }
+    .eval-row .value-wrap.na { color: var(--mj-text-disabled); }
 
     .eval-row .text {
       font-weight: 500;
@@ -266,44 +266,44 @@ export type EvaluationBadgeMode = 'compact' | 'expanded' | 'inline';
 
     .rating-num {
       font-weight: 700;
-      color: #92400e;
+      color: var(--mj-text-secondary);
     }
 
     .correctness {
       font-size: 11px;
-      color: #22c55e;
+      color: var(--mj-status-success);
       display: flex;
       align-items: center;
       gap: 4px;
     }
 
     .correctness.incorrect {
-      color: #ef4444;
+      color: var(--mj-status-error);
     }
 
     .score-bar {
       width: 60px;
       height: 6px;
-      background: #e2e8f0;
+      background: var(--mj-border-default);
       border-radius: 3px;
       overflow: hidden;
     }
 
     .score-fill {
       height: 100%;
-      background: linear-gradient(90deg, #3b82f6 0%, #22c55e 100%);
+      background: var(--mj-brand-primary);
       border-radius: 3px;
       transition: width 0.3s ease;
     }
 
     .score-text {
       font-weight: 700;
-      color: #1d4ed8;
+      color: var(--mj-brand-primary-hover);
     }
 
     .checks {
       font-size: 11px;
-      color: #64748b;
+      color: var(--mj-text-muted);
     }
 
     /* Inline mode */
@@ -314,23 +314,23 @@ export type EvaluationBadgeMode = 'compact' | 'expanded' | 'inline';
     }
 
     .eval-badge.inline.success {
-      background: #dcfce7;
-      color: #166534;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .eval-badge.inline.warning {
-      background: #fef3c7;
-      color: #92400e;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-text-secondary);
     }
 
     .eval-badge.inline.danger {
-      background: #fee2e2;
-      color: #991b1b;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     .eval-badge.inline.neutral {
-      background: #f3f4f6;
-      color: #6b7280;
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-muted);
     }
   `]
 })

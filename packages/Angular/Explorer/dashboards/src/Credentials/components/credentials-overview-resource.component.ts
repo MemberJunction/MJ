@@ -74,14 +74,15 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
     private _metadata = new Metadata();
     private _permissionCache = new Map<string, boolean>();
 
-    // Category colors for charts
+    // Category colors for charts - using CSS custom properties via getComputedStyle at runtime
+    // These are semantic fallback values; the actual tokens are resolved from the theme
     private categoryColors: Record<string, string> = {
-        'AI': '#8b5cf6',
-        'Communication': '#3b82f6',
-        'Storage': '#10b981',
-        'Database': '#f59e0b',
-        'Authentication': '#ef4444',
-        'Integration': '#6366f1'
+        'AI': 'var(--mj-brand-primary)',
+        'Communication': 'var(--mj-brand-primary)',
+        'Storage': 'var(--mj-status-success)',
+        'Database': 'var(--mj-status-warning)',
+        'Authentication': 'var(--mj-status-error)',
+        'Integration': 'var(--mj-brand-primary)'
     };
 
     private destroy$ = new Subject<void>();
@@ -282,7 +283,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
                     categoryId: category, // Use category name as ID for filtering
                     count: categoryCredentials.length,
                     iconClass: this.getCategoryIcon(category),
-                    color: this.categoryColors[category] || '#64748b',
+                    color: this.categoryColors[category] || 'var(--mj-text-muted)',
                     percentage: 0
                 });
             }

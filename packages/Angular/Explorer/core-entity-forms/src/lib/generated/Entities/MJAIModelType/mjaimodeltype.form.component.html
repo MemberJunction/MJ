@@ -38,7 +38,7 @@
     <mj-collapsible-panel
         SectionKey="defaultModality"
         SectionName="Default Modality"
-        Icon="fa fa-sliders-h"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -58,6 +58,32 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Prefill Settings Section -->
+    <mj-collapsible-panel
+        SectionKey="prefillSettings"
+        SectionName="Prefill Settings"
+        Icon="fa fa-comment-dots"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportsPrefill"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="PrefillFallbackText"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>

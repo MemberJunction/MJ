@@ -140,6 +140,10 @@
       [SelectionMode]="gridSelectionMode"
       [ShowAddToListButton]="showAddToListButton"
       [AllowLoad]="false"
+      [ShowPager]="effectiveConfig.showPagination"
+      [PageSize]="effectiveConfig.pageSize"
+      [TotalRowCount]="pagination.totalRecords"
+      [PagerPageNumber]="pagination.currentPage + 1"
       (AfterRowClick)="onDataGridRowClick($event)"
       (AfterRowDoubleClick)="onDataGridRowDoubleClick($event)"
       (AfterSort)="onDataGridSortChanged($event)"
@@ -150,7 +154,8 @@
       (DeleteButtonClick)="onGridDeleteRequested($event)"
       (ExportButtonClick)="onGridExportRequested()"
       (AddToListRequested)="onGridAddToListRequested($event)"
-      (ForeignKeyClick)="onForeignKeyClick($event)">
+      (ForeignKeyClick)="onForeignKeyClick($event)"
+      (PageChange)="onGridPageChange($event)">
     </mj-entity-data-grid>
 
     <!-- Cards View - always rendered, visibility controlled by hidden -->
@@ -181,12 +186,4 @@
     </mj-timeline>
   </div>
 
-  <!-- Pagination - only show when there's more data to load OR we've loaded more than one page -->
-  @if (effectiveConfig.showPagination && effectiveEntity && (pagination.hasMore || pagination.totalRecords > effectiveConfig.pageSize)) {
-    <mj-pagination
-      [pagination]="pagination"
-      [loadedRecordCount]="filteredRecords.length"
-      (loadMore)="onLoadMore()">
-    </mj-pagination>
-  }
 </div>

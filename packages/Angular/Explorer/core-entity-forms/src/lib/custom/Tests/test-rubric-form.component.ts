@@ -47,13 +47,13 @@ import { MJTestRubricFormComponent } from '../../generated/Entities/MJTestRubric
     .rubric-form { padding: 20px; }
     .rubric-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
     .rubric-header h2 { margin: 0; font-size: 20px; display: flex; align-items: center; gap: 12px; }
-    .status-badge { padding: 4px 12px; border-radius: 12px; color: white; font-size: 12px; font-weight: 600; }
-    .rubric-content { background: white; padding: 24px; border-radius: 8px; }
+    .status-badge { padding: 4px 12px; border-radius: 12px; color: var(--mj-text-inverse); font-size: 12px; font-weight: 600; }
+    .rubric-content { background: var(--mj-bg-surface); padding: 24px; border-radius: 8px; }
     .field-group { margin-bottom: 20px; }
-    .field-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #333; }
-    .field-group input, .field-group textarea, .field-group select { width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; }
+    .field-group label { display: block; margin-bottom: 8px; font-weight: 600; color: var(--mj-text-primary); }
+    .field-group input, .field-group textarea, .field-group select { width: 100%; padding: 8px 12px; border: 1px solid var(--mj-border-default); border-radius: 4px; }
     .json-editor { font-family: 'Courier New', monospace; font-size: 13px; }
-    .metadata { margin-top: 24px; padding-top: 16px; border-top: 1px solid #e0e0e0; display: flex; gap: 24px; font-size: 13px; color: #666; }
+    .metadata { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--mj-border-default); display: flex; gap: 24px; font-size: 13px; color: var(--mj-text-secondary); }
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })

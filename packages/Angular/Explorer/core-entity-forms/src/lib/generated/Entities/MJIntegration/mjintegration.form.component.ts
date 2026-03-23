@@ -22,7 +22,8 @@ export class MJIntegrationFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJIntegrationURLFormats', sectionName: 'URL Formats', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false },
-            { sectionKey: 'mJRecordChanges', sectionName: 'Record Changes', isExpanded: false }
+            { sectionKey: 'mJRecordChanges', sectionName: 'Record Changes', isExpanded: false },
+            { sectionKey: 'mJIntegrationObjects', sectionName: 'Integration Objects', isExpanded: false }
         ]);
     }
 }

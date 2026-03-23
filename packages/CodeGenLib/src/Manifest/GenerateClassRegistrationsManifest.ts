@@ -79,6 +79,39 @@ export interface GenerateManifestOptions {
      * @example ['@memberjunction'] — skips all @memberjunction/* packages
      */
     excludePackages?: string[];
+
+    /**
+     * When true (the default), compares manifest-imported packages against the
+     * app's `package.json` dependencies and automatically adds any that are
+     * missing. This prevents `MODULE_NOT_FOUND` errors after npm publish, since
+     * transitive packages discovered during the dependency walk may not be
+     * declared as direct dependencies.
+     *
+     * Set to false (or use `--no-sync-deps` in CLI) when generating supplemental
+     * manifests that exclude framework packages — those dependencies are already
+     * covered by the pre-built bootstrap manifest.
+     *
+     * Note: This modifies `package.json` only. You must run `npm install` at the
+     * repo root afterwards to update the lockfile.
+     *
+     * @default true
+     */
+    syncDependencies?: boolean;
+
+    /**
+     * When true, scans compiled JavaScript files in dist/ directories for
+     * packages that don't have src/ (e.g., npm-published packages).
+     *
+     * By default, the manifest generator only scans TypeScript source files
+     * in src/ directories. Enable this flag to additionally discover
+     * @RegisterClass decorators in pre-compiled dist/ output using AST parsing.
+     *
+     * Use this when your dependency tree includes npm-published packages
+     * (not workspace-linked) that contain @RegisterClass decorators.
+     *
+     * @default false
+     */
+    scanDist?: boolean;
 }
 
 /**
@@ -97,6 +130,12 @@ export interface GenerateManifestResult {
     packages: string[];
     /** Total packages in the dependency tree */
     totalDepsWalked: number;
+    /**
+     * Dependencies that were added to the app's package.json by the
+     * syncDependencies step. Keys are package names, values are version strings.
+     * Empty when syncDependencies is disabled or no packages were missing.
+     */
+    AddedDependencies: Record<string, string>;
     /** Any errors encountered */
     errors: string[];
 }
@@ -228,35 +267,86 @@ function walkDependencyTree(
 // ============================================================================
 
 /**
- * Finds all TypeScript source files in a package directory.
- * Looks in the src/ folder by default.
+ * Result of finding scannable files in a package directory.
+ * Indicates whether source (.ts) or compiled (.js) files were found.
  */
-  async function findSourceFiles(packageDir: string, excludePatterns: string[]): Promise<string[]>
-  {
-      const srcDir = path.join(packageDir, 'src');
-      if (!fs.existsSync(srcDir)) return [];
+interface FindFilesResult {
+    /** The discovered file paths */
+    files: string[];
+    /** Whether these are compiled JS files from dist/ (true) or TS source from src/ (false) */
+    isCompiledJS: boolean;
+}
 
-      const defaultExcludes = [
-          '**/node_modules/**',
-          '**/dist/**',
-          '**/build/**',
-          '**/.git/**',
-          '**/__tests__/**',
-          '**/*.d.ts',
-          '**/*.spec.ts',
-          '**/*.test.ts',
-          ...excludePatterns.map(p => `**/${p}/**`)
-      ];
+/**
+ * Finds scannable files in a package directory.
+ * Prefers TypeScript source files from src/, but falls back to compiled JS
+ * files in dist/ when src/ doesn't exist (e.g., npm-published packages).
+ */
+async function findScannableFiles(packageDir: string, excludePatterns: string[], scanDist: boolean): Promise<FindFilesResult> {
+    const srcDir = path.join(packageDir, 'src');
+    if (fs.existsSync(srcDir)) {
+        const files = await findSourceFiles(srcDir, excludePatterns);
+        return { files, isCompiledJS: false };
+    }
 
-      const files = await glob('**/*.ts', {
-          cwd: srcDir,
-          absolute: true,
-          ignore: defaultExcludes,
-          nodir: true
-      });
+    // Only scan dist/ when explicitly opted in via --scan-dist
+    if (scanDist) {
+        const distDir = path.join(packageDir, 'dist');
+        if (fs.existsSync(distDir)) {
+            const files = await findDistFiles(distDir, excludePatterns);
+            return { files, isCompiledJS: true };
+        }
+    }
 
-      return files;
-  }
+    return { files: [], isCompiledJS: false };
+}
+
+/**
+ * Finds all TypeScript source files in a package's src/ directory.
+ */
+async function findSourceFiles(srcDir: string, excludePatterns: string[]): Promise<string[]> {
+    const defaultExcludes = [
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/build/**',
+        '**/.git/**',
+        '**/__tests__/**',
+        '**/*.d.ts',
+        '**/*.spec.ts',
+        '**/*.test.ts',
+        ...excludePatterns.map(p => `**/${p}/**`)
+    ];
+
+    return glob('**/*.ts', {
+        cwd: srcDir,
+        absolute: true,
+        ignore: defaultExcludes,
+        nodir: true
+    });
+}
+
+/**
+ * Finds compiled JavaScript files in a package's dist/ directory.
+ * Used as a fallback when src/ doesn't exist (npm-published packages).
+ */
+async function findDistFiles(distDir: string, excludePatterns: string[]): Promise<string[]> {
+    const defaultExcludes = [
+        '**/node_modules/**',
+        '**/.git/**',
+        '**/*.d.ts',
+        '**/*.d.ts.map',
+        '**/*.js.map',
+        '**/*.min.js',
+        ...excludePatterns.map(p => `**/${p}/**`)
+    ];
+
+    return glob('**/*.{js,mjs,cjs}', {
+        cwd: distDir,
+        absolute: true,
+        ignore: defaultExcludes,
+        nodir: true
+    });
+}
 
 /**
  * Parses a TypeScript file and extracts @RegisterClass decorator information
@@ -325,6 +415,114 @@ function parseRegisterClassDecorator(
     }
 
     return { className, filePath, packageName, baseClassName, key };
+}
+
+/**
+ * Extracts @RegisterClass decorator information from compiled JavaScript files.
+ *
+ * In compiled JS output, TypeScript decorators are downleveled into
+ * `__decorate()` calls with the pattern:
+ *
+ *   ClassName = __decorate([ RegisterClass(BaseClass, 'key') ], ClassName);
+ *
+ * This function uses TypeScript's parser with ScriptKind.JS to build a proper
+ * AST, then walks it looking for assignment expressions whose right-hand side
+ * is a `__decorate([ ... ], ClassName)` call containing `RegisterClass()`.
+ */
+function extractRegisterClassFromCompiledJS(
+    filePath: string,
+    sourceText: string,
+    packageName: string
+): RegisteredClassInfo[] {
+    const results: RegisteredClassInfo[] = [];
+
+    // Quick check before parsing
+    if (!sourceText.includes('RegisterClass')) return results;
+
+    const sourceFile = ts.createSourceFile(
+        filePath,
+        sourceText,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.JS
+    );
+
+    function visit(node: ts.Node): void {
+        if (ts.isExpressionStatement(node)) {
+            const expr = node.expression;
+            if (ts.isBinaryExpression(expr) && expr.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+                const found = parseDecorateAssignment(expr, filePath, packageName);
+                results.push(...found);
+            }
+        }
+        ts.forEachChild(node, visit);
+    }
+
+    visit(sourceFile);
+    return results;
+}
+
+/**
+ * Parses a binary assignment expression of the form:
+ *   ClassName = __decorate([...decorators], ClassName)
+ *
+ * Validates the structure and delegates to extractRegisterClassFromDecoratorArray
+ * for the actual RegisterClass extraction.
+ */
+function parseDecorateAssignment(
+    expr: ts.BinaryExpression,
+    filePath: string,
+    packageName: string
+): RegisteredClassInfo[] {
+    // Left side must be an identifier (the class name)
+    if (!ts.isIdentifier(expr.left)) return [];
+    const className = expr.left.text;
+
+    // Right side must be a call to __decorate
+    if (!ts.isCallExpression(expr.right)) return [];
+    const callExpr = expr.right;
+    if (!ts.isIdentifier(callExpr.expression) || callExpr.expression.text !== '__decorate') return [];
+
+    // First argument must be an array literal (the decorators list)
+    if (callExpr.arguments.length < 1) return [];
+    const decoratorsArray = callExpr.arguments[0];
+    if (!ts.isArrayLiteralExpression(decoratorsArray)) return [];
+
+    return extractRegisterClassFromDecoratorArray(decoratorsArray, className, filePath, packageName);
+}
+
+/**
+ * Walks the elements of a __decorate() array literal and extracts
+ * RegisterClass(...) calls, returning a RegisteredClassInfo for each.
+ */
+function extractRegisterClassFromDecoratorArray(
+    arrayLiteral: ts.ArrayLiteralExpression,
+    className: string,
+    filePath: string,
+    packageName: string
+): RegisteredClassInfo[] {
+    const results: RegisteredClassInfo[] = [];
+
+    for (const element of arrayLiteral.elements) {
+        if (!ts.isCallExpression(element)) continue;
+        if (!ts.isIdentifier(element.expression)) continue;
+        if (element.expression.text !== 'RegisterClass') continue;
+
+        let baseClassName: string | undefined;
+        let key: string | undefined;
+
+        const args = element.arguments;
+        if (args.length > 0 && ts.isIdentifier(args[0])) {
+            baseClassName = args[0].text;
+        }
+        if (args.length > 1 && ts.isStringLiteral(args[1])) {
+            key = args[1].text;
+        }
+
+        results.push({ className, filePath, packageName, baseClassName, key });
+    }
+
+    return results;
 }
 
 // ============================================================================
@@ -706,6 +904,125 @@ function buildImportSpecifiers(
 }
 
 // ============================================================================
+// Dependency Reconciliation
+// ============================================================================
+
+/**
+ * Result of comparing manifest-imported packages against declared dependencies.
+ */
+interface DependencyReconciliationResult {
+    /** Packages that were added to package.json */
+    Added: Record<string, string>;
+    /** Whether package.json was modified */
+    Changed: boolean;
+}
+
+/**
+ * Compares the set of packages imported by the manifest against the app's
+ * declared `dependencies` in package.json. Any manifest-imported package that
+ * is not already a direct dependency is added using the version from its
+ * resolved package.json on disk.
+ *
+ * This prevents `MODULE_NOT_FOUND` errors when packages are published to npm,
+ * since transitive dependencies may not be resolvable without explicit
+ * declaration.
+ */
+function reconcileDependencies(
+    manifestPackages: string[],
+    appDir: string,
+    depTree: Map<string, string>,
+    log: (msg: string) => void
+): DependencyReconciliationResult {
+    const pkgPath = path.join(appDir, 'package.json');
+    const pkgText = fs.readFileSync(pkgPath, 'utf-8');
+    const pkg = JSON.parse(pkgText);
+    const currentDeps: Record<string, string> = pkg.dependencies || {};
+
+    const missing = findMissingDependencies(manifestPackages, currentDeps, depTree);
+
+    if (Object.keys(missing).length === 0) {
+        log('All manifest-imported packages are already declared as dependencies.');
+        return { Added: {}, Changed: false };
+    }
+
+    const updatedDeps = sortObjectKeys({ ...currentDeps, ...missing });
+    pkg.dependencies = updatedDeps;
+
+    const updatedText = JSON.stringify(pkg, null, 2) + '\n';
+
+    // Only write if content actually changed (defensive — should always differ here)
+    if (updatedText !== pkgText) {
+        fs.writeFileSync(pkgPath, updatedText, 'utf-8');
+        logAddedDependencies(missing, log);
+        return { Added: missing, Changed: true };
+    }
+
+    return { Added: {}, Changed: false };
+}
+
+/**
+ * Identifies manifest-imported packages that are not declared as direct
+ * dependencies, resolving their versions from the installed package on disk.
+ */
+function findMissingDependencies(
+    manifestPackages: string[],
+    currentDeps: Record<string, string>,
+    depTree: Map<string, string>
+): Record<string, string> {
+    const missing: Record<string, string> = {};
+
+    for (const pkg of manifestPackages) {
+        if (currentDeps[pkg]) continue; // Already declared
+
+        const resolvedDir = depTree.get(pkg);
+        if (!resolvedDir) continue; // Can't resolve — skip
+
+        const resolvedPkg = readPackageJson(resolvedDir);
+        if (!resolvedPkg) continue;
+
+        // Read the actual version from the resolved package's package.json
+        const resolvedPkgPath = path.join(resolvedDir, 'package.json');
+        try {
+            const resolvedPkgJson = JSON.parse(fs.readFileSync(resolvedPkgPath, 'utf-8'));
+            const version = resolvedPkgJson.version;
+            if (version) {
+                missing[pkg] = version;
+            }
+        } catch {
+            // Skip packages whose version can't be determined
+        }
+    }
+
+    return missing;
+}
+
+/**
+ * Logs the list of added dependencies with a reminder to run npm install.
+ */
+function logAddedDependencies(
+    added: Record<string, string>,
+    log: (msg: string) => void
+): void {
+    const count = Object.keys(added).length;
+    log(`Added ${count} missing ${count === 1 ? 'dependency' : 'dependencies'} to package.json:`);
+    for (const [name, version] of Object.entries(added)) {
+        log(`  + ${name}@${version}`);
+    }
+    log('Remember to run `npm install` at the repo root to update the lockfile.');
+}
+
+/**
+ * Returns a new object with keys sorted alphabetically.
+ */
+function sortObjectKeys(obj: Record<string, string>): Record<string, string> {
+    const sorted: Record<string, string> = {};
+    for (const key of Object.keys(obj).sort()) {
+        sorted[key] = obj[key];
+    }
+    return sorted;
+}
+
+// ============================================================================
 // Main Entry Point
 // ============================================================================
 
@@ -741,7 +1058,9 @@ export async function generateClassRegistrationsManifest(
         verbose = true,
         filterBaseClasses,
         excludePatterns = [],
-        excludePackages = []
+        excludePackages = [],
+        syncDependencies = true,
+        scanDist = false
     } = options;
 
     const errors: string[] = [];
@@ -758,7 +1077,7 @@ export async function generateClassRegistrationsManifest(
     const appPkg = readPackageJson(absoluteAppDir);
     if (!appPkg) {
         errors.push(`No package.json found in ${absoluteAppDir}`);
-        return { success: false, outputPath, ManifestChanged: false, classes: [], packages: [], totalDepsWalked: 0, errors };
+        return { success: false, outputPath, ManifestChanged: false, classes: [], packages: [], totalDepsWalked: 0, AddedDependencies: {}, errors };
     }
 
     log(`Building manifest for: ${appPkg.name}`);
@@ -767,18 +1086,23 @@ export async function generateClassRegistrationsManifest(
     // Walk the dependency tree
     const depTree = walkDependencyTree(absoluteAppDir, log, excludePackages);
     log(`Dependency tree: ${depTree.size} packages`);
+    if (scanDist) {
+        log('Dist scanning enabled: will scan dist/ for packages without src/');
+    }
 
     // Scan each dependency for @RegisterClass decorators
     let packagesWithDecorators = 0;
     for (const [depName, depDir] of Array.from(depTree.entries())) {
-        const sourceFiles = await findSourceFiles(depDir, excludePatterns);
-        if (sourceFiles.length === 0) continue;
+        const { files, isCompiledJS } = await findScannableFiles(depDir, excludePatterns, scanDist);
+        if (files.length === 0) continue;
 
         let foundInPackage = false;
-        for (const filePath of sourceFiles) {
+        for (const filePath of files) {
             try {
                 const sourceText = fs.readFileSync(filePath, 'utf-8');
-                const classes = extractRegisterClassDecorators(filePath, sourceText, depName);
+                const classes = isCompiledJS
+                    ? extractRegisterClassFromCompiledJS(filePath, sourceText, depName)
+                    : extractRegisterClassDecorators(filePath, sourceText, depName);
                 if (classes.length > 0) {
                     foundInPackage = true;
                     allClasses.push(...classes);
@@ -825,10 +1149,22 @@ export async function generateClassRegistrationsManifest(
         }
     } catch (err) {
         errors.push(`Error writing manifest: ${err}`);
-        return { success: false, outputPath: absoluteOutputPath, ManifestChanged: false, classes: allClasses, packages: [], totalDepsWalked: depTree.size, errors };
+        return { success: false, outputPath: absoluteOutputPath, ManifestChanged: false, classes: allClasses, packages: [], totalDepsWalked: depTree.size, AddedDependencies: {}, errors };
     }
 
     const uniquePackages = Array.from(new Set(verifiedClasses.map(c => c.packageName))).sort();
+
+    // Reconcile manifest-imported packages against declared dependencies
+    let addedDependencies: Record<string, string> = {};
+    if (syncDependencies && uniquePackages.length > 0) {
+        log('Checking for missing package.json dependencies...');
+        try {
+            const reconciliation = reconcileDependencies(uniquePackages, absoluteAppDir, depTree, log);
+            addedDependencies = reconciliation.Added;
+        } catch (err) {
+            errors.push(`Error reconciling dependencies: ${err}`);
+        }
+    }
 
     return {
         success: errors.length === 0,
@@ -837,6 +1173,7 @@ export async function generateClassRegistrationsManifest(
         classes: verifiedClasses,
         packages: uniquePackages,
         totalDepsWalked: depTree.size,
+        AddedDependencies: addedDependencies,
         errors
     };
 }

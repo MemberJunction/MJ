@@ -2,8 +2,6 @@ import pg from 'pg';
 import {
     DatabasePlatform,
     ExecuteSQLOptions,
-    RunQueryResult,
-    RunQueryParams,
     UserInfo,
     EntityInfo,
     EntityFieldInfo,
@@ -15,16 +13,13 @@ import {
     DeleteSQLResult,
     LogError,
     TransactionGroupBase,
-    ILocalStorageProvider,
     IMetadataProvider,
-    InMemoryLocalStorageProvider,
     RunQuerySQLFilterManager,
 } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+
 
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PostgreSQLDialect } from '@memberjunction/sql-dialect';
-import { QueryParameterProcessor } from '@memberjunction/query-processor';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
 import { PostgreSQLProviderConfigData } from './types.js';
@@ -48,7 +43,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
     private _configData: PostgreSQLProviderConfigData | null = null;
     private _schemaName: string = '__mj';
     private _transaction: pg.PoolClient | null = null;
-    private _localStorageProvider: ILocalStorageProvider = new InMemoryLocalStorageProvider();
 
     // ─── Platform Identity ───────────────────────────────────────────
 
@@ -155,6 +149,10 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
         return pgDialect;
     }
 
+    protected getDialect(): PostgreSQLDialect {
+        return pgDialect;
+    }
+
     // ─── Configuration & Lifecycle ───────────────────────────────────
 
     get ConfigData(): PostgreSQLProviderConfigData {
@@ -184,10 +182,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
 
     get MJCoreSchemaName(): string {
         return this._schemaName;
-    }
-
-    get LocalStorageProvider(): ILocalStorageProvider {
-        return this._localStorageProvider;
     }
 
     protected get Metadata(): IMetadataProvider {
@@ -308,75 +302,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
     protected override TransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string {
         if (!clause || clause.length === 0) return clause;
         return this.quoteIdentifiersInSQL(clause, entityInfo);
-    }
-
-    // ─── RunQuery Implementation ─────────────────────────────────────
-
-    protected async InternalRunQuery(
-        params: RunQueryParams,
-        contextUser?: UserInfo
-    ): Promise<RunQueryResult> {
-        const startTime = Date.now();
-        const queryId = params.QueryID ?? '';
-        const queryName = params.QueryName ?? '';
-        const emptyResult: RunQueryResult = {
-            QueryID: queryId,
-            QueryName: queryName,
-            Success: false,
-            Results: [],
-            RowCount: 0,
-            TotalRowCount: 0,
-            ExecutionTime: 0,
-            ErrorMessage: '',
-        };
-
-        try {
-            // Look up the query from metadata
-            const queryInfo = this.Queries.find(q =>
-                (params.QueryID && UUIDsEqual(q.ID, params.QueryID)) ||
-                (params.QueryName && q.Name === params.QueryName)
-            );
-            if (!queryInfo) {
-                return { ...emptyResult, ErrorMessage: `Query not found: ${queryId || queryName}` };
-            }
-
-            const querySQL = queryInfo.GetPlatformSQL(this.PlatformKey);
-            if (!querySQL) {
-                return { ...emptyResult, ErrorMessage: 'No SQL defined for query' };
-            }
-
-            // Process Nunjucks templates if the query uses them
-            let finalSQL = querySQL;
-            if (queryInfo.UsesTemplate) {
-                const processingResult = QueryParameterProcessor.processQueryTemplate(queryInfo, params.Parameters, querySQL);
-                if (!processingResult.success) {
-                    return { ...emptyResult, ErrorMessage: processingResult.error ?? 'Template processing failed' };
-                }
-                finalSQL = processingResult.processedSQL;
-            }
-
-            const rows = await this.ExecuteSQL<Record<string, unknown>>(finalSQL, undefined, { description: `RunQuery: ${queryInfo.Name}` }, contextUser);
-            return {
-                QueryID: queryInfo.ID,
-                QueryName: queryInfo.Name,
-                Success: true,
-                Results: rows,
-                RowCount: rows.length,
-                TotalRowCount: rows.length,
-                ExecutionTime: Date.now() - startTime,
-                ErrorMessage: '',
-            };
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            return { ...emptyResult, ExecutionTime: Date.now() - startTime, ErrorMessage: msg };
-        }
-    }
-
-    protected async InternalRunQueries(
-        params: RunQueryParams[],
-        contextUser?: UserInfo
-    ): Promise<RunQueryResult[]> {
-        return Promise.all(params.map(p => this.InternalRunQuery(p, contextUser)));
     }
 
     // ─── Entity Record Names ─────────────────────────────────────────

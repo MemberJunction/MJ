@@ -28,7 +28,7 @@
 
 .loading-spinner {
   margin-bottom: 16px;
-  color: var(--kendo-color-primary, #0078d4);
+  color: var(--mj-brand-primary);
 }
 
 /* Dialog Content */
@@ -42,24 +42,24 @@
 /* Form Sections */
 .form-section {
   margin-bottom: 24px;
-  border: 1px solid var(--kendo-color-border, #e0e0e0);
+  border: 1px solid var(--mj-border-default);
   border-radius: 6px;
   padding: 16px;
-  background: var(--kendo-color-surface-alt, #fafafa);
+  background: var(--mj-bg-surface-card);
 }
 
 .section-title {
   margin: 0 0 16px 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--kendo-color-on-app-surface, #323130);
+  color: var(--mj-text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .section-title i {
-  color: var(--kendo-color-primary, #0078d4);
+  color: var(--mj-brand-primary);
 }
 
 /* Form Grid Layout */
@@ -84,7 +84,7 @@
 .field-label {
   font-size: 13px;
   font-weight: 500;
-  color: var(--kendo-color-on-app-surface, #323130);
+  color: var(--mj-text-primary);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -92,13 +92,13 @@
 
 .field-label.required::after {
   content: '*';
-  color: var(--kendo-color-error, #d13438);
+  color: var(--mj-status-error);
   margin-left: 2px;
 }
 
 .field-label i {
   font-size: 11px;
-  color: var(--kendo-color-subtle, #605e5c);
+  color: var(--mj-text-muted);
 }
 
 /* Form Controls */
@@ -112,7 +112,7 @@
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: var(--kendo-color-error, #d13438);
+  color: var(--mj-status-error);
   margin-top: 4px;
 }
 
@@ -154,21 +154,21 @@
 }
 
 .radio-label:hover {
-  background-color: var(--kendo-color-base-hover, #f3f2f1);
+  background-color: var(--mj-bg-surface-sunken);
 }
 
 .radio-label i {
   font-size: 12px;
-  color: var(--kendo-color-subtle, #605e5c);
+  color: var(--mj-text-muted);
 }
 
 /* Template Editor Section */
 .template-editor-section {
   margin-top: 16px;
   padding: 16px;
-  border: 1px solid var(--kendo-color-border, #e0e0e0);
+  border: 1px solid var(--mj-border-default);
   border-radius: 4px;
-  background: var(--kendo-color-app-surface, #ffffff);
+  background: var(--mj-bg-surface);
 }
 
 .template-info {
@@ -179,7 +179,7 @@
   margin: 0 0 4px 0;
   font-size: 14px;
   font-weight: 600;
-  color: var(--kendo-color-on-app-surface, #323130);
+  color: var(--mj-text-primary);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -188,11 +188,11 @@
 .template-description {
   margin: 0;
   font-size: 12px;
-  color: var(--kendo-color-subtle, #605e5c);
+  color: var(--mj-text-muted);
 }
 
 .template-editor-container {
-  border: 1px solid var(--kendo-color-border, #e0e0e0);
+  border: 1px solid var(--mj-border-default);
   border-radius: 4px;
   overflow: hidden;
   min-height: 200px;
@@ -202,9 +202,9 @@
 .existing-template-section {
   margin-top: 16px;
   padding: 16px;
-  border: 1px solid var(--kendo-color-border, #e0e0e0);
+  border: 1px solid var(--mj-border-default);
   border-radius: 4px;
-  background: var(--kendo-color-app-surface, #ffffff);
+  background: var(--mj-bg-surface);
 }
 
 .existing-template-info {
@@ -225,8 +225,8 @@
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  background-color: var(--kendo-color-primary, #0078d4);
-  color: white;
+  background-color: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
   border-radius: 12px;
   font-size: 11px;
   font-weight: 500;
@@ -243,8 +243,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-top: 1px solid var(--kendo-color-border, #e0e0e0);
-  background: var(--kendo-color-surface-alt, #fafafa);
+  border-top: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
   gap: 16px;
 }
 
@@ -262,11 +262,11 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--kendo-color-subtle, #605e5c);
+  color: var(--mj-text-muted);
 }
 
 .form-hint i {
-  color: var(--kendo-color-primary, #0078d4);
+  color: var(--mj-brand-primary);
 }
 
 /* Responsive Design */
@@ -274,22 +274,22 @@
   .form-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .template-mode-options {
     flex-direction: column;
     gap: 8px;
   }
-  
+
   .dialog-footer {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
   }
-  
+
   .footer-right {
     justify-content: stretch;
   }
-  
+
   .footer-right button {
     flex: 1;
   }

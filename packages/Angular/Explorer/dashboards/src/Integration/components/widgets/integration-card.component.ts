@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { IRunViewProvider } from '@memberjunction/core';
-import { IntegrationSummary } from '../../services/integration-data.service';
+import { IntegrationSummary, ResolveIntegrationIcon } from '../../services/integration-data.service';
 
 @Component({
   standalone: false,
@@ -207,7 +207,13 @@ export class IntegrationCardComponent {
   @Output() ExpandToggle = new EventEmitter<string>();
 
   get SourceIconClass(): string {
-    return this.Summary.SourceType?.IconClass ?? 'fa-solid fa-plug';
+    if (this.Summary.SourceType?.IconClass) {
+      return this.Summary.SourceType.IconClass;
+    }
+    return ResolveIntegrationIcon(
+      this.Summary.Integration.Integration ?? this.Summary.Integration.Name,
+      this.Summary.Icon
+    );
   }
 
   get StatusLabel(): string {

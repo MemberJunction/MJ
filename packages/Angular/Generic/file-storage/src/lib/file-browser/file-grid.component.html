@@ -536,7 +536,7 @@
             [disabled]="isMoving"
             placeholder="Enter destination folder (e.g., folder1/folder2/)"
             (keydown.enter)="onConfirmMove()">
-          <p style="font-size: 11px; color: #666; margin-top: 8px;">
+          <p style="font-size: 11px; color: var(--mj-text-secondary); margin-top: 8px;">
             File will be moved to: {{ moveDestinationPath }}{{ itemToMove.name }}
           </p>
         </div>
@@ -565,7 +565,7 @@
         </div>
         <div class="modal-body">
           <p>Copying: <strong>{{ itemToCopyToProvider.name }}</strong></p>
-          <p style="font-size: 12px; color: #666; margin-bottom: 16px;">
+          <p style="font-size: 12px; color: var(--mj-text-secondary); margin-bottom: 16px;">
             From: <strong>{{ account?.account?.Name }}</strong>
           </p>
           <label>Select destination account(s):</label>

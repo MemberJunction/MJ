@@ -12,6 +12,8 @@
  */
 
 :root {
+  color-scheme: light;
+
   /* ========================================
      PRIMITIVE TOKENS
      Raw values - DO NOT use directly in components
@@ -217,6 +219,12 @@
   --mj-login-wave-2:     var(--mj-color-accent-400);
   --mj-login-wave-3:     var(--mj-color-brand-300);
 
+  /* Logo Tokens — override these for white-labeling */
+  --mj-logo-mark: url('/assets/mj-mark.svg');
+  --mj-logo-mark-inverse: url('/assets/mj-mark-white.svg');
+  --mj-logo-wordmark: url('/assets/MJ_logo.svg');
+  --mj-logo-color: #264FAF;
+
   /* ========================================
      TYPOGRAPHY
      ======================================== */
@@ -344,16 +352,17 @@
    ======================================== */
 
 [data-theme="dark"] {
+  color-scheme: dark;
 
   /* Background Colors */
   
   --mj-bg-page: var(--mj-color-neutral-900);
   --mj-bg-surface: var(--mj-color-neutral-800);
+  --mj-bg-surface-card: #253347;
   --mj-bg-surface-elevated: var(--mj-color-neutral-700);
-  --mj-bg-surface-card: var(--mj-color-neutral-800);
   --mj-bg-surface-sunken: var(--mj-color-neutral-950);
-  --mj-bg-surface-hover: var(--mj-color-neutral-700);
-  --mj-bg-surface-active: var(--mj-color-neutral-600);
+  --mj-bg-surface-hover: var(--mj-color-neutral-600);
+  --mj-bg-surface-active: var(--mj-color-neutral-500);
   --mj-bg-overlay: rgba(0, 0, 0, 0.7);
 
   /* Text Colors */
@@ -431,4 +440,8 @@
   --mj-login-wave-1:     var(--mj-color-accent-500);
   --mj-login-wave-2:     var(--mj-color-tertiary-400);
   --mj-login-wave-3:     var(--mj-color-brand-400);
+
+  /* Logo — lighter mark for dark header backgrounds */
+  --mj-logo-mark: url('/assets/mj-mark-dark.svg');
+  --mj-logo-color: #4dabd5;
 }

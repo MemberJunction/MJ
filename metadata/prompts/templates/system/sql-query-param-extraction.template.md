@@ -26,8 +26,13 @@ Identify ALL variables used in the template, including:
 5. Variables in filters: {% raw %}{{ name | default(userName) }}{% endraw %}
 6. Variables in assignments: {% raw %}{% set total = price * quantity %}{% endraw %}
 
-## **IMPORTANT** 
+## **IMPORTANT**
 Do NOT include variables that are shown within {% raw %}{% raw %}{% endraw %}{% endraw %} blocks, those are for illustrative purposes and part of an illustration of what another template might have. Only consider variables that are **NOT** part of raw blocks to be valid for the purpose of this request.
+
+**CRITICAL: Ignore query composition macros.** Expressions matching the pattern {% raw %}`{{query:"..."}}`{% endraw %} are **NOT parameters** — they are query composition tokens that reference other saved queries. The composition engine handles these separately. Do NOT extract `query` as a parameter name from these macros. Examples to SKIP:
+- {% raw %}`{{query:"Sales/Monthly Revenue"}}`{% endraw %}
+- {% raw %}`{{query:"Metrics/Active Customers(region=West)"}}`{% endraw %}
+- {% raw %}`{{query:"Reports/Order Summary(startDate={{startDate}})"}}`{% endraw %} — skip the outer `query` macro, but DO extract `startDate` as a parameter since it's a real Nunjucks variable nested inside
 
 For nested object references (like user.email), extract only the TOP-LEVEL variable name (user).
 

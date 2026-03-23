@@ -132,7 +132,7 @@
 
 .message.error {
     background: var(--mj-color-error-100);
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error);
     border: 1px solid var(--mj-status-error-border);
 }
 

@@ -287,8 +287,8 @@
       <div class="modal-body artifacts-grid">
         @if (artifactsByDetailId.size === 0) {
           <div class="empty-state">
-            <i class="fas fa-cube" style="font-size: 48px; color: #D1D5DB; margin-bottom: 16px;"></i>
-            <p style="color: #6B7280; font-size: 14px;">No artifacts in this conversation yet</p>
+            <i class="fas fa-cube" style="font-size: 48px; color: var(--mj-text-muted); margin-bottom: 16px;"></i>
+            <p style="color: var(--mj-text-muted); font-size: 14px;">No artifacts in this conversation yet</p>
           </div>
         }
         @for (artifact of getArtifactsArray(); track artifact.artifactId) {

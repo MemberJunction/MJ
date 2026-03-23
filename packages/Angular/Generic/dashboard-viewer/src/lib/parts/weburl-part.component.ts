@@ -148,7 +148,7 @@ import { PanelConfig } from '../models/dashboard-types';
             height: 100%;
             display: flex;
             flex-direction: column;
-            background: #fff;
+            background: var(--mj-bg-surface);
             position: relative; /* Required for overlay positioning */
         }
 
@@ -160,7 +160,7 @@ import { PanelConfig } from '../models/dashboard-types';
             align-items: center;
             justify-content: center;
             height: 100%;
-            color: #666;
+            color: var(--mj-text-secondary);
             text-align: center;
             padding: 24px;
         }
@@ -169,19 +169,19 @@ import { PanelConfig } from '../models/dashboard-types';
         .error-state i,
         .empty-state i {
             font-size: 48px;
-            color: #ccc;
+            color: var(--mj-text-muted);
             margin-bottom: 16px;
         }
 
         .error-state i {
-            color: #d32f2f;
+            color: var(--mj-status-error);
         }
 
         .error-state .open-link {
             margin-top: 16px;
             padding: 8px 16px;
-            background: #5c6bc0;
-            color: #fff;
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
             text-decoration: none;
             border-radius: 4px;
             display: flex;
@@ -191,12 +191,12 @@ import { PanelConfig } from '../models/dashboard-types';
         }
 
         .error-state .open-link:hover {
-            background: #3f51b5;
+            background: var(--mj-brand-primary-hover);
         }
 
         .empty-state h4 {
             margin: 0 0 8px 0;
-            color: #333;
+            color: var(--mj-text-primary);
         }
 
         .empty-state p {
@@ -217,14 +217,14 @@ import { PanelConfig } from '../models/dashboard-types';
             justify-content: center;
             gap: 8px;
             padding: 8px;
-            background: #f5f5f5;
-            border-top: 1px solid #e0e0e0;
+            background: var(--mj-bg-surface-card);
+            border-top: 1px solid var(--mj-border-default);
             font-size: 12px;
-            color: #666;
+            color: var(--mj-text-secondary);
         }
 
         .iframe-fallback a {
-            color: #5c6bc0;
+            color: var(--mj-brand-primary);
             text-decoration: none;
             display: flex;
             align-items: center;

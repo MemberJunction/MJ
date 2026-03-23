@@ -6,12 +6,12 @@
   font-size: 1.5rem;
   font-weight: 600;
   margin: 0 0 0.5rem 0;
-  color: var(--mj-text-primary, #1a1a1a);
+  color: var(--mj-text-primary);
 }
 
 .section-description {
   font-size: 0.875rem;
-  color: var(--mj-text-secondary, #666);
+  color: var(--mj-text-secondary);
   margin: 0 0 1.5rem 0;
 }
 

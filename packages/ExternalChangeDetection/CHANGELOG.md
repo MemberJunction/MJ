@@ -1,5 +1,105 @@
 # Change Log - @memberjunction/external-change-detection
 
+## 5.15.0
+
+### Patch Changes
+
+- 2488c5c: Fix External Change Detection OOM crashes by replacing unbounded OR-clause record fetching with paginated detection queries (ot.\* + ORDER BY), interleaved per-entity detect-replay to bound memory, and dynamic concurrency based on table row counts. Adds production safety mechanisms: circuit breaker, cooldown pause, and heap guard.
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/sqlserver-dataprovider@5.15.0
+  - @memberjunction/global@5.15.0
+  - @memberjunction/sql-dialect@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/sqlserver-dataprovider@5.14.0
+  - @memberjunction/global@5.14.0
+  - @memberjunction/sql-dialect@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- 9474e4a: Fix transaction race condition in ExternalChangeDetection concurrent replay by creating per-save provider instances with independent transaction state, sharing the singleton's connection pool
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/sqlserver-dataprovider@5.13.0
+  - @memberjunction/sql-dialect@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- 7def002: Fix ExternalChangeDetection unquoted string IDs and log spam, add /healthcheck endpoint before auth middleware, return TechnicalDescription in CreateQuery/UpdateQuery mutations, and improve MJCLI config validation errors with env var hints
+- Updated dependencies [05f19ff]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/sqlserver-dataprovider@5.12.0
+  - @memberjunction/global@5.12.0
+  - @memberjunction/sql-dialect@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/sqlserver-dataprovider@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/global@5.11.0
+  - @memberjunction/sql-dialect@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/global@5.10.1
+- @memberjunction/sql-dialect@5.10.1
+- @memberjunction/sqlserver-dataprovider@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/sqlserver-dataprovider@5.10.0
+  - @memberjunction/global@5.10.0
+  - @memberjunction/sql-dialect@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/sqlserver-dataprovider@5.9.0
+  - @memberjunction/sql-dialect@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

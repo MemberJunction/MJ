@@ -19,6 +19,7 @@ export function sampleConfig(): InstallConfig {
     APIPort: 4000,
     ExplorerPort: 4200,
     AuthProvider: 'none',
+    BaseEncryptionKey: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
   };
 }
 

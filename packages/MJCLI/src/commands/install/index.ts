@@ -257,9 +257,14 @@ export default class Install extends Command {
     }
     this.log(chalk.dim(`  Duration: ${this.formatDuration(result.DurationMs)}`));
     this.log('');
+    this.log(chalk.cyan('  A diagnostic report has been saved to mj-diagnostic-report.md'));
+    this.log(chalk.cyan('  Share this file when requesting installation support.'));
+    this.log('');
     this.log(chalk.yellow('Run "mj install" to resume from the last checkpoint.'));
     this.log(chalk.yellow('Run "mj install --no-resume" to start fresh.'));
     this.log(chalk.yellow('Run "mj doctor" to diagnose issues.'));
+    this.log(chalk.yellow('Run "mj doctor --report" to regenerate the diagnostic report.'));
+    this.log(chalk.yellow('Run "mj doctor --report_extended" for a detailed report with config snapshots and service logs.'));
     this.error('Installation failed', { exit: 1 });
   }
 

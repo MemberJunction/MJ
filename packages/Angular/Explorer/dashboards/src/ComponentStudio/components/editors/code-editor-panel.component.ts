@@ -126,8 +126,8 @@ type CodeViewMode = 'current' | 'original' | 'diff';
       align-items: center;
       padding: 0 8px;
       height: 36px;
-      background: var(--mat-sys-surface-container-low);
-      border-bottom: 1px solid var(--mat-sys-outline-variant);
+      background: var(--mj-bg-surface-sunken);
+      border-bottom: 1px solid var(--mj-border-default);
       flex-shrink: 0;
       gap: 2px;
       overflow-x: auto;
@@ -141,7 +141,7 @@ type CodeViewMode = 'current' | 'original' | 'diff';
       border: none;
       border-radius: 8px;
       background: transparent;
-      color: var(--mat-sys-on-surface-variant);
+      color: var(--mj-text-secondary);
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
@@ -152,27 +152,27 @@ type CodeViewMode = 'current' | 'original' | 'diff';
     }
 
     .code-tab:hover {
-      background: var(--mat-sys-surface-container);
-      color: var(--mat-sys-on-surface);
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .code-tab.active {
-      background: var(--mat-sys-surface);
-      color: var(--mat-sys-primary);
+      background: var(--mj-bg-surface);
+      color: var(--mj-brand-primary);
       font-weight: 600;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
 
     .dep-icon {
       font-size: 10px;
-      color: var(--mat-sys-tertiary, #7c3aed);
+      color: var(--mj-brand-primary);
     }
 
     .modified-dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--mat-sys-error, #dc2626);
+      background: var(--mj-status-error);
       display: inline-block;
       margin-left: 2px;
     }
@@ -182,15 +182,15 @@ type CodeViewMode = 'current' | 'original' | 'diff';
       display: flex;
       align-items: center;
       padding: 4px 8px;
-      background: var(--mat-sys-surface-container-lowest);
-      border-bottom: 1px solid var(--mat-sys-outline-variant);
+      background: var(--mj-bg-surface);
+      border-bottom: 1px solid var(--mj-border-default);
       flex-shrink: 0;
       gap: 8px;
     }
 
     .view-mode-toggle {
       display: inline-flex;
-      border: 1px solid var(--mat-sys-outline);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       overflow: hidden;
     }
@@ -202,7 +202,7 @@ type CodeViewMode = 'current' | 'original' | 'diff';
       padding: 4px 10px;
       border: none;
       background: transparent;
-      color: var(--mat-sys-on-surface-variant);
+      color: var(--mj-text-secondary);
       font-size: 11px;
       font-weight: 500;
       cursor: pointer;
@@ -211,16 +211,16 @@ type CodeViewMode = 'current' | 'original' | 'diff';
     }
 
     .mode-btn:not(:last-child) {
-      border-right: 1px solid var(--mat-sys-outline);
+      border-right: 1px solid var(--mj-border-default);
     }
 
     .mode-btn:hover {
-      background: var(--mat-sys-surface-container);
+      background: var(--mj-bg-surface-sunken);
     }
 
     .mode-btn.active {
-      background: var(--mat-sys-primary);
-      color: var(--mat-sys-on-primary, #fff);
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .mode-btn i {
@@ -240,15 +240,15 @@ type CodeViewMode = 'current' | 'original' | 'diff';
       border: none;
       border-radius: 6px;
       background: transparent;
-      color: var(--mat-sys-on-surface-variant);
+      color: var(--mj-text-secondary);
       cursor: pointer;
       font-size: 13px;
       transition: all 0.15s ease;
     }
 
     .icon-btn:hover {
-      background: var(--mat-sys-surface-container-high);
-      color: var(--mat-sys-on-surface);
+      background: var(--mj-bg-surface-sunken);
+      color: var(--mj-text-primary);
     }
 
     .action-buttons {
@@ -266,7 +266,7 @@ type CodeViewMode = 'current' | 'original' | 'diff';
     .diff-count {
       font-size: 11px;
       font-weight: 500;
-      color: var(--mat-sys-on-surface-variant);
+      color: var(--mj-text-secondary);
       padding: 0 4px;
       white-space: nowrap;
     }
@@ -298,11 +298,11 @@ type CodeViewMode = 'current' | 'original' | 'diff';
 
     /* ---- Diff-specific styles ---- */
     :host ::ng-deep .diff-pane .cm-mergeView .cm-changedLine {
-      background: rgba(var(--mat-sys-primary-rgb, 99, 102, 241), 0.08);
+      background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
     }
 
     :host ::ng-deep .diff-pane .cm-mergeView .cm-deletedChunk {
-      background: rgba(220, 38, 38, 0.08);
+      background: color-mix(in srgb, var(--mj-status-error) 8%, transparent);
     }
 
     /* ---- Empty state ---- */
@@ -312,7 +312,7 @@ type CodeViewMode = 'current' | 'original' | 'diff';
       align-items: center;
       justify-content: center;
       padding: 40px 20px;
-      color: var(--mat-sys-on-surface-variant);
+      color: var(--mj-text-secondary);
       flex: 1;
     }
 

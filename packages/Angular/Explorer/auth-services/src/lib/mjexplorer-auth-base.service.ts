@@ -89,11 +89,13 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
   protected abstract loginInternal(options?: Record<string, unknown>): Promise<void>;
 
   /**
-   * Logout implementation
+   * Provider-specific logout implementation
    *
-   * Subclasses implement provider-specific logout flow.
+   * Subclasses implement provider-specific logout flow (redirect, SDK logout, etc.).
+   * The base class `logout()` calls `clearClientCaches()` before invoking this method,
+   * so providers do NOT need to handle cache clearing themselves.
    */
-  abstract logout(): Promise<void>;
+  protected abstract logoutInternal(): Promise<void>;
 
   /**
    * Handle OAuth callback
@@ -200,6 +202,55 @@ export abstract class MJAuthBase implements IAngularAuthProvider {
    */
   login(options?: Record<string, unknown>): Observable<void> {
     return from(this.loginInternal(options));
+  }
+
+  /**
+   * Logout — clears all MJ client-side caches then delegates to the provider.
+   *
+   * Cache clearing happens universally regardless of auth provider so that a
+   * subsequent login as a different user never sees the previous user's data.
+   * Providers that need to clear additional caches should override
+   * `logoutInternal()` and call `super.logoutInternal()` if applicable.
+   */
+  async logout(): Promise<void> {
+    await this.clearClientCaches();
+    await this.logoutInternal();
+  }
+
+  /**
+   * localStorage keys that survive a logout (e.g. UI theme preference).
+   *
+   * Override this getter in a subclass to preserve additional keys specific
+   * to your provider or application.
+   */
+  protected get preservedLocalStorageKeys(): Set<string> {
+    return new Set(['mj-login-theme']);
+  }
+
+  /**
+   * Clears MJ client-side caches before logout.
+   *
+   * Removes all localStorage entries except those returned by
+   * `preservedLocalStorageKeys`, and deletes the `MJ_Metadata` IndexedDB
+   * database so a subsequent user session starts with a clean slate.
+   */
+  protected async clearClientCaches(): Promise<void> {
+    const preserved = this.preservedLocalStorageKeys;
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && !preserved.has(key)) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+
+    await new Promise<void>((resolve) => {
+      const req = indexedDB.deleteDatabase('MJ_Metadata');
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+      req.onblocked = () => resolve();
+    });
   }
 
   /**

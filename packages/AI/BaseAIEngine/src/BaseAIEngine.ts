@@ -24,7 +24,8 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAICredentialBindingEntity,
          MJAIModalityEntity,
          MJAIAgentModalityEntity,
-         MJAIModelModalityEntity} from "@memberjunction/core-entities";
+         MJAIModelModalityEntity,
+         ArtifactMetadataEngine} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
 import { MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended, MJAIModelEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
@@ -89,7 +90,6 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agents: MJAIAgentEntityExtended[] = [];
     private _agentRelationships: MJAIAgentRelationshipEntity[] = [];
     private _agentTypes: MJAIAgentTypeEntity[] = [];
-    private _artifactTypes: MJArtifactTypeEntity[] = [];
     private _vendorTypeDefinitions: MJAIVendorTypeDefinitionEntity[] = [];
     private _vendors: MJAIVendorEntity[] = [];
     private _modelVendors: MJAIModelVendorEntity[] = [];
@@ -187,11 +187,6 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 CacheLocal: true
             },
             {
-                PropertyName: '_artifactTypes',
-                EntityName: 'MJ: Artifact Types',
-                CacheLocal: true
-            },
-            {
                 PropertyName: '_vendorTypeDefinitions',
                 EntityName: 'MJ: AI Vendor Type Definitions',
                 CacheLocal: true
@@ -283,8 +278,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             }
         ];
 
-        // make sure template engine base is loaded up
-        await TemplateEngineBase.Instance.Config(false, contextUser);
+        // make sure engines we depend on downstream are loaded up before we load
+        await Promise.all([
+            TemplateEngineBase.Instance.Config(false, contextUser), 
+            ArtifactMetadataEngine.Instance.Config(false, contextUser)
+        ]);
         
         return await this.Load(params, provider, forceRefresh, contextUser);
     }
@@ -300,7 +298,18 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             this._prompts.filter((prompt: MJAIPromptEntityExtended) => {
                 return UUIDsEqual(prompt.CategoryID, PromptCategory.ID);
             }).forEach((prompt: MJAIPromptEntityExtended) => {
-                PromptCategory.Prompts.push(prompt);
+                if (!PromptCategory.Prompts) {
+                    // this is a duck typing check and means that at runtime
+                    // we didn't get MJAIPromptEntityExtended, but prob got the 
+                    // MJAIPromptEntity class instead that doesn't have a Prompts property
+                    // in which case we need to emit a console error with clear information next
+                    console.error(`PromptCategory class does not have a Prompts property. This is indicative of
+                                a failure to properly include the MJAIPromptEntityExtended class (or a subclass thereof) and often means tree-shaking or similar processes has resulted in the class
+                                not being included in the runtime environment. Check to make sure the bootstrap package associated with your runtime has its dynamic class registrations properly being imported`)
+                }
+                else {
+                    PromptCategory.Prompts.push(prompt);
+                }
             });
         }
 
@@ -625,7 +634,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     public get ArtifactTypes(): MJArtifactTypeEntity[] {
-        return this._artifactTypes;
+        return ArtifactMetadataEngine.Instance.ArtifactTypes;
     }
 
     /**

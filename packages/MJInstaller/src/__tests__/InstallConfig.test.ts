@@ -75,6 +75,7 @@ describe('resolveFromEnvironment', () => {
     'MJ_INSTALL_OPENAI_KEY',
     'MJ_INSTALL_ANTHROPIC_KEY',
     'MJ_INSTALL_MISTRAL_KEY',
+    'MJ_INSTALL_BASE_ENCRYPTION_KEY',
     'MJ_INSTALL_ENTRA_TENANT_ID',
     'MJ_INSTALL_ENTRA_CLIENT_ID',
     'MJ_INSTALL_AUTH0_DOMAIN',
@@ -166,6 +167,13 @@ describe('resolveFromEnvironment', () => {
     expect(config.OpenAIKey).toBe('sk-openai');
     expect(config.AnthropicKey).toBe('sk-ant');
     expect(config.MistralKey).toBe('sk-mistral');
+  });
+
+  it('should resolve BaseEncryptionKey from env vars', () => {
+    process.env.MJ_INSTALL_BASE_ENCRYPTION_KEY = 'base64-key-value';
+
+    const config = resolveFromEnvironment();
+    expect(config.BaseEncryptionKey).toBe('base64-key-value');
   });
 
   it('should resolve Entra auth provider values into AuthProviderValues', () => {
@@ -263,6 +271,7 @@ describe('loadConfigFile', () => {
       OpenAIKey: 'ok',
       AnthropicKey: 'ak',
       MistralKey: 'mk',
+      BaseEncryptionKey: 'base64-key',
       CreateNewUser: { Username: 'u', Email: 'e', FirstName: 'f', LastName: 'l' },
     };
 

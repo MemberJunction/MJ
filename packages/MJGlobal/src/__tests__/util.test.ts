@@ -6,6 +6,7 @@ import {
   CleanAndParseJSON,
   CopyScalarsAndArrays,
   convertCamelCaseToHaveSpaces,
+  createDisplayName,
   generatePluralName,
   getIrregularPlural,
   stripWhitespace,
@@ -326,6 +327,44 @@ describe('convertCamelCaseToHaveSpaces', () => {
 
   it('should handle acronym at the beginning', () => {
     expect(convertCamelCaseToHaveSpaces('HTMLParser')).toBe('HTML Parser');
+  });
+});
+
+describe('createDisplayName', () => {
+  it('should convert snake_case to title case with spaces', () => {
+    expect(createDisplayName('organization_email')).toBe('Organization Email');
+  });
+
+  it('should handle single-word snake_case', () => {
+    expect(createDisplayName('name')).toBe('name');
+  });
+
+  it('should handle multiple underscores', () => {
+    expect(createDisplayName('source_created_at')).toBe('Source Created At');
+  });
+
+  it('should handle mixed snake_case and camelCase segments', () => {
+    expect(createDisplayName('org_emailAddress')).toBe('Org Email Address');
+  });
+
+  it('should pass through PascalCase unchanged (delegates to convertCamelCaseToHaveSpaces)', () => {
+    expect(createDisplayName('OrganizationEmail')).toBe('Organization Email');
+  });
+
+  it('should handle leading/trailing underscores', () => {
+    expect(createDisplayName('_private_field')).toBe('Private Field');
+  });
+
+  it('should handle consecutive underscores', () => {
+    expect(createDisplayName('field__name')).toBe('Field Name');
+  });
+
+  it('should handle empty string', () => {
+    expect(createDisplayName('')).toBe('');
+  });
+
+  it('should handle acronyms in PascalCase', () => {
+    expect(createDisplayName('AIAgentLearningCycle')).toBe('AI Agent Learning Cycle');
   });
 });
 

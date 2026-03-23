@@ -109,8 +109,14 @@ export function subSplitCompoundBatch(batch: string): string[] {
   // Don't sub-split CREATE TABLE/VIEW/PROCEDURE/FUNCTION/TRIGGER blocks
   if (/^CREATE\s+(TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER)\s/i.test(upperNoComments)) return [batch];
   if (/^CREATE\s+PROC\s/i.test(upperNoComments)) return [batch];
-  // Don't split ALTER TABLE with column definitions
-  if (/^ALTER\s+TABLE\s/i.test(upperNoComments)) return [batch];
+  // Don't split ;WITH CTE ... DML blocks (the DML is part of the CTE statement)
+  if (/^;?\s*WITH\s+\w+\s+AS\s*\(/i.test(upperNoComments)) return [batch];
+  // Don't split ALTER TABLE batches UNLESS they contain non-ALTER-TABLE statements
+  // (like EXEC sp_addextendedproperty). Pure ALTER TABLE batches should stay together
+  // because DROP CONSTRAINT, DROP COLUMN, ADD COLUMN are continuations of ALTER TABLE.
+  if (/^ALTER\s+TABLE\s/i.test(upperNoComments)) {
+    if (!hasNonAlterTableStatements(batch)) return [batch];
+  }
   // Don't split BEGIN TRY blocks
   if (upperNoComments.startsWith('BEGIN TRY') || upper.startsWith('BEGIN TRY')) return [batch];
   // Don't split DECLARE blocks
@@ -203,6 +209,31 @@ export function subSplitCompoundBatch(batch: string): string[] {
   }
 
   return statements.length > 0 ? statements : [batch];
+}
+
+/** Check if an ALTER TABLE batch contains non-ALTER-TABLE top-level statements.
+ * Returns true if the batch has EXEC, INSERT, UPDATE, etc. mixed in with ALTER TABLE.
+ * This allows splitting compound batches like ALTER TABLE + EXEC sp_addextendedproperty
+ * while keeping pure ALTER TABLE batches (ALTER TABLE ... DROP CONSTRAINT; ALTER TABLE ... ADD COLUMN) together.
+ */
+function hasNonAlterTableStatements(batch: string): boolean {
+  const NON_ALTER = /^(INSERT\s+INTO|UPDATE\s|DELETE\s|EXEC\s|CREATE\s|GRANT\s|DENY\s|REVOKE\s)/i;
+  const lines = batch.split('\n');
+  let state: ParseState = { inString: false, inBlockComment: false };
+  let beginDepth = 0;
+
+  for (const line of lines) {
+    const stripped = line.trim();
+    if (!state.inString && !state.inBlockComment) {
+      if (/^\bBEGIN\b/i.test(stripped)) beginDepth++;
+      if (/^\bEND\b/i.test(stripped)) beginDepth = Math.max(0, beginDepth - 1);
+      if (beginDepth === 0 && NON_ALTER.test(stripped)) {
+        return true;
+      }
+    }
+    state = trackLineState(line, state);
+  }
+  return false;
 }
 
 /** Strip leading single-line (--) and block comments from SQL text */

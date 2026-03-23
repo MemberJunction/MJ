@@ -34,6 +34,24 @@ import type { VersionInfo } from '../models/VersionInfo.js';
 /** Base URL for all GitHub REST API calls. */
 const GITHUB_API_BASE = 'https://api.github.com';
 
+/** Base URL for raw file access on GitHub (not rate-limited like the API). */
+const GITHUB_RAW_BASE = 'https://github.com';
+
+/**
+ * Relative path within the repo to the pre-built bootstrap distribution ZIP.
+ * This is ~70 MB vs ~500 MB for the full repo zipball, and unlike the API
+ * zipball endpoint it returns a proper `Content-Length` header and is not
+ * subject to the 60-req/hour unauthenticated API rate limit.
+ */
+const BOOTSTRAP_ZIP_PATH = 'Distributions/MemberJunction_Code_Bootstrap.zip';
+
+/**
+ * Maximum time (in milliseconds) to wait for a download to complete before
+ * aborting. Set to 10 minutes — generous enough for slow connections but
+ * prevents indefinite hangs.
+ */
+const DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
+
 /** Default GitHub organization that owns the MemberJunction repository. */
 const REPO_OWNER = 'MemberJunction';
 
@@ -206,7 +224,13 @@ export class GitHubReleaseProvider {
       return this.mapRelease(release);
     }
 
-    // Fall back to tag lookup
+    // If rate-limited, skip the commits API too — resolve without any API calls.
+    // The bootstrap download URL is deterministic from the tag name alone.
+    if (this.isRateLimited(releaseResponse)) {
+      return this.resolveTagWithoutApi(tag);
+    }
+
+    // Fall back to tag lookup via commits API (gets the commit date)
     return this.fetchSingleTagVersion(tag);
   }
 
@@ -215,19 +239,24 @@ export class GitHubReleaseProvider {
    *
    * Streams the download to disk to avoid holding the entire archive in memory.
    * Follows HTTP redirects automatically (GitHub often 302-redirects to a CDN).
+   * Enforces a {@link DOWNLOAD_TIMEOUT_MS} timeout via `AbortController`.
    *
-   * @param downloadUrl - URL to download from (either an asset URL or a zipball URL).
+   * @param downloadUrl - URL to download from (bootstrap ZIP, asset URL, or zipball URL).
    * @param destPath - Absolute path where the ZIP file will be written.
    * @param onProgress - Optional callback invoked with download percentage (0–100)
-   *   as data arrives. Only called if the server provides a `Content-Length` header.
-   * @throws Error if the HTTP request fails or the response has no body.
+   *   as data arrives when the server provides a `Content-Length` header. When
+   *   `Content-Length` is missing (e.g., API zipball fallback), the callback is
+   *   invoked with `-1` on each chunk so the caller can display bytes-received
+   *   instead of a percentage bar.
+   * @throws Error if the HTTP request fails, times out, or the response has no body.
    *
    * @example
    * ```typescript
    * const provider = new GitHubReleaseProvider();
    * const version = await provider.GetReleaseByTag('v5.1.0');
    * await provider.DownloadRelease(version.DownloadUrl, '/tmp/mj.zip', (pct) => {
-   *   process.stdout.write(`\rDownloading... ${pct}%`);
+   *   if (pct >= 0) process.stdout.write(`\rDownloading... ${pct}%`);
+   *   else process.stdout.write(`\rDownloading...`);
    * });
    * ```
    */
@@ -236,22 +265,49 @@ export class GitHubReleaseProvider {
     destPath: string,
     onProgress?: (percent: number) => void
   ): Promise<void> {
-    const response = await fetch(downloadUrl, {
-      headers: { 'User-Agent': 'MJ-Installer' },
-      redirect: 'follow',
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
 
-    if (!response.ok) {
-      throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+    try {
+      const response = await fetch(downloadUrl, {
+        headers: { 'User-Agent': 'MJ-Installer' },
+        redirect: 'follow',
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+      }
+
+      if (!response.body) {
+        throw new Error('Download response has no body');
+      }
+
+      await this.streamToFile(response, destPath, onProgress);
+    } finally {
+      clearTimeout(timeout);
     }
+  }
 
-    if (!response.body) {
-      throw new Error('Download response has no body');
-    }
-
+  /**
+   * Stream an HTTP response body to a file on disk.
+   *
+   * Reports download progress via the optional callback. If the server
+   * provides `Content-Length`, progress is reported as 0–100 percentage.
+   * Otherwise, progress is reported as `-1` on each chunk (indeterminate).
+   *
+   * @param response - The HTTP response to stream from.
+   * @param destPath - Absolute file path to write to.
+   * @param onProgress - Optional progress callback.
+   */
+  private async streamToFile(
+    response: Response,
+    destPath: string,
+    onProgress?: (percent: number) => void
+  ): Promise<void> {
     const contentLength = Number(response.headers.get('content-length') ?? 0);
     const fileStream = fs.createWriteStream(destPath);
-    const reader = response.body.getReader();
+    const reader = response.body!.getReader();
 
     let receivedBytes = 0;
     const readableStream = new Readable({
@@ -262,8 +318,13 @@ export class GitHubReleaseProvider {
           return;
         }
         receivedBytes += value.byteLength;
-        if (onProgress && contentLength > 0) {
-          onProgress(Math.round((receivedBytes / contentLength) * 100));
+        if (onProgress) {
+          if (contentLength > 0) {
+            onProgress(Math.round((receivedBytes / contentLength) * 100));
+          } else {
+            // No Content-Length — signal indeterminate progress
+            onProgress(-1);
+          }
         }
         this.push(Buffer.from(value));
       },
@@ -286,6 +347,12 @@ export class GitHubReleaseProvider {
   private async fetchFormalReleases(includePrerelease: boolean): Promise<VersionInfo[]> {
     const url = `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/releases?per_page=50`;
     const response = await this.githubFetch(url);
+
+    if (this.isRateLimited(response)) {
+      // Graceful degradation — return empty so ListReleases falls through to
+      // the tag-based fallback path (which also degrades gracefully).
+      return [];
+    }
 
     if (!response.ok) {
       throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
@@ -326,8 +393,12 @@ export class GitHubReleaseProvider {
   /**
    * Find the best ZIP download URL for a release.
    *
-   * Looks for an uploaded asset with a `.zip` extension and `zip` content type.
-   * If none is found, returns the GitHub-generated `zipball_url`.
+   * Priority order:
+   * 1. An uploaded release asset with `.zip` extension and `zip` content type.
+   * 2. The pre-built bootstrap distribution ZIP (smaller, has Content-Length,
+   *    not rate-limited).
+   * 3. The GitHub-generated `zipball_url` (last resort — large, no Content-Length,
+   *    rate-limited).
    *
    * @param release - Raw GitHub Release response.
    * @returns Download URL for the release archive.
@@ -339,7 +410,22 @@ export class GitHubReleaseProvider {
     if (zipAsset) {
       return zipAsset.browser_download_url;
     }
-    return release.zipball_url;
+    return this.bootstrapDownloadUrl(release.tag_name);
+  }
+
+  /**
+   * Build the URL for the pre-built bootstrap distribution ZIP.
+   *
+   * This file lives in the repo at `Distributions/MemberJunction_Code_Bootstrap.zip`
+   * and is committed per release tag. It's ~70 MB (vs ~500 MB for the full repo
+   * zipball), returns a `Content-Length` header, and is served from GitHub's raw
+   * content CDN — not subject to the 60-req/hour API rate limit.
+   *
+   * @param tag - Git tag name (e.g., `"v5.9.0"`).
+   * @returns Direct download URL for the bootstrap ZIP.
+   */
+  private bootstrapDownloadUrl(tag: string): string {
+    return `${GITHUB_RAW_BASE}/${this.owner}/${this.repo}/raw/refs/tags/${tag}/${BOOTSTRAP_ZIP_PATH}`;
   }
 
   // ---------------------------------------------------------------------------
@@ -359,6 +445,13 @@ export class GitHubReleaseProvider {
   private async fetchTagVersions(): Promise<VersionInfo[]> {
     const url = `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/tags?per_page=30`;
     const response = await this.githubFetch(url);
+
+    if (this.isRateLimited(response)) {
+      // Both releases and tags are rate-limited. Return empty — the caller
+      // (ScaffoldPhase) will surface a NO_RELEASES error that suggests using
+      // `-t <tag>` to specify a version directly (which doesn't need the API).
+      return [];
+    }
 
     if (!response.ok) {
       throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
@@ -390,6 +483,11 @@ export class GitHubReleaseProvider {
     const commitUrl = `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/commits/${tagName}`;
     const response = await this.githubFetch(commitUrl);
 
+    // Rate-limited — fall back to API-free resolution
+    if (this.isRateLimited(response)) {
+      return this.resolveTagWithoutApi(tagName);
+    }
+
     if (!response.ok) {
       throw new Error(`Tag "${tagName}" not found (HTTP ${response.status}).`);
     }
@@ -400,7 +498,30 @@ export class GitHubReleaseProvider {
       Name: tagName,
       ReleaseDate: new Date(commitData.commit.committer.date),
       Prerelease: false,
-      DownloadUrl: `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/zipball/refs/tags/${tagName}`,
+      DownloadUrl: this.bootstrapDownloadUrl(tagName),
+      Notes: undefined,
+    };
+  }
+
+  /**
+   * Construct a {@link VersionInfo} for a tag without making any API calls.
+   *
+   * Used as a last-resort fallback when the GitHub API is rate-limited.
+   * The bootstrap download URL is deterministic from the tag name alone,
+   * so the download will still work. The only trade-off is that
+   * {@link VersionInfo.ReleaseDate} is set to `now` (since we can't look
+   * up the commit date without the API).
+   *
+   * @param tag - Git tag name (e.g., `"v5.9.0"`).
+   * @returns A minimal VersionInfo with a valid download URL.
+   */
+  private resolveTagWithoutApi(tag: string): VersionInfo {
+    return {
+      Tag: tag,
+      Name: tag,
+      ReleaseDate: new Date(),
+      Prerelease: false,
+      DownloadUrl: this.bootstrapDownloadUrl(tag),
       Notes: undefined,
     };
   }
@@ -421,7 +542,7 @@ export class GitHubReleaseProvider {
       Name: tag.name,
       ReleaseDate: commitDate,
       Prerelease: false,
-      DownloadUrl: tag.zipball_url,
+      DownloadUrl: this.bootstrapDownloadUrl(tag.name),
       Notes: undefined,
     };
   }
@@ -447,27 +568,53 @@ export class GitHubReleaseProvider {
   }
 
   // ---------------------------------------------------------------------------
+  // Rate-limit detection
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Check whether a GitHub API response indicates rate limiting.
+   *
+   * GitHub returns HTTP 403 with `X-RateLimit-Remaining: 0` when the
+   * unauthenticated rate limit (60 req/hour) is exhausted.
+   *
+   * @param response - Raw HTTP response from a GitHub API call.
+   * @returns `true` if the response indicates rate limiting.
+   */
+  private isRateLimited(response: Response): boolean {
+    return (
+      response.status === 403 &&
+      response.headers.get('x-ratelimit-remaining') === '0'
+    );
+  }
+
+  // ---------------------------------------------------------------------------
   // Shared HTTP helper
   // ---------------------------------------------------------------------------
 
   /**
-   * Make an authenticated-style GET request to the GitHub REST API.
+   * Make a GET request to the GitHub REST API.
    *
    * Sets the `Accept: application/vnd.github+json` header (recommended by GitHub)
    * and a `User-Agent` header (required by GitHub — requests without one are rejected).
    *
-   * This uses the unauthenticated API, so the rate limit is 60 requests/hour/IP.
-   * For installer use cases (a handful of calls per install), this is sufficient.
+   * If the `GITHUB_TOKEN` environment variable is set, it is sent as a
+   * `Bearer` token in the `Authorization` header, raising the rate limit
+   * from 60 to 5,000 requests/hour.
    *
    * @param url - Full GitHub API URL to fetch.
    * @returns The raw `Response` object (caller is responsible for checking `.ok`).
    */
   private async githubFetch(url: string): Promise<Response> {
-    return fetch(url, {
-      headers: {
-        'Accept': 'application/vnd.github+json',
-        'User-Agent': 'MJ-Installer',
-      },
-    });
+    const headers: Record<string, string> = {
+      'Accept': 'application/vnd.github+json',
+      'User-Agent': 'MJ-Installer',
+    };
+
+    const token = process.env.GITHUB_TOKEN;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return fetch(url, { headers });
   }
 }

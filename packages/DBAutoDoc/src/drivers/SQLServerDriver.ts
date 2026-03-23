@@ -337,6 +337,8 @@ export class SQLServerDriver extends BaseAutoDocDriver {
     // Get cardinality and null statistics
     const cardinalityStats = await this.getCardinalityStats(schemaName, tableName, columnName);
     Object.assign(stats, cardinalityStats);
+    // Fix: cardinalityStats returns totalCount, but AutoDocColumnStatistics expects totalRows
+    stats.totalRows = cardinalityStats.totalCount;
 
     // Get value distribution for low-cardinality columns
     if (stats.distinctCount <= cardinalityThreshold && stats.distinctCount > 0) {
@@ -399,7 +401,7 @@ export class SQLServerDriver extends BaseAutoDocDriver {
     return result.success && result.data ? result.data : [];
   }
 
-  protected async getSampleValues(
+  public async getSampleValues(
     schemaName: string,
     tableName: string,
     columnName: string,

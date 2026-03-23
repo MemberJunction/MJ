@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-card);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
@@ -19,8 +19,8 @@
 /* === Dialog Header === */
 .dialog-header {
   padding: 1.5rem;
-  background: white;
-  border-bottom: 1px solid #e9ecef;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-bg-surface-sunken);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -28,14 +28,14 @@
 
 .header-info h3 {
   margin: 0 0 0.5rem 0;
-  color: #212529;
+  color: var(--mj-text-primary);
   font-size: 1.25rem;
   font-weight: 600;
 }
 
 .header-description {
   margin: 0;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   font-size: 0.9rem;
   line-height: 1.4;
 }
@@ -49,19 +49,19 @@
 }
 
 .selection-count {
-  color: #0d6efd;
+  color: var(--mj-brand-primary);
   font-weight: 600;
 }
 
 .total-count {
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 
 /* === Controls Section === */
 .controls-section {
   padding: 1rem 1.5rem;
-  background: white;
-  border-bottom: 1px solid #e9ecef;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-bg-surface-sunken);
   display: flex;
   gap: 1rem;
   align-items: flex-end;
@@ -80,7 +80,7 @@
 .search-icon {
   position: absolute;
   left: 12px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   z-index: 1;
 }
 
@@ -110,7 +110,7 @@
 .type-filter label {
   font-size: 0.85rem;
   font-weight: 500;
-  color: #495057;
+  color: var(--mj-text-secondary);
 }
 
 .type-dropdown {
@@ -131,11 +131,11 @@
   align-items: center;
   justify-content: center;
   height: 300px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
 }
 
 .loading-state i {
-  color: #0d6efd;
+  color: var(--mj-brand-primary);
   margin-bottom: 1rem;
 }
 
@@ -151,19 +151,19 @@
   align-items: center;
   justify-content: center;
   height: 300px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   text-align: center;
 }
 
 .empty-state i {
   font-size: 3rem;
-  color: #dee2e6;
+  color: var(--mj-border-default);
   margin-bottom: 1rem;
 }
 
 .empty-state h4 {
   margin: 0 0 0.5rem 0;
-  color: #495057;
+  color: var(--mj-text-secondary);
   font-size: 1.1rem;
 }
 
@@ -181,8 +181,8 @@
 }
 
 .agent-card {
-  background: white;
-  border: 2px solid #e9ecef;
+  background: var(--mj-bg-surface);
+  border: 2px solid var(--mj-bg-surface-sunken);
   border-radius: 8px;
   padding: 1rem;
   cursor: pointer;
@@ -193,14 +193,14 @@
 }
 
 .agent-card:hover {
-  border-color: #0d6efd;
-  box-shadow: 0 2px 8px rgba(13, 110, 253, 0.15);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
 }
 
 .agent-card.selected {
-  border-color: #0d6efd;
-  background: #f8f9ff;
-  box-shadow: 0 2px 8px rgba(13, 110, 253, 0.2);
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 4%, var(--mj-bg-surface));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
 }
 
 .selection-indicator {
@@ -211,11 +211,11 @@
 }
 
 .selection-indicator .fa-check-circle {
-  color: #198754;
+  color: var(--mj-status-success);
 }
 
 .selection-indicator .fa-circle {
-  color: #dee2e6;
+  color: var(--mj-border-default);
 }
 
 .agent-icon {
@@ -226,13 +226,13 @@
   align-items: center;
   justify-content: center;
   border-radius: 8px;
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-bg-surface-sunken);
 }
 
 .agent-icon i {
   font-size: 1.5rem;
-  color: #0d6efd;
+  color: var(--mj-brand-primary);
 }
 
 .agent-logo {
@@ -250,14 +250,14 @@
 .agent-name {
   font-size: 1rem;
   font-weight: 600;
-  color: #212529;
+  color: var(--mj-text-primary);
   margin-bottom: 0.5rem;
   word-wrap: break-word;
 }
 
 .agent-description {
   font-size: 0.85rem;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   line-height: 1.4;
   margin-bottom: 0.75rem;
   display: -webkit-box;
@@ -280,24 +280,24 @@
   border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 500;
-  color: white;
+  color: var(--mj-text-inverse);
 }
 
 /* Status badge color set dynamically via style binding */
 
 .type-badge {
-  background: #6f42c1;
+  background: var(--mj-brand-primary);
 }
 
 .execution-badge {
-  background: #fd7e14;
+  background: var(--mj-status-warning);
 }
 
 /* === Dialog Footer === */
 .dialog-footer {
   padding: 1rem 1.5rem;
-  background: white;
-  border-top: 1px solid #e9ecef;
+  background: var(--mj-bg-surface);
+  border-top: 1px solid var(--mj-bg-surface-sunken);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -326,30 +326,30 @@
   .agents-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .dialog-header {
     flex-direction: column;
     gap: 1rem;
   }
-  
+
   .header-stats {
     align-items: flex-start;
   }
-  
+
   .controls-section {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .filter-controls {
     justify-content: flex-start;
   }
-  
+
   .dialog-footer {
     flex-direction: column-reverse;
     gap: 1rem;
   }
-  
+
   .footer-left,
   .footer-right {
     width: 100%;

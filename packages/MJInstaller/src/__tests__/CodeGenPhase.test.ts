@@ -132,8 +132,9 @@ describe('CodeGenPhase', () => {
     it('should rebuild + retry once and return RetryUsed=true on second success', async () => {
       let callCount = 0;
       mockRunner.Run.mockImplementation(async (cmd: string, args: string[]) => {
-        // First codegen call fails, rebuild succeeds, second codegen succeeds
-        if (cmd === 'npx' && args.includes('codegen')) {
+        // resolveCli uses `node` with local path when FileExists is true
+        const isCodegen = args.includes('codegen');
+        if (isCodegen) {
           callCount++;
           if (callCount === 1) {
             return { ExitCode: 1, Stdout: '', Stderr: 'some error', TimedOut: false };
@@ -153,7 +154,8 @@ describe('CodeGenPhase', () => {
 
     it('should throw CODEGEN_FAILED when both attempts fail', async () => {
       mockRunner.Run.mockImplementation(async (cmd: string, args: string[]) => {
-        if (cmd === 'npx' && args.includes('codegen')) {
+        const isCodegen = args.includes('codegen');
+        if (isCodegen) {
           return { ExitCode: 1, Stdout: '', Stderr: 'persistent error', TimedOut: false };
         }
         // rebuild succeeds

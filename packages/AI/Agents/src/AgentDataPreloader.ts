@@ -253,7 +253,7 @@ export class AgentDataPreloader {
     ): Promise<MJAIAgentDataSourceEntity[]> {
         // Ensure AIEngine is configured
         await AIEngine.Instance.Config(false, contextUser);
-        const data = AIEngine.Instance.AgentDataSources.filter(ads => UUIDsEqual(ads.AgentID, agentId));
+        const data = AIEngine.Instance.AgentDataSources.filter(ads => UUIDsEqual(ads.AgentID, agentId) && ads.Status === 'Active');
         const sortedData = data.sort((a, b) => {
             if (a.ExecutionOrder === b.ExecutionOrder) {
                 return a.Name.localeCompare(b.Name);

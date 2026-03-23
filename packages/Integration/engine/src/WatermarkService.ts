@@ -22,6 +22,7 @@ export class WatermarkService {
         const result = await rv.RunView<ICompanyIntegrationSyncWatermark>({
             EntityName: 'MJ: Company Integration Sync Watermarks',
             ExtraFilter: `EntityMapID='${entityMapID}'`,
+            OrderBy: 'LastSyncAt DESC',
             MaxRows: 1,
             ResultType: 'entity_object',
         }, contextUser);
@@ -50,6 +51,29 @@ export class WatermarkService {
         } else {
             await this.CreateNewWatermark(entityMapID, newValue, contextUser);
         }
+    }
+
+    /**
+     * Updates the progress fields on an existing watermark mid-sync without changing
+     * the WatermarkValue. Updates RecordsSynced to the cumulative total written so far
+     * and refreshes LastSyncAt so the DB reflects live progress between batches.
+     * Silently skips if no watermark record exists yet.
+     *
+     * @param entityMapID - The entity map being synced
+     * @param totalWritten - Cumulative number of records written to DB so far
+     * @param contextUser - User context for data access
+     */
+    public async UpdateProgress(
+        entityMapID: string,
+        totalWritten: number,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const existing = await this.Load(entityMapID, contextUser);
+        if (!existing) return;
+
+        existing.RecordsSynced = totalWritten;
+        existing.LastSyncAt = new Date();
+        await existing.Save();
     }
 
     /**

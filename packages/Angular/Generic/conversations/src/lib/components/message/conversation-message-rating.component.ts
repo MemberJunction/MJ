@@ -58,7 +58,7 @@ import { UUIDsEqual } from '@memberjunction/global';
             align-items: center;
             gap: 8px;
             font-size: 13px;
-            color: #666;
+            color: var(--mj-text-muted);
         }
 
         .thumbs-up, .thumbs-down {
@@ -71,7 +71,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 
         .total-count {
             font-size: 12px;
-            color: #999;
+            color: var(--mj-text-disabled);
         }
 
         .user-rating {
@@ -81,8 +81,8 @@ import { UUIDsEqual } from '@memberjunction/global';
         }
 
         .rating-button {
-            background: white;
-            border: 1px solid #9CA3AF;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-strong);
             border-radius: 6px;
             padding: 6px 10px;
             cursor: pointer;
@@ -94,7 +94,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 
         .rating-button:hover {
             opacity: 1;
-            border-color: #6B7280;
+            border-color: var(--mj-text-muted);
         }
 
         .rating-button.active {
@@ -102,29 +102,29 @@ import { UUIDsEqual } from '@memberjunction/global';
         }
 
         .thumbs-up-btn {
-            color: #16A34A;
+            color: var(--mj-status-success);
         }
 
         .thumbs-up-btn:hover {
-            background: #F0FDF4;
+            background: color-mix(in srgb, var(--mj-status-success) 8%, var(--mj-bg-surface));
         }
 
         .thumbs-up-btn.active {
-            border-color: #16A34A;
-            background: #DCFCE7;
+            border-color: var(--mj-status-success);
+            background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
         }
 
         .thumbs-down-btn {
-            color: #DC2626;
+            color: var(--mj-status-error);
         }
 
         .thumbs-down-btn:hover {
-            background: #FEF2F2;
+            background: color-mix(in srgb, var(--mj-status-error) 8%, var(--mj-bg-surface));
         }
 
         .thumbs-down-btn.active {
-            border-color: #DC2626;
-            background: #FEE2E2;
+            border-color: var(--mj-status-error);
+            background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
         }
     `]
 })

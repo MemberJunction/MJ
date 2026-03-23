@@ -131,12 +131,12 @@ interface DragData {
   `,
   styles: [`
     .collection-tree { display: flex; flex-direction: column; height: 100%; }
-    .tree-header { padding: 16px; border-bottom: 1px solid #D9D9D9; display: flex; justify-content: space-between; align-items: center; }
+    .tree-header { padding: 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; justify-content: space-between; align-items: center; }
     .tree-header h3 { margin: 0; font-size: 16px; }
-    .btn-new { padding: 6px 10px; background: #0076B6; color: white; border: none; border-radius: 4px; cursor: pointer; }
-    .btn-new:hover { background: #005A8C; }
+    .btn-new { padding: 6px 10px; background: var(--mj-brand-primary); color: var(--mj-text-inverse); border: none; border-radius: 4px; cursor: pointer; }
+    .btn-new:hover { background: var(--mj-brand-primary-hover); }
     .tree-content { flex: 1; overflow-y: auto; position: relative; }
-    .tree-content.drag-over-root { background: rgba(0, 118, 182, 0.1); }
+    .tree-content.drag-over-root { background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); }
     .tree-node {
       padding: 8px 12px;
       cursor: move;
@@ -147,24 +147,24 @@ interface DragData {
       transition: all 0.2s ease;
       border: 2px solid transparent;
     }
-    .tree-node:hover { background: #F4F4F4; }
-    .tree-node.selected { background: #AAE7FD; }
+    .tree-node:hover { background: var(--mj-bg-surface-sunken); }
+    .tree-node.selected { background: var(--mj-brand-accent); }
     .tree-node.dragging {
       opacity: 0.4;
       cursor: grabbing;
     }
     .tree-node.drag-over {
-      background: rgba(0, 118, 182, 0.1);
-      border: 2px dashed #0076B6;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border: 2px dashed var(--mj-brand-primary);
       border-radius: 4px;
     }
-    .toggle-icon { font-size: 10px; color: #AAA; cursor: pointer; width: 12px; }
+    .toggle-icon { font-size: 10px; color: var(--mj-text-disabled); cursor: pointer; width: 12px; }
     .collection-icon { font-size: 14px; }
     .collection-name { flex: 1; font-size: 14px; user-select: none; }
     .node-actions { display: none; gap: 4px; }
     .tree-node:hover .node-actions { display: flex; }
-    .node-action-btn { padding: 4px 6px; background: transparent; border: none; cursor: pointer; border-radius: 3px; color: #666; }
-    .node-action-btn:hover { background: rgba(0,0,0,0.1); }
+    .node-action-btn { padding: 4px 6px; background: transparent; border: none; cursor: pointer; border-radius: 3px; color: var(--mj-text-muted); }
+    .node-action-btn:hover { background: var(--mj-bg-surface-sunken); }
   `]
 })
 export class CollectionTreeComponent implements OnInit {

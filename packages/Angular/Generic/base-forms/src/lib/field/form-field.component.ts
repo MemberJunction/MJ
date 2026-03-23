@@ -302,6 +302,11 @@ export class MjFormFieldComponent implements OnChanges, OnDestroy {
   get FKDisplayName(): string | null {
     if (!this.Record || !this.HasRelatedEntity) return null;
 
+    // If the FK value itself is null/empty, there's nothing to display
+    // (the joined name field may still hold a stale cached value from the view)
+    const fkValue = this.Value;
+    if (fkValue == null || fkValue === '') return null;
+
     // Fast path: name field is joined into our record's view
     const nameFieldMap = this.FieldInfo?.RelatedEntityNameFieldMap;
     if (nameFieldMap) {

@@ -39,6 +39,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 
 vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => () => {},
+    UUIDsEqual: (a: string, b: string) => a?.toLowerCase() === b?.toLowerCase(),
 }));
 
 vi.mock('../BaseProvider', () => ({
@@ -94,16 +95,15 @@ describe('CommunicationEngineBase', () => {
 
     describe('AdditionalLoading', () => {
         it('should link ProviderMessageTypes to their Providers', async () => {
-            // Set up metadata
-            const metadata = engine.Metadata;
+            // Set up internal arrays directly (engine uses private properties now)
             const provider1 = { ID: 'p1', MessageTypes: [] } as never;
             const provider2 = { ID: 'p2', MessageTypes: [] } as never;
-            metadata.Providers.push(provider1, provider2);
-            metadata.ProviderMessageTypes.push(
+            (engine as unknown as Record<string, unknown[]>)['_providers'] = [provider1, provider2];
+            (engine as unknown as Record<string, unknown[]>)['_providerMessageTypes'] = [
                 { CommunicationProviderID: 'p1', Name: 'Email' } as never,
                 { CommunicationProviderID: 'p1', Name: 'SMS' } as never,
                 { CommunicationProviderID: 'p2', Name: 'Push' } as never,
-            );
+            ];
 
             // Call AdditionalLoading (it's protected, so we access it via bracket notation)
             await (engine as unknown as Record<string, Function>)['AdditionalLoading']();

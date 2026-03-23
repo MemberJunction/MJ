@@ -1,10 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { MJGlobal, RegisterClass } from '@memberjunction/global';
+import { describe, it, expect, vi } from 'vitest';
+import { RegisterClass } from '@memberjunction/global';
 import { BaseIntegrationConnector } from '../BaseIntegrationConnector.js';
 import { ConnectorFactory } from '../ConnectorFactory.js';
-import type { UserInfo } from '@memberjunction/core';
 import type { MJIntegrationEntity } from '@memberjunction/core-entities';
-import type { IIntegrationSourceType } from '../entity-types.js';
 import type {
     ConnectionTestResult,
     ExternalObjectSchema,
@@ -30,7 +28,7 @@ class MockConnector extends BaseIntegrationConnector {
     }
 }
 
-// Helpers to create mock entities
+// Helper to create mock integration entity
 function createMockIntegration(className: string | null): MJIntegrationEntity {
     return {
         Name: 'TestIntegration',
@@ -43,45 +41,26 @@ function createMockIntegration(className: string | null): MJIntegrationEntity {
     } as unknown as MJIntegrationEntity;
 }
 
-function createMockSourceTypes(driverClasses: string[]): IIntegrationSourceType[] {
-    return driverClasses.map(dc => ({
-        DriverClass: dc,
-        Name: dc,
-        Status: 'Active' as const,
-    } as unknown as IIntegrationSourceType));
-}
-
 describe('ConnectorFactory', () => {
     describe('Resolve', () => {
-        it('should return a connector instance for a registered driver class', () => {
+        it('should return a connector instance for a registered ClassName', () => {
             const integration = createMockIntegration('MockConnector');
-            const sourceTypes = createMockSourceTypes(['MockConnector']);
 
-            const connector = ConnectorFactory.Resolve(integration, sourceTypes);
+            const connector = ConnectorFactory.Resolve(integration);
             expect(connector).toBeInstanceOf(BaseIntegrationConnector);
         });
 
         it('should throw when integration has no ClassName', () => {
             const integration = createMockIntegration(null);
-            const sourceTypes = createMockSourceTypes(['MockConnector']);
 
-            expect(() => ConnectorFactory.Resolve(integration, sourceTypes))
+            expect(() => ConnectorFactory.Resolve(integration))
                 .toThrow('does not have a ClassName configured');
         });
 
-        it('should throw when no source type matches the ClassName', () => {
-            const integration = createMockIntegration('UnknownDriver');
-            const sourceTypes = createMockSourceTypes(['MockConnector']);
-
-            expect(() => ConnectorFactory.Resolve(integration, sourceTypes))
-                .toThrow('No IntegrationSourceType found with DriverClass "UnknownDriver"');
-        });
-
-        it('should throw when the driver class is not registered in ClassFactory', () => {
+        it('should throw when the ClassName is not registered in ClassFactory', () => {
             const integration = createMockIntegration('UnregisteredConnector');
-            const sourceTypes = createMockSourceTypes(['UnregisteredConnector']);
 
-            expect(() => ConnectorFactory.Resolve(integration, sourceTypes))
+            expect(() => ConnectorFactory.Resolve(integration))
                 .toThrow('No connector registered for driver class "UnregisteredConnector"');
         });
     });

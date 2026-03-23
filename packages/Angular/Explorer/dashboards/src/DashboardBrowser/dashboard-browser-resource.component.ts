@@ -325,7 +325,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Includes extensive logging for debugging category creation issues
      */
     public async onCategoryCreate(event: CategoryCreateEvent): Promise<void> {
-        console.log('[DashboardBrowserResource] Category create requested:', {
+        console.debug('[DashboardBrowserResource] Category create requested:', {
             name: event.Name,
             parentCategoryId: event.ParentCategoryId
         });
@@ -335,14 +335,14 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.cdr.detectChanges();
 
             const md = new Metadata();
-            console.log('[DashboardBrowserResource] Current user:', {
+            console.debug('[DashboardBrowserResource] Current user:', {
                 userId: md.CurrentUser?.ID,
                 userName: md.CurrentUser?.Name,
                 email: md.CurrentUser?.Email
             });
 
             const category = await md.GetEntityObject<MJDashboardCategoryEntity>('MJ: Dashboard Categories');
-            console.log('[DashboardBrowserResource] Created category entity object');
+            console.debug('[DashboardBrowserResource] Created category entity object');
 
             // Set required fields
             category.Name = event.Name;
@@ -352,7 +352,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 category.ParentID = event.ParentCategoryId;
             }
 
-            console.log('[DashboardBrowserResource] Category fields before save:', {
+            console.debug('[DashboardBrowserResource] Category fields before save:', {
                 name: category.Name,
                 userId: category.UserID,
                 parentId: category.ParentID,
@@ -361,7 +361,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
             const saved = await category.Save();
 
-            console.log('[DashboardBrowserResource] Save result:', {
+            console.debug('[DashboardBrowserResource] Save result:', {
                 success: saved,
                 latestResult: category.LatestResult,
                 message: category.LatestResult?.Message,
@@ -370,7 +370,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             });
 
             if (saved) {
-                console.log('[DashboardBrowserResource] Category saved successfully, ID:', category.ID);
+                console.debug('[DashboardBrowserResource] Category saved successfully, ID:', category.ID);
                 // Add to local array - engine will self-update
                 this.categories.push(category);
                 this.categories = [...this.categories].sort((a, b) => a.Name.localeCompare(b.Name));
@@ -396,7 +396,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Performs recursive deletion of category and all children
      */
     public async onCategoryDelete(event: CategoryDeleteEvent): Promise<void> {
-        console.log('[DashboardBrowserResource] Category delete requested:', event.Category.Name);
+        console.debug('[DashboardBrowserResource] Category delete requested:', event.Category.Name);
 
         try {
             this.isLoading = true;
@@ -406,7 +406,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             const categoriesToDelete = this.getChildCategoriesRecursive(event.Category.ID);
             categoriesToDelete.push(event.Category);
 
-            console.log('[DashboardBrowserResource] Deleting categories:', categoriesToDelete.map(c => c.Name));
+            console.debug('[DashboardBrowserResource] Deleting categories:', categoriesToDelete.map(c => c.Name));
 
             // Delete in reverse order (children first)
             for (const cat of categoriesToDelete.reverse()) {
@@ -445,7 +445,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Navigates back to list view with optional category selection
      */
     public onBreadcrumbNavigate(event: BreadcrumbNavigateEvent): void {
-        console.log('[DashboardBrowserResource] Breadcrumb navigate:', event);
+        console.debug('[DashboardBrowserResource] Breadcrumb navigate:', event);
 
         // CategoryId is null for root, or a category ID string
         this.selectedCategoryId = event.CategoryId;
@@ -726,9 +726,12 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 // Navigate to entity record
                 const compositeKey = new CompositeKey();
                 compositeKey.SimpleLoadFromURLSegment(request.recordId);
-                // If simple load didn't work (single ID without field name), create from ID field
+                // If simple load didn't work (single ID without field name), look up actual PK field
                 if (compositeKey.KeyValuePairs.length === 0) {
-                    compositeKey.LoadFromSingleKeyValuePair('ID', request.recordId);
+                    const md = new Metadata();
+                    const entity = md.Entities.find(e => e.Name === request.entityName);
+                    const pkFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
+                    compositeKey.LoadFromSingleKeyValuePair(pkFieldName, request.recordId);
                 }
                 this.navigationService.OpenEntityRecord(
                     request.entityName,
@@ -967,7 +970,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 // so the browser will use the dashboard's actual CategoryID
             }
 
-            console.log('[DashboardBrowserResource] Loaded from DashboardEngine:', {
+            console.debug('[DashboardBrowserResource] Loaded from DashboardEngine:', {
                 dashboardCount: this.dashboards.length,
                 categoryCount: this.categories.length,
                 sharedDashboardsInEffectiveMap: this.effectiveCategoryMap.size,

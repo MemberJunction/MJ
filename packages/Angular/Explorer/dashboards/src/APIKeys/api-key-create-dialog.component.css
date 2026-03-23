@@ -86,7 +86,7 @@
 
 .slideout-close:hover {
     background: var(--mj-bg-surface-hover);
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
 }
 
 /* Panel Content */
@@ -220,7 +220,7 @@
     display: block;
     font-weight: 600;
     font-size: 14px;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
     margin-bottom: 8px;
 }
 
@@ -253,7 +253,7 @@
     gap: 8px;
     cursor: pointer;
     font-size: 14px;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
 }
 
 .preset-buttons {
@@ -269,7 +269,7 @@
     border-radius: 6px;
     font-size: 13px;
     font-weight: 500;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
 }
@@ -456,7 +456,7 @@
     display: block;
     font-weight: 500;
     font-size: 13px;
-    color: var(--mj-color-neutral-700);
+    color: var(--mj-text-secondary);
     font-family: monospace;
 }
 
@@ -501,7 +501,7 @@
     border-radius: 10px;
     margin-top: 16px;
     font-size: 13px;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error);
 }
 
 .no-scopes-warning i {
@@ -513,7 +513,7 @@
 
 .no-scopes-warning strong {
     display: block;
-    color: var(--mj-color-error-700);
+    color: var(--mj-status-error);
     font-size: 14px;
     margin-bottom: 4px;
 }
@@ -570,7 +570,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    background: var(--mj-color-neutral-700);
+    background: var(--mj-bg-surface-card);
     border-radius: 8px;
     padding: 12px 16px;
 }

@@ -1,5 +1,168 @@
 # Change Log - @memberjunction/cli
 
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/codegen-lib@5.15.0
+  - @memberjunction/ai-cli@5.15.0
+  - @memberjunction/db-auto-doc@5.15.0
+  - @memberjunction/metadata-sync@5.15.0
+  - @memberjunction/query-gen@5.15.0
+  - @memberjunction/sqlserver-dataprovider@5.15.0
+  - @memberjunction/server-bootstrap-lite@5.15.0
+  - @memberjunction/testing-cli@5.15.0
+  - @memberjunction/config@5.15.0
+  - @memberjunction/installer@5.15.0
+  - @memberjunction/sql-converter@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/server-bootstrap-lite@5.14.0
+  - @memberjunction/ai-cli@5.14.0
+  - @memberjunction/codegen-lib@5.14.0
+  - @memberjunction/db-auto-doc@5.14.0
+  - @memberjunction/metadata-sync@5.14.0
+  - @memberjunction/query-gen@5.14.0
+  - @memberjunction/sqlserver-dataprovider@5.14.0
+  - @memberjunction/testing-cli@5.14.0
+  - @memberjunction/config@5.14.0
+  - @memberjunction/installer@5.14.0
+  - @memberjunction/sql-converter@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/db-auto-doc@5.13.0
+  - @memberjunction/ai-cli@5.13.0
+  - @memberjunction/codegen-lib@5.13.0
+  - @memberjunction/metadata-sync@5.13.0
+  - @memberjunction/query-gen@5.13.0
+  - @memberjunction/sqlserver-dataprovider@5.13.0
+  - @memberjunction/server-bootstrap-lite@5.13.0
+  - @memberjunction/testing-cli@5.13.0
+  - @memberjunction/config@5.13.0
+  - @memberjunction/installer@5.13.0
+  - @memberjunction/sql-converter@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- 714e42d: Add diagnostic report generation to `mj doctor` command. `--report` generates a basic diagnostic report (`mj-diagnostic-report.md`) with environment info, install state, and check results. `--report_extended` adds sanitized configuration file snapshots and service startup log capture (`mj-diagnostic-report-extended.md`). Passwords and secrets are automatically redacted. Also fixes process cleanup after service log capture and corrects key file detection for distribution installs.
+- 7def002: Fix ExternalChangeDetection unquoted string IDs and log spam, add /healthcheck endpoint before auth middleware, return TechnicalDescription in CreateQuery/UpdateQuery mutations, and improve MJCLI config validation errors with env var hints
+- Updated dependencies [217bca4]
+- Updated dependencies [21a04c1]
+- Updated dependencies [05f19ff]
+- Updated dependencies [714e42d]
+- Updated dependencies [257512b]
+- Updated dependencies [7def002]
+- Updated dependencies [d92502e]
+- Updated dependencies [1e5d181]
+  - @memberjunction/codegen-lib@5.12.0
+  - @memberjunction/core@5.12.0
+  - @memberjunction/installer@5.12.0
+  - @memberjunction/server-bootstrap-lite@5.12.0
+  - @memberjunction/ai-cli@5.12.0
+  - @memberjunction/db-auto-doc@5.12.0
+  - @memberjunction/metadata-sync@5.12.0
+  - @memberjunction/query-gen@5.12.0
+  - @memberjunction/sqlserver-dataprovider@5.12.0
+  - @memberjunction/testing-cli@5.12.0
+  - @memberjunction/config@5.12.0
+  - @memberjunction/sql-converter@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/sql-converter@5.11.0
+  - @memberjunction/sqlserver-dataprovider@5.11.0
+  - @memberjunction/metadata-sync@5.11.0
+  - @memberjunction/ai-cli@5.11.0
+  - @memberjunction/codegen-lib@5.11.0
+  - @memberjunction/db-auto-doc@5.11.0
+  - @memberjunction/query-gen@5.11.0
+  - @memberjunction/server-bootstrap-lite@5.11.0
+  - @memberjunction/testing-cli@5.11.0
+  - @memberjunction/config@5.11.0
+  - @memberjunction/installer@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- Updated dependencies [a4ac83d]
+  - @memberjunction/codegen-lib@5.10.1
+  - @memberjunction/ai-cli@5.10.1
+  - @memberjunction/config@5.10.1
+  - @memberjunction/db-auto-doc@5.10.1
+  - @memberjunction/core@5.10.1
+  - @memberjunction/installer@5.10.1
+  - @memberjunction/metadata-sync@5.10.1
+  - @memberjunction/query-gen@5.10.1
+  - @memberjunction/sql-converter@5.10.1
+  - @memberjunction/sqlserver-dataprovider@5.10.1
+  - @memberjunction/server-bootstrap-lite@5.10.1
+  - @memberjunction/testing-cli@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- f2df653: Add ExternalReferenceID column to AIAgentRun for cross-system run correlation and wire it through Skip proxy. Fix CodeGen validator duplicate generation and cleanup existing duplicates.
+- Updated dependencies [f2df653]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/codegen-lib@5.10.0
+  - @memberjunction/ai-cli@5.10.0
+  - @memberjunction/db-auto-doc@5.10.0
+  - @memberjunction/metadata-sync@5.10.0
+  - @memberjunction/query-gen@5.10.0
+  - @memberjunction/sqlserver-dataprovider@5.10.0
+  - @memberjunction/server-bootstrap-lite@5.10.0
+  - @memberjunction/testing-cli@5.10.0
+  - @memberjunction/config@5.10.0
+  - @memberjunction/installer@5.10.0
+  - @memberjunction/sql-converter@5.10.0
+
+## 5.9.0
+
+### Minor Changes
+
+- 6214edf: feat: Provider-agnostic OpenApp Engine with configurable project layouts, package manager auto-detection, Azure SQL support, and MJ version fallback detection
+
+### Patch Changes
+
+- Updated dependencies [f991f6d]
+- Updated dependencies [194ddf2]
+  - @memberjunction/codegen-lib@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/sqlserver-dataprovider@5.9.0
+  - @memberjunction/ai-cli@5.9.0
+  - @memberjunction/server-bootstrap-lite@5.9.0
+  - @memberjunction/metadata-sync@5.9.0
+  - @memberjunction/query-gen@5.9.0
+  - @memberjunction/testing-cli@5.9.0
+  - @memberjunction/db-auto-doc@5.9.0
+  - @memberjunction/config@5.9.0
+  - @memberjunction/installer@5.9.0
+  - @memberjunction/sql-converter@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

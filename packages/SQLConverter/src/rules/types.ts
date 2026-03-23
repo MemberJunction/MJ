@@ -24,6 +24,7 @@ export type StatementType =
   | 'ENABLE_CONSTRAINT'
   | 'CONDITIONAL_DDL'
   | 'EXEC_BLOCK'
+  | 'DECLARE_DML_BLOCK'
   | 'GRANT'
   | 'DENY'
   | 'REVOKE'

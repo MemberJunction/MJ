@@ -48,7 +48,7 @@ export class ReportGenerator {
       lines.push(`- **Iterations**: ${lastRun.iterationsPerformed}`);
       lines.push(`- **Levels Processed**: ${lastRun.levelsProcessed}`);
       lines.push(`- **Backpropagations**: ${lastRun.backpropagationCount}`);
-      lines.push(`- **Total Tokens**: ${lastRun.totalTokensUsed.toLocaleString()}`);
+      lines.push(`- **Total Tokens**: ${lastRun.totalTokensUsed.toLocaleString()} (input: ${(lastRun.totalInputTokens || 0).toLocaleString()}, output: ${(lastRun.totalOutputTokens || 0).toLocaleString()})`);
       lines.push(`- **Estimated Cost**: $${lastRun.estimatedCost.toFixed(2)}`);
       lines.push('');
 

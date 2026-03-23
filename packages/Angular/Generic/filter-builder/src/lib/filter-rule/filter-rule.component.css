@@ -4,16 +4,16 @@ mj-filter-rule .filter-rule {
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  background: linear-gradient(to bottom, #ffffff, #fafafa);
-  border: 1px solid #e5e7eb;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 10px;
   transition: all 0.2s ease;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 mj-filter-rule .filter-rule:hover {
-  border-color: #d1d5db;
-  background: linear-gradient(to bottom, #ffffff, #f5f5f5);
+  border-color: var(--mj-border-strong);
+  background: var(--mj-bg-surface-card);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
 }
 
@@ -57,12 +57,12 @@ mj-filter-rule .dropdown-trigger {
   justify-content: space-between;
   width: 100%;
   padding: 10px 14px;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--mj-border-strong);
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  background: white;
-  color: #374151;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -70,27 +70,27 @@ mj-filter-rule .dropdown-trigger {
 }
 
 mj-filter-rule .dropdown-trigger:hover:not(:disabled) {
-  border-color: #a1a1aa;
-  background: #fafafa;
+  border-color: var(--mj-text-disabled);
+  background: var(--mj-bg-surface-card);
 }
 
 mj-filter-rule .dropdown-trigger:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-  background: white;
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+  background: var(--mj-bg-surface);
 }
 
 mj-filter-rule .dropdown-trigger:disabled {
-  background-color: #f4f4f5;
-  color: #a1a1aa;
+  background-color: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-disabled);
   cursor: not-allowed;
   box-shadow: none;
 }
 
 mj-filter-rule .custom-dropdown.open .dropdown-trigger {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
 }
 
 mj-filter-rule .dropdown-value {
@@ -102,7 +102,7 @@ mj-filter-rule .dropdown-value {
 
 mj-filter-rule .dropdown-arrow {
   font-size: 10px;
-  color: #6b7280;
+  color: var(--mj-text-muted);
   margin-left: 8px;
   transition: transform 0.2s ease;
 }
@@ -111,17 +111,12 @@ mj-filter-rule .custom-dropdown.open .dropdown-arrow {
   transform: rotate(180deg);
 }
 
-/* Dropdown Menu */
+/* Dropdown Menu - position:fixed is set via ngStyle to escape overflow clipping */
 mj-filter-rule .dropdown-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  min-width: 100%;
   max-height: 280px;
   overflow-y: auto;
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
   border-radius: 10px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.04);
   z-index: 9999;
@@ -143,10 +138,10 @@ mj-filter-rule .dropdown-menu {
 mj-filter-rule .dropdown-item {
   padding: 10px 14px;
   font-size: 14px;
-  color: #374151;
+  color: var(--mj-text-primary);
   cursor: pointer;
   transition: all 0.15s ease;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 mj-filter-rule .dropdown-item:last-child {
@@ -155,18 +150,18 @@ mj-filter-rule .dropdown-item:last-child {
 
 mj-filter-rule .dropdown-item:hover,
 mj-filter-rule .dropdown-item.highlighted {
-  background: #f0f9ff;
-  color: #1d4ed8;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 mj-filter-rule .dropdown-item.highlighted {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: -2px;
 }
 
 mj-filter-rule .dropdown-item.selected {
-  background: #eff6ff;
-  color: #1d4ed8;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
   font-weight: 600;
 }
 
@@ -176,13 +171,13 @@ mj-filter-rule .dropdown-item.selected::before {
   font-weight: 900;
   font-size: 10px;
   margin-right: 8px;
-  color: #3b82f6;
+  color: var(--mj-brand-primary);
 }
 
 mj-filter-rule .dropdown-empty {
   padding: 16px;
   text-align: center;
-  color: #9ca3af;
+  color: var(--mj-text-disabled);
   font-size: 13px;
   font-style: italic;
 }
@@ -193,17 +188,17 @@ mj-filter-rule .dropdown-menu::-webkit-scrollbar {
 }
 
 mj-filter-rule .dropdown-menu::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--mj-bg-surface-sunken);
   border-radius: 3px;
 }
 
 mj-filter-rule .dropdown-menu::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: var(--mj-border-strong);
   border-radius: 3px;
 }
 
 mj-filter-rule .dropdown-menu::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: var(--mj-text-disabled);
 }
 
 /* ========================================
@@ -212,12 +207,12 @@ mj-filter-rule .dropdown-menu::-webkit-scrollbar-thumb:hover {
 
 mj-filter-rule .value-input {
   padding: 10px 14px;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--mj-border-strong);
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  background-color: white;
-  color: #374151;
+  background-color: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
   transition: all 0.2s ease;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   flex: 1;
@@ -225,26 +220,26 @@ mj-filter-rule .value-input {
 }
 
 mj-filter-rule .value-input:hover:not(:disabled) {
-  border-color: #a1a1aa;
-  background-color: #fafafa;
+  border-color: var(--mj-text-disabled);
+  background-color: var(--mj-bg-surface-card);
 }
 
 mj-filter-rule .value-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-  background-color: white;
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+  background-color: var(--mj-bg-surface);
 }
 
 mj-filter-rule .value-input:disabled {
-  background-color: #f4f4f5;
-  color: #a1a1aa;
+  background-color: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-disabled);
   cursor: not-allowed;
   box-shadow: none;
 }
 
 mj-filter-rule .value-input::placeholder {
-  color: #9ca3af;
+  color: var(--mj-text-disabled);
   font-weight: 400;
 }
 
@@ -258,10 +253,10 @@ mj-filter-rule .value-date {
 
 mj-filter-rule .value-toggle {
   display: flex;
-  background: #f4f4f5;
+  background: var(--mj-bg-surface-sunken);
   border-radius: 8px;
   padding: 3px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--mj-border-default);
 }
 
 mj-filter-rule .toggle-btn {
@@ -273,12 +268,12 @@ mj-filter-rule .toggle-btn {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  color: #71717a;
+  color: var(--mj-text-muted);
 }
 
 mj-filter-rule .toggle-btn:hover:not(:disabled) {
-  color: #3f3f46;
-  background: rgba(255, 255, 255, 0.5);
+  color: var(--mj-text-secondary);
+  background: color-mix(in srgb, var(--mj-bg-surface) 50%, transparent);
 }
 
 mj-filter-rule .toggle-btn:disabled {
@@ -287,17 +282,17 @@ mj-filter-rule .toggle-btn:disabled {
 }
 
 mj-filter-rule .toggle-btn.active {
-  background: white;
+  background: var(--mj-bg-surface);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  color: #18181b;
+  color: var(--mj-text-primary);
 }
 
 mj-filter-rule .toggle-btn.true.active {
-  color: #16a34a;
+  color: var(--mj-status-success);
 }
 
 mj-filter-rule .toggle-btn.false.active {
-  color: #dc2626;
+  color: var(--mj-status-error);
 }
 
 /* ========================================
@@ -318,7 +313,7 @@ mj-filter-rule .action-btn {
   background: transparent;
   border-radius: 8px;
   cursor: pointer;
-  color: #a1a1aa;
+  color: var(--mj-text-disabled);
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
@@ -327,8 +322,8 @@ mj-filter-rule .action-btn {
 }
 
 mj-filter-rule .action-btn:hover:not(:disabled) {
-  background: #f4f4f5;
-  color: #71717a;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-muted);
 }
 
 mj-filter-rule .action-btn:disabled {
@@ -337,8 +332,8 @@ mj-filter-rule .action-btn:disabled {
 }
 
 mj-filter-rule .action-btn.delete:hover:not(:disabled) {
-  background: #fef2f2;
-  color: #ef4444;
+  background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+  color: var(--mj-status-error);
 }
 
 /* ========================================

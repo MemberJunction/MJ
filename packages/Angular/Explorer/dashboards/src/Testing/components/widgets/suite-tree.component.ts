@@ -48,15 +48,15 @@ import { SuiteHierarchyNode } from '../../services/testing-instrumentation.servi
       height: 100%;
       display: flex;
       flex-direction: column;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
       overflow: hidden;
     }
 
     .tree-header {
       padding: 16px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -66,14 +66,14 @@ import { SuiteHierarchyNode } from '../../services/testing-instrumentation.servi
       margin: 0;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
     .tree-header h4 i {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .tree-actions {
@@ -82,20 +82,20 @@ import { SuiteHierarchyNode } from '../../services/testing-instrumentation.servi
     }
 
     .tree-action-btn {
-      background: white;
-      border: 1px solid #ddd;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       padding: 6px 10px;
       border-radius: 4px;
       cursor: pointer;
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-secondary);
       transition: all 0.2s ease;
     }
 
     .tree-action-btn:hover {
-      background: #e9ecef;
-      border-color: #ccc;
-      color: #333;
+      background: var(--mj-bg-surface-sunken);
+      border-color: var(--mj-border-strong);
+      color: var(--mj-text-primary);
     }
 
     .tree-action-btn i {
@@ -114,13 +114,13 @@ import { SuiteHierarchyNode } from '../../services/testing-instrumentation.servi
       align-items: center;
       justify-content: center;
       padding: 40px 20px;
-      color: #999;
+      color: var(--mj-text-disabled);
       gap: 12px;
     }
 
     .no-suites i {
       font-size: 36px;
-      color: #ddd;
+      color: var(--mj-border-default);
     }
 
     .no-suites p {
@@ -228,12 +228,12 @@ export class SuiteTreeComponent {
     }
 
     .node-content:hover {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
     }
 
     .node-content.selected {
-      background: rgba(33, 150, 243, 0.1);
-      border-left: 3px solid #2196f3;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      border-left: 3px solid var(--mj-brand-primary);
     }
 
     .expand-btn {
@@ -241,14 +241,14 @@ export class SuiteTreeComponent {
       border: none;
       cursor: pointer;
       padding: 2px 6px;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-size: 10px;
       transition: color 0.2s ease;
       min-width: 20px;
     }
 
     .expand-btn:hover {
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .expand-placeholder {
@@ -257,14 +257,14 @@ export class SuiteTreeComponent {
 
     .suite-icon {
       font-size: 12px;
-      color: #ff9800;
+      color: var(--mj-status-warning);
     }
 
     .suite-name {
       flex: 1;
       font-size: 12px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -281,8 +281,8 @@ export class SuiteTreeComponent {
       display: flex;
       align-items: center;
       gap: 3px;
-      color: #666;
-      background: #f0f0f0;
+      color: var(--mj-text-secondary);
+      background: var(--mj-bg-surface-sunken);
       padding: 2px 6px;
       border-radius: 10px;
     }
@@ -300,23 +300,23 @@ export class SuiteTreeComponent {
     }
 
     .pass-rate.excellent {
-      background: rgba(76, 175, 80, 0.1);
-      color: #4caf50;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .pass-rate.good {
-      background: rgba(139, 195, 74, 0.1);
-      color: #8bc34a;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .pass-rate.fair {
-      background: rgba(255, 193, 7, 0.1);
-      color: #ffc107;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-warning);
     }
 
     .pass-rate.poor {
-      background: rgba(244, 67, 54, 0.1);
-      color: #f44336;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
   `]
 })

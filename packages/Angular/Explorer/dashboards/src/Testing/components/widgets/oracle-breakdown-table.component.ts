@@ -108,7 +108,7 @@ export interface OracleResult {
     `,
   styles: [`
     .oracle-breakdown {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
       overflow: hidden;
       height: 100%;
@@ -118,8 +118,8 @@ export interface OracleResult {
 
     .breakdown-header {
       padding: 16px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -129,14 +129,14 @@ export interface OracleResult {
       margin: 0;
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
     .breakdown-header h4 i {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .aggregate-score {
@@ -147,7 +147,7 @@ export interface OracleResult {
     }
 
     .aggregate-score .label {
-      color: #666;
+      color: var(--mj-text-secondary);
       font-weight: 500;
     }
 
@@ -158,7 +158,7 @@ export interface OracleResult {
     }
 
     .oracle-table {
-      border: 1px solid #e0e0e0;
+      border: 1px solid var(--mj-border-default);
       border-radius: 6px;
       overflow: hidden;
     }
@@ -168,11 +168,11 @@ export interface OracleResult {
       grid-template-columns: 2fr 120px 150px 120px 100px;
       gap: 12px;
       padding: 12px 16px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
       font-size: 11px;
       font-weight: 600;
-      color: #666;
+      color: var(--mj-text-secondary);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -182,13 +182,13 @@ export interface OracleResult {
       grid-template-columns: 2fr 120px 150px 120px 100px;
       gap: 12px;
       padding: 12px 16px;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-border-default);
       align-items: center;
       transition: background 0.2s ease;
     }
 
     .table-row:hover {
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
     }
 
     .table-row:last-child {
@@ -196,12 +196,12 @@ export interface OracleResult {
     }
 
     .table-row.has-error {
-      border-left: 3px solid #f44336;
+      border-left: 3px solid var(--mj-status-error);
     }
 
     .table-cell {
       font-size: 12px;
-      color: #333;
+      color: var(--mj-text-primary);
       overflow: hidden;
       text-overflow: ellipsis;
     }
@@ -218,26 +218,26 @@ export interface OracleResult {
     }
 
     .oracle-icon.fa-check-circle {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .oracle-icon.fa-times-circle {
-      color: #f44336;
+      color: var(--mj-status-error);
     }
 
     .oracle-icon.fa-exclamation-triangle {
-      color: #ff9800;
+      color: var(--mj-status-warning);
     }
 
     .oracle-icon.fa-forward {
-      color: #9e9e9e;
+      color: var(--mj-text-disabled);
     }
 
     .error-row {
       padding: 8px 16px;
-      background: #fff3e0;
-      border-bottom: 1px solid #f0f0f0;
-      border-left: 3px solid #ff9800;
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      border-bottom: 1px solid var(--mj-border-default);
+      border-left: 3px solid var(--mj-status-warning);
     }
 
     .error-message {
@@ -245,7 +245,7 @@ export interface OracleResult {
       align-items: flex-start;
       gap: 8px;
       font-size: 11px;
-      color: #e65100;
+      color: var(--mj-status-warning);
       font-family: monospace;
       line-height: 1.4;
     }
@@ -258,7 +258,7 @@ export interface OracleResult {
     .breakdown-summary {
       margin-top: 16px;
       padding: 16px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       border-radius: 6px;
       display: flex;
       justify-content: space-around;
@@ -274,7 +274,7 @@ export interface OracleResult {
 
     .summary-label {
       font-size: 10px;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-weight: 500;
       text-transform: uppercase;
       letter-spacing: 0.5px;
@@ -283,7 +283,7 @@ export interface OracleResult {
     .summary-value {
       font-size: 14px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .no-results {
@@ -292,13 +292,13 @@ export interface OracleResult {
       align-items: center;
       justify-content: center;
       padding: 40px 20px;
-      color: #999;
+      color: var(--mj-text-disabled);
       gap: 12px;
     }
 
     .no-results i {
       font-size: 36px;
-      color: #ddd;
+      color: var(--mj-border-default);
     }
 
     .no-results p {

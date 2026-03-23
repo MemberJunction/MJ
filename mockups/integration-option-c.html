@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Integration Studio — Flow Studio (Option C)</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+/* ── Reset & Base ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary:#6366f1;--primary-light:#818cf8;--primary-50:#eef2ff;--primary-100:#e0e7ff;
+  --success:#10b981;--success-bg:#ecfdf5;--warning:#f59e0b;--warning-bg:#fffbeb;
+  --error:#f43f5e;--error-bg:#fff1f2;
+  --bg:#fafbfc;--surface:#ffffff;--text:#111827;--muted:#6b7280;--border:#e5e7eb;--border-light:#f3f4f6;
+  --gradient:linear-gradient(135deg,#6366f1,#8b5cf6);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.05);
+  --shadow:0 4px 6px -1px rgba(0,0,0,.07),0 2px 4px -2px rgba(0,0,0,.05);
+  --shadow-lg:0 10px 15px -3px rgba(0,0,0,.08),0 4px 6px -4px rgba(0,0,0,.05);
+  --shadow-xl:0 20px 25px -5px rgba(0,0,0,.08),0 8px 10px -6px rgba(0,0,0,.04);
+  --radius-sm:8px;--radius:12px;--radius-lg:16px;--radius-full:9999px;
+}
+html{font-size:16px}
+body{font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh;overflow-x:hidden}
+button{font:inherit;cursor:pointer;border:none;background:none}
+input{font:inherit;border:none;outline:none}
+
+/* ── Top Navigation ── */
+.topnav{position:sticky;top:0;z-index:100;background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;height:64px;padding:0 32px}
+.topnav-brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.1rem;color:var(--text);white-space:nowrap}
+.topnav-brand .brand-icon{width:32px;height:32px;border-radius:var(--radius-sm);background:var(--gradient);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:.9rem}
+.topnav-tabs{display:flex;gap:8px;position:absolute;left:50%;transform:translateX(-50%);height:100%}
+.topnav-tab{position:relative;padding:0 20px;height:100%;display:flex;align-items:center;
+  font-size:.925rem;font-weight:500;color:var(--muted);transition:color .2s;cursor:pointer;background:none;border:none}
+.topnav-tab:hover{color:var(--text)}
+.topnav-tab.active{color:var(--primary);font-weight:600}
+.tab-indicator{position:absolute;bottom:0;height:2.5px;background:var(--gradient);border-radius:2px 2px 0 0;transition:left .35s cubic-bezier(.4,0,.2,1),width .35s cubic-bezier(.4,0,.2,1)}
+.topnav-right{margin-left:auto;display:flex;align-items:center;gap:16px}
+.topnav-right .gear{width:36px;height:36px;border-radius:var(--radius-full);display:flex;align-items:center;
+  justify-content:center;color:var(--muted);transition:background .2s,color .2s}
+.topnav-right .gear:hover{background:var(--border-light);color:var(--text)}
+.topnav-right .avatar{width:34px;height:34px;border-radius:var(--radius-full);
+  background:var(--gradient);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:600}
+
+/* ── Page Container ── */
+.page{max-width:1200px;margin:0 auto;padding:32px 32px 64px}
+.page-section{display:none}
+.page-section.active{display:block}
+
+/* ── Home Tab ── */
+.welcome{margin-bottom:32px}
+.welcome h1{font-size:1.75rem;font-weight:700;margin-bottom:4px}
+.welcome p{color:var(--muted);font-size:1rem}
+.welcome p .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.welcome p .dot.green{background:var(--success)}.welcome p .dot.amber{background:var(--warning)}
+
+.cards-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-bottom:32px}
+.int-card{background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);
+  padding:28px;transition:box-shadow .3s,border-color .3s,transform .2s;cursor:pointer;position:relative;overflow:hidden}
+.int-card:hover{box-shadow:var(--shadow-lg);border-color:var(--primary-light);transform:translateY(-2px)}
+.int-card-top{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+.int-card-icon{width:48px;height:48px;border-radius:var(--radius);display:flex;align-items:center;
+  justify-content:center;font-size:1.3rem;flex-shrink:0}
+.int-card-icon.hubspot{background:#fff4f0;color:#ff7a59}
+.int-card-icon.salesforce{background:#e8f4fd;color:#00a1e0}
+.int-card-icon.ym{background:#fff7ed;color:#f97316}
+.int-card-icon.postgres{background:#eef2ff;color:#336791}
+.int-card-icon.csv{background:#f0fdf4;color:#22c55e}
+.int-card-name{font-weight:600;font-size:1.05rem}
+.status-pill{display:inline-flex;align-items:center;gap:5px;font-size:.75rem;font-weight:600;
+  padding:3px 10px;border-radius:var(--radius-full);margin-left:auto}
+.status-pill.healthy{background:var(--success-bg);color:var(--success)}
+.status-pill.warning{background:var(--warning-bg);color:var(--warning)}
+.status-pill.error{background:var(--error-bg);color:var(--error)}
+.status-pill.inactive{background:var(--border-light);color:var(--muted)}
+.status-pill .sdot{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+.int-card-flow{display:flex;align-items:center;gap:0;margin-bottom:20px;justify-content:center}
+.flow-node{display:flex;align-items:center;gap:6px;padding:8px 14px;background:var(--border-light);
+  border-radius:var(--radius-sm);font-size:.82rem;color:var(--muted);font-weight:500;white-space:nowrap}
+.flow-node i{font-size:.9rem}
+.flow-arrow{color:var(--border);font-size:.9rem;margin:0 6px}
+.flow-node.entities{background:var(--primary-50);color:var(--primary)}
+.flow-node.mj{background:var(--primary-50);color:var(--primary)}
+
+.int-card-status{font-size:.875rem;color:var(--muted);display:flex;align-items:center;gap:6px}
+.int-card-status i{font-size:.75rem}
+
+.int-card-actions{position:absolute;bottom:0;left:0;right:0;padding:16px 28px;background:linear-gradient(transparent,var(--surface) 30%);
+  display:flex;gap:10px;justify-content:flex-end;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;pointer-events:none}
+.int-card:hover .int-card-actions{opacity:1;transform:translateY(0);pointer-events:auto}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:var(--radius);
+  font-size:.875rem;font-weight:600;transition:all .2s}
+.btn-primary{background:var(--gradient);color:#fff;box-shadow:0 2px 8px rgba(99,102,241,.3)}
+.btn-primary:hover{box-shadow:0 4px 14px rgba(99,102,241,.4);transform:translateY(-1px)}
+.btn-ghost{color:var(--primary);background:var(--primary-50)}
+.btn-ghost:hover{background:var(--primary-100)}
+.btn-sm{padding:7px 14px;font-size:.8rem;border-radius:var(--radius-sm)}
+.btn-outline{border:1px solid var(--border);color:var(--text);background:var(--surface)}
+.btn-outline:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-50)}
+
+.quick-actions{display:flex;justify-content:center;margin-bottom:28px}
+.health-strip{display:flex;align-items:center;gap:20px;justify-content:center;padding:14px;
+  background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)}
+.health-item{display:flex;align-items:center;gap:6px;font-size:.85rem;color:var(--muted)}
+.health-item .hdot{width:10px;height:10px;border-radius:50%}
+.health-item .hdot.green{background:var(--success)}.health-item .hdot.amber{background:var(--warning)}
+.health-item .hdot.red{background:var(--error)}.health-item .hdot.gray{background:var(--border)}
+
+/* ── Integrations Tab ── */
+.int-list{display:flex;flex-direction:column;gap:2px;background:var(--surface);border-radius:var(--radius-lg);
+  border:1px solid var(--border);overflow:hidden;margin-bottom:16px}
+.int-list-row{display:flex;align-items:center;gap:16px;padding:18px 24px;cursor:pointer;transition:background .15s}
+.int-list-row:hover{background:var(--border-light)}
+.int-list-row+.int-list-row{border-top:1px solid var(--border-light)}
+.int-list-icon{width:40px;height:40px;border-radius:var(--radius-sm);display:flex;align-items:center;
+  justify-content:center;font-size:1.1rem;flex-shrink:0}
+.int-list-info{flex:1}
+.int-list-name{font-weight:600;font-size:.95rem}
+.int-list-meta{font-size:.82rem;color:var(--muted)}
+.int-list-chevron{color:var(--muted);font-size:.85rem}
+
+/* Detail stepper */
+.detail-header{display:flex;align-items:center;gap:14px;margin-bottom:28px}
+.detail-back{width:36px;height:36px;border-radius:var(--radius-full);display:flex;align-items:center;
+  justify-content:center;color:var(--muted);border:1px solid var(--border);transition:all .2s;cursor:pointer}
+.detail-back:hover{border-color:var(--primary);color:var(--primary);background:var(--primary-50)}
+.detail-title{font-size:1.3rem;font-weight:700}
+.detail-status{margin-left:auto}
+
+.stepper{display:flex;flex-direction:column;gap:2px}
+.step{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;transition:border-color .2s}
+.step.open{border-color:var(--primary-light)}
+.step-header{display:flex;align-items:center;gap:14px;padding:20px 24px;cursor:pointer;transition:background .15s}
+.step-header:hover{background:var(--border-light)}
+.step-num{width:32px;height:32px;border-radius:50%;background:var(--border-light);color:var(--muted);
+  display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex-shrink:0;transition:all .2s}
+.step.open .step-num{background:var(--gradient);color:#fff}
+.step-label{font-weight:600;font-size:.95rem}
+.step-summary{font-size:.82rem;color:var(--muted)}
+.step-chevron{margin-left:auto;color:var(--muted);transition:transform .3s;font-size:.8rem}
+.step.open .step-chevron{transform:rotate(180deg)}
+.step-body{max-height:0;overflow:hidden;transition:max-height .4s ease}
+.step.open .step-body{max-height:2000px}
+.step-content{padding:0 24px 24px 70px}
+
+/* Entity toggles */
+.entity-toggle{display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:var(--radius);
+  transition:background .15s;margin-bottom:4px}
+.entity-toggle:hover{background:var(--border-light)}
+.entity-toggle-info{flex:1}
+.entity-toggle-name{font-weight:600;font-size:.9rem}
+.entity-toggle-meta{font-size:.78rem;color:var(--muted)}
+.toggle-switch{position:relative;width:44px;height:24px;flex-shrink:0}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-track{position:absolute;inset:0;background:var(--border);border-radius:var(--radius-full);transition:background .25s;cursor:pointer}
+.toggle-track::after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;
+  background:#fff;border-radius:50%;transition:transform .25s;box-shadow:var(--shadow-sm)}
+.toggle-switch input:checked+.toggle-track{background:var(--primary)}
+.toggle-switch input:checked+.toggle-track::after{transform:translateX(20px)}
+.direction-badge{font-size:.7rem;font-weight:600;padding:2px 8px;border-radius:var(--radius-full);
+  background:var(--primary-50);color:var(--primary)}
+
+/* Field mapping */
+.mapping-tabs{display:flex;gap:4px;margin-bottom:16px}
+.mapping-tab{padding:8px 16px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:500;
+  color:var(--muted);cursor:pointer;transition:all .2s}
+.mapping-tab.active{background:var(--primary);color:#fff}
+.mapping-tab:hover:not(.active){background:var(--border-light)}
+.mapping-container{display:flex;gap:24px;position:relative}
+.mapping-card{flex:1;background:var(--border-light);border-radius:var(--radius);padding:16px;min-height:200px}
+.mapping-card-title{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--muted);margin-bottom:12px}
+.mapping-field{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);
+  border-radius:var(--radius-sm);margin-bottom:6px;font-size:.85rem;border:1px solid var(--border);
+  cursor:pointer;transition:all .15s;position:relative}
+.mapping-field:hover{border-color:var(--primary-light);box-shadow:0 0 0 2px var(--primary-50)}
+.mapping-field .field-type{font-size:.7rem;color:var(--muted);margin-left:auto;font-family:monospace}
+.mapping-field.unmapped{opacity:.45;border-style:dashed}
+.mapping-field.required-unmapped{border-color:var(--error);opacity:.8;background:var(--error-bg)}
+.mapping-arrow-col{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;width:40px;flex-shrink:0}
+.mapping-line{width:2px;height:100%;background:var(--border);position:relative}
+.mapping-connector{display:flex;align-items:center;gap:0;font-size:.7rem;color:var(--primary);padding:4px 0}
+.mapping-connector i{font-size:.65rem}
+.automap-btn{margin-top:12px}
+
+/* Schedule */
+.schedule-options{display:flex;flex-wrap:wrap;gap:8px}
+.schedule-opt{position:relative}
+.schedule-opt input{position:absolute;opacity:0}
+.schedule-opt label{display:block;padding:10px 20px;border-radius:var(--radius);border:1px solid var(--border);
+  font-size:.85rem;font-weight:500;cursor:pointer;transition:all .2s;color:var(--muted)}
+.schedule-opt input:checked+label{border-color:var(--primary);background:var(--primary-50);color:var(--primary);font-weight:600}
+.schedule-opt label:hover{border-color:var(--primary-light)}
+
+/* Run timeline */
+.run-timeline{display:flex;flex-direction:column;gap:8px}
+.run-item{display:flex;align-items:center;gap:14px;padding:10px 14px;border-radius:var(--radius-sm);
+  background:var(--border-light);font-size:.85rem;cursor:pointer;transition:background .15s}
+.run-item:hover{background:var(--primary-50)}
+.run-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.run-dot.green{background:var(--success)}.run-dot.amber{background:var(--warning)}.run-dot.red{background:var(--error)}
+.run-info{flex:1;color:var(--muted)}
+.run-info strong{color:var(--text);font-weight:600}
+
+/* ── Data Flow Tab ── */
+.flow-diagram{display:flex;align-items:center;gap:0;padding:48px 24px;justify-content:center;position:relative;margin-bottom:40px}
+.flow-stage{background:var(--surface);border:2px solid var(--border);border-radius:var(--radius-lg);
+  padding:28px 24px;text-align:center;width:220px;cursor:pointer;transition:all .3s;position:relative;z-index:2}
+.flow-stage:hover{border-color:var(--primary);box-shadow:var(--shadow-lg);transform:translateY(-4px)}
+.flow-stage.active{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-50)}
+.flow-stage-icon{width:52px;height:52px;border-radius:var(--radius);margin:0 auto 12px;
+  display:flex;align-items:center;justify-content:center;font-size:1.4rem}
+.flow-stage-icon.sources{background:var(--primary-50);color:var(--primary)}
+.flow-stage-icon.mapping{background:#fef3c7;color:var(--warning)}
+.flow-stage-icon.mj{background:var(--success-bg);color:var(--success)}
+.flow-stage-icon.ready{background:#fae8ff;color:#a855f7}
+.flow-stage-title{font-weight:700;font-size:.95rem;margin-bottom:4px}
+.flow-stage-meta{font-size:.8rem;color:var(--muted)}
+.flow-connector{display:flex;align-items:center;width:80px;justify-content:center;position:relative;z-index:1}
+.flow-connector-line{height:2px;flex:1;background:var(--border);position:relative;overflow:visible}
+.flow-connector-arrow{color:var(--border);font-size:.7rem}
+/* Animated dots */
+.flow-connector-line::after{content:'';position:absolute;top:-3px;width:8px;height:8px;border-radius:50%;
+  background:var(--primary);animation:flowDot 2.5s ease-in-out infinite}
+@keyframes flowDot{0%{left:-8px;opacity:0}10%{opacity:1}90%{opacity:1}100%{left:calc(100% + 8px);opacity:0}}
+.flow-connector:nth-child(4) .flow-connector-line::after{animation-delay:.8s}
+.flow-connector:nth-child(6) .flow-connector-line::after{animation-delay:1.6s}
+
+.flow-detail{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px;display:none}
+.flow-detail.active{display:block}
+.flow-detail h3{font-size:1.1rem;font-weight:700;margin-bottom:16px}
+.lineage-tree{padding-left:0}
+.lineage-node{display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:4px;
+  border-radius:var(--radius-sm);background:var(--border-light);font-size:.85rem}
+.lineage-node i{color:var(--primary);font-size:.75rem;width:20px;text-align:center}
+.lineage-connector-v{width:2px;height:16px;background:var(--border);margin-left:24px}
+
+/* ── History Tab ── */
+.history-filters{display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap;align-items:center}
+.filter-pill{padding:8px 18px;border-radius:var(--radius-full);font-size:.85rem;font-weight:500;
+  border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:all .2s}
+.filter-pill.active{border-color:var(--primary);background:var(--primary);color:#fff}
+.filter-pill:hover:not(.active){border-color:var(--primary-light);color:var(--primary)}
+.history-search{margin-left:auto;position:relative}
+.history-search input{padding:8px 16px 8px 36px;border-radius:var(--radius-full);border:1px solid var(--border);
+  width:240px;font-size:.85rem;transition:border-color .2s;background:var(--surface)}
+.history-search input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-50)}
+.history-search i{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.8rem}
+
+.history-group-label{font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--muted);margin:24px 0 12px;padding-left:4px}
+.history-group-label:first-child{margin-top:0}
+.history-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:20px 24px;margin-bottom:8px;cursor:pointer;transition:all .2s}
+.history-card:hover{box-shadow:var(--shadow);border-color:var(--primary-light)}
+.history-card-top{display:flex;align-items:center;gap:14px}
+.history-card-icon{width:40px;height:40px;border-radius:var(--radius-sm);display:flex;align-items:center;
+  justify-content:center;font-size:1rem;flex-shrink:0}
+.history-card-info{flex:1}
+.history-card-name{font-weight:600;font-size:.95rem}
+.history-card-time{font-size:.82rem;color:var(--muted)}
+.history-card-results{font-size:.85rem;color:var(--muted);margin-top:4px}
+.history-card-status{font-size:1.3rem;flex-shrink:0}
+.history-card-detail{display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border-light)}
+.history-card.expanded .history-card-detail{display:block}
+.history-entity-row{display:flex;align-items:center;gap:12px;padding:8px 0;font-size:.85rem}
+.history-entity-row+.history-entity-row{border-top:1px solid var(--border-light)}
+.history-entity-name{font-weight:600;width:120px}
+.history-entity-stat{color:var(--muted);flex:1}
+
+/* ── Wizard Modal ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);backdrop-filter:blur(4px);
+  z-index:1000;display:none;align-items:center;justify-content:center;opacity:0;transition:opacity .3s}
+.modal-overlay.show{display:flex;opacity:1}
+.wizard{background:var(--surface);border-radius:var(--radius-lg);width:720px;max-width:95vw;
+  max-height:90vh;overflow:auto;box-shadow:var(--shadow-xl);position:relative}
+.wizard-header{display:flex;align-items:center;padding:24px 28px 0;gap:16px}
+.wizard-header h2{font-size:1.2rem;font-weight:700;flex:1}
+.wizard-close{width:36px;height:36px;border-radius:var(--radius-full);display:flex;align-items:center;
+  justify-content:center;color:var(--muted);transition:all .15s}
+.wizard-close:hover{background:var(--border-light);color:var(--text)}
+.wizard-progress{display:flex;gap:4px;padding:20px 28px 0}
+.wizard-progress-dot{flex:1;height:4px;border-radius:2px;background:var(--border-light);transition:background .3s}
+.wizard-progress-dot.done{background:var(--primary)}
+.wizard-progress-dot.current{background:var(--gradient)}
+.wizard-body{padding:28px}
+.wizard-step{display:none}
+.wizard-step.active{display:block}
+.wizard-step h3{font-size:1.3rem;font-weight:700;margin-bottom:6px}
+.wizard-step .subtitle{color:var(--muted);font-size:.95rem;margin-bottom:24px}
+.wizard-footer{display:flex;justify-content:space-between;padding:0 28px 24px}
+
+/* Connector grid */
+.connector-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.connector-card{border:2px solid var(--border);border-radius:var(--radius);padding:20px;
+  text-align:center;cursor:pointer;transition:all .2s}
+.connector-card:hover{border-color:var(--primary-light);background:var(--primary-50)}
+.connector-card.selected{border-color:var(--primary);background:var(--primary-50);box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+.connector-card-icon{width:48px;height:48px;border-radius:var(--radius);margin:0 auto 10px;
+  display:flex;align-items:center;justify-content:center;font-size:1.3rem}
+.connector-card-name{font-weight:600;font-size:.9rem;margin-bottom:2px}
+.connector-card-desc{font-size:.75rem;color:var(--muted)}
+
+/* Wizard form */
+.wizard-form{display:flex;flex-direction:column;gap:18px}
+.form-group label{display:block;font-weight:600;font-size:.9rem;margin-bottom:6px}
+.form-group .help{font-size:.78rem;color:var(--muted);margin-top:4px}
+.form-group input[type="text"],.form-group input[type="password"]{width:100%;padding:12px 16px;
+  border:1px solid var(--border);border-radius:var(--radius);font-size:.9rem;transition:border-color .2s}
+.form-group input:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-50)}
+.test-result{margin-top:12px;padding:12px 16px;border-radius:var(--radius-sm);font-size:.85rem;font-weight:500;display:none}
+.test-result.success{display:flex;background:var(--success-bg);color:var(--success)}
+.test-result.error{display:flex;background:var(--error-bg);color:var(--error)}
+.test-result i{margin-right:8px}
+
+/* Wizard object toggle cards */
+.object-toggle-grid{display:flex;flex-direction:column;gap:8px}
+.object-toggle-card{display:flex;align-items:center;gap:14px;padding:16px 20px;border:1px solid var(--border);
+  border-radius:var(--radius);cursor:pointer;transition:all .2s}
+.object-toggle-card:hover{border-color:var(--primary-light)}
+.object-toggle-card.selected{border-color:var(--primary);background:var(--primary-50)}
+.object-toggle-card .otc-info{flex:1}
+.object-toggle-card .otc-name{font-weight:600;font-size:.95rem}
+.object-toggle-card .otc-meta{font-size:.8rem;color:var(--muted)}
+.otc-check{width:24px;height:24px;border-radius:var(--radius-sm);border:2px solid var(--border);
+  display:flex;align-items:center;justify-content:center;color:transparent;transition:all .2s;flex-shrink:0}
+.object-toggle-card.selected .otc-check{border-color:var(--primary);background:var(--primary);color:#fff}
+
+/* Success step */
+.success-celebration{text-align:center;padding:20px 0}
+.success-icon{width:80px;height:80px;border-radius:50%;background:var(--success-bg);color:var(--success);
+  display:flex;align-items:center;justify-content:center;font-size:2rem;margin:0 auto 20px;
+  animation:successPop .5s cubic-bezier(.175,.885,.32,1.275)}
+@keyframes successPop{0%{transform:scale(0)}60%{transform:scale(1.1)}100%{transform:scale(1)}}
+.success-celebration h3{font-size:1.5rem;margin-bottom:8px}
+.success-summary{background:var(--border-light);border-radius:var(--radius);padding:16px 20px;
+  margin:20px 0;text-align:left}
+.success-summary-item{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:.9rem}
+.success-summary-item i{color:var(--success);width:20px;text-align:center}
+
+/* Confetti */
+.confetti-container{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1100;overflow:hidden}
+.confetti-piece{position:absolute;width:10px;height:10px;top:-20px;animation:confettiFall 3s ease-in forwards}
+@keyframes confettiFall{0%{transform:translateY(0) rotate(0deg);opacity:1}
+  100%{transform:translateY(100vh) rotate(720deg);opacity:0}}
+
+/* ── Utilities ── */
+.mt-8{margin-top:8px}.mt-16{margin-top:16px}.mt-24{margin-top:24px}
+.text-link{color:var(--primary);font-size:.85rem;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:4px}
+.text-link:hover{text-decoration:underline}
+.empty-state{text-align:center;padding:48px;color:var(--muted)}
+.empty-state i{font-size:2rem;margin-bottom:12px;color:var(--border)}
+</style>
+</head>
+<body>
+
+<!-- ── Top Navigation ── -->
+<nav class="topnav">
+  <div class="topnav-brand">
+    <div class="brand-icon"><i class="fa-solid fa-shuffle"></i></div>
+    Integration Studio
+  </div>
+  <div class="topnav-tabs" id="tabBar">
+    <button class="topnav-tab active" data-tab="home"><i class="fa-solid fa-house" style="margin-right:6px;font-size:.8rem"></i>Home</button>
+    <button class="topnav-tab" data-tab="integrations"><i class="fa-solid fa-plug" style="margin-right:6px;font-size:.8rem"></i>Integrations</button>
+    <button class="topnav-tab" data-tab="dataflow"><i class="fa-solid fa-diagram-project" style="margin-right:6px;font-size:.8rem"></i>Data Flow</button>
+    <button class="topnav-tab" data-tab="history"><i class="fa-solid fa-clock-rotate-left" style="margin-right:6px;font-size:.8rem"></i>History</button>
+    <div class="tab-indicator" id="tabIndicator"></div>
+  </div>
+  <div class="topnav-right">
+    <button class="gear"><i class="fa-solid fa-gear"></i></button>
+    <div class="avatar">AK</div>
+  </div>
+</nav>
+
+<!-- ── Page Content ── -->
+<div class="page">
+
+  <!-- ===== HOME TAB ===== -->
+  <section class="page-section active" id="sec-home">
+    <div class="welcome">
+      <h1>Your Integrations</h1>
+      <p><span class="dot green"></span> 3 integrations running smoothly &nbsp;&middot;&nbsp; <span class="dot amber"></span> 1 needs attention &nbsp;&middot;&nbsp; 1 inactive</p>
+    </div>
+
+    <div class="cards-grid">
+      <!-- HubSpot -->
+      <div class="int-card" data-int="hubspot">
+        <div class="int-card-top">
+          <div class="int-card-icon hubspot"><i class="fa-brands fa-hubspot"></i></div>
+          <span class="int-card-name">HubSpot CRM</span>
+          <span class="status-pill healthy"><span class="sdot"></span>Healthy</span>
+        </div>
+        <div class="int-card-flow">
+          <span class="flow-node"><i class="fa-brands fa-hubspot"></i> HubSpot</span>
+          <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+          <span class="flow-node entities">3 entities</span>
+          <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+          <span class="flow-node mj"><i class="fa-solid fa-database"></i> MJ</span>
+        </div>
+        <div class="int-card-status"><i class="fa-solid fa-check-circle" style="color:var(--success)"></i> Last synced 12 minutes ago &middot; 4,832 records</div>
+        <div class="int-card-actions">
+          <button class="btn btn-ghost btn-sm">View Details</button>
+          <button class="btn btn-primary btn-sm">Sync Now</button>
+        </div>
+      </div>
+      <!-- Salesforce -->
+      <div class="int-card" data-int="salesforce">
+        <div class="int-card-top">
+          <div class="int-card-icon salesforce"><i class="fa-brands fa-salesforce"></i></div>
+          <span class="int-card-name">Salesforce</span>
+          <span class="status-pill warning"><span class="sdot"></span>Warning</span>
+        </div>
+        <div class="int-card-flow">
+          <span class="flow-node"><i class="fa-brands fa-salesforce"></i> Salesforce</span>
+          <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+          <span class="flow-node entities">3 entities</span>
+          <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+          <span class="flow-node mj"><i class="fa-solid fa-database"></i> MJ</span>
+        </div>
+        <div class="int-card-status"><i class="fa-solid fa-triangle-exclamation" style="color:var(--warning)"></i> Rate limited &middot; Retry in 8 minutes</div>
+        <div class="int-card-actions">
+          <button class="btn btn-ghost btn-sm">View Details</button>
+          <button class="btn btn-primary btn-sm">Sync Now</button>
+        </div>
+      </div>
+      <!-- YourMembership -->
+      <div class="int-card" data-int="ym">
+        <div class="int-card-top">
+          <div class="int-card-icon ym"><i class="fa-solid fa-users"></i></div>
+          <span class="int-card-name">YourMembership</span>
+          <span class="status-pill error"><span class="sdot"></span>Error</span>
+        </div>
+        <div class="int-card-flow">
+          <span class="flow-node"><i class="fa-solid fa-users"></i> YM</span>
+          <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+          <span class="flow-node entities">3 entities</span>
+          <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+          <span class="flow-node mj"><i class="fa-solid fa-database"></i> MJ</span>
+        </div>
+        <div class="int-card-status"><i class="fa-solid fa-circle-xmark" style="color:var(--error)"></i> Authentication expired 6 hours ago</div>
+        <div class="int-card-actions">
+          <button class="btn btn-ghost btn-sm">View Details</button>
+          <button class="btn btn-primary btn-sm">Reconnect</button>
+        </div>
+      </div>
+      <!-- PostgreSQL -->
+      <div class="int-card" data-int="postgres">
+        <div class="int-card-top">
+          <div class="int-card-icon postgres"><i class="fa-solid fa-database"></i></div>
+          <span class="int-card-name">PostgreSQL DB</span>
+          <span class="status-pill healthy"><span class="sdot"></span>Healthy</span>
+        </div>
+        <div class="int-card-flow">
+          <span class="flow-node"><i class="fa-solid fa-database"></i> PostgreSQL</span>
+          <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+          <span class="flow-node entities">2 entities</span>
+          <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+          <span class="flow-node mj"><i class="fa-solid fa-database"></i> MJ</span>
+        </div>
+        <div class="int-card-status"><i class="fa-solid fa-check-circle" style="color:var(--success)"></i> Last synced 3 minutes ago &middot; 8,291 records</div>
+        <div class="int-card-actions">
+          <button class="btn btn-ghost btn-sm">View Details</button>
+          <button class="btn btn-primary btn-sm">Sync Now</button>
+        </div>
+      </div>
+      <!-- CSV -->
+      <div class="int-card" data-int="csv">
+        <div class="int-card-top">
+          <div class="int-card-icon csv"><i class="fa-solid fa-file-csv"></i></div>
+          <span class="int-card-name">CSV Import</span>
+          <span class="status-pill inactive"><span class="sdot"></span>Inactive</span>
+        </div>
+        <div class="int-card-flow">
+          <span class="flow-node"><i class="fa-solid fa-file-csv"></i> CSV</span>
+          <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+          <span class="flow-node entities">1 entity</span>
+          <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+          <span class="flow-node mj"><i class="fa-solid fa-database"></i> MJ</span>
+        </div>
+        <div class="int-card-status"><i class="fa-solid fa-pause-circle" style="color:var(--muted)"></i> Paused &middot; Last import 14 days ago &middot; 342 records</div>
+        <div class="int-card-actions">
+          <button class="btn btn-ghost btn-sm">View Details</button>
+          <button class="btn btn-outline btn-sm">Resume</button>
+        </div>
+      </div>
+      <!-- Add new card -->
+      <div class="int-card" style="border-style:dashed;display:flex;align-items:center;justify-content:center;min-height:200px" onclick="openWizard()">
+        <div style="text-align:center;color:var(--muted)">
+          <div style="width:56px;height:56px;border-radius:50%;background:var(--primary-50);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.4rem;margin:0 auto 12px"><i class="fa-solid fa-plus"></i></div>
+          <div style="font-weight:600;font-size:.95rem;color:var(--text)">Add Integration</div>
+          <div style="font-size:.82rem;margin-top:2px">Connect a new data source</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="health-strip">
+      <div class="health-item"><span class="hdot green"></span>3 Healthy</div>
+      <div class="health-item"><span class="hdot amber"></span>1 Warning</div>
+      <div class="health-item"><span class="hdot red"></span>1 Error</div>
+      <div class="health-item"><span class="hdot gray"></span>1 Inactive</div>
+    </div>
+  </section>
+
+  <!-- ===== INTEGRATIONS TAB ===== -->
+  <section class="page-section" id="sec-integrations">
+    <!-- List view -->
+    <div id="intListView">
+      <h2 style="font-size:1.3rem;font-weight:700;margin-bottom:20px">All Integrations</h2>
+      <div class="int-list">
+        <div class="int-list-row" onclick="showIntDetail('hubspot')">
+          <div class="int-list-icon hubspot"><i class="fa-brands fa-hubspot"></i></div>
+          <div class="int-list-info">
+            <div class="int-list-name">HubSpot CRM</div>
+            <div class="int-list-meta"><span class="dot green" style="margin-right:2px"></span> 3 entities syncing &middot; Last synced 12 min ago</div>
+          </div>
+          <i class="fa-solid fa-chevron-right int-list-chevron"></i>
+        </div>
+        <div class="int-list-row" onclick="showIntDetail('salesforce')">
+          <div class="int-list-icon salesforce"><i class="fa-brands fa-salesforce"></i></div>
+          <div class="int-list-info">
+            <div class="int-list-name">Salesforce</div>
+            <div class="int-list-meta"><span class="dot amber" style="margin-right:2px;background:var(--warning)"></span> 3 entities syncing &middot; Rate limited</div>
+          </div>
+          <i class="fa-solid fa-chevron-right int-list-chevron"></i>
+        </div>
+        <div class="int-list-row" onclick="showIntDetail('ym')">
+          <div class="int-list-icon ym"><i class="fa-solid fa-users"></i></div>
+          <div class="int-list-info">
+            <div class="int-list-name">YourMembership</div>
+            <div class="int-list-meta"><span class="dot red" style="margin-right:2px;background:var(--error)"></span> 3 entities &middot; Auth expired</div>
+          </div>
+          <i class="fa-solid fa-chevron-right int-list-chevron"></i>
+        </div>
+        <div class="int-list-row" onclick="showIntDetail('postgres')">
+          <div class="int-list-icon postgres"><i class="fa-solid fa-database"></i></div>
+          <div class="int-list-info">
+            <div class="int-list-name">PostgreSQL DB</div>
+            <div class="int-list-meta"><span class="dot green" style="margin-right:2px"></span> 2 entities syncing &middot; Last synced 3 min ago</div>
+          </div>
+          <i class="fa-solid fa-chevron-right int-list-chevron"></i>
+        </div>
+        <div class="int-list-row" onclick="showIntDetail('csv')">
+          <div class="int-list-icon csv"><i class="fa-solid fa-file-csv"></i></div>
+          <div class="int-list-info">
+            <div class="int-list-name">CSV Import</div>
+            <div class="int-list-meta"><span class="dot gray" style="margin-right:2px;background:var(--muted)"></span> 1 entity &middot; Inactive</div>
+          </div>
+          <i class="fa-solid fa-chevron-right int-list-chevron"></i>
+        </div>
+      </div>
+      <div class="mt-16">
+        <button class="btn btn-primary" onclick="openWizard()"><i class="fa-solid fa-plus"></i> New Integration</button>
+      </div>
+    </div>
+
+    <!-- Detail view -->
+    <div id="intDetailView" style="display:none">
+      <div class="detail-header">
+        <button class="detail-back" onclick="hideIntDetail()"><i class="fa-solid fa-arrow-left"></i></button>
+        <div class="detail-title" id="detailTitle">HubSpot CRM</div>
+        <span class="status-pill healthy detail-status" id="detailStatus"><span class="sdot"></span><span id="detailStatusText">Healthy</span></span>
+      </div>
+
+      <div class="stepper">
+        <!-- Step 1: Connection -->
+        <div class="step" data-step="1">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">1</div>
+            <div>
+              <div class="step-label">Connection</div>
+              <div class="step-summary" id="connSummary">Connected via API Key &middot; Last tested 2 days ago</div>
+            </div>
+            <i class="fa-solid fa-chevron-down step-chevron"></i>
+          </div>
+          <div class="step-body">
+            <div class="step-content">
+              <div style="display:flex;gap:16px;align-items:center;margin-bottom:16px">
+                <div style="flex:1">
+                  <div style="font-size:.85rem;color:var(--muted);margin-bottom:4px">API Key</div>
+                  <div style="font-family:monospace;font-size:.9rem;padding:10px 14px;background:var(--border-light);border-radius:var(--radius-sm)">sk-hub-****-****-****-7f3a</div>
+                </div>
+                <div>
+                  <div style="font-size:.85rem;color:var(--muted);margin-bottom:4px">Base URL</div>
+                  <div style="font-family:monospace;font-size:.9rem;padding:10px 14px;background:var(--border-light);border-radius:var(--radius-sm)">https://api.hubapi.com</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px">
+                <button class="btn btn-ghost btn-sm"><i class="fa-solid fa-vial"></i> Test Connection</button>
+                <button class="btn btn-outline btn-sm"><i class="fa-solid fa-pen"></i> Edit Credentials</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: What to Sync -->
+        <div class="step" data-step="2">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">2</div>
+            <div>
+              <div class="step-label">What to Sync</div>
+              <div class="step-summary">3 objects enabled: Contacts, Companies, Deals</div>
+            </div>
+            <i class="fa-solid fa-chevron-down step-chevron"></i>
+          </div>
+          <div class="step-body">
+            <div class="step-content">
+              <div class="entity-toggle">
+                <label class="toggle-switch"><input type="checkbox" checked><span class="toggle-track"></span></label>
+                <div class="entity-toggle-info">
+                  <div class="entity-toggle-name">Contacts</div>
+                  <div class="entity-toggle-meta">~2,340 records &middot; <span class="dot green" style="margin-right:2px"></span>Syncing</div>
+                </div>
+                <span class="direction-badge">Inbound</span>
+              </div>
+              <div class="entity-toggle">
+                <label class="toggle-switch"><input type="checkbox" checked><span class="toggle-track"></span></label>
+                <div class="entity-toggle-info">
+                  <div class="entity-toggle-name">Companies</div>
+                  <div class="entity-toggle-meta">~1,105 records &middot; <span class="dot green" style="margin-right:2px"></span>Syncing</div>
+                </div>
+                <span class="direction-badge">Inbound</span>
+              </div>
+              <div class="entity-toggle">
+                <label class="toggle-switch"><input type="checkbox" checked><span class="toggle-track"></span></label>
+                <div class="entity-toggle-info">
+                  <div class="entity-toggle-name">Deals</div>
+                  <div class="entity-toggle-meta">~1,387 records &middot; <span class="dot green" style="margin-right:2px"></span>Syncing</div>
+                </div>
+                <span class="direction-badge">Bidirectional</span>
+              </div>
+              <div class="entity-toggle" style="opacity:.5">
+                <label class="toggle-switch"><input type="checkbox"><span class="toggle-track"></span></label>
+                <div class="entity-toggle-info">
+                  <div class="entity-toggle-name">Tickets</div>
+                  <div class="entity-toggle-meta">~456 records &middot; Not syncing</div>
+                </div>
+              </div>
+              <div class="entity-toggle" style="opacity:.5">
+                <label class="toggle-switch"><input type="checkbox"><span class="toggle-track"></span></label>
+                <div class="entity-toggle-info">
+                  <div class="entity-toggle-name">Products</div>
+                  <div class="entity-toggle-meta">~89 records &middot; Not syncing</div>
+                </div>
+              </div>
+              <div class="mt-8">
+                <span class="text-link"><i class="fa-solid fa-magnifying-glass"></i> Discover more objects</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: How to Map -->
+        <div class="step" data-step="3">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">3</div>
+            <div>
+              <div class="step-label">How to Map</div>
+              <div class="step-summary">42 fields mapped across 3 entities</div>
+            </div>
+            <i class="fa-solid fa-chevron-down step-chevron"></i>
+          </div>
+          <div class="step-body">
+            <div class="step-content">
+              <div class="mapping-tabs">
+                <button class="mapping-tab active" onclick="selectMappingTab(this,'contacts')">Contacts</button>
+                <button class="mapping-tab" onclick="selectMappingTab(this,'companies')">Companies</button>
+                <button class="mapping-tab" onclick="selectMappingTab(this,'deals')">Deals</button>
+              </div>
+              <div class="mapping-container">
+                <div class="mapping-card">
+                  <div class="mapping-card-title"><i class="fa-brands fa-hubspot" style="margin-right:6px"></i>HubSpot Fields</div>
+                  <div class="mapping-field" data-map="1"><i class="fa-solid fa-font" style="color:var(--primary);width:16px"></i>first_name <span class="field-type">string</span></div>
+                  <div class="mapping-field" data-map="2"><i class="fa-solid fa-font" style="color:var(--primary);width:16px"></i>last_name <span class="field-type">string</span></div>
+                  <div class="mapping-field" data-map="3"><i class="fa-solid fa-at" style="color:var(--primary);width:16px"></i>email <span class="field-type">string</span></div>
+                  <div class="mapping-field" data-map="4"><i class="fa-solid fa-phone" style="color:var(--primary);width:16px"></i>phone <span class="field-type">string</span></div>
+                  <div class="mapping-field" data-map="5"><i class="fa-solid fa-building" style="color:var(--primary);width:16px"></i>company <span class="field-type">string</span></div>
+                  <div class="mapping-field" data-map="6"><i class="fa-solid fa-briefcase" style="color:var(--primary);width:16px"></i>jobtitle <span class="field-type">string</span></div>
+                  <div class="mapping-field unmapped"><i class="fa-solid fa-globe" style="color:var(--muted);width:16px"></i>website <span class="field-type">string</span></div>
+                  <div class="mapping-field unmapped"><i class="fa-solid fa-note-sticky" style="color:var(--muted);width:16px"></i>notes <span class="field-type">text</span></div>
+                </div>
+                <div class="mapping-arrow-col">
+                  <div class="mapping-connector"><i class="fa-solid fa-arrows-left-right"></i></div>
+                  <div class="mapping-connector"><i class="fa-solid fa-arrows-left-right"></i></div>
+                  <div class="mapping-connector"><i class="fa-solid fa-arrows-left-right"></i></div>
+                  <div class="mapping-connector"><i class="fa-solid fa-arrows-left-right"></i></div>
+                  <div class="mapping-connector"><i class="fa-solid fa-arrows-left-right"></i></div>
+                  <div class="mapping-connector"><i class="fa-solid fa-arrows-left-right"></i></div>
+                </div>
+                <div class="mapping-card">
+                  <div class="mapping-card-title"><i class="fa-solid fa-database" style="margin-right:6px"></i>MJ Fields</div>
+                  <div class="mapping-field" data-map="1"><i class="fa-solid fa-font" style="color:var(--success);width:16px"></i>FirstName <span class="field-type">nvarchar</span></div>
+                  <div class="mapping-field" data-map="2"><i class="fa-solid fa-font" style="color:var(--success);width:16px"></i>LastName <span class="field-type">nvarchar</span></div>
+                  <div class="mapping-field" data-map="3"><i class="fa-solid fa-at" style="color:var(--success);width:16px"></i>Email <span class="field-type">nvarchar</span></div>
+                  <div class="mapping-field" data-map="4"><i class="fa-solid fa-phone" style="color:var(--success);width:16px"></i>Phone <span class="field-type">nvarchar</span></div>
+                  <div class="mapping-field" data-map="5"><i class="fa-solid fa-building" style="color:var(--success);width:16px"></i>Company <span class="field-type">nvarchar</span></div>
+                  <div class="mapping-field" data-map="6"><i class="fa-solid fa-briefcase" style="color:var(--success);width:16px"></i>Title <span class="field-type">nvarchar</span></div>
+                  <div class="mapping-field required-unmapped"><i class="fa-solid fa-exclamation-circle" style="color:var(--error);width:16px"></i>Status <span class="field-type">required</span></div>
+                </div>
+              </div>
+              <button class="btn btn-ghost btn-sm automap-btn" onclick="simulateAutoMap()"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map Remaining</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 4: Schedule -->
+        <div class="step" data-step="4">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">4</div>
+            <div>
+              <div class="step-label">Schedule</div>
+              <div class="step-summary">Syncing every 15 minutes</div>
+            </div>
+            <i class="fa-solid fa-chevron-down step-chevron"></i>
+          </div>
+          <div class="step-body">
+            <div class="step-content">
+              <div class="schedule-options">
+                <div class="schedule-opt"><input type="radio" name="sched" id="s1" checked><label for="s1">Every 15 min</label></div>
+                <div class="schedule-opt"><input type="radio" name="sched" id="s2"><label for="s2">Every 30 min</label></div>
+                <div class="schedule-opt"><input type="radio" name="sched" id="s3"><label for="s3">Every hour</label></div>
+                <div class="schedule-opt"><input type="radio" name="sched" id="s4"><label for="s4">Every 6 hours</label></div>
+                <div class="schedule-opt"><input type="radio" name="sched" id="s5"><label for="s5">Daily</label></div>
+                <div class="schedule-opt"><input type="radio" name="sched" id="s6"><label for="s6">Manual only</label></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 5: Recent Runs -->
+        <div class="step" data-step="5">
+          <div class="step-header" onclick="toggleStep(this)">
+            <div class="step-num">5</div>
+            <div>
+              <div class="step-label">Recent Runs</div>
+              <div class="step-summary">Last 5 sync runs</div>
+            </div>
+            <i class="fa-solid fa-chevron-down step-chevron"></i>
+          </div>
+          <div class="step-body">
+            <div class="step-content">
+              <div class="run-timeline">
+                <div class="run-item"><span class="run-dot green"></span><div class="run-info"><strong>12 min ago</strong> &middot; 32s &middot; 47 records synced</div></div>
+                <div class="run-item"><span class="run-dot green"></span><div class="run-info"><strong>27 min ago</strong> &middot; 28s &middot; 12 records synced</div></div>
+                <div class="run-item"><span class="run-dot green"></span><div class="run-info"><strong>42 min ago</strong> &middot; 45s &middot; 103 records synced</div></div>
+                <div class="run-item"><span class="run-dot amber"></span><div class="run-info"><strong>57 min ago</strong> &middot; 1m 12s &middot; 89 synced, 3 skipped</div></div>
+                <div class="run-item"><span class="run-dot green"></span><div class="run-info"><strong>1h 12m ago</strong> &middot; 31s &middot; 22 records synced</div></div>
+              </div>
+              <div class="mt-16"><span class="text-link" onclick="switchTab('history')">View all history <i class="fa-solid fa-arrow-right"></i></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== DATA FLOW TAB ===== -->
+  <section class="page-section" id="sec-dataflow">
+    <h2 style="font-size:1.3rem;font-weight:700;margin-bottom:8px">Data Flow</h2>
+    <p style="color:var(--muted);font-size:.9rem;margin-bottom:32px">See how your data moves from source systems into MemberJunction</p>
+
+    <div class="flow-diagram">
+      <div class="flow-stage" data-stage="sources" onclick="toggleFlowDetail('sources')">
+        <div class="flow-stage-icon sources"><i class="fa-solid fa-cloud-arrow-down"></i></div>
+        <div class="flow-stage-title">Source Systems</div>
+        <div class="flow-stage-meta">5 connected &middot; 13,465 records</div>
+      </div>
+      <div class="flow-connector"><div class="flow-connector-line"></div><span class="flow-connector-arrow"><i class="fa-solid fa-chevron-right"></i></span></div>
+      <div class="flow-stage" data-stage="mapping" onclick="toggleFlowDetail('mapping')">
+        <div class="flow-stage-icon mapping"><i class="fa-solid fa-arrows-split-up-and-left"></i></div>
+        <div class="flow-stage-title">Field Mapping</div>
+        <div class="flow-stage-meta">42 mapped &middot; 3 unmapped &middot; 8 transforms</div>
+      </div>
+      <div class="flow-connector"><div class="flow-connector-line"></div><span class="flow-connector-arrow"><i class="fa-solid fa-chevron-right"></i></span></div>
+      <div class="flow-stage" data-stage="mj" onclick="toggleFlowDetail('mj')">
+        <div class="flow-stage-icon mj"><i class="fa-solid fa-database"></i></div>
+        <div class="flow-stage-title">MemberJunction</div>
+        <div class="flow-stage-meta">12 entities &middot; 13,465 records</div>
+      </div>
+      <div class="flow-connector"><div class="flow-connector-line"></div><span class="flow-connector-arrow"><i class="fa-solid fa-chevron-right"></i></span></div>
+      <div class="flow-stage" data-stage="ready" onclick="toggleFlowDetail('ready')">
+        <div class="flow-stage-icon ready"><i class="fa-solid fa-rocket"></i></div>
+        <div class="flow-stage-title">Ready to Use</div>
+        <div class="flow-stage-meta">4 dashboards &middot; 12 views</div>
+      </div>
+    </div>
+
+    <!-- Detail sections -->
+    <div class="flow-detail" id="flowDetail-sources">
+      <h3><i class="fa-solid fa-cloud-arrow-down" style="margin-right:8px;color:var(--primary)"></i>Source Systems</h3>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        <div style="padding:16px;background:var(--border-light);border-radius:var(--radius);display:flex;align-items:center;gap:12px">
+          <div class="int-card-icon hubspot" style="width:36px;height:36px;font-size:1rem"><i class="fa-brands fa-hubspot"></i></div>
+          <div><div style="font-weight:600;font-size:.9rem">HubSpot</div><div style="font-size:.78rem;color:var(--muted)">4,832 records</div></div>
+        </div>
+        <div style="padding:16px;background:var(--border-light);border-radius:var(--radius);display:flex;align-items:center;gap:12px">
+          <div class="int-card-icon salesforce" style="width:36px;height:36px;font-size:1rem"><i class="fa-brands fa-salesforce"></i></div>
+          <div><div style="font-weight:600;font-size:.9rem">Salesforce</div><div style="font-size:.78rem;color:var(--muted)">3,891 records</div></div>
+        </div>
+        <div style="padding:16px;background:var(--border-light);border-radius:var(--radius);display:flex;align-items:center;gap:12px">
+          <div class="int-card-icon ym" style="width:36px;height:36px;font-size:1rem"><i class="fa-solid fa-users"></i></div>
+          <div><div style="font-weight:600;font-size:.9rem">YourMembership</div><div style="font-size:.78rem;color:var(--muted)">0 records (error)</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="flow-detail" id="flowDetail-mapping">
+      <h3><i class="fa-solid fa-arrows-split-up-and-left" style="margin-right:8px;color:var(--warning)"></i>Field Mapping Summary</h3>
+      <div style="display:flex;gap:24px">
+        <div style="text-align:center;padding:20px;background:var(--success-bg);border-radius:var(--radius);flex:1">
+          <div style="font-size:2rem;font-weight:700;color:var(--success)">42</div><div style="font-size:.85rem;color:var(--muted)">Mapped Fields</div></div>
+        <div style="text-align:center;padding:20px;background:var(--error-bg);border-radius:var(--radius);flex:1">
+          <div style="font-size:2rem;font-weight:700;color:var(--error)">3</div><div style="font-size:.85rem;color:var(--muted)">Unmapped</div></div>
+        <div style="text-align:center;padding:20px;background:var(--primary-50);border-radius:var(--radius);flex:1">
+          <div style="font-size:2rem;font-weight:700;color:var(--primary)">8</div><div style="font-size:.85rem;color:var(--muted)">Transforms</div></div>
+      </div>
+    </div>
+    <div class="flow-detail" id="flowDetail-mj">
+      <h3><i class="fa-solid fa-database" style="margin-right:8px;color:var(--success)"></i>MemberJunction Entities</h3>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        <div style="padding:12px;background:var(--border-light);border-radius:var(--radius-sm);font-size:.85rem"><strong>Contacts</strong><br><span style="color:var(--muted)">2,340 records</span></div>
+        <div style="padding:12px;background:var(--border-light);border-radius:var(--radius-sm);font-size:.85rem"><strong>Companies</strong><br><span style="color:var(--muted)">1,105 records</span></div>
+        <div style="padding:12px;background:var(--border-light);border-radius:var(--radius-sm);font-size:.85rem"><strong>Deals</strong><br><span style="color:var(--muted)">1,387 records</span></div>
+        <div style="padding:12px;background:var(--border-light);border-radius:var(--radius-sm);font-size:.85rem"><strong>Accounts</strong><br><span style="color:var(--muted)">891 records</span></div>
+        <div style="padding:12px;background:var(--border-light);border-radius:var(--radius-sm);font-size:.85rem"><strong>Opportunities</strong><br><span style="color:var(--muted)">1,450 records</span></div>
+        <div style="padding:12px;background:var(--border-light);border-radius:var(--radius-sm);font-size:.85rem"><strong>Leads</strong><br><span style="color:var(--muted)">1,550 records</span></div>
+        <div style="padding:12px;background:var(--border-light);border-radius:var(--radius-sm);font-size:.85rem"><strong>Products</strong><br><span style="color:var(--muted)">4,400 records</span></div>
+        <div style="padding:12px;background:var(--border-light);border-radius:var(--radius-sm);font-size:.85rem"><strong>Orders</strong><br><span style="color:var(--muted)">3,891 records</span></div>
+      </div>
+    </div>
+    <div class="flow-detail" id="flowDetail-ready">
+      <h3><i class="fa-solid fa-rocket" style="margin-right:8px;color:#a855f7"></i>Where Your Data is Used</h3>
+      <div style="margin-top:16px">
+        <div class="lineage-node"><i class="fa-solid fa-chart-pie"></i> Sales Dashboard &mdash; uses Contacts, Deals, Opportunities</div>
+        <div class="lineage-connector-v"></div>
+        <div class="lineage-node"><i class="fa-solid fa-table-columns"></i> Customer 360 View &mdash; uses Contacts, Companies, Orders</div>
+        <div class="lineage-connector-v"></div>
+        <div class="lineage-node"><i class="fa-solid fa-chart-line"></i> Revenue Report &mdash; uses Deals, Products, Orders</div>
+        <div class="lineage-connector-v"></div>
+        <div class="lineage-node"><i class="fa-solid fa-list"></i> Lead Pipeline View &mdash; uses Leads, Accounts</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== HISTORY TAB ===== -->
+  <section class="page-section" id="sec-history">
+    <h2 style="font-size:1.3rem;font-weight:700;margin-bottom:20px">Sync History</h2>
+
+    <div class="history-filters">
+      <button class="filter-pill active" onclick="filterHistory(this,'all')">All</button>
+      <button class="filter-pill" onclick="filterHistory(this,'success')">Successful</button>
+      <button class="filter-pill" onclick="filterHistory(this,'warning')">Warnings</button>
+      <button class="filter-pill" onclick="filterHistory(this,'error')">Errors</button>
+      <div class="history-search"><i class="fa-solid fa-magnifying-glass"></i><input type="text" placeholder="Search by integration name..."></div>
+    </div>
+
+    <div class="history-group-label">Today</div>
+
+    <div class="history-card" data-type="success" onclick="toggleHistoryCard(this)">
+      <div class="history-card-top">
+        <div class="history-card-icon hubspot"><i class="fa-brands fa-hubspot"></i></div>
+        <div class="history-card-info">
+          <div class="history-card-name">HubSpot CRM</div>
+          <div class="history-card-time">Completed 12 min ago in 32 seconds</div>
+          <div class="history-card-results">Created 5 contacts, updated 42, skipped 0</div>
+        </div>
+        <div class="history-card-status" style="color:var(--success)"><i class="fa-solid fa-circle-check"></i></div>
+      </div>
+      <div class="history-card-detail">
+        <div class="history-entity-row"><span class="history-entity-name">Contacts</span><span class="history-entity-stat">+5 created, 30 updated</span><span class="run-dot green"></span></div>
+        <div class="history-entity-row"><span class="history-entity-name">Companies</span><span class="history-entity-stat">0 created, 8 updated</span><span class="run-dot green"></span></div>
+        <div class="history-entity-row"><span class="history-entity-name">Deals</span><span class="history-entity-stat">0 created, 4 updated</span><span class="run-dot green"></span></div>
+      </div>
+    </div>
+
+    <div class="history-card" data-type="warning" onclick="toggleHistoryCard(this)">
+      <div class="history-card-top">
+        <div class="history-card-icon salesforce"><i class="fa-brands fa-salesforce"></i></div>
+        <div class="history-card-info">
+          <div class="history-card-name">Salesforce</div>
+          <div class="history-card-time">Completed 45 min ago in 1m 18s</div>
+          <div class="history-card-results">Created 12 accounts, updated 89, skipped 3 (rate limited)</div>
+        </div>
+        <div class="history-card-status" style="color:var(--warning)"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      </div>
+      <div class="history-card-detail">
+        <div class="history-entity-row"><span class="history-entity-name">Accounts</span><span class="history-entity-stat">+8 created, 45 updated</span><span class="run-dot green"></span></div>
+        <div class="history-entity-row"><span class="history-entity-name">Opportunities</span><span class="history-entity-stat">+4 created, 32 updated, 3 skipped</span><span class="run-dot amber"></span></div>
+        <div class="history-entity-row"><span class="history-entity-name">Leads</span><span class="history-entity-stat">0 created, 12 updated</span><span class="run-dot green"></span></div>
+      </div>
+    </div>
+
+    <div class="history-card" data-type="error" onclick="toggleHistoryCard(this)">
+      <div class="history-card-top">
+        <div class="history-card-icon ym"><i class="fa-solid fa-users"></i></div>
+        <div class="history-card-info">
+          <div class="history-card-name">YourMembership</div>
+          <div class="history-card-time">Failed 6 hours ago after 2 seconds</div>
+          <div class="history-card-results">Authentication token expired — reconnection required</div>
+        </div>
+        <div class="history-card-status" style="color:var(--error)"><i class="fa-solid fa-circle-xmark"></i></div>
+      </div>
+      <div class="history-card-detail">
+        <div class="history-entity-row"><span class="history-entity-name">Members</span><span class="history-entity-stat">Error: 401 Unauthorized</span><span class="run-dot red"></span></div>
+        <div class="history-entity-row"><span class="history-entity-name">Events</span><span class="history-entity-stat">Skipped (auth failure)</span><span class="run-dot red"></span></div>
+        <div class="history-entity-row"><span class="history-entity-name">Registrations</span><span class="history-entity-stat">Skipped (auth failure)</span><span class="run-dot red"></span></div>
+      </div>
+    </div>
+
+    <div class="history-card" data-type="success" onclick="toggleHistoryCard(this)">
+      <div class="history-card-top">
+        <div class="history-card-icon postgres"><i class="fa-solid fa-database"></i></div>
+        <div class="history-card-info">
+          <div class="history-card-name">PostgreSQL DB</div>
+          <div class="history-card-time">Completed 3 min ago in 1m 45s</div>
+          <div class="history-card-results">Created 120 products, updated 3,200 orders</div>
+        </div>
+        <div class="history-card-status" style="color:var(--success)"><i class="fa-solid fa-circle-check"></i></div>
+      </div>
+      <div class="history-card-detail">
+        <div class="history-entity-row"><span class="history-entity-name">Products</span><span class="history-entity-stat">+120 created, 0 updated</span><span class="run-dot green"></span></div>
+        <div class="history-entity-row"><span class="history-entity-name">Orders</span><span class="history-entity-stat">0 created, 3,200 updated</span><span class="run-dot green"></span></div>
+      </div>
+    </div>
+
+    <div class="history-group-label">Yesterday</div>
+
+    <div class="history-card" data-type="success" onclick="toggleHistoryCard(this)">
+      <div class="history-card-top">
+        <div class="history-card-icon hubspot"><i class="fa-brands fa-hubspot"></i></div>
+        <div class="history-card-info">
+          <div class="history-card-name">HubSpot CRM</div>
+          <div class="history-card-time">Completed yesterday at 11:42 PM in 28s</div>
+          <div class="history-card-results">Created 0 contacts, updated 15, skipped 0</div>
+        </div>
+        <div class="history-card-status" style="color:var(--success)"><i class="fa-solid fa-circle-check"></i></div>
+      </div>
+      <div class="history-card-detail">
+        <div class="history-entity-row"><span class="history-entity-name">Contacts</span><span class="history-entity-stat">0 created, 10 updated</span><span class="run-dot green"></span></div>
+        <div class="history-entity-row"><span class="history-entity-name">Companies</span><span class="history-entity-stat">0 created, 3 updated</span><span class="run-dot green"></span></div>
+        <div class="history-entity-row"><span class="history-entity-name">Deals</span><span class="history-entity-stat">0 created, 2 updated</span><span class="run-dot green"></span></div>
+      </div>
+    </div>
+
+    <div class="history-card" data-type="success" onclick="toggleHistoryCard(this)">
+      <div class="history-card-top">
+        <div class="history-card-icon salesforce"><i class="fa-brands fa-salesforce"></i></div>
+        <div class="history-card-info">
+          <div class="history-card-name">Salesforce</div>
+          <div class="history-card-time">Completed yesterday at 10:15 PM in 52s</div>
+          <div class="history-card-results">Created 3 accounts, updated 67, skipped 0</div>
+        </div>
+        <div class="history-card-status" style="color:var(--success)"><i class="fa-solid fa-circle-check"></i></div>
+      </div>
+      <div class="history-card-detail">
+        <div class="history-entity-row"><span class="history-entity-name">Accounts</span><span class="history-entity-stat">+3 created, 30 updated</span><span class="run-dot green"></span></div>
+        <div class="history-entity-row"><span class="history-entity-name">Opportunities</span><span class="history-entity-stat">0 created, 25 updated</span><span class="run-dot green"></span></div>
+        <div class="history-entity-row"><span class="history-entity-name">Leads</span><span class="history-entity-stat">0 created, 12 updated</span><span class="run-dot green"></span></div>
+      </div>
+    </div>
+
+    <div class="history-group-label">This Week</div>
+
+    <div class="history-card" data-type="warning" onclick="toggleHistoryCard(this)">
+      <div class="history-card-top">
+        <div class="history-card-icon csv"><i class="fa-solid fa-file-csv"></i></div>
+        <div class="history-card-info">
+          <div class="history-card-name">CSV Import</div>
+          <div class="history-card-time">Completed 5 days ago in 12s</div>
+          <div class="history-card-results">Created 342 employees, 8 had missing email addresses</div>
+        </div>
+        <div class="history-card-status" style="color:var(--warning)"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      </div>
+      <div class="history-card-detail">
+        <div class="history-entity-row"><span class="history-entity-name">Employee Dir.</span><span class="history-entity-stat">+342 created, 8 warnings (missing email)</span><span class="run-dot amber"></span></div>
+      </div>
+    </div>
+  </section>
+
+</div><!-- /page -->
+
+<!-- ===== NEW INTEGRATION WIZARD ===== -->
+<div class="modal-overlay" id="wizardModal">
+  <div class="wizard">
+    <div class="wizard-header">
+      <h2 id="wizardTitle">Add Integration</h2>
+      <button class="wizard-close" onclick="closeWizard()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="wizard-progress" id="wizardProgress">
+      <div class="wizard-progress-dot current"></div>
+      <div class="wizard-progress-dot"></div>
+      <div class="wizard-progress-dot"></div>
+      <div class="wizard-progress-dot"></div>
+    </div>
+
+    <div class="wizard-body">
+      <!-- Step 1: Choose connector -->
+      <div class="wizard-step active" id="wStep1">
+        <h3>Where's your data?</h3>
+        <p class="subtitle">Choose a data source to connect to MemberJunction</p>
+        <div style="margin-bottom:16px;position:relative">
+          <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:.85rem"></i>
+          <input type="text" placeholder="Search connectors..." style="width:100%;padding:12px 16px 12px 40px;border:1px solid var(--border);border-radius:var(--radius);font-size:.9rem">
+        </div>
+        <div class="connector-grid">
+          <div class="connector-card" onclick="selectConnector(this,'hubspot')">
+            <div class="connector-card-icon hubspot"><i class="fa-brands fa-hubspot"></i></div>
+            <div class="connector-card-name">HubSpot</div>
+            <div class="connector-card-desc">CRM &amp; Marketing</div>
+          </div>
+          <div class="connector-card" onclick="selectConnector(this,'salesforce')">
+            <div class="connector-card-icon salesforce"><i class="fa-brands fa-salesforce"></i></div>
+            <div class="connector-card-name">Salesforce</div>
+            <div class="connector-card-desc">CRM &amp; Sales</div>
+          </div>
+          <div class="connector-card" onclick="selectConnector(this,'dynamics')">
+            <div class="connector-card-icon" style="background:#e0e7ff;color:#4f46e5"><i class="fa-brands fa-microsoft"></i></div>
+            <div class="connector-card-name">Dynamics 365</div>
+            <div class="connector-card-desc">Microsoft CRM</div>
+          </div>
+          <div class="connector-card" onclick="selectConnector(this,'postgres')">
+            <div class="connector-card-icon postgres"><i class="fa-solid fa-database"></i></div>
+            <div class="connector-card-name">PostgreSQL</div>
+            <div class="connector-card-desc">Database</div>
+          </div>
+          <div class="connector-card" onclick="selectConnector(this,'mysql')">
+            <div class="connector-card-icon" style="background:#fff7ed;color:#ea580c"><i class="fa-solid fa-database"></i></div>
+            <div class="connector-card-name">MySQL</div>
+            <div class="connector-card-desc">Database</div>
+          </div>
+          <div class="connector-card" onclick="selectConnector(this,'rest')">
+            <div class="connector-card-icon" style="background:#fae8ff;color:#a855f7"><i class="fa-solid fa-globe"></i></div>
+            <div class="connector-card-name">REST API</div>
+            <div class="connector-card-desc">Custom API</div>
+          </div>
+          <div class="connector-card" onclick="selectConnector(this,'csv')">
+            <div class="connector-card-icon csv"><i class="fa-solid fa-file-csv"></i></div>
+            <div class="connector-card-name">CSV / Excel</div>
+            <div class="connector-card-desc">File Import</div>
+          </div>
+          <div class="connector-card" onclick="selectConnector(this,'stripe')">
+            <div class="connector-card-icon" style="background:#eef2ff;color:#6366f1"><i class="fa-brands fa-stripe"></i></div>
+            <div class="connector-card-name">Stripe</div>
+            <div class="connector-card-desc">Payments</div>
+          </div>
+          <div class="connector-card" onclick="selectConnector(this,'mailchimp')">
+            <div class="connector-card-icon" style="background:#fef3c7;color:#d97706"><i class="fa-brands fa-mailchimp"></i></div>
+            <div class="connector-card-name">Mailchimp</div>
+            <div class="connector-card-desc">Email Marketing</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Connect -->
+      <div class="wizard-step" id="wStep2">
+        <h3>Connect to <span id="wizConnectorName">HubSpot</span></h3>
+        <p class="subtitle">Enter your connection details so we can securely access your data</p>
+        <div class="wizard-form">
+          <div class="form-group">
+            <label>Your API Key</label>
+            <input type="password" placeholder="sk-hub-xxxx-xxxx-xxxx" value="sk-hub-9a3f-b721-e84c-7f3a">
+            <div class="help">Find this in your HubSpot Settings > Integrations > API Key</div>
+          </div>
+          <div class="form-group">
+            <label>Portal ID <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+            <input type="text" placeholder="e.g. 12345678" value="48291037">
+            <div class="help">Your HubSpot portal identifier</div>
+          </div>
+          <div>
+            <button class="btn btn-ghost" onclick="testConnection()"><i class="fa-solid fa-vial"></i> Test Connection</button>
+          </div>
+          <div class="test-result" id="testResult">
+            <i class="fa-solid fa-circle-check"></i> <span>Connected successfully! Found 5 available objects.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: What to sync -->
+      <div class="wizard-step" id="wStep3">
+        <h3>What do you want to sync?</h3>
+        <p class="subtitle">We found these objects in your account. Toggle the ones you want.</p>
+        <div class="object-toggle-grid">
+          <div class="object-toggle-card selected" onclick="toggleObjectCard(this)">
+            <div class="otc-check"><i class="fa-solid fa-check" style="font-size:.7rem"></i></div>
+            <div class="otc-info"><div class="otc-name">Contacts</div><div class="otc-meta">~2,340 records &middot; Recommended</div></div>
+          </div>
+          <div class="object-toggle-card selected" onclick="toggleObjectCard(this)">
+            <div class="otc-check"><i class="fa-solid fa-check" style="font-size:.7rem"></i></div>
+            <div class="otc-info"><div class="otc-name">Companies</div><div class="otc-meta">~1,105 records &middot; Recommended</div></div>
+          </div>
+          <div class="object-toggle-card selected" onclick="toggleObjectCard(this)">
+            <div class="otc-check"><i class="fa-solid fa-check" style="font-size:.7rem"></i></div>
+            <div class="otc-info"><div class="otc-name">Deals</div><div class="otc-meta">~1,387 records</div></div>
+          </div>
+          <div class="object-toggle-card" onclick="toggleObjectCard(this)">
+            <div class="otc-check"><i class="fa-solid fa-check" style="font-size:.7rem"></i></div>
+            <div class="otc-info"><div class="otc-name">Tickets</div><div class="otc-meta">~456 records</div></div>
+          </div>
+          <div class="object-toggle-card" onclick="toggleObjectCard(this)">
+            <div class="otc-check"><i class="fa-solid fa-check" style="font-size:.7rem"></i></div>
+            <div class="otc-info"><div class="otc-name">Products</div><div class="otc-meta">~89 records</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: Success -->
+      <div class="wizard-step" id="wStep4">
+        <div class="success-celebration">
+          <div class="success-icon"><i class="fa-solid fa-check"></i></div>
+          <h3>You're all set!</h3>
+          <p style="color:var(--muted)">Your integration is configured and ready to go.</p>
+          <div class="success-summary">
+            <div class="success-summary-item"><i class="fa-solid fa-plug"></i> Connected to HubSpot via API Key</div>
+            <div class="success-summary-item"><i class="fa-solid fa-layer-group"></i> 3 objects selected: Contacts, Companies, Deals</div>
+            <div class="success-summary-item"><i class="fa-solid fa-clock"></i> Scheduled to sync every 15 minutes</div>
+            <div class="success-summary-item"><i class="fa-solid fa-wand-magic-sparkles"></i> Fields will be auto-mapped on first run</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="wizard-footer">
+      <button class="btn btn-outline" id="wizBack" onclick="wizardBack()" style="visibility:hidden"><i class="fa-solid fa-arrow-left"></i> Back</button>
+      <button class="btn btn-primary" id="wizNext" onclick="wizardNext()" style="opacity:.4;pointer-events:none">Continue <i class="fa-solid fa-arrow-right"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- Confetti container -->
+<div class="confetti-container" id="confettiContainer"></div>
+
+<script>
+// ── Tab Navigation ──
+const tabs = document.querySelectorAll('.topnav-tab');
+const indicator = document.getElementById('tabIndicator');
+const sections = {
+  home: document.getElementById('sec-home'),
+  integrations: document.getElementById('sec-integrations'),
+  dataflow: document.getElementById('sec-dataflow'),
+  history: document.getElementById('sec-history')
+};
+
+function positionIndicator(tab) {
+  indicator.style.left = tab.offsetLeft + 'px';
+  indicator.style.width = tab.offsetWidth + 'px';
+}
+
+function switchTab(name) {
+  tabs.forEach(t => t.classList.remove('active'));
+  Object.values(sections).forEach(s => s.classList.remove('active'));
+  const tab = document.querySelector(`[data-tab="${name}"]`);
+  tab.classList.add('active');
+  sections[name].classList.add('active');
+  positionIndicator(tab);
+}
+
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+});
+
+// Initial position
+requestAnimationFrame(() => positionIndicator(document.querySelector('.topnav-tab.active')));
+window.addEventListener('resize', () => positionIndicator(document.querySelector('.topnav-tab.active')));
+
+// ── Home Card Clicks ──
+document.querySelectorAll('.int-card[data-int]').forEach(card => {
+  card.addEventListener('click', (e) => {
+    if (e.target.closest('.int-card-actions')) return;
+    const intName = card.dataset.int;
+    switchTab('integrations');
+    showIntDetail(intName);
+  });
+});
+
+// ── Integration Detail ──
+const intData = {
+  hubspot: { title: 'HubSpot CRM', status: 'healthy', statusText: 'Healthy', conn: 'Connected via API Key \u00b7 Last tested 2 days ago' },
+  salesforce: { title: 'Salesforce', status: 'warning', statusText: 'Warning', conn: 'Connected via OAuth 2.0 \u00b7 Rate limited' },
+  ym: { title: 'YourMembership', status: 'error', statusText: 'Error', conn: 'API Key expired \u00b7 Reconnection required' },
+  postgres: { title: 'PostgreSQL DB', status: 'healthy', statusText: 'Healthy', conn: 'Connected via connection string \u00b7 Tested 1 hour ago' },
+  csv: { title: 'CSV Import', status: 'inactive', statusText: 'Inactive', conn: 'File upload \u00b7 Last import 14 days ago' }
+};
+
+function showIntDetail(name) {
+  const d = intData[name];
+  if (!d) return;
+  document.getElementById('intListView').style.display = 'none';
+  document.getElementById('intDetailView').style.display = 'block';
+  document.getElementById('detailTitle').textContent = d.title;
+  const sp = document.getElementById('detailStatus');
+  sp.className = 'status-pill detail-status ' + d.status;
+  document.getElementById('detailStatusText').textContent = d.statusText;
+  document.getElementById('connSummary').textContent = d.conn;
+  // Close all steps
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('open'));
+}
+
+function hideIntDetail() {
+  document.getElementById('intListView').style.display = '';
+  document.getElementById('intDetailView').style.display = 'none';
+}
+
+// ── Stepper ──
+function toggleStep(header) {
+  const step = header.closest('.step');
+  step.classList.toggle('open');
+}
+
+// ── Mapping tabs ──
+function selectMappingTab(btn, entity) {
+  document.querySelectorAll('.mapping-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ── Auto-map simulation ──
+function simulateAutoMap() {
+  const unmapped = document.querySelectorAll('.mapping-field.unmapped, .mapping-field.required-unmapped');
+  unmapped.forEach((f, i) => {
+    setTimeout(() => {
+      f.classList.remove('unmapped', 'required-unmapped');
+      f.style.borderColor = 'var(--success)';
+      f.style.opacity = '1';
+      f.style.background = 'var(--success-bg)';
+      setTimeout(() => {
+        f.style.background = '';
+        f.style.borderColor = '';
+      }, 1000);
+    }, i * 300);
+  });
+}
+
+// ── Flow diagram ──
+function toggleFlowDetail(stage) {
+  const stages = document.querySelectorAll('.flow-stage');
+  const detail = document.getElementById('flowDetail-' + stage);
+  const wasActive = detail.classList.contains('active');
+
+  // Close all
+  document.querySelectorAll('.flow-detail').forEach(d => d.classList.remove('active'));
+  stages.forEach(s => s.classList.remove('active'));
+
+  if (!wasActive) {
+    detail.classList.add('active');
+    document.querySelector(`[data-stage="${stage}"]`).classList.add('active');
+  }
+}
+
+// ── History ──
+function toggleHistoryCard(card) {
+  card.classList.toggle('expanded');
+}
+
+function filterHistory(pill, type) {
+  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+  pill.classList.add('active');
+  document.querySelectorAll('.history-card').forEach(card => {
+    if (type === 'all') {
+      card.style.display = '';
+    } else {
+      card.style.display = card.dataset.type === type ? '' : 'none';
+    }
+  });
+}
+
+// ── Wizard ──
+let wizardStep = 1;
+let selectedConnector = null;
+
+function openWizard() {
+  wizardStep = 1;
+  selectedConnector = null;
+  updateWizard();
+  const modal = document.getElementById('wizardModal');
+  modal.classList.add('show');
+  document.getElementById('testResult').className = 'test-result';
+}
+
+function closeWizard() {
+  document.getElementById('wizardModal').classList.remove('show');
+}
+
+function updateWizard() {
+  // Steps
+  for (let i = 1; i <= 4; i++) {
+    document.getElementById('wStep' + i).classList.toggle('active', i === wizardStep);
+  }
+  // Progress
+  const dots = document.querySelectorAll('.wizard-progress-dot');
+  dots.forEach((d, i) => {
+    d.className = 'wizard-progress-dot';
+    if (i + 1 < wizardStep) d.classList.add('done');
+    if (i + 1 === wizardStep) d.classList.add('current');
+  });
+  // Buttons
+  const back = document.getElementById('wizBack');
+  const next = document.getElementById('wizNext');
+  back.style.visibility = wizardStep > 1 ? 'visible' : 'hidden';
+
+  if (wizardStep === 1) {
+    next.innerHTML = 'Continue <i class="fa-solid fa-arrow-right"></i>';
+    next.style.opacity = selectedConnector ? '1' : '.4';
+    next.style.pointerEvents = selectedConnector ? 'auto' : 'none';
+  } else if (wizardStep === 2) {
+    next.innerHTML = 'Continue <i class="fa-solid fa-arrow-right"></i>';
+    next.style.opacity = '1';
+    next.style.pointerEvents = 'auto';
+  } else if (wizardStep === 3) {
+    next.innerHTML = 'Finish Setup <i class="fa-solid fa-check"></i>';
+    next.style.opacity = '1';
+    next.style.pointerEvents = 'auto';
+  } else if (wizardStep === 4) {
+    next.innerHTML = '<i class="fa-solid fa-play"></i> Run First Sync';
+    next.style.opacity = '1';
+    next.style.pointerEvents = 'auto';
+  }
+  // Title
+  const titles = ['Add Integration', 'Connect', 'Select Objects', 'All Set!'];
+  document.getElementById('wizardTitle').textContent = titles[wizardStep - 1];
+}
+
+function selectConnector(card, name) {
+  document.querySelectorAll('.connector-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  selectedConnector = name;
+  const names = { hubspot: 'HubSpot', salesforce: 'Salesforce', dynamics: 'Dynamics 365', postgres: 'PostgreSQL', mysql: 'MySQL', rest: 'REST API', csv: 'CSV / Excel', stripe: 'Stripe', mailchimp: 'Mailchimp' };
+  document.getElementById('wizConnectorName').textContent = names[name] || name;
+  updateWizard();
+}
+
+function wizardNext() {
+  if (wizardStep === 4) { closeWizard(); return; }
+  wizardStep++;
+  updateWizard();
+  if (wizardStep === 4) launchConfetti();
+}
+
+function wizardBack() {
+  if (wizardStep > 1) { wizardStep--; updateWizard(); }
+}
+
+function testConnection() {
+  const res = document.getElementById('testResult');
+  res.className = 'test-result';
+  res.style.display = 'flex';
+  res.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Testing connection...</span>';
+  res.style.background = 'var(--border-light)';
+  res.style.color = 'var(--muted)';
+  setTimeout(() => {
+    res.className = 'test-result success';
+    res.innerHTML = '<i class="fa-solid fa-circle-check"></i> <span>Connected successfully! Found 5 available objects.</span>';
+    res.style.background = '';
+    res.style.color = '';
+  }, 1500);
+}
+
+function toggleObjectCard(card) {
+  card.classList.toggle('selected');
+}
+
+// ── Confetti ──
+function launchConfetti() {
+  const container = document.getElementById('confettiContainer');
+  const colors = ['#6366f1','#8b5cf6','#10b981','#f59e0b','#f43f5e','#ec4899','#3b82f6'];
+  for (let i = 0; i < 60; i++) {
+    const piece = document.createElement('div');
+    piece.className = 'confetti-piece';
+    piece.style.left = Math.random() * 100 + '%';
+    piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+    piece.style.animationDelay = Math.random() * 1 + 's';
+    piece.style.animationDuration = (2 + Math.random() * 2) + 's';
+    piece.style.width = (6 + Math.random() * 8) + 'px';
+    piece.style.height = (6 + Math.random() * 8) + 'px';
+    piece.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+    container.appendChild(piece);
+  }
+  setTimeout(() => { container.innerHTML = ''; }, 4000);
+}
+
+// Close wizard on overlay click
+document.getElementById('wizardModal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeWizard();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,76 @@
+[
+  {
+    "fields": {
+      "Name": "Rasa.io",
+      "Description": "Rasa.io email newsletter integration for managing subscribers, newsletters, and engagement data",
+      "Status": "Active",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Communication"
+    },
+    "primaryKey": {
+      "ID": "CD554E55-82FB-4472-B0F4-8C16F56D9DA9"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:13:33.270Z",
+      "checksum": "383aa541b43eba0b93c9da2e74452d2a5dc089d32bfe8c6747dca1a155ee50f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "YourMembership",
+      "Description": "YourMembership AMS integration for managing members, events, dues, and association data",
+      "Status": "Active",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Business Apps"
+    },
+    "primaryKey": {
+      "ID": "437E9C50-2E6B-4B6A-8B03-2B3F0FD730F2"
+    },
+    "sync": {
+      "lastModified": "2026-03-17T18:13:33.282Z",
+      "checksum": "820b7caa244ebcafcf205075bd938405b72c9f04cfe96176af61a194b5670c52"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Salesforce",
+      "Description": "Salesforce integration actions",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "90687B09-3181-4C24-B94F-84EDB108F8A7"
+    },
+    "sync": {
+      "lastModified": "2026-03-21T18:09:30.028Z",
+      "checksum": "c0e1926fa0569f7b38c65205dfb8d914eaddafc1e899a69db18d272be498ae6e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sage Intacct",
+      "Description": "Sage Intacct accounting and ERP integration actions",
+      "Status": "Active",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Business Apps"
+    },
+    "primaryKey": {
+      "ID": "64C35E2F-C709-4B45-8168-6F9A70D2D2B6"
+    },
+    "sync": {
+      "lastModified": "2026-03-21T18:09:30.092Z",
+      "checksum": "ab617bb457a3266a7f2749f94cbfe96601b47c31d057fc09b5c0da91934d7ecb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "QuickBooks",
+      "Description": "QuickBooks Online accounting integration actions",
+      "Status": "Active",
+      "ParentID": "@lookup:MJ: Action Categories.Name=Business Apps"
+    },
+    "primaryKey": {
+      "ID": "B78A928D-DBF4-4C2D-837E-7C1501346F19"
+    },
+    "sync": {
+      "lastModified": "2026-03-21T18:09:30.112Z",
+      "checksum": "065cf79584bff1f3947c09cc1321cd7ba6db1ec66e82c32f11c162dbb8e4618a"
+    }
+  }
+]

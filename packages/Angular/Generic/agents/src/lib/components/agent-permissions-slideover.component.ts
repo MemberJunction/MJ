@@ -73,7 +73,7 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
             top: 0;
             right: 0;
             height: 100vh;
-            background: var(--card-background, #ffffff);
+            background: var(--mj-bg-surface-card);
             box-shadow: -8px 0 32px rgba(0, 0, 0, 0.12);
             z-index: 1001;
             display: flex;
@@ -102,12 +102,12 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
         .aps-resize-handle:hover .aps-resize-grip,
         .aps-resize-handle:active .aps-resize-grip {
             opacity: 1;
-            background: #6366f1;
+            background: var(--mj-brand-primary);
         }
         .aps-resize-grip {
             width: 3px;
             height: 40px;
-            background: var(--border-color, #d1d5db);
+            background: var(--mj-border-default);
             border-radius: 3px;
             opacity: 0;
             transition: opacity 0.2s ease, background 0.2s ease;
@@ -121,7 +121,7 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
             align-items: center;
             justify-content: space-between;
             padding: 20px 24px 16px;
-            border-bottom: 1px solid var(--border-color, #e5e7eb);
+            border-bottom: 1px solid var(--mj-border-default);
             flex-shrink: 0;
         }
 
@@ -133,20 +133,20 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 
         .aps-title-icon {
             font-size: 20px;
-            color: #6366f1;
+            color: var(--mj-brand-primary);
         }
 
         .aps-title {
             margin: 0;
             font-size: 18px;
             font-weight: 700;
-            color: var(--text-primary, #1f2937);
+            color: var(--mj-text-primary);
         }
 
         .aps-subtitle {
             margin: 2px 0 0 0;
             font-size: 13px;
-            color: #6b7280;
+            color: var(--mj-text-muted);
         }
 
         .aps-close-btn {
@@ -158,15 +158,15 @@ import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
             background: none;
             border: none;
             border-radius: 8px;
-            color: var(--text-secondary, #6b7280);
+            color: var(--mj-text-secondary);
             cursor: pointer;
             transition: all 0.15s ease;
             font-size: 16px;
             flex-shrink: 0;
         }
         .aps-close-btn:hover {
-            background: var(--hover-background, #f3f4f6);
-            color: var(--text-primary, #1f2937);
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-primary);
         }
 
         .aps-body {

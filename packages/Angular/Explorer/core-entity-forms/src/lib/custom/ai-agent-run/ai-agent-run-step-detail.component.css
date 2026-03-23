@@ -2,24 +2,24 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: white;
-  border-left: 1px solid #e0e6ed;
+  background: var(--mj-bg-surface);
+  border-left: 1px solid var(--mj-border-default);
 }
 
 .json-pane-header {
   padding: 16px;
-  border-bottom: 1px solid #e0e6ed;
+  border-bottom: 1px solid var(--mj-border-default);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #f8f9fa;
+  background: var(--mj-bg-surface-sunken);
 }
 
 .json-pane-header h3 {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #2c3e50;
+  color: var(--mj-text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -30,14 +30,14 @@
   border: none;
   padding: 4px 8px;
   cursor: pointer;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   border-radius: 4px;
   transition: all 0.2s;
 }
 
 .btn-icon:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: #495057;
+  background: color-mix(in srgb, var(--mj-text-primary) 5%, transparent);
+  color: var(--mj-text-secondary);
 }
 
 .json-pane-content {
@@ -51,7 +51,7 @@
   padding: 16px;
   display: flex;
   gap: 24px;
-  border-bottom: 1px solid #e0e6ed;
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .meta-item {
@@ -63,13 +63,13 @@
 .meta-item label {
   font-size: 11px;
   text-transform: uppercase;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   font-weight: 600;
 }
 
 .meta-item span {
   font-size: 13px;
-  color: #2c3e50;
+  color: var(--mj-text-primary);
 }
 
 .status-badge {
@@ -88,34 +88,34 @@
 }
 
 .status-badge[data-status="Running"] {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 .status-badge[data-status="Completed"] {
-  background: #e8f5e9;
-  color: #388e3c;
+  background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-success);
 }
 
 .status-badge[data-status="Failed"] {
-  background: #ffebee;
-  color: #d32f2f;
+  background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-error);
 }
 
 .status-badge[data-status="Cancelled"] {
-  background: #fff3e0;
-  color: #f57c00;
+  background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-warning);
 }
 
 .action-link {
   padding: 12px 16px;
-  border-bottom: 1px solid #e0e6ed;
+  border-bottom: 1px solid var(--mj-border-default);
 }
 
 .btn-link {
   background: none;
   border: none;
-  color: #2196f3;
+  color: var(--mj-brand-primary);
   cursor: pointer;
   padding: 6px 12px;
   border-radius: 4px;
@@ -127,15 +127,15 @@
 }
 
 .btn-link:hover {
-  background: rgba(33, 150, 243, 0.1);
-  color: #1976d2;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  color: var(--mj-brand-primary);
 }
 
 .detail-pane-tabs {
   display: flex;
   gap: 0;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e0e6ed;
+  background: var(--mj-bg-surface-sunken);
+  border-bottom: 1px solid var(--mj-border-default);
   padding: 0 16px;
 }
 
@@ -146,7 +146,7 @@
   border-bottom: 2px solid transparent;
   cursor: pointer;
   font-size: 13px;
-  color: #6c757d;
+  color: var(--mj-text-muted);
   transition: all 0.2s;
   display: flex;
   align-items: center;
@@ -154,13 +154,13 @@
 }
 
 .detail-tab:hover {
-  color: #495057;
-  background: rgba(0, 0, 0, 0.02);
+  color: var(--mj-text-secondary);
+  background: color-mix(in srgb, var(--mj-text-primary) 2%, transparent);
 }
 
 .detail-tab.active {
-  color: #2196f3;
-  border-bottom-color: #2196f3;
+  color: var(--mj-brand-primary);
+  border-bottom-color: var(--mj-brand-primary);
   font-weight: 600;
 }
 

@@ -1,0 +1,286 @@
+<!-- Loading state -->
+@if (IsLoading) {
+  <div class="loading-container">
+    <mj-loading text="Loading schedules..."></mj-loading>
+  </div>
+} @else {
+  <div class="schedules-root">
+
+    <!-- ================================================================= -->
+    <!-- HEADER -->
+    <!-- ================================================================= -->
+    <div class="section-header">
+      <div class="header-left">
+        <h2 class="section-title">
+          <i class="fa-solid fa-calendar-check"></i>
+          Sync Schedules
+        </h2>
+        <span class="header-meta">{{ Schedules.length }} integration{{ Schedules.length === 1 ? '' : 's' }}</span>
+        <span class="header-meta">{{ ScheduledCount }} scheduled</span>
+        @if (LockedCount > 0) {
+          <span class="header-meta running-badge">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            {{ LockedCount }} running
+          </span>
+        }
+      </div>
+      <button class="btn btn-outline" (click)="LoadData()">
+        <i class="fa-solid fa-arrows-rotate"></i>
+        Refresh
+      </button>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- TIMELINE (24-hour visual) -->
+    <!-- ================================================================= -->
+    @if (TimelineMarkers.length > 0) {
+      <div class="timeline-section">
+        <div class="timeline-title">
+          <i class="fa-regular fa-clock"></i>
+          Next 24 Hours
+        </div>
+        <div class="timeline-container">
+          <!-- Hour grid labels -->
+          <div class="timeline-grid-labels">
+            <div class="timeline-label-spacer"></div>
+            <div class="timeline-grid-track">
+              @for (hour of TimelineHours; track TrackHour($index, hour)) {
+                @if (hour % 4 === 0) {
+                  <span class="timeline-hour-label"
+                        [style.left.%]="ComputeTimelinePosition(hour, 0)">
+                    {{ hour }}:00
+                  </span>
+                }
+              }
+            </div>
+          </div>
+
+          <!-- Integration rows -->
+          @for (row of TimelineMarkers; track TrackTimelineByID($index, row)) {
+            <div class="timeline-row">
+              <div class="timeline-row-label" [title]="row.IntegrationName">
+                {{ row.IntegrationName }}
+              </div>
+              <div class="timeline-track-container">
+                <!-- Hour grid lines -->
+                @for (hour of TimelineHours; track TrackHour($index, hour)) {
+                  @if (hour % 4 === 0) {
+                    <div class="timeline-grid-line"
+                         [style.left.%]="ComputeTimelinePosition(hour, 0)">
+                    </div>
+                  }
+                }
+
+                <!-- Track bar -->
+                <div class="timeline-track"></div>
+
+                <!-- Markers -->
+                @for (marker of row.Markers; track TrackMarker($index, marker)) {
+                  <div class="timeline-marker"
+                       [class.timeline-marker-next]="marker.IsNext"
+                       [style.left.%]="ComputeTimelinePosition(marker.Hour, marker.Minute)"
+                       [title]="marker.Hour + ':' + ('' + marker.Minute).padStart(2, '0')">
+                  </div>
+                }
+
+                <!-- Locked indicator -->
+                @if (row.IsLocked) {
+                  <div class="timeline-locked-indicator">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                  </div>
+                }
+
+                <!-- Current time line -->
+                <div class="timeline-now-line"></div>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- ================================================================= -->
+    <!-- SCHEDULE CARDS -->
+    <!-- ================================================================= -->
+    <div class="cards-section">
+      @for (schedule of Schedules; track TrackByID($index, schedule)) {
+        <div class="schedule-card" [class.schedule-card-disabled]="!schedule.IsActive">
+
+          <!-- LEFT: Icon + Info -->
+          <div class="card-info">
+            <div class="card-icon">
+              <i [class]="GetIntegrationIcon(schedule.Integration || schedule.Name)"></i>
+            </div>
+            <div class="card-details">
+              <div class="card-name">{{ schedule.Integration || schedule.Name }}</div>
+              <div class="card-company">{{ schedule.Company }}</div>
+              <div class="card-badges">
+                @if (schedule.IsActive) {
+                  <span class="badge badge-success">Active</span>
+                } @else {
+                  <span class="badge badge-gray">Inactive</span>
+                }
+                @if (schedule.IsLocked) {
+                  <span class="badge badge-running">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    Running
+                  </span>
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- CENTER: Schedule Configuration -->
+          <div class="card-config">
+            <!-- Schedule toggle -->
+            <div class="config-row">
+              <label class="toggle-label">
+                Auto-sync
+                <button class="toggle-switch"
+                        [class.toggle-on]="GetEffectiveScheduleEnabled(schedule)"
+                        (click)="ToggleScheduleEnabled(schedule.ID)"
+                        [attr.aria-checked]="GetEffectiveScheduleEnabled(schedule)"
+                        role="switch">
+                  <span class="toggle-knob"></span>
+                </button>
+              </label>
+            </div>
+
+            @if (GetEffectiveScheduleEnabled(schedule)) {
+              <!-- Schedule type pills -->
+              <div class="config-row">
+                <div class="type-pills">
+                  <button class="type-pill"
+                          [class.type-pill-active]="GetEffectiveScheduleType(schedule) === 'Manual'"
+                          (click)="SetScheduleType(schedule.ID, 'Manual')">
+                    Manual
+                  </button>
+                  <button class="type-pill"
+                          [class.type-pill-active]="GetEffectiveScheduleType(schedule) === 'Interval'"
+                          (click)="SetScheduleType(schedule.ID, 'Interval')">
+                    Interval
+                  </button>
+                  <button class="type-pill"
+                          [class.type-pill-active]="GetEffectiveScheduleType(schedule) === 'Cron'"
+                          (click)="SetScheduleType(schedule.ID, 'Cron')">
+                    Cron
+                  </button>
+                </div>
+              </div>
+
+              <!-- Interval config -->
+              @if (GetEffectiveScheduleType(schedule) === 'Interval') {
+                <div class="config-row">
+                  <div class="interval-presets">
+                    @for (preset of IntervalPresets; track TrackPresetByMinutes($index, preset)) {
+                      <button class="preset-btn"
+                              [class.preset-btn-active]="IsIntervalSelected(schedule, preset.Minutes)"
+                              (click)="SetInterval(schedule.ID, preset.Minutes)">
+                        {{ preset.Label }}
+                      </button>
+                    }
+                  </div>
+                  <div class="custom-interval">
+                    <input type="number"
+                           class="interval-input"
+                           placeholder="Custom min"
+                           min="1"
+                           [value]="GetEffectiveInterval(schedule)"
+                           (change)="SetCustomInterval(schedule.ID, $event)" />
+                    <span class="interval-unit">min</span>
+                  </div>
+                </div>
+              }
+
+              <!-- Cron config -->
+              @if (GetEffectiveScheduleType(schedule) === 'Cron') {
+                <div class="config-row">
+                  <div class="cron-presets">
+                    @for (preset of CronPresets; track TrackCronPresetByExpr($index, preset)) {
+                      <button class="preset-btn"
+                              [class.preset-btn-active]="GetEffectiveCron(schedule) === preset.Expression"
+                              (click)="SetCronExpression(schedule.ID, preset.Expression)">
+                        {{ preset.Label }}
+                      </button>
+                    }
+                  </div>
+                  <div class="cron-input-row">
+                    <input type="text"
+                           class="cron-input"
+                           placeholder="* * * * *"
+                           [value]="GetEffectiveCron(schedule) ?? ''"
+                           (change)="OnCronInputChange(schedule.ID, $event)" />
+                    @if (GetEffectiveCron(schedule)) {
+                      <span class="cron-description">
+                        {{ GetCronDescription(GetEffectiveCron(schedule)) }}
+                      </span>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+
+          <!-- RIGHT: Status + Actions -->
+          <div class="card-status">
+            <div class="status-items">
+              <div class="status-item">
+                <span class="status-label">Next run</span>
+                <span class="status-value">{{ GetNextRunRelative(schedule) }}</span>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Last run</span>
+                <span class="status-value">{{ GetLastRunRelative(schedule) }}</span>
+              </div>
+              <div class="status-item">
+                <span class="status-label">Status</span>
+                @if (schedule.IsLocked) {
+                  <span class="status-value status-running">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    Running
+                  </span>
+                } @else {
+                  <span class="status-value status-idle">Idle</span>
+                }
+              </div>
+            </div>
+
+            <div class="card-actions">
+              @if (HasChanges(schedule.ID)) {
+                <button class="btn btn-primary btn-save"
+                        [disabled]="IsSaving(schedule.ID)"
+                        (click)="SaveSchedule(schedule.ID)">
+                  @if (IsSaving(schedule.ID)) {
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    Saving...
+                  } @else {
+                    <i class="fa-solid fa-check"></i>
+                    Save
+                  }
+                </button>
+              }
+              <button class="btn btn-outline btn-run"
+                      [disabled]="IsRunning(schedule.ID) || schedule.IsLocked"
+                      (click)="RunNow(schedule.ID)">
+                @if (IsRunning(schedule.ID)) {
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  Running...
+                } @else {
+                  <i class="fa-solid fa-play"></i>
+                  Run Now
+                }
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (Schedules.length === 0) {
+        <div class="empty-state">
+          <i class="fa-solid fa-calendar-xmark"></i>
+          <p>No integrations found</p>
+        </div>
+      }
+    </div>
+  </div>
+}

@@ -5,8 +5,8 @@
     align-items: center;
     gap: 4px;
     padding: 12px 24px;
-    background: #fff;
-    border-bottom: 1px solid #e0e0e0;
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
     flex-wrap: wrap;
 }
 
@@ -40,7 +40,7 @@
     padding: 6px 10px;
     border: none;
     background: transparent;
-    color: #5c6bc0;
+    color: var(--mj-brand-primary);
     font-size: 13px;
     cursor: pointer;
     border-radius: 4px;
@@ -49,11 +49,11 @@
 }
 
 .breadcrumb-item:hover {
-    background: #f0f0f0;
+    background: var(--mj-bg-surface-sunken);
 }
 
 .breadcrumb-item.current {
-    color: #333;
+    color: var(--mj-text-primary);
     font-weight: 500;
     cursor: default;
 }
@@ -72,18 +72,18 @@
 
 /* Drop target highlighting */
 .breadcrumb-item.drop-target {
-    background: #e3f2fd;
-    border-color: #5c6bc0;
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    border-color: var(--mj-brand-primary);
 }
 
 .breadcrumb-separator {
-    color: #999;
+    color: var(--mj-text-disabled);
     font-size: 10px;
 }
 
 /* Dashboard name styling */
 .breadcrumb-item.dashboard-name {
-    color: #333;
+    color: var(--mj-text-primary);
     font-weight: 500;
     cursor: default;
 }
@@ -93,5 +93,5 @@
 }
 
 .breadcrumb-item.dashboard-name i {
-    color: #5c6bc0;
+    color: var(--mj-brand-primary);
 }

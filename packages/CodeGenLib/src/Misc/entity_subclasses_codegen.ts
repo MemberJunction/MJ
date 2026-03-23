@@ -1,4 +1,4 @@
-import { EntityFieldInfo, EntityFieldValueListType, EntityInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
+import { BaseEntity, EntityFieldInfo, EntityFieldValueListType, EntityInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
@@ -7,6 +7,37 @@ import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata
 import { mj_core_schema } from '../Config/config';
 import { SQLLogging } from './sql_logging';
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
+
+/**
+ * Dynamically collects all own property names from BaseEntity's prototype chain
+ * (excluding Object.prototype). Any entity field whose CodeName matches one of
+ * these is suffixed with `_` to avoid shadowing base-class members at the
+ * getter/setter level. Computed once at module load time.
+ */
+function getBaseEntityMemberNames(): Set<string> {
+    const names = new Set<string>();
+    let proto = BaseEntity.prototype;
+    while (proto && proto !== Object.prototype) {
+        for (const name of Object.getOwnPropertyNames(proto)) {
+            if (name !== 'constructor') {
+                names.add(name);
+            }
+        }
+        proto = Object.getPrototypeOf(proto);
+    }
+    return names;
+}
+
+const BASE_ENTITY_RESERVED_NAMES = getBaseEntityMemberNames();
+
+/**
+ * Returns a safe property name for a generated field getter/setter.
+ * If the field's CodeName collides with a BaseEntity member, appends `_` to avoid shadowing.
+ */
+function SafeCodeName(field: EntityFieldInfo): string {
+    const raw = field.CodeName;
+    return BASE_ENTITY_RESERVED_NAMES.has(raw) ? `${raw}_` : raw;
+}
 
 /**
  * Base class for generating entity sub-classes, you can sub-class this class to modify/extend your own entity sub-class generator logic
@@ -117,17 +148,22 @@ export const loadModule = () => {
             ? `\n    * * IS-A Source: Inherited from ${this.getISAFieldSourceEntity(entity, e)}`
             : '';
 
+        const safeName = SafeCodeName(e);
+        const conflictNote = safeName !== e.CodeName
+            ? `\n    * * NOTE: Property renamed to \`${safeName}\` to avoid conflict with BaseEntity.${e.CodeName}`
+            : '';
+
         let sRet: string = `    /**
     * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
-    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(e.Description) : ''}${isaSourceComment}
+    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(e.Description) : ''}${isaSourceComment}${conflictNote}
     */
-    get ${e.CodeName}(): ${typeString} {
+    get ${safeName}(): ${typeString} {
         return this.Get('${e.Name}');
     }`;
         if (!e.ReadOnly || (e.IsPrimaryKey && !e.AutoIncrement) || isISAParentField) {
           // Generate setter for non-readonly fields, non-auto-increment PKs, or IS-A parent fields
           sRet += `
-    set ${e.CodeName}(value: ${typeString}) {
+    set ${safeName}(value: ${typeString}) {
         this.Set('${e.Name}', value);
     }`;
         }
@@ -300,20 +336,20 @@ ${fields}
           if (v.generatedCodeId) {
             // need to update the existing record in the __mj.GeneratedCode table
             sSQL += `UPDATE [${mj_core_schema()}].[GeneratedCode] SET
-                        Source='${source}', 
+                        Source='${source}',
                         Code='${code}',
                         Description='${description}',
                         Name='${name}',
                         GeneratedAt=GETUTCDATE(),
                         GeneratedByModelID='${v.aiModelID}'
-                     WHERE 
+                     WHERE
                         ID='${v.generatedCodeId}';`
           }
           else {
             // need to create a row inside the __mj.GeneratedCode table
             sSQL += `INSERT INTO [${mj_core_schema()}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
                       VALUES (${validatorCodeCategoryID}, '${v.aiModelID}', GETUTCDATE(), 'TypeScript','Approved', '${source}', '${code}', '${description}', '${name}', '${f ? entityFieldsEntityID : entitiesEntityID}', '${f ? f.ID : entity.ID}');
-  
+
             `
           }
         }
@@ -336,7 +372,7 @@ ${fields}
   public GenerateValidateFunction(entity: EntityInfo): null | { code: string, validators: ValidatorResult[] } {
     // go through the ManageMetadataBase.generatedFieldValidators to see if we have anything to generate
     const unsortedValidators = ManageMetadataBase.generatedValidators.filter((f) => f.entityName.trim().toLowerCase() === entity.Name.trim().toLowerCase());
-    const validators = unsortedValidators.sort((a, b) => {
+    const sortedValidators = unsortedValidators.sort((a, b) => {
       // sort by field name, then by function name, then by generatedCodeId as last-resort tiebreaker
       if (a.fieldName && b.fieldName) {
         const cmp = a.fieldName.localeCompare(b.fieldName) || a.functionName.localeCompare(b.functionName);
@@ -353,6 +389,18 @@ ${fields}
       return a.generatedCodeId.localeCompare(b.generatedCodeId);
     });
 
+    // Deduplicate by functionName — duplicate GeneratedCode records can exist if the view JOIN
+    // previously failed to match (e.g., whitespace differences in CHECK constraint text).
+    // Keep the first occurrence of each functionName (which is the earliest by sort order).
+    const seenFunctionNames = new Set<string>();
+    const validators = sortedValidators.filter((v) => {
+      if (seenFunctionNames.has(v.functionName)) {
+        return false;
+      }
+      seenFunctionNames.add(v.functionName);
+      return true;
+    });
+
     if (validators.length === 0) {
       return null;
     }
@@ -360,8 +408,8 @@ ${fields}
       const validationFunctions = validators.map((f) => {
         // output the function text and the function description in a JSDoc block
 
-        // first format the function text to ensure that escaped \n and \t are removed and replaced with actual newlines and tabs
-        const cleansedText = f.functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+        // first format the function text to ensure that escaped \n, \t, and \" are replaced with actual characters
+        const cleansedText = f.functionText.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"');
         // next up, format the function text to have proper indentation with 4 spaces preceding the start of each line
         const formattedText = cleansedText.split('\n').map((l) => `    ${l}`).join('\n');
 
@@ -430,7 +478,7 @@ ${validationFunctions}`
             typeString += '.nullable()';
           }
         }
-        let sRet: string = `    ${e.CodeName}: z.${typeString}.describe(\`\n${this.GenerateZodDescription(e)}\`),`;
+        let sRet: string = `    ${SafeCodeName(e)}: z.${typeString}.describe(\`\n${this.GenerateZodDescription(e)}\`),`;
         return sRet;
       }).join('\n');
 

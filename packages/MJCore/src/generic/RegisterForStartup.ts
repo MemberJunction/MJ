@@ -331,7 +331,7 @@ export class StartupManager {
         const cacheStart = Date.now();
         const storageProvider = Metadata.Provider.LocalStorageProvider;
         await LocalCacheManager.Instance.Initialize(storageProvider);
-        console.log(`LocalCacheManager initialized in ${Date.now() - cacheStart}ms`);
+        console.debug(`LocalCacheManager initialized in ${Date.now() - cacheStart}ms`);
 
 
 

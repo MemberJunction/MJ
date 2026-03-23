@@ -5,20 +5,27 @@ import { RunSyncAction } from '../RunSyncAction.js';
 
 // --- Mocks ---
 
-let mockRunSyncFn: ReturnType<typeof vi.fn>;
+let mockRunSyncFn: ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
 
 vi.mock('@memberjunction/integration-engine', () => {
-    function MockOrchestrator(this: { RunSync: (...args: unknown[]) => unknown }) {
-        this.RunSync = function(...args: unknown[]) {
-            return mockRunSyncFn(...args);
-        };
-    }
-    return { IntegrationOrchestrator: MockOrchestrator };
+    const mockInstance = {
+        RunSync: (...args: unknown[]) => mockRunSyncFn(...args),
+        Config: vi.fn().mockResolvedValue(undefined),
+    };
+    return {
+        IntegrationEngine: {
+            Instance: mockInstance,
+        },
+    };
 });
 
-vi.mock('@memberjunction/core', () => ({
-    LogError: vi.fn(),
-}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        LogError: vi.fn(),
+    };
+});
 
 // --- Helpers ---
 
@@ -103,7 +110,10 @@ describe('RunSyncAction', () => {
             expect(mockRunSyncFn).toHaveBeenCalledWith(
                 'ci-001',
                 expect.objectContaining({ ID: 'user-1' }),
-                'Manual'
+                'Manual',
+                undefined,  // onProgress
+                undefined,  // onNotification
+                {}          // options (empty IntegrationSyncOptions)
             );
         });
 
@@ -217,7 +227,10 @@ describe('RunSyncAction', () => {
             expect(mockRunSyncFn).toHaveBeenCalledWith(
                 expect.any(String),
                 expect.anything(),
-                expected
+                expected,
+                undefined,  // onProgress
+                undefined,  // onNotification
+                expect.any(Object)  // options
             );
         });
     });
@@ -260,7 +273,14 @@ describe('RunSyncAction', () => {
             params.Params = [p];
 
             await action['InternalRunAction'](params);
-            expect(mockRunSyncFn).toHaveBeenCalledWith('ci-lowercase', expect.anything(), 'Manual');
+            expect(mockRunSyncFn).toHaveBeenCalledWith(
+                'ci-lowercase',
+                expect.anything(),
+                'Manual',
+                undefined,
+                undefined,
+                {}
+            );
         });
     });
 });

@@ -147,18 +147,18 @@
 }
 
 .status-badge.status-active {
-  background: var(--mj-color-success-100);
-  color: var(--mj-color-success-800);
+  background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface-card));
+  color: var(--mj-status-success);
 }
 
 .status-badge.status-deprecated {
-  background: var(--mj-color-warning-50);
-  color: var(--mj-color-warning-900);
+  background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface-card));
+  color: var(--mj-status-warning);
 }
 
 .status-badge.status-disabled {
-  background: var(--mj-color-error-100);
-  color: var(--mj-color-error-700);
+  background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface-card));
+  color: var(--mj-status-error);
 }
 
 .extra-padding {
@@ -291,7 +291,7 @@
 
 .fields-list::-webkit-scrollbar-thumb,
 .related-entities-list::-webkit-scrollbar-thumb {
-  background: var(--mj-color-neutral-400);
+  background: var(--mj-text-disabled);
   border-radius: 3px;
 }
 
@@ -325,7 +325,7 @@
 /* Primary Key Field - Success Accent */
 .field-item.primary-key-field {
   border-color: var(--mj-status-success);
-  background: var(--mj-color-success-100);
+  background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface-card));
   border-left: 4px solid var(--mj-status-success);
 }
 
@@ -336,7 +336,7 @@
 /* Foreign Key Field - Primary Accent */
 .field-item.foreign-key-field {
   border-color: var(--mj-brand-primary);
-  background: var(--mj-color-accent-300);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface-card));
   border-left: 4px solid var(--mj-brand-primary);
 }
 
@@ -447,13 +447,13 @@
 
 .field-info-btn:hover,
 .field-values-btn:hover {
-  background: var(--mj-color-accent-300);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface-card));
   color: var(--mj-brand-primary);
 }
 
 .field-info-btn.expanded,
 .field-values-btn.expanded {
-  background: var(--mj-color-accent-300);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface-card));
   color: var(--mj-brand-primary);
 }
 
@@ -500,15 +500,15 @@
 .field-values {
   margin-top: 8px;
   padding: 8px;
-  background: var(--mj-color-warning-50);
-  border-left: 3px solid var(--mj-color-warning-500);
+  background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface-card));
+  border-left: 3px solid var(--mj-status-warning);
   border-radius: 0 8px 8px 0;
   animation: fadeIn 0.3s ease-in-out;
 }
 
 .field-values .values-header {
   font-size: 11px;
-  color: var(--mj-color-warning-900);
+  color: var(--mj-text-primary);
   font-weight: 600;
   margin-bottom: 6px;
 }
@@ -601,9 +601,9 @@
 }
 
 .field-comprehensive-details .detail-value.virtual-yes {
-  color: var(--mj-color-warning-900);
-  background: var(--mj-color-warning-50);
-  border-color: var(--mj-color-warning-500);
+  color: var(--mj-text-primary);
+  background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface-card));
+  border-color: var(--mj-status-warning);
 }
 
 .field-comprehensive-details .detail-value.virtual-no {
@@ -611,14 +611,14 @@
 }
 
 .field-comprehensive-details .detail-value.default-value {
-  color: var(--mj-color-success-800);
-  background: var(--mj-color-success-100);
+  color: var(--mj-status-success);
+  background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface-card));
   border-color: var(--mj-status-success);
 }
 
 .field-comprehensive-details .detail-value.related-entity {
-  color: var(--mj-color-brand-900);
-  background: var(--mj-color-accent-300);
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface-card));
   border-color: var(--mj-brand-primary);
   cursor: pointer;
   user-select: none;
@@ -630,7 +630,7 @@
 
 .field-comprehensive-details .detail-value.related-entity:hover {
   text-decoration: underline;
-  background: color-mix(in srgb, var(--mj-color-accent-300) 80%, var(--mj-brand-primary) 20%);
+  background: color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface-card));
   transform: translateX(2px);
 }
 
@@ -645,8 +645,8 @@
 }
 
 .field-comprehensive-details .detail-value.auto-increment {
-  color: var(--mj-color-success-800);
-  background: var(--mj-color-success-100);
+  color: var(--mj-status-success);
+  background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface-card));
   border-color: var(--mj-status-success);
 }
 
@@ -661,7 +661,7 @@
   color: var(--mj-text-primary);
   line-height: 1.4;
   font-style: italic;
-  background: var(--mj-color-accent-300);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface-card));
   padding: 10px;
   border-radius: 8px;
   border: 1px solid var(--mj-brand-primary);
@@ -672,10 +672,10 @@
 .field-comprehensive-details .field-values-comprehensive {
   margin-bottom: 12px;
   padding: 12px;
-  background: var(--mj-color-warning-50);
-  border: 1px solid var(--mj-color-warning-500);
+  background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface-card));
+  border: 1px solid var(--mj-status-warning);
   border-radius: 8px;
-  border-left: 4px solid var(--mj-color-warning-500);
+  border-left: 4px solid var(--mj-status-warning);
 }
 
 .field-comprehensive-details .field-values-comprehensive .values-header {
@@ -684,14 +684,14 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--mj-color-warning-900);
+  color: var(--mj-text-primary);
   margin-bottom: 10px;
   padding-bottom: 6px;
-  border-bottom: 1px solid color-mix(in srgb, var(--mj-color-warning-500) 30%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
 }
 
 .field-comprehensive-details .field-values-comprehensive .values-header .fa-solid {
-  color: var(--mj-color-warning-500);
+  color: var(--mj-status-warning);
 }
 
 .field-comprehensive-details .field-values-comprehensive .values-grid {
@@ -707,17 +707,17 @@
 }
 
 .field-comprehensive-details .field-values-comprehensive .values-grid::-webkit-scrollbar-track {
-  background: var(--mj-color-warning-50);
+  background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface-card));
   border-radius: 2px;
 }
 
 .field-comprehensive-details .field-values-comprehensive .values-grid::-webkit-scrollbar-thumb {
-  background: var(--mj-color-warning-500);
+  background: var(--mj-status-warning);
   border-radius: 2px;
 }
 
 .field-comprehensive-details .field-values-comprehensive .values-grid::-webkit-scrollbar-thumb:hover {
-  background: var(--mj-color-warning-900);
+  background: var(--mj-text-primary);
 }
 
 .field-comprehensive-details .field-values-comprehensive .value-item {
@@ -742,11 +742,11 @@
 
 .field-comprehensive-details .field-values-comprehensive .value-item .value-main .value-code {
   font-size: 9px;
-  color: var(--mj-color-warning-900);
-  background: var(--mj-color-warning-50);
+  color: var(--mj-text-primary);
+  background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface-card));
   padding: 1px 4px;
   border-radius: 4px;
-  border: 1px solid var(--mj-color-warning-500);
+  border: 1px solid var(--mj-status-warning);
   font-family: "Courier New", monospace;
 }
 
@@ -791,7 +791,7 @@
 }
 
 .related-entity-item:hover {
-  background: var(--mj-color-accent-300);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface-card));
   border-color: var(--mj-brand-primary);
   transform: translateX(4px);
   box-shadow: var(--mj-shadow-md);
@@ -814,7 +814,7 @@
   top: 0;
   bottom: 0;
   width: 3px;
-  background: linear-gradient(to bottom, var(--mj-brand-primary), var(--mj-color-warning-500));
+  background: linear-gradient(to bottom, var(--mj-brand-primary), var(--mj-status-warning));
   border-radius: 0 3px 3px 0;
 }
 

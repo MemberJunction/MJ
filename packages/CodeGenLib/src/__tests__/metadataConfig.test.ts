@@ -68,6 +68,7 @@ import {
    VirtualEntityConfig,
    ISARelationshipConfig,
    EntityConfig,
+   OrganicKeyConfig,
 } from '../Database/manage-metadata';
 
 // ---------------------------------------------------------------------------
@@ -92,6 +93,10 @@ class TestableManageMetadata extends ManageMetadataBase {
 
    public testDeriveEntityName(viewName: string): string {
       return this.deriveEntityNameFromView(viewName);
+   }
+
+   public testExtractOrganicKeys(config: Record<string, unknown>): { SchemaName: string; TableName: string; OrganicKeys: OrganicKeyConfig[] }[] {
+      return this.extractOrganicKeysFromConfig(config);
    }
 }
 
@@ -792,5 +797,303 @@ describe('cross-section interactions', () => {
       expect(manager.testExtractVirtualEntities(tablesOnlyConfig)).toEqual([]);
       expect(manager.testExtractISARelationships(tablesOnlyConfig)).toEqual([]);
       expect(manager.testExtractEntities(tablesOnlyConfig)).toEqual([]);
+   });
+});
+
+// ===========================================================================
+// Organic Key Extraction Tests
+// ===========================================================================
+
+/** Config with organic keys on tables in two schemas */
+const organicKeyConfig: Record<string, unknown> = {
+   'hubspot': [
+      {
+         TableName: 'Contact',
+         OrganicKeys: [
+            {
+               Name: 'Email Match',
+               Description: 'Match by email',
+               MatchFieldNames: ['Email'],
+               NormalizationStrategy: 'LowerCaseTrim',
+               RelatedEntities: [
+                  {
+                     SchemaName: 'mailchimp',
+                     TableName: 'Subscriber',
+                     RelatedFieldNames: ['EmailAddress'],
+                     DisplayName: 'Mailchimp Subscriptions',
+                  },
+                  {
+                     SchemaName: 'mailchimp',
+                     TableName: 'CampaignSend',
+                     TransitiveView: {
+                        Name: 'vwSubscriberCampaignSendBridge',
+                        SchemaName: 'mailchimp',
+                        SQL: 'SELECT s.EmailAddress, cs.ID AS CampaignSendID FROM mailchimp.Subscriber s INNER JOIN mailchimp.CampaignSend cs ON cs.SubscriberID = s.ID',
+                     },
+                     TransitiveMatchFieldNames: ['EmailAddress'],
+                     TransitiveOutputFieldName: 'CampaignSendID',
+                     RelatedEntityJoinFieldName: 'ID',
+                     DisplayName: 'Campaign Sends',
+                  },
+               ],
+            },
+         ],
+      },
+      {
+         TableName: 'Company',
+         OrganicKeys: [
+            {
+               Name: 'Domain Match',
+               MatchFieldNames: ['Domain'],
+               RelatedEntities: [
+                  {
+                     SchemaName: 'mailchimp',
+                     TableName: 'Subscriber',
+                     RelatedFieldNames: ['EmailDomain'],
+                  },
+               ],
+            },
+         ],
+      },
+   ],
+   'mailchimp': [
+      {
+         TableName: 'Subscriber',
+         OrganicKeys: [
+            {
+               Name: 'Email Match',
+               MatchFieldNames: ['EmailAddress'],
+               RelatedEntities: [
+                  {
+                     SchemaName: 'hubspot',
+                     TableName: 'Contact',
+                     RelatedFieldNames: ['Email'],
+                     DisplayName: 'Hubspot Contacts',
+                  },
+               ],
+            },
+            {
+               Name: 'Domain Match',
+               MatchFieldNames: ['EmailDomain'],
+               Sequence: 5,
+               RelatedEntities: [
+                  {
+                     SchemaName: 'hubspot',
+                     TableName: 'Company',
+                     RelatedFieldNames: ['Domain'],
+                     DisplayLocation: 'Before Field Tabs',
+                     Sequence: 10,
+                  },
+               ],
+            },
+         ],
+      },
+      {
+         TableName: 'Campaign',
+         // No OrganicKeys — should be skipped
+      },
+   ],
+   // Top-level keys that should be ignored
+   'ISARelationships': [],
+   'VirtualEntities': [],
+   'Entities': [],
+};
+
+/** Config with custom normalization */
+const customNormConfig: Record<string, unknown> = {
+   'crm': [
+      {
+         TableName: 'Contact',
+         OrganicKeys: [
+            {
+               Name: 'Phone Match',
+               MatchFieldNames: ['Phone'],
+               NormalizationStrategy: 'Custom',
+               CustomNormalizationExpression: "REPLACE(REPLACE({{FieldName}}, '-', ''), ' ', '')",
+               RelatedEntities: [
+                  {
+                     SchemaName: 'billing',
+                     TableName: 'Customer',
+                     RelatedFieldNames: ['PhoneNumber'],
+                  },
+               ],
+            },
+         ],
+      },
+   ],
+};
+
+/** Config with compound key */
+const compoundKeyConfig: Record<string, unknown> = {
+   'hr': [
+      {
+         TableName: 'Employee',
+         OrganicKeys: [
+            {
+               Name: 'Name + DOB',
+               MatchFieldNames: ['FirstName', 'LastName', 'DateOfBirth'],
+               NormalizationStrategy: 'Trim',
+               RelatedEntities: [
+                  {
+                     SchemaName: 'payroll',
+                     TableName: 'Worker',
+                     RelatedFieldNames: ['First', 'Last', 'DOB'],
+                  },
+               ],
+            },
+         ],
+      },
+   ],
+};
+
+describe('extractOrganicKeysFromConfig', () => {
+   const manager = new TestableManageMetadata();
+
+   test('extracts organic keys from multiple schemas', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      // hubspot.Contact, hubspot.Company, mailchimp.Subscriber — mailchimp.Campaign has no OrganicKeys
+      expect(results).toHaveLength(3);
+   });
+
+   test('maps schema and table names correctly', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      const hubspotContact = results.find(r => r.SchemaName === 'hubspot' && r.TableName === 'Contact');
+      expect(hubspotContact).toBeDefined();
+      expect(hubspotContact!.OrganicKeys).toHaveLength(1);
+      expect(hubspotContact!.OrganicKeys[0].Name).toBe('Email Match');
+   });
+
+   test('extracts direct match related entities', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      const hubspotContact = results.find(r => r.TableName === 'Contact' && r.SchemaName === 'hubspot')!;
+      const emailKey = hubspotContact.OrganicKeys[0];
+      const directTarget = emailKey.RelatedEntities[0];
+
+      expect(directTarget.SchemaName).toBe('mailchimp');
+      expect(directTarget.TableName).toBe('Subscriber');
+      expect(directTarget.RelatedFieldNames).toEqual(['EmailAddress']);
+      expect(directTarget.DisplayName).toBe('Mailchimp Subscriptions');
+   });
+
+   test('extracts transitive match with view definition', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      const hubspotContact = results.find(r => r.TableName === 'Contact' && r.SchemaName === 'hubspot')!;
+      const emailKey = hubspotContact.OrganicKeys[0];
+      const transitiveTarget = emailKey.RelatedEntities[1];
+
+      expect(transitiveTarget.TransitiveView).toBeDefined();
+      expect(transitiveTarget.TransitiveView!.Name).toBe('vwSubscriberCampaignSendBridge');
+      expect(transitiveTarget.TransitiveView!.SchemaName).toBe('mailchimp');
+      expect(transitiveTarget.TransitiveView!.SQL).toContain('SELECT s.EmailAddress');
+      expect(transitiveTarget.TransitiveMatchFieldNames).toEqual(['EmailAddress']);
+      expect(transitiveTarget.TransitiveOutputFieldName).toBe('CampaignSendID');
+      expect(transitiveTarget.RelatedEntityJoinFieldName).toBe('ID');
+      expect(transitiveTarget.DisplayName).toBe('Campaign Sends');
+   });
+
+   test('extracts multiple organic keys on one table', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      const subscriber = results.find(r => r.TableName === 'Subscriber')!;
+      expect(subscriber.OrganicKeys).toHaveLength(2);
+      expect(subscriber.OrganicKeys[0].Name).toBe('Email Match');
+      expect(subscriber.OrganicKeys[1].Name).toBe('Domain Match');
+   });
+
+   test('defaults NormalizationStrategy to LowerCaseTrim', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      const company = results.find(r => r.TableName === 'Company')!;
+      expect(company.OrganicKeys[0].NormalizationStrategy).toBe('LowerCaseTrim');
+   });
+
+   test('preserves explicit NormalizationStrategy', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      const hubspotContact = results.find(r => r.TableName === 'Contact' && r.SchemaName === 'hubspot')!;
+      expect(hubspotContact.OrganicKeys[0].NormalizationStrategy).toBe('LowerCaseTrim');
+   });
+
+   test('auto-assigns sequence from array index when not specified', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      const hubspotContact = results.find(r => r.TableName === 'Contact' && r.SchemaName === 'hubspot')!;
+      // First key, no explicit Sequence → index 0
+      expect(hubspotContact.OrganicKeys[0].Sequence).toBe(0);
+      // Related entities also get auto-assigned sequences
+      expect(hubspotContact.OrganicKeys[0].RelatedEntities[0].Sequence).toBe(0);
+      expect(hubspotContact.OrganicKeys[0].RelatedEntities[1].Sequence).toBe(1);
+   });
+
+   test('preserves explicit sequence values', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      const subscriber = results.find(r => r.TableName === 'Subscriber')!;
+      // Second key has explicit Sequence: 5
+      expect(subscriber.OrganicKeys[1].Sequence).toBe(5);
+      // Its related entity has explicit Sequence: 10
+      expect(subscriber.OrganicKeys[1].RelatedEntities[0].Sequence).toBe(10);
+   });
+
+   test('preserves DisplayLocation', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      const subscriber = results.find(r => r.TableName === 'Subscriber')!;
+      // Default
+      expect(subscriber.OrganicKeys[0].RelatedEntities[0].DisplayLocation).toBe('After Field Tabs');
+      // Explicit
+      expect(subscriber.OrganicKeys[1].RelatedEntities[0].DisplayLocation).toBe('Before Field Tabs');
+   });
+
+   test('skips tables without OrganicKeys array', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      const campaign = results.find(r => r.TableName === 'Campaign');
+      expect(campaign).toBeUndefined();
+   });
+
+   test('skips top-level non-schema keys', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      // ISARelationships, VirtualEntities, Entities should not produce results
+      const nonSchema = results.filter(r =>
+         r.SchemaName === 'ISARelationships' ||
+         r.SchemaName === 'VirtualEntities' ||
+         r.SchemaName === 'Entities'
+      );
+      expect(nonSchema).toHaveLength(0);
+   });
+
+   test('handles Custom normalization with expression', () => {
+      const results = manager.testExtractOrganicKeys(customNormConfig);
+      expect(results).toHaveLength(1);
+      const key = results[0].OrganicKeys[0];
+      expect(key.NormalizationStrategy).toBe('Custom');
+      expect(key.CustomNormalizationExpression).toContain('REPLACE');
+      expect(key.CustomNormalizationExpression).toContain('{{FieldName}}');
+   });
+
+   test('handles compound key with multiple match fields', () => {
+      const results = manager.testExtractOrganicKeys(compoundKeyConfig);
+      expect(results).toHaveLength(1);
+      const key = results[0].OrganicKeys[0];
+      expect(key.MatchFieldNames).toEqual(['FirstName', 'LastName', 'DateOfBirth']);
+      expect(key.NormalizationStrategy).toBe('Trim');
+      const relatedFields = key.RelatedEntities[0].RelatedFieldNames;
+      expect(relatedFields).toEqual(['First', 'Last', 'DOB']);
+   });
+
+   test('returns empty array for config with no organic keys', () => {
+      const results = manager.testExtractOrganicKeys(tablesOnlyConfig);
+      expect(results).toEqual([]);
+   });
+
+   test('returns empty array for empty config', () => {
+      const results = manager.testExtractOrganicKeys({});
+      expect(results).toEqual([]);
+   });
+
+   test('extracts description when provided', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      const hubspotContact = results.find(r => r.TableName === 'Contact' && r.SchemaName === 'hubspot')!;
+      expect(hubspotContact.OrganicKeys[0].Description).toBe('Match by email');
+   });
+
+   test('description is undefined when not provided', () => {
+      const results = manager.testExtractOrganicKeys(organicKeyConfig);
+      const company = results.find(r => r.TableName === 'Company')!;
+      expect(company.OrganicKeys[0].Description).toBeUndefined();
    });
 });

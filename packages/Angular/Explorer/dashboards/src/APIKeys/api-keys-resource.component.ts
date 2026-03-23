@@ -91,7 +91,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     // Default UI config for categories without explicit configuration
     private readonly defaultUIConfig = {
         icon: 'fa-solid fa-ellipsis',
-        color: '#6b7280'
+        color: 'var(--mj-text-muted)'
     };
 
     // Dynamic category UI configs built from root scopes

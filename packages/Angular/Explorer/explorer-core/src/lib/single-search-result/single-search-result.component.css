@@ -13,8 +13,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 24px;
-  background: white;
-  border-bottom: 1px solid #e0e0e0;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
   flex-shrink: 0;
   gap: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -30,19 +30,19 @@
 
 .entity-icon {
   font-size: 20px;
-  color: #1976d2;
+  color: var(--mj-brand-primary);
 }
 
 .entity-title {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--mj-text-primary);
 }
 
 .record-count {
   font-size: 13px;
-  color: #666;
+  color: var(--mj-text-secondary);
   font-weight: 500;
 }
 
@@ -62,20 +62,20 @@
   position: relative;
   width: 36px;
   height: 36px;
-  border: 1px solid #e0e0e0;
-  background: white;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
   border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666;
+  color: var(--mj-text-secondary);
   transition: all 0.15s ease;
 }
 .header-action-btn:hover {
-  border-color: #1976d2;
-  color: #1976d2;
-  background: #f5f9ff;
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
 }
 .header-action-btn i {
   font-size: 14px;
@@ -84,7 +84,7 @@
 /* View Mode Toggle */
 .view-mode-toggle {
   display: flex;
-  background: #f0f0f0;
+  background: var(--mj-bg-surface-sunken);
   border-radius: 8px;
   padding: 3px;
 }
@@ -99,15 +99,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #666;
+  color: var(--mj-text-secondary);
   transition: all 0.15s ease;
 }
 .toggle-btn:hover {
-  color: #333;
+  color: var(--mj-text-primary);
 }
 .toggle-btn.active {
-  background: white;
-  color: #1976d2;
+  background: var(--mj-bg-surface);
+  color: var(--mj-brand-primary);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
@@ -132,12 +132,12 @@
   align-items: center;
   justify-content: center;
   padding: 64px 0;
-  color: #666;
+  color: var(--mj-text-secondary);
 }
 
 .empty-icon {
   font-size: 48px;
-  color: #ccc;
+  color: var(--mj-border-strong);
   margin-bottom: 16px;
 }
 
@@ -147,7 +147,7 @@
 }
 
 .empty-hint {
-  color: #999;
+  color: var(--mj-text-disabled);
   font-size: 13px !important;
 }
 
@@ -161,12 +161,12 @@
   align-items: center;
   justify-content: center;
   padding: 64px 0;
-  color: #666;
+  color: var(--mj-text-secondary);
 }
 
 .redirect-icon {
   font-size: 32px;
-  color: #4a90d9;
+  color: var(--mj-brand-primary);
   margin-bottom: 16px;
 }
 

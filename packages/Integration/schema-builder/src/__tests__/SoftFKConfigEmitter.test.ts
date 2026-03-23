@@ -8,6 +8,7 @@ function MakeTargetConfig(overrides: Partial<TargetTableConfig> = {}): TargetTab
         SchemaName: 'hubspot',
         TableName: 'Contact',
         EntityName: 'HubSpot Contact',
+        PrimaryKeyFields: ['ContactID'],
         Columns: [],
         SoftForeignKeys: [],
         ...overrides,
@@ -142,7 +143,7 @@ describe('SoftFKConfigEmitter', () => {
             expect(entries).toHaveLength(1);
             expect(entries[0].FieldName).toBe('ContactID');
             expect(entries[0].TargetTableName).toBe('Contact');
-            expect(entries[0].TargetFieldName).toBe('ID');
+            expect(entries[0].TargetFieldName).toBe('ContactID');
         });
 
         it('should include pre-defined SoftForeignKeys from target configs', () => {

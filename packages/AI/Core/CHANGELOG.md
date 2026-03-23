@@ -1,5 +1,59 @@
 # Change Log - @memberjunction/ai
 
+## 5.15.0
+
+### Minor Changes
+
+- c3e8b94: metadata updates and migration
+
+### Patch Changes
+
+- @memberjunction/global@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+  - @memberjunction/global@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- @memberjunction/global@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- @memberjunction/global@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/global@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [194ddf2]
+  - @memberjunction/global@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

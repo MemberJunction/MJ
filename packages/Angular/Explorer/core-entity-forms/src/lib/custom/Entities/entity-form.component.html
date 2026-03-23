@@ -5,7 +5,7 @@
     <!-- ============================================================ -->
     <header class="explorer-header">
       <div class="entity-identity">
-        <div class="entity-icon" [style.background-color]="'#3b82f6'">
+        <div class="entity-icon" [style.background-color]="'var(--mj-brand-primary)'">
           <i [class]="entityIcon"></i>
         </div>
         <div class="entity-info">
@@ -68,7 +68,7 @@
           <span class="stat-value">{{ stats.permissionCount }}</span>
           <span class="stat-label">Roles</span>
         </div>
-        <div class="stat-item">
+        <div class="stat-item" (click)="setActiveSection('data')">
           <i class="fa-solid fa-database"></i>
           @if (!isRowCountLoading) {
             <span class="stat-value">{{ formattedRowCount }}</span>
@@ -245,9 +245,9 @@
                                 <div class="isa-inspector-header">
                                   <span class="isa-inspector-entity">
                                     @if (group.Level === 0) {
-                                      <i class="fa-solid fa-circle" style="color: #3b82f6; font-size: 8px;"></i>
+                                      <i class="fa-solid fa-circle" style="color: var(--mj-brand-primary); font-size: 8px;"></i>
                                     } @else {
-                                      <i class="fa-solid fa-arrow-up" style="color: #6366f1; font-size: 10px;"></i>
+                                      <i class="fa-solid fa-arrow-up" style="color: var(--mj-brand-primary); font-size: 10px;"></i>
                                     }
                                     {{ group.Label }}
                                   </span>
@@ -452,6 +452,7 @@
                               </div>
                               <div class="field-info">
                                 <div class="field-name">{{ field.DisplayName || field.Name }}</div>
+                                <div class="field-db-name">{{ field.Name }}</div>
                                 <div class="field-meta">
                                   <span class="field-type">{{ formatFieldType(field) }}</span>
                                   @if (!field.AllowsNull) {
@@ -504,6 +505,10 @@
                       Field Name
                       <i class="sort-icon fa-solid" [ngClass]="fieldListSortColumn === 'Name' ? (fieldListSortDirection === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : 'fa-sort'"></i>
                     </div>
+                    <div class="list-col col-display-name sortable" (click)="sortFieldList('DisplayName')" [class.sorted]="fieldListSortColumn === 'DisplayName'">
+                      Display Name
+                      <i class="sort-icon fa-solid" [ngClass]="fieldListSortColumn === 'DisplayName' ? (fieldListSortDirection === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : 'fa-sort'"></i>
+                    </div>
                     <div class="list-col col-type sortable" (click)="sortFieldList('Type')" [class.sorted]="fieldListSortColumn === 'Type'">
                       Type
                       <i class="sort-icon fa-solid" [ngClass]="fieldListSortColumn === 'Type' ? (fieldListSortDirection === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : 'fa-sort'"></i>
@@ -534,7 +539,10 @@
                         </div>
                         <div class="list-col col-name">
                           <i [class]="getFieldTypeIcon(field)" class="field-type-icon"></i>
-                          <span class="field-name-text">{{ field.DisplayName || field.Name }}</span>
+                          <span class="field-name-text">{{ field.Name }}</span>
+                        </div>
+                        <div class="list-col col-display-name">
+                          <span class="display-name-text">{{ field.DisplayName || field.Name }}</span>
                         </div>
                         <div class="list-col col-type">
                           <span class="type-tag">{{ field.Type }}</span>
@@ -736,6 +744,124 @@
           </section>
         }
         <!-- ============================================================ -->
+        <!-- ORGANIC KEYS SECTION -->
+        <!-- ============================================================ -->
+        @if (activeSection === 'organicKeys') {
+          <section class="section organic-keys-section">
+            <div class="section-content">
+              @if (organicKeysOutgoing.length === 0 && organicKeysIncoming.length === 0) {
+                <div class="empty-state-card">
+                  <i class="fa-solid fa-fingerprint empty-state-icon"></i>
+                  <h3>No Organic Keys</h3>
+                  <p>This entity has no organic key relationships configured. Organic keys enable cross-system matching by shared business data like email addresses, phone numbers, or domain names — without requiring foreign key constraints.</p>
+                </div>
+              } @else {
+                <!-- Outgoing: Keys defined on THIS entity -->
+                @if (organicKeysOutgoing.length > 0) {
+                  <div class="relationship-group">
+                    <h3 class="relationship-group-title">
+                      <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                      Outgoing (Matches from this entity)
+                      <span class="group-count">{{ organicKeysOutgoing.length }}</span>
+                    </h3>
+                    <div class="organic-key-cards">
+                      @for (okGroup of organicKeysOutgoing; track okGroup.OrganicKey.ID) {
+                        <div class="organic-key-card">
+                          <div class="organic-key-card-header">
+                            <div class="organic-key-name">
+                              <i class="fa-solid fa-fingerprint organic-key-icon"></i>
+                              {{ okGroup.OrganicKey.Name }}
+                            </div>
+                            <div class="organic-key-badges">
+                              <span class="organic-key-badge strategy">{{ okGroup.OrganicKey.NormalizationStrategy }}</span>
+                              <span class="organic-key-badge fields">{{ okGroup.OrganicKey.MatchFieldNames }}</span>
+                            </div>
+                          </div>
+                          @if (okGroup.OrganicKey.Description) {
+                            <p class="organic-key-description">{{ okGroup.OrganicKey.Description }}</p>
+                          }
+                          <div class="organic-key-targets">
+                            @for (target of okGroup.RelatedEntities; track target.Info.ID) {
+                              <div class="organic-key-target clickable" (click)="NavigateToEntityByID(target.Info.RelatedEntityID)">
+                                <div class="rel-icon outgoing">
+                                  <i class="fa-solid fa-arrow-right"></i>
+                                </div>
+                                <div class="target-main">
+                                  <div class="target-header">
+                                    <i [class]="target.EntityIcon" class="target-entity-icon"></i>
+                                    <span class="target-entity-name">{{ target.Info.DisplayName || target.EntityName }}</span>
+                                    <i class="fa-solid fa-external-link-alt target-nav-icon"></i>
+                                  </div>
+                                  <div class="target-match-detail">
+                                    @if (target.Info.IsDirectMatch) {
+                                      <span class="match-type-badge direct">Direct</span>
+                                      <span class="match-fields">{{ okGroup.OrganicKey.MatchFieldNames }} → {{ target.Info.RelatedEntityFieldNames }}</span>
+                                    } @else {
+                                      <span class="match-type-badge transitive">Transitive</span>
+                                      <span class="match-fields" [title]="target.Info.TransitiveObjectName || ''">via {{ target.Info.TransitiveObjectName }}</span>
+                                    }
+                                  </div>
+                                </div>
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+
+                <!-- Incoming: Keys on OTHER entities targeting THIS entity -->
+                @if (organicKeysIncoming.length > 0) {
+                  <div class="relationship-group">
+                    <h3 class="relationship-group-title">
+                      <i class="fa-solid fa-arrow-right-to-bracket"></i>
+                      Incoming (Other entities matching to this one)
+                      <span class="group-count">{{ organicKeysIncoming.length }}</span>
+                    </h3>
+                    <div class="organic-key-cards">
+                      @for (incoming of organicKeysIncoming; track incoming.OrganicKey.ID + incoming.SourceEntityName) {
+                        <div class="organic-key-card incoming clickable" (click)="NavigateToEntityByID(incoming.SourceEntityID)">
+                          <div class="organic-key-card-header">
+                            <div class="organic-key-name">
+                              <div class="rel-icon incoming">
+                                <i class="fa-solid fa-arrow-left"></i>
+                              </div>
+                              <i [class]="incoming.SourceEntityIcon" class="target-entity-icon"></i>
+                              {{ incoming.SourceEntityName }}
+                              <i class="fa-solid fa-external-link-alt target-nav-icon"></i>
+                            </div>
+                            <div class="organic-key-badges">
+                              <span class="match-type-badge" [class.direct]="incoming.MatchType === 'Direct'" [class.transitive]="incoming.MatchType === 'Transitive'">{{ incoming.MatchType }}</span>
+                            </div>
+                          </div>
+                          <div class="organic-key-detail-row">
+                            <span class="detail-label">Key:</span>
+                            <span class="detail-value">{{ incoming.OrganicKey.Name }}</span>
+                            <span class="organic-key-badge fields">{{ incoming.OrganicKey.MatchFieldNames }}</span>
+                            <span class="organic-key-badge strategy">{{ incoming.OrganicKey.NormalizationStrategy }}</span>
+                          </div>
+                          @if (incoming.RelatedEntityConfig.IsDirectMatch) {
+                            <div class="organic-key-detail-row">
+                              <span class="detail-label">Matched via:</span>
+                              <span class="detail-value">{{ incoming.RelatedEntityConfig.RelatedEntityFieldNames }}</span>
+                            </div>
+                          } @else {
+                            <div class="organic-key-detail-row">
+                              <span class="detail-label">Bridge:</span>
+                              <span class="detail-value">{{ incoming.RelatedEntityConfig.TransitiveObjectName }}</span>
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              }
+            </div>
+          </section>
+        }
+        <!-- ============================================================ -->
         <!-- PERMISSIONS SECTION -->
         <!-- ============================================================ -->
         @if (activeSection === 'permissions') {
@@ -837,6 +963,23 @@
           </section>
         }
         <!-- ============================================================ -->
+        <!-- DATA SECTION -->
+        <!-- ============================================================ -->
+        @if (activeSection === 'data') {
+          <section class="section data-section">
+            <div class="data-viewer-container">
+              @if (entity) {
+                <mj-entity-viewer
+                  [entity]="entity"
+                  [showGridToolbar]="true"
+                  (recordOpened)="OnRecordOpened($event)"
+                  (addRequested)="OnAddRequested()">
+                </mj-entity-viewer>
+              }
+            </div>
+          </section>
+        }
+                <!-- ============================================================ -->
         <!-- LINEAGE SECTION -->
         <!-- ============================================================ -->
         @if (activeSection === 'lineage') {
@@ -1001,9 +1144,9 @@
                       <span class="config-label">Virtual Entity</span>
                       <span class="config-value">
                         @if (IsVirtualEntity) {
-                          <i class="fa-solid fa-circle-check" style="color: #7c3aed;"></i> Yes — read-only view
+                          <i class="fa-solid fa-circle-check" style="color: var(--mj-brand-primary);"></i> Yes — read-only view
                         } @else {
-                          <i class="fa-solid fa-circle-minus" style="color: #94a3b8;"></i> No
+                          <i class="fa-solid fa-circle-minus" style="color: var(--mj-text-muted);"></i> No
                         }
                       </span>
                     </div>
@@ -1190,6 +1333,7 @@
           <div class="panel-content">
             <div class="detail-section">
               <h4>{{ selectedField.DisplayName || selectedField.Name }}</h4>
+              <div class="detail-field-db-name">{{ selectedField.Name }}</div>
               @if (selectedField.Description) {
                 <p class="field-description">{{ selectedField.Description }}</p>
               }

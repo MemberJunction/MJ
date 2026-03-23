@@ -28,8 +28,16 @@ generate a supplemental manifest covering only your own application classes.`;
             description: 'Exclude MJ packages (use pre-built bootstrap manifests instead)',
         },
         {
+            command: '<%= config.bin %> <%= command.id %> --exclude-packages @memberjunction --no-sync-deps',
+            description: 'Exclude MJ packages and skip dependency reconciliation',
+        },
+        {
             command: '<%= config.bin %> <%= command.id %> --filter BaseEngine --filter BaseAction --verbose',
             description: 'Only include specific base classes with detailed progress',
+        },
+        {
+            command: '<%= config.bin %> <%= command.id %> --scan-dist',
+            description: 'Include dist/ scanning for npm-published packages without src/',
         },
     ];
 
@@ -53,6 +61,10 @@ generate a supplemental manifest covering only your own application classes.`;
             description: 'Skip packages whose name starts with this prefix. Useful for excluding @memberjunction packages when using pre-built bootstrap manifests. Can be repeated.',
             multiple: true,
         }),
+        'no-sync-deps': Flags.boolean({
+            description: 'Skip automatic dependency reconciliation. By default, the manifest generator adds any manifest-imported packages that are missing from package.json dependencies. Use this flag when generating supplemental manifests with --exclude-packages, where excluded packages are already covered by a pre-built bootstrap manifest.',
+            default: false,
+        }),
         quiet: Flags.boolean({
             char: 'q',
             description: 'Suppress all output except errors.',
@@ -63,6 +75,12 @@ generate a supplemental manifest covering only your own application classes.`;
             description: 'Show detailed progress including per-package scanning info and skipped classes.',
             default: false,
         }),
+        'scan-dist': Flags.boolean({
+            description: 'Scan compiled JavaScript files in dist/ directories for packages without src/. ' +
+                'Use this when your dependency tree includes npm-published packages that contain @RegisterClass decorators. ' +
+                'Without this flag, only TypeScript source in src/ is scanned.',
+            default: false,
+        }),
     };
 
     async run(): Promise<void> {
@@ -71,12 +89,16 @@ generate a supplemental manifest covering only your own application classes.`;
         const { flags } = await this.parse(CodeGenManifest);
 
         const excludePackages = flags['exclude-packages'];
+        const syncDependencies = !flags['no-sync-deps'];
+        const scanDist = flags['scan-dist'];
         const result = await generateClassRegistrationsManifest({
             outputPath: flags.output,
             appDir: flags.appDir || process.cwd(),
             verbose: flags.verbose,
             filterBaseClasses: flags.filter && flags.filter.length > 0 ? flags.filter : undefined,
             excludePackages: excludePackages && excludePackages.length > 0 ? excludePackages : undefined,
+            syncDependencies,
+            scanDist,
         });
 
         if (!result.success) {
@@ -88,6 +110,11 @@ generate a supplemental manifest covering only your own application classes.`;
                 this.log(`[class-manifest] Updated: ${result.classes.length} classes from ${result.packages.length} packages (${result.totalDepsWalked} deps walked)`);
             } else {
                 this.log(`[class-manifest] No changes detected (${result.classes.length} classes, ${result.packages.length} packages)`);
+            }
+
+            const addedCount = Object.keys(result.AddedDependencies).length;
+            if (addedCount > 0) {
+                this.log(`[class-manifest] Added ${addedCount} missing ${addedCount === 1 ? 'dependency' : 'dependencies'} to package.json — run \`npm install\` at repo root`);
             }
         }
     }

@@ -78,6 +78,28 @@
             </div>
           }
         </div>
+        <!-- Technical Description Section -->
+        @if (QueryInfo.TechnicalDescription) {
+          <div class="info-section" [class.expanded]="IsSectionExpanded('technical')">
+            <div class="section-header" (click)="ToggleSection('technical')">
+              <i class="fa-solid section-icon"
+                [class.fa-chevron-down]="IsSectionExpanded('technical')"
+                [class.fa-chevron-right]="!IsSectionExpanded('technical')"></i>
+              <span class="section-title">Technical Description</span>
+            </div>
+            @if (IsSectionExpanded('technical')) {
+              <div class="section-content technical-description-content">
+                <mj-markdown
+                  [data]="QueryInfo.TechnicalDescription || ''"
+                  [enableMermaid]="true"
+                  [enableHighlight]="true"
+                  [enableCollapsibleHeadings]="false"
+                  [enableSmartypants]="true">
+                </mj-markdown>
+              </div>
+            }
+          </div>
+        }
         <!-- Fields Section -->
         <div class="info-section" [class.expanded]="IsSectionExpanded('fields')">
           <div class="section-header" (click)="ToggleSection('fields')">
@@ -186,7 +208,12 @@
             <div class="section-content">
               @if (QueryInfo.SQL) {
                 <div class="sql-container">
-                  <pre class="sql-code">{{ QueryInfo.SQL }}</pre>
+                  <mj-code-editor
+                    [value]="QueryInfo.SQL"
+                    [readonly]="true"
+                    [language]="'sql'"
+                    (CompositionTokenClick)="OnCompositionTokenClick($event)">
+                  </mj-code-editor>
                 </div>
               } @else {
                 <div class="empty-section">
@@ -197,6 +224,41 @@
             </div>
           }
         </div>
+        <!-- Dependent Queries Section -->
+        @if (QueryInfo.Dependents.length > 0) {
+          <div class="info-section" [class.expanded]="IsSectionExpanded('dependents')">
+            <div class="section-header" (click)="ToggleSection('dependents')">
+              <i class="fa-solid section-icon"
+                [class.fa-chevron-down]="IsSectionExpanded('dependents')"
+                [class.fa-chevron-right]="!IsSectionExpanded('dependents')"></i>
+              <span class="section-title">Dependent Queries</span>
+              <span class="section-count">({{ QueryInfo.Dependents.length }})</span>
+            </div>
+            @if (IsSectionExpanded('dependents')) {
+              <div class="section-content">
+                <div class="dependents-list">
+                  @for (dep of QueryInfo.Dependents; track dep.ID) {
+                    <div class="dependent-item" (click)="OnDependentQueryClick(dep)">
+                      <div class="dependent-header">
+                        <i class="fa-solid fa-arrow-left dependent-icon"></i>
+                        <span class="dependent-name">{{ dep.Query }}</span>
+                      </div>
+                      @if (dep.ReferencePath) {
+                        <span class="dependent-ref-path">
+                          via {{ dep.ReferencePath }}
+                        </span>
+                      }
+                    </div>
+                  }
+                </div>
+                <div class="dependents-hint">
+                  <i class="fa-solid fa-info-circle"></i>
+                  These queries reference this query via composition
+                </div>
+              </div>
+            }
+          </div>
+        }
       </div>
     }
     <!-- Footer -->

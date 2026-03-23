@@ -196,11 +196,17 @@ export interface IQueryInfoBase {
     /**
      * Current status of the query in the approval workflow
      */
-    Status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete';
+    Status: 'Pending' | 'Approved' | 'Rejected' | 'Expired';
     /**
      * Value indicating the quality of the query, higher values mean better quality
      */
     QualityRank: number;
+    /**
+     * When true, this query can be referenced by other queries via the composition syntax
+     * `{{query:"CategoryPath/QueryName"}}`. Only queries with Reusable=true AND Status='Approved'
+     * are eligible for composition.
+     */
+    Reusable: boolean;
     /**
      * When true, query results will be cached in memory with TTL expiration
      */
@@ -230,6 +236,12 @@ export interface IQueryInfoBase {
      * The AI Model name used to generate the embedding vector
      */
     EmbeddingModelName?: string | null;
+    /**
+     * Technical documentation of the query logic, performance considerations,
+     * and parameter usage. Supports markdown content including mermaid diagrams.
+     */
+    TechnicalDescription: string | null;
+
     /**
      * Field metadata for this query
      */

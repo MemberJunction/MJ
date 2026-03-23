@@ -1,5 +1,139 @@
 # @memberjunction/ng-entity-viewer
 
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/ng-filter-builder@5.15.0
+  - @memberjunction/ng-shared-generic@5.15.0
+  - @memberjunction/ng-timeline@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/ng-export-service@5.15.0
+  - @memberjunction/ng-pagination@5.15.0
+  - @memberjunction/export-engine@5.15.0
+  - @memberjunction/global@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- Updated dependencies [69b5af4]
+- Updated dependencies [140fc6d]
+  - @memberjunction/core@5.14.0
+  - @memberjunction/ng-filter-builder@5.14.0
+  - @memberjunction/ng-shared-generic@5.14.0
+  - @memberjunction/ng-timeline@5.14.0
+  - @memberjunction/core-entities@5.14.0
+  - @memberjunction/ng-export-service@5.14.0
+  - @memberjunction/ng-pagination@5.14.0
+  - @memberjunction/export-engine@5.14.0
+  - @memberjunction/global@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- Updated dependencies [f72b538]
+- Updated dependencies [d0d9eba]
+  - @memberjunction/core@5.13.0
+  - @memberjunction/global@5.13.0
+  - @memberjunction/ng-filter-builder@5.13.0
+  - @memberjunction/ng-shared-generic@5.13.0
+  - @memberjunction/ng-timeline@5.13.0
+  - @memberjunction/core-entities@5.13.0
+  - @memberjunction/ng-export-service@5.13.0
+  - @memberjunction/ng-pagination@5.13.0
+  - @memberjunction/export-engine@5.13.0
+
+## 5.12.0
+
+### Minor Changes
+
+- 05f19ff: Add composable query system with semantic catalog search, CTE composition engine, server-side paging, query caching with TTL/dependency invalidation, and agent directive surfacing. Includes QueryCacheManager wrapper over LocalCacheManager, QueryPagingEngine for SQL-level OFFSET/FETCH paging, QueryCompositionEngine for platform-aware CTE generation, and SearchQueryCatalog action for vector-based query discovery. Renames PaginationComponent to DataPagerComponent and extracts into shared module.
+
+### Patch Changes
+
+- a57b8d5: Migrate all hardcoded CSS colors to design tokens for dark mode and white-label support. Introduces `--mj-*` semantic CSS custom properties in `_tokens.scss` with full `[data-theme="dark"]` overrides. Migrates 1,544 of 1,659 hardcoded hex values (93%) across 72+ CSS files to semantic tokens. Adds logo token system (`--mj-logo-mark`, `--mj-logo-color`) for themeable branding. Fixes dark mode theming for CodeMirror, AG Grid v35, and Kendo popups. No API or behavioral changes — CSS only.
+- e87d153: design tokens phase 1
+- Updated dependencies [05f19ff]
+- Updated dependencies [a57b8d5]
+- Updated dependencies [e87d153]
+- Updated dependencies [d92502e]
+- Updated dependencies [1567293]
+- Updated dependencies [1e5d181]
+  - @memberjunction/core@5.12.0
+  - @memberjunction/ng-shared-generic@5.12.0
+  - @memberjunction/ng-pagination@5.12.0
+  - @memberjunction/ng-export-service@5.12.0
+  - @memberjunction/ng-filter-builder@5.12.0
+  - @memberjunction/ng-timeline@5.12.0
+  - @memberjunction/core-entities@5.12.0
+  - @memberjunction/export-engine@5.12.0
+  - @memberjunction/global@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- Updated dependencies [a4c3c81]
+  - @memberjunction/core@5.11.0
+  - @memberjunction/ng-filter-builder@5.11.0
+  - @memberjunction/ng-shared-generic@5.11.0
+  - @memberjunction/ng-timeline@5.11.0
+  - @memberjunction/core-entities@5.11.0
+  - @memberjunction/ng-export-service@5.11.0
+  - @memberjunction/export-engine@5.11.0
+  - @memberjunction/global@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/ng-export-service@5.10.1
+- @memberjunction/ng-filter-builder@5.10.1
+- @memberjunction/ng-shared-generic@5.10.1
+- @memberjunction/ng-timeline@5.10.1
+- @memberjunction/core@5.10.1
+- @memberjunction/core-entities@5.10.1
+- @memberjunction/export-engine@5.10.1
+- @memberjunction/global@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- Updated dependencies [f2df653]
+- Updated dependencies [98e9f15]
+- Updated dependencies [5ce18ff]
+- Updated dependencies [75dd36b]
+  - @memberjunction/core@5.10.0
+  - @memberjunction/core-entities@5.10.0
+  - @memberjunction/ng-filter-builder@5.10.0
+  - @memberjunction/ng-shared-generic@5.10.0
+  - @memberjunction/ng-timeline@5.10.0
+  - @memberjunction/ng-export-service@5.10.0
+  - @memberjunction/export-engine@5.10.0
+  - @memberjunction/global@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- Updated dependencies [c6a0df2]
+- Updated dependencies [89b6abe]
+- Updated dependencies [194ddf2]
+  - @memberjunction/core-entities@5.9.0
+  - @memberjunction/ng-filter-builder@5.9.0
+  - @memberjunction/global@5.9.0
+  - @memberjunction/core@5.9.0
+  - @memberjunction/ng-shared-generic@5.9.0
+  - @memberjunction/ng-timeline@5.9.0
+  - @memberjunction/ng-export-service@5.9.0
+  - @memberjunction/export-engine@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

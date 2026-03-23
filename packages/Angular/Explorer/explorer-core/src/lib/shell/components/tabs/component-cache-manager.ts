@@ -41,6 +41,13 @@ export interface CachedComponentInfo {
 export class ComponentCacheManager {
   private cache = new Map<string, CachedComponentInfo>();
 
+  /**
+   * Maximum number of detached (not currently visible) components to keep
+   * cached.  When exceeded, least-recently-used detached components are
+   * evicted.  Set to 0 to disable eviction (legacy behavior).  Default: 20.
+   */
+  public static MaxDetachedComponents: number = 20;
+
   constructor(private appRef: ApplicationRef) {}
 
   /**
@@ -142,7 +149,28 @@ export class ComponentCacheManager {
     info.attachedToTabId = null;
     info.lastUsed = new Date();
 
+    this.EvictIfNeeded();
+
     return info;
+  }
+
+  /**
+   * Evict least-recently-used detached components when over the limit.
+   * Only evicts components that are not currently attached to a tab.
+   */
+  private EvictIfNeeded(): void {
+    if (ComponentCacheManager.MaxDetachedComponents <= 0) return;
+
+    const detached = Array.from(this.cache.entries())
+      .filter(([_, info]) => !info.isAttached)
+      .sort((a, b) => a[1].lastUsed.getTime() - b[1].lastUsed.getTime());
+
+    while (detached.length > ComponentCacheManager.MaxDetachedComponents) {
+      const [key, info] = detached.shift()!;
+      this.appRef.detachView(info.componentRef.hostView);
+      info.componentRef.destroy();
+      this.cache.delete(key);
+    }
   }
 
   /**

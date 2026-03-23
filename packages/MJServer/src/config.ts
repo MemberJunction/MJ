@@ -90,6 +90,14 @@ const sqlLoggingOptionsSchema = z.object({
   formatAsMigration: z.boolean().optional().default(false),
   statementTypes: z.enum(['queries', 'mutations', 'both']).optional().default('both'),
   batchSeparator: z.string().optional().default('GO'),
+  /**
+   * When set, enables variable-count-based batch separation.
+   * A batch separator is emitted only when the accumulated DECLARE @ count reaches this threshold,
+   * instead of after every statement. Prevents hitting SQL Server's 10,000-variable-per-batch limit
+   * on large migration files while avoiding one GO per statement. Recommended: 200.
+   * Set to 0 to use the legacy per-statement behavior.
+   */
+  variableBatchThreshold: z.coerce.number().optional().default(200),
   prettyPrint: z.boolean().optional().default(true),
   logRecordChangeMetadata: z.boolean().optional().default(false),
   retainEmptyLogFiles: z.boolean().optional().default(false),
@@ -147,6 +155,29 @@ const queryDialectSchema = z.object({
   targetPlatforms: z.array(z.string()).optional().default([]),
 });
 
+const multiTenancySchema = z.object({
+  /** Master switch — when false (default), no tenant isolation is applied */
+  enabled: zodBooleanWithTransforms().default(false),
+  /** How the tenant ID is determined for each request */
+  contextSource: z.enum(['header', 'linkedEntity', 'custom']).default('header'),
+  /** HTTP header name used when contextSource is 'header' */
+  tenantHeader: z.string().default('X-Tenant-ID'),
+  /** Whether scopedEntities is an allowlist or denylist of entities to filter */
+  scopingStrategy: z.enum(['allowlist', 'denylist']).default('denylist'),
+  /** Entities included/excluded from tenant filtering based on scopingStrategy */
+  scopedEntities: z.array(z.string()).default([]),
+  /** When true, entities in the __mj core schema are never tenant-filtered */
+  autoExcludeCoreEntities: zodBooleanWithTransforms().default(true),
+  /** Default column name containing the tenant identifier */
+  defaultTenantColumn: z.string().default('OrganizationID'),
+  /** Per-entity overrides for the tenant column name: { "EntityName": "ColumnName" } */
+  entityColumnMappings: z.record(z.string()).default({}),
+  /** Roles that bypass tenant filtering entirely */
+  adminRoles: z.array(z.string()).default(['Admin', 'System']),
+  /** Write protection mode: 'strict' rejects, 'log' warns, 'off' skips validation */
+  writeProtection: z.enum(['strict', 'log', 'off']).default('strict'),
+});
+
 const telemetrySchema = z.object({
   enabled: zodBooleanWithTransforms().default(
     process.env.MJ_TELEMETRY_ENABLED !== 'false' // Enabled by default unless explicitly disabled
@@ -166,6 +197,7 @@ const configInfoSchema = z.object({
   scheduledJobs: scheduledJobsSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
+  multiTenancy: multiTenancySchema.optional().default({}),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -210,6 +242,7 @@ export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
+export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**

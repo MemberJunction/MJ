@@ -1,52 +1,9 @@
 /* =============================================================================
-   User Profile Component - Material Design 3
-   Following MD3 Design System Guidelines
+   User Profile Component
+   Using MJ Design Tokens
    ============================================================================= */
 
-/* MD3 Color Tokens */
 :host {
-  /* Primary - Deep Blue */
-  --md-primary: #0076B6;
-  --md-on-primary: #FFFFFF;
-  --md-primary-container: #AAE7FD;
-  --md-on-primary-container: #001F2A;
-
-  /* Secondary - Light Orange */
-  --md-secondary: #F5A623;
-  --md-on-secondary: #FFFFFF;
-  --md-secondary-container: #FFECD6;
-  --md-on-secondary-container: #2D1600;
-
-  /* Tertiary - Light Green */
-  --md-tertiary: #4CAF50;
-  --md-on-tertiary: #FFFFFF;
-  --md-tertiary-container: #C8E6C9;
-  --md-on-tertiary-container: #002204;
-
-  /* Surface Colors */
-  --md-surface: #FAFCFF;
-  --md-surface-container-lowest: #FFFFFF;
-  --md-surface-container-low: #F3F5F9;
-  --md-surface-container: #EDF0F4;
-  --md-surface-container-high: #E7EAEE;
-  --md-surface-container-highest: #E1E3E8;
-  --md-on-surface: #191C20;
-  --md-on-surface-variant: #43474E;
-  --md-outline: #74777F;
-  --md-outline-variant: #C4C6D0;
-
-  /* Elevation (Box Shadows) */
-  --md-elevation-1: 0 1px 2px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
-  --md-elevation-2: 0 2px 4px rgba(0, 0, 0, 0.1), 0 4px 8px rgba(0, 0, 0, 0.08);
-  --md-elevation-3: 0 4px 8px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.08);
-
-  /* Corner Radii */
-  --md-corner-extra-small: 4px;
-  --md-corner-small: 8px;
-  --md-corner-medium: 12px;
-  --md-corner-large: 16px;
-  --md-corner-full: 9999px;
-
   /* Host element configuration */
   display: block;
   width: 100%;
@@ -68,16 +25,16 @@
    Profile Card
    ----------------------------------------------------------------------------- */
 .profile-card {
-  background: var(--md-surface-container-lowest);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-corner-medium);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 12px;
   padding: 1.5rem;
-  box-shadow: var(--md-elevation-1);
+  box-shadow: var(--mj-shadow-sm);
   transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .profile-card:hover {
-  box-shadow: var(--md-elevation-2);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .profile-header {
@@ -90,22 +47,22 @@
   width: 80px;
   height: 80px;
   border-radius: 50%;
-  background: var(--md-primary-container);
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  border: 3px solid var(--md-outline-variant);
+  border: 3px solid var(--mj-border-default);
   transition: border-color 0.2s;
 }
 
 .profile-card:hover .avatar-container {
-  border-color: var(--md-primary);
+  border-color: var(--mj-brand-primary);
 }
 
 .avatar-icon {
   font-size: 2.5rem;
-  color: var(--md-primary);
+  color: var(--mj-brand-primary);
 }
 
 .profile-info {
@@ -117,29 +74,29 @@
   margin: 0 0 0.375rem 0;
   font-size: 1.5rem;
   font-weight: 600;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
 }
 
 .user-email {
   margin: 0;
   font-size: 1rem;
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
 }
 
 /* -----------------------------------------------------------------------------
    Notification Card
    ----------------------------------------------------------------------------- */
 .notification-card {
-  background: var(--md-surface-container-lowest);
-  border: 1px solid var(--md-outline-variant);
-  border-radius: var(--md-corner-medium);
-  box-shadow: var(--md-elevation-1);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 12px;
+  box-shadow: var(--mj-shadow-sm);
   transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
 }
 
 .notification-card:hover {
-  box-shadow: var(--md-elevation-2);
+  box-shadow: var(--mj-shadow-md);
 }
 
 .card-header {
@@ -147,8 +104,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.25rem;
-  border-bottom: 1px solid var(--md-outline-variant);
-  background: var(--md-surface-container-low);
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
 }
 
 .header-left {
@@ -159,14 +116,14 @@
 
 .header-icon {
   font-size: 1.5rem;
-  color: var(--md-primary);
+  color: var(--mj-brand-primary);
 }
 
 .card-header h4 {
   margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
 }
 
 .unread-badge {
@@ -176,12 +133,12 @@
   min-width: 28px;
   height: 28px;
   padding: 0 0.5rem;
-  background: var(--md-tertiary);
-  color: var(--md-on-tertiary);
-  border-radius: var(--md-corner-full);
+  background: var(--mj-status-success);
+  color: white;
+  border-radius: 9999px;
   font-size: 0.875rem;
   font-weight: 600;
-  box-shadow: var(--md-elevation-1);
+  box-shadow: var(--mj-shadow-sm);
 }
 
 .card-body {
@@ -191,7 +148,7 @@
 .card-description {
   margin: 0 0 1.25rem 0;
   font-size: 0.9375rem;
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
   line-height: 1.5;
 }
 
@@ -210,9 +167,9 @@
   align-items: center;
   gap: 0.875rem;
   padding: 1rem 1.25rem;
-  background: var(--md-surface);
-  border: 2px solid var(--md-outline-variant);
-  border-radius: var(--md-corner-small);
+  background: var(--mj-bg-surface-card);
+  border: 2px solid var(--mj-border-default);
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: inherit;
@@ -221,7 +178,7 @@
 
 .channel-toggle i:first-child {
   font-size: 1.25rem;
-  color: var(--md-on-surface-variant);
+  color: var(--mj-text-secondary);
   transition: color 0.2s;
 }
 
@@ -230,7 +187,7 @@
   text-align: left;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: var(--md-on-surface);
+  color: var(--mj-text-primary);
 }
 
 .toggle-indicator {
@@ -240,7 +197,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid var(--md-outline);
+  border: 2px solid var(--mj-text-muted);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   flex-shrink: 0;
 }
@@ -251,30 +208,30 @@
 }
 
 .channel-toggle:hover:not(:disabled) {
-  border-color: var(--md-primary);
-  background: var(--md-primary-container);
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 .channel-toggle:hover:not(:disabled) i:first-child {
-  color: var(--md-primary);
+  color: var(--mj-brand-primary);
 }
 
 .channel-toggle.active {
-  border-color: var(--md-primary);
-  background: var(--md-primary-container);
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 .channel-toggle.active i:first-child {
-  color: var(--md-primary);
+  color: var(--mj-brand-primary);
 }
 
 .channel-toggle.active .toggle-indicator {
-  background: var(--md-primary);
-  border-color: var(--md-primary);
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
 }
 
 .channel-toggle.active .toggle-indicator i {
-  color: var(--md-on-primary);
+  color: white;
 }
 
 .channel-toggle:disabled {
@@ -283,7 +240,7 @@
 }
 
 .channel-toggle:focus-visible {
-  outline: 2px solid var(--md-primary);
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 
@@ -292,7 +249,7 @@
    ----------------------------------------------------------------------------- */
 .card-footer {
   padding-top: 1rem;
-  border-top: 1px solid var(--md-outline-variant);
+  border-top: 1px solid var(--mj-border-default);
 }
 
 .settings-link {
@@ -301,17 +258,17 @@
   gap: 0.5rem;
   font-size: 0.9375rem;
   font-weight: 600;
-  color: var(--md-primary);
+  color: var(--mj-brand-primary);
   text-decoration: none;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   padding: 0.5rem;
   margin: -0.5rem;
-  border-radius: var(--md-corner-small);
+  border-radius: 8px;
 }
 
 .settings-link:hover {
-  background: var(--md-primary-container);
-  color: var(--md-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 
 .settings-link i {
@@ -328,7 +285,7 @@
    ----------------------------------------------------------------------------- */
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid var(--md-primary);
+  outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
 

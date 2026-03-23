@@ -2,6 +2,7 @@
   {
     "fields": {
       "Name": "Skip",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
       "Description": "Data analytics and reporting expert that can create charts, graphs, dashboards and provide insights on data",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
@@ -15,8 +16,8 @@
       "ID": "A829FAAC-9E64-440C-B650-83F92A37E990"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:07:35.720Z",
-      "checksum": "86bdc799e6519aea95298474d6e2b7575d0438e4efa7835713f558588b1339a4"
+      "lastModified": "2026-03-13T19:10:50.969Z",
+      "checksum": "34ed57a88dda13bef3ba6e0d902be422f8ddfc2cf2229b460e0e3d43aeace848"
     }
   }
 ]

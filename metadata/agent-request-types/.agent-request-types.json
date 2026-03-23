@@ -1,0 +1,72 @@
+[
+  {
+    "fields": {
+      "Name": "Approval",
+      "Description": "Agent needs explicit approval to proceed with an action. User responds with Approved or Rejected.",
+      "Icon": "fa-solid fa-check-circle"
+    },
+    "primaryKey": {
+      "ID": "015B94A7-8817-4FF2-98FB-7F0513F4591F"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:42:30.968Z",
+      "checksum": "4948cf9332ddd6fe6323041967dd46a3e8e33d68c9f640609cc78a5380815473"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Information",
+      "Description": "Agent needs additional information or data from the user before it can continue processing.",
+      "Icon": "fa-solid fa-info-circle"
+    },
+    "primaryKey": {
+      "ID": "895A5582-02A0-458D-86E0-BA394A35F5A6"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:42:30.982Z",
+      "checksum": "f3fea4efdf27d57122d97320619e2bc3a93c6874e7d57827fdee3cdc571e1eab"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Choice",
+      "Description": "Agent needs the user to select from a set of options. Options are defined in the request's ResponseSchema.",
+      "Icon": "fa-solid fa-list-check"
+    },
+    "primaryKey": {
+      "ID": "4F7BE519-0749-49AD-9F71-B48A964C69CA"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:42:30.995Z",
+      "checksum": "8f2331c81eefd277b93d86230a925ad50253718f402193560eff7d6fb0bf0d7a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Review",
+      "Description": "Agent wants the user to review its output before proceeding. User can approve, request changes, or reject.",
+      "Icon": "fa-solid fa-eye"
+    },
+    "primaryKey": {
+      "ID": "FFAC3741-EA40-47C2-9754-3DF95F76EC5F"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:42:31.007Z",
+      "checksum": "8216f08342d7c6dedf17dd42d78c72ebe67162b747824267a9284f2ea25978e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Custom",
+      "Description": "Agent-defined request type with a custom response schema. Used when none of the standard types apply.",
+      "Icon": "fa-solid fa-cog"
+    },
+    "primaryKey": {
+      "ID": "8F62D631-4D9B-4CB0-BF9C-372A8EEA2699"
+    },
+    "sync": {
+      "lastModified": "2026-03-13T19:42:31.019Z",
+      "checksum": "eebe568b25ebac87f00cdc638dbebd669fee35bb9bf8b8647f91f422eb7ff239"
+    }
+  }
+]

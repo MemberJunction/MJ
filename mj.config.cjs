@@ -39,8 +39,7 @@ module.exports = {
   ],
 
   // Soft PK/FK configuration for tables without database constraints
-  // RELATIVE PATH TO YOUR ADDITIONAL SCHEMA INFO FILE - below is an example to a demo schema
-  // additionalSchemaInfo: './Demos/AdvancedEntities/database-metadata-config.json',
+  additionalSchemaInfo: './metadata/integrations/additionalSchemaInfo.json',
 
   // Output directories specific to monorepo structure
   output: [

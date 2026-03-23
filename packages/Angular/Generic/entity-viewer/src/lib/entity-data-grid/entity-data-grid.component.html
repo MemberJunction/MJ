@@ -386,6 +386,17 @@
 
   </div>
 
+  <!-- Pagination (opt-in via ShowPager input) -->
+  @if (ShowPager) {
+    <mj-pagination
+      [TotalRowCount]="totalRowCount"
+      [PageNumber]="PagerPageNumber"
+      [PageSize]="PageSize"
+      [IsLoading]="loading"
+      (PageChange)="PageChange.emit($event)">
+    </mj-pagination>
+  }
+
   <!-- Aggregate Summary Row (outside mj-grid-content so it's always visible) -->
   @if (ShowAggregateSummary) {
     <div class="mj-aggregate-summary">

@@ -95,16 +95,16 @@ import { Subject, takeUntil, distinctUntilChanged, combineLatest, filter } from 
     }
 
     .artifact-panel-resize-handle:hover {
-      background: #0076B6;
+      background: var(--mj-brand-primary);
     }
 
     .artifact-panel-resize-handle:active {
-      background: #005a8c;
+      background: var(--mj-brand-primary-hover);
     }
 
     .artifact-panel {
-      border-left: 1px solid #e0e0e0;
-      background: white;
+      border-left: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface-card);
       transition: width 0.2s ease;
     }
 

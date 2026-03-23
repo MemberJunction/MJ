@@ -21,6 +21,8 @@
 import type { InstallerEventEmitter } from '../events/InstallerEvents.js';
 import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner, type ProcessResult } from '../adapters/ProcessRunner.js';
+import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
+import path from 'node:path';
 
 /**
  * Packages that contain generated code managed by CodeGen.
@@ -31,6 +33,8 @@ import { ProcessRunner, type ProcessResult } from '../adapters/ProcessRunner.js'
  * hard error.
  */
 const CODEGEN_MANAGED_PACKAGES = [
+  'mj_generatedentities',
+  'mj_generatedactions',
   'ng-core-entity-forms',
   'server-bootstrap-lite',
   'server-bootstrap',
@@ -45,6 +49,8 @@ const CODEGEN_MANAGED_PACKAGES = [
 export interface DependencyContext {
   /** Absolute path to the repo root (where `npm install` and `npm run build` are executed). */
   Dir: string;
+  /** MemberJunction version tag (e.g., `"v5.9.0"`) — used to pin the CLI dependency version. */
+  Tag: string;
   /** Event emitter for progress, warn, and log events. */
   Emitter: InstallerEventEmitter;
 }
@@ -82,6 +88,7 @@ export interface DependencyResult {
  */
 export class DependencyPhase {
   private processRunner = new ProcessRunner();
+  private fileSystem = new FileSystemAdapter();
 
   /**
    * Execute the dependency phase: `npm install` then `npm run build`.
@@ -94,6 +101,15 @@ export class DependencyPhase {
   async Run(context: DependencyContext): Promise<DependencyResult> {
     const { Emitter: emitter } = context;
     const warnings: string[] = [];
+
+    // Step 0a: Ensure @memberjunction/cli is a dependency so `mj` in npm scripts
+    // resolves to the correct version (not a stale global install)
+    await this.ensureCliDependency(context.Dir, context.Tag, emitter);
+
+    // Step 0b: Ensure packages that must be hoisted to root node_modules are listed
+    // as root dependencies. Without this, npm may nest them under workspace packages
+    // due to peer-dep conflicts, causing duplicate class instances and Angular DI failures.
+    await this.ensureHoistedDependencies(context.Dir, context.Tag, emitter);
 
     // Step 1: npm install
     await this.runNpmInstall(context.Dir, emitter, warnings);
@@ -113,6 +129,10 @@ export class DependencyPhase {
   // npm install
   // ---------------------------------------------------------------------------
 
+  /**
+   * Run `npm install`, retrying with `--legacy-peer-deps` on ERESOLVE errors.
+   * Collects vulnerability warnings into the supplied array.
+   */
   private async runNpmInstall(
     dir: string,
     emitter: InstallerEventEmitter,
@@ -281,14 +301,20 @@ export class DependencyPhase {
   // ---------------------------------------------------------------------------
 
   /**
-   * Extract failed package names from turbo's stderr output.
-   * Turbo outputs lines like: "Failed:    @memberjunction/ng-core-entity-forms#build"
+   * Extract failed package names from turbo's output.
+   *
+   * Turbo outputs lines like:
+   * - `"Failed:    @memberjunction/ng-core-entity-forms#build"` (scoped)
+   * - `"Failed:    mj_generatedactions#build"` (unscoped)
+   *
+   * @param output - Combined stdout + stderr from turbo.
+   * @returns Deduplicated list of failed package names.
    */
-  private extractFailedTurboPackages(stderr: string): string[] {
+  private extractFailedTurboPackages(output: string): string[] {
     const packages: string[] = [];
-    const failedPattern = /Failed:\s+(@[^#\s]+)#build/g;
+    const failedPattern = /Failed:\s+([@\w][^#\s]*)#build/g;
     let match: RegExpExecArray | null;
-    while ((match = failedPattern.exec(stderr)) !== null) {
+    while ((match = failedPattern.exec(output)) !== null) {
       packages.push(match[1]);
     }
     return [...new Set(packages)];
@@ -298,6 +324,10 @@ export class DependencyPhase {
   // Helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Execute a single `npm install` invocation with optional extra arguments.
+   * Streams stdout/stderr to the emitter for real-time progress.
+   */
   private async runNpmInstallOnce(
     dir: string,
     emitter: InstallerEventEmitter,
@@ -326,12 +356,110 @@ export class DependencyPhase {
     });
   }
 
+  /** Check whether npm stderr output indicates an ERESOLVE peer-dependency conflict. */
   private isEresolveError(stderr: string): boolean {
     return stderr.includes('ERESOLVE') || stderr.includes('unable to resolve dependency tree');
   }
 
+  /** Return the last `n` lines of a multi-line string. */
   private lastNLines(text: string, n: number): string {
     const lines = text.split('\n');
     return lines.slice(-n).join('\n');
+  }
+
+  // ---------------------------------------------------------------------------
+  // CLI dependency injection
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Ensure `@memberjunction/cli` is in the root `package.json` devDependencies.
+   *
+   * The bootstrap distribution's scripts (`mj:migrate`, `mj:codegen`) and the
+   * apps' `prestart` scripts (`mj codegen manifest`) require the `mj` binary.
+   * Without an explicit dependency, `mj` resolves to whatever is on the system
+   * PATH (often a stale version or nothing at all in the distribution).
+   */
+  private async ensureCliDependency(
+    dir: string,
+    tag: string,
+    emitter: InstallerEventEmitter
+  ): Promise<void> {
+    const pkgPath = path.join(dir, 'package.json');
+    const pkg = await this.fileSystem.ReadJSON<Record<string, Record<string, string>>>(pkgPath);
+
+    const npmVersion = tag.startsWith('v') ? tag.slice(1) : tag;
+
+    if (!pkg['devDependencies']) {
+      pkg['devDependencies'] = {};
+    }
+
+    const existing = pkg['devDependencies']['@memberjunction/cli'];
+    if (existing === npmVersion) {
+      return;
+    }
+
+    pkg['devDependencies']['@memberjunction/cli'] = npmVersion;
+    await this.fileSystem.WriteJSON(pkgPath, pkg);
+
+    emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'dependencies',
+      Message: `Added @memberjunction/cli@${npmVersion} to devDependencies`,
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dependency hoisting
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Packages that must be hoisted to the root `node_modules` to avoid duplicate-
+   * instance problems with Angular's DI system and MJ's ClassFactory.
+   */
+  private static readonly HOISTED_PACKAGES: ReadonlyArray<{
+    Name: string;
+    Section: 'dependencies' | 'devDependencies';
+  }> = [
+    { Name: '@memberjunction/ng-auth-services', Section: 'dependencies' },
+  ];
+
+  /**
+   * Ensure packages that require hoisting are listed in the root package.json
+   * so npm places a single copy at root `node_modules`.
+   */
+  private async ensureHoistedDependencies(
+    dir: string,
+    tag: string,
+    emitter: InstallerEventEmitter
+  ): Promise<void> {
+    const pkgPath = path.join(dir, 'package.json');
+    const pkg = await this.fileSystem.ReadJSON<Record<string, Record<string, string>>>(pkgPath);
+    const npmVersion = tag.startsWith('v') ? tag.slice(1) : tag;
+
+    let modified = false;
+
+    for (const { Name, Section } of DependencyPhase.HOISTED_PACKAGES) {
+      if (!pkg[Section]) {
+        pkg[Section] = {};
+      }
+
+      const existing = pkg[Section][Name];
+      if (existing === npmVersion) {
+        continue;
+      }
+
+      pkg[Section][Name] = npmVersion;
+      modified = true;
+
+      emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'dependencies',
+        Message: `Added ${Name}@${npmVersion} to ${Section} (hoisting fix)`,
+      });
+    }
+
+    if (modified) {
+      await this.fileSystem.WriteJSON(pkgPath, pkg);
+    }
   }
 }

@@ -1,16 +1,8 @@
 /* ============================================
-   CSS VARIABLES
+   SECTION MANAGER — uses global --mj-* design tokens
    ============================================ */
 :host {
-  --mj-sm-width: 340px;
-  --mj-sm-bg: #ffffff;
-  --mj-sm-header-bg: #f9fafb;
-  --mj-sm-border: #e5e7eb;
-  --mj-sm-text: #1f2937;
-  --mj-sm-text-secondary: #6b7280;
-  --mj-sm-text-muted: #9ca3af;
-  --mj-sm-accent: #667eea;
-  --mj-sm-transition: 200ms;
+  display: block;
 }
 
 /* ============================================
@@ -22,7 +14,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--mj-bg-overlay);
   z-index: 1000;
   animation: mj-sm-fade-in 150ms ease;
 }
@@ -35,10 +27,10 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: var(--mj-sm-width);
+  width: 340px;
   max-width: 90vw;
-  background: var(--mj-sm-bg);
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+  background: var(--mj-bg-surface);
+  box-shadow: var(--mj-shadow-lg);
   display: flex;
   flex-direction: column;
   animation: mj-sm-slide-in 200ms ease;
@@ -52,41 +44,41 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  background: var(--mj-sm-header-bg);
-  border-bottom: 1px solid var(--mj-sm-border);
+  background: var(--mj-bg-surface-elevated);
+  border-bottom: 1px solid var(--mj-border-default);
   flex-shrink: 0;
 }
 
 .mj-sm-title {
   margin: 0;
   font-size: 15px;
-  font-weight: 600;
-  color: var(--mj-sm-text);
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .mj-sm-title i {
-  color: var(--mj-sm-accent);
-  font-size: 14px;
+  color: var(--mj-brand-primary);
+  font-size: var(--mj-text-sm);
 }
 
 .mj-sm-close {
   background: none;
   border: none;
-  color: var(--mj-sm-text-muted);
+  color: var(--mj-text-muted);
   cursor: pointer;
   padding: 6px;
-  font-size: 16px;
-  border-radius: 4px;
-  transition: all var(--mj-sm-transition);
+  font-size: var(--mj-text-base);
+  border-radius: var(--mj-radius-sm);
+  transition: all var(--mj-transition-base);
   line-height: 1;
 }
 
 .mj-sm-close:hover {
-  color: var(--mj-sm-text);
-  background: rgba(0, 0, 0, 0.05);
+  color: var(--mj-text-primary);
+  background: color-mix(in srgb, var(--mj-text-primary) 5%, transparent);
 }
 
 /* ============================================
@@ -103,12 +95,12 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 20px;
-  border-bottom: 1px solid #f3f4f6;
-  transition: background var(--mj-sm-transition);
+  border-bottom: 1px solid var(--mj-bg-surface-hover);
+  transition: background var(--mj-transition-base);
 }
 
 .mj-sm-row:hover {
-  background: #f9fafb;
+  background: var(--mj-bg-surface-card);
 }
 
 .mj-sm-row-info {
@@ -121,7 +113,7 @@
 
 .mj-sm-row-icon {
   font-size: 13px;
-  color: var(--mj-sm-text-secondary);
+  color: var(--mj-text-secondary);
   width: 18px;
   text-align: center;
   flex-shrink: 0;
@@ -129,8 +121,8 @@
 
 .mj-sm-row-name {
   font-size: 13px;
-  font-weight: 500;
-  color: var(--mj-sm-text);
+  font-weight: var(--mj-font-medium);
+  color: var(--mj-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -139,27 +131,27 @@
 /* Variant badges */
 .mj-sm-row-badge {
   font-size: 10px;
-  font-weight: 600;
+  font-weight: var(--mj-font-semibold);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--mj-radius-sm);
   flex-shrink: 0;
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
 
 .mj-sm-row-badge--default {
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-secondary);
 }
 
 .mj-sm-row-badge--related-entity {
-  background: #eff6ff;
-  color: #3b82f6;
+  background: color-mix(in srgb, var(--mj-status-info) 10%, var(--mj-bg-surface));
+  color: var(--mj-status-info);
 }
 
 .mj-sm-row-badge--inherited {
-  background: #f3f0ff;
-  color: #8b5cf6;
+  background: color-mix(in srgb, var(--mj-color-indigo-500) 10%, var(--mj-bg-surface));
+  color: var(--mj-color-indigo-500);
 }
 
 /* Arrow buttons */
@@ -176,19 +168,19 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  border: 1px solid var(--mj-sm-border);
-  background: white;
-  border-radius: 4px;
+  border: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
+  border-radius: var(--mj-radius-sm);
   cursor: pointer;
-  color: var(--mj-sm-text-secondary);
+  color: var(--mj-text-secondary);
   font-size: 11px;
-  transition: all var(--mj-sm-transition);
+  transition: all var(--mj-transition-base);
 }
 
 .mj-sm-arrow:hover:not(:disabled) {
-  background: var(--mj-sm-accent);
-  border-color: var(--mj-sm-accent);
-  color: white;
+  background: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
 }
 
 .mj-sm-arrow:disabled {
@@ -201,7 +193,7 @@
    ============================================ */
 .mj-sm-footer {
   padding: 14px 20px;
-  border-top: 1px solid var(--mj-sm-border);
+  border-top: 1px solid var(--mj-border-default);
   flex-shrink: 0;
 }
 
@@ -210,25 +202,25 @@
   align-items: center;
   gap: 6px;
   padding: 7px 14px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--mj-sm-text-secondary);
-  background: white;
-  border: 1px solid var(--mj-sm-border);
-  border-radius: 6px;
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-medium);
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm);
   cursor: pointer;
-  transition: all var(--mj-sm-transition);
+  transition: all var(--mj-transition-base);
   font-family: inherit;
 }
 
 .mj-sm-reset:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
-  color: var(--mj-sm-text);
+  background: var(--mj-bg-surface-hover);
+  border-color: var(--mj-border-strong);
+  color: var(--mj-text-primary);
 }
 
 .mj-sm-reset i {
-  font-size: 12px;
+  font-size: var(--mj-text-xs);
 }
 
 /* ============================================

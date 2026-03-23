@@ -664,7 +664,7 @@ interface ProgressUpdate {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       overflow: hidden;
     }
 
@@ -682,8 +682,8 @@ interface ProgressUpdate {
       justify-content: flex-end;
       gap: 12px;
       padding: 16px 20px;
-      background: white;
-      border-top: 1px solid #e0e0e0;
+      background: var(--mj-bg-surface);
+      border-top: 1px solid var(--mj-border-default);
       margin-top: auto;
     }
 
@@ -701,25 +701,25 @@ interface ProgressUpdate {
     }
 
     .cancel-btn {
-      background: #f5f5f5;
-      color: #666;
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-secondary);
     }
 
     .cancel-btn:hover {
-      background: #e0e0e0;
+      background: var(--mj-border-default);
     }
 
     .run-btn {
-      background: #2196f3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .run-btn:hover:not(:disabled) {
-      background: #1976d2;
+      background: var(--mj-brand-primary-hover);
     }
 
     .run-btn:disabled {
-      background: #ccc;
+      background: var(--mj-border-strong);
       cursor: not-allowed;
       opacity: 0.6;
     }
@@ -730,9 +730,9 @@ interface ProgressUpdate {
       align-items: center;
       justify-content: space-between;
       padding: 12px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .preselected-info {
@@ -746,11 +746,11 @@ interface ProgressUpdate {
       width: 36px;
       height: 36px;
       border-radius: 6px;
-      background: linear-gradient(135deg, #2196f3, #21cbf3);
+      background: var(--mj-brand-primary);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: white;
+      color: var(--mj-text-inverse);
       font-size: 16px;
       flex-shrink: 0;
     }
@@ -764,7 +764,7 @@ interface ProgressUpdate {
     .preselected-label {
       font-size: 12px;
       font-weight: 500;
-      color: #999;
+      color: var(--mj-text-disabled);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
@@ -772,7 +772,7 @@ interface ProgressUpdate {
     .preselected-name {
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .options-compact {
@@ -794,10 +794,10 @@ interface ProgressUpdate {
     .mode-tabs {
       display: flex;
       gap: 8px;
-      background: white;
+      background: var(--mj-bg-surface);
       padding: 8px;
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
       flex-shrink: 0;
     }
 
@@ -810,7 +810,7 @@ interface ProgressUpdate {
       padding: 12px 20px;
       border: none;
       background: transparent;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-size: 14px;
       font-weight: 500;
       border-radius: 6px;
@@ -819,13 +819,13 @@ interface ProgressUpdate {
     }
 
     .mode-tab:hover {
-      background: rgba(33, 150, 243, 0.1);
-      color: #2196f3;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+      color: var(--mj-brand-primary);
     }
 
     .mode-tab.active {
-      background: #2196f3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
     }
 
     .mode-tab i {
@@ -837,10 +837,10 @@ interface ProgressUpdate {
       display: flex;
       flex-direction: column;
       gap: 12px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
       padding: 16px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
       overflow: hidden;
     }
 
@@ -849,18 +849,18 @@ interface ProgressUpdate {
       align-items: center;
       gap: 8px;
       padding: 10px 14px;
-      background: #f5f7fa;
-      border: 2px solid #e0e4e8;
+      background: var(--mj-bg-surface-sunken);
+      border: 2px solid var(--mj-border-default);
       border-radius: 6px;
       transition: border-color 0.2s ease;
     }
 
     .search-box:focus-within {
-      border-color: #2196f3;
+      border-color: var(--mj-brand-primary);
     }
 
     .search-box i {
-      color: #999;
+      color: var(--mj-text-disabled);
       font-size: 14px;
     }
 
@@ -870,26 +870,26 @@ interface ProgressUpdate {
       background: transparent;
       outline: none;
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .search-box input::placeholder {
-      color: #999;
+      color: var(--mj-text-disabled);
     }
 
     .clear-btn {
       padding: 4px 8px;
       border: none;
       background: transparent;
-      color: #999;
+      color: var(--mj-text-disabled);
       cursor: pointer;
       border-radius: 4px;
       transition: all 0.2s ease;
     }
 
     .clear-btn:hover {
-      background: rgba(0,0,0,0.05);
-      color: #666;
+      background: var(--mj-bg-overlay);
+      color: var(--mj-text-secondary);
     }
 
     .items-list {
@@ -906,7 +906,7 @@ interface ProgressUpdate {
       align-items: flex-start;
       gap: 14px;
       padding: 16px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       border: 2px solid transparent;
       border-radius: 8px;
       cursor: pointer;
@@ -916,13 +916,13 @@ interface ProgressUpdate {
     }
 
     .item:hover {
-      background: #e3f2fd;
-      border-color: #90caf9;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
     }
 
     .item.selected {
-      background: #e3f2fd;
-      border-color: #2196f3;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      border-color: var(--mj-brand-primary);
     }
 
     .item-icon {
@@ -931,15 +931,15 @@ interface ProgressUpdate {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: #2196f3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border-radius: 8px;
       font-size: 18px;
       flex-shrink: 0;
     }
 
     .item-icon.suite {
-      background: #9c27b0;
+      background: var(--mj-brand-primary);
     }
 
     .item-content {
@@ -953,7 +953,7 @@ interface ProgressUpdate {
     .item-name {
       font-size: 15px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       line-height: 1.3;
       word-wrap: break-word;
       overflow-wrap: break-word;
@@ -961,7 +961,7 @@ interface ProgressUpdate {
 
     .item-meta {
       font-size: 13px;
-      color: #666;
+      color: var(--mj-text-secondary);
       line-height: 1.4;
       word-wrap: break-word;
       overflow-wrap: break-word;
@@ -969,7 +969,7 @@ interface ProgressUpdate {
     }
 
     .item-check {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
       font-size: 20px;
     }
 
@@ -979,7 +979,7 @@ interface ProgressUpdate {
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: #999;
+      color: var(--mj-text-disabled);
       padding: 40px;
       text-align: center;
     }
@@ -1000,9 +1000,9 @@ interface ProgressUpdate {
       flex-direction: column;
       gap: 12px;
       padding: 16px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .checkbox-label {
@@ -1021,7 +1021,7 @@ interface ProgressUpdate {
 
     .checkbox-label span {
       font-size: 14px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     /* Execution Mode */
@@ -1039,9 +1039,9 @@ interface ProgressUpdate {
       justify-content: space-between;
       align-items: center;
       padding: 16px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .execution-title {
@@ -1050,20 +1050,20 @@ interface ProgressUpdate {
       gap: 12px;
       font-size: 16px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .execution-title i {
       font-size: 20px;
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .execution-title i.fa-check-circle {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .execution-title i.fa-exclamation-circle {
-      color: #f44336;
+      color: var(--mj-status-error);
     }
 
     .execution-status {
@@ -1076,18 +1076,18 @@ interface ProgressUpdate {
     }
 
     .execution-status.running {
-      background: #e3f2fd;
-      color: #2196f3;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
     }
 
     .execution-status.success {
-      background: #e8f5e9;
-      color: #4caf50;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
     }
 
     .execution-status.error {
-      background: #ffebee;
-      color: #f44336;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
     }
 
     .progress-container {
@@ -1095,22 +1095,22 @@ interface ProgressUpdate {
       align-items: center;
       gap: 12px;
       padding: 16px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .progress-bar {
       flex: 1;
       height: 8px;
-      background: #e0e0e0;
+      background: var(--mj-border-default);
       border-radius: 4px;
       overflow: hidden;
     }
 
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #2196f3, #21cbf3);
+      background: var(--mj-brand-primary);
       border-radius: 4px;
       transition: width 0.3s ease;
     }
@@ -1118,7 +1118,7 @@ interface ProgressUpdate {
     .progress-text {
       font-size: 14px;
       font-weight: 600;
-      color: #2196f3;
+      color: var(--mj-brand-primary);
       min-width: 45px;
       text-align: right;
     }
@@ -1128,9 +1128,9 @@ interface ProgressUpdate {
       flex-direction: column;
       gap: 10px;
       padding: 16px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
       max-height: 150px;
       overflow-y: auto;
       flex-shrink: 0;
@@ -1146,7 +1146,7 @@ interface ProgressUpdate {
     }
 
     .step.active {
-      background: #e3f2fd;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     .step.completed {
@@ -1159,16 +1159,16 @@ interface ProgressUpdate {
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #999;
+      color: var(--mj-text-disabled);
       font-size: 12px;
     }
 
     .step.active .step-icon {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .step.completed .step-icon {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .step-content {
@@ -1179,13 +1179,13 @@ interface ProgressUpdate {
     .step-label {
       font-size: 13px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       margin-bottom: 2px;
     }
 
     .step-message {
       font-size: 12px;
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     .execution-log {
@@ -1194,7 +1194,7 @@ interface ProgressUpdate {
       background: #1e1e1e;
       border-radius: 8px;
       overflow: hidden;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
       flex: 1;
       min-height: 0;
     }
@@ -1205,14 +1205,14 @@ interface ProgressUpdate {
       gap: 8px;
       padding: 12px 16px;
       background: #2d2d2d;
-      color: #fff;
+      color: #e0e0e0;
       font-size: 13px;
       font-weight: 600;
       border-bottom: 1px solid #3d3d3d;
     }
 
     .log-header i {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .log-content {
@@ -1229,23 +1229,23 @@ interface ProgressUpdate {
       display: flex;
       gap: 12px;
       margin-bottom: 4px;
-      color: #e0e0e0;
+      color: #d4d4d4;
     }
 
     .log-entry.error {
-      color: #f44336;
+      color: var(--mj-status-error);
     }
 
     .log-entry.success {
-      color: #4caf50;
+      color: var(--mj-status-success);
     }
 
     .log-entry.info {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .log-time {
-      color: #999;
+      color: #888;
       min-width: 60px;
     }
 
@@ -1256,17 +1256,17 @@ interface ProgressUpdate {
     .result-summary {
       padding: 16px;
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .result-summary.success {
-      background: #e8f5e9;
-      border: 2px solid #4caf50;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      border: 2px solid var(--mj-status-success);
     }
 
     .result-summary.error {
-      background: #ffebee;
-      border: 2px solid #f44336;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      border: 2px solid var(--mj-status-error);
     }
 
     .result-header {
@@ -1279,11 +1279,11 @@ interface ProgressUpdate {
     }
 
     .result-summary.success .result-header {
-      color: #2e7d32;
+      color: var(--mj-status-success);
     }
 
     .result-summary.error .result-header {
-      color: #c62828;
+      color: var(--mj-status-error);
     }
 
     .result-header i {
@@ -1300,19 +1300,19 @@ interface ProgressUpdate {
       display: flex;
       justify-content: space-between;
       padding: 8px 12px;
-      background: rgba(255,255,255,0.5);
+      background: color-mix(in srgb, var(--mj-bg-surface) 50%, transparent);
       border-radius: 4px;
     }
 
     .result-label {
       font-weight: 600;
-      color: #666;
+      color: var(--mj-text-secondary);
       font-size: 13px;
     }
 
     .result-value {
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
       font-size: 13px;
     }
 
@@ -1321,9 +1321,9 @@ interface ProgressUpdate {
       align-items: flex-start;
       gap: 12px;
       padding: 14px;
-      background: rgba(255,255,255,0.7);
+      background: color-mix(in srgb, var(--mj-bg-surface) 70%, transparent);
       border-radius: 6px;
-      color: #c62828;
+      color: var(--mj-status-error);
       font-size: 13px;
       line-height: 1.5;
       word-break: break-word;
@@ -1342,13 +1342,13 @@ interface ProgressUpdate {
     /* Tags Section Styles */
     .tags-section {
       padding: 10px 12px;
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .tags-section.selection-mode-tags {
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
     }
 
     .tags-header {
@@ -1358,15 +1358,15 @@ interface ProgressUpdate {
       margin-bottom: 8px;
       font-size: 13px;
       font-weight: 500;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .tags-header i {
-      color: #2196f3;
+      color: var(--mj-brand-primary);
     }
 
     .tags-hint {
-      color: #999;
+      color: var(--mj-text-disabled);
       font-weight: 400;
       font-size: 12px;
     }
@@ -1389,8 +1389,8 @@ interface ProgressUpdate {
       align-items: center;
       gap: 6px;
       padding: 4px 10px;
-      background: #e3f2fd;
-      color: #1976d2;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary-hover);
       border-radius: 16px;
       font-size: 13px;
       font-weight: 500;
@@ -1404,16 +1404,16 @@ interface ProgressUpdate {
       height: 18px;
       padding: 0;
       border: none;
-      background: rgba(0,0,0,0.1);
-      color: #1976d2;
+      background: var(--mj-bg-overlay);
+      color: var(--mj-brand-primary-hover);
       border-radius: 50%;
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .tag-remove:hover {
-      background: rgba(0,0,0,0.2);
-      color: #c62828;
+      background: color-mix(in srgb, var(--mj-status-error) 20%, transparent);
+      color: var(--mj-status-error);
     }
 
     .tag-remove i {
@@ -1429,7 +1429,7 @@ interface ProgressUpdate {
     .tag-input {
       flex: 1;
       padding: 6px 10px;
-      border: 1px solid #e0e4e8;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 12px;
       outline: none;
@@ -1437,11 +1437,11 @@ interface ProgressUpdate {
     }
 
     .tag-input:focus {
-      border-color: #2196f3;
+      border-color: var(--mj-brand-primary);
     }
 
     .tag-input::placeholder {
-      color: #999;
+      color: var(--mj-text-disabled);
     }
 
     .tag-add-btn {
@@ -1452,19 +1452,19 @@ interface ProgressUpdate {
       height: 28px;
       padding: 0;
       border: none;
-      background: #2196f3;
-      color: white;
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
       border-radius: 4px;
       cursor: pointer;
       transition: all 0.2s ease;
     }
 
     .tag-add-btn:hover:not(:disabled) {
-      background: #1976d2;
+      background: var(--mj-brand-primary-hover);
     }
 
     .tag-add-btn:disabled {
-      background: #ccc;
+      background: var(--mj-border-strong);
       cursor: not-allowed;
     }
 
@@ -1474,9 +1474,9 @@ interface ProgressUpdate {
 
     /* Advanced Options - Progressive Disclosure */
     .advanced-options-section {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
       overflow: hidden;
     }
 
@@ -1491,17 +1491,17 @@ interface ProgressUpdate {
       cursor: pointer;
       font-size: 13px;
       font-weight: 500;
-      color: #555;
+      color: var(--mj-text-secondary);
       text-align: left;
       transition: background 0.2s ease;
     }
 
     .advanced-toggle:hover {
-      background: #f5f7fa;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .advanced-toggle i {
-      color: #999;
+      color: var(--mj-text-disabled);
       font-size: 12px;
       transition: transform 0.2s ease;
     }
@@ -1509,8 +1509,8 @@ interface ProgressUpdate {
     .test-count-badge {
       margin-left: auto;
       padding: 2px 8px;
-      background: #e3f2fd;
-      color: #1976d2;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary-hover);
       border-radius: 10px;
       font-size: 11px;
       font-weight: 500;
@@ -1518,7 +1518,7 @@ interface ProgressUpdate {
 
     .advanced-content {
       padding: 0 12px 12px 12px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--mj-border-default);
     }
 
     .selection-mode-tabs {
@@ -1534,9 +1534,9 @@ interface ProgressUpdate {
       justify-content: center;
       gap: 6px;
       padding: 8px 12px;
-      border: 1px solid #e0e4e8;
-      background: white;
-      color: #666;
+      border: 1px solid var(--mj-border-default);
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-secondary);
       font-size: 12px;
       font-weight: 500;
       border-radius: 4px;
@@ -1545,14 +1545,14 @@ interface ProgressUpdate {
     }
 
     .selection-tab:hover {
-      border-color: #90caf9;
-      color: #2196f3;
+      border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+      color: var(--mj-brand-primary);
     }
 
     .selection-tab.active {
-      border-color: #2196f3;
-      background: #e3f2fd;
-      color: #1976d2;
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary-hover);
     }
 
     .selection-tab i {
@@ -1561,7 +1561,7 @@ interface ProgressUpdate {
 
     /* Test Selection Panel */
     .test-selection-panel {
-      border: 1px solid #e0e4e8;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       overflow: hidden;
     }
@@ -1571,8 +1571,8 @@ interface ProgressUpdate {
       align-items: center;
       justify-content: space-between;
       padding: 6px 10px;
-      background: #f8f9fa;
-      border-bottom: 1px solid #e0e4e8;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
     }
 
     .select-all {
@@ -1582,7 +1582,7 @@ interface ProgressUpdate {
 
     .selection-count {
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     .test-list {
@@ -1597,7 +1597,7 @@ interface ProgressUpdate {
       padding: 6px 10px;
       cursor: pointer;
       transition: background 0.2s ease;
-      border-bottom: 1px solid #f0f0f0;
+      border-bottom: 1px solid var(--mj-bg-surface-sunken);
     }
 
     .test-item:last-child {
@@ -1605,11 +1605,11 @@ interface ProgressUpdate {
     }
 
     .test-item:hover {
-      background: #f5f7fa;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .test-item.selected {
-      background: #e8f4fd;
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     }
 
     .test-item input[type="checkbox"] {
@@ -1621,20 +1621,20 @@ interface ProgressUpdate {
     .test-sequence {
       font-size: 11px;
       font-weight: 600;
-      color: #999;
+      color: var(--mj-text-disabled);
       min-width: 24px;
     }
 
     .test-name {
       flex: 1;
       font-size: 12px;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     /* Sequence Range Panel */
     .sequence-range-panel {
       padding: 10px;
-      background: #f8f9fa;
+      background: var(--mj-bg-surface-card);
       border-radius: 4px;
     }
 
@@ -1654,12 +1654,12 @@ interface ProgressUpdate {
     .range-field label {
       font-size: 11px;
       font-weight: 500;
-      color: #666;
+      color: var(--mj-text-secondary);
     }
 
     .sequence-input {
       padding: 8px 10px;
-      border: 1px solid #e0e4e8;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 13px;
       text-align: center;
@@ -1668,19 +1668,19 @@ interface ProgressUpdate {
     }
 
     .sequence-input:focus {
-      border-color: #2196f3;
+      border-color: var(--mj-brand-primary);
     }
 
     .range-separator {
       padding-bottom: 8px;
-      color: #999;
+      color: var(--mj-text-disabled);
     }
 
     .range-summary {
       margin-top: 8px;
       padding: 8px;
-      background: #e8f5e9;
-      color: #2e7d32;
+      background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-success);
       border-radius: 4px;
       font-size: 12px;
       text-align: center;
@@ -1689,8 +1689,8 @@ interface ProgressUpdate {
     .range-error {
       margin-top: 8px;
       padding: 8px;
-      background: #ffebee;
-      color: #c62828;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
       border-radius: 4px;
       font-size: 12px;
       display: flex;
@@ -1708,9 +1708,9 @@ interface ProgressUpdate {
 
     /* Variables Section Styles */
     .variables-section {
-      background: white;
+      background: var(--mj-bg-surface);
       border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: var(--mj-shadow-sm);
       overflow: hidden;
     }
 
@@ -1725,24 +1725,24 @@ interface ProgressUpdate {
       cursor: pointer;
       font-size: 13px;
       font-weight: 500;
-      color: #555;
+      color: var(--mj-text-secondary);
       text-align: left;
       transition: background 0.2s ease;
     }
 
     .variables-toggle:hover {
-      background: #f5f7fa;
+      background: var(--mj-bg-surface-sunken);
     }
 
     .variables-toggle .fa-sliders {
-      color: #9c27b0;
+      color: var(--mj-brand-primary);
     }
 
     .variables-count-badge {
       margin-left: auto;
       padding: 2px 8px;
-      background: #f3e5f5;
-      color: #7b1fa2;
+      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary-hover);
       border-radius: 10px;
       font-size: 11px;
       font-weight: 500;
@@ -1750,7 +1750,7 @@ interface ProgressUpdate {
 
     .variables-content {
       padding: 0 12px 12px 12px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--mj-border-default);
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -1772,12 +1772,12 @@ interface ProgressUpdate {
     .variable-label {
       font-size: 13px;
       font-weight: 600;
-      color: #333;
+      color: var(--mj-text-primary);
     }
 
     .variable-description {
       font-size: 11px;
-      color: #666;
+      color: var(--mj-text-secondary);
       line-height: 1.3;
     }
 
@@ -1789,21 +1789,21 @@ interface ProgressUpdate {
     .variable-input-field {
       width: 100%;
       padding: 8px 10px;
-      border: 1px solid #e0e4e8;
+      border: 1px solid var(--mj-border-default);
       border-radius: 4px;
       font-size: 13px;
       outline: none;
       transition: border-color 0.2s ease;
-      background: white;
+      background: var(--mj-bg-surface);
     }
 
     .variable-select:focus,
     .variable-input-field:focus {
-      border-color: #9c27b0;
+      border-color: var(--mj-brand-primary);
     }
 
     .variable-input-field::placeholder {
-      color: #999;
+      color: var(--mj-text-disabled);
     }
   `]
 })

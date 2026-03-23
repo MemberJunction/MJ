@@ -22,7 +22,7 @@
 }
 
 .dashboard-title h3 {
-    color: #424242;
+    color: var(--mj-text-secondary);
     font-size: 28px;
     font-style: normal;
     font-weight: 300;
@@ -80,11 +80,11 @@
     margin-top: 20px;
     padding: 15px;
     border-radius: 8px;
-    background-color: #f9f9f9;
+    background-color: var(--mj-bg-surface-card);
 }
 
 .tile-resource-container .k-tilelayout {
-    background: #fff;
+    background: var(--mj-bg-surface);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
     border-radius: 8px;
     padding: 10px;
@@ -99,16 +99,16 @@
 }
 
 .bg-light-grey {
-    background-color: #f0f0f0;
+    background-color: var(--mj-bg-surface-sunken);
 }
 
 .bg-dark-grey {
-    background-color: #5a5a5a;
+    background-color: var(--mj-text-secondary);
     color: white;
 }
 
 .bg-blue {
-    background-color: #4250AD;
+    background-color: var(--mj-brand-primary);
     color: white;
 }
 
@@ -145,8 +145,8 @@
     justify-content: center;
     padding: 40px;
     text-align: center;
-    color: #666;
-    background-color: #f9f9f9;
+    color: var(--mj-text-secondary);
+    background-color: var(--mj-bg-surface-card);
     border-radius: 8px;
     margin-top: 20px;
 }
@@ -154,7 +154,7 @@
 .empty-dashboard i {
     font-size: 48px;
     margin-bottom: 20px;
-    color: #ccc;
+    color: var(--mj-border-strong);
 }
 
 .empty-dashboard h3 {

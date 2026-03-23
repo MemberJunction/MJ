@@ -21,21 +21,6 @@ UPDATE pg_cast SET castcontext = 'i'
 WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
 
 
--- ===================== DDL: Tables, PKs, Indexes =====================
-
-
--- ===================== Helper Functions (fn*) =====================
-
-
--- ===================== Views =====================
-
-
--- ===================== Stored Procedures (sp*) =====================
-
-
--- ===================== Triggers =====================
-
-
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
 -- Fix EntityRelationship records for MJ: Roles entity                                                                                                                                                                                                                                                                   
@@ -54,12 +39,3 @@ WHERE "EntityID" = (
     SELECT "ID" FROM __mj."Entity" WHERE "Name" = 'MJ: Roles'
 )
 AND "RelatedEntityJoinField" = 'RoleName';
-
-
--- ===================== FK & CHECK Constraints =====================
-
-
--- ===================== Grants =====================
-
-
--- ===================== Comments =====================

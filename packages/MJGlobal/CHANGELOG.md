@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/global
 
+## 5.15.0
+
+## 5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- f72b538: Replace HookRegistry and DynamicPackageLoader with @RegisterClass + ClassFactory middleware pattern, and add GetResolverPaths() to BaseServerMiddleware for auto-discovery of middleware-contributed GraphQL resolvers
+
+## 5.12.0
+
+## 5.11.0
+
+## 5.10.1
+
+## 5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- 194ddf2: Add Redis-backed ILocalStorageProvider with cross-server cache invalidation via pub/sub
+
 ## 5.8.0
 
 ## 5.7.0

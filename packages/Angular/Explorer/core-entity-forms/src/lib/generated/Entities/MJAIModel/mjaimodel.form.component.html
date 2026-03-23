@@ -128,6 +128,22 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="SupportsPrefill"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="PrefillFallbackText"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="DriverClass"
             Type="textbox"
             [EditMode]="EditMode"
@@ -606,10 +622,10 @@
         }
     </mj-collapsible-panel>
 
-    <!-- AI Prompt Runs (Original Model ID) Section -->
+    <!-- AI Prompt Runs (Original Model) Section -->
     <mj-collapsible-panel
         SectionKey="mJAIPromptRunsOriginalModelID"
-        SectionName="AI Prompt Runs (Original Model ID)"
+        SectionName="AI Prompt Runs (Original Model)"
         Icon="fa fa-robot"
         Variant="related-entity"
         [Form]="this"

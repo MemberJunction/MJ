@@ -74,7 +74,7 @@ kendo-buttongroup .k-button {
     background-position: center center;
     vertical-align: middle;
     line-height: 32px;
-    box-shadow: inset 0 0 1px #999, inset 0 0 10px rgba(0, 0, 0, 0.2);
+    box-shadow: inset 0 0 1px var(--mj-text-muted), inset 0 0 10px rgba(0, 0, 0, 0.2);
     margin-left: 5px;
 }
 
@@ -86,7 +86,7 @@ kendo-buttongroup .k-button {
 }
 
 .red {
-    color: #d9534f;
+    color: var(--mj-status-error);
 }
 
 // Chart
@@ -140,12 +140,12 @@ kendo-recurrence-frequency-editor .k-edit-field {
 }
 
 .material-bg .k-dropdown-wrap.k-state-focused {
-    border-color: #697bcf;
+    border-color: var(--mj-brand-primary);
     border-bottom-width: 2px;
 }
 
 .material-bg .k-dropdown-wrap:hover {
-    border-color: #2942bb;
+    border-color: var(--mj-brand-primary-hover);
     border-bottom-width: 2px;
 }
 
@@ -176,7 +176,7 @@ kendo-recurrence-frequency-editor .k-edit-field {
     #txtSearch {
         width: 300px;
         height: 30px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--mj-border-default);
         border-radius: 5px;
         margin-right: 5px;
         margin-left: 10px;
@@ -184,7 +184,7 @@ kendo-recurrence-frequency-editor .k-edit-field {
 }
 
 .item {
-    border: 1px solid #e1e0e1;
+    border: 1px solid var(--mj-border-default);
     border-radius: 5px;
     padding: 12px 10px;
     font-size: 16px;
@@ -200,9 +200,9 @@ kendo-recurrence-frequency-editor .k-edit-field {
 
 .item.active,
 .employee.active {
-    background-color: #f55f54;
-    color: #fff;
-    border-color: #f55f54;
+    background-color: var(--mj-status-error);
+    color: var(--mj-text-inverse, white);
+    border-color: var(--mj-status-error);
     z-index: 10;
 }
 

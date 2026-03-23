@@ -148,6 +148,7 @@ export class ActionEngineServer extends ActionEngineBase {
             RunParams: params,
             Success: simpleResult.Success,
             Message: simpleResult.Message,
+            AIDirectives: simpleResult.AIDirectives,
             LogEntry: logEntry,
             Params: simpleResult.Params || params.Params, // use the params from the simple result if provided, otherwise use the original params
             Result: resultCodeEntity

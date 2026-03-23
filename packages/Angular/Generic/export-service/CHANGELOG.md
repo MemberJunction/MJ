@@ -1,5 +1,55 @@
 # @memberjunction/ng-export-service
 
+## 5.15.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.15.0
+
+## 5.14.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.14.0
+
+## 5.13.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.13.0
+
+## 5.12.0
+
+### Patch Changes
+
+- a57b8d5: Migrate all hardcoded CSS colors to design tokens for dark mode and white-label support. Introduces `--mj-*` semantic CSS custom properties in `_tokens.scss` with full `[data-theme="dark"]` overrides. Migrates 1,544 of 1,659 hardcoded hex values (93%) across 72+ CSS files to semantic tokens. Adds logo token system (`--mj-logo-mark`, `--mj-logo-color`) for themeable branding. Fixes dark mode theming for CodeMirror, AG Grid v35, and Kendo popups. No API or behavioral changes — CSS only.
+- e87d153: design tokens phase 1
+  - @memberjunction/export-engine@5.12.0
+
+## 5.11.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.11.0
+
+## 5.10.1
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.10.1
+
+## 5.10.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.10.0
+
+## 5.9.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.9.0
+
 ## 5.8.0
 
 ### Patch Changes

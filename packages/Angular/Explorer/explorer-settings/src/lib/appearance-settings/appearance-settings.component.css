@@ -6,12 +6,12 @@
   font-size: 1.5rem;
   font-weight: 600;
   margin: 0 0 0.5rem 0;
-  color: var(--mj-text-primary, #1a1a1a);
+  color: var(--mj-text-primary);
 }
 
 .section-description {
   font-size: 0.875rem;
-  color: var(--mj-text-secondary, #666);
+  color: var(--mj-text-secondary);
   margin: 0 0 1.5rem 0;
 }
 
@@ -20,7 +20,7 @@
   align-items: center;
   gap: 1.5rem;
   padding: 2rem;
-  background: linear-gradient(135deg, var(--mj-primary-light, #dbeafe) 0%, var(--mj-info-bg, #e0f2fe) 100%);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
   border-radius: 16px;
   margin-bottom: 2rem;
 }
@@ -31,7 +31,7 @@
   justify-content: center;
   width: 4rem;
   height: 4rem;
-  background: white;
+  background: var(--mj-bg-surface);
   border-radius: 12px;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   flex-shrink: 0;
@@ -39,19 +39,19 @@
 
 .banner-icon i {
   font-size: 2rem;
-  color: var(--mj-primary-color, #3b82f6);
+  color: var(--mj-brand-primary);
 }
 
 .banner-content h3 {
   font-size: 1.25rem;
   font-weight: 600;
-  color: var(--mj-text-primary, #1f2937);
+  color: var(--mj-text-primary);
   margin: 0 0 0.5rem 0;
 }
 
 .banner-content p {
   font-size: 0.875rem;
-  color: var(--mj-text-secondary, #4b5563);
+  color: var(--mj-text-secondary);
   margin: 0;
 }
 
@@ -64,7 +64,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--mj-text-secondary, #6b7280);
+  color: var(--mj-text-secondary);
   margin: 0 0 1rem 0;
 }
 
@@ -79,8 +79,8 @@
   align-items: center;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  background: var(--mj-surface-color, #fff);
-  border: 1px solid var(--mj-border-color, #e5e7eb);
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 12px;
   opacity: 0.7;
 }
@@ -91,14 +91,14 @@
   justify-content: center;
   width: 2.5rem;
   height: 2.5rem;
-  background: var(--mj-surface-secondary, #f3f4f6);
+  background: var(--mj-bg-surface-sunken);
   border-radius: 8px;
   flex-shrink: 0;
 }
 
 .feature-icon i {
   font-size: 1rem;
-  color: var(--mj-text-secondary, #6b7280);
+  color: var(--mj-text-secondary);
 }
 
 .feature-info {
@@ -108,12 +108,12 @@
 
 .feature-title {
   font-weight: 500;
-  color: var(--mj-text-primary, #1f2937);
+  color: var(--mj-text-primary);
 }
 
 .feature-desc {
   font-size: 0.875rem;
-  color: var(--mj-text-secondary, #6b7280);
+  color: var(--mj-text-secondary);
 }
 
 @media (max-width: 480px) {

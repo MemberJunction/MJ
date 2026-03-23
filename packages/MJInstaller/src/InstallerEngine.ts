@@ -43,8 +43,13 @@ import { SmokeTestPhase } from './phases/SmokeTestPhase.js';
 import { InstallPlan, type CreatePlanInput, type RunOptions, type DoctorOptions, type InstallResult } from './models/InstallPlan.js';
 import { InstallState } from './models/InstallState.js';
 import { InstallConfigDefaults, resolveFromEnvironment, loadConfigFile, mergeConfigs, type PartialInstallConfig } from './models/InstallConfig.js';
+import { EventLogger } from './logging/EventLogger.js';
+import { ReportGenerator, type ReportData, type ServiceLogCapture } from './logging/ReportGenerator.js';
+import { FileSystemAdapter } from './adapters/FileSystemAdapter.js';
+import { ProcessRunner } from './adapters/ProcessRunner.js';
 import type { VersionInfo } from './models/VersionInfo.js';
 import type { Diagnostics } from './models/Diagnostics.js';
+import path from 'node:path';
 
 /**
  * Ordered list of all install phases in execution order.
@@ -99,6 +104,12 @@ export class InstallerEngine {
   private dependency = new DependencyPhase();
   private codeGen = new CodeGenPhase();
   private smokeTest = new SmokeTestPhase();
+
+  /** Event logger that captures all events for diagnostic reports. */
+  private eventLogger = new EventLogger();
+
+  /** Report generator for producing diagnostic markdown files. */
+  private reportGenerator = new ReportGenerator();
 
   /**
    * Resolved config accumulator — populated incrementally by the configure phase,
@@ -206,8 +217,13 @@ export class InstallerEngine {
     const yes = options?.Yes ?? false;
     const fast = options?.Fast ?? false;
 
+    // Attach event logger for diagnostic capture
+    this.eventLogger.Clear();
+    this.eventLogger.Attach(this.emitter);
+
     // Dry-run: the plan itself is the output, so Run is a no-op
     if (options?.DryRun) {
+      this.eventLogger.Detach();
       return {
         Success: true,
         DurationMs: 0,
@@ -358,24 +374,31 @@ export class InstallerEngine {
           Error: installerError,
         });
 
-        // Stop on failure
-        return {
+        // Stop on failure — auto-generate diagnostic report
+        const failResult: InstallResult = {
           Success: false,
           DurationMs: Date.now() - startTime,
           Warnings: warnings,
           PhasesCompleted: phasesCompleted,
           PhasesFailed: phasesFailed,
         };
+
+        await this.generateFailureReport(plan.Dir, state, failResult, config);
+        this.eventLogger.Detach();
+        return failResult;
       }
     }
 
-    return {
+    const successResult: InstallResult = {
       Success: true,
       DurationMs: Date.now() - startTime,
       Warnings: warnings,
       PhasesCompleted: phasesCompleted,
       PhasesFailed: phasesFailed,
     };
+
+    this.eventLogger.Detach();
+    return successResult;
   }
 
   /**
@@ -391,6 +414,14 @@ export class InstallerEngine {
    */
   async Doctor(targetDir: string, options?: DoctorOptions): Promise<Diagnostics> {
     const config: PartialInstallConfig = { ...InstallConfigDefaults };
+
+    // ReportExtended implies Report
+    const extended = options?.ReportExtended ?? false;
+    const generateReport = extended || (options?.Report ?? false);
+    if (generateReport) {
+      this.eventLogger.Clear();
+      this.eventLogger.Attach(this.emitter);
+    }
 
     const diagnostics = await this.preflight.RunDiagnostics(targetDir, config, this.emitter);
 
@@ -427,6 +458,21 @@ export class InstallerEngine {
           Message: `${result.Id}: not present or already patched`,
         });
       }
+    }
+
+    // Run auth configuration validation checks (fast — always runs)
+    await this.runAuthValidationChecks(targetDir, diagnostics);
+
+    // Generate diagnostic report if requested
+    if (generateReport) {
+      const reportPath = await this.generateDoctorReport(targetDir, state, diagnostics, config, extended);
+      this.eventLogger.Detach();
+
+      this.emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: `Diagnostic report saved to: ${reportPath}`,
+      });
     }
 
     return diagnostics;
@@ -502,6 +548,7 @@ export class InstallerEngine {
     }
   }
 
+  /** Run preflight checks (Node version, disk space, ports, SQL connectivity). */
   private async executePreflight(
     plan: InstallPlan,
     config: PartialInstallConfig
@@ -528,6 +575,7 @@ export class InstallerEngine {
     return { Warnings: warningMessages };
   }
 
+  /** Download and extract the selected MemberJunction release from GitHub. */
   private async executeScaffold(
     plan: InstallPlan,
     config: PartialInstallConfig,
@@ -551,6 +599,7 @@ export class InstallerEngine {
     return { Warnings: [] };
   }
 
+  /** Gather config values (prompts or defaults) and generate `.env`, `mj.config.cjs`, and environment files. */
   private async executeConfigure(
     plan: InstallPlan,
     config: PartialInstallConfig,
@@ -569,6 +618,7 @@ export class InstallerEngine {
     return { Warnings: [] };
   }
 
+  /** Generate SQL setup/validation scripts and optionally validate database connectivity. */
   private async executeDatabase(
     plan: InstallPlan,
     yes: boolean
@@ -588,16 +638,19 @@ export class InstallerEngine {
     return { Warnings: warnings };
   }
 
+  /** Run Flyway database migrations to create/update the `__mj` schema. */
   private async executeMigrate(plan: InstallPlan): Promise<PhaseExecutionResult> {
     await this.migrate.Run({
       Dir: plan.Dir,
       Config: this.resolvedConfig,
       Emitter: this.emitter,
+      VersionTag: plan.Tag,
     });
 
     return { Warnings: [] };
   }
 
+  /** Patch npm scripts for OS compatibility (e.g. `cross-env` on Windows). */
   private async executePlatform(plan: InstallPlan): Promise<PhaseExecutionResult> {
     const result = await this.platformCompat.Run({
       Dir: plan.Dir,
@@ -613,20 +666,24 @@ export class InstallerEngine {
     return { Warnings: warnings };
   }
 
+  /** Run `npm install` and `npm run build` to install and compile all packages. */
   private async executeDependencies(plan: InstallPlan): Promise<PhaseExecutionResult> {
     const result = await this.dependency.Run({
       Dir: plan.Dir,
+      Tag: plan.Tag,
       Emitter: this.emitter,
     });
 
     return { Warnings: result.Warnings };
   }
 
+  /** Run `mj codegen` to generate entities, manifests, and apply known-issue patches. */
   private async executeCodeGen(plan: InstallPlan, fast: boolean): Promise<PhaseExecutionResult> {
     const result = await this.codeGen.Run({
       Dir: plan.Dir,
       Emitter: this.emitter,
       Fast: fast,
+      VersionTag: plan.Tag,
     });
 
     const warnings: string[] = [];
@@ -637,6 +694,7 @@ export class InstallerEngine {
     return { Warnings: warnings };
   }
 
+  /** Start MJAPI and Explorer, verify they launch, then shut them down. */
   private async executeSmokeTest(plan: InstallPlan): Promise<PhaseExecutionResult> {
     const result = await this.smokeTest.Run({
       Dir: plan.Dir,
@@ -653,6 +711,515 @@ export class InstallerEngine {
     }
 
     return { Warnings: warnings };
+  }
+
+  // -------------------------------------------------------------------------
+  // Diagnostic report generation
+  // -------------------------------------------------------------------------
+
+  /**
+   * Auto-generate a diagnostic report after an install failure.
+   *
+   * Collects environment info, install state, sanitized config, and the
+   * full event log into a markdown file in the install directory.
+   *
+   * @param targetDir - Install directory where the report is saved.
+   * @param state - Current install checkpoint state.
+   * @param result - The install result with failure details.
+   * @param config - Resolved config (passwords will be redacted).
+   */
+  private async generateFailureReport(
+    targetDir: string,
+    state: InstallState,
+    result: InstallResult,
+    config: PartialInstallConfig
+  ): Promise<void> {
+    try {
+      const reportData: ReportData = {
+        TargetDir: targetDir,
+        Trigger: 'install-failure',
+        InstallState: state.ToJSON(),
+        InstallResult: result,
+        Config: config,
+        EventLog: this.eventLogger.Entries,
+      };
+
+      // Try to get environment info from a quick preflight diagnostic
+      try {
+        const diagnostics = await this.preflight.RunDiagnostics(targetDir, config, this.emitter);
+        reportData.Environment = diagnostics.Environment;
+        reportData.Diagnostics = diagnostics;
+      } catch {
+        // Preflight may fail — that's fine, we generate what we can
+      }
+
+      const reportPath = await this.reportGenerator.Generate(reportData);
+      this.emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: `Diagnostic report saved to: ${reportPath}`,
+      });
+      this.emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: 'Share this report when requesting installation support.',
+      });
+    } catch {
+      // Report generation is best-effort — don't fail the install flow
+    }
+  }
+
+  /**
+   * Generate a diagnostic report for `mj doctor --report`.
+   *
+   * Collects config file snapshots, service startup logs, key file checks,
+   * and all other diagnostic data into a comprehensive markdown report.
+   *
+   * @param targetDir - Directory being diagnosed.
+   * @param state - Install state from checkpoint (if available).
+   * @param diagnostics - Completed diagnostic results.
+   * @param config - Current config (passwords will be redacted).
+   * @returns Absolute path to the generated report file.
+   */
+  private async generateDoctorReport(
+    targetDir: string,
+    state: InstallState | null,
+    diagnostics: Diagnostics,
+    config: PartialInstallConfig,
+    extended: boolean = false
+  ): Promise<string> {
+    // Check key files (fast — always included)
+    const keyFiles = await this.reportGenerator.CheckKeyFiles(targetDir);
+
+    const reportData: ReportData = {
+      TargetDir: targetDir,
+      Trigger: 'doctor-report',
+      Environment: diagnostics.Environment,
+      Diagnostics: diagnostics,
+      Config: config,
+      EventLog: this.eventLogger.Entries,
+    };
+
+    if (state) {
+      reportData.InstallState = state.ToJSON();
+    }
+
+    // Extended report: add config file snapshots and service startup logs
+    if (extended) {
+      this.emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'preflight',
+        Message: 'Collecting configuration files...',
+      });
+      reportData.ConfigFiles = await this.reportGenerator.SnapshotConfigFiles(targetDir);
+
+      this.emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'preflight',
+        Message: 'Capturing service startup logs (this may take up to 3 minutes)...',
+      });
+      reportData.ServiceLogs = await this.captureServiceLogs(targetDir, config);
+    }
+
+    // Generate the base report, then inject key files section
+    let markdown = this.reportGenerator.Render(reportData);
+
+    // Replace placeholder key files section with actual results
+    const keyFilesSection = this.renderKeyFilesSection(keyFiles);
+    markdown = markdown.replace(
+      /## Key Files\n\n_File existence checks will be populated when the report is generated with a target directory._/,
+      keyFilesSection
+    );
+
+    // Write final report
+    const fsModule = await import('node:fs/promises');
+    const filename = extended ? 'mj-diagnostic-report-extended.md' : 'mj-diagnostic-report.md';
+    const finalPath = path.join(targetDir, filename);
+    await fsModule.writeFile(finalPath, markdown, 'utf-8');
+
+    return finalPath;
+  }
+
+  /**
+   * Render the key files section with actual existence check results.
+   *
+   * @param keyFiles - Results from checking key file existence.
+   * @returns Markdown section string.
+   */
+  private renderKeyFilesSection(
+    keyFiles: Array<{ Path: string; Description: string; Exists: boolean }>
+  ): string {
+    const lines = [
+      '## Key Files',
+      '',
+      '| File | Description | Status |',
+      '|------|-------------|--------|',
+    ];
+    for (const file of keyFiles) {
+      const status = file.Exists ? 'Found' : '**MISSING**';
+      lines.push(`| ${file.Path} | ${file.Description} | ${status} |`);
+    }
+    return lines.join('\n');
+  }
+
+  // -------------------------------------------------------------------------
+  // Auth validation checks
+  // -------------------------------------------------------------------------
+
+  /**
+   * Validate authentication configuration across all config files.
+   *
+   * Checks for common misconfiguration patterns like AUTH_TYPE='msal' with
+   * empty CLIENT_ID, or .env and environment.ts having conflicting auth settings.
+   *
+   * @param targetDir - Install directory to check.
+   * @param diagnostics - Diagnostics object to add checks to.
+   */
+  private async runAuthValidationChecks(
+    targetDir: string,
+    diagnostics: Diagnostics
+  ): Promise<void> {
+    const fs = new FileSystemAdapter();
+
+    // Find and parse Explorer environment.ts
+    const envTsCandidates = [
+      path.join(targetDir, 'apps', 'MJExplorer', 'src', 'environments', 'environment.ts'),
+      path.join(targetDir, 'packages', 'MJExplorer', 'src', 'environments', 'environment.ts'),
+    ];
+
+    let authType = '';
+    let clientId = '';
+    let tenantId = '';
+    let auth0Domain = '';
+    let auth0ClientId = '';
+    let envTsFound = false;
+
+    for (const candidate of envTsCandidates) {
+      if (await fs.FileExists(candidate)) {
+        envTsFound = true;
+        const content = await fs.ReadText(candidate);
+
+        // Extract auth values from TypeScript (keys may be quoted or unquoted)
+        const authTypeMatch = content.match(/["']?AUTH_TYPE["']?\s*:\s*['"]([^'"]*)['"]/);
+        const clientIdMatch = content.match(/["']?CLIENT_ID["']?\s*:\s*['"]([^'"]*)['"]/);
+        const tenantIdMatch = content.match(/["']?TENANT_ID["']?\s*:\s*['"]([^'"]*)['"]/);
+        const auth0DomainMatch = content.match(/["']?AUTH0_DOMAIN["']?\s*:\s*['"]([^'"]*)['"]/);
+        const auth0ClientIdMatch = content.match(/["']?AUTH0_CLIENTID["']?\s*:\s*['"]([^'"]*)['"]/);
+
+        authType = authTypeMatch?.[1] ?? '';
+        clientId = clientIdMatch?.[1] ?? '';
+        tenantId = tenantIdMatch?.[1] ?? '';
+        auth0Domain = auth0DomainMatch?.[1] ?? '';
+        auth0ClientId = auth0ClientIdMatch?.[1] ?? '';
+        break;
+      }
+    }
+
+    if (!envTsFound) {
+      diagnostics.AddCheck({
+        Name: 'Explorer environment.ts',
+        Status: 'warn',
+        Message: 'Explorer environment.ts not found. MJExplorer may not be installed.',
+        SuggestedFix: 'Run "mj install" to generate environment files.',
+      });
+      this.emitDiagnostic('Explorer environment.ts', 'warn', 'Explorer environment.ts not found.');
+      return;
+    }
+
+    // Check AUTH_TYPE is set
+    if (!authType) {
+      diagnostics.AddCheck({
+        Name: 'Auth configuration',
+        Status: 'warn',
+        Message: 'AUTH_TYPE is not set in environment.ts.',
+        SuggestedFix: 'Set AUTH_TYPE to "msal" or "auth0" in environment.ts.',
+      });
+      this.emitDiagnostic('Auth configuration', 'warn', 'AUTH_TYPE is not set in environment.ts.');
+      return;
+    }
+
+    // MSAL auth checks
+    if (authType === 'msal') {
+      if (!clientId) {
+        diagnostics.AddCheck({
+          Name: 'MSAL CLIENT_ID',
+          Status: 'fail',
+          Message: 'AUTH_TYPE is "msal" but CLIENT_ID is empty. Browser will show Azure login errors.',
+          SuggestedFix: 'Set CLIENT_ID in environment.ts to your Azure AD Application (client) ID.',
+        });
+        this.emitDiagnostic('MSAL CLIENT_ID', 'fail', 'AUTH_TYPE is "msal" but CLIENT_ID is empty.');
+      } else {
+        diagnostics.AddCheck({ Name: 'MSAL CLIENT_ID', Status: 'pass', Message: `CLIENT_ID is set (${clientId.slice(0, 8)}...)` });
+        this.emitDiagnostic('MSAL CLIENT_ID', 'pass', 'CLIENT_ID is configured.');
+      }
+
+      if (!tenantId) {
+        diagnostics.AddCheck({
+          Name: 'MSAL TENANT_ID',
+          Status: 'fail',
+          Message: 'AUTH_TYPE is "msal" but TENANT_ID is empty. Browser will show Azure login errors.',
+          SuggestedFix: 'Set TENANT_ID in environment.ts to your Azure AD Directory (tenant) ID.',
+        });
+        this.emitDiagnostic('MSAL TENANT_ID', 'fail', 'AUTH_TYPE is "msal" but TENANT_ID is empty.');
+      } else {
+        diagnostics.AddCheck({ Name: 'MSAL TENANT_ID', Status: 'pass', Message: `TENANT_ID is set (${tenantId.slice(0, 8)}...)` });
+        this.emitDiagnostic('MSAL TENANT_ID', 'pass', 'TENANT_ID is configured.');
+      }
+    }
+
+    // Auth0 checks
+    if (authType === 'auth0') {
+      if (!auth0Domain) {
+        diagnostics.AddCheck({
+          Name: 'Auth0 Domain',
+          Status: 'fail',
+          Message: 'AUTH_TYPE is "auth0" but AUTH0_DOMAIN is empty.',
+          SuggestedFix: 'Set AUTH0_DOMAIN in environment.ts (e.g., "your-tenant.us.auth0.com").',
+        });
+        this.emitDiagnostic('Auth0 Domain', 'fail', 'AUTH_TYPE is "auth0" but AUTH0_DOMAIN is empty.');
+      } else {
+        diagnostics.AddCheck({ Name: 'Auth0 Domain', Status: 'pass', Message: `AUTH0_DOMAIN is set (${auth0Domain})` });
+        this.emitDiagnostic('Auth0 Domain', 'pass', 'AUTH0_DOMAIN is configured.');
+      }
+
+      if (!auth0ClientId) {
+        diagnostics.AddCheck({
+          Name: 'Auth0 Client ID',
+          Status: 'fail',
+          Message: 'AUTH_TYPE is "auth0" but AUTH0_CLIENTID is empty.',
+          SuggestedFix: 'Set AUTH0_CLIENTID in environment.ts.',
+        });
+        this.emitDiagnostic('Auth0 Client ID', 'fail', 'AUTH_TYPE is "auth0" but AUTH0_CLIENTID is empty.');
+      } else {
+        diagnostics.AddCheck({ Name: 'Auth0 Client ID', Status: 'pass', Message: 'AUTH0_CLIENTID is set.' });
+        this.emitDiagnostic('Auth0 Client ID', 'pass', 'AUTH0_CLIENTID is configured.');
+      }
+    }
+
+    // Cross-file consistency: check MJAPI .env has matching auth values
+    await this.checkApiAuthConsistency(targetDir, authType, fs, diagnostics);
+  }
+
+  /**
+   * Verify MJAPI .env has auth values consistent with Explorer's environment.ts.
+   */
+  private async checkApiAuthConsistency(
+    targetDir: string,
+    explorerAuthType: string,
+    fs: FileSystemAdapter,
+    diagnostics: Diagnostics
+  ): Promise<void> {
+    const envCandidates = [
+      path.join(targetDir, 'apps', 'MJAPI', '.env'),
+      path.join(targetDir, 'packages', 'MJAPI', '.env'),
+      path.join(targetDir, '.env'),
+    ];
+
+    for (const envPath of envCandidates) {
+      if (!(await fs.FileExists(envPath))) continue;
+
+      const content = await fs.ReadText(envPath);
+
+      if (explorerAuthType === 'msal') {
+        const hasTenantId = /^TENANT_ID\s*=\s*\S+/m.test(content);
+        const hasClientId = /^WEB_CLIENT_ID\s*=\s*\S+/m.test(content);
+        if (!hasTenantId || !hasClientId) {
+          diagnostics.AddCheck({
+            Name: 'MJAPI auth consistency',
+            Status: 'warn',
+            Message: `Explorer uses MSAL but MJAPI .env (${path.basename(path.dirname(envPath))}) is missing TENANT_ID or WEB_CLIENT_ID.`,
+            SuggestedFix: 'Add TENANT_ID and WEB_CLIENT_ID to the MJAPI .env file with the same values as environment.ts.',
+          });
+          this.emitDiagnostic('MJAPI auth consistency', 'warn', 'MJAPI .env missing MSAL credentials.');
+        } else {
+          diagnostics.AddCheck({ Name: 'MJAPI auth consistency', Status: 'pass', Message: 'MJAPI .env has MSAL credentials matching Explorer auth type.' });
+          this.emitDiagnostic('MJAPI auth consistency', 'pass', 'MJAPI .env MSAL credentials present.');
+        }
+      }
+
+      if (explorerAuthType === 'auth0') {
+        const hasDomain = /^AUTH0_DOMAIN\s*=\s*\S+/m.test(content);
+        const hasClientId = /^AUTH0_CLIENT_ID\s*=\s*\S+/m.test(content);
+        if (!hasDomain || !hasClientId) {
+          diagnostics.AddCheck({
+            Name: 'MJAPI auth consistency',
+            Status: 'warn',
+            Message: `Explorer uses Auth0 but MJAPI .env is missing AUTH0_DOMAIN or AUTH0_CLIENT_ID.`,
+            SuggestedFix: 'Add Auth0 credentials to the MJAPI .env file.',
+          });
+          this.emitDiagnostic('MJAPI auth consistency', 'warn', 'MJAPI .env missing Auth0 credentials.');
+        } else {
+          diagnostics.AddCheck({ Name: 'MJAPI auth consistency', Status: 'pass', Message: 'MJAPI .env has Auth0 credentials.' });
+          this.emitDiagnostic('MJAPI auth consistency', 'pass', 'MJAPI .env Auth0 credentials present.');
+        }
+      }
+
+      return; // Only check first found .env
+    }
+  }
+
+  /** Emit a diagnostic event with the given parameters. */
+  private emitDiagnostic(check: string, status: 'pass' | 'fail' | 'warn' | 'info', message: string, suggestedFix?: string): void {
+    this.emitter.Emit('diagnostic', {
+      Type: 'diagnostic',
+      Check: check,
+      Status: status,
+      Message: message,
+      SuggestedFix: suggestedFix,
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // Service log capture
+  // -------------------------------------------------------------------------
+
+  /** Readiness patterns for MJAPI startup detection. */
+  private static readonly API_READY_PATTERNS: RegExp[] = [/Server ready at/i];
+
+  /** Readiness patterns for Explorer startup detection. */
+  private static readonly EXPLORER_READY_PATTERNS: RegExp[] = [
+    /Compiled successfully/i,
+    /Application bundle generation complete/i,
+    /Local:\s+http/i,
+  ];
+
+  /** Patterns indicating fatal startup errors. */
+  private static readonly FATAL_PATTERNS: RegExp[] = [
+    /EADDRINUSE/i,
+    /Cannot find module/i,
+    /FATAL ERROR/i,
+    /Error: listen/i,
+    /Missing required environment variable/i,
+  ];
+
+  /**
+   * Briefly start MJAPI and Explorer to capture their startup output.
+   *
+   * Starts each service for up to 30 seconds, capturing stdout/stderr.
+   * Kills processes after capture. Used by `mj doctor --report` to detect
+   * runtime errors like missing modules, auth failures, or DB connectivity.
+   *
+   * @param targetDir - Install directory where `npm run start:api` is valid.
+   * @param config - Current config (for port detection).
+   * @returns Array of service log captures.
+   */
+  private async captureServiceLogs(
+    targetDir: string,
+    config: PartialInstallConfig
+  ): Promise<ServiceLogCapture[]> {
+    const results: ServiceLogCapture[] = [];
+    const runner = new ProcessRunner();
+
+    // Only attempt if package.json exists (indicates a valid install)
+    const fsAdapter = new FileSystemAdapter();
+    const pkgJsonPath = path.join(targetDir, 'package.json');
+    if (!(await fsAdapter.FileExists(pkgJsonPath))) {
+      return results;
+    }
+
+    // Capture MJAPI startup
+    results.push(await this.captureServiceStartup(
+      runner, targetDir, 'MJAPI', ['run', 'start:api'],
+      InstallerEngine.API_READY_PATTERNS,
+      config.APIPort ?? 4000
+    ));
+
+    // Capture Explorer startup
+    results.push(await this.captureServiceStartup(
+      runner, targetDir, 'Explorer', ['run', 'start:explorer'],
+      InstallerEngine.EXPLORER_READY_PATTERNS,
+      config.ExplorerPort ?? 4200
+    ));
+
+    return results;
+  }
+
+  /**
+   * Start a single service, capture output for up to 30 seconds, then kill it.
+   */
+  private async captureServiceStartup(
+    runner: ProcessRunner,
+    dir: string,
+    label: string,
+    args: string[],
+    readyPatterns: RegExp[],
+    port: number
+  ): Promise<ServiceLogCapture> {
+    const output: string[] = [];
+    const startTime = Date.now();
+    let started = false;
+    let failureReason: string | undefined;
+    const captureTimeoutMs = 90_000; // 90 seconds max — MJAPI needs time for DB + metadata bootstrap
+
+    this.emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'preflight',
+      Message: `Starting ${label} for log capture...`,
+    });
+
+    try {
+      // Create a promise that resolves when we detect readiness, fatal error, or timeout
+      let resolveCapture: () => void;
+      const capturePromise = new Promise<void>((resolve) => { resolveCapture = resolve; });
+      const timer = setTimeout(() => resolveCapture!(), captureTimeoutMs);
+      let childPid: number | undefined;
+
+      const processPromise = runner.Run('npm', args, {
+        Cwd: dir,
+        TimeoutMs: captureTimeoutMs + 10_000, // Process timeout slightly longer than capture
+        OnSpawn: (pid: number) => { childPid = pid; },
+        OnStdout: (line: string) => {
+          output.push(line.trimEnd());
+          // Check for readiness
+          if (readyPatterns.some((p) => p.test(line))) {
+            started = true;
+            resolveCapture!();
+          }
+          // Check for fatal errors
+          if (InstallerEngine.FATAL_PATTERNS.some((p) => p.test(line))) {
+            failureReason = line.trim();
+            resolveCapture!();
+          }
+        },
+        OnStderr: (line: string) => {
+          output.push(`[stderr] ${line.trimEnd()}`);
+          if (InstallerEngine.FATAL_PATTERNS.some((p) => p.test(line))) {
+            failureReason = line.trim();
+            resolveCapture!();
+          }
+        },
+      });
+
+      // Wait for capture to complete (readiness, fatal error, or timeout)
+      await capturePromise;
+      clearTimeout(timer);
+
+      // Kill the server process on the port, then kill the entire spawned
+      // process tree (npm → turbo → node). Both are needed because killByPort
+      // targets the listening server while killTree targets the parent wrapper.
+      runner.killByPort(port);
+      runner.killTree(childPid);
+      // Suppress the expected rejection from killing
+      processPromise.catch(() => {});
+
+    } catch {
+      // Process failed to start — capture the error
+      failureReason = failureReason ?? 'Process failed to start';
+    }
+
+    this.emitter.Emit('step:progress', {
+      Type: 'step:progress',
+      Phase: 'preflight',
+      Message: `${label} capture complete (${output.length} lines, ${started ? 'started' : 'did not start'}).`,
+    });
+
+    return {
+      Service: label,
+      Started: started,
+      Output: output,
+      DurationMs: Date.now() - startTime,
+      FailureReason: failureReason,
+    };
   }
 
   // -------------------------------------------------------------------------

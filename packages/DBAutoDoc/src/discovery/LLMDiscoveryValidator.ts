@@ -85,7 +85,9 @@ export class LLMDiscoveryValidator {
         reasoning: `LLM call failed: ${chatResult.errorMessage}`,
         confidenceAdjustment: 0,
         recommendations: [],
-        tokensUsed: 0
+        tokensUsed: 0,
+        inputTokens: 0,
+        outputTokens: 0
       };
     }
 
@@ -119,7 +121,9 @@ export class LLMDiscoveryValidator {
         reasoning: result.reasoning,
         confidenceAdjustment: 0, // Overall adjustment
         recommendations: result.recommendations || [],
-        tokensUsed: usage?.totalTokens || 0
+        tokensUsed: usage?.totalTokens || 0,
+        inputTokens: usage?.promptTokens || 0,
+        outputTokens: usage?.completionTokens || 0
       };
     } catch (parseError) {
       return {
@@ -127,7 +131,9 @@ export class LLMDiscoveryValidator {
         reasoning: `Failed to parse LLM response: ${(parseError as Error).message}\n\nRaw content:\n${content}`,
         confidenceAdjustment: 0,
         recommendations: [],
-        tokensUsed: usage?.totalTokens || 0
+        tokensUsed: usage?.totalTokens || 0,
+        inputTokens: usage?.promptTokens || 0,
+        outputTokens: usage?.completionTokens || 0
       };
     }
   }
@@ -577,11 +583,13 @@ ${
 ## Your Task:
 Analyze the statistical findings and provide validation:
 
-1. **Validate Primary Keys**: Are the PK candidates correct? Should any be removed or added?
+1. **Validate Primary Keys**: Are the PK candidates correct? Should any be removed?
 2. **Validate Foreign Keys**: Are the FK candidates correct? Look for:
    - Columns marked as PKs that should actually be FKs
    - Missing FK relationships based on column names and data patterns
 3. **Cross-table Context**: Use the related tables information to identify relationships
+
+**HARD CONSTRAINT**: You may ONLY confirm or reject candidates already in the lists above. You CANNOT recommend new PK columns — PK eligibility requires zero nulls, zero blanks, and 100% unique values, which has already been computed deterministically. Any column not listed as a candidate has been mathematically disqualified. For FK recommendations, only columns with key-compatible data types (not dates, booleans, or floats) are eligible.
 
 **Output Format:**
 {
