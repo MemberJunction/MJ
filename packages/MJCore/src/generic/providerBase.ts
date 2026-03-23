@@ -171,6 +171,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /** Timer handle for the coalesce flush */
     private _coalesceTimer: ReturnType<typeof setTimeout> | null = null;
 
+    // ── Fast Startup Mode ─────────────────────────────────────────────
+    /**
+     * When enabled, the first round of RunViews calls after startup will
+     * trust the local IndexedDB/localStorage cache without server validation.
+     * This eliminates the smart cache check round-trips during initial load,
+     * making warm page refreshes near-instant.
+     *
+     * After the first round of engine loads completes, FastStartupMode
+     * automatically disables itself so subsequent data access uses normal
+     * server validation.
+     *
+     * Only applies to client-side providers (TrustLocalCacheCompletely=false).
+     * Set to false to disable.
+     */
+    public static FastStartupMode: boolean = true;
+
+    /** Tracks whether fast startup has been consumed (auto-disables after first use) */
+    private static _fastStartupConsumed = false;
+
     // ── Request Deduplication + Linger Window ──────────────────────────
     /**
      * How long (ms) a resolved RunViews result stays available for instant
@@ -1144,9 +1163,52 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Server-side providers trust the cache completely and fall through to
         // the traditional flow which returns cached data immediately on hit.
         if (!this.TrustLocalCacheCompletely) {
-            const useSmartCacheCheck = params.some(p => p.CacheLocal);
-            if (useSmartCacheCheck && LocalCacheManager.Instance.IsInitialized) {
-                return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
+            // FastStartupMode: on the first engine load after a page refresh, trust
+            // the local IndexedDB cache without server validation. This eliminates
+            // the RunViewsWithCacheCheck round-trips that dominate warm-load TTI.
+            // After the first batch of engine loads, auto-disable so subsequent
+            // requests use normal server validation for data freshness.
+            const useFastStartup = ProviderBase.FastStartupMode
+                && !ProviderBase._fastStartupConsumed
+                && LocalCacheManager.Instance.IsInitialized
+                && params.some(p => p.CacheLocal);
+
+            if (useFastStartup) {
+                // Check if we actually have cached data for ALL params
+                let allHaveCachedData = true;
+                for (const param of params) {
+                    if (param.CacheLocal) {
+                        const fp = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+                        const cached = await LocalCacheManager.Instance.GetRunViewResult(fp);
+                        if (!cached) {
+                            allHaveCachedData = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (allHaveCachedData) {
+                    // Mark fast startup as consumed — subsequent loads will validate normally
+                    ProviderBase._fastStartupConsumed = true;
+                    const entityNames = params.map(p => p.EntityName || p.ViewName || '?').join(', ');
+                    LogStatusEx({
+                        message: `⚡ [Fast-Start] Trusting local cache for ${params.length} views [${entityNames}] — skipping server validation`,
+                        verboseOnly: false
+                    });
+                    // Fall through to the traditional flow below which will return cached data
+                } else {
+                    // Not all params have cached data — use normal smart cache check
+                    ProviderBase._fastStartupConsumed = true; // Still consume the fast-start flag
+                    const useSmartCacheCheck = params.some(p => p.CacheLocal);
+                    if (useSmartCacheCheck) {
+                        return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
+                    }
+                }
+            } else if (!useFastStartup) {
+                const useSmartCacheCheck = params.some(p => p.CacheLocal);
+                if (useSmartCacheCheck && LocalCacheManager.Instance.IsInitialized) {
+                    return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
+                }
             }
         }
 
