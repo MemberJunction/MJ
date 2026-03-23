@@ -329,7 +329,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
     protected override async GenerateSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
         const entityInfo = entity.EntityInfo;
         const fnName = this.getCRUDFunctionName(isNew ? 'create' : 'update', entityInfo);
-        const { paramValues, paramPlaceholders } = this.buildCRUDParams(entity, isNew, entityInfo);
+        const { paramValues, paramPlaceholders } = await this.buildCRUDParams(entity, isNew, entityInfo, user);
         const simpleSQL = `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})`;
 
         if (this.shouldTrackRecordChanges(entityInfo)) {
@@ -541,24 +541,37 @@ SELECT * FROM delete_result`;
         }
     }
 
-    private buildCRUDParams(
+    private async buildCRUDParams(
         entity: BaseEntity,
         isNew: boolean,
-        entityInfo: EntityInfo
-    ): { paramValues: unknown[]; paramPlaceholders: string } {
+        entityInfo: EntityInfo,
+        contextUser?: UserInfo
+    ): Promise<{ paramValues: unknown[]; paramPlaceholders: string }> {
         const fields = this.getWritableFields(entityInfo, isNew);
-        const paramValues: unknown[] = [];
-        const placeholders: string[] = [];
 
-        for (let i = 0; i < fields.length; i++) {
-            const field = fields[i];
+        // Collect field values into a map for generic encryption processing
+        const fieldValueMap = new Map<EntityFieldInfo, unknown>();
+        for (const field of fields) {
             let value = entity.Get(field.Name);
             value = this.resolveFieldValue(value, field, isNew);
+            fieldValueMap.set(field, value);
+        }
+
+        // Encrypt field values using the generic method from GenericDatabaseProvider
+        await this.EncryptFieldValuesForSave(entity, fieldValueMap, contextUser);
+
+        // Build parameterized query components from (possibly encrypted) values
+        const paramValues: unknown[] = [];
+        const placeholders: string[] = [];
+        let paramIndex = 0;
+
+        for (const [field, value] of fieldValueMap) {
             paramValues.push(PGQueryParameterProcessor.ProcessParameterValue(value));
             // Use named parameter notation (p_fieldname => $N) to avoid
             // parameter ordering mismatches with the stored functions
             const paramName = `p_${field.Name.toLowerCase()}`;
-            placeholders.push(`${paramName} => $${i + 1}`);
+            placeholders.push(`${paramName} => $${paramIndex + 1}`);
+            paramIndex++;
         }
 
         return { paramValues, paramPlaceholders: placeholders.join(', ') };

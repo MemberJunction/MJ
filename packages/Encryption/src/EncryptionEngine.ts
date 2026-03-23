@@ -55,7 +55,7 @@
 import * as crypto from 'crypto';
 import { MJGlobal, ENCRYPTION_MARKER, IsValueEncrypted } from '@memberjunction/global';
 import { BaseSingleton } from '@memberjunction/global';
-import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { EncryptionEngineBase, EncryptionKeyConfiguration } from '@memberjunction/core-entities';
 import { MJEncryptionKeyEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity } from '@memberjunction/core-entities';
 import { EncryptionKeySourceBase } from './EncryptionKeySourceBase';
@@ -545,9 +545,12 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
      * Call after key rotation or configuration changes to ensure
      * fresh data is loaded. The base class metadata caches are
      * handled separately via RefreshAllItems().
+     *
+     * Key material buffers are explicitly zeroed before removal
+     * to minimize the window where sensitive bytes linger in memory.
      */
     ClearCaches(): void {
-        this._keyMaterialCache.clear();
+        this.zeroAndClearKeyMaterialCache();
         // Don't clear source cache - sources can be reused
     }
 
@@ -558,13 +561,38 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
      * when you need to completely refresh all cached data.
      */
     async ClearAllCaches(): Promise<void> {
-        this._keyMaterialCache.clear();
+        this.zeroAndClearKeyMaterialCache();
         await this.RefreshAllItems();
     }
 
     // ========================================================================
     // PRIVATE METHODS
     // ========================================================================
+
+    /**
+     * Zeros all key material buffers and clears the cache.
+     *
+     * Overwrites each cached Buffer with 0x00 bytes before removing
+     * references, reducing the window where key material persists
+     * in process memory awaiting garbage collection.
+     *
+     * @private
+     */
+    private zeroAndClearKeyMaterialCache(): void {
+        for (const entry of this._keyMaterialCache.values()) {
+            entry.value.fill(0);
+        }
+        this._keyMaterialCache.clear();
+    }
+
+    /**
+     * Zeros a single key material buffer (e.g. when replacing a stale cache entry).
+     *
+     * @private
+     */
+    private zeroBuffer(buf: Buffer): void {
+        buf.fill(0);
+    }
 
     /**
      * Ensures the engine is configured before operations.
@@ -784,6 +812,11 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
             return cached.value;
         }
 
+        // Zero the stale buffer before replacing it
+        if (cached) {
+            this.zeroBuffer(cached.value);
+        }
+
         // Get or create the key source
         const source = await this.getOrCreateKeySource(config.source.driverClass);
 
@@ -911,5 +944,91 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         // Standard UUID format
         const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         return uuidPattern.test(value);
+    }
+
+    // ========================================================================
+    // KEY VALIDATION
+    // ========================================================================
+
+    /**
+     * Validates that ALL active encryption keys have accessible key material.
+     *
+     * This method iterates through every active encryption key in the system,
+     * instantiates the appropriate key source provider, and delegates validation
+     * to each provider's `ValidateKeyAccessibility()` method. Each provider
+     * encapsulates its own validation logic and generates source-specific
+     * error messages with actionable remediation steps.
+     *
+     * The engine never touches key material during validation — that stays
+     * encapsulated within each provider.
+     *
+     * @param contextUser - User context for database access
+     * @returns Array of validation results, one per active key
+     */
+    async ValidateAllKeys(contextUser?: UserInfo): Promise<Array<{
+        KeyName: string;
+        KeyId: string;
+        SourceType: string;
+        LookupValue: string;
+        IsAccessible: boolean;
+        Error?: string;
+    }>> {
+        await this.ensureConfigured(contextUser);
+
+        const activeKeys = this.ActiveEncryptionKeys;
+
+        // Validate all keys concurrently — each validation is independent
+        return Promise.all(activeKeys.map(key => this.validateSingleKey(key)));
+    }
+
+    /**
+     * Validates a single encryption key by delegating to its source provider.
+     *
+     * @private
+     */
+    private async validateSingleKey(key: { ID: string; Name: string; KeyLookupValue?: string }): Promise<{
+        KeyName: string;
+        KeyId: string;
+        SourceType: string;
+        LookupValue: string;
+        IsAccessible: boolean;
+        Error?: string;
+    }> {
+        const result = {
+            KeyName: key.Name,
+            KeyId: key.ID,
+            SourceType: '',
+            LookupValue: key.KeyLookupValue || '',
+            IsAccessible: false,
+            Error: undefined as string | undefined
+        };
+
+        try {
+            // Validate metadata configuration (key, algorithm, source all active)
+            const keyConfig = this.buildKeyConfiguration(key.ID);
+            result.SourceType = keyConfig.source.driverClass;
+            result.LookupValue = keyConfig.source.lookupValue;
+
+            // Get or create the key source provider
+            const source = await this.getOrCreateKeySource(keyConfig.source.driverClass);
+
+            // Delegate validation entirely to the provider — each provider
+            // encapsulates its own validation logic, error messages, and
+            // remediation guidance. Key material never flows back to the engine.
+            const expectedBytes = keyConfig.algorithm.keyLengthBits / 8;
+            const validation = await source.ValidateKeyAccessibility(
+                keyConfig.source.lookupValue,
+                keyConfig.keyVersion,
+                expectedBytes
+            );
+
+            result.IsAccessible = validation.IsAccessible;
+            result.Error = validation.Error;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            result.Error = message;
+        }
+
+        return result;
     }
 }
