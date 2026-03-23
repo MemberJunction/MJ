@@ -87,11 +87,15 @@ export class TeamsMessagingExtension extends BaseServerExtension {
 
             const appId = settings.MicrosoftAppId ?? process.env.MICROSOFT_APP_ID ?? '';
             const appPassword = settings.MicrosoftAppPassword ?? process.env.MICROSOFT_APP_PASSWORD ?? '';
+            const appTenantId = settings.MicrosoftAppTenantId ?? process.env.MICROSOFT_APP_TENANT_ID ?? '';
+            const appType = settings.MicrosoftAppType ?? process.env.MICROSOFT_APP_TYPE ?? (appTenantId ? 'SingleTenant' : 'MultiTenant');
 
             // Create Bot Framework authentication
             const botFrameworkAuth = new ConfigurationBotFrameworkAuthentication({
                 MicrosoftAppId: appId,
                 MicrosoftAppPassword: appPassword,
+                MicrosoftAppType: appType,
+                MicrosoftAppTenantId: appTenantId,
             });
 
             this.cloudAdapterInstance = new CloudAdapter(botFrameworkAuth);
@@ -113,7 +117,23 @@ export class TeamsMessagingExtension extends BaseServerExtension {
             app.post(config.RootPath, express.json(), async (req, res) => {
                 try {
                     await cloudAdapter.process(req, res, async (turnContext: TurnContext) => {
-                        if (turnContext.activity.type === ActivityTypes.Message) {
+                        const activityValue = turnContext.activity.value as Record<string, unknown> | null;
+                        const isFormSubmit = activityValue != null &&
+                            activityValue['action'] === 'mj:form_submit';
+
+                        if (isFormSubmit) {
+                            // Action.Submit from an Adaptive Card form.
+                            // Web Chat sends this as a Message; real Teams sends
+                            // an Invoke. Handle both here, then send InvokeResponse
+                            // if this was an invoke activity.
+                            await adapter.HandleFormSubmit(turnContext);
+                            if (turnContext.activity.type === ActivityTypes.Invoke) {
+                                await turnContext.sendActivity({
+                                    type: ActivityTypes.InvokeResponse,
+                                    value: { status: 200 },
+                                } as Partial<import('botbuilder').Activity>);
+                            }
+                        } else if (turnContext.activity.type === ActivityTypes.Message) {
                             const incomingMessage = adapter.MapTeamsActivity(turnContext);
                             await adapter.HandleMessage(incomingMessage);
                         }

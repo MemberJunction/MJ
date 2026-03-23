@@ -293,8 +293,13 @@ export class SlackMessagingExtension extends BaseServerExtension {
             return;
         }
 
+        if (!this.interactClient || !this.adapter) {
+            LogStatus('Slack interact: extension not fully initialized');
+            return;
+        }
+
         try {
-            await handleSlackInteraction(payloadStr, this.interactClient!, this.adapter ?? undefined);
+            await handleSlackInteraction(payloadStr, this.interactClient, this.adapter);
         } catch (error) {
             LogError('Error handling Slack interaction:', undefined, error);
         }
@@ -366,7 +371,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
      */
     private buildSlashCommandMap(configuredCommands?: Record<string, string>): Record<string, string> {
         const autoCommands: Record<string, string> = {};
-        for (const name of this.adapter!.AvailableAgentNames) {
+        for (const name of (this.adapter?.AvailableAgentNames ?? [])) {
             const firstWord = name.split(/\s+/)[0].toLowerCase();
             const cmd = `/${firstWord}`;
             if (!autoCommands[cmd]) {
@@ -439,7 +444,7 @@ export class SlackMessagingExtension extends BaseServerExtension {
             RawEvent: { type: 'slash_command', command: agentName, text }
         };
 
-        this.adapter!.HandleMessage(incomingMessage).catch(error => {
+        this.adapter?.HandleMessage(incomingMessage).catch(error => {
             LogError(`Error handling slash command for agent '${agentName}':`, undefined, error);
         });
     }
@@ -470,9 +475,14 @@ export class SlackMessagingExtension extends BaseServerExtension {
             return;
         }
 
+        if (!this.adapter) {
+            LogStatus('Slack: adapter not initialized, ignoring event');
+            return;
+        }
+
         try {
-            const incomingMessage = this.adapter!.MapSlackEvent(event);
-            await this.adapter!.HandleMessage(incomingMessage);
+            const incomingMessage = this.adapter.MapSlackEvent(event);
+            await this.adapter.HandleMessage(incomingMessage);
         } catch (error) {
             LogError('Error handling Slack event:', undefined, error);
         }

@@ -430,7 +430,6 @@ describe('TeamsAdapter', () => {
 
             expect(mocks.sendActivity).toHaveBeenCalledWith(expect.objectContaining({
                 type: 'message',
-                text: 'Hello world',
                 attachments: [
                     {
                         contentType: 'application/vnd.microsoft.card.adaptive',
@@ -438,6 +437,9 @@ describe('TeamsAdapter', () => {
                     }
                 ]
             }));
+            // text should NOT be present — it causes duplicate content in Web Chat/Teams
+            const sentActivity = mocks.sendActivity.mock.calls[0][0] as Record<string, unknown>;
+            expect(sentActivity.text).toBeUndefined();
         });
     });
 
@@ -470,7 +472,6 @@ describe('TeamsAdapter', () => {
             expect(mocks.updateActivity).toHaveBeenCalledWith(expect.objectContaining({
                 id: 'msg-to-update',
                 type: 'message',
-                text: 'Final response',
                 attachments: [
                     {
                         contentType: 'application/vnd.microsoft.card.adaptive',

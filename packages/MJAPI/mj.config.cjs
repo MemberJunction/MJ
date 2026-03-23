@@ -73,6 +73,7 @@ module.exports = {
         ConnectionMode: 'http',
         MaxThreadMessages: 50,
         StreamingUpdateIntervalMs: 1500,
+        ExplorerBaseURL: process.env.MJ_EXPLORER_BASE_URL || 'http://localhost:4201',
       }
     },
     {
@@ -84,8 +85,10 @@ module.exports = {
         ContextUserEmail: process.env.MJ_BOT_CONTEXT_USER_EMAIL || 'your-service-account@company.com',
         MicrosoftAppId: process.env.MICROSOFT_APP_ID,
         MicrosoftAppPassword: process.env.MICROSOFT_APP_PASSWORD,
+        MicrosoftAppTenantId: process.env.MICROSOFT_APP_TENANT_ID,
         MaxThreadMessages: 50,
         StreamingUpdateIntervalMs: 2000,
+        ExplorerBaseURL: process.env.MJ_EXPLORER_BASE_URL || 'http://localhost:4201',
       }
     }
   ],

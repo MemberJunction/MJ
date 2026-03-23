@@ -118,6 +118,18 @@ export interface MessagingAdapterSettings {
      * Only needed for Teams adapters.
      */
     MicrosoftAppPassword?: string;
+
+    /**
+     * Microsoft App Tenant ID for single-tenant Bot Framework authentication.
+     * Required when the Azure Bot is configured as Single Tenant.
+     */
+    MicrosoftAppTenantId?: string;
+
+    /**
+     * Microsoft App Type: 'SingleTenant', 'MultiTenant', or 'UserAssignedMsi'.
+     * Auto-detected from MicrosoftAppTenantId if not set (tenant ID present = SingleTenant).
+     */
+    MicrosoftAppType?: string;
 }
 
 /**

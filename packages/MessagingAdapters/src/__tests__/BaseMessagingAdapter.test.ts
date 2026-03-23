@@ -485,7 +485,7 @@ describe('BaseMessagingAdapter', () => {
                 RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
                     success: true,
                     agentRun: {
-                        Result: JSON.stringify({ summary: 'Quantum computing is a paradigm...' }),
+                        Result: 'Quantum computing is a paradigm that uses quantum bits.',
                         Steps: [{
                             OutputData: JSON.stringify({
                                 subAgentResult: { success: true, finalStep: 'Chat' },
@@ -504,6 +504,26 @@ describe('BaseMessagingAdapter', () => {
             const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
             expect(sent?.PlainText).toContain('Quantum computing');
             expect(sent?.PlainText).not.toContain('subAgentResult');
+        });
+
+        it('should show friendly fallback when agentRun.Result is JSON (artifact handles it)', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
+                    success: true,
+                    agentRun: {
+                        Result: JSON.stringify({ summary: 'Quantum computing is a paradigm...' }),
+                        Steps: []
+                    }
+                }))
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            // JSON Result should NOT be shown raw — friendly fallback instead
+            expect(sent?.PlainText).toContain('MJ Explorer');
+            expect(sent?.PlainText).not.toContain('"summary"');
         });
 
         it('should NOT render in-progress research state (plan/questions) as user content', async () => {
@@ -603,6 +623,45 @@ describe('BaseMessagingAdapter', () => {
             expect(sent?.PlainText).not.toContain('actionResult');
             expect(sent?.PlainText).not.toContain('similarityScore');
             expect(sent?.PlainText).not.toContain('allMatches');
+        });
+
+        it('should show friendly fallback when Message is raw JSON (artifact handles rendering)', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const jsonPayload = JSON.stringify({
+                metadata: { status: 'draft', lastModifiedBy: 'Copywriter Agent' },
+                content: { headline: 'Dinosaurs: Giants of the Past', body: 'Full blog content...' },
+                seo: { primaryKeyword: 'dinosaurs' }
+            });
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
+                    success: true,
+                    agentRun: { Message: jsonPayload, Steps: [] }
+                }))
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            // Should NOT show raw JSON — should show friendly fallback
+            expect(sent?.PlainText).not.toContain('"metadata"');
+            expect(sent?.PlainText).not.toContain('"seo"');
+            expect(sent?.PlainText).not.toContain('primaryKeyword');
+            expect(sent?.PlainText).toContain('MJ Explorer');
+        });
+
+        it('should pass through plain text Message unchanged', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockResolvedValue(wrapInConversationResult({
+                    success: true,
+                    agentRun: { Message: 'Here is your blog post about dinosaurs.', Steps: [] }
+                }))
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({ IsDirectMessage: true });
+            await adapter.HandleMessage(msg);
+            const sent = adapter.FinalMessages[0] ?? adapter.FinalUpdates[0]?.response;
+            expect(sent?.PlainText).toContain('Here is your blog post about dinosaurs.');
         });
 
     });

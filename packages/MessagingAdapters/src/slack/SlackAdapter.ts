@@ -13,6 +13,7 @@
 
 import { WebClient, type KnownBlock } from '@slack/web-api';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { LogStatus } from '@memberjunction/core';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 import { buildRichResponse, buildErrorBlocks, buildAgentContextBlock, buildDivider } from './slack-block-builder.js';
@@ -46,8 +47,11 @@ export class SlackAdapter extends BaseMessagingAdapter {
     /** The bot's own Slack user ID (e.g., `U0123456`). */
     private botUserID: string = '';
 
-    /** Message ID of the "Thinking..." indicator, reused by the first streaming update. */
-    private thinkingMessageId: string | null = null;
+    /**
+     * Message IDs of "Thinking..." indicators, keyed by `channelId:threadTs`.
+     * Per-thread keying prevents concurrent messages from overwriting each other's indicator.
+     */
+    private thinkingMessageIds = new Map<string, string>();
 
     /**
      * Slack's maximum message text length. Messages exceeding this cause `msg_too_long`.
@@ -117,7 +121,9 @@ export class SlackAdapter extends BaseMessagingAdapter {
             text: '_Thinking..._',
             ...identityParams
         });
-        this.thinkingMessageId = result.ts ?? null;
+        if (result.ts) {
+            this.thinkingMessageIds.set(this.threadKey(message), result.ts);
+        }
     }
 
     /**
@@ -155,10 +161,11 @@ export class SlackAdapter extends BaseMessagingAdapter {
         agent?: MJAIAgentEntityExtended
     ): Promise<string> {
         // Reuse the "Thinking..." message for the first streaming update
-        const messageToUpdate = existingMessageId ?? this.thinkingMessageId;
+        const key = this.threadKey(originalMessage);
+        const messageToUpdate = existingMessageId ?? this.thinkingMessageIds.get(key) ?? null;
 
         if (messageToUpdate) {
-            this.thinkingMessageId = null; // Consumed
+            this.thinkingMessageIds.delete(key); // Consumed
             await this.client.chat.update({
                 channel: originalMessage.ChannelID,
                 ts: messageToUpdate,
@@ -184,9 +191,11 @@ export class SlackAdapter extends BaseMessagingAdapter {
      * (no streaming occurred), update it in-place instead of posting a new message.
      */
     protected async sendFinalMessage(originalMessage: IncomingMessage, response: FormattedResponse): Promise<void> {
-        if (this.thinkingMessageId) {
-            await this.updateFinalMessage(originalMessage, this.thinkingMessageId, response);
-            this.thinkingMessageId = null;
+        const key = this.threadKey(originalMessage);
+        const thinkingId = this.thinkingMessageIds.get(key);
+        if (thinkingId) {
+            this.thinkingMessageIds.delete(key);
+            await this.updateFinalMessage(originalMessage, thinkingId, response);
             return;
         }
         const threadTs = originalMessage.ThreadID ?? originalMessage.MessageID;
@@ -268,12 +277,18 @@ export class SlackAdapter extends BaseMessagingAdapter {
         try {
             const result = await this.client.users.info({ user: platformUserId });
             return result.user?.profile?.email ?? null;
-        } catch {
+        } catch (error) {
+            LogStatus(`Slack user email lookup failed for '${platformUserId}' (falling back to service account)`);
             return null;
         }
     }
 
     // ─── Private helpers ─────────────────────────────────────────────
+
+    /** Build a unique key for per-thread state (thinking indicator). */
+    private threadKey(message: IncomingMessage): string {
+        return `${message.ChannelID}:${message.ThreadID ?? message.MessageID}`;
+    }
 
     /**
      * Truncate text to Slack's message length limit.

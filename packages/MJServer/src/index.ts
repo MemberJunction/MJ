@@ -636,6 +636,23 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // client from reading the error code and triggering token refresh.
   app.use(cors<cors.CorsRequest>());
 
+  // ─── Server extensions (before auth — extensions handle their own auth) ─────
+  // Slack uses HMAC signature verification, Teams uses Bot Framework JWT validation.
+  // These must be registered before the unified auth middleware so webhook
+  // requests aren't rejected for lacking an MJ bearer token.
+  const extensionLoader = new ServerExtensionLoader();
+  const extensionConfigs = (configInfo.serverExtensions ?? []) as ServerExtensionConfig[];
+  if (extensionConfigs.length > 0) {
+    await extensionLoader.LoadExtensions(app, extensionConfigs);
+  }
+
+  // Extension health endpoint (always available, returns empty array if no extensions)
+  app.get('/health/extensions', async (_req, res) => {
+    const results = await extensionLoader.HealthCheckAll();
+    const allHealthy = results.length === 0 || results.every(r => r.Healthy);
+    res.status(allHealthy ? 200 : 503).json({ extensions: results });
+  });
+
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
   app.use(createUnifiedAuthMiddleware(dataSources));
 
@@ -682,22 +699,6 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   // No per-route authMiddleware needed — unified auth middleware already ran
   setupRESTEndpoints(app, restApiConfig);
-
-  // Load server extensions from config (messaging adapters, etc.)
-  const extensionLoader = new ServerExtensionLoader();
-  // Zod defaults guarantee all fields are present, but the passthrough schema
-  // output type marks them as optional. Cast is safe since validation already ran.
-  const extensionConfigs = (configInfo.serverExtensions ?? []) as ServerExtensionConfig[];
-  if (extensionConfigs.length > 0) {
-    await extensionLoader.LoadExtensions(app, extensionConfigs);
-  }
-
-  // Extension health endpoint (always available, returns empty array if no extensions)
-  app.get('/health/extensions', async (_req, res) => {
-    const results = await extensionLoader.HealthCheckAll();
-    const allHealthy = results.length === 0 || results.every(r => r.Healthy);
-    res.status(allHealthy ? 200 : 503).json({ extensions: results });
-  });
 
   // ─── GraphQL middleware (contextFunction reads req.userPayload, no re-auth) ─────
   app.use(

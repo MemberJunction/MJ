@@ -16,9 +16,6 @@ import { markdownToBlocks } from './slack-formatter.js';
 /** Slack enforces a hard 50-block limit per message. */
 const SLACK_MAX_BLOCKS = 50;
 
-/** Blocks reserved for non-text elements (header, footer, dividers, actions). */
-const RESERVED_BLOCK_SLOTS = 8;
-
 /**
  * Approximate max payload size in bytes. Slack's actual limit is ~50KB,
  * but we leave headroom for the API envelope (metadata, token, etc.).

@@ -29,6 +29,8 @@ import {
 interface ConversationAgentResult {
     /** The agent execution result. */
     result: ExecuteAgentResult;
+    /** The platform message ID of the streaming/progress message, if one was sent. */
+    progressMessageId?: string | null;
     /** The MJ Conversation Artifact ID, if one was created. */
     artifactId?: string;
     /** The MJ Conversation ID for this interaction. */
@@ -94,8 +96,16 @@ export abstract class BaseMessagingAdapter {
      * Maps platform thread IDs to MJ Conversation IDs.
      * Ensures all messages in the same Slack/Teams thread share a single MJ Conversation,
      * preserving context across follow-up messages.
+     *
+     * Entries are evicted after 24 hours to prevent unbounded growth on long-running servers.
      */
-    private threadConversationMap = new Map<string, string>();
+    private threadConversationMap = new Map<string, { conversationId: string; timestamp: number }>();
+
+    /** Max age for thread→conversation mappings (24 hours). */
+    private static readonly THREAD_MAP_TTL_MS = 24 * 60 * 60 * 1000;
+
+    /** Max entries in the thread map before forced eviction of oldest entries. */
+    private static readonly THREAD_MAP_MAX_SIZE = 10_000;
 
     constructor(settings: MessagingAdapterSettings) {
         this.settings = settings;
@@ -575,7 +585,7 @@ export abstract class BaseMessagingAdapter {
     ): Promise<void> {
         // Look up existing MJ Conversation for this thread
         const threadKey = this.getThreadKey(message);
-        const existingConversationId = this.threadConversationMap.get(threadKey);
+        const existingConversationId = this.getThreadConversationId(threadKey);
 
         let agentResult: ConversationAgentResult;
         try {
@@ -588,11 +598,11 @@ export abstract class BaseMessagingAdapter {
             return;
         }
 
-        const { result, artifactId, conversationId } = agentResult;
+        const { result, progressMessageId, artifactId, conversationId } = agentResult;
 
         // Store the conversation ID for future messages in this thread
         if (conversationId) {
-            this.threadConversationMap.set(threadKey, conversationId);
+            this.setThreadConversationId(threadKey, conversationId);
         }
 
         // Check for delegation: payload.invokeAgent indicates the agent wants to hand off
@@ -616,7 +626,7 @@ export abstract class BaseMessagingAdapter {
 
         // No delegation — send the result directly
         const metadata: AgentResponseMetadata = { ArtifactId: artifactId, ConversationId: conversationId };
-        await this.sendAgentResult(message, agent, result, multiAgentNote, metadata);
+        await this.sendAgentResult(message, agent, result, multiAgentNote, metadata, progressMessageId);
     }
 
     /**
@@ -709,6 +719,7 @@ export abstract class BaseMessagingAdapter {
 
             return {
                 result: conversationResult.agentResult,
+                progressMessageId,
                 artifactId,
                 conversationId: conversationResult.conversationId,
             };
@@ -935,7 +946,8 @@ export abstract class BaseMessagingAdapter {
         agent: MJAIAgentEntityExtended,
         result: ExecuteAgentResult,
         multiAgentNote: string | null,
-        metadata?: AgentResponseMetadata
+        metadata?: AgentResponseMetadata,
+        progressMessageId?: string | null
     ): Promise<void> {
         const responseText = this.extractResponseText(result);
         const fullResponse = multiAgentNote
@@ -943,7 +955,11 @@ export abstract class BaseMessagingAdapter {
             : responseText;
 
         const formatted = await this.formatResponse(result, agent, fullResponse, metadata);
-        await this.sendFinalMessage(message, formatted);
+        if (progressMessageId) {
+            await this.updateFinalMessage(message, progressMessageId, formatted);
+        } else {
+            await this.sendFinalMessage(message, formatted);
+        }
     }
 
     /**
@@ -957,9 +973,14 @@ export abstract class BaseMessagingAdapter {
      * agent-specific payload shapes and inevitably leaks internal LLM state
      * (research plans, orchestration metadata, etc.) to the user.
      *
-     * Fallback chain (only when Message is absent):
-     * 1. `agentRun.Message` — the primary human-readable field
-     * 2. `agentRun.Result` — simple string result (not parsed as JSON)
+     * When `Message` is a JSON blob (some agents dump structured payloads there),
+     * we don't try to extract content from it. If an artifact exists, the
+     * "View in MJ Explorer" link handles rendering. If not, we fall through
+     * to a generic message rather than showing raw JSON.
+     *
+     * Fallback chain (only when Message is absent or is raw JSON):
+     * 1. `agentRun.Message` — the primary human-readable field (skipped if JSON)
+     * 2. `agentRun.Result` — simple string result (skipped if JSON)
      * 3. Generic fallback message
      */
     private extractResponseText(result: ExecuteAgentResult): string {
@@ -970,16 +991,37 @@ export abstract class BaseMessagingAdapter {
         // Primary: agentRun.Message — the explicit user-facing field
         const message = result.agentRun?.Message;
         if (message && typeof message === 'string' && message.trim()) {
-            return message;
+            if (!this.looksLikeJSON(message)) {
+                return message;
+            }
+            // Message is JSON — skip it, fall through to friendlier alternatives
         }
 
         // Fallback: agentRun.Result as a simple string
         const runResult = result.agentRun?.Result;
         if (runResult && typeof runResult === 'string' && runResult.trim()) {
-            return runResult;
+            if (!this.looksLikeJSON(runResult)) {
+                return runResult;
+            }
         }
 
-        return "I processed your request but have no response to show.";
+        return "I've completed your request. View the full result in MJ Explorer.";
+    }
+
+    /**
+     * Quick check: does this string look like a JSON object or array?
+     * Used to avoid showing raw JSON to users when agents dump structured
+     * payloads into the Message field instead of human-readable text.
+     */
+    private looksLikeJSON(text: string): boolean {
+        const trimmed = text.trim();
+        if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false;
+        try {
+            JSON.parse(trimmed);
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     /**
@@ -1020,8 +1062,8 @@ export abstract class BaseMessagingAdapter {
     private async safeShowTypingIndicator(message: IncomingMessage, agent?: MJAIAgentEntityExtended): Promise<void> {
         try {
             await this.showTypingIndicator(message, agent);
-        } catch (error) {
-            // Typing indicator failures are non-critical
+        } catch {
+            LogStatus(`${this.PlatformName}: typing indicator failed (non-critical), continuing`);
         }
     }
 
@@ -1115,6 +1157,49 @@ export abstract class BaseMessagingAdapter {
         }
 
         this.fallbackContextUser = user;
+    }
+
+    // ─── Thread conversation map with TTL ──────────────────────────────
+
+    /**
+     * Get a conversation ID from the thread map, respecting TTL.
+     */
+    private getThreadConversationId(threadKey: string): string | undefined {
+        const entry = this.threadConversationMap.get(threadKey);
+        if (!entry) return undefined;
+        if (Date.now() - entry.timestamp > BaseMessagingAdapter.THREAD_MAP_TTL_MS) {
+            this.threadConversationMap.delete(threadKey);
+            return undefined;
+        }
+        return entry.conversationId;
+    }
+
+    /**
+     * Store a conversation ID in the thread map with TTL and max-size eviction.
+     */
+    private setThreadConversationId(threadKey: string, conversationId: string): void {
+        this.threadConversationMap.set(threadKey, { conversationId, timestamp: Date.now() });
+        this.evictExpiredThreadEntries();
+    }
+
+    /**
+     * Evict expired and overflow entries from the thread conversation map.
+     */
+    private evictExpiredThreadEntries(): void {
+        const now = Date.now();
+        for (const [key, entry] of this.threadConversationMap) {
+            if (now - entry.timestamp > BaseMessagingAdapter.THREAD_MAP_TTL_MS) {
+                this.threadConversationMap.delete(key);
+            }
+        }
+        // If still over max size, evict oldest entries
+        if (this.threadConversationMap.size > BaseMessagingAdapter.THREAD_MAP_MAX_SIZE) {
+            const sorted = [...this.threadConversationMap.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
+            const toRemove = sorted.slice(0, sorted.length - BaseMessagingAdapter.THREAD_MAP_MAX_SIZE);
+            for (const [key] of toRemove) {
+                this.threadConversationMap.delete(key);
+            }
+        }
     }
 
     /**
