@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/a2aserver
 
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+- Updated dependencies [c3e8b94]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/ai@5.15.0
+  - @memberjunction/ai-core-plus@5.15.0
+  - @memberjunction/ai-agents@5.15.0
+  - @memberjunction/aiengine@5.15.0
+  - @memberjunction/api-keys@5.15.0
+  - @memberjunction/encryption@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/server@5.15.0
+  - @memberjunction/sqlserver-dataprovider@5.15.0
+  - @memberjunction/server-bootstrap-lite@5.15.0
+  - @memberjunction/config@5.15.0
+  - @memberjunction/global@5.15.0
+
 ## 5.14.0
 
 ### Patch Changes

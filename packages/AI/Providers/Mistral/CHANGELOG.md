@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/ai-mistral
 
+## 5.15.0
+
+### Minor Changes
+
+- c3e8b94: metadata updates and migration
+
+### Patch Changes
+
+- Updated dependencies [c3e8b94]
+  - @memberjunction/ai@5.15.0
+  - @memberjunction/global@5.15.0
+
 ## 5.14.0
 
 ### Patch Changes

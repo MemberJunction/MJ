@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 5.15.0
+
+### Minor Changes
+
+- 662d56b: migration + metadata
+
+### Patch Changes
+
+- d01f697: MJ SQL Parser: unified parser for SQL + Nunjucks templates + composition tokens. Replaces fragmented regex-based SQL parsing across 6 packages with a single MJSQLParser class providing AST-based tokenization, placeholder substitution, CTE extraction, ORDER BY remapping, and deterministic parameter/field extraction. Moves QueryPagingEngine from MJCore to GenericDatabaseProvider with AST-based paging. Fixes backtick quoting, table-qualified ORDER BY remapping, trailing semicolon, and FOR XML parsing bugs.
+  - @memberjunction/global@5.15.0
+
 ## 5.14.0
 
 ### Minor Changes
