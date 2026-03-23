@@ -56,6 +56,13 @@
           "collectionLabel": "Library",
           "collectionsLabel": "Libraries"
         }
+      },
+      {
+        "Label": "Libraries",
+        "Icon": "fa-solid fa-folder-open",
+        "ResourceType": "Custom",
+        "DriverClass": "ChatCollectionsResource",
+        "isDefault": false
       }
     ]
   },

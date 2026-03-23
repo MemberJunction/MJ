@@ -664,13 +664,12 @@ export abstract class BaseChatResource extends BaseResourceComponent implements 
   // NAVIGATION HANDLERS
   // ============================================
 
-  onArtifactLinkClicked(event: {
+  async onArtifactLinkClicked(event: {
     type: 'conversation' | 'collection';
     id: string;
     artifactId?: string;
     versionNumber?: number;
-  }): void {
-    const navItemName = event.type === 'conversation' ? 'Conversations' : 'Collections';
+  }): Promise<void> {
     const params: Record<string, unknown> = {};
 
     if (event.type === 'conversation') {
@@ -686,7 +685,19 @@ export abstract class BaseChatResource extends BaseResourceComponent implements 
       }
     }
 
-    this.navigationService.OpenNavItemByName(navItemName, params);
+    if (event.type === 'conversation') {
+      // Try BrandedChatResource first (Skip), then ChatConversationsResource (Chat)
+      const result = await this.navigationService.OpenNavItemByDriverClass('BrandedChatResource', params);
+      if (!result) {
+        this.navigationService.OpenNavItemByDriverClass('ChatConversationsResource', params);
+      }
+    } else {
+      const result = await this.navigationService.OpenNavItemByDriverClass('ChatCollectionsResource', params);
+      if (!result) {
+        // Fallback to label-based lookup for backwards compatibility
+        this.navigationService.OpenNavItemByName('Collections', params);
+      }
+    }
   }
 
   onOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {

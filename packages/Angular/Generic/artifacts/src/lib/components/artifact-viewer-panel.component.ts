@@ -1011,6 +1011,18 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     });
   }
 
+  onNavigateToOriginConversation(): void {
+    if (this.originConversation && this.hasAccessToOriginConversation) {
+      this.navigateToLink.emit({
+        type: 'conversation',
+        id: this.originConversation.ID,
+        artifactId: this.artifactId,
+        versionNumber: this.selectedVersionNumber,
+        versionId: this.artifactVersion?.ID
+      });
+    }
+  }
+
   onClose(): void {
     this.closed.emit();
   }

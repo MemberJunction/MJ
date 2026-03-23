@@ -127,69 +127,72 @@ import { UUIDsEqual } from '@memberjunction/global';
           </div>
         }
 
-        <!-- Conversations Section -->
-        <div class="sidebar-section">
-          <div class="section-header" [class.expanded]="directMessagesExpanded" (click)="toggleDirectMessages()">
-            <div class="section-title">
-              <i class="fas fa-chevron-right"></i>
-              <span>Conversations</span>
+        <!-- Conversations Section (grouped by date) -->
+        @for (group of groupedUnpinnedConversations; track group.label) {
+          <div class="sidebar-section">
+            <div class="section-header" [class.expanded]="IsDateGroupExpanded(group.label)" (click)="ToggleDateGroup(group.label)">
+              <div class="section-title">
+                <i class="fas fa-chevron-right"></i>
+                <span>{{ group.label }}</span>
+                <span class="section-count">{{ group.conversations.length }}</span>
+              </div>
             </div>
-          </div>
-          <div class="chat-list" [class.expanded]="directMessagesExpanded">
-            @for (conversation of unpinnedConversations; track conversation.ID) {
-              <div class="conversation-item"
-                   [class.active]="IsConversationActive(conversation)"
-                   [class.renamed]="IsConversationRenamed(conversation)"
-                   (click)="handleConversationClick(conversation)">
-                @if (isSelectionMode) {
-                  <div class="conversation-checkbox">
-                    <input type="checkbox"
-                           [checked]="selectedConversationIds.has(conversation.ID)"
-                           (click)="$event.stopPropagation(); toggleConversationSelection(conversation.ID)">
-                  </div>
-                }
-                <div class="conversation-icon-wrapper">
-                  @if (hasActiveTasks(conversation.ID)) {
-                    <div class="conversation-icon has-tasks">
-                      <i class="fas fa-spinner fa-pulse"></i>
+            <div class="chat-list" [class.expanded]="IsDateGroupExpanded(group.label)">
+              @for (conversation of group.conversations; track conversation.ID) {
+                <div class="conversation-item"
+                     [class.active]="IsConversationActive(conversation)"
+                     [class.renamed]="IsConversationRenamed(conversation)"
+                     (click)="handleConversationClick(conversation)">
+                  @if (isSelectionMode) {
+                    <div class="conversation-checkbox">
+                      <input type="checkbox"
+                             [checked]="selectedConversationIds.has(conversation.ID)"
+                             (click)="$event.stopPropagation(); toggleConversationSelection(conversation.ID)">
                     </div>
                   }
-                  <div class="badge-overlay">
-                    <mj-notification-badge [conversationId]="conversation.ID"></mj-notification-badge>
-                  </div>
-                </div>
-                <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
-                  <div class="conversation-name">{{ conversation.Name }}</div>
-                  <div class="conversation-preview">{{ conversation.Description }}</div>
-                </div>
-                @if (!isSelectionMode) {
-                  <div class="conversation-actions">
-                    <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
-                      <i class="fas fa-ellipsis"></i>
-                    </button>
-                    @if (IsMenuOpen(conversation)) {
-                      <div class="context-menu" (click)="$event.stopPropagation()">
-                        <button class="menu-item" (click)="togglePin(conversation, $event)">
-                          <i class="fas fa-thumbtack"></i>
-                          <span>Pin</span>
-                        </button>
-                        <button class="menu-item" (click)="renameConversation(conversation); closeMenu()">
-                          <i class="fas fa-edit"></i>
-                          <span>Rename</span>
-                        </button>
-                        <div class="menu-divider"></div>
-                        <button class="menu-item danger" (click)="deleteConversation(conversation); closeMenu()">
-                          <i class="fas fa-trash"></i>
-                          <span>Delete</span>
-                        </button>
+                  <div class="conversation-icon-wrapper">
+                    @if (hasActiveTasks(conversation.ID)) {
+                      <div class="conversation-icon has-tasks">
+                        <i class="fas fa-spinner fa-pulse"></i>
                       </div>
                     }
+                    <div class="badge-overlay">
+                      <mj-notification-badge [conversationId]="conversation.ID"></mj-notification-badge>
+                    </div>
                   </div>
-                }
-              </div>
-            }
+                  <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
+                    <div class="conversation-name">{{ conversation.Name }}</div>
+                    <div class="conversation-preview">{{ conversation.Description }}</div>
+                  </div>
+                  @if (!isSelectionMode) {
+                    <div class="conversation-actions">
+                      <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
+                        <i class="fas fa-ellipsis"></i>
+                      </button>
+                      @if (IsMenuOpen(conversation)) {
+                        <div class="context-menu" (click)="$event.stopPropagation()">
+                          <button class="menu-item" (click)="togglePin(conversation, $event)">
+                            <i class="fas fa-thumbtack"></i>
+                            <span>Pin</span>
+                          </button>
+                          <button class="menu-item" (click)="renameConversation(conversation); closeMenu()">
+                            <i class="fas fa-edit"></i>
+                            <span>Rename</span>
+                          </button>
+                          <div class="menu-divider"></div>
+                          <button class="menu-item danger" (click)="deleteConversation(conversation); closeMenu()">
+                            <i class="fas fa-trash"></i>
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+            </div>
           </div>
-        </div>
+        }
       </div>
 
       <!-- Selection Action Bar -->
@@ -290,7 +293,19 @@ import { UUIDsEqual } from '@memberjunction/global';
       font-size: 10px;
       transition: transform 0.2s;
     }
-    .section-header.expanded .section-title i { transform: rotate(90deg); }
+    .section-header.expanded .section-title i:first-child { transform: rotate(90deg); }
+    .section-count {
+      font-size: 10px;
+      color: rgba(255,255,255,0.5);
+      font-weight: 600;
+      margin-left: 4px;
+      background: rgba(255,255,255,0.12);
+      padding: 1px 6px;
+      border-radius: 10px;
+      min-width: 18px;
+      text-align: center;
+      line-height: 16px;
+    }
     .chat-list {
       padding: 4px 0;
       display: none;
@@ -742,8 +757,8 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   @Output() unpinSidebarRequested = new EventEmitter<void>(); // Request to unpin (collapse) sidebar
   @Output() refreshRequested = new EventEmitter<void>(); // Emitted after list refresh so chat area can also reload
 
-  public directMessagesExpanded: boolean = true;
   public pinnedExpanded: boolean = true;
+  private collapsedDateGroups = new Set<string>();
   public openMenuConversationId: string | null = null;
   public conversationIdsWithTasks = new Set<string>();
   public isSelectionMode: boolean = false;
@@ -780,6 +795,51 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   get unpinnedConversations() {
     return this.SortConversations(this.filteredConversations.filter(c => !c.IsPinned));
+  }
+
+  /**
+   * Groups unpinned conversations by date bucket: Today, Yesterday, Last 7 Days, Last 30 Days, Older.
+   * When sorted by name, returns a single group with all conversations.
+   */
+  get groupedUnpinnedConversations(): { label: string; conversations: MJConversationEntity[] }[] {
+    const unpinned = this.unpinnedConversations;
+    if (unpinned.length === 0) return [];
+
+    // When sorting by name, no date grouping — return one flat group
+    if (this.sortBy === 'name') {
+      return [{ label: 'Conversations', conversations: unpinned }];
+    }
+
+    const groups = new Map<string, MJConversationEntity[]>();
+    const orderedLabels = ['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'Older'];
+    for (const label of orderedLabels) {
+      groups.set(label, []);
+    }
+
+    for (const c of unpinned) {
+      const label = this.GetDateGroupLabel(c.__mj_UpdatedAt);
+      groups.get(label)!.push(c);
+    }
+
+    return orderedLabels
+      .filter(label => groups.get(label)!.length > 0)
+      .map(label => ({ label, conversations: groups.get(label)! }));
+  }
+
+  private GetDateGroupLabel(date: Date): string {
+    if (!date) return 'Older';
+    const now = new Date();
+    const d = new Date(date);
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterdayStart = new Date(todayStart.getTime() - 86400000);
+    const weekAgo = new Date(todayStart.getTime() - 6 * 86400000);
+    const monthAgo = new Date(todayStart.getTime() - 29 * 86400000);
+
+    if (d >= todayStart) return 'Today';
+    if (d >= yesterdayStart) return 'Yesterday';
+    if (d >= weekAgo) return 'Last 7 Days';
+    if (d >= monthAgo) return 'Last 30 Days';
+    return 'Older';
   }
 
   private SortConversations(conversations: MJConversationEntity[]): MJConversationEntity[] {
@@ -869,8 +929,16 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     this.unpinSidebarRequested.emit();
   }
 
-  public toggleDirectMessages(): void {
-    this.directMessagesExpanded = !this.directMessagesExpanded;
+  public IsDateGroupExpanded(label: string): boolean {
+    return !this.collapsedDateGroups.has(label);
+  }
+
+  public ToggleDateGroup(label: string): void {
+    if (this.collapsedDateGroups.has(label)) {
+      this.collapsedDateGroups.delete(label);
+    } else {
+      this.collapsedDateGroups.add(label);
+    }
   }
 
   public togglePinned(): void {

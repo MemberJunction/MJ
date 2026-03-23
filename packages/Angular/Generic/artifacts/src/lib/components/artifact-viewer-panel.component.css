@@ -82,6 +82,51 @@
   overflow-wrap: break-word;
 }
 
+.origin-conversation-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 3px 10px 3px 8px;
+  font-size: 12px;
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+  max-width: 100%;
+}
+
+.origin-conversation-link:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+  border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
+}
+
+.origin-conversation-link i:first-child {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.origin-conversation-link span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.origin-conversation-link .link-arrow {
+  font-size: 10px;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: transform 0.15s;
+}
+
+.origin-conversation-link:hover .link-arrow {
+  transform: translateX(2px);
+  opacity: 1;
+}
+
 .panel-header-right {
   display: flex;
   align-items: center;

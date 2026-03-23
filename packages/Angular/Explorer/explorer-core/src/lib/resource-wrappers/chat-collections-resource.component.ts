@@ -445,16 +445,13 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
    * Handle navigation request from artifact viewer panel.
    * Converts the link event to a generic navigation request and uses NavigationService.
    */
-  onNavigateToLink(event: {
+  async onNavigateToLink(event: {
     type: 'conversation' | 'collection';
     id: string;
     artifactId?: string;
     versionNumber?: number;
     versionId?: string;
-  }): void {
-    // Map the link type to the nav item name
-    const navItemName = event.type === 'conversation' ? 'Conversations' : 'Collections';
-
+  }): Promise<void> {
     // Build configuration params to pass to the target resource
     const params: Record<string, unknown> = {};
     if (event.type === 'conversation') {
@@ -471,8 +468,15 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
       }
     }
 
-    // Navigate using the generic nav item method
-    this.navigationService.OpenNavItemByName(navItemName, params);
+    if (event.type === 'conversation') {
+      // Try BrandedChatResource first (Skip), then ChatConversationsResource (Chat)
+      const result = await this.navigationService.OpenNavItemByDriverClass('BrandedChatResource', params);
+      if (!result) {
+        this.navigationService.OpenNavItemByDriverClass('ChatConversationsResource', params);
+      }
+    } else {
+      this.navigationService.OpenNavItemByDriverClass('ChatCollectionsResource', params);
+    }
   }
 
   /**

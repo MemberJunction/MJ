@@ -21,6 +21,13 @@
         @if (displayDescription) {
           <p class="header-description">{{ displayDescription }}</p>
         }
+        @if (viewContext === 'collection' && originConversation && hasAccessToOriginConversation) {
+          <a class="origin-conversation-link" (click)="onNavigateToOriginConversation()">
+            <i class="fas fa-comments"></i>
+            <span>{{ originConversation.Name }}</span>
+            <i class="fas fa-arrow-right link-arrow"></i>
+          </a>
+        }
       </div>
       <div class="panel-header-right">
         <div class="version-selector"

@@ -617,6 +617,38 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
+   * Open a nav item by its DriverClass within the current (or specified) app.
+   * Unlike OpenNavItemByName, this matches by component class rather than label,
+   * so it works across apps that use different labels for the same resource (e.g. "Conversations" vs "Chat").
+   */
+  public async OpenNavItemByDriverClass(
+    driverClass: string,
+    configuration?: Record<string, unknown>,
+    appId?: string,
+    options?: NavigationOptions
+  ): Promise<string | null> {
+    const targetAppId = appId || this.appManager.GetActiveApp()?.ID;
+    if (!targetAppId) return null;
+
+    const app = this.appManager.GetAppById(targetAppId);
+    if (!app) return null;
+
+    const navItems = await app.GetNavItems();
+    const navItem = navItems.find(item => item.DriverClass === driverClass);
+    if (!navItem) return null;
+
+    const mergedNavItem: NavItem = {
+      ...navItem,
+      Configuration: {
+        ...(navItem.Configuration || {}),
+        ...(configuration || {})
+      }
+    };
+
+    return this.OpenNavItem(targetAppId, mergedNavItem, app.GetColor(), options);
+  }
+
+  /**
    * Switch to an application by ID.
    * This sets the app as active and either opens a specific nav item or creates a default tab.
    * If the requested nav item already has an open tab, switches to that tab instead of creating a new one.
