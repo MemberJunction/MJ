@@ -943,54 +943,59 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         await this.ensureConfigured(contextUser);
 
         const activeKeys = this.ActiveEncryptionKeys;
-        const results: Array<{
-            KeyName: string;
-            KeyId: string;
-            SourceType: string;
-            LookupValue: string;
-            IsAccessible: boolean;
-            Error?: string;
-        }> = [];
 
-        for (const key of activeKeys) {
-            const result = {
-                KeyName: key.Name,
-                KeyId: key.ID,
-                SourceType: '',
-                LookupValue: key.KeyLookupValue || '',
-                IsAccessible: false,
-                Error: undefined as string | undefined
-            };
+        // Validate all keys concurrently — each validation is independent
+        return Promise.all(activeKeys.map(key => this.validateSingleKey(key)));
+    }
 
-            try {
-                // Validate metadata configuration (key, algorithm, source all active)
-                const keyConfig = this.buildKeyConfiguration(key.ID);
-                result.SourceType = keyConfig.source.driverClass;
-                result.LookupValue = keyConfig.source.lookupValue;
+    /**
+     * Validates a single encryption key by delegating to its source provider.
+     *
+     * @private
+     */
+    private async validateSingleKey(key: { ID: string; Name: string; KeyLookupValue?: string }): Promise<{
+        KeyName: string;
+        KeyId: string;
+        SourceType: string;
+        LookupValue: string;
+        IsAccessible: boolean;
+        Error?: string;
+    }> {
+        const result = {
+            KeyName: key.Name,
+            KeyId: key.ID,
+            SourceType: '',
+            LookupValue: key.KeyLookupValue || '',
+            IsAccessible: false,
+            Error: undefined as string | undefined
+        };
 
-                // Get or create the key source provider
-                const source = await this.getOrCreateKeySource(keyConfig.source.driverClass);
+        try {
+            // Validate metadata configuration (key, algorithm, source all active)
+            const keyConfig = this.buildKeyConfiguration(key.ID);
+            result.SourceType = keyConfig.source.driverClass;
+            result.LookupValue = keyConfig.source.lookupValue;
 
-                // Delegate validation entirely to the provider — each provider
-                // encapsulates its own validation logic, error messages, and
-                // remediation guidance. Key material never flows back to the engine.
-                const expectedBytes = keyConfig.algorithm.keyLengthBits / 8;
-                const validation = await source.ValidateKeyAccessibility(
-                    keyConfig.source.lookupValue,
-                    keyConfig.keyVersion,
-                    expectedBytes
-                );
+            // Get or create the key source provider
+            const source = await this.getOrCreateKeySource(keyConfig.source.driverClass);
 
-                result.IsAccessible = validation.IsAccessible;
-                result.Error = validation.Error;
-            } catch (err) {
-                const message = err instanceof Error ? err.message : String(err);
-                result.Error = message;
-            }
+            // Delegate validation entirely to the provider — each provider
+            // encapsulates its own validation logic, error messages, and
+            // remediation guidance. Key material never flows back to the engine.
+            const expectedBytes = keyConfig.algorithm.keyLengthBits / 8;
+            const validation = await source.ValidateKeyAccessibility(
+                keyConfig.source.lookupValue,
+                keyConfig.keyVersion,
+                expectedBytes
+            );
 
-            results.push(result);
+            result.IsAccessible = validation.IsAccessible;
+            result.Error = validation.Error;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            result.Error = message;
         }
 
-        return results;
+        return result;
     }
 }
