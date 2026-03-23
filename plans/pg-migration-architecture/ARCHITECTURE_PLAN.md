@@ -325,7 +325,7 @@ Test **all** v5 migrations in both directions:
 
 ## 4. Migration Path (Phased Implementation)
 
-### Phase A: Foundation (2-3 weeks)
+### Phase A: Foundation
 
 1. **Audit SQLConverter rules** — Classify every rule, test against latest sqlglot, remove redundant bypasses
 2. **Consolidate pipelines** — BatchConverter as sole orchestrator, absorb ConversionPipeline features
@@ -333,7 +333,7 @@ Test **all** v5 migrations in both directions:
 4. **Integrate Skyway** — Wire into `mj migrate run`, test with PG migrations
 5. **Add bypass justifications** — Document every bypass rule
 
-### Phase B: Dev-on-PG (2-3 weeks)
+### Phase B: Dev-on-PG
 
 1. **CodeGen PG validation** — Run CodeGen against PG, fix any generated SQL issues
 2. **mj-sync PG validation** — Full push/pull cycle on PG
@@ -341,14 +341,14 @@ Test **all** v5 migrations in both directions:
 4. **mj migrate create** — Dialect-aware migration templates
 5. **Docker workbench update** — Use `mj migrate` instead of raw `psql`
 
-### Phase C: CI & Regression (1-2 weeks)
+### Phase C: CI & Regression
 
 1. **GitHub Actions workflow** — Automated parity checks on migration changes
 2. **v5 migration regression** — Full comparison of all migrations
 3. **Parity report automation** — Machine-readable comparison output
 4. **Update `/pg-migrate` slash command** — Use new tooling internally
 
-### Phase D: MySQL & Extensibility (future)
+### Phase D: MySQL & Extensibility
 
 1. **MySQLDialect** — Type mapping, quoting, introspection
 2. **MySQL conversion rules** — T-SQL → MySQL rule set
