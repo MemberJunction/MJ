@@ -65,6 +65,7 @@ export {
     EncryptionKeySourceConfig,
     EncryptedValueParts,
     KeyConfiguration,
+    KeyValidationResult,
     RotateKeyParams,
     RotateKeyResult,
     EnableFieldEncryptionParams,

@@ -316,6 +316,122 @@ describe('EncryptionEngine', () => {
             )).rejects.toThrow('Invalid lookup value');
         });
     });
+
+    describe('ValidateAllKeys', () => {
+        it('should return empty array when no active keys exist', async () => {
+            vi.spyOn(engine as Record<string, Function>, 'ensureConfigured' as string).mockResolvedValue(undefined);
+            vi.spyOn(engine, 'ActiveEncryptionKeys', 'get').mockReturnValue([]);
+
+            const results = await engine.ValidateAllKeys();
+            expect(results).toEqual([]);
+        });
+
+        it('should delegate validation to the key source provider', async () => {
+            const mockValidateKeyAccessibility = vi.fn().mockResolvedValue({ IsAccessible: true });
+            const mockSource = {
+                ValidateKeyAccessibility: mockValidateKeyAccessibility,
+                Initialize: vi.fn(),
+                ValidateConfiguration: vi.fn().mockReturnValue(true),
+                SourceName: 'Mock Source'
+            };
+
+            vi.spyOn(engine as Record<string, Function>, 'ensureConfigured' as string).mockResolvedValue(undefined);
+            vi.spyOn(engine, 'ActiveEncryptionKeys', 'get').mockReturnValue([
+                { ID: 'key-1', Name: 'Test Key', KeyLookupValue: 'MY_KEY', IsActive: true } as Record<string, unknown>
+            ] as never);
+
+            vi.spyOn(engine as Record<string, Function>, 'buildKeyConfiguration' as string).mockReturnValue({
+                keyId: 'key-1',
+                keyVersion: '1',
+                marker: '$ENC$',
+                algorithm: { name: 'AES-256-GCM', keyLengthBits: 256 },
+                source: { driverClass: 'MockSource', lookupValue: 'MY_KEY' }
+            });
+
+            vi.spyOn(engine as Record<string, Function>, 'getOrCreateKeySource' as string).mockResolvedValue(mockSource);
+
+            const results = await engine.ValidateAllKeys();
+            expect(results).toHaveLength(1);
+            expect(results[0].IsAccessible).toBe(true);
+            expect(results[0].KeyName).toBe('Test Key');
+
+            // Verify the provider's ValidateKeyAccessibility was called with correct params
+            expect(mockValidateKeyAccessibility).toHaveBeenCalledWith('MY_KEY', '1', 32);
+        });
+
+        it('should propagate provider validation errors', async () => {
+            const mockSource = {
+                ValidateKeyAccessibility: vi.fn().mockResolvedValue({
+                    IsAccessible: false,
+                    Error: 'Environment variable "MY_KEY" is not set. Set it with: export MY_KEY=$(openssl rand -base64 32)'
+                }),
+                Initialize: vi.fn(),
+                ValidateConfiguration: vi.fn().mockReturnValue(true),
+                SourceName: 'Mock Source'
+            };
+
+            vi.spyOn(engine as Record<string, Function>, 'ensureConfigured' as string).mockResolvedValue(undefined);
+            vi.spyOn(engine, 'ActiveEncryptionKeys', 'get').mockReturnValue([
+                { ID: 'key-1', Name: 'Test Key', KeyLookupValue: 'MY_KEY', IsActive: true } as Record<string, unknown>
+            ] as never);
+            vi.spyOn(engine as Record<string, Function>, 'buildKeyConfiguration' as string).mockReturnValue({
+                keyId: 'key-1', keyVersion: '1', marker: '$ENC$',
+                algorithm: { name: 'AES-256-GCM', keyLengthBits: 256 },
+                source: { driverClass: 'MockSource', lookupValue: 'MY_KEY' }
+            });
+            vi.spyOn(engine as Record<string, Function>, 'getOrCreateKeySource' as string).mockResolvedValue(mockSource);
+
+            const results = await engine.ValidateAllKeys();
+            expect(results[0].IsAccessible).toBe(false);
+            expect(results[0].Error).toContain('MY_KEY');
+            expect(results[0].Error).toContain('not set');
+        });
+
+        it('should handle buildKeyConfiguration errors gracefully', async () => {
+            vi.spyOn(engine as Record<string, Function>, 'ensureConfigured' as string).mockResolvedValue(undefined);
+            vi.spyOn(engine, 'ActiveEncryptionKeys', 'get').mockReturnValue([
+                { ID: 'bad-key', Name: 'Bad Key', KeyLookupValue: 'X', IsActive: true } as Record<string, unknown>
+            ] as never);
+            vi.spyOn(engine as Record<string, Function>, 'buildKeyConfiguration' as string).mockImplementation(() => {
+                throw new Error('Encryption key not found: bad-key');
+            });
+
+            const results = await engine.ValidateAllKeys();
+            expect(results[0].IsAccessible).toBe(false);
+            expect(results[0].Error).toContain('bad-key');
+        });
+
+        it('engine should never receive key material during validation', async () => {
+            const mockSource = {
+                ValidateKeyAccessibility: vi.fn().mockResolvedValue({ IsAccessible: true }),
+                // GetKey should NOT be called by ValidateAllKeys
+                GetKey: vi.fn().mockRejectedValue(new Error('GetKey should not be called during validation')),
+                Initialize: vi.fn(),
+                ValidateConfiguration: vi.fn().mockReturnValue(true),
+                SourceName: 'Mock Source'
+            };
+
+            vi.spyOn(engine as Record<string, Function>, 'ensureConfigured' as string).mockResolvedValue(undefined);
+            vi.spyOn(engine, 'ActiveEncryptionKeys', 'get').mockReturnValue([
+                { ID: 'key-1', Name: 'Test Key', KeyLookupValue: 'MY_KEY', IsActive: true } as Record<string, unknown>
+            ] as never);
+            vi.spyOn(engine as Record<string, Function>, 'buildKeyConfiguration' as string).mockReturnValue({
+                keyId: 'key-1', keyVersion: '1', marker: '$ENC$',
+                algorithm: { name: 'AES-256-GCM', keyLengthBits: 256 },
+                source: { driverClass: 'MockSource', lookupValue: 'MY_KEY' }
+            });
+            vi.spyOn(engine as Record<string, Function>, 'getOrCreateKeySource' as string).mockResolvedValue(mockSource);
+
+            const results = await engine.ValidateAllKeys();
+            expect(results[0].IsAccessible).toBe(true);
+
+            // Verify GetKey was never called — engine should not touch key material
+            expect(mockSource.GetKey).not.toHaveBeenCalled();
+
+            // Verify ValidateKeyAccessibility was called instead
+            expect(mockSource.ValidateKeyAccessibility).toHaveBeenCalledOnce();
+        });
+    });
 });
 
 describe('EncryptionEngine - end-to-end encrypt/decrypt', () => {

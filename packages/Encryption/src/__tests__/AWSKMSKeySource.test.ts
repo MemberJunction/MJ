@@ -219,4 +219,70 @@ describe('AWSKMSKeySource', () => {
             await expect(source.Dispose()).resolves.toBeUndefined();
         });
     });
+
+    describe('ValidateKeyAccessibility', () => {
+        it('should return error when not initialized', async () => {
+            const result = await source.ValidateKeyAccessibility('some-blob');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('not initialized');
+        });
+
+        it('should return error when no region configured', async () => {
+            delete process.env.AWS_REGION;
+            delete process.env.AWS_DEFAULT_REGION;
+            await source.Initialize();
+
+            const result = await source.ValidateKeyAccessibility('some-blob');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('region');
+        });
+
+        it('should return IsAccessible true when KMS decrypt succeeds', async () => {
+            process.env.AWS_REGION = 'us-east-1';
+            await source.Initialize();
+
+            const plaintextKey = Buffer.alloc(32, 0xAB);
+            mockSend.mockResolvedValue({ Plaintext: plaintextKey });
+
+            const ciphertextBlob = Buffer.from('encrypted-data').toString('base64');
+            const result = await source.ValidateKeyAccessibility(ciphertextBlob, undefined, 32);
+            expect(result.IsAccessible).toBe(true);
+        });
+
+        it('should return error for key length mismatch', async () => {
+            process.env.AWS_REGION = 'us-east-1';
+            await source.Initialize();
+
+            const plaintextKey = Buffer.alloc(16, 0xAB); // 16 bytes, not 32
+            mockSend.mockResolvedValue({ Plaintext: plaintextKey });
+
+            const result = await source.ValidateKeyAccessibility('blob', undefined, 32);
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('16 bytes');
+            expect(result.Error).toContain('32 bytes');
+        });
+
+        it('should return error for AccessDeniedException', async () => {
+            process.env.AWS_REGION = 'us-east-1';
+            await source.Initialize();
+            mockSend.mockRejectedValue(new Error('AccessDeniedException'));
+
+            const result = await source.ValidateKeyAccessibility('blob');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('Access denied');
+        });
+
+        it('should not return key material in result', async () => {
+            process.env.AWS_REGION = 'us-east-1';
+            await source.Initialize();
+
+            const plaintextKey = Buffer.alloc(32, 0xDE);
+            mockSend.mockResolvedValue({ Plaintext: plaintextKey });
+
+            const result = await source.ValidateKeyAccessibility('blob', undefined, 32);
+            const resultStr = JSON.stringify(result);
+            expect(resultStr).not.toContain(plaintextKey.toString('base64'));
+            expect(Object.keys(result).every(k => k === 'IsAccessible' || k === 'Error')).toBe(true);
+        });
+    });
 });
