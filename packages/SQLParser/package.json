@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/sql-parser",
   "type": "module",
-  "version": "5.14.0",
+  "version": "5.15.0",
   "description": "MemberJunction: SQL parsing utilities — table/column extraction with AST and regex fallback",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

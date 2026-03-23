@@ -7,6 +7,7 @@
  * @module @memberjunction/core/runQuerySQLFilterImplementations
  */
 
+import { BaseSingleton } from '@memberjunction/global';
 import { RUN_QUERY_SQL_FILTERS, RunQuerySQLFilter } from './querySQLFilters';
 import { DatabasePlatform } from './platformSQL';
 
@@ -246,14 +247,19 @@ function createPlatformSqlIdentifier(platform: DatabasePlatform): (value: unknow
 /**
  * Singleton class for managing RunQuery SQL filters with implementations.
  * Supports platform-specific filter behavior via SetPlatform().
+ *
+ * Uses BaseSingleton to guarantee a single instance across the entire process,
+ * even if bundlers duplicate this module across multiple execution paths.
  */
-export class RunQuerySQLFilterManager {
-    private static _instance: RunQuerySQLFilterManager;
-    private _filters: Map<string, RunQuerySQLFilter>;
+export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterManager> {
+    private _filters: Map<string, RunQuerySQLFilter> = new Map();
     private _platform: DatabasePlatform = 'sqlserver';
 
-    private constructor() {
-        this._filters = new Map();
+    /**
+     * Use RunQuerySQLFilterManager.Instance to get the singleton instance.
+     */
+    public constructor() {
+        super();
         this.initializeFilters();
     }
 
@@ -289,10 +295,7 @@ export class RunQuerySQLFilterManager {
      * Gets the singleton instance
      */
     public static get Instance(): RunQuerySQLFilterManager {
-        if (!this._instance) {
-            this._instance = new RunQuerySQLFilterManager();
-        }
-        return this._instance;
+        return RunQuerySQLFilterManager.getInstance<RunQuerySQLFilterManager>();
     }
 
     /**

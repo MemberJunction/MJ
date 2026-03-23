@@ -1,4 +1,19 @@
+<!-- TEMP: API Test Harness toggle -->
+@if (ShowTestHarness) {
+    <div style="height: 100%; display: flex; flex-direction: column; overflow: hidden;">
+        <div style="padding: 8px; flex-shrink: 0;">
+            <button (click)="ShowTestHarness = false" style="padding: 4px 12px; cursor: pointer;">
+                &larr; Back to Integrations
+            </button>
+        </div>
+        <div style="flex: 1; overflow-y: auto;">
+            <integration-api-test-harness></integration-api-test-harness>
+        </div>
+    </div>
+}
+
 <!-- Main container -->
+@if (!ShowTestHarness) {
 <div class="connections-container" [class.detail-active]="!!SelectedSummary"
      [class.editor-active]="!!EditorEntityMap">
 
@@ -15,6 +30,10 @@
       <button kendoButton (click)="OpenWizard()" class="add-connection-btn">
         <i class="fa-solid fa-plus"></i>
         Add Integration
+      </button>
+      <button (click)="ShowTestHarness = true"
+              style="margin-left: 8px; padding: 6px 12px; border: 1px dashed var(--mj-status-warning); border-radius: 4px; background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); cursor: pointer; font-size: 12px;">
+        <i class="fa-solid fa-flask"></i> API Test Harness
       </button>
     </div>
 
@@ -1090,3 +1109,4 @@
     }
   </div>
 }
+} <!-- end @if (!ShowTestHarness) -->

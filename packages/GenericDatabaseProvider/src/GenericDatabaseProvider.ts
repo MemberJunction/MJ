@@ -615,6 +615,86 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         }));
     }
 
+    /**************************************************************************/
+    // PreProcessFieldsForSave — Field-Level Encryption Before Save
+    /**************************************************************************/
+
+    /**
+     * Encrypts field values before saving to the database.
+     *
+     * This method handles field-level encryption for any entity with encrypted fields.
+     * It is called by platform-specific providers (SQL Server, PostgreSQL) before
+     * building their SQL parameters, ensuring encryption is handled generically.
+     *
+     * For each field marked with `Encrypt=true`:
+     * - If `EncryptionKeyID` is null → throws an error (misconfiguration)
+     * - If value is null/undefined → skips (nothing to encrypt)
+     * - If value is already encrypted → skips (prevents double-encryption)
+     * - Otherwise → encrypts the value using the configured key
+     *
+     * @param entity The entity being saved
+     * @param fieldValues Map of field info to current values — values are mutated in-place
+     * @param contextUser User context for encryption operations
+     * @throws Error if a field is marked for encryption but has no EncryptionKeyID configured
+     * @throws Error if encryption fails (to prevent storing unencrypted sensitive data)
+     */
+    protected async EncryptFieldValuesForSave(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        // Lazy-load encryption engine only when needed
+        let encryptionEngine: EncryptionEngine | null = null;
+
+        for (const [field, value] of fieldValues) {
+            if (!field.Encrypt) continue;
+
+            // SECURITY: If field is marked for encryption but has no key, refuse to save.
+            // This prevents silent storage of cleartext data in fields intended to be encrypted.
+            if (!field.EncryptionKeyID) {
+                throw new Error(
+                    `Field "${field.Name}" on entity "${entity.EntityInfo.Name}" is marked for encryption ` +
+                    `(Encrypt=true) but has no EncryptionKeyID configured. ` +
+                    `Cannot save — refusing to store sensitive data without encryption. ` +
+                    `Configure an encryption key for this field in the EntityField metadata.`
+                );
+            }
+
+            if (value === null || value === undefined) continue;
+
+            // Lazy-load encryption engine on first encrypted field
+            if (!encryptionEngine) {
+                encryptionEngine = EncryptionEngine.Instance;
+                await encryptionEngine.Config(false, contextUser);
+            }
+
+            // Only encrypt if the value is not already encrypted
+            // This handles cases where values may already be encrypted (e.g., re-save scenarios)
+            const keyMarker = encryptionEngine.GetKeyByID(field.EncryptionKeyID)?.Marker;
+            if (!encryptionEngine.IsEncrypted(value, keyMarker)) {
+                try {
+                    const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+                    const encryptedValue = await encryptionEngine.Encrypt(stringValue, field.EncryptionKeyID, contextUser);
+                    fieldValues.set(field, encryptedValue);
+                } catch (encryptError) {
+                    // SECURITY: Never store unencrypted data in an encrypted field.
+                    // Log the detailed error server-side for operators, but throw a
+                    // generic message to prevent leaking infrastructure details
+                    // (env var names, config paths, vault URLs) to API consumers.
+                    const detail = encryptError instanceof Error ? encryptError.message : String(encryptError);
+                    LogError(
+                        `Encryption failed for field "${field.Name}" on entity "${entity.EntityInfo.Name}": ${detail}`
+                    );
+                    throw new Error(
+                        `Failed to encrypt field "${field.Name}" on entity "${entity.EntityInfo.Name}". ` +
+                        'The save operation has been aborted to prevent storing unencrypted sensitive data. ' +
+                        'Check server logs for details.'
+                    );
+                }
+            }
+        }
+    }
+
     /**
      * Virtual hook for platform-specific datetime field adjustments.
      * Default implementation is a no-op (returns rows unchanged).

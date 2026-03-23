@@ -79,6 +79,8 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   // --- Wizard state ---
   WizardOpen = false;
+  /** TEMP: toggle API test harness */
+  ShowTestHarness = false;
   WizardStep: WizardStepType = 1;
   WizardSteps = WIZARD_STEPS;
   AvailableIntegrations: MJIntegrationEntity[] = [];

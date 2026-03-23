@@ -1,6 +1,7 @@
 export { gql } from 'graphql-request';
 export { setupGraphQLClient } from './config';
 export { GraphQLDataProvider, GraphQLProviderConfigData } from './graphQLDataProvider';
+export type { AuthenticationErrorCallback } from './graphQLDataProvider';
 export * from './graphQLTransactionGroup';
 export { FieldMapper } from './FieldMapper';
 export * from './rolesAndUsersType';

@@ -6,12 +6,9 @@ import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
 import { MJUserEntity, MJUserEntityType } from '@memberjunction/core-entities';
-import { AuthProviderFactory } from './AuthProviderFactory.js';
+import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { initializeAuthProviders } from './initializeProviders.js';
 
-export { TokenExpiredError } from './tokenExpiredError.js';
-export { IAuthProvider } from './IAuthProvider.js';
-export { AuthProviderFactory } from './AuthProviderFactory.js';
 export * from './APIKeyScopeAuth.js';
 
 // This is a hard-coded forever constant due to internal migrations
@@ -53,7 +50,7 @@ const refreshUserCache = async (dataSource?: sql.ConnectionPool) => {
  * are aggregated into an array. jwt.verify() natively accepts string | string[].
  */
 export const getValidationOptions = (issuer: string): { audience: string | string[]; jwksUri: string } | undefined => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   const providers = factory.getAllByIssuer(issuer);
 
   if (providers.length === 0) {
@@ -81,7 +78,7 @@ export const validationOptions: Record<string, { audience: string | string[]; jw
     return getValidationOptions(prop) !== undefined;
   },
   ownKeys: () => {
-    const factory = AuthProviderFactory.getInstance();
+    const factory = AuthProviderFactory.Instance;
     return factory.getAllProviders().map(p => p.issuer);
   }
 });
@@ -112,7 +109,7 @@ export class UserPayload {
  * Gets signing keys for JWT validation
  */
 export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   
   // Initialize providers if not already done
   if (!factory.hasProviders()) {
@@ -142,7 +139,7 @@ export const extractUserInfoFromPayload = (payload: JwtPayload): {
   fullName?: string;
   preferredUsername?: string;
 } => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   const issuer = payload.iss;
   
   if (!issuer) {
