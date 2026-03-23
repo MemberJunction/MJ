@@ -511,6 +511,27 @@ class CreateScheduleOutput {
     @Field({ nullable: true }) ScheduledJobID?: string;
 }
 
+@ObjectType()
+class ScheduleSummaryOutput {
+    @Field() ID: string;
+    @Field() Name: string;
+    @Field({ nullable: true }) Status?: string;
+    @Field({ nullable: true }) CronExpression?: string;
+    @Field({ nullable: true }) Timezone?: string;
+    @Field({ nullable: true }) NextRunAt?: string;
+    @Field({ nullable: true }) LastRunAt?: string;
+    @Field({ nullable: true }) RunCount?: number;
+    @Field({ nullable: true }) SuccessCount?: number;
+    @Field({ nullable: true }) FailureCount?: number;
+}
+
+@ObjectType()
+class ListSchedulesOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [ScheduleSummaryOutput], { nullable: true }) Schedules?: ScheduleSummaryOutput[];
+}
+
 @InputType()
 class EntityMapUpdateInput {
     @Field() EntityMapID: string;
@@ -2339,6 +2360,45 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             return { Success: true, Message: `Deleted (${runsResult.Results?.length ?? 0} runs removed)` };
         } catch (e) {
             LogError(`IntegrationDeleteSchedule error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    @Query(() => ListSchedulesOutput)
+    async IntegrationListSchedules(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<ListSchedulesOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const rv = new RunView();
+            const result = await rv.RunView<{ ID: string; Name: string; Status: string; CronExpression: string; Timezone: string; NextRunAt: string; LastRunAt: string; RunCount: number; SuccessCount: number; FailureCount: number }>({
+                EntityName: 'MJ: Scheduled Jobs',
+                ExtraFilter: `Configuration LIKE '%"CompanyIntegrationID":"${companyIntegrationID}"%'`,
+                OrderBy: '__mj_CreatedAt DESC',
+                ResultType: 'simple',
+                Fields: ['ID', 'Name', 'Status', 'CronExpression', 'Timezone', 'NextRunAt', 'LastRunAt', 'RunCount', 'SuccessCount', 'FailureCount']
+            }, user);
+
+            if (!result.Success) return { Success: false, Message: result.ErrorMessage || 'Query failed' };
+            return {
+                Success: true,
+                Message: `${result.Results.length} schedule(s)`,
+                Schedules: result.Results.map(r => ({
+                    ID: r.ID,
+                    Name: r.Name,
+                    Status: r.Status,
+                    CronExpression: r.CronExpression,
+                    Timezone: r.Timezone,
+                    NextRunAt: r.NextRunAt ?? undefined,
+                    LastRunAt: r.LastRunAt ?? undefined,
+                    RunCount: r.RunCount,
+                    SuccessCount: r.SuccessCount,
+                    FailureCount: r.FailureCount,
+                }))
+            };
+        } catch (e) {
+            LogError(`IntegrationListSchedules error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
     }
