@@ -545,9 +545,12 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
      * Call after key rotation or configuration changes to ensure
      * fresh data is loaded. The base class metadata caches are
      * handled separately via RefreshAllItems().
+     *
+     * Key material buffers are explicitly zeroed before removal
+     * to minimize the window where sensitive bytes linger in memory.
      */
     ClearCaches(): void {
-        this._keyMaterialCache.clear();
+        this.zeroAndClearKeyMaterialCache();
         // Don't clear source cache - sources can be reused
     }
 
@@ -558,13 +561,38 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
      * when you need to completely refresh all cached data.
      */
     async ClearAllCaches(): Promise<void> {
-        this._keyMaterialCache.clear();
+        this.zeroAndClearKeyMaterialCache();
         await this.RefreshAllItems();
     }
 
     // ========================================================================
     // PRIVATE METHODS
     // ========================================================================
+
+    /**
+     * Zeros all key material buffers and clears the cache.
+     *
+     * Overwrites each cached Buffer with 0x00 bytes before removing
+     * references, reducing the window where key material persists
+     * in process memory awaiting garbage collection.
+     *
+     * @private
+     */
+    private zeroAndClearKeyMaterialCache(): void {
+        for (const entry of this._keyMaterialCache.values()) {
+            entry.value.fill(0);
+        }
+        this._keyMaterialCache.clear();
+    }
+
+    /**
+     * Zeros a single key material buffer (e.g. when replacing a stale cache entry).
+     *
+     * @private
+     */
+    private zeroBuffer(buf: Buffer): void {
+        buf.fill(0);
+    }
 
     /**
      * Ensures the engine is configured before operations.
@@ -782,6 +810,11 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         const cached = this._keyMaterialCache.get(cacheKey);
         if (cached && cached.expiry > new Date()) {
             return cached.value;
+        }
+
+        // Zero the stale buffer before replacing it
+        if (cached) {
+            this.zeroBuffer(cached.value);
         }
 
         // Get or create the key source

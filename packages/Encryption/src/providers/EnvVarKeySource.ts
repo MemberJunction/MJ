@@ -265,6 +265,18 @@ export class EnvVarKeySource extends EncryptionKeySourceBase {
                 };
             }
 
+            // Round-trip check: Node's Buffer.from(str,'base64') silently ignores
+            // non-base64 characters, so verify the value actually was valid base64
+            const roundTrip = keyBytes.toString('base64');
+            const normalized = keyValue.replace(/\s+/g, '');
+            if (roundTrip !== normalized && roundTrip + '=' !== normalized && roundTrip + '==' !== normalized) {
+                return {
+                    IsAccessible: false,
+                    Error: `Environment variable "${envVarName}" does not contain valid base64 encoding. ` +
+                        `Generate a key with: openssl rand -base64 ${expectedKeyLengthBytes || 32}`
+                };
+            }
+
             if (expectedKeyLengthBytes !== undefined && keyBytes.length !== expectedKeyLengthBytes) {
                 return {
                     IsAccessible: false,

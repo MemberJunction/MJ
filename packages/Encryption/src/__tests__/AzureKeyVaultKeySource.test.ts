@@ -234,6 +234,51 @@ describe('AzureKeyVaultKeySource', () => {
         });
     });
 
+    describe('parseLookupValue - secret name validation', () => {
+        it('should reject secret names with path traversal characters', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            const s = new AzureKeyVaultKeySource();
+            await s.Initialize();
+
+            // Secret names with slashes, dots, or special chars should be rejected
+            await expect(s.GetKey('../../../etc/passwd')).rejects.toThrow(
+                'Invalid Key Vault lookup value'
+            );
+        });
+
+        it('should reject secret names with special characters when using default vault URL', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            const s = new AzureKeyVaultKeySource();
+            await s.Initialize();
+
+            await expect(s.GetKey('secret;drop table')).rejects.toThrow(
+                'Invalid Key Vault lookup value'
+            );
+        });
+
+        it('should reject secret names with dots when using default vault URL', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            const s = new AzureKeyVaultKeySource();
+            await s.Initialize();
+
+            await expect(s.GetKey('secret.name.with.dots')).rejects.toThrow(
+                'Invalid Key Vault lookup value'
+            );
+        });
+
+        it('should accept valid alphanumeric-with-hyphens secret names', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            const s = new AzureKeyVaultKeySource();
+            await s.Initialize();
+
+            const keyBytes = Buffer.alloc(32, 0xAB);
+            mockGetSecret.mockResolvedValue({ value: keyBytes.toString('base64') });
+
+            const result = await s.GetKey('my-valid-secret-123');
+            expect(result).toEqual(keyBytes);
+        });
+    });
+
     describe('Dispose', () => {
         it('should clear clients and reset initialization', async () => {
             await source.Initialize();

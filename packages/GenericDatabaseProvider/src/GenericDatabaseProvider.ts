@@ -677,11 +677,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     const encryptedValue = await encryptionEngine.Encrypt(stringValue, field.EncryptionKeyID, contextUser);
                     fieldValues.set(field, encryptedValue);
                 } catch (encryptError) {
-                    // SECURITY: Never store unencrypted data in an encrypted field
-                    const message = encryptError instanceof Error ? encryptError.message : String(encryptError);
+                    // SECURITY: Never store unencrypted data in an encrypted field.
+                    // Log the detailed error server-side for operators, but throw a
+                    // generic message to prevent leaking infrastructure details
+                    // (env var names, config paths, vault URLs) to API consumers.
+                    const detail = encryptError instanceof Error ? encryptError.message : String(encryptError);
+                    LogError(
+                        `Encryption failed for field "${field.Name}" on entity "${entity.EntityInfo.Name}": ${detail}`
+                    );
                     throw new Error(
-                        `Failed to encrypt field "${field.Name}" on entity "${entity.EntityInfo.Name}": ${message}. ` +
-                        'The save operation has been aborted to prevent storing unencrypted sensitive data.'
+                        `Failed to encrypt field "${field.Name}" on entity "${entity.EntityInfo.Name}". ` +
+                        'The save operation has been aborted to prevent storing unencrypted sensitive data. ' +
+                        'Check server logs for details.'
                     );
                 }
             }

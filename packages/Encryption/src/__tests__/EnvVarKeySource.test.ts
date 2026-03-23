@@ -259,6 +259,24 @@ describe('EnvVarKeySource', () => {
             expect(result.IsAccessible).toBe(true);
         });
 
+        it('should reject non-base64 content that Buffer.from silently accepts', async () => {
+            // Node's Buffer.from('not!valid@base64', 'base64') silently ignores
+            // non-base64 characters — the round-trip check should catch this
+            process.env.MJ_BAD_B64 = 'not!valid@base64###data';
+
+            const result = await source.ValidateKeyAccessibility('MJ_BAD_B64');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('valid base64');
+        });
+
+        it('should accept valid base64 that passes round-trip check', async () => {
+            const keyBytes = Buffer.alloc(32, 0xAB);
+            process.env.MJ_GOOD_B64 = keyBytes.toString('base64');
+
+            const result = await source.ValidateKeyAccessibility('MJ_GOOD_B64', undefined, 32);
+            expect(result.IsAccessible).toBe(true);
+        });
+
         it('should not return key material in the result', async () => {
             const keyBytes = Buffer.alloc(32, 0xAB);
             process.env.MJ_SECRET_KEY = keyBytes.toString('base64');

@@ -351,7 +351,10 @@ export class AzureKeyVaultKeySource extends EncryptionKeySourceBase {
         }
 
         // Simple name format (requires AZURE_KEYVAULT_URL)
-        if (this._defaultVaultUrl) {
+        // Validate secret name matches Azure's allowed pattern to prevent
+        // path traversal or injection via crafted lookup values
+        const secretNamePattern = /^[a-zA-Z0-9-]+$/;
+        if (this._defaultVaultUrl && secretNamePattern.test(lookupValue)) {
             return {
                 vaultUrl: this._defaultVaultUrl,
                 secretName: lookupValue
@@ -361,7 +364,8 @@ export class AzureKeyVaultKeySource extends EncryptionKeySourceBase {
         throw new Error(
             `Invalid Key Vault lookup value: "${lookupValue}". ` +
             `Expected format: https://vault-name.vault.azure.net/secrets/secret-name ` +
-            `or set AZURE_KEYVAULT_URL and provide just the secret name.`
+            `or set AZURE_KEYVAULT_URL and provide a valid secret name ` +
+            `(alphanumeric characters and hyphens only).`
         );
     }
 

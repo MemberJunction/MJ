@@ -434,6 +434,97 @@ describe('EncryptionEngine', () => {
     });
 });
 
+describe('EncryptionStartupValidator - BaseSingleton pattern', () => {
+    it('should use BaseSingleton (not manual static _instance)', async () => {
+        // Import the module to verify it compiles with BaseSingleton
+        const mod = await import('../EncryptionStartupValidator');
+        const ValidatorClass = mod.EncryptionStartupValidator;
+
+        // The Instance static getter should exist
+        expect(typeof ValidatorClass.Instance).not.toBe('undefined');
+
+        // Singleton should return the same instance
+        const a = ValidatorClass.Instance;
+        const b = ValidatorClass.Instance;
+        expect(a).toBe(b);
+    });
+});
+
+describe('EncryptionEngine - buffer zeroing security', () => {
+    let engine: EncryptionEngine;
+
+    beforeEach(() => {
+        engine = EncryptionEngine.Instance;
+    });
+
+    it('ClearCaches should zero all cached key material buffers', () => {
+        // Access private cache via bracket notation for testing
+        const cache = (engine as Record<string, unknown>)['_keyMaterialCache'] as Map<string, { value: Buffer; expiry: Date }>;
+
+        // Simulate cached key material
+        const keyBuf1 = Buffer.from('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'utf8');
+        const keyBuf2 = Buffer.from('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'utf8');
+        cache.set('key1:1', { value: keyBuf1, expiry: new Date(Date.now() + 60000) });
+        cache.set('key2:1', { value: keyBuf2, expiry: new Date(Date.now() + 60000) });
+
+        // Verify buffers have non-zero content before clearing
+        expect(keyBuf1[0]).not.toBe(0);
+        expect(keyBuf2[0]).not.toBe(0);
+
+        engine.ClearCaches();
+
+        // Buffers should now be zeroed
+        expect(keyBuf1.every(b => b === 0)).toBe(true);
+        expect(keyBuf2.every(b => b === 0)).toBe(true);
+
+        // Cache should be empty
+        expect(cache.size).toBe(0);
+    });
+
+    it('ClearAllCaches should zero all cached key material buffers', async () => {
+        const cache = (engine as Record<string, unknown>)['_keyMaterialCache'] as Map<string, { value: Buffer; expiry: Date }>;
+
+        const keyBuf = Buffer.from('cccccccccccccccccccccccccccccccccc', 'utf8');
+        cache.set('key3:1', { value: keyBuf, expiry: new Date(Date.now() + 60000) });
+
+        await engine.ClearAllCaches();
+
+        expect(keyBuf.every(b => b === 0)).toBe(true);
+        expect(cache.size).toBe(0);
+    });
+
+    it('getKeyMaterial should zero stale buffer when replacing cache entry', async () => {
+        const staleBuf = Buffer.alloc(32, 0xAA);
+        const freshBuf = Buffer.alloc(32, 0xBB);
+
+        // Set up a stale cache entry (expired)
+        const cache = (engine as Record<string, unknown>)['_keyMaterialCache'] as Map<string, { value: Buffer; expiry: Date }>;
+        cache.set('key-stale:1', { value: staleBuf, expiry: new Date(Date.now() - 1000) }); // already expired
+
+        // Mock the internal methods so getKeyMaterial fetches a new key
+        vi.spyOn(engine as Record<string, Function>, 'getOrCreateKeySource' as string).mockResolvedValue({
+            GetKey: vi.fn().mockResolvedValue(freshBuf),
+            Initialize: vi.fn(),
+            ValidateConfiguration: vi.fn().mockReturnValue(true),
+        });
+
+        const config = {
+            keyId: 'key-stale',
+            keyVersion: '1',
+            marker: '$ENC$',
+            algorithm: { name: 'AES-256-GCM', nodeCryptoName: 'aes-256-gcm', keyLengthBits: 256, ivLengthBytes: 12, isAEAD: true },
+            source: { driverClass: 'MockSource', lookupValue: 'MY_KEY' }
+        };
+
+        // Call the private getKeyMaterial
+        const getKeyMaterial = (engine as Record<string, Function>)['getKeyMaterial'].bind(engine);
+        await getKeyMaterial(config);
+
+        // The stale buffer should be zeroed
+        expect(staleBuf.every(b => b === 0)).toBe(true);
+    });
+});
+
 describe('EncryptionEngine - end-to-end encrypt/decrypt', () => {
     /**
      * This test suite exercises the actual crypto operations (performEncryption/performDecryption)

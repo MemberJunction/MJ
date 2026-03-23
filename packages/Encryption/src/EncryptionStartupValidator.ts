@@ -19,6 +19,7 @@
  */
 
 import { IMetadataProvider, IStartupSink, Metadata, RegisterForStartup, UserInfo } from '@memberjunction/core';
+import { BaseSingleton } from '@memberjunction/global';
 import { EncryptionEngine } from './EncryptionEngine';
 
 /**
@@ -30,14 +31,13 @@ import { EncryptionEngine } from './EncryptionEngine';
  * the misconfiguration impossible to miss.
  */
 @RegisterForStartup({ priority: 200, severity: 'error', description: 'Encryption key material validation' })
-export class EncryptionStartupValidator implements IStartupSink {
-    private static _instance: EncryptionStartupValidator;
+export class EncryptionStartupValidator extends BaseSingleton<EncryptionStartupValidator> implements IStartupSink {
+    protected constructor() {
+        super();
+    }
 
     public static get Instance(): EncryptionStartupValidator {
-        if (!EncryptionStartupValidator._instance) {
-            EncryptionStartupValidator._instance = new EncryptionStartupValidator();
-        }
-        return EncryptionStartupValidator._instance;
+        return super.getInstance<EncryptionStartupValidator>();
     }
 
     /**
