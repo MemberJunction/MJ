@@ -55,7 +55,7 @@
 import * as crypto from 'crypto';
 import { MJGlobal, ENCRYPTION_MARKER, IsValueEncrypted } from '@memberjunction/global';
 import { BaseSingleton } from '@memberjunction/global';
-import { IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { EncryptionEngineBase, EncryptionKeyConfiguration } from '@memberjunction/core-entities';
 import { MJEncryptionKeyEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity } from '@memberjunction/core-entities';
 import { EncryptionKeySourceBase } from './EncryptionKeySourceBase';
@@ -911,5 +911,127 @@ export class EncryptionEngine extends BaseSingleton<EncryptionEngine> {
         // Standard UUID format
         const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         return uuidPattern.test(value);
+    }
+
+    // ========================================================================
+    // KEY VALIDATION
+    // ========================================================================
+
+    /**
+     * Validates that ALL active encryption keys have accessible key material.
+     *
+     * This method iterates through every active encryption key in the system,
+     * instantiates the appropriate key source provider, and attempts to retrieve
+     * the key material. This ensures that the server can actually perform encryption
+     * operations at runtime, catching misconfigurations early at startup.
+     *
+     * For each key, it:
+     * 1. Validates the key configuration (algorithm, source, status)
+     * 2. Creates and initializes the key source provider
+     * 3. Calls `KeyExists()` on the provider to check accessibility
+     * 4. Reports success or failure with actionable error messages
+     *
+     * @param contextUser - User context for database access
+     * @returns Array of validation results, one per active key
+     */
+    async ValidateAllKeys(contextUser?: UserInfo): Promise<Array<{
+        KeyName: string;
+        KeyId: string;
+        SourceType: string;
+        LookupValue: string;
+        IsAccessible: boolean;
+        Error?: string;
+    }>> {
+        await this.ensureConfigured(contextUser);
+
+        const activeKeys = this.ActiveEncryptionKeys;
+        const results: Array<{
+            KeyName: string;
+            KeyId: string;
+            SourceType: string;
+            LookupValue: string;
+            IsAccessible: boolean;
+            Error?: string;
+        }> = [];
+
+        for (const key of activeKeys) {
+            const result = {
+                KeyName: key.Name,
+                KeyId: key.ID,
+                SourceType: '',
+                LookupValue: key.KeyLookupValue || '',
+                IsAccessible: false,
+                Error: undefined as string | undefined
+            };
+
+            try {
+                // Validate metadata configuration
+                const keyConfig = this.buildKeyConfiguration(key.ID);
+                result.SourceType = keyConfig.source.driverClass;
+                result.LookupValue = keyConfig.source.lookupValue;
+
+                // Get or create the key source provider
+                const source = await this.getOrCreateKeySource(keyConfig.source.driverClass);
+
+                // Check if key material is accessible
+                const exists = await source.KeyExists(keyConfig.source.lookupValue);
+                if (!exists) {
+                    result.Error = this.buildKeyNotFoundMessage(keyConfig);
+                } else {
+                    // Key exists — try to actually retrieve it and validate length
+                    const keyMaterial = await source.GetKey(keyConfig.source.lookupValue, keyConfig.keyVersion);
+                    this.validateKeyLength(keyMaterial, keyConfig);
+                    result.IsAccessible = true;
+                }
+            } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                result.Error = message;
+            }
+
+            results.push(result);
+        }
+
+        return results;
+    }
+
+    /**
+     * Builds a helpful error message for a missing key based on the source type.
+     * @private
+     */
+    private buildKeyNotFoundMessage(config: KeyConfiguration): string {
+        const driverClass = config.source.driverClass.toLowerCase();
+        const lookupValue = config.source.lookupValue;
+
+        if (driverClass.includes('envvar')) {
+            return (
+                `Environment variable "${lookupValue}" is not set. ` +
+                `Set it with a base64-encoded key value:\n` +
+                `  export ${lookupValue}=$(openssl rand -base64 32)`
+            );
+        }
+
+        if (driverClass.includes('configfile')) {
+            return (
+                `Key "${lookupValue}" not found in configuration file. ` +
+                `Add it to the "encryptionKeys" section of your mj.config.cjs:\n` +
+                `  module.exports = { encryptionKeys: { "${lookupValue}": "<base64-key>" } };`
+            );
+        }
+
+        if (driverClass.includes('aws') || driverClass.includes('kms')) {
+            return (
+                `AWS KMS key not accessible at "${lookupValue}". ` +
+                `Ensure AWS credentials are configured and the key ARN/alias is correct.`
+            );
+        }
+
+        if (driverClass.includes('azure') || driverClass.includes('keyvault')) {
+            return (
+                `Azure Key Vault secret not accessible at "${lookupValue}". ` +
+                `Ensure Azure credentials are configured and the vault URL/secret name is correct.`
+            );
+        }
+
+        return `Key material not found at "${lookupValue}" via source "${config.source.driverClass}".`;
     }
 }
