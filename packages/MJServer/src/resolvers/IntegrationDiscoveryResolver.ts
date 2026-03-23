@@ -1,5 +1,6 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType } from "type-graphql";
 import { CompositeKey, Metadata, RunView, UserInfo, LogError } from "@memberjunction/core";
+import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
     MJCompanyIntegrationEntity,
     MJIntegrationEntity,
@@ -7,8 +8,11 @@ import {
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRunEntity,
+    MJCompanyIntegrationSyncWatermarkEntity,
+    MJCompanyIntegrationRecordMapEntity,
     MJScheduledJobEntity,
-    MJScheduledJobTypeEntity
+    MJScheduledJobTypeEntity,
+    MJScheduledJobRunEntity
 } from "@memberjunction/core-entities";
 import {
     BaseIntegrationConnector,
@@ -67,9 +71,12 @@ class ApplySchemaBatchItemInput {
 @InputType()
 class ApplyAllInput {
     @Field() CompanyIntegrationID: string;
-    @Field(() => [String]) SourceObjectNames: string[];
+    @Field(() => [String]) SourceObjectIDs: string[];
     @Field({ nullable: true }) CronExpression?: string;
     @Field({ nullable: true }) ScheduleTimezone?: string;
+    @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips the sync step after schema + entity maps are created' }) StartSync?: boolean;
+    @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'If true, ignores watermarks and does a full re-fetch' }) FullSync?: boolean;
+    @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
 }
 
 @ObjectType()
@@ -116,7 +123,7 @@ class ApplySchemaBatchOutput {
 @InputType()
 class ApplyAllBatchConnectorInput {
     @Field() CompanyIntegrationID: string;
-    @Field(() => [String]) SourceObjectNames: string[];
+    @Field(() => [String]) SourceObjectIDs: string[];
     /** Optional per-connector schedule. Applied on success. */
     @Field({ nullable: true }) CronExpression?: string;
     @Field({ nullable: true }) ScheduleTimezone?: string;
@@ -125,6 +132,9 @@ class ApplyAllBatchConnectorInput {
 @InputType()
 class ApplyAllBatchInput {
     @Field(() => [ApplyAllBatchConnectorInput]) Connectors: ApplyAllBatchConnectorInput[];
+    @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips sync after schema + entity maps' }) StartSync?: boolean;
+    @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'If true, ignores watermarks and does a full re-fetch' }) FullSync?: boolean;
+    @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
 }
 
 @ObjectType()
@@ -230,6 +240,9 @@ class ListFieldMapsOutput {
 
 @ObjectType()
 class ExternalObjectOutput {
+    @Field({ nullable: true })
+    ID?: string;
+
     @Field()
     Name: string;
 
@@ -324,8 +337,11 @@ class PreviewDataOutput {
 
 @InputType()
 class SchemaPreviewObjectInput {
-    @Field()
+    @Field({ nullable: true, description: 'Source object name. Required if SourceObjectID is not provided.' })
     SourceObjectName: string;
+
+    @Field({ nullable: true, description: 'Source object ID (IntegrationObject.ID). Takes priority over SourceObjectName when provided.' })
+    SourceObjectID?: string;
 
     @Field()
     SchemaName: string;
@@ -675,6 +691,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Success: true,
                 Message: `Discovered ${objects.length} objects`,
                 Objects: objects.map(o => ({
+                    ID: o.ID,
                     Name: o.Name,
                     Label: o.Label,
                     SupportsIncrementalSync: o.SupportsIncrementalSync,
@@ -818,16 +835,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
             const sourceSchema = await introspect(companyIntegration, user);
 
-            // Filter to only requested objects
+            await this.resolveObjectInputs(objects, sourceSchema, user);
+
             const requestedNames = new Set(objects.map(o => o.SourceObjectName));
             const filteredSchema: SourceSchemaInfo = {
                 Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
             };
 
-            // Validate platform before use
             const validatedPlatform = this.validatePlatform(platform);
-
-            // Build target configs from user input + source schema
             const targetConfigs = this.buildTargetConfigs(objects, filteredSchema, validatedPlatform, connector);
 
             // Run SchemaBuilder
@@ -938,8 +953,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const connectorDescriptions = this.buildDescriptionLookup(connector);
 
         return objects.map(obj => {
-            const sourceObj = sourceSchema.Objects.find(o => o.ExternalName === obj.SourceObjectName);
-            const objDescriptions = connectorDescriptions.get(obj.SourceObjectName);
+            const sourceObj = sourceSchema.Objects.find(o => o.ExternalName.toLowerCase() === obj.SourceObjectName.toLowerCase());
+            const objDescriptions = connectorDescriptions.get(obj.SourceObjectName.toLowerCase());
 
             const columns: TargetColumnConfig[] = (sourceObj?.Fields ?? []).map(f => ({
                 SourceFieldName: f.Name,
@@ -950,7 +965,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Precision: f.Precision,
                 Scale: f.Scale,
                 DefaultValue: f.DefaultValue,
-                Description: f.Description ?? objDescriptions?.fields.get(f.Name),
+                Description: f.Description ?? objDescriptions?.fields.get(f.Name.toLowerCase()),
             }));
 
             const primaryKeyFields = (sourceObj?.Fields ?? [])
@@ -979,11 +994,84 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         for (const obj of staticObjects) {
             const fieldMap = new Map<string, string>();
             for (const f of obj.Fields) {
-                if (f.Description) fieldMap.set(f.Name, f.Description);
+                if (f.Description) fieldMap.set(f.Name.toLowerCase(), f.Description);
             }
-            result.set(obj.Name, { objectDescription: obj.Description, fields: fieldMap });
+            result.set(obj.Name.toLowerCase(), { objectDescription: obj.Description, fields: fieldMap });
         }
         return result;
+    }
+
+    /**
+     * Resolves source object IDs to exact names from the DB, and normalizes names
+     * to match the source schema's ExternalName casing. Call once at each entry point.
+     */
+    private async resolveSourceObjectNames(
+        ids: string[] | undefined,
+        names: string[] | undefined,
+        sourceSchema: SourceSchemaInfo,
+        integrationID: string,
+        user: UserInfo
+    ): Promise<string[]> {
+        // If IDs provided, resolve them to names from IntegrationObject records
+        if (ids && ids.length > 0) {
+            const rv = new RunView();
+            const result = await rv.RunView<{ ID: string; Name: string }>({
+                EntityName: 'MJ: Integration Objects',
+                ExtraFilter: ids.map(id => `ID='${id}'`).join(' OR '),
+                ResultType: 'simple',
+                Fields: ['ID', 'Name'],
+            }, user);
+            if (result.Success) {
+                return result.Results.map(r => r.Name);
+            }
+        }
+
+        // Otherwise normalize provided names against source schema casing
+        if (names && names.length > 0) {
+            const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
+            return names.map(n => nameMap.get(n.toLowerCase()) ?? n);
+        }
+
+        return [];
+    }
+
+    /**
+     * Resolves SourceObjectID/SourceObjectName on SchemaPreviewObjectInput array.
+     * Mutates the objects in place — sets SourceObjectName from ID if provided.
+     */
+    private async resolveObjectInputs(
+        objects: SchemaPreviewObjectInput[],
+        sourceSchema: SourceSchemaInfo,
+        user: UserInfo
+    ): Promise<void> {
+        const idsToResolve = objects.filter(o => o.SourceObjectID && !o.SourceObjectName).map(o => o.SourceObjectID!);
+        if (idsToResolve.length > 0) {
+            const rv = new RunView();
+            const result = await rv.RunView<{ ID: string; Name: string }>({
+                EntityName: 'MJ: Integration Objects',
+                ExtraFilter: idsToResolve.map(id => `ID='${id}'`).join(' OR '),
+                ResultType: 'simple',
+                Fields: ['ID', 'Name'],
+            }, user);
+            if (result.Success) {
+                const idToName = new Map(result.Results.map(r => [r.ID.toUpperCase(), r.Name]));
+                for (const obj of objects) {
+                    if (obj.SourceObjectID) {
+                        const resolved = idToName.get(obj.SourceObjectID.toUpperCase());
+                        if (resolved) obj.SourceObjectName = resolved;
+                    }
+                }
+            }
+        }
+
+        // Normalize remaining names to match source schema casing
+        const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
+        for (const obj of objects) {
+            if (obj.SourceObjectName) {
+                const exact = nameMap.get(obj.SourceObjectName.toLowerCase());
+                if (exact) obj.SourceObjectName = exact;
+            }
+        }
     }
 
     private getAuthenticatedUser(ctx: AppContext): UserInfo {
@@ -1208,7 +1296,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             const credSaved = await credential.Save();
             if (!credSaved) {
-                return { Success: false, Message: 'Failed to create Credential record' };
+                const err = credential.LatestResult?.Message || 'Unknown error';
+                return { Success: false, Message: `Failed to create Credential: ${err}` };
             }
             const credentialID = credential.ID;
 
@@ -1219,11 +1308,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             ci.CompanyID = input.CompanyID;
             ci.CredentialID = credentialID;
             ci.IsActive = true;
+            ci.Name = input.CredentialName; // Name is required on CompanyIntegration
             if (input.ExternalSystemID) ci.ExternalSystemID = input.ExternalSystemID;
             if (input.Configuration) ci.Configuration = input.Configuration;
 
             const saved = await ci.Save();
-            if (!saved) return { Success: false, Message: 'Failed to save CompanyIntegration' };
+            if (!saved) {
+                const validationErrors = ci.LatestResult?.Message || 'Unknown validation error';
+                return { Success: false, Message: `Failed to save CompanyIntegration: ${validationErrors}` };
+            }
 
             // 3. Optionally test the connection; rollback on failure
             if (testConnection) {
@@ -1460,6 +1553,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
             const sourceSchema = await introspect(companyIntegration, user);
 
+            await this.resolveObjectInputs(objects, sourceSchema, user);
+
             const requestedNames = new Set(objects.map(o => o.SourceObjectName));
             const filteredSchema: SourceSchemaInfo = {
                 Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
@@ -1602,8 +1697,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const { connector, companyIntegration } = await this.resolveConnector(input.CompanyIntegrationID, user);
             const schemaName = this.deriveSchemaName(companyIntegration.Integration);
 
-            // Step 2: Build SchemaPreviewObjectInput for each source object
-            const objects = this.buildObjectInputsFromNames(input.SourceObjectNames, schemaName);
+            // Step 2: Resolve object IDs to names, then build inputs
+            const sourceSchema = await (connector.IntrospectSchema.bind(connector) as
+                (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
+            const resolvedNames = await this.resolveSourceObjectNames(input.SourceObjectIDs, undefined, sourceSchema, companyIntegration.IntegrationID, user);
+            const objects = this.buildObjectInputsFromNames(resolvedNames, schemaName);
 
             // Step 3: Build schema and RSU pipeline input
             const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
@@ -1619,10 +1717,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const pendingFilePath = join(pendingWorkDir, `${Date.now()}.json`);
             const pendingPayload = {
                 CompanyIntegrationID: input.CompanyIntegrationID,
-                SourceObjectNames: input.SourceObjectNames,
+                SourceObjectNames: resolvedNames,
                 SchemaName: schemaName,
                 CronExpression: input.CronExpression,
                 ScheduleTimezone: input.ScheduleTimezone,
+                StartSync: input.StartSync,
+                FullSync: input.FullSync ?? false,
+                SyncScope: input.SyncScope ?? 'created',
                 CreatedAt: new Date().toISOString(),
             };
             rsuInput.PostRestartFiles = [
@@ -1657,7 +1758,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 const entityMapsCreated = await this.createEntityAndFieldMaps(
                     input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user
                 );
-                const syncRunID = await this.startSyncAfterApply(input.CompanyIntegrationID, user);
+                const createdMapIDs = entityMapsCreated.map(em => em.EntityMapID).filter(Boolean);
+                const scopedMapIDs = input.SyncScope === 'all' ? undefined : createdMapIDs;
+                const syncRunID = input.StartSync !== false
+                    ? await this.startSyncAfterApply(input.CompanyIntegrationID, user, scopedMapIDs, input.FullSync)
+                    : null;
 
                 // Create schedule if requested
                 let scheduledJobID: string | undefined;
@@ -1836,10 +1941,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /** Starts sync after a successful apply-all pipeline, returning the run ID if available. */
-    private async startSyncAfterApply(companyIntegrationID: string, user: UserInfo): Promise<string | null> {
+    private async startSyncAfterApply(companyIntegrationID: string, user: UserInfo, entityMapIDs?: string[], fullSync?: boolean): Promise<string | null> {
         try {
             await IntegrationEngine.Instance.Config(false, user);
-            const syncPromise = IntegrationEngine.Instance.RunSync(companyIntegrationID, user, 'Manual');
+            const options: Record<string, unknown> = {};
+            if (entityMapIDs?.length) options.EntityMapIDs = entityMapIDs;
+            if (fullSync) options.FullSync = true;
+            const finalOptions = Object.keys(options).length > 0 ? options : undefined;
+            const syncPromise = IntegrationEngine.Instance.RunSync(companyIntegrationID, user, 'Manual', undefined, undefined, finalOptions);
 
             // Fire and forget — don't block the response
             syncPromise.catch(err => {
@@ -1884,6 +1993,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
         const sourceSchema = await introspect(companyIntegration, user);
 
+        // Normalize names to match source schema casing
+        const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
+        for (const obj of objects) {
+            const exact = nameMap.get(obj.SourceObjectName.toLowerCase());
+            if (exact) obj.SourceObjectName = exact;
+        }
+
         const requestedNames = new Set(objects.map(o => o.SourceObjectName));
         const filteredSchema: SourceSchemaInfo = {
             Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
@@ -1925,17 +2041,26 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     async IntegrationStartSync(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Arg("webhookURL", { nullable: true }) webhookURL: string,
+        @Arg("fullSync", () => Boolean, { defaultValue: false, description: 'If true, ignores watermarks and re-fetches all records from the source' }) fullSync: boolean,
+        @Arg("entityMapIDs", () => [String], { nullable: true, description: 'Optional: sync only these entity maps. If omitted, syncs all maps for the connector.' }) entityMapIDs: string[],
         @Ctx() ctx: AppContext
     ): Promise<StartSyncOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
             await IntegrationEngine.Instance.Config(false, user);
 
+            const syncOptions: { FullSync?: boolean; EntityMapIDs?: string[] } = {};
+            if (fullSync) syncOptions.FullSync = true;
+            if (entityMapIDs?.length) syncOptions.EntityMapIDs = entityMapIDs;
+
             // Fire and forget
             const syncPromise = IntegrationEngine.Instance.RunSync(
                 companyIntegrationID,
                 user,
-                'Manual'
+                'Manual',
+                undefined,
+                undefined,
+                Object.keys(syncOptions).length > 0 ? syncOptions : undefined
             );
 
             syncPromise
@@ -2058,6 +2183,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             job.Status = 'Active';
             job.OwnerUserID = user.ID;
             job.Configuration = JSON.stringify({ CompanyIntegrationID: input.CompanyIntegrationID });
+            job.NextRunAt = CronExpressionHelper.GetNextRunTime(input.CronExpression, input.Timezone || 'UTC');
 
             if (!await job.Save()) return { Success: false, Message: 'Failed to create schedule' };
 
@@ -2096,6 +2222,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (cronExpression) job.CronExpression = cronExpression;
             if (timezone) job.Timezone = timezone;
             if (name) job.Name = name;
+            if (cronExpression || timezone) {
+                job.NextRunAt = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone || 'UTC');
+            }
 
             if (!await job.Save()) return { Success: false, Message: 'Failed to update' };
             return { Success: true, Message: 'Updated' };
@@ -2147,11 +2276,44 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             }
 
+            const rv = new RunView();
+
+            // Clear ScheduledJobID on any CompanyIntegration that references this job
+            const ciResult = await rv.RunView<MJCompanyIntegrationEntity>({
+                EntityName: 'MJ: Company Integrations',
+                ExtraFilter: `ScheduledJobID='${scheduledJobID}'`,
+                ResultType: 'entity_object',
+            }, user);
+            if (ciResult.Success) {
+                for (const refCI of ciResult.Results) {
+                    refCI.ScheduledJobID = null;
+                    refCI.ScheduleEnabled = false;
+                    refCI.CronExpression = null;
+                    await refCI.Save();
+                }
+            }
+
+            // Delete child run records
+            const runsResult = await rv.RunView<MJScheduledJobRunEntity>({
+                EntityName: 'MJ: Scheduled Job Runs',
+                ExtraFilter: `ScheduledJobID='${scheduledJobID}'`,
+                ResultType: 'entity_object',
+            }, user);
+            if (runsResult.Success) {
+                for (const run of runsResult.Results) {
+                    await run.Delete();
+                }
+            }
+
             const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
             const loaded = await job.InnerLoad(CompositeKey.FromID(scheduledJobID));
             if (!loaded) return { Success: false, Message: 'ScheduledJob not found' };
-            if (!await job.Delete()) return { Success: false, Message: 'Failed to delete' };
-            return { Success: true, Message: 'Deleted' };
+            const deleted = await job.Delete();
+            if (!deleted) {
+                const err = job.LatestResult?.Message || 'Unknown error';
+                return { Success: false, Message: `Failed to delete: ${err}` };
+            }
+            return { Success: true, Message: `Deleted (${runsResult.Results?.length ?? 0} runs removed)` };
         } catch (e) {
             LogError(`IntegrationDeleteSchedule error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
@@ -2448,7 +2610,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 input.Connectors.map(async (connInput) => {
                     const { connector, companyIntegration } = await this.resolveConnector(connInput.CompanyIntegrationID, user);
                     const schemaName = this.deriveSchemaName(companyIntegration.Integration);
-                    const objects = this.buildObjectInputsFromNames(connInput.SourceObjectNames, schemaName);
+
+                    // Resolve object IDs to names
+                    const sourceSchema = await (connector.IntrospectSchema.bind(connector) as
+                        (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
+                    const resolvedNames = await this.resolveSourceObjectNames(connInput.SourceObjectIDs, undefined, sourceSchema, companyIntegration.IntegrationID, user);
+                    const objects = this.buildObjectInputsFromNames(resolvedNames, schemaName);
+
                     const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
                         connInput.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart
                     );
@@ -2460,10 +2628,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     const pendingFilePath = join(pendingWorkDir, `${Date.now()}_${connInput.CompanyIntegrationID}.json`);
                     const pendingPayload = {
                         CompanyIntegrationID: connInput.CompanyIntegrationID,
-                        SourceObjectNames: connInput.SourceObjectNames,
+                        SourceObjectNames: resolvedNames,
                         SchemaName: schemaName,
                         CronExpression: connInput.CronExpression,
                         ScheduleTimezone: connInput.ScheduleTimezone,
+                        StartSync: input.StartSync,
+                        FullSync: input.FullSync ?? false,
+                        SyncScope: input.SyncScope ?? 'created',
                         CreatedAt: new Date().toISOString(),
                     };
                     rsuInput.PostRestartFiles = [
@@ -2563,7 +2734,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     );
                     connResult.EntityMapsCreated = entityMapsCreated;
 
-                    const syncRunID = await this.startSyncAfterApply(build.connInput.CompanyIntegrationID, user);
+                    const createdMapIDs = entityMapsCreated.map(em => em.EntityMapID).filter(Boolean);
+                    const scopedMapIDs = input.SyncScope === 'all' ? undefined : createdMapIDs;
+                    const syncRunID = input.StartSync !== false
+                        ? await this.startSyncAfterApply(build.connInput.CompanyIntegrationID, user, scopedMapIDs, input.FullSync)
+                        : null;
                     if (syncRunID) connResult.SyncRunID = syncRunID;
 
                     // Create schedule if CronExpression provided
@@ -2697,17 +2872,41 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const entityMaps = entityMapsResult.Success ? entityMapsResult.Results : [];
             let fieldMapsDeleted = 0;
 
-            // Step 3: Delete all field maps for each entity map
+            // Step 3: Delete field maps, watermarks, and record maps for each entity map
             for (const em of entityMaps) {
-                const fieldMapsResult = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
+                // Field maps
+                const fmResult = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
                     EntityName: 'MJ: Company Integration Field Maps',
                     ExtraFilter: `EntityMapID='${em.ID}'`,
                     ResultType: 'entity_object'
                 }, user);
-
-                if (fieldMapsResult.Success) {
-                    for (const fm of fieldMapsResult.Results) {
+                if (fmResult.Success) {
+                    for (const fm of fmResult.Results) {
                         if (await fm.Delete()) fieldMapsDeleted++;
+                    }
+                }
+
+                // Watermarks
+                const wmResult = await rv.RunView<MJCompanyIntegrationSyncWatermarkEntity>({
+                    EntityName: 'MJ: Company Integration Sync Watermarks',
+                    ExtraFilter: `EntityMapID='${em.ID}'`,
+                    ResultType: 'entity_object'
+                }, user);
+                if (wmResult.Success) {
+                    for (const wm of wmResult.Results) {
+                        await wm.Delete();
+                    }
+                }
+
+                // Record maps
+                const rmResult = await rv.RunView<MJCompanyIntegrationRecordMapEntity>({
+                    EntityName: 'MJ: Company Integration Record Maps',
+                    ExtraFilter: `EntityMapID='${em.ID}'`,
+                    ResultType: 'entity_object'
+                }, user);
+                if (rmResult.Success) {
+                    for (const rm of rmResult.Results) {
+                        await rm.Delete();
                     }
                 }
             }
@@ -2718,8 +2917,19 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 if (await em.Delete()) entityMapsDeleted++;
             }
 
-            // Step 5: Delete scheduled jobs linked to this CompanyIntegration
-            // ScheduledJob stores CompanyIntegrationID in its Configuration JSON
+            // Step 5: Delete company integration runs
+            const runsResult = await rv.RunView<MJCompanyIntegrationRunEntity>({
+                EntityName: 'MJ: Company Integration Runs',
+                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ResultType: 'entity_object'
+            }, user);
+            if (runsResult.Success) {
+                for (const run of runsResult.Results) {
+                    await run.Delete();
+                }
+            }
+
+            // Step 6: Delete scheduled jobs + their runs
             const jobsResult = await rv.RunView<MJScheduledJobEntity>({
                 EntityName: 'MJ: Scheduled Jobs',
                 ExtraFilter: `Configuration LIKE '%${companyIntegrationID}%'`,
@@ -2729,19 +2939,27 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             let schedulesDeleted = 0;
             if (jobsResult.Success) {
                 for (const job of jobsResult.Results) {
-                    // Verify the job's Configuration actually references this CompanyIntegrationID
                     try {
                         const config = JSON.parse(job.Configuration || '{}') as Record<string, unknown>;
                         if (config.CompanyIntegrationID === companyIntegrationID) {
+                            // Delete job runs first
+                            const jobRunsResult = await rv.RunView<MJScheduledJobRunEntity>({
+                                EntityName: 'MJ: Scheduled Job Runs',
+                                ExtraFilter: `ScheduledJobID='${job.ID}'`,
+                                ResultType: 'entity_object'
+                            }, user);
+                            if (jobRunsResult.Success) {
+                                for (const jr of jobRunsResult.Results) {
+                                    await (jr as unknown as { Delete: () => Promise<boolean> }).Delete();
+                                }
+                            }
                             if (await job.Delete()) schedulesDeleted++;
                         }
-                    } catch {
-                        // If Configuration isn't valid JSON, skip
-                    }
+                    } catch { /* skip invalid config */ }
                 }
             }
 
-            // Step 6: Delete the CompanyIntegration itself
+            // Step 7: Delete the CompanyIntegration itself
             if (!await ci.Delete()) {
                 return { Success: false, Message: 'Failed to delete CompanyIntegration' };
             }
@@ -2833,7 +3051,16 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
             const sourceSchema = await introspect(companyIntegration, user);
 
-            const requestedNames = new Set(sourceObjectNames);
+            // Normalize names to match source schema casing
+            const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
+            const normalizedNames = sourceObjectNames.map(n => nameMap.get(n.toLowerCase()) ?? n);
+            // Also normalize the objects array SourceObjectName
+            for (const obj of objects) {
+                const exact = nameMap.get(obj.SourceObjectName.toLowerCase());
+                if (exact) obj.SourceObjectName = exact;
+            }
+
+            const requestedNames = new Set(normalizedNames);
             const filteredSchema: SourceSchemaInfo = {
                 Objects: sourceSchema.Objects.filter(o => requestedNames.has(o.ExternalName))
             };
@@ -2887,7 +3114,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                       && c.TableName.toLowerCase() === existing.TableName.toLowerCase()
                 );
                 if (!config) continue;
-                const sourceObj = filteredSchema.Objects.find(o => o.ExternalName === config.SourceObjectName);
+                const sourceObj = filteredSchema.Objects.find(o => o.ExternalName.toLowerCase() === config.SourceObjectName.toLowerCase());
                 if (!sourceObj) continue;
                 const diff = evolution.DiffSchema(sourceObj, config, existing, validatedPlatform);
                 addedColumns += diff.AddedColumns.length;

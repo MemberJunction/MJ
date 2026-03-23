@@ -25,6 +25,7 @@ import {
     RuntimeSchemaManager,
     type RSUPipelineInput,
 } from '@memberjunction/schema-engine';
+import { readFileSync, existsSync } from 'node:fs';
 
 // ─── RSU Input Types ─────────────────────────────────────────────────
 
@@ -188,6 +189,25 @@ export class RSUResolver {
             LastRunAt: status.LastRunAt,
             LastRunResult: status.LastRunResult,
         };
+    }
+
+    /**
+     * Query: Tail the RSU pipeline log file. Returns the last N lines.
+     */
+    @Query(() => [String], { description: 'Returns recent lines from the RSU pipeline log' })
+    RuntimeSchemaUpdateLogTail(
+        @Arg('lines', () => Int, { defaultValue: 100 }) lines: number
+    ): string[] {
+        try {
+            const logPath = `${process.env.RSU_WORK_DIR || process.cwd()}/rsu-pipeline.log`;
+            if (!existsSync(logPath)) return ['(no log file found)'];
+            const content = readFileSync(logPath, 'utf-8');
+            const allLines = content.split('\n').filter(l => l.trim());
+            const maxLines = Math.min(Math.max(lines, 1), 1000);
+            return allLines.slice(-maxLines);
+        } catch (e) {
+            return [`Error reading log: ${(e as Error).message}`];
+        }
     }
 
     /**

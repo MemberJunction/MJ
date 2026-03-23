@@ -530,10 +530,10 @@ export class GraphQLIntegrationClient {
         } catch (e) { return { Success: false, Message: (e as Error).message }; }
     }
 
-    public async ListEntityMaps(companyIntegrationID: string): Promise<MutationResult & { EntityMaps?: string }> {
+    public async ListEntityMaps(companyIntegrationID: string): Promise<MutationResult & { EntityMaps?: Array<{ ID: string; Entity: string; ExternalObjectName: string; SyncDirection: string; Priority: number; Status: string }> }> {
         try {
             const query = gql`query IntegrationListEntityMaps($companyIntegrationID: String!) {
-                IntegrationListEntityMaps(companyIntegrationID: $companyIntegrationID) { Success Message EntityMaps }
+                IntegrationListEntityMaps(companyIntegrationID: $companyIntegrationID) { Success Message EntityMaps { ID Entity ExternalObjectName SyncDirection Priority Status } }
             }`;
             const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID });
             return result?.IntegrationListEntityMaps ?? { Success: false, Message: 'No response' };

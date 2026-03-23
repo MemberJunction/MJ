@@ -86,6 +86,7 @@ export interface RSUPipelineInput {
      * restart. The caller is responsible for reading them on the other side.
      */
     PostRestartFiles?: Array<{ Path: string; Content: string }>;
+
 }
 
 /**
@@ -152,6 +153,11 @@ export interface RSUPendingWork {
     SourceObjectNames: string[];
     SchemaName: string;
     CreatedAt: string;
+    CronExpression?: string;
+    ScheduleTimezone?: string;
+    StartSync?: boolean;
+    FullSync?: boolean;
+    SyncScope?: 'created' | 'all';
 }
 
 /**
