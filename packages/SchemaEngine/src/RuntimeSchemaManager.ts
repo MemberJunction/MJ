@@ -754,6 +754,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       try {
         writeFileSync(probe, '');
         unlinkSync(probe);
+        this.rsuLog(`✓ Filesystem writable: ${dir}`);
       } catch (e) {
         throw new RSUError('FILESYSTEM', `Filesystem is not writable at ${dir}: ${(e as Error).message}. Ensure the directory is mounted read-write.`);
       }
