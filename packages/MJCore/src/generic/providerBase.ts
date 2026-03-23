@@ -143,6 +143,34 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     public static ServerAutoCacheMaxRows: number = 250;
 
+    // ── Request Coalescing ─────────────────────────────────────────────
+    /**
+     * When enabled, concurrent RunViews calls arriving within the same
+     * microtask (or within CoalesceWindowMs) are merged into a single
+     * mega-batch before hitting the network. This dramatically reduces
+     * the number of HTTP round-trips during startup when multiple engines
+     * independently call RunViews in parallel.
+     *
+     * Set to 0 to disable coalescing. Default 10ms — enough to capture
+     * all engines that fire in the same tick, without adding perceptible delay.
+     */
+    public static CoalesceWindowMs: number = 10;
+
+    /**
+     * Pending coalesced requests waiting to be flushed.
+     * Each entry tracks the original params, contextUser, and a resolver
+     * so the caller's promise resolves with only their slice of results.
+     */
+    private _coalesceQueue: Array<{
+        params: RunViewParams[];
+        contextUser?: UserInfo;
+        resolve: (results: RunViewResult[]) => void;
+        reject: (err: unknown) => void;
+    }> = [];
+
+    /** Timer handle for the coalesce flush */
+    private _coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+
     // ── Request Deduplication + Linger Window ──────────────────────────
     /**
      * How long (ms) a resolved RunViews result stays available for instant
@@ -484,6 +512,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return this.ExecuteRunViewsPipeline<T>(params, contextUser);
         }
 
+        // ── Coalescing: merge concurrent RunViews into one mega-batch ──
+        if (ProviderBase.CoalesceWindowMs > 0 && !this.TrustLocalCacheCompletely) {
+            // Only coalesce on the client side where cache validation round-trips are expensive.
+            // Server-side trusts its cache (no network calls), so coalescing adds no benefit.
+            return this.enqueueCoalescedRunViews<T>(params, contextUser);
+        }
+
         const key = this.GenerateDedupKey(params, contextUser);
         const existing = this._inflightViews.get(key);
 
@@ -594,6 +629,140 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         await this.PostRunViews(finalResults, params, preResult, contextUser);
 
         return finalResults as RunViewResult<T>[];
+    }
+
+    // ── Coalescing implementation ─────────────────────────────────────
+
+    /**
+     * Enqueues a RunViews call for coalescing. Multiple calls arriving within
+     * CoalesceWindowMs are merged into a single mega-batch, executed once, and
+     * each caller receives only their slice of the results.
+     */
+    private enqueueCoalescedRunViews<T>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        return new Promise<RunViewResult<T>[]>((resolve, reject) => {
+            this._coalesceQueue.push({
+                params,
+                contextUser,
+                resolve: resolve as (results: RunViewResult[]) => void,
+                reject
+            });
+
+            // Start the coalesce timer if not already running
+            if (!this._coalesceTimer) {
+                this._coalesceTimer = setTimeout(() => this.flushCoalesceQueue(), ProviderBase.CoalesceWindowMs);
+            }
+        });
+    }
+
+    /**
+     * Flushes the coalesce queue: merges all pending RunViews params into one
+     * mega-batch, executes it, then splits results back to each original caller.
+     */
+    private async flushCoalesceQueue(): Promise<void> {
+        this._coalesceTimer = null;
+
+        // Grab and clear the queue atomically
+        const queue = this._coalesceQueue.splice(0);
+        if (queue.length === 0) return;
+
+        // If only one caller, no merging needed
+        if (queue.length === 1) {
+            const entry = queue[0];
+            try {
+                const results = await this.RunViewsUncoalesced(entry.params, entry.contextUser);
+                entry.resolve(results);
+            } catch (err) {
+                entry.reject(err);
+            }
+            return;
+        }
+
+        // Merge all params into one mega-batch, tracking boundaries
+        const allParams: RunViewParams[] = [];
+        const boundaries: Array<{ start: number; count: number }> = [];
+        // Use the first caller's contextUser (all should be the same on client-side)
+        const contextUser = queue[0].contextUser;
+
+        for (const entry of queue) {
+            boundaries.push({ start: allParams.length, count: entry.params.length });
+            allParams.push(...entry.params);
+        }
+
+        const entityNames = allParams.map(p => p.EntityName || p.ViewName || '?').join(', ');
+        LogStatusEx({
+            message: `⚡ [Coalesce] Merged ${queue.length} RunViews calls (${allParams.length} total entities) into 1 mega-batch: [${entityNames}]`,
+            verboseOnly: false
+        });
+
+        try {
+            // Execute the mega-batch as a single pipeline call
+            const allResults = await this.RunViewsUncoalesced(allParams, contextUser);
+
+            // Split results back to each original caller
+            for (let i = 0; i < queue.length; i++) {
+                const { start, count } = boundaries[i];
+                const callerResults = allResults.slice(start, start + count);
+                queue[i].resolve(callerResults);
+            }
+        } catch (err) {
+            // If the mega-batch fails, reject all callers
+            for (const entry of queue) {
+                entry.reject(err);
+            }
+        }
+    }
+
+    /**
+     * Runs RunViews without coalescing (used internally after coalescing merge).
+     * This goes through dedup + linger + the full pipeline.
+     */
+    private async RunViewsUncoalesced<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        const key = this.GenerateDedupKey(params, contextUser);
+        const existing = this._inflightViews.get(key);
+
+        // ── Linger hit ──
+        if (existing?.resolvedResults && existing.resolvedAt) {
+            const age = Date.now() - existing.resolvedAt;
+            if (age < ProviderBase.DedupLingerMs) {
+                return existing.resolvedResults.map(r => this.ShallowCopyResult<T>(r));
+            }
+            this._inflightViews.delete(key);
+        }
+
+        // ── In-flight hit ──
+        if (existing && !existing.resolvedResults) {
+            const results = await existing.promise;
+            return results.map(r => this.ShallowCopyResult<T>(r));
+        }
+
+        // ── Fresh execution ──
+        const promise = this.ExecuteRunViewsPipeline<T>(params, contextUser)
+            .then(results => {
+                const entry = this._inflightViews.get(key);
+                if (entry && entry.promise === promise) {
+                    entry.resolvedResults = results as RunViewResult[];
+                    entry.resolvedAt = Date.now();
+                    if (ProviderBase.DedupLingerMs > 0) {
+                        setTimeout(() => {
+                            const current = this._inflightViews.get(key);
+                            if (current && current.promise === promise) {
+                                this._inflightViews.delete(key);
+                            }
+                        }, ProviderBase.DedupLingerMs);
+                    } else {
+                        this._inflightViews.delete(key);
+                    }
+                }
+                return results as RunViewResult[];
+            })
+            .catch(err => {
+                this._inflightViews.delete(key);
+                throw err;
+            });
+
+        this._inflightViews.set(key, { promise });
+        const results = await promise;
+        return results.map(r => this.ShallowCopyResult<T>(r));
     }
 
     /**

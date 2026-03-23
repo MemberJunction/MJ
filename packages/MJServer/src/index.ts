@@ -152,6 +152,13 @@ const localPath = (p: string) => {
 export const createApp = (): Application => express();
 
 export const serve = async (resolverPaths: Array<string>, app: Application = createApp(), options?: MJServerOptions): Promise<void> => {
+  const t0 = performance.now();
+  const lap = (label: string, since: number) => {
+    const ms = performance.now() - since;
+    console.log(`⏱️  [Startup] ${label}: ${ms.toFixed(0)}ms`);
+    return performance.now();
+  };
+
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
 
   const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
@@ -260,6 +267,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   } else {
     // ─── SQL Server Path (existing behavior) ───────────────────────
     console.log('Database type: SQL Server');
+    let tPhase = performance.now();
     const pool = new sql.ConnectionPool(createMSSQLConfig());
 
     // Handle connection-level errors from dead/stale connections in the pool.
@@ -270,6 +278,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     });
 
     await pool.connect();
+    tPhase = lap('DB Pool Connect', tPhase);
 
     dataSources.push(new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername}));
 
@@ -294,9 +303,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
     await setupSQLServerClient(config);
+    tPhase = lap('Metadata + Provider Setup', tPhase);
     const md = new Metadata();
     console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
   }
+
+  let tServe = performance.now();
 
   // Store queryDialects config in GlobalObjectStore so MJQueryEntityServer can
   // read it without a circular dependency on MJServer
@@ -386,6 +398,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // });
   /******TEST HARNESS FOR CHANGE DETECTION */
   /******TEST HARNESS FOR CHANGE DETECTION */
+
+  tServe = lap('Telemetry + Cache + APIKey Init', tServe);
 
   const dynamicModules = await Promise.all(
     paths.map((modulePath) => {
@@ -518,6 +532,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     }
   });
 
+  tServe = lap('Resolver + Middleware Discovery', tServe);
+
   let schema = mergeSchemas({
     schemas: [
       buildSchemaSync({
@@ -537,6 +553,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   for (const transformer of mwSchemaTransformers) {
     schema = transformer(schema);
   }
+
+  tServe = lap('Schema Build', tServe);
 
   const httpServer = createServer(app);
 
@@ -723,7 +741,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     await Promise.resolve(options.onBeforeServe());
   }
 
+  tServe = lap('Apollo + Express Setup', tServe);
+
   await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
+  lap('Total Startup', t0);
   console.log(`📦 Connected to database: ${dbHost}:${dbPort}/${dbDatabase}`);
   console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
 
