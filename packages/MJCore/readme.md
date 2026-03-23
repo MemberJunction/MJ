@@ -1399,12 +1399,35 @@ When saving through one branch of an overlapping hierarchy, Record Change entrie
 
 > **Full Guide**: See [IS-A Relationships Guide](./docs/isa-relationships.md) for the complete data model, runtime object model, save/delete orchestration sequences, overlapping subtypes, Record Change propagation, provider implementations, CodeGen integration, and troubleshooting.
 
+## Organic Keys (Cross-System Matching)
+
+MemberJunction supports **Organic Keys** for establishing relationships between entities based on shared business data (email addresses, phone numbers, domains, etc.) rather than foreign key constraints. This is essential for cross-system integrations where external platforms (Mailchimp, QuickBooks, HubSpot, etc.) share data values but not primary keys.
+
+Key capabilities:
+- **Direct matching**: Field-to-field comparison with configurable normalization (LowerCaseTrim, Trim, ExactMatch, Custom)
+- **Compound keys**: Match on multiple fields simultaneously (FirstName + LastName + DOB)
+- **Transitive matching**: Bridge through intermediate tables via SQL views for multi-hop relationships
+- **Bidirectional**: Configure on both sides for complete cross-system navigation
+- **CodeGen integration**: Declare organic keys in `additionalSchemaInfo.json` — CodeGen creates bridge views, inserts metadata, and generates form panels automatically
+
+```typescript
+// Access organic keys at runtime
+const organicKeys = entity.OrganicKeys; // EntityOrganicKeyInfo[]
+
+// Build query params for matching
+const params = EntityInfo.BuildOrganicKeyViewParams(record, relatedEntity, organicKey);
+// params.ExtraFilter = "LOWER(LTRIM(RTRIM([EmailAddress]))) = LOWER(LTRIM(RTRIM('john@acme.com')))"
+```
+
+> **Full Guide**: See [Organic Keys Guide](./docs/organic-keys.md) for the complete schema, all 4 query patterns, normalization strategies, CodeGen configuration, Angular UI integration, and an end-to-end setup walkthrough.
+
 ## Documentation
 
 For detailed guides on specific topics, see the [docs/](./docs/) folder:
 
 - [Virtual Entities](./docs/virtual-entities.md) — Config-driven creation, LLM decoration, read-only enforcement
 - [IS-A Relationships](./docs/isa-relationships.md) — Type inheritance, save/delete orchestration, provider integration
+- [Organic Keys](./docs/organic-keys.md) — Cross-system matching by shared business data (email, phone, domain), CodeGen integration, transitive views
 - [RunQuery Pagination](./docs/runquery-pagination.md) — Parameterized queries with pagination support
 
 ## Support

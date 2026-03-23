@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+- Updated dependencies [c3e8b94]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/ai@5.15.0
+  - @memberjunction/ai-vectors-pinecone@5.15.0
+  - @memberjunction/aiengine@5.15.0
+  - @memberjunction/ai-vectors@5.15.0
+  - @memberjunction/ai-vectordb@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/templates-base-types@5.15.0
+  - @memberjunction/templates@5.15.0
+  - @memberjunction/global@5.15.0
+
 ## 5.14.0
 
 ### Patch Changes

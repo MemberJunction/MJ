@@ -795,6 +795,109 @@ SELECT 1 AS Val`;
     });
 
     // ================================================================
+    // Inner CTE Hoisting
+    // ================================================================
+    describe('Inner CTE Hoisting', () => {
+        it('should hoist inner WITH clauses from dependency SQL as sibling CTEs', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'inner-cte-1',
+                Name: 'With Inner CTE',
+                CategoryPath: '/Test/',
+                SQL: 'WITH InnerCTE AS (SELECT ID, Name FROM Users WHERE Active = 1) SELECT * FROM InnerCTE WHERE Name IS NOT NULL'
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/With Inner CTE"}} t';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // The final SQL should have InnerCTE hoisted as a sibling, not nested
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            // InnerCTE should appear as a top-level CTE definition
+            expect(result.ResolvedSQL).toMatch(/WITH\s+InnerCTE\s+AS\s*\(/i);
+            // The generated CTE should reference InnerCTE in its body
+            const cteName = result.CTEs[0].CTEName;
+            expect(result.ResolvedSQL).toContain(cteName);
+        });
+
+        it('should hoist multiple inner CTEs from dependency SQL', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'multi-inner-1',
+                Name: 'Multi Inner',
+                CategoryPath: '/Test/',
+                SQL: 'WITH A AS (SELECT 1 AS x), B AS (SELECT 2 AS y) SELECT A.x, B.y FROM A, B'
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Multi Inner"}} t';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // No nested WITH clauses
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            // Both inner CTEs should be hoisted
+            expect(result.ResolvedSQL).toMatch(/A\s+AS\s*\(/);
+            expect(result.ResolvedSQL).toMatch(/B\s+AS\s*\(/);
+        });
+
+        it('should handle inner CTEs with nested parentheses in their bodies', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'nested-paren-1',
+                Name: 'Nested Parens',
+                CategoryPath: '/Test/',
+                SQL: "WITH Agg AS (SELECT MemberID, COUNT(DISTINCT ChapterID) AS ChaptersJoined FROM (SELECT * FROM Memberships WHERE Status = 'Active') sub GROUP BY MemberID) SELECT * FROM Agg"
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Nested Parens"}} t';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            expect(result.ResolvedSQL).toMatch(/Agg\s+AS\s*\(/);
+            // AST path brackets identifiers: [Agg]; regex path preserves as-is
+            expect(result.ResolvedSQL).toMatch(/SELECT\s+\*\s+FROM\s+\[?Agg\]?/i);
+        });
+
+        it('should hoist inner CTEs when main SQL also has a WITH clause', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'both-with-1',
+                Name: 'Dep With CTE',
+                CategoryPath: '/Test/',
+                SQL: 'WITH DepCTE AS (SELECT ID FROM Users) SELECT * FROM DepCTE'
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'WITH MainCTE AS (SELECT 1 AS z) SELECT m.*, d.* FROM MainCTE m, {{query:"Test/Dep With CTE"}} d';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // All CTEs should be at the top level
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            // Should have DepCTE, the generated dep CTE, and MainCTE
+            expect(result.ResolvedSQL).toMatch(/DepCTE\s+AS\s*\(/);
+            expect(result.ResolvedSQL).toMatch(/MainCTE\s+AS\s*\(/);
+        });
+
+        it('should handle inner CTEs with string literals containing parentheses', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'string-paren-1',
+                Name: 'String Parens',
+                CategoryPath: '/Test/',
+                SQL: "WITH Filtered AS (SELECT * FROM T WHERE Name = 'Test (Dept)') SELECT * FROM Filtered"
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/String Parens"}} t';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            expect(result.ResolvedSQL).toContain("'Test (Dept)'");
+        });
+    });
+
+    // ================================================================
     // ORDER BY Stripping in CTEs
     // ================================================================
     describe('ORDER BY Stripping', () => {
@@ -1630,6 +1733,556 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
             expect(result.HasCompositions).toBe(true);
             // PostgreSQL CTE names use double quotes instead of brackets
             expect(result.CTEs[0].CTEName).toMatch(/^"/);
+        });
+    });
+
+    // ================================================================
+    // Real-World Composition Scenarios
+    // ================================================================
+    describe('Real-World Composition Scenarios', () => {
+        // --------------- SQL Constants for Dependencies ---------------
+
+        const MEMBER_ACTIVITY_COUNTS_SQL = `WITH MemberActivities AS (
+    SELECT
+        m.ID AS MemberID, m.FirstName, m.LastName, m.Email, m.JoinDate, m.EngagementScore,
+        COALESCE(evt.EventsAttended, 0) AS EventsAttended,
+        COALESCE(evt.EventsRegistered, 0) AS EventsRegistered,
+        COALESCE(crs.CoursesCompleted, 0) AS CoursesCompleted,
+        COALESCE(crs.CoursesInProgress, 0) AS CoursesInProgress,
+        COALESCE(ch.ChaptersJoined, 0) AS ChaptersJoined,
+        COALESCE(com.CommitteesServed, 0) AS CommitteesServed,
+        (COALESCE(evt.EventsAttended, 0) + COALESCE(crs.CoursesCompleted, 0) + COALESCE(ch.ChaptersJoined, 0) + COALESCE(com.CommitteesServed, 0)) AS TotalActivityCount
+    FROM [AssociationDemo].[vwMembers] m
+    LEFT JOIN (SELECT er.MemberID, COUNT(DISTINCT er.ID) AS EventsRegistered, SUM(CASE WHEN er.Status = 'Attended' THEN 1 ELSE 0 END) AS EventsAttended FROM [AssociationDemo].[vwEventRegistrations] er GROUP BY er.MemberID) evt ON m.ID = evt.MemberID
+    LEFT JOIN (SELECT en.MemberID, SUM(CASE WHEN en.Status = 'Completed' THEN 1 ELSE 0 END) AS CoursesCompleted, SUM(CASE WHEN en.Status = 'In Progress' THEN 1 ELSE 0 END) AS CoursesInProgress FROM [AssociationDemo].[vwEnrollments] en GROUP BY en.MemberID) crs ON m.ID = crs.MemberID
+    LEFT JOIN (SELECT cm.MemberID, COUNT(DISTINCT cm.ChapterID) AS ChaptersJoined FROM [AssociationDemo].[vwChapterMemberships] cm WHERE cm.Status = 'Active' GROUP BY cm.MemberID) ch ON m.ID = ch.MemberID
+    LEFT JOIN (SELECT cm.MemberID, COUNT(DISTINCT cm.CommitteeID) AS CommitteesServed FROM [AssociationDemo].[vwCommitteeMemberships] cm WHERE cm.IsActive = 1 GROUP BY cm.MemberID) com ON m.ID = com.MemberID
+)
+SELECT * FROM MemberActivities WHERE 1=1
+{% if MinActivityCount %}AND TotalActivityCount >= {{ MinActivityCount | sqlNumber }}{% endif %}
+{% if MembershipType %}AND EXISTS (SELECT 1 FROM [AssociationDemo].[vwMemberships] ms INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID WHERE ms.MemberID = MemberActivities.MemberID AND ms.Status = 'Active' AND mt.Name = '{{ MembershipType }}'){% endif %}
+ORDER BY TotalActivityCount DESC`;
+
+        const CHAPTER_ENGAGEMENT_SUMMARY_SQL = `WITH ChapterMembers AS (
+    SELECT c.ID AS ChapterID, c.Name AS ChapterName, c.ChapterType, c.Region, c.State, c.IsActive,
+        COUNT(DISTINCT cm.MemberID) AS ActiveMemberCount, AVG(DATEDIFF(DAY, cm.JoinDate, GETDATE())) AS AvgMemberTenureDays
+    FROM [AssociationDemo].[vwChapters] c LEFT JOIN [AssociationDemo].[vwChapterMemberships] cm ON c.ID = cm.ChapterID AND cm.Status = 'Active'
+    WHERE c.IsActive = 1 {% if ChapterType %}AND c.ChapterType = '{{ ChapterType }}'{% endif %}
+    GROUP BY c.ID, c.Name, c.ChapterType, c.Region, c.State, c.IsActive
+),
+ChapterEventActivity AS (
+    SELECT cm.ChapterID, COUNT(DISTINCT er.EventID) AS UniqueEventsAttended, COUNT(DISTINCT er.ID) AS TotalRegistrations,
+        SUM(CASE WHEN er.Status = 'Attended' THEN 1 ELSE 0 END) AS TotalAttendances
+    FROM [AssociationDemo].[vwChapterMemberships] cm LEFT JOIN [AssociationDemo].[vwEventRegistrations] er ON cm.MemberID = er.MemberID
+    WHERE cm.Status = 'Active' GROUP BY cm.ChapterID
+),
+ChapterCourseActivity AS (
+    SELECT cm.ChapterID, COUNT(DISTINCT en.CourseID) AS UniqueCoursesEnrolled,
+        SUM(CASE WHEN en.Status = 'Completed' THEN 1 ELSE 0 END) AS CourseCompletions
+    FROM [AssociationDemo].[vwChapterMemberships] cm LEFT JOIN [AssociationDemo].[vwEnrollments] en ON cm.MemberID = en.MemberID
+    WHERE cm.Status = 'Active' GROUP BY cm.ChapterID
+)
+SELECT chmem.*, COALESCE(chev.UniqueEventsAttended, 0) AS UniqueEventsAttended, COALESCE(chev.TotalRegistrations, 0) AS TotalRegistrations,
+    COALESCE(chcr.UniqueCoursesEnrolled, 0) AS UniqueCoursesEnrolled, COALESCE(chcr.CourseCompletions, 0) AS CourseCompletions
+FROM ChapterMembers chmem LEFT JOIN ChapterEventActivity chev ON chmem.ChapterID = chev.ChapterID
+LEFT JOIN ChapterCourseActivity chcr ON chmem.ChapterID = chcr.ChapterID`;
+
+        const MEMBER_LIFETIME_REVENUE_SQL = `WITH CurrentMembership AS (
+    SELECT ms.MemberID, mt.Name AS MembershipType,
+        ROW_NUMBER() OVER (PARTITION BY ms.MemberID ORDER BY ms.StartDate DESC) AS rn
+    FROM [AssociationDemo].[vwMemberships] ms
+    INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID
+    WHERE ms.Status = 'Active'
+),
+MemberRevenue AS (
+    SELECT i.MemberID, COUNT(DISTINCT i.ID) AS InvoiceCount, SUM(li.Amount) AS TotalRevenue,
+        SUM(CASE WHEN li.ItemType = 'Membership Dues' THEN li.Amount ELSE 0 END) AS MembershipRevenue,
+        SUM(CASE WHEN li.ItemType = 'Event Registration' THEN li.Amount ELSE 0 END) AS EventRevenue
+    FROM [AssociationDemo].[vwInvoices] i INNER JOIN [AssociationDemo].[vwInvoiceLineItems] li ON i.ID = li.InvoiceID
+    WHERE i.Status NOT IN ('Cancelled', 'Refunded') GROUP BY i.MemberID
+)
+SELECT m.ID AS MemberID, m.FirstName, m.LastName, m.Email, m.JoinDate,
+    cm.MembershipType AS CurrentMembershipType, COALESCE(rev.TotalRevenue, 0) AS TotalRevenue,
+    COALESCE(rev.InvoiceCount, 0) AS InvoiceCount
+FROM [AssociationDemo].[vwMembers] m
+LEFT JOIN CurrentMembership cm ON m.ID = cm.MemberID AND cm.rn = 1
+LEFT JOIN MemberRevenue rev ON m.ID = rev.MemberID
+WHERE 1=1
+{% if MembershipType %}AND cm.MembershipType = '{{ MembershipType }}'{% endif %}`;
+
+        const BOARD_OF_DIRECTORS_SQL = `WITH board_committee AS (
+    SELECT Id FROM nams.vwNU__Committee__cs WHERE Name = 'MSTA Board of Directors' AND NU__Type__c = 'Board'
+),
+current_members AS (
+    SELECT cm.NU__Account__c, cm.CommitteePositionName__c, cm.NU__StartDate__c, cm.NU__EndDate__c
+    FROM nams.vwNU__CommitteeMembership__cs cm INNER JOIN board_committee bc ON bc.Id = cm.NU__Committee__c
+    WHERE cm.NU__State__c = 'Current' AND cm.IsDeleted = 0
+)
+SELECT a.FirstName, a.LastName, m.CommitteePositionName__c AS Board_Position, a.Institution__c AS School_District
+FROM current_members m INNER JOIN nams.vwAccounts a ON a.Id = m.NU__Account__c
+ORDER BY a.LastName, a.FirstName`;
+
+        const ACTIVE_MEMBERS_BY_TYPE_SQL = `SELECT mt.Name AS MembershipType, mt.AnnualDues, COUNT(DISTINCT m.ID) AS ActiveMemberCount,
+    ROUND(COUNT(DISTINCT m.ID) * 100.0 / SUM(COUNT(DISTINCT m.ID)) OVER (), 1) AS PercentageOfTotal
+FROM [AssociationDemo].[vwMemberships] ms
+INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID
+INNER JOIN [AssociationDemo].[vwMembers] m ON ms.MemberID = m.ID
+WHERE ms.Status = 'Active'
+GROUP BY mt.Name, mt.AnnualDues
+ORDER BY ActiveMemberCount DESC`;
+
+        const EVENT_REVENUE_SUMMARY_SQL = `SELECT e.ID AS EventID, e.Name AS EventName, e.EventType, COUNT(DISTINCT er.ID) AS TotalRegistrations, COALESCE(rev.TotalRevenue, 0) AS TotalRevenue
+FROM [AssociationDemo].[vwEvents] e
+LEFT JOIN [AssociationDemo].[vwEventRegistrations] er ON e.ID = er.EventID
+LEFT JOIN (SELECT li.RelatedEntityID AS EventID, SUM(li.Amount) AS TotalRevenue FROM [AssociationDemo].[vwInvoiceLineItems] li INNER JOIN [AssociationDemo].[vwInvoices] i ON li.InvoiceID = i.ID WHERE li.RelatedEntityType = 'Event' AND i.Status NOT IN ('Cancelled', 'Refunded') GROUP BY li.RelatedEntityID) rev ON e.ID = rev.EventID
+WHERE e.Status NOT IN ('Draft', 'Cancelled')
+GROUP BY e.ID, e.Name, e.EventType, rev.TotalRevenue`;
+
+        const MONTHLY_REVENUE_BY_SOURCE_SQL = `SELECT YEAR(i.InvoiceDate) AS RevenueYear, MONTH(i.InvoiceDate) AS RevenueMonth,
+    li.ItemType AS RevenueSource, COUNT(DISTINCT i.ID) AS InvoiceCount, SUM(li.Amount) AS Revenue
+FROM [AssociationDemo].[vwInvoices] i
+INNER JOIN [AssociationDemo].[vwInvoiceLineItems] li ON i.ID = li.InvoiceID
+WHERE i.Status NOT IN ('Cancelled', 'Refunded')
+{% if StartDate %}AND i.InvoiceDate >= {{ StartDate | sqlDate }}{% endif %}
+{% if EndDate %}AND i.InvoiceDate < {{ EndDate | sqlDate }}{% endif %}
+GROUP BY YEAR(i.InvoiceDate), MONTH(i.InvoiceDate), li.ItemType
+ORDER BY RevenueYear, RevenueMonth`;
+
+        const MEMBERSHIP_GROWTH_SQL = `SELECT YEAR(m.JoinDate) AS JoinYear, MONTH(m.JoinDate) AS JoinMonth,
+    COUNT(DISTINCT m.ID) AS NewMembers,
+    SUM(COUNT(DISTINCT m.ID)) OVER (ORDER BY YEAR(m.JoinDate), MONTH(m.JoinDate)) AS CumulativeMembers
+FROM [AssociationDemo].[vwMembers] m
+{% if StartDate %}WHERE m.JoinDate >= {{ StartDate | sqlDate }}{% endif %}
+GROUP BY YEAR(m.JoinDate), MONTH(m.JoinDate)
+ORDER BY JoinYear, JoinMonth`;
+
+        // Regex that detects nested WITH — i.e. AS ( WITH ... ) — which is invalid SQL
+        const NESTED_WITH_REGEX = /AS\s*\(\s*WITH\s/i;
+
+        it('should hoist MemberActivities CTE from member-activity-counts dependency (the original bug)', () => {
+            const dep = makeQueryInfo({
+                ID: 'mac-1',
+                Name: 'Member Activity Counts',
+                CategoryPath: '/Engagement Analytics/',
+                SQL: MEMBER_ACTIVITY_COUNTS_SQL,
+                UsesTemplate: true,
+            });
+            mockMetadataQueries([dep]);
+
+            const mainSQL = 'SELECT mac.MemberID, mac.FirstName, mac.TotalActivityCount FROM {{query:"Engagement Analytics/Member Activity Counts"}} mac WHERE mac.TotalActivityCount > 5';
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(1);
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+            // No nested WITH — inner MemberActivities CTE must be hoisted
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // MemberActivities should appear as a top-level CTE definition
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+        });
+
+        it('should hoist inner CTE when main query also has its own CTE (exact bug scenario)', () => {
+            const dep = makeQueryInfo({
+                ID: 'mac-1',
+                Name: 'Member Activity Counts',
+                CategoryPath: '/Engagement Analytics/',
+                SQL: MEMBER_ACTIVITY_COUNTS_SQL,
+                UsesTemplate: true,
+            });
+            mockMetadataQueries([dep]);
+
+            const mainSQL = `WITH PrimaryChapters AS (
+    SELECT cm.MemberID, cm.ChapterID, cm.Chapter AS ChapterName,
+        ROW_NUMBER() OVER (PARTITION BY cm.MemberID ORDER BY cm.JoinDate ASC) as rn
+    FROM [AssociationDemo].[vwChapterMemberships] cm WHERE cm.Status = 'Active'
+)
+SELECT mac.MemberID, mac.FirstName, mac.LastName, mac.TotalActivityCount,
+    pc.ChapterName AS PrimaryChapterName
+FROM {{query:"Engagement Analytics/Member Activity Counts"}} mac
+LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID AND pc.rn = 1`;
+
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(1);
+            // No nested WITH anywhere
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // Both MemberActivities (hoisted from dep) and PrimaryChapters (from main) should be top-level
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+            expect(result.ResolvedSQL).toMatch(/PrimaryChapters\s+AS\s*\(/i);
+            // Should start with a single WITH keyword
+            expect(result.ResolvedSQL.trimStart()).toMatch(/^WITH\s/i);
+        });
+
+        it('should hoist all 3 inner CTEs from chapter-engagement-summary dependency', () => {
+            const dep = makeQueryInfo({
+                ID: 'ces-1',
+                Name: 'Chapter Engagement Summary',
+                CategoryPath: '/Engagement Analytics/',
+                SQL: CHAPTER_ENGAGEMENT_SUMMARY_SQL,
+                UsesTemplate: true,
+            });
+            mockMetadataQueries([dep]);
+
+            const mainSQL = 'SELECT ch.ChapterName, ch.ActiveMemberCount, ch.UniqueEventsAttended FROM {{query:"Engagement Analytics/Chapter Engagement Summary"}} ch WHERE ch.ActiveMemberCount > 10';
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(1);
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // All 3 inner CTEs should be hoisted as top-level definitions
+            expect(result.ResolvedSQL).toMatch(/ChapterMembers\s+AS\s*\(/i);
+            expect(result.ResolvedSQL).toMatch(/ChapterEventActivity\s+AS\s*\(/i);
+            expect(result.ResolvedSQL).toMatch(/ChapterCourseActivity\s+AS\s*\(/i);
+        });
+
+        it('should hoist CTEs from two different dependencies composed together', () => {
+            const dep1 = makeQueryInfo({
+                ID: 'mc-1',
+                Name: 'Member Activity Counts',
+                CategoryPath: '/Engagement Analytics/',
+                SQL: MEMBER_ACTIVITY_COUNTS_SQL,
+                UsesTemplate: true,
+            });
+            const dep2 = makeQueryInfo({
+                ID: 'mc-2',
+                Name: 'Member Lifetime Revenue',
+                CategoryPath: '/Revenue/',
+                SQL: MEMBER_LIFETIME_REVENUE_SQL,
+                UsesTemplate: true,
+            });
+            mockMetadataQueries([dep1, dep2]);
+
+            const mainSQL = 'SELECT mac.MemberID, mac.TotalActivityCount, rev.TotalRevenue FROM {{query:"Engagement Analytics/Member Activity Counts"}} mac JOIN {{query:"Revenue/Member Lifetime Revenue"}} rev ON mac.MemberID = rev.MemberID';
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(2);
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // Hoisted CTEs from dep1
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+            // Hoisted CTEs from dep2
+            expect(result.ResolvedSQL).toMatch(/CurrentMembership\s+AS\s*\(/i);
+            expect(result.ResolvedSQL).toMatch(/MemberRevenue\s+AS\s*\(/i);
+        });
+
+        it('should hoist CTEs from board-of-directors dependency (AST path, no Nunjucks)', () => {
+            const dep = makeQueryInfo({
+                ID: 'bod-1',
+                Name: 'Board of Directors',
+                CategoryPath: '/MSTA/',
+                SQL: BOARD_OF_DIRECTORS_SQL,
+                UsesTemplate: false,
+            });
+            mockMetadataQueries([dep]);
+
+            const mainSQL = 'SELECT bd.FirstName, bd.LastName, bd.Board_Position FROM {{query:"MSTA/Board of Directors"}} bd';
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(1);
+            expect(result.AnyDependencyUsesTemplates).toBe(false);
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // Both inner CTEs hoisted (AST path brackets identifiers)
+            expect(result.ResolvedSQL).toMatch(/\[?board_committee\]?\s+AS\s*\(/i);
+            expect(result.ResolvedSQL).toMatch(/\[?current_members\]?\s+AS\s*\(/i);
+        });
+
+        it('should correctly handle non-CTE dependency (no hoisting needed)', () => {
+            const dep = makeQueryInfo({
+                ID: 'am-1',
+                Name: 'Active Members By Membership Type',
+                CategoryPath: '/Reports/',
+                SQL: ACTIVE_MEMBERS_BY_TYPE_SQL,
+                UsesTemplate: false,
+            });
+            mockMetadataQueries([dep]);
+
+            const mainSQL = 'SELECT am.MembershipType, am.ActiveMemberCount FROM {{query:"Reports/Active Members By Membership Type"}} am WHERE am.ActiveMemberCount > 100';
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(1);
+            // No nested WITH because the dep has no inner WITH clause
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // Standard CTE wrapping — the dep SQL is wrapped as a single CTE
+            expect(result.ResolvedSQL.trimStart()).toMatch(/^WITH\s/i);
+        });
+
+        it('should handle non-CTE dependency with subquery in FROM clause', () => {
+            const dep = makeQueryInfo({
+                ID: 'ers-1',
+                Name: 'Event Revenue Summary',
+                CategoryPath: '/Revenue/',
+                SQL: EVENT_REVENUE_SUMMARY_SQL,
+                UsesTemplate: false,
+            });
+            mockMetadataQueries([dep]);
+
+            const mainSQL = 'SELECT ev.EventName, ev.TotalRevenue FROM {{query:"Revenue/Event Revenue Summary"}} ev ORDER BY ev.TotalRevenue DESC';
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(1);
+            // No nested WITH — dep SQL has subqueries but not a WITH clause
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // Standard CTE wrapping
+            expect(result.ResolvedSQL.trimStart()).toMatch(/^WITH\s/i);
+        });
+
+        it('should compose with parameter pass-through on CTE dependency', () => {
+            const dep = makeQueryInfo({
+                ID: 'mac-1',
+                Name: 'Member Activity Counts',
+                CategoryPath: '/Engagement Analytics/',
+                SQL: MEMBER_ACTIVITY_COUNTS_SQL,
+                UsesTemplate: true,
+            });
+            mockMetadataQueries([dep]);
+
+            const mainSQL = `SELECT mac.MemberID, mac.TotalActivityCount FROM {{query:"Engagement Analytics/Member Activity Counts(MinActivityCount='5', MembershipType=MembershipType)"}} mac`;
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(1);
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // MemberActivities CTE should be hoisted
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+            // MinActivityCount='5' should be substituted — the literal '5' replaces the Nunjucks token
+            expect(result.CTEs[0].Parameters['MinActivityCount']).toBe('5');
+            // MembershipType is pass-through — should remain as a Nunjucks token for later processing
+            expect(result.ResolvedSQL).toMatch(/MembershipType/);
+        });
+
+        it('should compose aggregation over CTE dependency', () => {
+            const dep = makeQueryInfo({
+                ID: 'mac-1',
+                Name: 'Member Activity Counts',
+                CategoryPath: '/Engagement Analytics/',
+                SQL: MEMBER_ACTIVITY_COUNTS_SQL,
+                UsesTemplate: true,
+            });
+            mockMetadataQueries([dep]);
+
+            const mainSQL = `SELECT
+    CASE WHEN mac.TotalActivityCount >= 10 THEN 'Highly Active'
+         WHEN mac.TotalActivityCount >= 5 THEN 'Moderately Active'
+         ELSE 'Low Activity' END AS EngagementTier,
+    COUNT(*) AS MemberCount, AVG(mac.TotalActivityCount) AS AvgActivity
+FROM {{query:"Engagement Analytics/Member Activity Counts"}} mac
+GROUP BY CASE WHEN mac.TotalActivityCount >= 10 THEN 'Highly Active'
+              WHEN mac.TotalActivityCount >= 5 THEN 'Moderately Active'
+              ELSE 'Low Activity' END`;
+
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(1);
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // MemberActivities hoisted
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+            // Main SELECT has GROUP BY structure preserved
+            expect(result.ResolvedSQL).toMatch(/GROUP BY/i);
+            expect(result.ResolvedSQL).toMatch(/EngagementTier/i);
+        });
+
+        it('should compose dashboard query joining 3 different dependencies', () => {
+            const dep1 = makeQueryInfo({
+                ID: 'am-1',
+                Name: 'Active Members By Membership Type',
+                CategoryPath: '/Reports/',
+                SQL: ACTIVE_MEMBERS_BY_TYPE_SQL,
+                UsesTemplate: false,
+            });
+            const dep2 = makeQueryInfo({
+                ID: 'rev-1',
+                Name: 'Monthly Revenue By Source Type',
+                CategoryPath: '/Revenue/',
+                SQL: MONTHLY_REVENUE_BY_SOURCE_SQL,
+                UsesTemplate: true,
+            });
+            const dep3 = makeQueryInfo({
+                ID: 'mg-1',
+                Name: 'Membership Growth By Period',
+                CategoryPath: '/Reports/',
+                SQL: MEMBERSHIP_GROWTH_SQL,
+                UsesTemplate: true,
+            });
+            mockMetadataQueries([dep1, dep2, dep3]);
+
+            const mainSQL = `SELECT am.MembershipType, am.ActiveMemberCount, rev.Revenue AS MonthlyRevenue, growth.NewMembers
+FROM {{query:"Reports/Active Members By Membership Type"}} am
+LEFT JOIN {{query:"Revenue/Monthly Revenue By Source Type"}} rev ON rev.RevenueSource = 'Membership Dues'
+LEFT JOIN {{query:"Reports/Membership Growth By Period"}} growth ON 1=1`;
+
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(3);
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+            // None of these deps have inner CTEs, so no hoisting needed — just no nested WITH
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+        });
+
+        it('should compose main query with CTE referencing a CTE dependency', () => {
+            const dep = makeQueryInfo({
+                ID: 'bod-1',
+                Name: 'Board of Directors',
+                CategoryPath: '/MSTA/',
+                SQL: BOARD_OF_DIRECTORS_SQL,
+                UsesTemplate: false,
+            });
+            mockMetadataQueries([dep]);
+
+            const mainSQL = `WITH RegionCounts AS (
+    SELECT bd.School_District, COUNT(*) AS BoardMemberCount
+    FROM {{query:"MSTA/Board of Directors"}} bd
+    GROUP BY bd.School_District
+)
+SELECT * FROM RegionCounts WHERE BoardMemberCount > 1`;
+
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(1);
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // board_committee + current_members hoisted before RegionCounts (AST path brackets identifiers)
+            expect(result.ResolvedSQL).toMatch(/\[?board_committee\]?\s+AS\s*\(/i);
+            expect(result.ResolvedSQL).toMatch(/\[?current_members\]?\s+AS\s*\(/i);
+            expect(result.ResolvedSQL).toMatch(/RegionCounts\s+AS\s*\(/i);
+            // All should be under a single WITH
+            expect(result.ResolvedSQL.trimStart()).toMatch(/^WITH\s/i);
+        });
+
+        it('should compose templated main query with two CTE dependencies', () => {
+            const dep1 = makeQueryInfo({
+                ID: 'mac-1',
+                Name: 'Member Activity Counts',
+                CategoryPath: '/Engagement Analytics/',
+                SQL: MEMBER_ACTIVITY_COUNTS_SQL,
+                UsesTemplate: true,
+            });
+            const dep2 = makeQueryInfo({
+                ID: 'ces-1',
+                Name: 'Chapter Engagement Summary',
+                CategoryPath: '/Engagement Analytics/',
+                SQL: CHAPTER_ENGAGEMENT_SUMMARY_SQL,
+                UsesTemplate: true,
+            });
+            mockMetadataQueries([dep1, dep2]);
+
+            const mainSQL = `WITH CrossReference AS (
+    SELECT mac.MemberID, mac.TotalActivityCount, ch.ChapterName
+    FROM {{query:"Engagement Analytics/Member Activity Counts"}} mac
+    JOIN {{query:"Engagement Analytics/Chapter Engagement Summary"}} ch ON 1=1
+)
+SELECT * FROM CrossReference`;
+
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(2);
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // All 4 inner CTEs (1 from dep1 + 3 from dep2) should be hoisted
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+            expect(result.ResolvedSQL).toMatch(/ChapterMembers\s+AS\s*\(/i);
+            expect(result.ResolvedSQL).toMatch(/ChapterEventActivity\s+AS\s*\(/i);
+            expect(result.ResolvedSQL).toMatch(/ChapterCourseActivity\s+AS\s*\(/i);
+            // Main CTE should also be present
+            expect(result.ResolvedSQL).toMatch(/CrossReference\s+AS\s*\(/i);
+        });
+
+        it('should compose with event-revenue and member-activity for ROI analysis', () => {
+            const dep1 = makeQueryInfo({
+                ID: 'ers-1',
+                Name: 'Event Revenue Summary',
+                CategoryPath: '/Revenue/',
+                SQL: EVENT_REVENUE_SUMMARY_SQL,
+                UsesTemplate: false,
+            });
+            const dep2 = makeQueryInfo({
+                ID: 'mac-1',
+                Name: 'Member Activity Counts',
+                CategoryPath: '/Engagement Analytics/',
+                SQL: MEMBER_ACTIVITY_COUNTS_SQL,
+                UsesTemplate: true,
+            });
+            mockMetadataQueries([dep1, dep2]);
+
+            const mainSQL = `SELECT ev.EventName, ev.TotalRevenue, ev.TotalRegistrations,
+    AVG(mac.EventsAttended) AS AvgMemberEvents
+FROM {{query:"Revenue/Event Revenue Summary"}} ev
+CROSS APPLY (
+    SELECT TOP 10 mac2.EventsAttended
+    FROM {{query:"Engagement Analytics/Member Activity Counts"}} mac2
+    ORDER BY mac2.EventsAttended DESC
+) mac
+GROUP BY ev.EventName, ev.TotalRevenue, ev.TotalRegistrations`;
+
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(2);
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // MemberActivities hoisted from dep2
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+        });
+
+        it('should dedup when same CTE dependency is referenced twice', () => {
+            const dep = makeQueryInfo({
+                ID: 'mac-1',
+                Name: 'Member Activity Counts',
+                CategoryPath: '/Engagement Analytics/',
+                SQL: MEMBER_ACTIVITY_COUNTS_SQL,
+                UsesTemplate: true,
+            });
+            mockMetadataQueries([dep]);
+
+            const mainSQL = `SELECT high.MemberID AS HighEngagement, low.MemberID AS LowEngagement
+FROM {{query:"Engagement Analytics/Member Activity Counts"}} high
+JOIN {{query:"Engagement Analytics/Member Activity Counts"}} low ON 1=1`;
+
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            // Deduplicated — same query+params referenced twice should produce only 1 CTE entry
+            expect(result.CTEs).toHaveLength(1);
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // MemberActivities hoisted once
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+        });
+
+        it('should compose with parameter substitution on both CTE and non-CTE dependencies', () => {
+            const dep1 = makeQueryInfo({
+                ID: 'mac-1',
+                Name: 'Member Activity Counts',
+                CategoryPath: '/Engagement Analytics/',
+                SQL: MEMBER_ACTIVITY_COUNTS_SQL,
+                UsesTemplate: true,
+            });
+            const dep2 = makeQueryInfo({
+                ID: 'am-1',
+                Name: 'Active Members By Membership Type',
+                CategoryPath: '/Reports/',
+                SQL: ACTIVE_MEMBERS_BY_TYPE_SQL,
+                UsesTemplate: false,
+            });
+            mockMetadataQueries([dep1, dep2]);
+
+            const mainSQL = `SELECT mac.MemberID, mac.TotalActivityCount, am.ActiveMemberCount
+FROM {{query:"Engagement Analytics/Member Activity Counts(MinActivityCount='3')"}} mac
+JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
+
+            const result = engine.ResolveComposition(mainSQL, 'sqlserver', mockUser);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.CTEs).toHaveLength(2);
+            expect(result.ResolvedSQL).not.toMatch(NESTED_WITH_REGEX);
+            // MemberActivities hoisted from dep1
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+            // MinActivityCount='3' substituted in the dep1 SQL
+            expect(result.CTEs[0].Parameters['MinActivityCount']).toBe('3');
         });
     });
 });

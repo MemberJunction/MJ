@@ -1,0 +1,3579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Database Documentation - LousyDB</title>
+<style>
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f5f7fa;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      .container {
+        width: 100%;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+
+      header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+
+      header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+      }
+
+      header .subtitle {
+        font-size: 1.1rem;
+        opacity: 0.95;
+        margin-bottom: 1rem;
+      }
+
+      header .meta {
+        display: flex;
+        gap: 2rem;
+        font-size: 0.95rem;
+        opacity: 0.9;
+      }
+
+      .main-wrapper {
+        display: flex;
+        flex: 1;
+        gap: 0;
+      }
+
+      .sidebar {
+        width: 280px;
+        background-color: #fff;
+        border-right: 1px solid #e0e0e0;
+        overflow-y: auto;
+        padding: 1.5rem 0;
+        position: sticky;
+        top: 0;
+        max-height: calc(100vh - 200px);
+      }
+
+      .sidebar h3 {
+        padding: 0.5rem 1.5rem;
+        color: #667eea;
+        font-size: 0.95rem;
+        text-transform: uppercase;
+        margin-top: 1.5rem;
+        margin-bottom: 0.5rem;
+        letter-spacing: 0.5px;
+      }
+
+      .sidebar a {
+        display: block;
+        padding: 0.6rem 1.5rem;
+        color: #555;
+        text-decoration: none;
+        border-left: 3px solid transparent;
+        transition: all 0.2s;
+      }
+
+      .sidebar a:hover {
+        background-color: #f5f5f5;
+        color: #667eea;
+        border-left-color: #667eea;
+      }
+
+      .main-content {
+        flex: 1;
+        padding: 2rem;
+        overflow-y: auto;
+      }
+
+      section {
+        background: white;
+        border-radius: 8px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      }
+
+      h2 {
+        color: #667eea;
+        font-size: 1.8rem;
+        margin-bottom: 1rem;
+        border-bottom: 2px solid #e0e0e0;
+        padding-bottom: 0.5rem;
+      }
+
+      h3 {
+        color: #764ba2;
+        font-size: 1.3rem;
+        margin-top: 1.5rem;
+        margin-bottom: 0.8rem;
+      }
+
+      h4 {
+        color: #555;
+        font-size: 1.1rem;
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .summary-card {
+        background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        padding: 1rem;
+        border-radius: 6px;
+        border-left: 4px solid #667eea;
+      }
+
+      .summary-card strong {
+        display: block;
+        color: #667eea;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        margin-bottom: 0.3rem;
+      }
+
+      .summary-card .value {
+        font-size: 1.6rem;
+        font-weight: bold;
+        color: #333;
+      }
+
+      .search-box {
+        margin-bottom: 2rem;
+      }
+
+      .search-box input {
+        width: 100%;
+        padding: 0.8rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 6px;
+        font-size: 1rem;
+        transition: border-color 0.2s;
+      }
+
+      .search-box input:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      .search-results {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .search-result {
+        padding: 0.8rem;
+        background-color: #f9f9f9;
+        border-radius: 4px;
+        border-left: 3px solid #667eea;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .search-result:hover {
+        background-color: #f0f0f0;
+        transform: translateX(4px);
+      }
+
+      .search-result .table-name {
+        font-weight: bold;
+        color: #667eea;
+      }
+
+      .search-result .column-name {
+        color: #666;
+        font-size: 0.9rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+      }
+
+      table th {
+        background-color: #f5f5f5;
+        padding: 0.8rem;
+        text-align: left;
+        font-weight: 600;
+        color: #667eea;
+        border-bottom: 2px solid #e0e0e0;
+      }
+
+      table td {
+        padding: 0.8rem;
+        border-bottom: 1px solid #e0e0e0;
+      }
+
+      table tr:hover {
+        background-color: #f9f9f9;
+      }
+
+      .confidence-indicator {
+        display: inline-block;
+        padding: 0.3rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+
+      .confidence-high {
+        background-color: #d4edda;
+        color: #155724;
+      }
+
+      .confidence-medium {
+        background-color: #fff3cd;
+        color: #856404;
+      }
+
+      .confidence-low {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+
+      .schema-section {
+        background: white;
+        border-radius: 8px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      }
+
+      .schema-title {
+        color: #667eea;
+        font-size: 1.6rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #e0e0e0;
+      }
+
+      .mermaid {
+        background-color: #f9f9f9;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 1rem;
+        margin: 1rem 0;
+        display: flex;
+        justify-content: center;
+      }
+
+      .mermaid svg {
+        max-width: 100%;
+        height: auto;
+      }
+
+      .relationship-info {
+        margin-top: 1rem;
+        padding: 1rem;
+        background-color: #f5f5f5;
+        border-radius: 4px;
+      }
+
+      .relationship-info strong {
+        color: #667eea;
+      }
+
+      .tag {
+        display: inline-block;
+        padding: 0.25rem 0.6rem;
+        margin-right: 0.5rem;
+        background-color: #e0e0e0;
+        color: #333;
+        border-radius: 3px;
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+
+      .tag.pk {
+        background-color: #667eea;
+        color: white;
+      }
+
+      .tag.fk {
+        background-color: #764ba2;
+        color: white;
+      }
+
+      .tag.notnull {
+        background-color: #ff6b6b;
+        color: white;
+      }
+
+      .no-results {
+        text-align: center;
+        color: #999;
+        padding: 2rem;
+        font-style: italic;
+      }
+
+      @media (max-width: 1024px) {
+        .main-wrapper {
+          flex-direction: column;
+        }
+
+        .sidebar {
+          width: 100%;
+          max-height: auto;
+          border-right: none;
+          border-bottom: 1px solid #e0e0e0;
+          padding: 1rem 0;
+        }
+
+        .sidebar h3 {
+          display: inline-block;
+          margin-right: 1rem;
+          margin-top: 0;
+          margin-bottom: 0;
+        }
+
+        .sidebar a {
+          display: inline-block;
+          margin-right: 1rem;
+          border-left: none;
+          border-bottom: 2px solid transparent;
+          padding: 0.5rem 0;
+        }
+
+        .sidebar a:hover {
+          border-left: none;
+          border-bottom-color: #667eea;
+        }
+      }
+    
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>📊 LousyDB</h1>
+<div class="subtitle">Database Documentation</div>
+<div class="meta">
+<span><strong>Server:</strong> sql-claude</span>
+<span><strong>Generated:</strong> 3/22/2026</span>
+</div>
+</header>
+<div class="main-wrapper">
+<aside class="sidebar">
+<h3>📑 Schemas</h3>
+<a href="#schema-inv">inv</a>
+<a href="#schema-sales">sales</a>
+</aside>
+<div class="main-content">
+<section id="summary">
+<h2>📈 Analysis Summary</h2>
+<div class="summary-grid">
+<div class="summary-card">
+      <strong>Total Schemas</strong>
+      <div class="value">2</div>
+    </div>
+<div class="summary-card">
+      <strong>Total Tables</strong>
+      <div class="value">20</div>
+    </div>
+<div class="summary-card">
+      <strong>Total Columns</strong>
+      <div class="value">162</div>
+    </div>
+<div class="summary-card">
+      <strong>Total Iterations</strong>
+      <div class="value">2</div>
+    </div>
+<div class="summary-card">
+      <strong>Tokens Used</strong>
+      <div class="value">213,637</div>
+    </div>
+<div class="summary-card">
+      <strong>Estimated Cost</strong>
+      <div class="value">$0.00</div>
+    </div>
+</div>
+<h3>Latest Analysis Run</h3>
+<p><strong>Status:</strong> converged</p>
+<p><strong>Model:</strong> gemini-3-flash-preview (gemini)</p>
+<p><strong>Temperature:</strong> 0.1</p>
+</section>
+<section id="context">
+<h2>💡 Database Context</h2>
+<p><strong>Purpose:</strong> Legacy business database with cryptic table/column names, no constraints, and intentional data quality issues</p>
+<p><strong>Industry:</strong> General Business / Legacy System</p>
+<p><strong>Business Domains:</strong> 
+Sales, Inventory, Order Management, Purchasing</p>
+</section>
+<section id="search">
+<h2>🔍 Search Tables & Columns</h2>
+<div class="search-box">
+<input type="text" id="search-input" placeholder="Search for tables or columns...">
+</div>
+<div id="search-results" class="search-results"></div>
+</section>
+<script>
+const searchData = [
+  {
+    type: 'table',
+    schema: 'inv',
+    name: 'adj',
+    description: 'The inv.adj table records manual or system-generated inventory adjustments used to reconcile physical stock with the digital ledger. It tracks changes in product quantities due to non-standard events such as damage, expiration, theft (shrinkage), or administrative corrections.',
+    anchor: 'table-adj'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'adj',
+    name: 'adj_id',
+    dataType: 'int',
+    description: 'Unique identifier for each inventory adjustment transaction',
+    anchor: 'table-adj'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'adj',
+    name: 'prd_id',
+    dataType: 'int',
+    description: 'Reference to the specific product being adjusted',
+    anchor: 'table-adj'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'adj',
+    name: 'whs_id',
+    dataType: 'int',
+    description: 'Reference to the warehouse location where the adjustment occurred',
+    anchor: 'table-adj'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'adj',
+    name: 'adj_dt',
+    dataType: 'date',
+    description: 'The date and time when the adjustment was recorded',
+    anchor: 'table-adj'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'adj',
+    name: 'qty',
+    dataType: 'int',
+    description: 'The numerical change in stock level; negative values indicate stock removal, while positive values indicate stock additions',
+    anchor: 'table-adj'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'adj',
+    name: 'rsn',
+    dataType: 'char',
+    description: 'A short category code for the adjustment reason (e.g., STL for Steal/Shrinkage, EXP for Expired, DAM for Damaged, COR for Correction)',
+    anchor: 'table-adj'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'adj',
+    name: 'usr',
+    dataType: 'nvarchar',
+    description: 'The name of the employee or system user who performed the adjustment',
+    anchor: 'table-adj'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'adj',
+    name: 'notes',
+    dataType: 'nvarchar',
+    description: 'A descriptive explanation of the adjustment reason code',
+    anchor: 'table-adj'
+  },
+  {
+    type: 'table',
+    schema: 'inv',
+    name: 'cat',
+    description: 'Stores a hierarchical product categorization system used to organize inventory items into at least 11 distinct groups, covering domains such as office furniture, computer hardware, and stationery. While the schema supports multi-level nesting via a self-referencing structure, it is currently utilized as a shallow two-level hierarchy (Parent/Child) to group products into broad departments and specific sub-categories.',
+    anchor: 'table-cat'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cat',
+    name: 'cat_id',
+    dataType: 'int',
+    description: 'Unique identifier for each product category',
+    anchor: 'table-cat'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cat',
+    name: 'prnt_id',
+    dataType: 'int',
+    description: 'Reference to the parent category ID, establishing a hierarchy',
+    anchor: 'table-cat'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cat',
+    name: 'nm',
+    dataType: 'nvarchar',
+    description: 'The short display name of the category (e.g., \'Printers\', \'Furniture\')',
+    anchor: 'table-cat'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cat',
+    name: 'dsc',
+    dataType: 'nvarchar',
+    description: 'A detailed description of the types of products included in the category',
+    anchor: 'table-cat'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cat',
+    name: 'lvl',
+    dataType: 'int',
+    description: 'The depth level of the category in the hierarchy (1 for top-level, 2 for sub-categories)',
+    anchor: 'table-cat'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cat',
+    name: 'seq',
+    dataType: 'int',
+    description: 'The display or sort order of the category within its hierarchy level',
+    anchor: 'table-cat'
+  },
+  {
+    type: 'table',
+    schema: 'inv',
+    name: 'cnt',
+    description: 'Stores the results of physical inventory counts (cycle counts) performed at specific warehouses. It records the discrepancy between the system\'s expected stock levels and the actual physical quantities found during an audit.',
+    anchor: 'table-cnt'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cnt',
+    name: 'cnt_id',
+    dataType: 'int',
+    description: 'Unique identifier for each inventory count record',
+    anchor: 'table-cnt'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cnt',
+    name: 'whs_id',
+    dataType: 'int',
+    description: 'Identifier for the warehouse where the physical count was conducted',
+    anchor: 'table-cnt'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cnt',
+    name: 'cnt_dt',
+    dataType: 'date',
+    description: 'The date the physical inventory count was performed',
+    anchor: 'table-cnt'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cnt',
+    name: 'prd_id',
+    dataType: 'int',
+    description: 'Identifier for the specific product being audited',
+    anchor: 'table-cnt'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cnt',
+    name: 'exp_qty',
+    dataType: 'int',
+    description: 'The theoretical stock quantity expected by the system at the time of the count',
+    anchor: 'table-cnt'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cnt',
+    name: 'act_qty',
+    dataType: 'int',
+    description: 'The actual physical quantity counted by the staff member',
+    anchor: 'table-cnt'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cnt',
+    name: 'var',
+    dataType: 'int',
+    description: 'The numerical difference (variance) between the actual and expected quantities',
+    anchor: 'table-cnt'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'cnt',
+    name: 'usr',
+    dataType: 'nvarchar',
+    description: 'The name of the employee or system user who performed the count',
+    anchor: 'table-cnt'
+  },
+  {
+    type: 'table',
+    schema: 'inv',
+    name: 'po',
+    description: 'Stores purchase order header information, representing formal requests sent to suppliers for goods or services. It tracks the overall order lifecycle, including dates, total costs, shipping fees, and fulfillment status.',
+    anchor: 'table-po'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po',
+    name: 'po_id',
+    dataType: 'int',
+    description: 'The unique primary identifier for each purchase order.',
+    anchor: 'table-po'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po',
+    name: 'sup_id',
+    dataType: 'int',
+    description: 'Foreign key referencing the supplier (inv.sup) from whom the goods are being ordered.',
+    anchor: 'table-po'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po',
+    name: 'po_dt',
+    dataType: 'date',
+    description: 'The date the purchase order was created or issued.',
+    anchor: 'table-po'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po',
+    name: 'exp_dt',
+    dataType: 'date',
+    description: 'The expected delivery date or expiration date for the purchase order.',
+    anchor: 'table-po'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po',
+    name: 'sts',
+    dataType: 'char',
+    description: 'The current lifecycle status of the purchase order (e.g., \'A\' for Approved, \'P\' for Pending, \'R\' for Received, \'S\' for Shipped, \'X\' for Cancelled).',
+    anchor: 'table-po'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po',
+    name: 'tot',
+    dataType: 'decimal',
+    description: 'The total monetary value of the purchase order, excluding or including shipping depending on business logic.',
+    anchor: 'table-po'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po',
+    name: 'ship_amt',
+    dataType: 'decimal',
+    description: 'The cost associated with shipping the order; appears to use a flat rate (150) or zero.',
+    anchor: 'table-po'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po',
+    name: 'notes',
+    dataType: 'nvarchar',
+    description: 'Optional free-text field for special instructions or comments regarding the order.',
+    anchor: 'table-po'
+  },
+  {
+    type: 'table',
+    schema: 'inv',
+    name: 'po_dtl',
+    description: 'The inv.po_dtl table stores the line-item details for purchase orders. It acts as a bridge between purchase order headers (inv.po) and products (inv.prd), specifying the quantity of each product ordered, the agreed price, and tracking the quantity actually received.',
+    anchor: 'table-po-dtl'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po_dtl',
+    name: 'po_id',
+    dataType: 'int',
+    description: 'Foreign key identifying the parent purchase order header in inv.po.',
+    anchor: 'table-po-dtl'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po_dtl',
+    name: 'seq',
+    dataType: 'int',
+    description: 'The sequence or line-item number for the product within a specific purchase order.',
+    anchor: 'table-po-dtl'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po_dtl',
+    name: 'prd_id',
+    dataType: 'int',
+    description: 'Foreign key identifying the specific product being ordered, referencing the product master.',
+    anchor: 'table-po-dtl'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po_dtl',
+    name: 'qty',
+    dataType: 'int',
+    description: 'The quantity of the product originally requested or ordered from the supplier.',
+    anchor: 'table-po-dtl'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po_dtl',
+    name: 'prc',
+    dataType: 'decimal',
+    description: 'The unit price or cost of the product for this specific purchase order line.',
+    anchor: 'table-po-dtl'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'po_dtl',
+    name: 'rcv_qty',
+    dataType: 'int',
+    description: 'The actual quantity of the product that has been delivered and processed into inventory.',
+    anchor: 'table-po-dtl'
+  },
+  {
+    type: 'table',
+    schema: 'inv',
+    name: 'prd',
+    description: 'The central product master table (inv.prd) that stores detailed information for all items in the inventory catalog, including identification, pricing, physical attributes, and categorization.',
+    anchor: 'table-prd'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'prd',
+    name: 'prd_id',
+    dataType: 'int',
+    description: 'Unique internal identifier for each product record',
+    anchor: 'table-prd'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'prd',
+    name: 'cat_id',
+    dataType: 'int',
+    description: 'Reference to the product category (e.g., Furniture, Electronics)',
+    anchor: 'table-prd'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'prd',
+    name: 'sup_id',
+    dataType: 'int',
+    description: 'Reference to the primary supplier or vendor for the product',
+    anchor: 'table-prd'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'prd',
+    name: 'sku',
+    dataType: 'nvarchar',
+    description: 'Stock Keeping Unit; a unique alphanumeric code used for inventory tracking',
+    anchor: 'table-prd'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'prd',
+    name: 'nm',
+    dataType: 'nvarchar',
+    description: 'The display name of the product',
+    anchor: 'table-prd'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'prd',
+    name: 'dsc',
+    dataType: 'nvarchar',
+    description: 'A brief text description of the product\'s features or specifications',
+    anchor: 'table-prd'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'prd',
+    name: 'prc',
+    dataType: 'decimal',
+    description: 'The retail or selling price of the product',
+    anchor: 'table-prd'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'prd',
+    name: 'cost',
+    dataType: 'decimal',
+    description: 'The wholesale cost or acquisition price paid to the supplier',
+    anchor: 'table-prd'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'prd',
+    name: 'sts',
+    dataType: 'char',
+    description: 'The current lifecycle status of the product (e.g., Active, Discontinued, Obsolete)',
+    anchor: 'table-prd'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'prd',
+    name: 'wgt',
+    dataType: 'decimal',
+    description: 'The physical weight of the product, likely in pounds or kilograms',
+    anchor: 'table-prd'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'prd',
+    name: 'uom',
+    dataType: 'char',
+    description: 'Unit of Measure; defines how the product is packaged or sold',
+    anchor: 'table-prd'
+  },
+  {
+    type: 'table',
+    schema: 'inv',
+    name: 'rcv',
+    description: 'Stores header-level records for inventory receiving transactions. This table documents the arrival of goods from suppliers (linked via purchase orders) into specific warehouse locations, capturing the date of receipt and any relevant processing notes.',
+    anchor: 'table-rcv'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'rcv',
+    name: 'rcv_id',
+    dataType: 'int',
+    description: 'Unique identifier for each receiving transaction record',
+    anchor: 'table-rcv'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'rcv',
+    name: 'po_id',
+    dataType: 'int',
+    description: 'Reference to the purchase order associated with the incoming shipment',
+    anchor: 'table-rcv'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'rcv',
+    name: 'rcv_dt',
+    dataType: 'date',
+    description: 'The date the goods were physically received at the facility',
+    anchor: 'table-rcv'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'rcv',
+    name: 'whs_id',
+    dataType: 'int',
+    description: 'The specific warehouse or distribution center where the goods were delivered',
+    anchor: 'table-rcv'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'rcv',
+    name: 'notes',
+    dataType: 'nvarchar',
+    description: 'Internal comments regarding the shipment status, such as discrepancies or backorder information',
+    anchor: 'table-rcv'
+  },
+  {
+    type: 'table',
+    schema: 'inv',
+    name: 'stk',
+    description: 'The inv.stk table serves as the central inventory ledger, tracking real-time stock levels, reservations, and replenishment thresholds for every product across all physical warehouse locations. It functions as the authoritative source for expected stock levels during physical counts and is the primary table updated by variance adjustments following inventory audits.',
+    anchor: 'table-stk'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'stk',
+    name: 'prd_id',
+    dataType: 'int',
+    description: 'Foreign key identifying the specific product being tracked.',
+    anchor: 'table-stk'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'stk',
+    name: 'whs_id',
+    dataType: 'int',
+    description: 'Foreign key identifying the physical warehouse or distribution center where the stock is located.',
+    anchor: 'table-stk'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'stk',
+    name: 'qty',
+    dataType: 'int',
+    description: 'The current physical quantity of the product available at this specific warehouse.',
+    anchor: 'table-stk'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'stk',
+    name: 'rsv',
+    dataType: 'int',
+    description: 'The quantity of stock currently reserved or committed to open sales orders but not yet shipped.',
+    anchor: 'table-stk'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'stk',
+    name: 'min_qty',
+    dataType: 'int',
+    description: 'The minimum stock threshold or safety stock level used to trigger reordering processes.',
+    anchor: 'table-stk'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'stk',
+    name: 'max_qty',
+    dataType: 'int',
+    description: 'The maximum capacity or target stock level for this product at this location.',
+    anchor: 'table-stk'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'stk',
+    name: 'lst_cnt',
+    dataType: 'date',
+    description: 'The date of the last physical inventory count or audit performed for this item at this location.',
+    anchor: 'table-stk'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'stk',
+    name: 'lst_rcv',
+    dataType: 'date',
+    description: 'The date when stock for this product was last received into this warehouse from a supplier or transfer.',
+    anchor: 'table-stk'
+  },
+  {
+    type: 'table',
+    schema: 'inv',
+    name: 'sup',
+    description: 'A master data table storing information about external business partners, including both product vendors/suppliers and commission-based sales representatives or agents. It maintains contact details, account status, payment terms, and performance ratings to support procurement workflows and customer account management.',
+    anchor: 'table-sup'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'sup',
+    name: 'sup_id',
+    dataType: 'int',
+    description: 'Unique identifier for each supplier',
+    anchor: 'table-sup'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'sup',
+    name: 'nm',
+    dataType: 'nvarchar',
+    description: 'The legal or trade name of the supplier company',
+    anchor: 'table-sup'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'sup',
+    name: 'sts',
+    dataType: 'char',
+    description: 'The current operational status of the supplier account (e.g., Active, Terminated, Suspended, Inactive)',
+    anchor: 'table-sup'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'sup',
+    name: 'pmt_trm',
+    dataType: 'char',
+    description: 'Standard payment terms agreed upon with the supplier',
+    anchor: 'table-sup'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'sup',
+    name: 'rtg',
+    dataType: 'tinyint',
+    description: 'A numerical performance or quality rating assigned to the supplier',
+    anchor: 'table-sup'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'sup',
+    name: 'cnt_nm',
+    dataType: 'nvarchar',
+    description: 'The name of the primary contact person at the supplier company',
+    anchor: 'table-sup'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'sup',
+    name: 'cnt_phn',
+    dataType: 'nvarchar',
+    description: 'The phone number for the primary contact person',
+    anchor: 'table-sup'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'sup',
+    name: 'cnt_eml',
+    dataType: 'nvarchar',
+    description: 'The email address for the primary contact person',
+    anchor: 'table-sup'
+  },
+  {
+    type: 'table',
+    schema: 'inv',
+    name: 'whs',
+    description: 'A foundational lookup table defining the 8 active physical warehouse locations within a distributed supply chain. It stores master data including geographic details, storage capacity, and operational status for all nodes currently managing the complete inventory lifecycle, from receipt and storage to outbound fulfillment.',
+    anchor: 'table-whs'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'whs',
+    name: 'whs_id',
+    dataType: 'int',
+    description: 'Unique surrogate primary key for each warehouse facility',
+    anchor: 'table-whs'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'whs',
+    name: 'cd',
+    dataType: 'char',
+    description: 'Short mnemonic code for the warehouse, typically using 3-letter airport codes',
+    anchor: 'table-whs'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'whs',
+    name: 'nm',
+    dataType: 'nvarchar',
+    description: 'The full descriptive name of the warehouse facility',
+    anchor: 'table-whs'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'whs',
+    name: 'cty',
+    dataType: 'nvarchar',
+    description: 'The city where the warehouse is physically located',
+    anchor: 'table-whs'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'whs',
+    name: 'st',
+    dataType: 'char',
+    description: 'The two-character state abbreviation for the warehouse location',
+    anchor: 'table-whs'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'whs',
+    name: 'typ',
+    dataType: 'char',
+    description: 'Classification code for the warehouse type (e.g., Regional, Main, Distribution)',
+    anchor: 'table-whs'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'whs',
+    name: 'cap',
+    dataType: 'int',
+    description: 'The storage capacity of the warehouse, likely measured in square feet or units',
+    anchor: 'table-whs'
+  },
+  {
+    type: 'column',
+    schema: 'inv',
+    table: 'whs',
+    name: 'sts',
+    dataType: 'char',
+    description: 'The current operational status of the warehouse (e.g., Active, Maintenance)',
+    anchor: 'table-whs'
+  },
+  {
+    type: 'table',
+    schema: 'sales',
+    name: 'addr',
+    description: 'Stores physical address information for customers, supporting multiple address types (Shipping, Billing, Office) per customer and identifying primary/default locations.',
+    anchor: 'table-addr'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'addr',
+    name: 'addr_id',
+    dataType: 'int',
+    description: 'The unique primary identifier for each address record.',
+    anchor: 'table-addr'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'addr',
+    name: 'cst_id',
+    dataType: 'int',
+    description: 'Foreign key linking the address to a specific customer in the sales.cst table.',
+    anchor: 'table-addr'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'addr',
+    name: 'typ',
+    dataType: 'char',
+    description: 'The category or purpose of the address (e.g., Shipping, Billing, Office).',
+    anchor: 'table-addr'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'addr',
+    name: 'ln1',
+    dataType: 'nvarchar',
+    description: 'The primary street address line.',
+    anchor: 'table-addr'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'addr',
+    name: 'ln2',
+    dataType: 'nvarchar',
+    description: 'Secondary address information such as suite, apartment, or unit numbers.',
+    anchor: 'table-addr'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'addr',
+    name: 'cty',
+    dataType: 'nvarchar',
+    description: 'The city where the address is located.',
+    anchor: 'table-addr'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'addr',
+    name: 'st',
+    dataType: 'char',
+    description: 'The two-character state abbreviation.',
+    anchor: 'table-addr'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'addr',
+    name: 'zip',
+    dataType: 'nvarchar',
+    description: 'The postal or ZIP code.',
+    anchor: 'table-addr'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'addr',
+    name: 'ctry',
+    dataType: 'char',
+    description: 'The country code for the address.',
+    anchor: 'table-addr'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'addr',
+    name: 'dflt',
+    dataType: 'bit',
+    description: 'A boolean flag indicating if this is the primary/default address for the customer.',
+    anchor: 'table-addr'
+  },
+  {
+    type: 'table',
+    schema: 'sales',
+    name: 'cst',
+    description: 'The central master data table for customers, serving as the hub for a normalized contact architecture including multiple addresses, emails, and phone numbers. It manages customer identity, market segmentation, and financial standing, specifically supporting a balance-forward accounting model where credit-based invoicing (e.g., N30, N45) is complemented by the ability to apply payments as general account credits independent of specific orders.',
+    anchor: 'table-cst'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst',
+    name: 'cst_id',
+    dataType: 'int',
+    description: 'Unique identifier for each customer record',
+    anchor: 'table-cst'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst',
+    name: 'nm',
+    dataType: 'nvarchar',
+    description: 'The full name of the customer or business entity',
+    anchor: 'table-cst'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst',
+    name: 'sts',
+    dataType: 'char',
+    description: 'The current status of the customer account (e.g., Active, Suspended, Inactive, Terminated)',
+    anchor: 'table-cst'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst',
+    name: 'dt',
+    dataType: 'date',
+    description: 'The date the customer record was created or the account was opened',
+    anchor: 'table-cst'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst',
+    name: 'src',
+    dataType: 'char',
+    description: 'The acquisition source or lead channel for the customer (e.g., Website, Store, Referral, Phone)',
+    anchor: 'table-cst'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst',
+    name: 'rep_id',
+    dataType: 'int',
+    description: 'The identifier of the sales representative or account manager assigned to the customer',
+    anchor: 'table-cst'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst',
+    name: 'seg',
+    dataType: 'char',
+    description: 'Market segment classification (e.g., Wholesale, Retail, Enterprise)',
+    anchor: 'table-cst'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst',
+    name: 'rtg',
+    dataType: 'tinyint',
+    description: 'Internal customer rating or tier (1 to 5 scale)',
+    anchor: 'table-cst'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst',
+    name: 'bal',
+    dataType: 'decimal',
+    description: 'The current outstanding balance on the customer\'s account',
+    anchor: 'table-cst'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst',
+    name: 'cr_lmt',
+    dataType: 'decimal',
+    description: 'The maximum credit limit allowed for the customer',
+    anchor: 'table-cst'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst',
+    name: 'lst_ord',
+    dataType: 'date',
+    description: 'The date of the most recent order placed by the customer',
+    anchor: 'table-cst'
+  },
+  {
+    type: 'table',
+    schema: 'sales',
+    name: 'cst_note',
+    description: 'A log of customer interactions and administrative notes. This table tracks various touchpoints such as meetings, emails, and phone calls, providing a history of engagement and status updates for each client in the sales system.',
+    anchor: 'table-cst-note'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst_note',
+    name: 'note_id',
+    dataType: 'int',
+    description: 'A unique surrogate identifier for each note entry.',
+    anchor: 'table-cst-note'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst_note',
+    name: 'cst_id',
+    dataType: 'int',
+    description: 'The identifier for the customer associated with the note, linking to sales.cst.',
+    anchor: 'table-cst-note'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst_note',
+    name: 'dt',
+    dataType: 'date',
+    description: 'The date the note was created or the interaction occurred.',
+    anchor: 'table-cst-note'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst_note',
+    name: 'usr',
+    dataType: 'nvarchar',
+    description: 'The name of the staff member or system user who recorded the note.',
+    anchor: 'table-cst-note'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst_note',
+    name: 'txt',
+    dataType: 'nvarchar',
+    description: 'The detailed content of the note, describing the nature of the customer interaction (e.g., bulk pricing discussions, payment follow-ups).',
+    anchor: 'table-cst-note'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'cst_note',
+    name: 'typ',
+    dataType: 'char',
+    description: 'A category code for the interaction type: M (Meeting), E (Email), O (Order/Other), and C (Correspondence/Collections).',
+    anchor: 'table-cst-note'
+  },
+  {
+    type: 'table',
+    schema: 'sales',
+    name: 'eml',
+    description: 'Stores email contact information for customers, allowing for multiple email addresses per customer with classification, verification status, and primary contact designation.',
+    anchor: 'table-eml'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'eml',
+    name: 'eml_id',
+    dataType: 'int',
+    description: 'Primary key for the email record',
+    anchor: 'table-eml'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'eml',
+    name: 'cst_id',
+    dataType: 'int',
+    description: 'Foreign key referencing the customer who owns this email address',
+    anchor: 'table-eml'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'eml',
+    name: 'typ',
+    dataType: 'char',
+    description: 'The category or type of email address (e.g., Work, Personal, Other)',
+    anchor: 'table-eml'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'eml',
+    name: 'adr',
+    dataType: 'nvarchar',
+    description: 'The actual email address string',
+    anchor: 'table-eml'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'eml',
+    name: 'vrf',
+    dataType: 'bit',
+    description: 'Indicates whether the email address has been verified (e.g., via a confirmation link)',
+    anchor: 'table-eml'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'eml',
+    name: 'dflt',
+    dataType: 'bit',
+    description: 'Indicates if this is the primary or default email address for the customer',
+    anchor: 'table-eml'
+  },
+  {
+    type: 'table',
+    schema: 'sales',
+    name: 'oli',
+    description: 'This table stores the individual line items for sales orders. It acts as a detail table for sales.ord, breaking down each order into specific products, quantities, and prices. It serves as the bridge between the sales transaction and the inventory stock.',
+    anchor: 'table-oli'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'oli',
+    name: 'oli_id',
+    dataType: 'int',
+    description: 'The unique primary identifier for each individual line item in an order.',
+    anchor: 'table-oli'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'oli',
+    name: 'ord_id',
+    dataType: 'int',
+    description: 'The identifier of the parent sales order this line item belongs to.',
+    anchor: 'table-oli'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'oli',
+    name: 'prd_id',
+    dataType: 'int',
+    description: 'The identifier of the specific product or stock item being purchased.',
+    anchor: 'table-oli'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'oli',
+    name: 'qty',
+    dataType: 'int',
+    description: 'The quantity of the product ordered in this specific line item.',
+    anchor: 'table-oli'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'oli',
+    name: 'prc',
+    dataType: 'decimal',
+    description: 'The unit price or gross price for the line item before discounts and taxes.',
+    anchor: 'table-oli'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'oli',
+    name: 'disc',
+    dataType: 'decimal',
+    description: 'The discount amount applied to this specific line item.',
+    anchor: 'table-oli'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'oli',
+    name: 'tax_amt',
+    dataType: 'decimal',
+    description: 'The calculated tax amount for this specific line item.',
+    anchor: 'table-oli'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'oli',
+    name: 'seq',
+    dataType: 'int',
+    description: 'The sequence or line number of the item within the specific order (e.g., Item 1, Item 2).',
+    anchor: 'table-oli'
+  },
+  {
+    type: 'table',
+    schema: 'sales',
+    name: 'ord',
+    description: 'Stores header-level information for sales orders, serving as the central record for the transaction lifecycle. It manages financial totals, taxes, and payment terms, supporting multiple payment transactions (e.g., attempts or refunds) per order. The table follows a strict 1:1 fulfillment model where each order corresponds to exactly one shipment, and typically aggregates a small number of line items (averaging 3-4).',
+    anchor: 'table-ord'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'ord',
+    name: 'ord_id',
+    dataType: 'int',
+    description: 'The unique primary identifier for each sales order.',
+    anchor: 'table-ord'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'ord',
+    name: 'cst_id',
+    dataType: 'int',
+    description: 'Foreign key referencing the customer who placed the order.',
+    anchor: 'table-ord'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'ord',
+    name: 'ord_dt',
+    dataType: 'date',
+    description: 'The date the order was originally placed by the customer.',
+    anchor: 'table-ord'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'ord',
+    name: 'ship_dt',
+    dataType: 'date',
+    description: 'The date the order was dispatched to the customer. Contains nulls for orders not yet shipped or cancelled.',
+    anchor: 'table-ord'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'ord',
+    name: 'sts',
+    dataType: 'char',
+    description: 'The current status of the order (e.g., P=Pending, S=Shipped, D=Delivered, C=Complete, X=Cancelled).',
+    anchor: 'table-ord'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'ord',
+    name: 'tot',
+    dataType: 'decimal',
+    description: 'The total monetary value of the order.',
+    anchor: 'table-ord'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'ord',
+    name: 'tax',
+    dataType: 'decimal',
+    description: 'The amount of tax calculated for the order.',
+    anchor: 'table-ord'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'ord',
+    name: 'ship_amt',
+    dataType: 'decimal',
+    description: 'The shipping fee charged to the customer (e.g., 0 for free, 15 or 25 for paid tiers).',
+    anchor: 'table-ord'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'ord',
+    name: 'disc_pct',
+    dataType: 'decimal',
+    description: 'The percentage discount applied to the order total.',
+    anchor: 'table-ord'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'ord',
+    name: 'pmt_trm',
+    dataType: 'char',
+    description: 'The agreed-upon payment terms for the order (e.g., COD=Cash on Delivery, N30=Net 30 days).',
+    anchor: 'table-ord'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'ord',
+    name: 'notes',
+    dataType: 'nvarchar',
+    description: 'Internal or customer-facing notes regarding the order, often used for special handling instructions.',
+    anchor: 'table-ord'
+  },
+  {
+    type: 'table',
+    schema: 'sales',
+    name: 'phn',
+    description: 'Stores contact phone numbers associated with customers, supporting multiple phone types per customer and identifying a primary contact number.',
+    anchor: 'table-phn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'phn',
+    name: 'phn_id',
+    dataType: 'int',
+    description: 'The unique primary identifier for each phone record.',
+    anchor: 'table-phn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'phn',
+    name: 'cst_id',
+    dataType: 'int',
+    description: 'The identifier of the customer to whom the phone number belongs.',
+    anchor: 'table-phn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'phn',
+    name: 'typ',
+    dataType: 'char',
+    description: 'The category or type of phone number (e.g., W=Work, M=Mobile, H=Home, F=Fax).',
+    anchor: 'table-phn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'phn',
+    name: 'num',
+    dataType: 'nvarchar',
+    description: 'The actual phone number string, stored in various formats.',
+    anchor: 'table-phn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'phn',
+    name: 'ext',
+    dataType: 'nvarchar',
+    description: 'The telephone extension, typically used for work or office numbers.',
+    anchor: 'table-phn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'phn',
+    name: 'dflt',
+    dataType: 'bit',
+    description: 'A boolean flag indicating if this is the primary or default phone number for the customer.',
+    anchor: 'table-phn'
+  },
+  {
+    type: 'table',
+    schema: 'sales',
+    name: 'pmt',
+    description: 'This table, sales.pmt, functions as a ledger for customer payment transactions. It records the financial amounts received, the payment methods used, and the status of each transaction, linking them to specific customers and, where applicable, specific sales orders.',
+    anchor: 'table-pmt'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'pmt',
+    name: 'pmt_id',
+    dataType: 'int',
+    description: 'The unique primary identifier for each payment transaction record.',
+    anchor: 'table-pmt'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'pmt',
+    name: 'ord_id',
+    dataType: 'int',
+    description: 'A reference to the specific sales order that this payment is intended to satisfy. The 10% null rate suggests that some payments are unallocated or represent general account credits.',
+    anchor: 'table-pmt'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'pmt',
+    name: 'cst_id',
+    dataType: 'int',
+    description: 'The identifier of the customer who made the payment.',
+    anchor: 'table-pmt'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'pmt',
+    name: 'pmt_dt',
+    dataType: 'date',
+    description: 'The date on which the payment was received or processed.',
+    anchor: 'table-pmt'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'pmt',
+    name: 'amt',
+    dataType: 'decimal',
+    description: 'The monetary value of the payment transaction.',
+    anchor: 'table-pmt'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'pmt',
+    name: 'mthd',
+    dataType: 'char',
+    description: 'The medium used for the payment. Codes likely represent: CC (Credit Card), CA (Cash), CK (Check), and WR (Wire Transfer).',
+    anchor: 'table-pmt'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'pmt',
+    name: 'sts',
+    dataType: 'char',
+    description: 'The current processing state of the payment. Likely codes: A (Applied/Approved), F (Failed), P (Pending), R (Refunded/Rejected).',
+    anchor: 'table-pmt'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'pmt',
+    name: 'ref',
+    dataType: 'nvarchar',
+    description: 'A unique reference string or transaction number, likely used for auditing or external reconciliation (e.g., bank transaction ID).',
+    anchor: 'table-pmt'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'pmt',
+    name: 'notes',
+    dataType: 'nvarchar',
+    description: 'Supplemental information about the payment, specifically used to flag transactions that are applied as account credits rather than direct order payments.',
+    anchor: 'table-pmt'
+  },
+  {
+    type: 'table',
+    schema: 'sales',
+    name: 'rtn',
+    description: 'The sales.rtn table functions as a return management system, tracking customer returns for specific products purchased. It records the reason for the return, the quantity and monetary value being refunded, the processing status, and links each return back to the original order and specific line item.',
+    anchor: 'table-rtn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'rtn',
+    name: 'rtn_id',
+    dataType: 'int',
+    description: 'The unique primary identifier for each return record.',
+    anchor: 'table-rtn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'rtn',
+    name: 'ord_id',
+    dataType: 'int',
+    description: 'Foreign key referencing the original sales order associated with the return.',
+    anchor: 'table-rtn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'rtn',
+    name: 'oli_id',
+    dataType: 'int',
+    description: 'Foreign key referencing the specific line item within an order that is being returned.',
+    anchor: 'table-rtn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'rtn',
+    name: 'rtn_dt',
+    dataType: 'date',
+    description: 'The date the return was initiated or processed.',
+    anchor: 'table-rtn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'rtn',
+    name: 'rsn',
+    dataType: 'char',
+    description: 'A short code representing the reason for the return (e.g., WRG, DOA, DMG, CHG).',
+    anchor: 'table-rtn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'rtn',
+    name: 'qty',
+    dataType: 'int',
+    description: 'The number of units of the specific line item being returned.',
+    anchor: 'table-rtn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'rtn',
+    name: 'amt',
+    dataType: 'decimal',
+    description: 'The monetary value or refund amount associated with the return.',
+    anchor: 'table-rtn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'rtn',
+    name: 'sts',
+    dataType: 'char',
+    description: 'The current processing status of the return (e.g., Approved, Rejected, Pending, Completed).',
+    anchor: 'table-rtn'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'rtn',
+    name: 'notes',
+    dataType: 'nvarchar',
+    description: 'A text description explaining the reason for the return in detail.',
+    anchor: 'table-rtn'
+  },
+  {
+    type: 'table',
+    schema: 'sales',
+    name: 'shp',
+    description: 'The sales.shp table functions as the shipment tracking and logistics ledger for the sales domain. It records the fulfillment details for every sales.ord, including the originating warehouse, carrier selection, tracking information, and the physical characteristics of the package (weight and cost).',
+    anchor: 'table-shp'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'shp',
+    name: 'shp_id',
+    dataType: 'int',
+    description: 'The unique primary identifier for a shipment record.',
+    anchor: 'table-shp'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'shp',
+    name: 'ord_id',
+    dataType: 'int',
+    description: 'The identifier of the sales order being fulfilled by this shipment.',
+    anchor: 'table-shp'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'shp',
+    name: 'whs_id',
+    dataType: 'int',
+    description: 'The identifier of the warehouse from which the goods were dispatched.',
+    anchor: 'table-shp'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'shp',
+    name: 'ship_dt',
+    dataType: 'date',
+    description: 'The date the shipment left the warehouse.',
+    anchor: 'table-shp'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'shp',
+    name: 'dlv_dt',
+    dataType: 'date',
+    description: 'The date the shipment was confirmed as delivered to the customer.',
+    anchor: 'table-shp'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'shp',
+    name: 'carr',
+    dataType: 'nvarchar',
+    description: 'The logistics provider or service level used for the shipment (e.g., FedEx, UPS, DHL, USPS).',
+    anchor: 'table-shp'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'shp',
+    name: 'trk',
+    dataType: 'nvarchar',
+    description: 'The unique tracking number provided by the carrier for shipment monitoring.',
+    anchor: 'table-shp'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'shp',
+    name: 'sts',
+    dataType: 'char',
+    description: 'The current status of the shipment (e.g., \'D\' for Delivered, \'S\' for Shipped, \'P\' for Pending, \'N\' for New).',
+    anchor: 'table-shp'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'shp',
+    name: 'wgt',
+    dataType: 'decimal',
+    description: 'The physical weight of the shipment, likely used for calculating shipping costs.',
+    anchor: 'table-shp'
+  },
+  {
+    type: 'column',
+    schema: 'sales',
+    table: 'shp',
+    name: 'cost',
+    dataType: 'decimal',
+    description: 'The monetary cost incurred for the shipping service.',
+    anchor: 'table-shp'
+  },
+];
+
+      const searchInput = document.getElementById('search-input');
+      const searchResults = document.getElementById('search-results');
+
+      searchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase().trim();
+
+        if (!query) {
+          searchResults.innerHTML = '';
+          return;
+        }
+
+        const results = searchData.filter(item =>
+          item.name.toLowerCase().includes(query) ||
+          item.description.toLowerCase().includes(query)
+        ).slice(0, 50);
+
+        if (results.length === 0) {
+          searchResults.innerHTML = '<div class="no-results">No results found</div>';
+          return;
+        }
+
+        searchResults.innerHTML = results.map(item => {
+          if (item.type === 'table') {
+            return `<div class="search-result" onclick="document.getElementById('${item.anchor}').scrollIntoView({behavior: 'smooth'})">
+              <div class="table-name">${item.schema}.${item.name}</div>
+              <div class="column-name">${item.description || 'No description'}</div>
+            </div>`;
+          } else {
+            return `<div class="search-result" onclick="document.getElementById('${item.anchor}').scrollIntoView({behavior: 'smooth'})">
+              <div class="table-name">${item.table}.${item.name}</div>
+              <div class="column-name">${item.dataType} - ${item.description || 'No description'}</div>
+            </div>`;
+          }
+        }).join('');
+      });
+    
+</script>
+<div class="schema-section" id="schema-inv">
+<div class="schema-title">inv</div>
+<h3>Entity Relationship Diagram</h3>
+<div class="mermaid">
+erDiagram
+    adj {
+        int adj_id "PK,NOT_NULL"
+        int prd_id "FK"
+        int whs_id "FK"
+        date adj_dt
+        int qty
+        char rsn
+        nvarchar usr
+        nvarchar notes
+    }
+    cat {
+        int cat_id "PK,NOT_NULL"
+        int prnt_id "FK"
+        nvarchar nm
+        nvarchar dsc
+        int lvl
+        int seq
+    }
+    cnt {
+        int cnt_id "PK,NOT_NULL"
+        int whs_id "FK"
+        date cnt_dt
+        int prd_id "FK"
+        int exp_qty
+        int act_qty
+        int var
+        nvarchar usr
+    }
+    po {
+        int po_id "PK,NOT_NULL"
+        int sup_id "FK"
+        date po_dt
+        date exp_dt
+        char sts
+        decimal tot
+        decimal ship_amt
+        nvarchar notes
+    }
+    po_dtl {
+        int po_id "FK,NOT_NULL"
+        int seq "PK,NOT_NULL"
+        int prd_id "FK"
+        int qty
+        decimal prc
+        int rcv_qty
+    }
+    prd {
+        int prd_id "PK,NOT_NULL"
+        int cat_id "FK"
+        int sup_id "FK"
+        nvarchar sku
+        nvarchar nm
+        nvarchar dsc
+        decimal prc
+        decimal cost
+        char sts
+        decimal wgt
+        char uom
+    }
+    rcv {
+        int rcv_id "PK,NOT_NULL"
+        int po_id "FK"
+        date rcv_dt
+        int whs_id "FK"
+        nvarchar notes
+    }
+    stk {
+        int prd_id "PK,FK,NOT_NULL"
+        int whs_id "PK,FK,NOT_NULL"
+        int qty
+        int rsv
+        int min_qty
+        int max_qty
+        date lst_cnt
+        date lst_rcv
+    }
+    sup {
+        int sup_id "PK,NOT_NULL"
+        nvarchar nm
+        char sts
+        char pmt_trm
+        tinyint rtg
+        nvarchar cnt_nm
+        nvarchar cnt_phn
+        nvarchar cnt_eml
+    }
+    whs {
+        int whs_id "PK,NOT_NULL"
+        char cd
+        nvarchar nm
+        nvarchar cty
+        char st
+        char typ
+        int cap
+        char sts
+    }
+
+    stk ||--o{ adj : "has"
+    rcv ||--o{ adj : "has"
+    stk ||--o{ adj : "has"
+    whs ||--o{ adj : "has"
+    prd ||--o{ adj : "has"
+    cat ||--o{ cat : "has"
+    rcv ||--o{ cnt : "has"
+    stk ||--o{ cnt : "has"
+    whs ||--o{ cnt : "has"
+    stk ||--o{ cnt : "has"
+    prd ||--o{ cnt : "has"
+    sup ||--o{ po : "has"
+    stk ||--o{ po_dtl : "has"
+    po ||--o{ po_dtl : "has"
+    prd ||--o{ po_dtl : "has"
+    sup ||--o{ prd : "has"
+    cat ||--o{ prd : "has"
+    po ||--o{ rcv : "has"
+    whs ||--o{ rcv : "has"
+    prd ||--o{ stk : "has"
+    whs ||--o{ stk : "has"
+</div>
+<h3>Tables</h3>
+<div id="table-adj">
+<h4>adj</h4>
+<p>The inv.adj table records manual or system-generated inventory adjustments used to reconcile physical stock with the digital ledger. It tracks changes in product quantities due to non-standard events such as damage, expiration, theft (shrinkage), or administrative corrections.</p>
+<p><strong>Row Count:</strong> 300</p>
+<p><strong>Dependency Level:</strong> 1</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 98%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-stk">inv.stk</a> (via prd_id)</li>
+<li><a href="#table-rcv">inv.rcv</a> (via whs_id)</li>
+<li><a href="#table-stk">inv.stk</a> (via whs_id)</li>
+<li><a href="#table-whs">inv.whs</a> (via whs_id)</li>
+<li><a href="#table-prd">inv.prd</a> (via prd_id)</li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>adj_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Unique identifier for each inventory adjustment transaction</td>
+</tr>
+<tr>
+<td>prd_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Reference to the specific product being adjusted</td>
+</tr>
+<tr>
+<td>whs_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Reference to the warehouse location where the adjustment occurred</td>
+</tr>
+<tr>
+<td>adj_dt</td>
+<td>date</td>
+<td>The date and time when the adjustment was recorded</td>
+</tr>
+<tr>
+<td>qty</td>
+<td>int</td>
+<td>The numerical change in stock level; negative values indicate stock removal, while positive values indicate stock additions</td>
+</tr>
+<tr>
+<td>rsn</td>
+<td>char</td>
+<td>A short category code for the adjustment reason (e.g., STL for Steal/Shrinkage, EXP for Expired, DAM for Damaged, COR for Correction)</td>
+</tr>
+<tr>
+<td>usr</td>
+<td>nvarchar</td>
+<td>The name of the employee or system user who performed the adjustment</td>
+</tr>
+<tr>
+<td>notes</td>
+<td>nvarchar</td>
+<td>A descriptive explanation of the adjustment reason code</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-cat">
+<h4>cat</h4>
+<p>Stores a hierarchical product categorization system used to organize inventory items into at least 11 distinct groups, covering domains such as office furniture, computer hardware, and stationery. While the schema supports multi-level nesting via a self-referencing structure, it is currently utilized as a shallow two-level hierarchy (Parent/Child) to group products into broad departments and specific sub-categories.</p>
+<p><strong>Row Count:</strong> 20</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-cat">inv.cat</a> (via prnt_id)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-prd">inv.prd</a></li>
+<li><a href="#table-cat">inv.cat</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>cat_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Unique identifier for each product category</td>
+</tr>
+<tr>
+<td>prnt_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Reference to the parent category ID, establishing a hierarchy</td>
+</tr>
+<tr>
+<td>nm</td>
+<td>nvarchar</td>
+<td>The short display name of the category (e.g., &#039;Printers&#039;, &#039;Furniture&#039;)</td>
+</tr>
+<tr>
+<td>dsc</td>
+<td>nvarchar</td>
+<td>A detailed description of the types of products included in the category</td>
+</tr>
+<tr>
+<td>lvl</td>
+<td>int</td>
+<td>The depth level of the category in the hierarchy (1 for top-level, 2 for sub-categories)</td>
+</tr>
+<tr>
+<td>seq</td>
+<td>int</td>
+<td>The display or sort order of the category within its hierarchy level</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-cnt">
+<h4>cnt</h4>
+<p>Stores the results of physical inventory counts (cycle counts) performed at specific warehouses. It records the discrepancy between the system&#039;s expected stock levels and the actual physical quantities found during an audit.</p>
+<p><strong>Row Count:</strong> 250</p>
+<p><strong>Dependency Level:</strong> 1</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 95%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-rcv">inv.rcv</a> (via whs_id)</li>
+<li><a href="#table-stk">inv.stk</a> (via whs_id)</li>
+<li><a href="#table-whs">inv.whs</a> (via whs_id)</li>
+<li><a href="#table-stk">inv.stk</a> (via prd_id)</li>
+<li><a href="#table-prd">inv.prd</a> (via prd_id)</li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>cnt_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Unique identifier for each inventory count record</td>
+</tr>
+<tr>
+<td>whs_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Identifier for the warehouse where the physical count was conducted</td>
+</tr>
+<tr>
+<td>cnt_dt</td>
+<td>date</td>
+<td>The date the physical inventory count was performed</td>
+</tr>
+<tr>
+<td>prd_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Identifier for the specific product being audited</td>
+</tr>
+<tr>
+<td>exp_qty</td>
+<td>int</td>
+<td>The theoretical stock quantity expected by the system at the time of the count</td>
+</tr>
+<tr>
+<td>act_qty</td>
+<td>int</td>
+<td>The actual physical quantity counted by the staff member</td>
+</tr>
+<tr>
+<td>var</td>
+<td>int</td>
+<td>The numerical difference (variance) between the actual and expected quantities</td>
+</tr>
+<tr>
+<td>usr</td>
+<td>nvarchar</td>
+<td>The name of the employee or system user who performed the count</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-po">
+<h4>po</h4>
+<p>Stores purchase order header information, representing formal requests sent to suppliers for goods or services. It tracks the overall order lifecycle, including dates, total costs, shipping fees, and fulfillment status.</p>
+<p><strong>Row Count:</strong> 150</p>
+<p><strong>Dependency Level:</strong> 1</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 95%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-sup">inv.sup</a> (via sup_id)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-rcv">inv.rcv</a></li>
+<li><a href="#table-po-dtl">inv.po_dtl</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>po_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for each purchase order.</td>
+</tr>
+<tr>
+<td>sup_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Foreign key referencing the supplier (inv.sup) from whom the goods are being ordered.</td>
+</tr>
+<tr>
+<td>po_dt</td>
+<td>date</td>
+<td>The date the purchase order was created or issued.</td>
+</tr>
+<tr>
+<td>exp_dt</td>
+<td>date</td>
+<td>The expected delivery date or expiration date for the purchase order.</td>
+</tr>
+<tr>
+<td>sts</td>
+<td>char</td>
+<td>The current lifecycle status of the purchase order (e.g., &#039;A&#039; for Approved, &#039;P&#039; for Pending, &#039;R&#039; for Received, &#039;S&#039; for Shipped, &#039;X&#039; for Cancelled).</td>
+</tr>
+<tr>
+<td>tot</td>
+<td>decimal</td>
+<td>The total monetary value of the purchase order, excluding or including shipping depending on business logic.</td>
+</tr>
+<tr>
+<td>ship_amt</td>
+<td>decimal</td>
+<td>The cost associated with shipping the order; appears to use a flat rate (150) or zero.</td>
+</tr>
+<tr>
+<td>notes</td>
+<td>nvarchar</td>
+<td>Optional free-text field for special instructions or comments regarding the order.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-po-dtl">
+<h4>po_dtl</h4>
+<p>The inv.po_dtl table stores the line-item details for purchase orders. It acts as a bridge between purchase order headers (inv.po) and products (inv.prd), specifying the quantity of each product ordered, the agreed price, and tracking the quantity actually received.</p>
+<p><strong>Row Count:</strong> 750</p>
+<p><strong>Dependency Level:</strong> 1</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-stk">inv.stk</a> (via prd_id)</li>
+<li><a href="#table-po">inv.po</a> (via po_id)</li>
+<li><a href="#table-prd">inv.prd</a> (via prd_id)</li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>po_id</td>
+<td>int <span class="tag fk">FK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Foreign key identifying the parent purchase order header in inv.po.</td>
+</tr>
+<tr>
+<td>seq</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The sequence or line-item number for the product within a specific purchase order.</td>
+</tr>
+<tr>
+<td>prd_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Foreign key identifying the specific product being ordered, referencing the product master.</td>
+</tr>
+<tr>
+<td>qty</td>
+<td>int</td>
+<td>The quantity of the product originally requested or ordered from the supplier.</td>
+</tr>
+<tr>
+<td>prc</td>
+<td>decimal</td>
+<td>The unit price or cost of the product for this specific purchase order line.</td>
+</tr>
+<tr>
+<td>rcv_qty</td>
+<td>int</td>
+<td>The actual quantity of the product that has been delivered and processed into inventory.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-prd">
+<h4>prd</h4>
+<p>The central product master table (inv.prd) that stores detailed information for all items in the inventory catalog, including identification, pricing, physical attributes, and categorization.</p>
+<p><strong>Row Count:</strong> 177</p>
+<p><strong>Dependency Level:</strong> 1</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-sup">inv.sup</a> (via sup_id)</li>
+<li><a href="#table-cat">inv.cat</a> (via cat_id)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-stk">inv.stk</a></li>
+<li><a href="#table-adj">inv.adj</a></li>
+<li><a href="#table-cnt">inv.cnt</a></li>
+<li><a href="#table-po-dtl">inv.po_dtl</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>prd_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Unique internal identifier for each product record</td>
+</tr>
+<tr>
+<td>cat_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Reference to the product category (e.g., Furniture, Electronics)</td>
+</tr>
+<tr>
+<td>sup_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Reference to the primary supplier or vendor for the product</td>
+</tr>
+<tr>
+<td>sku</td>
+<td>nvarchar</td>
+<td>Stock Keeping Unit; a unique alphanumeric code used for inventory tracking</td>
+</tr>
+<tr>
+<td>nm</td>
+<td>nvarchar</td>
+<td>The display name of the product</td>
+</tr>
+<tr>
+<td>dsc</td>
+<td>nvarchar</td>
+<td>A brief text description of the product&#039;s features or specifications</td>
+</tr>
+<tr>
+<td>prc</td>
+<td>decimal</td>
+<td>The retail or selling price of the product</td>
+</tr>
+<tr>
+<td>cost</td>
+<td>decimal</td>
+<td>The wholesale cost or acquisition price paid to the supplier</td>
+</tr>
+<tr>
+<td>sts</td>
+<td>char</td>
+<td>The current lifecycle status of the product (e.g., Active, Discontinued, Obsolete)</td>
+</tr>
+<tr>
+<td>wgt</td>
+<td>decimal</td>
+<td>The physical weight of the product, likely in pounds or kilograms</td>
+</tr>
+<tr>
+<td>uom</td>
+<td>char</td>
+<td>Unit of Measure; defines how the product is packaged or sold</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-rcv">
+<h4>rcv</h4>
+<p>Stores header-level records for inventory receiving transactions. This table documents the arrival of goods from suppliers (linked via purchase orders) into specific warehouse locations, capturing the date of receipt and any relevant processing notes.</p>
+<p><strong>Row Count:</strong> 120</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-po">inv.po</a> (via po_id)</li>
+<li><a href="#table-whs">inv.whs</a> (via whs_id)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-adj">inv.adj</a></li>
+<li><a href="#table-cnt">inv.cnt</a></li>
+<li><a href="#table-shp">sales.shp</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>rcv_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Unique identifier for each receiving transaction record</td>
+</tr>
+<tr>
+<td>po_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Reference to the purchase order associated with the incoming shipment</td>
+</tr>
+<tr>
+<td>rcv_dt</td>
+<td>date</td>
+<td>The date the goods were physically received at the facility</td>
+</tr>
+<tr>
+<td>whs_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>The specific warehouse or distribution center where the goods were delivered</td>
+</tr>
+<tr>
+<td>notes</td>
+<td>nvarchar</td>
+<td>Internal comments regarding the shipment status, such as discrepancies or backorder information</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-stk">
+<h4>stk</h4>
+<p>The inv.stk table serves as the central inventory ledger, tracking real-time stock levels, reservations, and replenishment thresholds for every product across all physical warehouse locations. It functions as the authoritative source for expected stock levels during physical counts and is the primary table updated by variance adjustments following inventory audits.</p>
+<p><strong>Row Count:</strong> 1120</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 98%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-prd">inv.prd</a> (via prd_id)</li>
+<li><a href="#table-whs">inv.whs</a> (via whs_id)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-adj">inv.adj</a></li>
+<li><a href="#table-adj">inv.adj</a></li>
+<li><a href="#table-cnt">inv.cnt</a></li>
+<li><a href="#table-cnt">inv.cnt</a></li>
+<li><a href="#table-po-dtl">inv.po_dtl</a></li>
+<li><a href="#table-oli">sales.oli</a></li>
+<li><a href="#table-shp">sales.shp</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>prd_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag fk">FK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Foreign key identifying the specific product being tracked.</td>
+</tr>
+<tr>
+<td>whs_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag fk">FK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Foreign key identifying the physical warehouse or distribution center where the stock is located.</td>
+</tr>
+<tr>
+<td>qty</td>
+<td>int</td>
+<td>The current physical quantity of the product available at this specific warehouse.</td>
+</tr>
+<tr>
+<td>rsv</td>
+<td>int</td>
+<td>The quantity of stock currently reserved or committed to open sales orders but not yet shipped.</td>
+</tr>
+<tr>
+<td>min_qty</td>
+<td>int</td>
+<td>The minimum stock threshold or safety stock level used to trigger reordering processes.</td>
+</tr>
+<tr>
+<td>max_qty</td>
+<td>int</td>
+<td>The maximum capacity or target stock level for this product at this location.</td>
+</tr>
+<tr>
+<td>lst_cnt</td>
+<td>date</td>
+<td>The date of the last physical inventory count or audit performed for this item at this location.</td>
+</tr>
+<tr>
+<td>lst_rcv</td>
+<td>date</td>
+<td>The date when stock for this product was last received into this warehouse from a supplier or transfer.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-sup">
+<h4>sup</h4>
+<p>A master data table storing information about external business partners, including both product vendors/suppliers and commission-based sales representatives or agents. It maintains contact details, account status, payment terms, and performance ratings to support procurement workflows and customer account management.</p>
+<p><strong>Row Count:</strong> 25</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 95%</span></p>
+<div class="relationship-info">
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-po">inv.po</a></li>
+<li><a href="#table-prd">inv.prd</a></li>
+<li><a href="#table-cst">sales.cst</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>sup_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Unique identifier for each supplier</td>
+</tr>
+<tr>
+<td>nm</td>
+<td>nvarchar</td>
+<td>The legal or trade name of the supplier company</td>
+</tr>
+<tr>
+<td>sts</td>
+<td>char</td>
+<td>The current operational status of the supplier account (e.g., Active, Terminated, Suspended, Inactive)</td>
+</tr>
+<tr>
+<td>pmt_trm</td>
+<td>char</td>
+<td>Standard payment terms agreed upon with the supplier</td>
+</tr>
+<tr>
+<td>rtg</td>
+<td>tinyint</td>
+<td>A numerical performance or quality rating assigned to the supplier</td>
+</tr>
+<tr>
+<td>cnt_nm</td>
+<td>nvarchar</td>
+<td>The name of the primary contact person at the supplier company</td>
+</tr>
+<tr>
+<td>cnt_phn</td>
+<td>nvarchar</td>
+<td>The phone number for the primary contact person</td>
+</tr>
+<tr>
+<td>cnt_eml</td>
+<td>nvarchar</td>
+<td>The email address for the primary contact person</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-whs">
+<h4>whs</h4>
+<p>A foundational lookup table defining the 8 active physical warehouse locations within a distributed supply chain. It stores master data including geographic details, storage capacity, and operational status for all nodes currently managing the complete inventory lifecycle, from receipt and storage to outbound fulfillment.</p>
+<p><strong>Row Count:</strong> 8</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-adj">inv.adj</a></li>
+<li><a href="#table-cnt">inv.cnt</a></li>
+<li><a href="#table-shp">sales.shp</a></li>
+<li><a href="#table-rcv">inv.rcv</a></li>
+<li><a href="#table-stk">inv.stk</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>whs_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Unique surrogate primary key for each warehouse facility</td>
+</tr>
+<tr>
+<td>cd</td>
+<td>char</td>
+<td>Short mnemonic code for the warehouse, typically using 3-letter airport codes</td>
+</tr>
+<tr>
+<td>nm</td>
+<td>nvarchar</td>
+<td>The full descriptive name of the warehouse facility</td>
+</tr>
+<tr>
+<td>cty</td>
+<td>nvarchar</td>
+<td>The city where the warehouse is physically located</td>
+</tr>
+<tr>
+<td>st</td>
+<td>char</td>
+<td>The two-character state abbreviation for the warehouse location</td>
+</tr>
+<tr>
+<td>typ</td>
+<td>char</td>
+<td>Classification code for the warehouse type (e.g., Regional, Main, Distribution)</td>
+</tr>
+<tr>
+<td>cap</td>
+<td>int</td>
+<td>The storage capacity of the warehouse, likely measured in square feet or units</td>
+</tr>
+<tr>
+<td>sts</td>
+<td>char</td>
+<td>The current operational status of the warehouse (e.g., Active, Maintenance)</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="schema-section" id="schema-sales">
+<div class="schema-title">sales</div>
+<h3>Entity Relationship Diagram</h3>
+<div class="mermaid">
+erDiagram
+    addr {
+        int addr_id "PK,NOT_NULL"
+        int cst_id "FK"
+        char typ
+        nvarchar ln1
+        nvarchar ln2
+        nvarchar cty
+        char st
+        nvarchar zip
+        char ctry
+        bit dflt
+    }
+    cst {
+        int cst_id "PK,NOT_NULL"
+        nvarchar nm
+        char sts
+        date dt
+        char src
+        int rep_id "FK"
+        char seg
+        tinyint rtg
+        decimal bal
+        decimal cr_lmt
+        date lst_ord
+    }
+    cst_note {
+        int note_id "PK,NOT_NULL"
+        int cst_id "FK"
+        date dt
+        nvarchar usr
+        nvarchar txt
+        char typ
+    }
+    eml {
+        int eml_id "PK,NOT_NULL"
+        int cst_id "FK"
+        char typ
+        nvarchar adr
+        bit vrf
+        bit dflt
+    }
+    oli {
+        int oli_id "PK,NOT_NULL"
+        int ord_id "FK"
+        int prd_id "FK"
+        int qty
+        decimal prc
+        decimal disc
+        decimal tax_amt
+        int seq
+    }
+    ord {
+        int ord_id "PK,NOT_NULL"
+        int cst_id "FK"
+        date ord_dt
+        date ship_dt
+        char sts
+        decimal tot
+        decimal tax
+        decimal ship_amt
+        decimal disc_pct
+        char pmt_trm
+        nvarchar notes
+    }
+    phn {
+        int phn_id "PK,NOT_NULL"
+        int cst_id "FK"
+        char typ
+        nvarchar num
+        nvarchar ext
+        bit dflt
+    }
+    pmt {
+        int pmt_id "PK,NOT_NULL"
+        int ord_id "FK"
+        int cst_id "FK"
+        date pmt_dt
+        decimal amt
+        char mthd
+        char sts
+        nvarchar ref
+        nvarchar notes
+    }
+    rtn {
+        int rtn_id "PK,NOT_NULL"
+        int ord_id "FK"
+        int oli_id "FK"
+        date rtn_dt
+        char rsn
+        int qty
+        decimal amt
+        char sts
+        nvarchar notes
+    }
+    shp {
+        int shp_id "PK,NOT_NULL"
+        int ord_id "FK"
+        int whs_id "FK"
+        date ship_dt
+        date dlv_dt
+        nvarchar carr
+        nvarchar trk
+        char sts
+        decimal wgt
+        decimal cost
+    }
+
+    cst ||--o{ addr : "has"
+    sup ||--o{ cst : "has"
+    cst ||--o{ cst_note : "has"
+    cst ||--o{ eml : "has"
+    ord ||--o{ oli : "has"
+    stk ||--o{ oli : "has"
+    cst ||--o{ ord : "has"
+    cst ||--o{ phn : "has"
+    cst ||--o{ pmt : "has"
+    ord ||--o{ pmt : "has"
+    ord ||--o{ rtn : "has"
+    oli ||--o{ rtn : "has"
+    rcv ||--o{ shp : "has"
+    stk ||--o{ shp : "has"
+    whs ||--o{ shp : "has"
+    ord ||--o{ shp : "has"
+</div>
+<h3>Tables</h3>
+<div id="table-addr">
+<h4>addr</h4>
+<p>Stores physical address information for customers, supporting multiple address types (Shipping, Billing, Office) per customer and identifying primary/default locations.</p>
+<p><strong>Row Count:</strong> 800</p>
+<p><strong>Dependency Level:</strong> 2</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 95%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-cst">sales.cst</a> (via cst_id)</li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>addr_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for each address record.</td>
+</tr>
+<tr>
+<td>cst_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Foreign key linking the address to a specific customer in the sales.cst table.</td>
+</tr>
+<tr>
+<td>typ</td>
+<td>char</td>
+<td>The category or purpose of the address (e.g., Shipping, Billing, Office).</td>
+</tr>
+<tr>
+<td>ln1</td>
+<td>nvarchar</td>
+<td>The primary street address line.</td>
+</tr>
+<tr>
+<td>ln2</td>
+<td>nvarchar</td>
+<td>Secondary address information such as suite, apartment, or unit numbers.</td>
+</tr>
+<tr>
+<td>cty</td>
+<td>nvarchar</td>
+<td>The city where the address is located.</td>
+</tr>
+<tr>
+<td>st</td>
+<td>char</td>
+<td>The two-character state abbreviation.</td>
+</tr>
+<tr>
+<td>zip</td>
+<td>nvarchar</td>
+<td>The postal or ZIP code.</td>
+</tr>
+<tr>
+<td>ctry</td>
+<td>char</td>
+<td>The country code for the address.</td>
+</tr>
+<tr>
+<td>dflt</td>
+<td>bit</td>
+<td>A boolean flag indicating if this is the primary/default address for the customer.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-cst">
+<h4>cst</h4>
+<p>The central master data table for customers, serving as the hub for a normalized contact architecture including multiple addresses, emails, and phone numbers. It manages customer identity, market segmentation, and financial standing, specifically supporting a balance-forward accounting model where credit-based invoicing (e.g., N30, N45) is complemented by the ability to apply payments as general account credits independent of specific orders.</p>
+<p><strong>Row Count:</strong> 500</p>
+<p><strong>Dependency Level:</strong> 1</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 99%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-sup">inv.sup</a> (via rep_id)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-addr">sales.addr</a></li>
+<li><a href="#table-eml">sales.eml</a></li>
+<li><a href="#table-ord">sales.ord</a></li>
+<li><a href="#table-phn">sales.phn</a></li>
+<li><a href="#table-pmt">sales.pmt</a></li>
+<li><a href="#table-cst-note">sales.cst_note</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>cst_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Unique identifier for each customer record</td>
+</tr>
+<tr>
+<td>nm</td>
+<td>nvarchar</td>
+<td>The full name of the customer or business entity</td>
+</tr>
+<tr>
+<td>sts</td>
+<td>char</td>
+<td>The current status of the customer account (e.g., Active, Suspended, Inactive, Terminated)</td>
+</tr>
+<tr>
+<td>dt</td>
+<td>date</td>
+<td>The date the customer record was created or the account was opened</td>
+</tr>
+<tr>
+<td>src</td>
+<td>char</td>
+<td>The acquisition source or lead channel for the customer (e.g., Website, Store, Referral, Phone)</td>
+</tr>
+<tr>
+<td>rep_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>The identifier of the sales representative or account manager assigned to the customer</td>
+</tr>
+<tr>
+<td>seg</td>
+<td>char</td>
+<td>Market segment classification (e.g., Wholesale, Retail, Enterprise)</td>
+</tr>
+<tr>
+<td>rtg</td>
+<td>tinyint</td>
+<td>Internal customer rating or tier (1 to 5 scale)</td>
+</tr>
+<tr>
+<td>bal</td>
+<td>decimal</td>
+<td>The current outstanding balance on the customer&#039;s account</td>
+</tr>
+<tr>
+<td>cr_lmt</td>
+<td>decimal</td>
+<td>The maximum credit limit allowed for the customer</td>
+</tr>
+<tr>
+<td>lst_ord</td>
+<td>date</td>
+<td>The date of the most recent order placed by the customer</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-cst-note">
+<h4>cst_note</h4>
+<p>A log of customer interactions and administrative notes. This table tracks various touchpoints such as meetings, emails, and phone calls, providing a history of engagement and status updates for each client in the sales system.</p>
+<p><strong>Row Count:</strong> 450</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 95%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-cst">sales.cst</a> (via cst_id)</li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>note_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>A unique surrogate identifier for each note entry.</td>
+</tr>
+<tr>
+<td>cst_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>The identifier for the customer associated with the note, linking to sales.cst.</td>
+</tr>
+<tr>
+<td>dt</td>
+<td>date</td>
+<td>The date the note was created or the interaction occurred.</td>
+</tr>
+<tr>
+<td>usr</td>
+<td>nvarchar</td>
+<td>The name of the staff member or system user who recorded the note.</td>
+</tr>
+<tr>
+<td>txt</td>
+<td>nvarchar</td>
+<td>The detailed content of the note, describing the nature of the customer interaction (e.g., bulk pricing discussions, payment follow-ups).</td>
+</tr>
+<tr>
+<td>typ</td>
+<td>char</td>
+<td>A category code for the interaction type: M (Meeting), E (Email), O (Order/Other), and C (Correspondence/Collections).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-eml">
+<h4>eml</h4>
+<p>Stores email contact information for customers, allowing for multiple email addresses per customer with classification, verification status, and primary contact designation.</p>
+<p><strong>Row Count:</strong> 550</p>
+<p><strong>Dependency Level:</strong> 2</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-cst">sales.cst</a> (via cst_id)</li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>eml_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>Primary key for the email record</td>
+</tr>
+<tr>
+<td>cst_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Foreign key referencing the customer who owns this email address</td>
+</tr>
+<tr>
+<td>typ</td>
+<td>char</td>
+<td>The category or type of email address (e.g., Work, Personal, Other)</td>
+</tr>
+<tr>
+<td>adr</td>
+<td>nvarchar</td>
+<td>The actual email address string</td>
+</tr>
+<tr>
+<td>vrf</td>
+<td>bit</td>
+<td>Indicates whether the email address has been verified (e.g., via a confirmation link)</td>
+</tr>
+<tr>
+<td>dflt</td>
+<td>bit</td>
+<td>Indicates if this is the primary or default email address for the customer</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-oli">
+<h4>oli</h4>
+<p>This table stores the individual line items for sales orders. It acts as a detail table for sales.ord, breaking down each order into specific products, quantities, and prices. It serves as the bridge between the sales transaction and the inventory stock.</p>
+<p><strong>Row Count:</strong> 6998</p>
+<p><strong>Dependency Level:</strong> 3</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 95%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-ord">sales.ord</a> (via ord_id)</li>
+<li><a href="#table-stk">inv.stk</a> (via prd_id)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-rtn">sales.rtn</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>oli_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for each individual line item in an order.</td>
+</tr>
+<tr>
+<td>ord_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>The identifier of the parent sales order this line item belongs to.</td>
+</tr>
+<tr>
+<td>prd_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>The identifier of the specific product or stock item being purchased.</td>
+</tr>
+<tr>
+<td>qty</td>
+<td>int</td>
+<td>The quantity of the product ordered in this specific line item.</td>
+</tr>
+<tr>
+<td>prc</td>
+<td>decimal</td>
+<td>The unit price or gross price for the line item before discounts and taxes.</td>
+</tr>
+<tr>
+<td>disc</td>
+<td>decimal</td>
+<td>The discount amount applied to this specific line item.</td>
+</tr>
+<tr>
+<td>tax_amt</td>
+<td>decimal</td>
+<td>The calculated tax amount for this specific line item.</td>
+</tr>
+<tr>
+<td>seq</td>
+<td>int</td>
+<td>The sequence or line number of the item within the specific order (e.g., Item 1, Item 2).</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-ord">
+<h4>ord</h4>
+<p>Stores header-level information for sales orders, serving as the central record for the transaction lifecycle. It manages financial totals, taxes, and payment terms, supporting multiple payment transactions (e.g., attempts or refunds) per order. The table follows a strict 1:1 fulfillment model where each order corresponds to exactly one shipment, and typically aggregates a small number of line items (averaging 3-4).</p>
+<p><strong>Row Count:</strong> 2000</p>
+<p><strong>Dependency Level:</strong> 2</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 99%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-cst">sales.cst</a> (via cst_id)</li>
+</ul>
+<strong>Referenced By:</strong>
+<ul>
+<li><a href="#table-oli">sales.oli</a></li>
+<li><a href="#table-pmt">sales.pmt</a></li>
+<li><a href="#table-shp">sales.shp</a></li>
+<li><a href="#table-rtn">sales.rtn</a></li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>ord_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for each sales order.</td>
+</tr>
+<tr>
+<td>cst_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Foreign key referencing the customer who placed the order.</td>
+</tr>
+<tr>
+<td>ord_dt</td>
+<td>date</td>
+<td>The date the order was originally placed by the customer.</td>
+</tr>
+<tr>
+<td>ship_dt</td>
+<td>date</td>
+<td>The date the order was dispatched to the customer. Contains nulls for orders not yet shipped or cancelled.</td>
+</tr>
+<tr>
+<td>sts</td>
+<td>char</td>
+<td>The current status of the order (e.g., P=Pending, S=Shipped, D=Delivered, C=Complete, X=Cancelled).</td>
+</tr>
+<tr>
+<td>tot</td>
+<td>decimal</td>
+<td>The total monetary value of the order.</td>
+</tr>
+<tr>
+<td>tax</td>
+<td>decimal</td>
+<td>The amount of tax calculated for the order.</td>
+</tr>
+<tr>
+<td>ship_amt</td>
+<td>decimal</td>
+<td>The shipping fee charged to the customer (e.g., 0 for free, 15 or 25 for paid tiers).</td>
+</tr>
+<tr>
+<td>disc_pct</td>
+<td>decimal</td>
+<td>The percentage discount applied to the order total.</td>
+</tr>
+<tr>
+<td>pmt_trm</td>
+<td>char</td>
+<td>The agreed-upon payment terms for the order (e.g., COD=Cash on Delivery, N30=Net 30 days).</td>
+</tr>
+<tr>
+<td>notes</td>
+<td>nvarchar</td>
+<td>Internal or customer-facing notes regarding the order, often used for special handling instructions.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-phn">
+<h4>phn</h4>
+<p>Stores contact phone numbers associated with customers, supporting multiple phone types per customer and identifying a primary contact number.</p>
+<p><strong>Row Count:</strong> 600</p>
+<p><strong>Dependency Level:</strong> 2</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-cst">sales.cst</a> (via cst_id)</li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>phn_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for each phone record.</td>
+</tr>
+<tr>
+<td>cst_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>The identifier of the customer to whom the phone number belongs.</td>
+</tr>
+<tr>
+<td>typ</td>
+<td>char</td>
+<td>The category or type of phone number (e.g., W=Work, M=Mobile, H=Home, F=Fax).</td>
+</tr>
+<tr>
+<td>num</td>
+<td>nvarchar</td>
+<td>The actual phone number string, stored in various formats.</td>
+</tr>
+<tr>
+<td>ext</td>
+<td>nvarchar</td>
+<td>The telephone extension, typically used for work or office numbers.</td>
+</tr>
+<tr>
+<td>dflt</td>
+<td>bit</td>
+<td>A boolean flag indicating if this is the primary or default phone number for the customer.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-pmt">
+<h4>pmt</h4>
+<p>This table, sales.pmt, functions as a ledger for customer payment transactions. It records the financial amounts received, the payment methods used, and the status of each transaction, linking them to specific customers and, where applicable, specific sales orders.</p>
+<p><strong>Row Count:</strong> 2200</p>
+<p><strong>Dependency Level:</strong> 3</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 100%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-cst">sales.cst</a> (via cst_id)</li>
+<li><a href="#table-ord">sales.ord</a> (via ord_id)</li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>pmt_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for each payment transaction record.</td>
+</tr>
+<tr>
+<td>ord_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>A reference to the specific sales order that this payment is intended to satisfy. The 10% null rate suggests that some payments are unallocated or represent general account credits.</td>
+</tr>
+<tr>
+<td>cst_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>The identifier of the customer who made the payment.</td>
+</tr>
+<tr>
+<td>pmt_dt</td>
+<td>date</td>
+<td>The date on which the payment was received or processed.</td>
+</tr>
+<tr>
+<td>amt</td>
+<td>decimal</td>
+<td>The monetary value of the payment transaction.</td>
+</tr>
+<tr>
+<td>mthd</td>
+<td>char</td>
+<td>The medium used for the payment. Codes likely represent: CC (Credit Card), CA (Cash), CK (Check), and WR (Wire Transfer).</td>
+</tr>
+<tr>
+<td>sts</td>
+<td>char</td>
+<td>The current processing state of the payment. Likely codes: A (Applied/Approved), F (Failed), P (Pending), R (Refunded/Rejected).</td>
+</tr>
+<tr>
+<td>ref</td>
+<td>nvarchar</td>
+<td>A unique reference string or transaction number, likely used for auditing or external reconciliation (e.g., bank transaction ID).</td>
+</tr>
+<tr>
+<td>notes</td>
+<td>nvarchar</td>
+<td>Supplemental information about the payment, specifically used to flag transactions that are applied as account credits rather than direct order payments.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-rtn">
+<h4>rtn</h4>
+<p>The sales.rtn table functions as a return management system, tracking customer returns for specific products purchased. It records the reason for the return, the quantity and monetary value being refunded, the processing status, and links each return back to the original order and specific line item.</p>
+<p><strong>Row Count:</strong> 150</p>
+<p><strong>Dependency Level:</strong> 0</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 95%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-ord">sales.ord</a> (via ord_id)</li>
+<li><a href="#table-oli">sales.oli</a> (via oli_id)</li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>rtn_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for each return record.</td>
+</tr>
+<tr>
+<td>ord_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Foreign key referencing the original sales order associated with the return.</td>
+</tr>
+<tr>
+<td>oli_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>Foreign key referencing the specific line item within an order that is being returned.</td>
+</tr>
+<tr>
+<td>rtn_dt</td>
+<td>date</td>
+<td>The date the return was initiated or processed.</td>
+</tr>
+<tr>
+<td>rsn</td>
+<td>char</td>
+<td>A short code representing the reason for the return (e.g., WRG, DOA, DMG, CHG).</td>
+</tr>
+<tr>
+<td>qty</td>
+<td>int</td>
+<td>The number of units of the specific line item being returned.</td>
+</tr>
+<tr>
+<td>amt</td>
+<td>decimal</td>
+<td>The monetary value or refund amount associated with the return.</td>
+</tr>
+<tr>
+<td>sts</td>
+<td>char</td>
+<td>The current processing status of the return (e.g., Approved, Rejected, Pending, Completed).</td>
+</tr>
+<tr>
+<td>notes</td>
+<td>nvarchar</td>
+<td>A text description explaining the reason for the return in detail.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="table-shp">
+<h4>shp</h4>
+<p>The sales.shp table functions as the shipment tracking and logistics ledger for the sales domain. It records the fulfillment details for every sales.ord, including the originating warehouse, carrier selection, tracking information, and the physical characteristics of the package (weight and cost).</p>
+<p><strong>Row Count:</strong> 1500</p>
+<p><strong>Dependency Level:</strong> 3</p>
+<p><span class="confidence-indicator confidence-high">Confidence: 95%</span></p>
+<div class="relationship-info">
+<strong>Depends On:</strong>
+<ul>
+<li><a href="#table-rcv">inv.rcv</a> (via whs_id)</li>
+<li><a href="#table-stk">inv.stk</a> (via whs_id)</li>
+<li><a href="#table-whs">inv.whs</a> (via whs_id)</li>
+<li><a href="#table-ord">sales.ord</a> (via ord_id)</li>
+</ul>
+</div>
+<table>
+<thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+<tbody>
+<tr>
+<td>shp_id</td>
+<td>int <span class="tag pk">PK</span> <span class="tag notnull">NOT NULL</span></td>
+<td>The unique primary identifier for a shipment record.</td>
+</tr>
+<tr>
+<td>ord_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>The identifier of the sales order being fulfilled by this shipment.</td>
+</tr>
+<tr>
+<td>whs_id</td>
+<td>int <span class="tag fk">FK</span></td>
+<td>The identifier of the warehouse from which the goods were dispatched.</td>
+</tr>
+<tr>
+<td>ship_dt</td>
+<td>date</td>
+<td>The date the shipment left the warehouse.</td>
+</tr>
+<tr>
+<td>dlv_dt</td>
+<td>date</td>
+<td>The date the shipment was confirmed as delivered to the customer.</td>
+</tr>
+<tr>
+<td>carr</td>
+<td>nvarchar</td>
+<td>The logistics provider or service level used for the shipment (e.g., FedEx, UPS, DHL, USPS).</td>
+</tr>
+<tr>
+<td>trk</td>
+<td>nvarchar</td>
+<td>The unique tracking number provided by the carrier for shipment monitoring.</td>
+</tr>
+<tr>
+<td>sts</td>
+<td>char</td>
+<td>The current status of the shipment (e.g., &#039;D&#039; for Delivered, &#039;S&#039; for Shipped, &#039;P&#039; for Pending, &#039;N&#039; for New).</td>
+</tr>
+<tr>
+<td>wgt</td>
+<td>decimal</td>
+<td>The physical weight of the shipment, likely used for calculating shipping costs.</td>
+</tr>
+<tr>
+<td>cost</td>
+<td>decimal</td>
+<td>The monetary cost incurred for the shipping service.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({ startOnLoad: true, theme: "default" }); mermaid.contentLoaded();</script>
+</div>
+</div>
+</div>
+</body>
+</html>

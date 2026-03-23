@@ -1,0 +1,1652 @@
+{
+    "Schemas": [
+        {
+            "name": "dbo",
+            "entityNamePrefix": "Dbo: ",
+            "entityNameSuffix": ""
+        },
+        {
+            "name": "HumanResources",
+            "entityNamePrefix": "Humanresources: ",
+            "entityNameSuffix": ""
+        },
+        {
+            "name": "Person",
+            "entityNamePrefix": "Person: ",
+            "entityNameSuffix": ""
+        },
+        {
+            "name": "Production",
+            "entityNamePrefix": "Production: ",
+            "entityNameSuffix": ""
+        },
+        {
+            "name": "Purchasing",
+            "entityNamePrefix": "Purchasing: ",
+            "entityNameSuffix": ""
+        },
+        {
+            "name": "Sales",
+            "entityNamePrefix": "Sales: ",
+            "entityNameSuffix": ""
+        }
+    ],
+    "dbo": [
+        {
+            "TableName": "AWBuildVersion",
+            "PrimaryKey": [
+                {
+                    "FieldName": "SystemInformationID",
+                    "Description": "Unique identifier for the single system information record in dbo.AWBuildVersion; it exists to provide a stable primary key for the singleton row."
+                }
+            ]
+        },
+        {
+            "TableName": "DatabaseLog",
+            "PrimaryKey": [
+                {
+                    "FieldName": "DatabaseLogID",
+                    "Description": "Primary identifier for each logged database event row."
+                }
+            ]
+        }
+    ],
+    "HumanResources": [
+        {
+            "TableName": "Department",
+            "PrimaryKey": [
+                {
+                    "FieldName": "DepartmentID",
+                    "Description": "Unique identifier for each department record; serves as the stable key used by related tables to reference a department."
+                }
+            ]
+        },
+        {
+            "TableName": "Employee",
+            "PrimaryKey": [
+                {
+                    "FieldName": "LoginID",
+                    "Description": "Windows/domain login used by the employee to authenticate to company systems."
+                },
+                {
+                    "FieldName": "rowguid",
+                    "Description": "System-generated unique row identifier used for replication and synchronization."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "BusinessEntity",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "The employee's shared business entity identifier and the table's primary key; links each employee record to the base person/business entity record."
+                }
+            ]
+        },
+        {
+            "TableName": "EmployeeDepartmentHistory",
+            "PrimaryKey": [
+                {
+                    "FieldName": "StartDate",
+                    "Description": "The date the employee began the department/shift assignment."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                },
+                {
+                    "FieldName": "DepartmentID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                },
+                {
+                    "FieldName": "ShiftID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "HumanResources",
+                    "RelatedTable": "Employee",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifies the employee whose department/shift assignment is being recorded."
+                },
+                {
+                    "FieldName": "DepartmentID",
+                    "SchemaName": "HumanResources",
+                    "RelatedTable": "Department",
+                    "RelatedField": "DepartmentID",
+                    "Description": "Identifies the department the employee was assigned to during the recorded period."
+                },
+                {
+                    "FieldName": "ShiftID",
+                    "SchemaName": "HumanResources",
+                    "RelatedTable": "Shift",
+                    "RelatedField": "ShiftID",
+                    "Description": "Identifies the work shift associated with the employee's assignment."
+                }
+            ]
+        },
+        {
+            "TableName": "EmployeePayHistory",
+            "PrimaryKey": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "Identifies the employee whose pay history record this is."
+                },
+                {
+                    "FieldName": "RateChangeDate",
+                    "Description": "The date and time when this pay rate became effective."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "HumanResources",
+                    "RelatedTable": "Employee",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifies the employee whose pay history record this is."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "HumanResources",
+                    "RelatedTable": "EmployeeDepartmentHistory",
+                    "RelatedField": "BusinessEntityID"
+                }
+            ]
+        },
+        {
+            "TableName": "JobCandidate",
+            "PrimaryKey": [
+                {
+                    "FieldName": "JobCandidateID",
+                    "Description": "Surrogate identifier for each job candidate record in HumanResources.JobCandidate."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "Person",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "References the underlying person record for the candidate in Person.Person."
+                }
+            ]
+        },
+        {
+            "TableName": "Shift",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ShiftID",
+                    "Description": "Unique identifier for each shift definition."
+                }
+            ]
+        }
+    ],
+    "Person": [
+        {
+            "TableName": "Address",
+            "PrimaryKey": [
+                {
+                    "FieldName": "AddressID",
+                    "Description": "Surrogate identifier for each address record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "StateProvinceID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "StateProvince",
+                    "RelatedField": "StateProvinceID",
+                    "Description": "Reference to the state, province, or similar administrative region for the address."
+                }
+            ]
+        },
+        {
+            "TableName": "AddressType",
+            "PrimaryKey": [
+                {
+                    "FieldName": "AddressTypeID",
+                    "Description": "Surrogate identifier for each address type record; serves as the primary key and is used by related tables to reference a specific address classification."
+                }
+            ]
+        },
+        {
+            "TableName": "BusinessEntity",
+            "PrimaryKey": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "Surrogate identifier for the business entity record; used as the shared key that child tables reference."
+                }
+            ]
+        },
+        {
+            "TableName": "BusinessEntityAddress",
+            "PrimaryKey": [
+                {
+                    "FieldName": "rowguid",
+                    "Description": "Globally unique row identifier used for replication, synchronization, or stable row tracking."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                },
+                {
+                    "FieldName": "AddressID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                },
+                {
+                    "FieldName": "AddressTypeID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "BusinessEntity",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifies the business entity associated with the address link."
+                },
+                {
+                    "FieldName": "AddressID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "Address",
+                    "RelatedField": "AddressID",
+                    "Description": "Identifies the address being linked to the business entity."
+                },
+                {
+                    "FieldName": "AddressTypeID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "AddressType",
+                    "RelatedField": "AddressTypeID",
+                    "Description": "Indicates the role or usage type of the address for the entity, such as billing or shipping."
+                }
+            ]
+        },
+        {
+            "TableName": "BusinessEntityContact",
+            "PrimaryKey": [
+                {
+                    "FieldName": "rowguid",
+                    "Description": "A globally unique row identifier used for replication, synchronization, or stable row tracking."
+                },
+                {
+                    "FieldName": "PersonID",
+                    "Description": "AI-discovered primary key (confidence: 82%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "BusinessEntity",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifies the business entity that the person is associated with in this contact relationship."
+                },
+                {
+                    "FieldName": "PersonID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "Person",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifies the person involved in the contact relationship; this is the row's primary identifier."
+                },
+                {
+                    "FieldName": "ContactTypeID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "ContactType",
+                    "RelatedField": "ContactTypeID",
+                    "Description": "Specifies the role or category of the contact relationship, such as the person's function for the business entity."
+                }
+            ]
+        },
+        {
+            "TableName": "ContactType",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ContactTypeID",
+                    "Description": "Primary key identifier for each contact type category."
+                }
+            ]
+        },
+        {
+            "TableName": "CountryRegion",
+            "PrimaryKey": [
+                {
+                    "FieldName": "CountryRegionCode",
+                    "Description": "Two-character country or region code that uniquely identifies each geographic entry and serves as the table's primary key."
+                }
+            ]
+        },
+        {
+            "TableName": "EmailAddress",
+            "PrimaryKey": [
+                {
+                    "FieldName": "EmailAddressID",
+                    "Description": "Surrogate primary key for the email address record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "Password",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifies the person/business entity that owns this email address record."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "BusinessEntity",
+                    "RelatedField": "BusinessEntityID"
+                }
+            ]
+        },
+        {
+            "TableName": "Password",
+            "PrimaryKey": [
+                {
+                    "FieldName": "rowguid",
+                    "Description": "Globally unique row identifier used for replication, synchronization, or system-level uniqueness tracking."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "Person",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifier of the person whose authentication credentials are stored in this row; also serves as the table's primary key."
+                }
+            ]
+        },
+        {
+            "TableName": "Person",
+            "PrimaryKey": [
+                {
+                    "FieldName": "rowguid",
+                    "Description": "Globally unique row identifier used for replication or synchronization scenarios."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "BusinessEntity",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Unique identifier for the person record; serves as the row's primary key and links this person to related business entity-based tables."
+                }
+            ]
+        },
+        {
+            "TableName": "PersonPhone",
+            "PrimaryKey": [
+                {
+                    "FieldName": "PhoneNumber",
+                    "Description": "The actual phone number stored for the entity."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "AI-discovered primary key (confidence: 88%)"
+                },
+                {
+                    "FieldName": "PhoneNumberTypeID",
+                    "Description": "AI-discovered primary key (confidence: 88%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "BusinessEntity",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifies the person/business entity that owns the phone number record."
+                },
+                {
+                    "FieldName": "PhoneNumberTypeID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "PhoneNumberType",
+                    "RelatedField": "PhoneNumberTypeID",
+                    "Description": "Classifies the phone number by type, such as home, work, or cell."
+                }
+            ]
+        },
+        {
+            "TableName": "PhoneNumberType",
+            "PrimaryKey": [
+                {
+                    "FieldName": "PhoneNumberTypeID",
+                    "Description": "Surrogate identifier for each phone number type. It uniquely identifies the lookup value used by related phone records."
+                }
+            ]
+        },
+        {
+            "TableName": "StateProvince",
+            "PrimaryKey": [
+                {
+                    "FieldName": "StateProvinceID",
+                    "Description": "Surrogate primary key for each state/province record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "CountryRegionCode",
+                    "SchemaName": "Person",
+                    "RelatedTable": "CountryRegion",
+                    "RelatedField": "CountryRegionCode",
+                    "Description": "Code of the country or region that contains this state/province."
+                },
+                {
+                    "FieldName": "TerritoryID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesTerritory",
+                    "RelatedField": "TerritoryID",
+                    "Description": "Sales territory assignment for this geographic region."
+                },
+                {
+                    "FieldName": "TerritoryID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesTerritoryHistory",
+                    "RelatedField": "TerritoryID"
+                }
+            ]
+        }
+    ],
+    "Production": [
+        {
+            "TableName": "BillOfMaterials",
+            "PrimaryKey": [
+                {
+                    "FieldName": "BillOfMaterialsID",
+                    "Description": "Surrogate primary key for each bill of materials record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductAssemblyID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "The parent product being assembled."
+                },
+                {
+                    "FieldName": "ComponentID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "The component product required in the assembly."
+                },
+                {
+                    "FieldName": "UnitMeasureCode",
+                    "SchemaName": "Production",
+                    "RelatedTable": "UnitMeasure",
+                    "RelatedField": "UnitMeasureCode",
+                    "Description": "The unit of measure used for the component quantity."
+                }
+            ]
+        },
+        {
+            "TableName": "Culture",
+            "PrimaryKey": [
+                {
+                    "FieldName": "CultureID",
+                    "Description": "The culture/language code used as the unique identifier for each supported culture entry."
+                }
+            ]
+        },
+        {
+            "TableName": "Illustration",
+            "PrimaryKey": [
+                {
+                    "FieldName": "IllustrationID",
+                    "Description": "Unique identifier for each illustration asset in Production.Illustration."
+                }
+            ]
+        },
+        {
+            "TableName": "Location",
+            "PrimaryKey": [
+                {
+                    "FieldName": "LocationID",
+                    "Description": "Primary identifier for each production location or work center."
+                }
+            ]
+        },
+        {
+            "TableName": "Product",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductID",
+                    "Description": "Surrogate primary key for each product record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductSubcategoryID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "ProductSubcategory",
+                    "RelatedField": "ProductSubcategoryID",
+                    "Description": "Foreign key to the product subcategory classification."
+                },
+                {
+                    "FieldName": "ProductModelID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "ProductModel",
+                    "RelatedField": "ProductModelID",
+                    "Description": "Foreign key to the product model definition."
+                }
+            ]
+        },
+        {
+            "TableName": "ProductCategory",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductCategoryID",
+                    "Description": "Surrogate identifier for each product category; uniquely identifies the category record and is used by child tables such as Production.ProductSubcategory."
+                }
+            ]
+        },
+        {
+            "TableName": "ProductCostHistory",
+            "PrimaryKey": [
+                {
+                    "FieldName": "StartDate",
+                    "Description": "The date on which this standard cost version becomes effective."
+                },
+                {
+                    "FieldName": "ProductID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifies the product whose standard cost is being tracked. It links each history row to a specific item in Production.Product."
+                }
+            ]
+        },
+        {
+            "TableName": "ProductDescription",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductDescriptionID",
+                    "Description": "Surrogate identifier for each product description record."
+                }
+            ]
+        },
+        {
+            "TableName": "ProductDocument",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductID",
+                    "Description": "Identifies the product associated with a document. This is the product side of the product-document relationship and links each row to a specific Production.Product record."
+                },
+                {
+                    "FieldName": "DocumentNode",
+                    "Description": "Identifies the document associated with a product, using the hierarchical key from Production.Document. This links the row to a specific document record in the document tree."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifies the product associated with a document. This is the product side of the product-document relationship and links each row to a specific Production.Product record."
+                },
+                {
+                    "FieldName": "DocumentNode",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Document",
+                    "RelatedField": "DocumentNode",
+                    "Description": "Identifies the document associated with a product, using the hierarchical key from Production.Document. This links the row to a specific document record in the document tree."
+                }
+            ]
+        },
+        {
+            "TableName": "ProductInventory",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductID",
+                    "Description": "Identifies the product whose inventory is being tracked at a location."
+                },
+                {
+                    "FieldName": "LocationID",
+                    "Description": "Identifies the production or warehouse location where the product is stored."
+                },
+                {
+                    "FieldName": "rowguid",
+                    "Description": "Globally unique row identifier used for replication or synchronization."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifies the product whose inventory is being tracked at a location."
+                },
+                {
+                    "FieldName": "LocationID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Location",
+                    "RelatedField": "LocationID",
+                    "Description": "Identifies the production or warehouse location where the product is stored."
+                }
+            ]
+        },
+        {
+            "TableName": "ProductListPriceHistory",
+            "PrimaryKey": [
+                {
+                    "FieldName": "StartDate",
+                    "Description": "The date on which this list price became effective."
+                },
+                {
+                    "FieldName": "ProductID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifies the product whose list price history is being recorded."
+                }
+            ]
+        },
+        {
+            "TableName": "ProductModel",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductModelID",
+                    "Description": "Unique identifier for each product model."
+                }
+            ]
+        },
+        {
+            "TableName": "ProductModelIllustration",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductModelID",
+                    "Description": "Identifies the product model being linked to an illustration."
+                },
+                {
+                    "FieldName": "IllustrationID",
+                    "Description": "Identifies the illustration associated with the product model."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductModelID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "ProductModel",
+                    "RelatedField": "ProductModelID",
+                    "Description": "Identifies the product model being linked to an illustration."
+                },
+                {
+                    "FieldName": "IllustrationID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Illustration",
+                    "RelatedField": "IllustrationID",
+                    "Description": "Identifies the illustration associated with the product model."
+                }
+            ]
+        },
+        {
+            "TableName": "ProductModelProductDescriptionCulture",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductModelID",
+                    "Description": "Identifies the product model that this localized description applies to."
+                },
+                {
+                    "FieldName": "ProductDescriptionID",
+                    "Description": "Identifies the reusable description text linked to the product model."
+                },
+                {
+                    "FieldName": "CultureID",
+                    "Description": "Specifies the language/culture for the description text."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductModelID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "ProductModel",
+                    "RelatedField": "ProductModelID",
+                    "Description": "Identifies the product model that this localized description applies to."
+                },
+                {
+                    "FieldName": "ProductDescriptionID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "ProductDescription",
+                    "RelatedField": "ProductDescriptionID",
+                    "Description": "Identifies the reusable description text linked to the product model."
+                },
+                {
+                    "FieldName": "CultureID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Culture",
+                    "RelatedField": "CultureID",
+                    "Description": "Specifies the language/culture for the description text."
+                }
+            ]
+        },
+        {
+            "TableName": "ProductPhoto",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductPhotoID",
+                    "Description": "Primary key column for ProductPhoto"
+                }
+            ]
+        },
+        {
+            "TableName": "ProductProductPhoto",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductID",
+                    "Description": "Identifies the product being associated with a photo."
+                },
+                {
+                    "FieldName": "ProductPhotoID",
+                    "Description": "Identifies the photo linked to the product."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifies the product being associated with a photo."
+                },
+                {
+                    "FieldName": "ProductPhotoID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "ProductPhoto",
+                    "RelatedField": "ProductPhotoID",
+                    "Description": "Identifies the photo linked to the product."
+                }
+            ]
+        },
+        {
+            "TableName": "ProductReview",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductReviewID",
+                    "Description": "Unique identifier for each product review record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifies the product being reviewed."
+                }
+            ]
+        },
+        {
+            "TableName": "ProductSubcategory",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductSubcategoryID",
+                    "Description": "Primary identifier for each product subcategory."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductCategoryID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "ProductCategory",
+                    "RelatedField": "ProductCategoryID",
+                    "Description": "Identifies the parent product category that this subcategory belongs to."
+                }
+            ]
+        },
+        {
+            "TableName": "ScrapReason",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ScrapReasonID",
+                    "Description": "Primary identifier for each scrap reason code."
+                }
+            ]
+        },
+        {
+            "TableName": "TransactionHistory",
+            "PrimaryKey": [
+                {
+                    "FieldName": "TransactionID",
+                    "Description": "Unique identifier for each transaction record in the ledger."
+                },
+                {
+                    "FieldName": "ReferenceOrderID",
+                    "Description": "Identifier of the source document or order that generated the transaction."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifies the product affected by the transaction."
+                }
+            ]
+        },
+        {
+            "TableName": "TransactionHistoryArchive",
+            "PrimaryKey": [
+                {
+                    "FieldName": "TransactionID",
+                    "Description": "Unique identifier for each transaction history record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifies the product affected by the transaction."
+                },
+                {
+                    "FieldName": "ReferenceOrderID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "WorkOrder",
+                    "RelatedField": "WorkOrderID",
+                    "Description": "Identifier of the originating order or work order associated with the transaction."
+                }
+            ]
+        },
+        {
+            "TableName": "UnitMeasure",
+            "PrimaryKey": [
+                {
+                    "FieldName": "UnitMeasureCode",
+                    "Description": "Short code that uniquely identifies a unit of measure, such as KG, OZ, EA, or L. It serves as the primary key and compact reference value used by related tables."
+                }
+            ]
+        },
+        {
+            "TableName": "WorkOrder",
+            "PrimaryKey": [
+                {
+                    "FieldName": "WorkOrderID",
+                    "Description": "Unique identifier for each work order record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifier of the product being manufactured on this work order."
+                },
+                {
+                    "FieldName": "ScrapReasonID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "ScrapReason",
+                    "RelatedField": "ScrapReasonID",
+                    "Description": "Optional reason code explaining why units were scrapped."
+                },
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "ProductProductPhoto",
+                    "RelatedField": "ProductID",
+                    "Description": "AI-discovered relationship (confidence: 51%)"
+                }
+            ]
+        },
+        {
+            "TableName": "WorkOrderRouting",
+            "PrimaryKey": [
+                {
+                    "FieldName": "OperationSequence",
+                    "Description": "The sequence number of the operation within the work order routing."
+                },
+                {
+                    "FieldName": "WorkOrderID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                },
+                {
+                    "FieldName": "ProductID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                },
+                {
+                    "FieldName": "LocationID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "WorkOrderID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "WorkOrder",
+                    "RelatedField": "WorkOrderID",
+                    "Description": "Identifies the manufacturing work order this routing step belongs to."
+                },
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifies the product being manufactured for this routing step."
+                },
+                {
+                    "FieldName": "LocationID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Location",
+                    "RelatedField": "LocationID",
+                    "Description": "The production location or work center where the operation is performed."
+                }
+            ]
+        }
+    ],
+    "Purchasing": [
+        {
+            "TableName": "ProductVendor",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ProductID",
+                    "Description": "Identifies the product being sourced from a vendor."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "Identifies the vendor supplying the product."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifies the product being sourced from a vendor."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Purchasing",
+                    "RelatedTable": "Vendor",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifies the vendor supplying the product."
+                },
+                {
+                    "FieldName": "UnitMeasureCode",
+                    "SchemaName": "Production",
+                    "RelatedTable": "UnitMeasure",
+                    "RelatedField": "UnitMeasureCode",
+                    "Description": "Unit of measure used when ordering or packaging the product from the vendor."
+                }
+            ]
+        },
+        {
+            "TableName": "PurchaseOrderDetail",
+            "PrimaryKey": [
+                {
+                    "FieldName": "PurchaseOrderID",
+                    "Description": "Identifies the purchase order header that this line item belongs to."
+                },
+                {
+                    "FieldName": "PurchaseOrderDetailID",
+                    "Description": "Unique identifier for each purchase order line item."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Purchasing",
+                    "RelatedTable": "ProductVendor",
+                    "RelatedField": "ProductID",
+                    "Description": "The product being purchased on this line item."
+                }
+            ]
+        },
+        {
+            "TableName": "PurchaseOrderHeader",
+            "PrimaryKey": [
+                {
+                    "FieldName": "PurchaseOrderID",
+                    "Description": "Unique identifier for each purchase order header record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "EmployeeID",
+                    "SchemaName": "HumanResources",
+                    "RelatedTable": "Employee",
+                    "RelatedField": "EmployeeID",
+                    "Description": "References the employee responsible for creating, approving, or managing the purchase order."
+                },
+                {
+                    "FieldName": "VendorID",
+                    "SchemaName": "Purchasing",
+                    "RelatedTable": "Vendor",
+                    "RelatedField": "VendorID",
+                    "Description": "References the supplier/vendor from whom the goods or services are being purchased."
+                },
+                {
+                    "FieldName": "ShipMethodID",
+                    "SchemaName": "Purchasing",
+                    "RelatedTable": "ShipMethod",
+                    "RelatedField": "ShipMethodID",
+                    "Description": "References the shipping method used for the purchase order."
+                }
+            ]
+        },
+        {
+            "TableName": "ShipMethod",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ShipMethodID",
+                    "Description": "Primary identifier for each shipping method."
+                }
+            ]
+        },
+        {
+            "TableName": "Vendor",
+            "PrimaryKey": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "Primary identifier for the vendor record; also links the vendor to its shared business entity identity in Person.BusinessEntity."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "BusinessEntity",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Primary identifier for the vendor record; also links the vendor to its shared business entity identity in Person.BusinessEntity."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "BusinessEntityContact",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "AI-discovered relationship (confidence: 70%)"
+                }
+            ]
+        }
+    ],
+    "Sales": [
+        {
+            "TableName": "CountryRegionCurrency",
+            "PrimaryKey": [
+                {
+                    "FieldName": "CountryRegionCode",
+                    "Description": "The country or region code for the geographic entity being mapped to a currency."
+                },
+                {
+                    "FieldName": "CurrencyCode",
+                    "Description": "The currency code associated with the country or region."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "CountryRegionCode",
+                    "SchemaName": "Person",
+                    "RelatedTable": "CountryRegion",
+                    "RelatedField": "CountryRegionCode",
+                    "Description": "The country or region code for the geographic entity being mapped to a currency."
+                },
+                {
+                    "FieldName": "CurrencyCode",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "Currency",
+                    "RelatedField": "CurrencyCode",
+                    "Description": "The currency code associated with the country or region."
+                }
+            ]
+        },
+        {
+            "TableName": "CreditCard",
+            "PrimaryKey": [
+                {
+                    "FieldName": "CreditCardID",
+                    "Description": "Surrogate identifier for each credit card record."
+                }
+            ]
+        },
+        {
+            "TableName": "Currency",
+            "PrimaryKey": [
+                {
+                    "FieldName": "CurrencyCode",
+                    "Description": "The unique 3-character currency code used to identify each currency record."
+                }
+            ]
+        },
+        {
+            "TableName": "CurrencyRate",
+            "PrimaryKey": [
+                {
+                    "FieldName": "CurrencyRateID",
+                    "Description": "Surrogate primary key for each currency-rate record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "FromCurrencyCode",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "Currency",
+                    "RelatedField": "CurrencyCode",
+                    "Description": "The source currency for the exchange rate, used as the base currency in the conversion."
+                },
+                {
+                    "FieldName": "ToCurrencyCode",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "Currency",
+                    "RelatedField": "CurrencyCode",
+                    "Description": "The target currency being quoted against the base currency."
+                }
+            ]
+        },
+        {
+            "TableName": "Customer",
+            "PrimaryKey": [
+                {
+                    "FieldName": "CustomerID",
+                    "Description": "Surrogate primary key for each customer record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "PersonID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "Person",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Optional link to the individual person who is the customer."
+                },
+                {
+                    "FieldName": "StoreID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "Store",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Optional link to the retail store account that is the customer."
+                },
+                {
+                    "FieldName": "TerritoryID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesTerritory",
+                    "RelatedField": "TerritoryID",
+                    "Description": "Sales territory assigned to the customer for regional sales management and reporting."
+                },
+                {
+                    "FieldName": "TerritoryID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesTerritoryHistory",
+                    "RelatedField": "TerritoryID"
+                }
+            ]
+        },
+        {
+            "TableName": "PersonCreditCard",
+            "PrimaryKey": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "Identifies the person associated with the credit card."
+                },
+                {
+                    "FieldName": "CreditCardID",
+                    "Description": "Identifies the credit card linked to the person."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "Person",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifies the person associated with the credit card."
+                },
+                {
+                    "FieldName": "CreditCardID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "CreditCard",
+                    "RelatedField": "CreditCardID",
+                    "Description": "Identifies the credit card linked to the person."
+                }
+            ]
+        },
+        {
+            "TableName": "SalesOrderDetail",
+            "PrimaryKey": [
+                {
+                    "FieldName": "SalesOrderDetailID",
+                    "Description": "Unique identifier for each sales order line item."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "SalesOrderID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesOrderHeader",
+                    "RelatedField": "SalesOrderID",
+                    "Description": "Identifies the sales order header that this line item belongs to."
+                },
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifies the product sold on this order line."
+                },
+                {
+                    "FieldName": "SpecialOfferID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SpecialOffer",
+                    "RelatedField": "SpecialOfferID",
+                    "Description": "Identifies the special offer or promotion applied to this line item."
+                },
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "ProductCostHistory",
+                    "RelatedField": "ProductID"
+                },
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "ProductListPriceHistory",
+                    "RelatedField": "ProductID"
+                },
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SpecialOfferProduct",
+                    "RelatedField": "ProductID"
+                },
+                {
+                    "FieldName": "SpecialOfferID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SpecialOfferProduct",
+                    "RelatedField": "SpecialOfferID"
+                }
+            ]
+        },
+        {
+            "TableName": "SalesOrderHeader",
+            "PrimaryKey": [
+                {
+                    "FieldName": "SalesOrderID",
+                    "Description": "Unique identifier for each sales order header record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "CustomerID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "Customer",
+                    "RelatedField": "CustomerID",
+                    "Description": "Identifier of the customer who placed the order."
+                },
+                {
+                    "FieldName": "SalesPersonID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesPerson",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifier of the salesperson responsible for the order, when assigned."
+                },
+                {
+                    "FieldName": "TerritoryID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesTerritory",
+                    "RelatedField": "TerritoryID",
+                    "Description": "Sales territory associated with the order."
+                },
+                {
+                    "FieldName": "BillToAddressID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "Address",
+                    "RelatedField": "AddressID",
+                    "Description": "Address used for billing the order."
+                },
+                {
+                    "FieldName": "ShipToAddressID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "Address",
+                    "RelatedField": "AddressID",
+                    "Description": "Address where the order should be shipped."
+                },
+                {
+                    "FieldName": "ShipMethodID",
+                    "SchemaName": "Purchasing",
+                    "RelatedTable": "ShipMethod",
+                    "RelatedField": "ShipMethodID",
+                    "Description": "Shipping method selected for the order."
+                },
+                {
+                    "FieldName": "CreditCardID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "CreditCard",
+                    "RelatedField": "CreditCardID",
+                    "Description": "Credit card used to pay for the order, if payment was made by card."
+                },
+                {
+                    "FieldName": "CurrencyRateID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "CurrencyRate",
+                    "RelatedField": "CurrencyRateID",
+                    "Description": "Exchange-rate record used when the order was placed in a non-base currency."
+                },
+                {
+                    "FieldName": "TerritoryID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesTerritoryHistory",
+                    "RelatedField": "TerritoryID"
+                },
+                {
+                    "FieldName": "BillToAddressID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "BusinessEntityAddress",
+                    "RelatedField": "AddressID"
+                },
+                {
+                    "FieldName": "ShipToAddressID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "BusinessEntityAddress",
+                    "RelatedField": "AddressID"
+                },
+                {
+                    "FieldName": "CreditCardID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "PersonCreditCard",
+                    "RelatedField": "CreditCardID"
+                },
+                {
+                    "FieldName": "ShipMethodID",
+                    "SchemaName": "Purchasing",
+                    "RelatedTable": "PurchaseOrderHeader",
+                    "RelatedField": "ShipMethodID",
+                    "Description": "AI-discovered relationship (confidence: 51%)"
+                }
+            ]
+        },
+        {
+            "TableName": "SalesOrderHeaderSalesReason",
+            "PrimaryKey": [
+                {
+                    "FieldName": "SalesOrderID",
+                    "Description": "Identifies the sales order that this reason is associated with."
+                },
+                {
+                    "FieldName": "SalesReasonID",
+                    "Description": "Identifies the standardized reason for the sales order."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "SalesOrderID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesOrderHeader",
+                    "RelatedField": "SalesOrderID",
+                    "Description": "Identifies the sales order that this reason is associated with."
+                },
+                {
+                    "FieldName": "SalesReasonID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesReason",
+                    "RelatedField": "SalesReasonID",
+                    "Description": "Identifies the standardized reason for the sales order."
+                }
+            ]
+        },
+        {
+            "TableName": "SalesPerson",
+            "PrimaryKey": [
+                {
+                    "FieldName": "rowguid",
+                    "Description": "Globally unique row identifier used for replication and synchronization."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "Person",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifier for the salesperson record, inherited from the underlying person/employee entity and used as the row's primary key."
+                },
+                {
+                    "FieldName": "TerritoryID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesTerritory",
+                    "RelatedField": "TerritoryID",
+                    "Description": "Sales territory assigned to the salesperson for regional responsibility and reporting."
+                },
+                {
+                    "FieldName": "TerritoryID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesTerritoryHistory",
+                    "RelatedField": "TerritoryID"
+                }
+            ]
+        },
+        {
+            "TableName": "SalesPersonQuotaHistory",
+            "PrimaryKey": [
+                {
+                    "FieldName": "QuotaDate",
+                    "Description": "The date the quota record applies to, likely the end of a fiscal quarter or quota period."
+                },
+                {
+                    "FieldName": "rowguid",
+                    "Description": "A globally unique row identifier used for replication and row-level identity."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "HumanResources",
+                    "RelatedTable": "Employee",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifies the employee whose sales quota is being recorded."
+                }
+            ]
+        },
+        {
+            "TableName": "SalesReason",
+            "PrimaryKey": [
+                {
+                    "FieldName": "SalesReasonID",
+                    "Description": "Unique identifier for each sales reason."
+                }
+            ]
+        },
+        {
+            "TableName": "SalesTaxRate",
+            "PrimaryKey": [
+                {
+                    "FieldName": "SalesTaxRateID",
+                    "Description": "Surrogate primary key for each sales tax rate record."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "StateProvinceID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "StateProvince",
+                    "RelatedField": "StateProvinceID",
+                    "Description": "References the state or province to which this tax rate applies."
+                }
+            ]
+        },
+        {
+            "TableName": "SalesTerritory",
+            "PrimaryKey": [
+                {
+                    "FieldName": "TerritoryID",
+                    "Description": "Unique identifier for each sales territory."
+                },
+                {
+                    "FieldName": "rowguid",
+                    "Description": "Globally unique row identifier used for replication or synchronization."
+                }
+            ]
+        },
+        {
+            "TableName": "SalesTerritoryHistory",
+            "PrimaryKey": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "Identifies the salesperson whose territory assignment is being recorded."
+                },
+                {
+                    "FieldName": "TerritoryID",
+                    "Description": "Identifies the sales territory assigned to the salesperson."
+                },
+                {
+                    "FieldName": "rowguid",
+                    "Description": "A globally unique row identifier used for replication, synchronization, or stable row tracking."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesPerson",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifies the salesperson whose territory assignment is being recorded."
+                },
+                {
+                    "FieldName": "TerritoryID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesTerritory",
+                    "RelatedField": "TerritoryID",
+                    "Description": "Identifies the sales territory assigned to the salesperson."
+                }
+            ]
+        },
+        {
+            "TableName": "ShoppingCartItem",
+            "PrimaryKey": [
+                {
+                    "FieldName": "ShoppingCartItemID",
+                    "Description": "Surrogate primary key for each shopping cart line item row."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Reference to the product being added to the cart."
+                }
+            ]
+        },
+        {
+            "TableName": "SpecialOffer",
+            "PrimaryKey": [
+                {
+                    "FieldName": "SpecialOfferID",
+                    "Description": "Identifier of the special offer applied in this row; also the table's primary key in the provided data and a foreign key to Sales.SpecialOffer.SpecialOfferID."
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "SpecialOfferID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SpecialOffer",
+                    "RelatedField": "SpecialOfferID",
+                    "Description": "Identifier of the special offer applied in this row; also the table's primary key in the provided data and a foreign key to Sales.SpecialOffer.SpecialOfferID."
+                }
+            ]
+        },
+        {
+            "TableName": "SpecialOfferProduct",
+            "PrimaryKey": [
+                {
+                    "FieldName": "rowguid",
+                    "Description": "A globally unique row identifier used by the Adventure Works schema for replication, synchronization, or stable row identity."
+                },
+                {
+                    "FieldName": "SpecialOfferID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                },
+                {
+                    "FieldName": "ProductID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "SpecialOfferID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SpecialOffer",
+                    "RelatedField": "SpecialOfferID",
+                    "Description": "Identifies the special offer or promotion applied to the product. This links each row to a specific Sales.SpecialOffer record and is part of the table's composite business key."
+                },
+                {
+                    "FieldName": "ProductID",
+                    "SchemaName": "Production",
+                    "RelatedTable": "Product",
+                    "RelatedField": "ProductID",
+                    "Description": "Identifies the product participating in the special offer. This links the row to a specific Production.Product record and is the other half of the junction relationship."
+                }
+            ]
+        },
+        {
+            "TableName": "Store",
+            "PrimaryKey": [
+                {
+                    "FieldName": "rowguid",
+                    "Description": "Globally unique row identifier used for replication and synchronization."
+                },
+                {
+                    "FieldName": "BusinessEntityID",
+                    "Description": "AI-discovered primary key (confidence: 100%)"
+                }
+            ],
+            "ForeignKeys": [
+                {
+                    "FieldName": "BusinessEntityID",
+                    "SchemaName": "Person",
+                    "RelatedTable": "BusinessEntity",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Unique identifier for the store's business entity record; this is the store's surrogate key and inherited identity in the shared entity model."
+                },
+                {
+                    "FieldName": "SalesPersonID",
+                    "SchemaName": "Sales",
+                    "RelatedTable": "SalesPerson",
+                    "RelatedField": "BusinessEntityID",
+                    "Description": "Identifier of the salesperson responsible for managing this store account."
+                }
+            ]
+        }
+    ]
+}

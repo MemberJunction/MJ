@@ -1,64 +1,10 @@
+[Back to AI Framework Overview](../README.md)
+
 # @memberjunction/ai
 
-Core abstractions and base classes for the MemberJunction AI Framework. This package defines provider-agnostic interfaces for Large Language Models (LLMs), embeddings, image generation, audio, video, reranking, and more. It has **zero MemberJunction dependencies** beyond `@memberjunction/global`, making it suitable for standalone use in any TypeScript/JavaScript project.
+Core abstractions and base classes for the MemberJunction AI Framework. This package defines provider-agnostic interfaces for Large Language Models, embeddings, image generation, audio, video, reranking, and more.
 
-## Architecture
-
-```mermaid
-graph TD
-    subgraph "@memberjunction/ai"
-        BM["BaseModel"]
-        style BM fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        BLLM["BaseLLM"]
-        style BLLM fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        BE["BaseEmbeddings"]
-        style BE fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        BIG["BaseImageGenerator"]
-        style BIG fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        BA["BaseAudio"]
-        style BA fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        BV["BaseVideo"]
-        style BV fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        BR["BaseReranker"]
-        style BR fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        CT["Chat Types"]
-        style CT fill:#7c5295,stroke:#563a6b,color:#fff
-
-        ET["Embed Types"]
-        style ET fill:#7c5295,stroke:#563a6b,color:#fff
-
-        ERR["ErrorAnalyzer"]
-        style ERR fill:#b8762f,stroke:#8a5722,color:#fff
-
-        AK["AIAPIKeys"]
-        style AK fill:#2d8659,stroke:#1a5c3a,color:#fff
-
-        BM --> BLLM
-        BM --> BE
-        BM --> BIG
-        BM --> BA
-        BM --> BV
-        BM --> BR
-    end
-
-    P1["OpenAI Provider"]
-    style P1 fill:#2d8659,stroke:#1a5c3a,color:#fff
-    P2["Anthropic Provider"]
-    style P2 fill:#2d8659,stroke:#1a5c3a,color:#fff
-    P3["Other Providers"]
-    style P3 fill:#2d8659,stroke:#1a5c3a,color:#fff
-
-    BLLM --> P1
-    BLLM --> P2
-    BLLM --> P3
-```
+**Zero MemberJunction dependencies** beyond `@memberjunction/global` (which itself has no transitive dependencies). This package works in any TypeScript or JavaScript project -- no database, no metadata layer, no MJ runtime required.
 
 ## Installation
 
@@ -66,168 +12,180 @@ graph TD
 npm install @memberjunction/ai
 ```
 
-## Key Exports
+## Base Classes
 
-### Base Classes
+Every AI capability is represented by an abstract base class. Provider packages (OpenAI, Anthropic, Gemini, etc.) extend these to implement the actual API calls.
 
-| Class | Purpose |
-|---|---|
-| `BaseModel` | Root base class for all AI model types; manages API key storage |
-| `BaseLLM` | Abstract base for chat completion providers with streaming, parallel execution, and thinking model support |
-| `BaseEmbeddings` | Abstract base for text embedding providers |
-| `BaseImageGenerator` | Abstract base for image generation, editing, and variation providers |
-| `BaseAudio` | Abstract base for text-to-speech and speech-to-text providers |
-| `BaseVideo` | Abstract base for video generation providers |
-| `BaseReranker` | Abstract base for document reranking providers |
+| Class | Purpose | Key Methods |
+|-------|---------|-------------|
+| `BaseLLM` | Chat completions (text generation) | `ChatCompletion()`, `ChatCompletions()` (parallel batch) |
+| `BaseEmbeddings` | Text-to-vector embeddings | `EmbedText()`, `EmbedTexts()` |
+| `BaseImageGenerator` | Image generation, editing, variations | `GenerateImage()`, `EditImage()`, `CreateVariation()` |
+| `BaseAudio` | Text-to-speech and speech-to-text | `TextToSpeech()`, `SpeechToText()` |
+| `BaseVideo` | Video generation from text/images | `GenerateVideo()` |
+| `BaseReranker` | Document reranking for retrieval | `Rerank()` |
 
-### Type Definitions
+All inherit from `BaseModel`, which manages API key storage and provides the `@RegisterClass` integration point.
 
-| Type / Class | Purpose |
-|---|---|
-| `ChatParams` | Parameters for chat completion requests (messages, streaming, sampling controls) |
-| `ChatResult` | Result of a chat completion including choices, usage, and cache info |
-| `ChatMessage` | Individual message with role, content (text or multimodal blocks), and optional metadata |
-| `ChatMessageContentBlock` | Multimodal content block (text, image, video, audio, file) |
-| `StreamingChatCallbacks` | Callbacks for real-time streaming responses |
+## Type Definitions
+
+### Chat Types
+
+| Type | Description |
+|------|-------------|
+| `ChatParams` | Full parameter set for chat requests: messages, model, temperature, topP, topK, streaming, effort level, response format, and more |
+| `ChatResult` | Completion result with choices, token usage, cost tracking, and timing |
+| `ChatMessage` | Single message with role, content (text or multimodal blocks), and optional metadata |
+| `ChatMessageContentBlock` | Multimodal content: text, image (base64/URL), video, audio, or file |
+| `StreamingChatCallbacks` | Callbacks for real-time streaming: `OnContent`, `OnComplete`, `OnError` |
 | `ParallelChatCompletionsCallbacks` | Callbacks for batch parallel completions |
-| `EmbedTextParams` / `EmbedTextResult` | Parameters and results for single text embedding |
-| `EmbedTextsParams` / `EmbedTextsResult` | Parameters and results for batch text embeddings |
+| `ChatMessageRole` | Enum: `system`, `user`, `assistant` |
+
+### Embedding Types
+
+| Type | Description |
+|------|-------------|
+| `EmbedTextParams` / `EmbedTextResult` | Single text embedding request and response |
+| `EmbedTextsParams` / `EmbedTextsResult` | Batch text embedding request and response |
+
+### Other Types
+
+| Type | Description |
+|------|-------------|
 | `ImageGenerationParams` / `ImageGenerationResult` | Image generation parameters and results |
-| `SummarizeParams` / `SummarizeResult` | Text summarization parameters and results |
-| `ClassifyParams` / `ClassifyResult` | Text classification parameters and results |
-| `RerankParams` / `RerankResult` | Document reranking parameters and results |
-
-### Utilities
-
-| Export | Purpose |
-|---|---|
+| `SummarizeParams` / `SummarizeResult` | Text summarization |
+| `ClassifyParams` / `ClassifyResult` | Text classification |
+| `RerankParams` / `RerankResult` | Document reranking |
+| `ModelUsage` | Token counts and cost tracking (prompt tokens, completion tokens, total cost, currency) |
 | `BaseResult` | Common result base with success flag, timing, and error info |
-| `ModelUsage` | Token usage and cost tracking (prompt tokens, completion tokens, cost, currency) |
-| `AIAPIKeys` | API key management via environment variables (`AI_VENDOR_API_KEY__<DRIVER>`) |
-| `GetAIAPIKey()` | Helper to resolve API keys with optional runtime overrides |
-| `ErrorAnalyzer` | Standardized error analysis across all providers with severity and failover hints |
-| `AIErrorInfo` / `AIErrorType` | Structured error types (rate limit, authentication, context length, etc.) |
+
+## Utilities
+
+| Export | Description |
+|--------|-------------|
+| `AIAPIKeys` / `GetAIAPIKey()` | API key resolution from environment variables (`AI_VENDOR_API_KEY__<DRIVER>`) with optional runtime overrides |
+| `ErrorAnalyzer` | Classifies provider errors into structured types with severity, retry hints, and failover recommendations |
+| `AIErrorInfo` / `AIErrorType` | Structured error types: rate limit, authentication, context length, content filter, etc. |
 | `serializeMessageContent()` / `deserializeMessageContent()` | Content block serialization for database storage |
 | `parseBase64DataUrl()` / `createBase64DataUrl()` | Base64 data URL utilities |
 
-## Usage
+## Usage Examples
 
-### Basic Chat Completion
+### Chat Completion
 
 ```typescript
-import { ChatParams, ChatMessageRole } from '@memberjunction/ai';
-import { OpenAILLM } from '@memberjunction/ai-openai';
+import { ChatParams, ChatMessageRole } from "@memberjunction/ai";
+import { OpenAILLM } from "@memberjunction/ai-openai";
 
-const llm = new OpenAILLM('your-api-key');
+const llm = new OpenAILLM("your-api-key");
 
-const params = new ChatParams();
-params.model = 'gpt-4';
-params.messages = [
-    { role: ChatMessageRole.user, content: 'What is the capital of France?' }
-];
+const result = await llm.ChatCompletion({
+    model: "gpt-4.1",
+    messages: [
+        { role: ChatMessageRole.system, content: "You are a helpful assistant." },
+        { role: ChatMessageRole.user, content: "What is the capital of France?" },
+    ],
+    temperature: 0.7,
+    maxOutputTokens: 500,
+});
 
-const result = await llm.ChatCompletion(params);
 console.log(result.data.choices[0].message.content);
 ```
 
-### Streaming Chat Completion
+### Streaming
 
 ```typescript
-const params = new ChatParams();
-params.model = 'gpt-4';
-params.streaming = true;
-params.messages = [
-    { role: ChatMessageRole.user, content: 'Explain quantum computing' }
-];
-params.streamingCallbacks = {
-    OnContent: (chunk, isComplete) => process.stdout.write(chunk),
-    OnComplete: (result) => console.log('\nDone!'),
-    OnError: (error) => console.error('Stream error:', error)
-};
-
-await llm.ChatCompletion(params);
+await llm.ChatCompletion({
+    model: "gpt-4.1",
+    messages: [{ role: ChatMessageRole.user, content: "Explain quantum computing." }],
+    streaming: true,
+    streamingCallbacks: {
+        OnContent: (chunk, isComplete) => process.stdout.write(chunk),
+        OnComplete: (result) => console.log("\nDone!"),
+        OnError: (error) => console.error("Stream error:", error),
+    },
+});
 ```
 
-### Parallel Chat Completions
+### Parallel Completions
 
 ```typescript
-const paramsArray = [
-    { ...baseParams, temperature: 0.3 },
-    { ...baseParams, temperature: 0.7 },
-    { ...baseParams, temperature: 1.0 }
+const paramSets = [
+    { ...base, temperature: 0.3 },
+    { ...base, temperature: 0.7 },
+    { ...base, temperature: 1.0 },
 ];
 
-const results = await llm.ChatCompletions(paramsArray, {
+const results = await llm.ChatCompletions(paramSets, {
     OnCompletion: (result, index) => console.log(`Completion ${index} done`),
-    OnAllCompleted: (results) => console.log(`All ${results.length} done`)
+    OnAllCompleted: (results) => console.log(`All ${results.length} complete`),
 });
 ```
 
 ### Multimodal Content
 
 ```typescript
-const params = new ChatParams();
-params.model = 'gpt-4o';
-params.messages = [
-    {
+const result = await llm.ChatCompletion({
+    model: "gpt-4.1",
+    messages: [{
         role: ChatMessageRole.user,
         content: [
-            { type: 'text', content: 'What is in this image?' },
-            { type: 'image_url', content: 'data:image/png;base64,...' }
-        ]
-    }
-];
+            { type: "text", content: "What is in this image?" },
+            { type: "image_url", content: "data:image/png;base64,..." },
+        ],
+    }],
+});
 ```
 
 ### Text Embeddings
 
 ```typescript
-import { EmbedTextParams } from '@memberjunction/ai';
-import { OpenAIEmbeddings } from '@memberjunction/ai-openai';
+import { OpenAIEmbedding } from "@memberjunction/ai-openai";
 
-const embedder = new OpenAIEmbeddings('your-api-key');
+const embedder = new OpenAIEmbedding("your-api-key");
 const result = await embedder.EmbedText({
-    model: 'text-embedding-ada-002',
-    text: 'Sample text to embed'
+    model: "text-embedding-3-small",
+    text: "Sample text to embed",
 });
-console.log(result.embedding); // number[]
+console.log(`Dimensions: ${result.vector.length}`);
 ```
 
-### API Key Management
+### API Key Resolution
 
 ```typescript
-import { GetAIAPIKey } from '@memberjunction/ai';
+import { GetAIAPIKey } from "@memberjunction/ai";
 
-// Reads from environment: AI_VENDOR_API_KEY__OPENAILLM
-const key = GetAIAPIKey('OpenAILLM');
+// Reads AI_VENDOR_API_KEY__OPENAILLM from environment
+const key = GetAIAPIKey("OpenAILLM");
 
 // With runtime override
-const key2 = GetAIAPIKey('AnthropicLLM', [
-    { driverClass: 'AnthropicLLM', apiKey: 'sk-ant-...' }
+const key2 = GetAIAPIKey("AnthropicLLM", [
+    { driverClass: "AnthropicLLM", apiKey: "sk-ant-..." },
 ]);
 ```
 
-## Provider Implementation
+## Implementing a New Provider
 
-To create a new AI provider, extend the appropriate base class:
+Extend the base class for the capability you want to support:
 
 ```typescript
-import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
+import { RegisterClass } from "@memberjunction/global";
 
+@RegisterClass(BaseLLM, "MyProviderLLM")
 export class MyProviderLLM extends BaseLLM {
+    // Required: implement non-streaming chat
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
-        // Implement provider-specific chat completion
+        // Your API call here
     }
 
-    public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> {
-        // Implement or throw if not supported
-    }
+    // Optional: implement text classification
+    public async ClassifyText(params: ClassifyParams): Promise<ClassifyResult> { /* ... */ }
 
-    public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> {
-        // Implement or throw if not supported
-    }
+    // Optional: implement summarization
+    public async SummarizeText(params: SummarizeParams): Promise<SummarizeResult> { /* ... */ }
 
-    // For streaming support, override these:
+    // Optional: enable streaming by overriding these
     public get SupportsStreaming(): boolean { return true; }
     protected async createStreamingRequest(params: ChatParams): Promise<AsyncIterable<unknown>> { /* ... */ }
     protected processStreamingChunk(chunk: unknown): { content: string } { /* ... */ }
@@ -235,8 +193,19 @@ export class MyProviderLLM extends BaseLLM {
 }
 ```
 
+See the [full provider list](../Providers/README.md) for working examples across 25+ implementations.
+
 ## Dependencies
 
-- `@memberjunction/global` -- Class factory and global utilities (zero transitive dependencies)
-- `dotenv` -- Environment variable loading
-- `rxjs` -- Reactive extensions (used internally)
+| Package | Purpose |
+|---------|---------|
+| `@memberjunction/global` | Class factory and global utilities (zero transitive dependencies) |
+| `dotenv` | Environment variable loading |
+| `rxjs` | Reactive extensions (internal use) |
+
+## Related Packages
+
+- **[AI Framework Overview](../README.md)** -- Architecture, provider matrix, and quick start
+- **[Providers](../Providers/README.md)** -- All 25+ provider implementations
+- **[Prompts](../Prompts/README.md)** -- MJ-integrated prompt template engine
+- **[Agents](../Agents/README.md)** -- Agent execution framework

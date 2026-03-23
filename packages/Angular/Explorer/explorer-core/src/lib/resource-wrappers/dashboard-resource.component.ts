@@ -1,10 +1,12 @@
-import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Component, ViewContainerRef, ComponentRef, ViewChild, ElementRef, ChangeDetectorRef, inject } from '@angular/core';
 import { BaseResourceComponent, NavigationService, BaseDashboard, DashboardConfig } from '@memberjunction/ng-shared';
 import { ResourceData, MJDashboardEntity, DashboardEngine, MJDashboardUserStateEntity, MJDashboardCategoryEntity, MJDashboardPartTypeEntity, DashboardUserPermissions } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal, SafeJSONParse , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core';
-import { DataExplorerDashboardComponent, DataExplorerFilter, ShareDialogResult } from '@memberjunction/ng-dashboards';
+import type { DataExplorerFilter } from '@memberjunction/ng-dashboards/data-explorer-dashboards.module';
+import type { ShareDialogResult } from '@memberjunction/ng-dashboards/core-dashboards.module';
 import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEvent, AddPanelResult, DashboardPanel } from '@memberjunction/ng-dashboard-viewer';
+import { LazyModuleRegistry } from '../services/lazy-module-registry';
 /**
  * Dashboard Resource Wrapper - displays a single dashboard in a tab
  * Extends BaseResourceComponent to work with the resource type system
@@ -407,6 +409,7 @@ import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEve
     `]
 })
 export class DashboardResource extends BaseResourceComponent {
+    private lazyRegistry = inject(LazyModuleRegistry);
     private componentRef: ComponentRef<unknown> | null = null;
     private dataLoaded = false;
     @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
@@ -689,7 +692,8 @@ export class DashboardResource extends BaseResourceComponent {
         contextIcon?: string
     ): Promise<void> {
         try {
-            // Create the Data Explorer component directly (it's already registered)
+            // Lazy-load the Data Explorer component to keep it out of the initial bundle
+            const { DataExplorerDashboardComponent } = await import('@memberjunction/ng-dashboards/data-explorer-dashboards.module');
             this.containerElement.nativeElement.innerHTML = '';
             const componentRef = this.viewContainer.createComponent(DataExplorerDashboardComponent);
             this.componentRef = componentRef;
@@ -752,11 +756,18 @@ export class DashboardResource extends BaseResourceComponent {
                 throw new Error(`Dashboard '${dashboard.Name}' is marked as Code type but has no DriverClass specified`);
             }
 
-            // Look up the registered class using the DriverClass name
-            const classReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+            // Look up the registered class using the DriverClass name (with lazy loading fallback)
+            let classReg = MJGlobal.Instance.ClassFactory.GetRegistration(
                 BaseDashboard,
                 dashboard.DriverClass
             );
+
+            if (!classReg?.SubClass) {
+                const loaded = await this.lazyRegistry.Load(dashboard.DriverClass);
+                if (loaded) {
+                    classReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseDashboard, dashboard.DriverClass);
+                }
+            }
 
             if (!classReg?.SubClass) {
                 throw new Error(`Dashboard class '${dashboard.DriverClass}' is not registered. Please check the class registration.`);

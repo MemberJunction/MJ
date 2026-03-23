@@ -314,6 +314,147 @@ describe('BedrockLLM', () => {
     });
   });
 
+  /* ---- stopSequences ---- */
+  describe('stopSequences', () => {
+    const mockAnthropicResponse = {
+      body: new TextEncoder().encode(JSON.stringify({
+        content: [{ text: 'response' }],
+        usage: { input_tokens: 5, output_tokens: 10 },
+      })),
+    };
+    const mockAI21Response = {
+      body: new TextEncoder().encode(JSON.stringify({
+        completions: [{ data: { text: 'response' } }],
+        prompt_tokens: 5,
+        completion_tokens: 10,
+      })),
+    };
+    const mockTitanResponse = {
+      body: new TextEncoder().encode(JSON.stringify({
+        results: [{ outputText: 'response' }],
+        inputTextTokenCount: 5,
+        outputTextTokenCount: 10,
+      })),
+    };
+    const mockLlamaResponse = {
+      body: new TextEncoder().encode(JSON.stringify({
+        generation: 'response',
+      })),
+    };
+
+    const callNonStreaming = async (model: string, stopSequences: string[]) => {
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion'].bind(llm);
+      await fn({
+        model,
+        messages: [{ role: 'user', content: 'Hello' }],
+        stopSequences,
+      });
+      const sentBody = JSON.parse(mockSend.mock.calls[0][0].body as string);
+      return sentBody;
+    };
+
+    it('should pass stop_sequences for Anthropic models', async () => {
+      mockSend.mockResolvedValueOnce(mockAnthropicResponse);
+      const body = await callNonStreaming('anthropic.claude-v2', ['STOP', 'END']);
+      expect(body.stop_sequences).toEqual(['STOP', 'END']);
+    });
+
+    it('should pass stopSequences for AI21 models', async () => {
+      mockSend.mockResolvedValueOnce(mockAI21Response);
+      const body = await callNonStreaming('ai21.j2-ultra', ['STOP', 'END']);
+      expect(body.stopSequences).toEqual(['STOP', 'END']);
+    });
+
+    it('should pass stopSequences inside textGenerationConfig for Amazon Titan models', async () => {
+      mockSend.mockResolvedValueOnce(mockTitanResponse);
+      const body = await callNonStreaming('amazon.titan-text-express-v1', ['STOP', 'END']);
+      expect(body.textGenerationConfig.stopSequences).toEqual(['STOP', 'END']);
+    });
+
+    it('should NOT include stop sequences for Meta Llama models', async () => {
+      mockSend.mockResolvedValueOnce(mockLlamaResponse);
+      const body = await callNonStreaming('meta.llama2-70b', ['STOP', 'END']);
+      expect(body.stop_sequences).toBeUndefined();
+      expect(body.stopSequences).toBeUndefined();
+    });
+
+    it('should omit stop_sequences for Anthropic when array is empty', async () => {
+      mockSend.mockResolvedValueOnce(mockAnthropicResponse);
+      const body = await callNonStreaming('anthropic.claude-v2', []);
+      expect(body.stop_sequences).toBeUndefined();
+    });
+  });
+
+  /* ---- assistantPrefill ---- */
+  describe('assistantPrefill', () => {
+    const mockAnthropicResponse = {
+      body: new TextEncoder().encode(JSON.stringify({
+        content: [{ text: 'completed prefill' }],
+        usage: { input_tokens: 5, output_tokens: 10 },
+      })),
+    };
+
+    const callWithPrefill = async (model: string, assistantPrefill: string | undefined) => {
+      const mockResponse = {
+        body: new TextEncoder().encode(JSON.stringify(
+          model.startsWith('anthropic.')
+            ? { content: [{ text: 'response' }], usage: { input_tokens: 5, output_tokens: 10 } }
+            : model.startsWith('ai21.')
+              ? { completions: [{ data: { text: 'response' } }], prompt_tokens: 5, completion_tokens: 10 }
+              : model.startsWith('amazon.titan-')
+                ? { results: [{ outputText: 'response' }], inputTextTokenCount: 5, outputTextTokenCount: 10 }
+                : { generation: 'response' }
+        )),
+      };
+      mockSend.mockResolvedValueOnce(mockResponse);
+
+      const fn = (llm as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>)['nonStreamingChatCompletion'].bind(llm);
+      await fn({
+        model,
+        messages: [{ role: 'user', content: 'Hello' }],
+        assistantPrefill,
+      });
+      const sentBody = JSON.parse(mockSend.mock.calls[0][0].body as string);
+      return sentBody;
+    };
+
+    it('should append assistant message with prefill text for Anthropic models', async () => {
+      const body = await callWithPrefill('anthropic.claude-v2', '{"result":');
+      const messages = body.messages;
+      expect(messages[messages.length - 1]).toEqual({ role: 'assistant', content: '{"result":' });
+    });
+
+    it('should not append assistant message when assistantPrefill is undefined for Anthropic', async () => {
+      const body = await callWithPrefill('anthropic.claude-v2', undefined);
+      const messages = body.messages;
+      // Only the user message should be present (no trailing assistant)
+      expect(messages.length).toBe(1);
+      expect(messages[0].role).toBe('user');
+    });
+
+    it('should not include prefill in AI21 request body', async () => {
+      const body = await callWithPrefill('ai21.j2-ultra', '{"result":');
+      // AI21 uses prompt string, not messages array — no assistant prefill
+      expect(body.messages).toBeUndefined();
+      expect(body.prompt).toBeDefined();
+      expect(body.prompt).not.toContain('{"result":');
+    });
+
+    it('should not include prefill in Amazon Titan request body', async () => {
+      const body = await callWithPrefill('amazon.titan-text-express-v1', '{"result":');
+      expect(body.messages).toBeUndefined();
+      expect(body.inputText).toBeDefined();
+      expect(body.inputText).not.toContain('{"result":');
+    });
+
+    it('should not include prefill in Meta Llama request body', async () => {
+      const body = await callWithPrefill('meta.llama2-70b', '{"result":');
+      expect(body.messages).toBeUndefined();
+      expect(body.prompt).toBeDefined();
+      expect(body.prompt).not.toContain('{"result":');
+    });
+  });
+
   /* ---- processStreamingChunk ---- */
   describe('processStreamingChunk', () => {
     it('should extract content from delta.text format', () => {

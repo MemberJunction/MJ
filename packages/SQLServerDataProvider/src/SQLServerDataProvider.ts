@@ -70,9 +70,10 @@ import {
 } from './types.js';
 
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
-import { EncryptionEngine } from '@memberjunction/encryption';
+
 import { v4 as uuidv4 } from 'uuid';
 import { UUIDsEqual } from '@memberjunction/global';
+import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
 /**
  * Checks whether an error indicates a stale/dead database connection that
  * could be resolved by retrying with a fresh connection from the pool.
@@ -248,6 +249,15 @@ export class SQLServerDataProvider
   /**************************************************************************/
   // SQL Dialect Implementations (override abstract methods from DatabaseProviderBase)
   /**************************************************************************/
+
+  /**
+   * Returns the SQL Server dialect instance so that platform-specific tokens
+   * (batch separator, quoted identifiers, etc.) are sourced from
+   * `@memberjunction/sql-dialect` rather than hardcoded strings.
+   */
+  protected getDialect(): SQLDialect {
+    return new SQLServerDialect();
+  }
 
   public override QuoteIdentifier(name: string): string {
     return `[${name}]`;
@@ -896,8 +906,8 @@ export class SQLServerDataProvider
     let simpleParams: string = '';
     let bFirst: boolean = true;
 
-    // Get the encryption engine instance (lazy - only used if needed)
-    let encryptionEngine: EncryptionEngine | null = null;
+    // Collect field values into a map for generic encryption processing
+    const fieldValueMap = new Map<EntityFieldInfo, unknown>();
 
     for (let i = 0; i < entity.EntityInfo.Fields.length; i++) {
       const f = entity.EntityInfo.Fields[i];
@@ -932,59 +942,34 @@ export class SQLServerDataProvider
             }
           }
 
-          // ========================================================================
-          // FIELD-LEVEL ENCRYPTION
-          // If the field is marked for encryption and has a non-null value,
-          // encrypt it before storing in the database.
-          // ========================================================================
-          if (f.Encrypt && f.EncryptionKeyID && value !== null && value !== undefined) {
-            // Lazy-load encryption engine only when needed
-            if (!encryptionEngine) {
-              encryptionEngine = EncryptionEngine.Instance;
-              await encryptionEngine.Config(false, contextUser);
-            }
-
-            // Only encrypt if the value is not already encrypted
-            // This handles cases where values may already be encrypted (e.g., re-save scenarios)
-            const keyMarker = encryptionEngine.GetKeyByID(f.EncryptionKeyID)?.Marker;
-            if (!encryptionEngine.IsEncrypted(value, keyMarker)) {
-              try {
-                // Convert value to string for encryption if it isn't already
-                const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
-                value = await encryptionEngine.Encrypt(stringValue, f.EncryptionKeyID, contextUser);
-              } catch (encryptError) {
-                // Log the error but throw to prevent unencrypted storage
-                // SECURITY: Never store unencrypted data in an encrypted field
-                const message = encryptError instanceof Error ? encryptError.message : String(encryptError);
-                throw new Error(
-                  `Failed to encrypt field "${f.Name}" on entity "${entity.EntityInfo.Name}": ${message}. ` +
-                  'The save operation has been aborted to prevent storing unencrypted sensitive data.'
-                );
-              }
-            }
-          }
-          // ========================================================================
-
-          // Generate variable name with unique suffix
-          const varName = `@${f.CodeName}${uniqueSuffix}`;
-
-          // Add declaration with proper SQL type using existing SQLFullType property
-          declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
-
-          // Add SET statement if value is not null (SQL variables default to NULL)
-          if (value !== null && value !== undefined) {
-            const setValueSQL = this.generateSetStatementValue(f, value);
-            setStatements.push(`SET ${varName} = ${setValueSQL}`);
-          }
-
-          // Add to EXEC parameters
-          execParams.push(`@${f.CodeName}=${varName}`);
-
-          // Also build the old-style simple params for backward compatibility
-          simpleParams += this.generateSingleSPParam(f, value, bFirst);
-          bFirst = false;
+          fieldValueMap.set(f, value);
         }
       }
+    }
+
+    // Encrypt field values using the generic method from GenericDatabaseProvider
+    await this.EncryptFieldValuesForSave(entity, fieldValueMap, contextUser);
+
+    // Now build the SQL parameters from the (possibly encrypted) values
+    for (const [f, value] of fieldValueMap) {
+      // Generate variable name with unique suffix
+      const varName = `@${f.CodeName}${uniqueSuffix}`;
+
+      // Add declaration with proper SQL type using existing SQLFullType property
+      declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
+
+      // Add SET statement if value is not null (SQL variables default to NULL)
+      if (value !== null && value !== undefined) {
+        const setValueSQL = this.generateSetStatementValue(f, value);
+        setStatements.push(`SET ${varName} = ${setValueSQL}`);
+      }
+
+      // Add to EXEC parameters
+      execParams.push(`@${f.CodeName}=${varName}`);
+
+      // Also build the old-style simple params for backward compatibility
+      simpleParams += this.generateSingleSPParam(f, value as string, bFirst);
+      bFirst = false;
     }
     if (isUpdate && execParams.length > 0) {
       // this is an update and we have other fields, so we need to add all of the pkeys to the end of the SP call

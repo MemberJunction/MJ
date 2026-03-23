@@ -1,6 +1,8 @@
+[Back to AI Framework Overview](../../README.md) | [All Providers](../README.md)
+
 # @memberjunction/ai-groq
 
-MemberJunction AI provider for Groq's ultra-fast inference platform. This package extends the OpenAI provider to work with Groq's OpenAI-compatible API, providing access to LLM inference powered by Groq's custom Language Processing Units (LPUs) for industry-leading inference speed.
+MemberJunction AI provider for Groq's ultra-fast inference platform. Extends the OpenAI provider to work with Groq's OpenAI-compatible API, providing access to LLM inference powered by Groq's custom Language Processing Units (LPUs).
 
 ## Architecture
 
@@ -26,7 +28,7 @@ graph TD
 - **OpenAI Compatible**: Inherits all features from the OpenAI provider
 - **Streaming**: Full streaming support for real-time responses
 - **Thinking/Reasoning**: Thinking block extraction for reasoning models
-- **Multiple Models**: Access to Llama, Mixtral, Gemma, and other open models optimized for Groq
+- **Multiple Models**: Access to Llama 4, Llama 3.3, Mixtral, Gemma, and other open models optimized for Groq
 
 ## Installation
 
@@ -37,18 +39,18 @@ npm install @memberjunction/ai-groq
 ## Usage
 
 ```typescript
-import { GroqLLM } from '@memberjunction/ai-groq';
+import { GroqLLM } from "@memberjunction/ai-groq";
 
-const llm = new GroqLLM('your-groq-api-key');
+const llm = new GroqLLM("your-groq-api-key");
 
 const result = await llm.ChatCompletion({
-    model: 'llama-3.1-70b-versatile',
+    model: "llama-3.3-70b-versatile",
     messages: [
-        { role: 'system', content: 'You are a helpful assistant.' },
-        { role: 'user', content: 'Explain neural networks.' }
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: "Explain neural networks." },
     ],
     temperature: 0.7,
-    maxOutputTokens: 1000
+    maxOutputTokens: 1000,
 });
 
 if (result.success) {
@@ -60,13 +62,13 @@ if (result.success) {
 
 ```typescript
 const result = await llm.ChatCompletion({
-    model: 'llama-3.1-8b-instant',
-    messages: [{ role: 'user', content: 'Write a haiku about speed.' }],
+    model: "llama-3.3-70b-versatile",
+    messages: [{ role: "user", content: "Write a haiku about speed." }],
     streaming: true,
     streamingCallbacks: {
         OnContent: (content) => process.stdout.write(content),
-        OnComplete: () => console.log('\nDone!')
-    }
+        OnComplete: () => console.log("\nDone!"),
+    },
 });
 ```
 
@@ -77,6 +79,8 @@ const result = await llm.ChatCompletion({
 ## Supported Parameters
 
 All parameters supported by the OpenAI provider are available, including `temperature`, `maxOutputTokens`, `topP`, `frequencyPenalty`, `presencePenalty`, `seed`, `stopSequences`, and `responseFormat`.
+
+Additionally, `assistantPrefill` is supported — Groq natively supports prefilling the assistant's response to guide output format. See the [Prefill & Stop Sequences Guide](../../Prompts/PREFILL_AND_STOP_SEQUENCES.md) for details.
 
 ## Class Registration
 

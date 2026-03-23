@@ -648,6 +648,51 @@
               </div>
             </div>
           </kendo-expansionpanel>
+          <!-- Prefill & Output Control Expansion Panel -->
+          <kendo-expansionpanel
+            [expanded]="false"
+            style="margin-bottom: 12px;">
+            <ng-template kendoExpansionPanelTitleDirective>
+              <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--mj-text-muted);"></i>
+                Prefill &amp; Output Control
+              </span>
+            </ng-template>
+            <div style="padding: 16px 0;">
+              <p style="margin: 0 0 12px 0; font-size: 0.85em; color: var(--mj-text-muted);">
+                Assistant prefill seeds the model's response with an initial string, guiding output format and content. Stop sequences terminate generation when encountered.
+              </p>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <!-- Left Column -->
+                <div>
+                  <mj-form-field
+                    [Record]="record"
+                    [ShowLabel]="true"
+                    FieldName="AssistantPrefill"
+                    Type="textarea"
+                    [EditMode]="EditMode">
+                  </mj-form-field>
+                  <mj-form-field
+                    [Record]="record"
+                    [ShowLabel]="true"
+                    FieldName="StopSequences"
+                    Type="textbox"
+                    [EditMode]="EditMode">
+                  </mj-form-field>
+                </div>
+                <!-- Right Column -->
+                <div>
+                  <mj-form-field
+                    [Record]="record"
+                    [ShowLabel]="true"
+                    FieldName="PrefillFallbackMode"
+                    Type="dropdownlist"
+                    [EditMode]="EditMode">
+                  </mj-form-field>
+                </div>
+              </div>
+            </div>
+          </kendo-expansionpanel>
           <!-- Template Parameters Expansion Panel -->
           @if (template && templateParams.length > 0) {
             <kendo-expansionpanel

@@ -111,6 +111,12 @@ export interface SyncConfig {
     filterType?: 'exclude' | 'include';
     /** Whether to output verbose debug information to console (default: false) */
     verboseOutput?: boolean;
+    /**
+     * Number of SQL variable declarations (DECLARE @...) to accumulate before emitting a batch
+     * separator. Prevents hitting SQL Server's 10,000-variable-per-batch limit on large migrations
+     * while avoiding one GO per statement. Defaults to 200. Set to 0 for legacy per-statement behavior.
+     */
+    variableBatchThreshold?: number;
   };
   /** Watch command configuration */
   watch?: {

@@ -133,10 +133,13 @@ export interface LoadAllResult {
     fatalError?: Error;
 }
 
-// Type for the class constructor that can be decorated
-type StartupClassConstructor = {
-    new(...args: unknown[]): IStartupSink;
+// Type for the class constructor that can be decorated.
+// The decorator never calls `new` — it only accesses the static `Instance` property.
+// Using Function + Instance instead of `new()` to accept both public and protected
+// constructors (e.g. BaseSingleton-derived classes with protected constructors).
+type StartupClassConstructor = Function & {
     Instance: IStartupSink;
+    name: string;
 };
 
 /**
@@ -213,7 +216,8 @@ export function RegisterForStartup<T extends StartupClassConstructor>(
     }
 
     // Called with options (or empty parentheses): @RegisterForStartup() or @RegisterForStartup({ ... })
-    const options = constructorOrOptions || {};
+    // The typeof check above guarantees this is not a constructor at this point
+    const options = (constructorOrOptions || {}) as RegisterForStartupOptions;
     return function(constructor: T): T {
         return registerStartupClass(constructor, options);
     };

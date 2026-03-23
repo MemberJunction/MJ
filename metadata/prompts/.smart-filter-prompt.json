@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/views/smart-filter-generation.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "PrefillFallbackMode": "SystemInstruction",
+      "StopSequences": "```",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -70,8 +73,8 @@
       "ID": "1F4C8B38-8419-40E2-A96F-3A6DC1243D42"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:49:10.865Z",
-      "checksum": "f53b08ff06a25c721467811acf1b0ec70d023b554713ebe9ff2cf4e93f3ad3a1"
+      "lastModified": "2026-03-21T22:27:47.914Z",
+      "checksum": "07c32f2cd2a3044eb1f496af6fbd05c31e9e71c9f8208710f786b1b43463fef9"
     }
   }
 ]

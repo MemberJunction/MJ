@@ -1,8 +1,39 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityFieldTSType, EntityInfo, IMetadataProvider, KeyValuePair, LogError, LogStatus, Metadata, RunQuery, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
-import { MJRecordChangeEntity, MJRecordChangeReplayRunEntity } from "@memberjunction/core-entities";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityFieldTSType, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, RunQuery, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
+import { MJRecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLServerDataProvider, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { PostgreSQLDialect, SQLDialect, SQLServerDialect } from "@memberjunction/sql-dialect";
+import { getHeapStatistics } from "v8";
+
+/**
+ * Maximum number of rows per detection query page. Since changes are replayed
+ * per-entity and then discarded (not accumulated), this can be generous.
+ */
+const DETECTION_PAGE_SIZE = 5000;
+
+/**
+ * Abort the entire run if this percentage of entities fail detection.
+ * Prevents hammering a database that's clearly under pressure.
+ */
+const FAILURE_ABORT_THRESHOLD = 0.5;
+
+/**
+ * Number of consecutive entity failures that triggers a cooldown pause.
+ * After this many failures in a row, the engine pauses before continuing
+ * to let the database recover.
+ */
+const CONSECUTIVE_FAILURE_COOLDOWN_THRESHOLD = 5;
+
+/**
+ * Milliseconds to pause after hitting the consecutive failure threshold.
+ */
+const COOLDOWN_PAUSE_MS = 30_000;
+
+/**
+ * Maximum percentage of Node.js heap that can be used before the engine
+ * skips remaining entities to prevent OOM crashes.
+ */
+const HEAP_USAGE_LIMIT_PERCENT = 0.85;
 
 
 /**
@@ -105,181 +136,265 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     }
 
     /**
-     * Detects external changes for a single entity
-     * @param entity 
+     * Detects external changes for a single entity. Results are paginated
+     * (DETECTION_PAGE_SIZE rows per query) to cap memory regardless of how
+     * many untracked records exist.
+     *
+     * Detection queries return ot.* so we build LatestRecord inline —
+     * no second round-trip to the database.
      */
     public async DetectChangesForEntity(entity: EntityInfo): Promise<ChangeDetectionResult> {
         try {
-            // check to make sure that the entity is in the eligible list
-            if (!entity) {
-                throw new Error("entity parameter is required");
-            }
-            else if (!this.EligibleEntities.find(e => UUIDsEqual(e.ID, entity.ID))) {
-                throw new Error(`Entity ${entity.Name} is not eligible for external change detection. Refer to the documentation on the EligibleEntities and IneligibleEntities properties for more information.`);
-            }
+            this.validateEntityEligibility(entity);
 
             const md = new Metadata();
             const rq = new RunQuery();
-            const commonParams = {
-                EntityID: entity.ID,
-                SchemaName: entity.SchemaName,
-                BaseView: entity.BaseView,
-                ColumnList: entity.PrimaryKeys.map(pk => `ot.${this._dialect.QuoteIdentifier(pk.Name)}`).join(', '),
-                PrimaryKeyJoin: this.getPrimaryKeyString(entity, 'ot'),
-                CreatedAtField: EntityInfo.CreatedAtFieldName,
-                UpdatedAtField: EntityInfo.UpdatedAtFieldName
-            };
-
-            const [createResult, updateResult, deleteResult] = await rq.RunQueries([
-                { QueryName: 'ExternalChangeDetection_DetectCreations', Parameters: commonParams },
-                { QueryName: 'ExternalChangeDetection_DetectUpdates', Parameters: {
-                    EntityID: commonParams.EntityID,
-                    SchemaName: commonParams.SchemaName,
-                    BaseView: commonParams.BaseView,
-                    ColumnList: commonParams.ColumnList,
-                    PrimaryKeyJoin: commonParams.PrimaryKeyJoin,
-                    UpdatedAtField: commonParams.UpdatedAtField
-                } },
-                { QueryName: 'ExternalChangeDetection_DetectDeletions', Parameters: {
-                    EntityID: commonParams.EntityID,
-                    SchemaName: commonParams.SchemaName,
-                    BaseView: commonParams.BaseView,
-                    PrimaryKeyJoin: commonParams.PrimaryKeyJoin,
-                    PrimaryKeyIsNull: entity.PrimaryKeys.map(pk => `ot.${this._dialect.QuoteIdentifier(pk.Name)} IS NULL`).join(' AND ')
-                } }
-            ], this.ContextUser);
-
-            // we have the results for all of the queries, now we need to convert them into ChangeDetectionItems
+            const params = this.buildDetectionParams(entity);
             const changes: ChangeDetectionItem[] = [];
-            if (createResult && createResult.Success && createResult.Results.length > 0) {
-                for (const row of createResult.Results) {
-                    const item = new ChangeDetectionItem();
-                    item.Entity = entity;
-                    item.PrimaryKey = new CompositeKey(entity.PrimaryKeys.map(pk => { 
-                        return {
-                            FieldName: pk.Name, 
-                            Value: row[pk.Name]
-                        }
-                    }));
-                    item.Type = 'Create';
-                    item.ChangedAt = row.CreatedAt >= row.UpdatedAt ? row.CreatedAt : row.UpdatedAt;
-                    item.Changes = []; // not relevant because the row is new 
 
+            // Detect creations (paginated)
+            await this.detectPages(rq, 'ExternalChangeDetection_DetectCreations', params.creation, async (row) => {
+                const item = this.buildChangeItem(entity, row, 'Create');
+                const created = new Date(row.__ecd_CreatedAt as string);
+                const updated = new Date(row.__ecd_UpdatedAt as string);
+                item.ChangedAt = created >= updated ? created : updated;
+                item.LatestRecord = await this.buildEntityFromRow(md, entity, row);
+                changes.push(item);
+            });
+
+            // Track creation PKs so we can skip duplicates in update detection
+            const createdKeys = new Set(changes.map(c => c.PrimaryKey.ToConcatenatedString()));
+
+            // Detect updates (paginated)
+            await this.detectPages(rq, 'ExternalChangeDetection_DetectUpdates', params.update, async (row) => {
+                const item = this.buildChangeItem(entity, row, 'Update');
+                item.ChangedAt = new Date(row.__ecd_UpdatedAt as string);
+                // skip if already detected as a creation
+                if (!createdKeys.has(item.PrimaryKey.ToConcatenatedString())) {
+                    item.LatestRecord = await this.buildEntityFromRow(md, entity, row);
                     changes.push(item);
+                }
+            });
+
+            // Detect deletions (single call — bounded by RecordChange entries, not entity size)
+            const deleteResult = await rq.RunQuery({
+                QueryName: 'ExternalChangeDetection_DetectDeletions',
+                Parameters: params.deletion
+            }, this.ContextUser);
+            if (deleteResult?.Success) {
+                for (const row of deleteResult.Results) {
+                    changes.push(this.buildDeleteItem(entity, row));
                 }
             }
 
-            if (updateResult && updateResult.Success && updateResult.Results.length > 0) {
-                for (const row of updateResult.Results) {
-                    const item = new ChangeDetectionItem();
-                    item.Entity = entity;
-                    item.PrimaryKey = new CompositeKey(entity.PrimaryKeys.map(pk => { 
-                        return {
-                            FieldName: pk.Name, 
-                            Value: row[pk.Name]
-                        }
-                    }));
-                    item.Type = 'Update';
-                    item.ChangedAt = row.UpdatedAt;
-
-                    // push the item but first make sure it is NOT already in the changes from the
-                    // create detection, if it is, we do not push it into changes
-                    if (!changes.find(c => c.PrimaryKey.Equals(item.PrimaryKey))) {
-                        changes.push(item);
-                    }
-                }
-            }
-
-            if (deleteResult && deleteResult.Success && deleteResult.Results.length > 0) {
-                deleteResult.Results.forEach(row => {
-                    const item = new ChangeDetectionItem();
-                    item.Entity = entity;
-                    const ck = new CompositeKey();
-                    // row.RecordID should have a format of Field1|Value1||Field2|Value2, however in some cases there is legacy
-                    // data in the RecordChange table that just has a single value in it and in that case assuming that the entity
-                    // in question has a single-valued primary key, we can just use that value as the key, so we need to test for that
-                    // first and if we find that the RecordID is just a single value, we can use that as the key
-                    if (row.RecordID.indexOf(CompositeKey.DefaultValueDelimiter) === -1) {
-                        // there is no field delimiter, so we can assume this is a single value
-                        ck.LoadFromSingleKeyValuePair(entity.PrimaryKeys[0].Name, row.RecordID); // this is a string like 'Field1Value' (no quotes
-                        item.LegacyKey = true;
-                        item.LegacyKeyValue = row.RecordID;
-                    }
-                    else
-                        ck.LoadFromConcatenatedString(row.RecordID); // this is a string like 'Field1Value|Field2Value' (no quotes)
-
-                    item.PrimaryKey = ck;
-                    item.Type = 'Delete';
-                    item.ChangedAt = row.ChangedAt;
-                    item.Changes = []; // not relevant because the row is now deleted
-                    changes.push(item);
-                });
-            }
-
-            await this.GetLatestDatabaseRecords(md, changes); // load everything from the database in one step
-
-            // now we have latest records, go back through and update the Changes field for the UPDATE types
+            // Determine field-level changes for updates
             for (const c of changes) {
                 if (c.Type === 'Update') {
-                    const changesResult = await this.DetermineRecordChanges(md, c);
-                    c.Changes = changesResult.changes;
+                    const result = await this.DetermineRecordChanges(md, c);
+                    c.Changes = result.changes;
                 }
             }
 
-            return { 
-                Success: true, 
-                Changes: changes 
-            };
+            return { Success: true, Changes: changes };
         }
         catch (e) {
             LogError(e);
-            return { 
-                Success: false, 
-                ErrorMessage: e.message,
-                Changes: [] 
-            };
+            return { Success: false, ErrorMessage: e.message, Changes: [] };
         }
-    } 
+    }
 
     /**
-     * This method compares a version of the record in question from the database with the last version we had in RecordChange table
-     * @param change 
+     * Validates that entity is non-null and in the eligible list.
+     */
+    private validateEntityEligibility(entity: EntityInfo): void {
+        if (!entity)
+            throw new Error("entity parameter is required");
+
+        if (!this.EligibleEntities.find(e => UUIDsEqual(e.ID, entity.ID)))
+            throw new Error(`Entity ${entity.Name} is not eligible for external change detection. Refer to the documentation on the EligibleEntities and IneligibleEntities properties for more information.`);
+    }
+
+    /**
+     * Builds the template parameter objects for all three detection queries.
+     */
+    private buildDetectionParams(entity: EntityInfo): {
+        creation: Record<string, string>,
+        update: Record<string, string>,
+        deletion: Record<string, string>
+    } {
+        const base = {
+            EntityID: entity.ID,
+            SchemaName: entity.SchemaName,
+            BaseView: entity.BaseView,
+            PrimaryKeyJoin: this.getPrimaryKeyString(entity, 'ot'),
+            PrimaryKeyOrderBy: entity.PrimaryKeys.map(pk => `ot.${this._dialect.QuoteIdentifier(pk.Name)}`).join(', ')
+        };
+        return {
+            creation: {
+                ...base,
+                CreatedAtField: EntityInfo.CreatedAtFieldName,
+                UpdatedAtField: EntityInfo.UpdatedAtFieldName
+            },
+            update: {
+                ...base,
+                UpdatedAtField: EntityInfo.UpdatedAtFieldName
+            },
+            deletion: {
+                EntityID: base.EntityID,
+                SchemaName: base.SchemaName,
+                BaseView: base.BaseView,
+                PrimaryKeyJoin: base.PrimaryKeyJoin,
+                PrimaryKeyIsNull: entity.PrimaryKeys.map(pk =>
+                    `ot.${this._dialect.QuoteIdentifier(pk.Name)} IS NULL`
+                ).join(' AND ')
+            }
+        };
+    }
+
+    /**
+     * Runs a detection query in pages of DETECTION_PAGE_SIZE, calling the
+     * provided handler for each result row. Stops when a page returns fewer
+     * rows than the page size.
+     *
+     * If a page query fails (timeout, connection error, etc.), logs the error
+     * and stops pagination for this entity rather than retrying or crashing.
+     * The caller's try/catch in DetectChangesForEntity will report partial results.
+     */
+    private async detectPages(
+        rq: RunQuery,
+        queryName: string,
+        parameters: Record<string, string>,
+        handleRow: (row: Record<string, unknown>) => Promise<void>
+    ): Promise<void> {
+        let startRow = 0;
+
+        for (;;) {
+            const result = await rq.RunQuery({
+                QueryName: queryName,
+                Parameters: parameters,
+                MaxRows: DETECTION_PAGE_SIZE,
+                StartRow: startRow
+            }, this.ContextUser);
+
+            if (!result?.Success) {
+                // Query failed (timeout, connection error, etc.) — stop paginating
+                // this entity. Don't throw — let the caller report partial results.
+                LogError(`Detection query ${queryName} failed at offset ${startRow}: ${result?.ErrorMessage || 'unknown error'}`);
+                break;
+            }
+
+            if (result.Results.length === 0)
+                break;
+
+            for (const row of result.Results) {
+                await handleRow(row);
+            }
+
+            // If we got fewer rows than requested, this was the last page
+            if (result.Results.length < DETECTION_PAGE_SIZE)
+                break;
+
+            startRow += DETECTION_PAGE_SIZE;
+        }
+    }
+
+    /**
+     * Builds a ChangeDetectionItem with PrimaryKey extracted from a query result row.
+     */
+    private buildChangeItem(
+        entity: EntityInfo,
+        row: Record<string, unknown>,
+        type: 'Create' | 'Update'
+    ): ChangeDetectionItem {
+        const item = new ChangeDetectionItem();
+        item.Entity = entity;
+        item.PrimaryKey = new CompositeKey(entity.PrimaryKeys.map(pk => ({
+            FieldName: pk.Name,
+            Value: row[pk.Name]
+        })));
+        item.Type = type;
+        item.ChangedAt = new Date();
+        item.Changes = [];
+        return item;
+    }
+
+    /**
+     * Builds a ChangeDetectionItem for a deletion from a RecordChanges row.
+     */
+    private buildDeleteItem(entity: EntityInfo, row: Record<string, unknown>): ChangeDetectionItem {
+        const item = new ChangeDetectionItem();
+        item.Entity = entity;
+        const ck = new CompositeKey();
+        const recordID = row.RecordID as string;
+
+        // Legacy data may have a bare value instead of Field|Value format
+        if (recordID.indexOf(CompositeKey.DefaultValueDelimiter) === -1) {
+            ck.LoadFromSingleKeyValuePair(entity.PrimaryKeys[0].Name, recordID);
+            item.LegacyKey = true;
+            item.LegacyKeyValue = recordID;
+        }
+        else {
+            ck.LoadFromConcatenatedString(recordID);
+        }
+
+        item.PrimaryKey = ck;
+        item.Type = 'Delete';
+        item.ChangedAt = row.ChangedAt as Date;
+        item.Changes = [];
+        return item;
+    }
+
+    /**
+     * Creates a BaseEntity instance and loads it with data from a query result row.
+     * Strips __ecd_ prefixed columns (our timestamp aliases) before loading to
+     * avoid "field not found in entity" warnings from BaseEntity.SetMany().
+     */
+    private async buildEntityFromRow(
+        md: Metadata,
+        entity: EntityInfo,
+        row: Record<string, unknown>
+    ): Promise<BaseEntity> {
+        const cleanRow: Record<string, unknown> = {};
+        for (const key of Object.keys(row)) {
+            if (!key.startsWith('__ecd_'))
+                cleanRow[key] = row[key];
+        }
+        const record = await md.GetEntityObject(entity.Name, this.ContextUser);
+        await record.LoadFromData(cleanRow);
+        return record;
+    }
+
+    /**
+     * Compares the current record with the last RecordChange snapshot to determine field-level changes.
      */
     public async DetermineRecordChanges(md: Metadata, change: ChangeDetectionItem): Promise<{changes: FieldChange[], latestRecord: BaseEntity}> {
         try {
-            // Step 1 - load the current record if needed, sometimes already loaded by here
-            const record = change.LatestRecord ? change.LatestRecord : await this.GetLatestDatabaseRecord(md, change);
-            if (record) {
-                // now we have the version from the database that has been updated from an external source
-                // then we need to get the latest version from the vwRecordChanges table that matches this entity and RecordID
-                const result = await this.GetLatestRecordChangesDataForEntityRecord(change);
-                if (result && result.FullRecordJSON && result.FullRecordJSON.length > 0) {
-                    // we have our row, so get the JSON, parse it and we'll have the differences
-                    const json = JSON.parse(result.FullRecordJSON);
-                    // now go through each field in the record object and compare it with the json
-                    const changes: FieldChange[] = [];
-                    for (const field of record.Fields) {
-                        if (!field.IsPrimaryKey) {
-                            const differResult = this.DoValuesDiffer(field.FieldType, field.Value, json[field.Name])
-                            if (differResult.differ) {
-                                changes.push({
-                                    FieldName: field.Name,
-                                    NewValue: differResult.castValue1, // use the typecast values so they're the right types
-                                    OldValue: differResult.castValue2  // use the typecast values so they're the right types
-                                });
-                            }
+            const record = change.LatestRecord;
+            if (!record)
+                return {changes: [], latestRecord: null};
+
+            const result = await this.GetLatestRecordChangesDataForEntityRecord(change);
+            const fullRecordJSON = result?.FullRecordJSON as string | undefined;
+            if (fullRecordJSON?.length > 0) {
+                const json = JSON.parse(fullRecordJSON);
+                const changes: FieldChange[] = [];
+                for (const field of record.Fields) {
+                    if (!field.IsPrimaryKey) {
+                        const differResult = this.DoValuesDiffer(field.FieldType, field.Value, json[field.Name]);
+                        if (differResult.differ) {
+                            changes.push({
+                                FieldName: field.Name,
+                                NewValue: differResult.castValue1,
+                                OldValue: differResult.castValue2
+                            });
                         }
                     }
-                    return {changes, latestRecord: record};
                 }
-                else {
-                    LogStatus(`      WARNING: No record found, or no FullRecordJSON found, in vwRecordChanges for ${change.Entity.Name}: ${change.PrimaryKey.ToConcatenatedString()}`);
-                    return {changes: [], latestRecord: record};
-                }
+                return {changes, latestRecord: record};
             }
             else {
-                // record not found in database, this could happen if it was deleted between detection and replay
-                return {changes: [], latestRecord: null};
+                LogStatus(`      WARNING: No record found, or no FullRecordJSON found, in vwRecordChanges for ${change.Entity.Name}: ${change.PrimaryKey.ToConcatenatedString()}`);
+                return {changes: [], latestRecord: record};
             }
         }
         catch (e) {
@@ -288,34 +403,31 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         }
     }
 
-    protected DoValuesDiffer(tsType: EntityFieldTSType, value1: any, value2: any): {differ: boolean, castValue1: any, castValue2: any} {
-        let castValue1: any = value1;
-        let castValue2: any = value2;
+    protected DoValuesDiffer(tsType: EntityFieldTSType, value1: unknown, value2: unknown): {differ: boolean, castValue1: unknown, castValue2: unknown} {
+        let castValue1: unknown = value1;
+        let castValue2: unknown = value2;
 
         switch (tsType) {
             case EntityFieldTSType.Date:
-                castValue1 = value1 ? new Date(value1) : null;
-                castValue2 = value2 ? new Date(value2) : null;
+                castValue1 = value1 ? new Date(value1 as string) : null;
+                castValue2 = value2 ? new Date(value2 as string) : null;
                 if (castValue1 && castValue2) {
-                    // check both to see if they're the same - up to 3 digits of precision
-                    // because when we get the values back into JavaScript objects, Date objects only have 3 digits of precision
-                    const d1 = castValue1.getTime();
-                    const d2 = castValue2.getTime();
+                    const d1 = (castValue1 as Date).getTime();
+                    const d2 = (castValue2 as Date).getTime();
                     return {differ: d1 !== d2, castValue1, castValue2};
                 }
-                else
-                    return {differ: castValue1 !== castValue2, castValue1, castValue2};
+                return {differ: castValue1 !== castValue2, castValue1, castValue2};
             case EntityFieldTSType.Number:
-                castValue1 = value1 ? parseFloat(value1) : 0;
-                castValue2 = value2 ? parseFloat(value2) : 0;
+                castValue1 = value1 ? parseFloat(value1 as string) : 0;
+                castValue2 = value2 ? parseFloat(value2 as string) : 0;
                 return {differ: castValue1 !== castValue2, castValue1, castValue2};
             case EntityFieldTSType.Boolean:
                 castValue1 = this.CastToBoolean(value1);
                 castValue2 = this.CastToBoolean(value2);
                 return {differ: castValue1 !== castValue2, castValue1, castValue2};
             default:
-                castValue1 = value1 ? value1.toString().trim() : '';
-                castValue2 = value2 ? value2.toString().trim() : '';
+                castValue1 = value1 ? (value1 as string).toString().trim() : '';
+                castValue2 = value2 ? (value2 as string).toString().trim() : '';
                 return {differ: castValue1 !== castValue2, castValue1, castValue2};
         }
     }
@@ -332,7 +444,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         return !!value;
     }
 
-    protected async GetLatestRecordChangesDataForEntityRecord(change: ChangeDetectionItem): Promise<any> {
+    protected async GetLatestRecordChangesDataForEntityRecord(change: ChangeDetectionItem): Promise<Record<string, unknown> | null> {
         try {
             const rv = new RunView();
             const result = await rv.RunView({
@@ -341,85 +453,10 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 OrderBy: "ChangedAt DESC"
             }, this.ContextUser);
 
-            if (result && result.Success && result.Results.length > 0) {
-                return result.Results[0];
-            }
-            else
-                return null;
-        }
-        catch (e) {
-            LogError(e);
+            if (result?.Success && result.Results.length > 0)
+                return result.Results[0] as Record<string, unknown>;
+
             return null;
-        }
-    }
-
-    protected async GetLatestDatabaseRecords(md: Metadata, changes: ChangeDetectionItem[]): Promise<boolean> {
-        try {
-            const provider = Metadata.Provider as SQLServerDataProvider;
-            // distinct list of entities
-            const entities: {entity: EntityInfo, keys: CompositeKey[]}[] = [];
-            for (const c of changes) {
-                if (c.Type === 'Update' || c.Type === 'Create') {
-                    let entry = entities.find(e => UUIDsEqual(e.entity.ID, c.Entity.ID))
-                    if (!entry) {
-                        entry = {entity: c.Entity, keys: []};
-                        entities.push(entry);
-                    }
-                    entry.keys.push(c.PrimaryKey);
-                }
-            }
-
-            // now we have a distinct list of entities and all of the pkeys for each one, so we can run a single
-            // select statement for each entity
-            for (const e of entities) {
-                const quotedTable = this._dialect.QuoteSchema(e.entity.SchemaName, e.entity.BaseView);
-                const sql = `SELECT * FROM ${quotedTable}
-                            WHERE ${e.keys.map(k => `(${k.KeyValuePairs.map(kvp => {
-                                    const f = e.entity.Fields.find(f => kvp.FieldName.trim().toLowerCase() === f.Name.trim().toLowerCase());
-                                    const needsQuotes = f?.NeedsQuotes || typeof kvp.Value === 'string';
-                                    const quotes = needsQuotes ? "'" : "";
-                                    const quotedField = this._dialect.QuoteIdentifier(kvp.FieldName);
-                                    const escapedValue = typeof kvp.Value === 'string' ? kvp.Value.replace(/'/g, "''") : kvp.Value;
-                                    return `${quotedField}=${quotes}${escapedValue}${quotes}`
-                                }).join(' AND ')})`).join(' OR ')} `
-                const result = await provider.ExecuteSQL(sql);
-                if (result) {
-                    // we have the rows from the result, now go back through each of the changes we have in the changes array
-                    // and associate the data with each one 
-                    for (const r of result) {
-                        const kvp: KeyValuePair[] = e.entity.PrimaryKeys.map(pk => {
-                            return {
-                                FieldName: pk.Name,
-                                Value: r[pk.Name]
-                            }
-                        })
-                        const changeItem = changes.find(ci => ci.Entity === e.entity && ci.PrimaryKey.EqualsKey(kvp))
-                        if (changeItem) {
-                            // found the match, update latest Record
-                            const record = await md.GetEntityObject(changeItem.Entity.Name, this.ContextUser);
-                            await record.LoadFromData(r);
-                            changeItem.LatestRecord = record;
-                        }
-                    }
-                }
-            }
-
-            return true;
-        }
-        catch (e) {
-            LogError(e);
-            return false;
-        }
-    }
-
-    protected async GetLatestDatabaseRecord(md: Metadata, change: ChangeDetectionItem): Promise<BaseEntity> {
-        try {
-            const record = await md.GetEntityObject(change.Entity.Name, this.ContextUser);
-            if (await record.InnerLoad(change.PrimaryKey)) {
-                return record;
-            }
-            else
-                return null;
         }
         catch (e) {
             LogError(e);
@@ -439,62 +476,278 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     }
 
     /**
-     * Detects changes across all of the entities specified
-     * @param entities Array of entities to process
-     * @param entityBatchSize Optional, defines how many entities to process in parallel. Defaults to 10.
-     * @returns 
+     * Row count thresholds for dynamic concurrency. Entities are sorted smallest-first
+     * and processed with a concurrency level appropriate to their size.
+     * Conservative values to avoid overwhelming production databases where
+     * detection queries use string-concat PK joins that force full table scans.
      */
-    public async DetectChangesForEntities(entities: EntityInfo[], entityBatchSize: number = 10): Promise<ChangeDetectionResult>  {
+    private static readonly CONCURRENCY_TIERS = [
+        { maxRows: 1_000,     concurrency: 5 },  // tiny tables
+        { maxRows: 10_000,    concurrency: 3 },  // small tables
+        { maxRows: 50_000,    concurrency: 2 },  // medium tables
+        { maxRows: Infinity,  concurrency: 1 },  // large tables — one at a time
+    ];
+
+    /**
+     * Detects and replays external changes for the specified entities in an interleaved
+     * fashion: each entity's changes are detected, replayed, and then discarded before
+     * moving to the next entity. This keeps memory bounded to one entity's changes at
+     * a time rather than accumulating all changes across all entities.
+     *
+     * Entity concurrency is dynamically determined from approximate row counts
+     * (via sys.partitions) so small tables run in parallel while large tables
+     * don't overwhelm the DB.
+     *
+     * Production safety mechanisms:
+     * - **Circuit breaker**: Aborts if >50% of entities fail
+     * - **Cooldown**: Pauses 30s after 5 consecutive failures
+     * - **Heap guard**: Stops if heap usage exceeds 85%
+     *
+     * @param entities Array of entities to process
+     * @param replayBatchSize Concurrent replays per entity. Defaults to 20.
+     * @param maxConcurrency Max parallel entity detection. Defaults to 5.
+     * @param staleTimeoutHours Hours before a stuck run is considered stale. Defaults to 24.
+     * @returns Summary with success status and aggregate counts
+     */
+    public async DetectAndReplayChanges(
+        entities: EntityInfo[],
+        replayBatchSize: number = 20,
+        maxConcurrency: number = 5,
+        staleTimeoutHours: number = 24
+    ): Promise<{ Success: boolean; ErrorMessage?: string; TotalDetected: number; TotalReplayed: number; EntitiesProcessed: number; EntitiesFailed: number }> {
+        if (!entities || entities.length === 0)
+            throw new Error("entities parameter is required and must have at least one entity");
+
+        const rowCounts = await this.getApproxRowCounts(entities);
+        const sortedEntities = rowCounts.size > 0
+            ? [...entities].sort((a, b) => (rowCounts.get(a.ID) ?? 0) - (rowCounts.get(b.ID) ?? 0))
+            : entities;
+
+        LogStatus(`Detecting and replaying changes for ${sortedEntities.length} entities with dynamic concurrency (max ${maxConcurrency})`);
+
+        // Start the replay run record (ensures no concurrent runs)
+        const run = await this.StartRun(staleTimeoutHours);
+        const replayProviders = await this.createReplayProviders(replayBatchSize);
+
+        let entitiesProcessed = 0;
+        let entitiesFailed = 0;
+        let consecutiveFailures = 0;
+        let totalDetected = 0;
+        let totalReplayed = 0;
+        let aborted = false;
+        let i = 0;
+
         try {
-            if (!entities)
-                throw new Error("entities parameter is required");
-            else if (entities.length === 0)
-                throw new Error("entities parameter must have at least one entity in it");
+            while (i < sortedEntities.length && !aborted) {
+                // Heap guard
+                if (this.isHeapPressureHigh()) {
+                    LogStatus(`   ⚠ Heap usage exceeds ${Math.round(HEAP_USAGE_LIMIT_PERCENT * 100)}%, stopping to prevent OOM (${entitiesProcessed}/${sortedEntities.length} processed)`);
+                    aborted = true;
+                    break;
+                }
 
-            const result: ChangeDetectionResult = new ChangeDetectionResult();
-            result.Success = true;
-            result.Changes = [];
+                // Circuit breaker
+                if (entitiesProcessed >= 10 && entitiesFailed / entitiesProcessed > FAILURE_ABORT_THRESHOLD) {
+                    LogStatus(`   ⚠ Circuit breaker: ${entitiesFailed}/${entitiesProcessed} entities failed, aborting`);
+                    aborted = true;
+                    break;
+                }
 
-            LogStatus(`Detecting changes for ${entities.length} entities in batches of ${entityBatchSize}`)
-            
-            // process entities in batches
-            for (let i = 0; i < entities.length; i += entityBatchSize) {
-                const batch = entities.slice(i, i + entityBatchSize);
+                // Dynamic concurrency for detection (entities run in parallel)
+                const dynamicSize = this.getConcurrencyForEntity(sortedEntities[i], rowCounts);
+                const concurrency = Math.min(dynamicSize, maxConcurrency);
+                const batch = sortedEntities.slice(i, i + concurrency);
+
+                // Detect changes for this batch of entities in parallel
                 const batchPromises = batch.map(e => {
-                    UpdateCurrentConsoleLine(`   Starting change detection changes for ${e.Name}`, ConsoleColor.gray);
+                    const rows = rowCounts?.get(e.ID);
+                    const rowInfo = rows != null ? ` (~${rows.toLocaleString()} rows)` : '';
+                    UpdateCurrentConsoleLine(`   Detecting: ${e.Name}${rowInfo}`, ConsoleColor.gray);
                     return this.DetectChangesForEntity(e);
                 });
-                
                 const batchResults = await Promise.all(batchPromises);
-                
+
+                // Replay each entity's changes immediately, then discard
                 for (let j = 0; j < batch.length; j++) {
-                    const r = batchResults[j];
-                    const e = batch[j];
-                    if (r.Success) {
-                        result.Changes.push(...r.Changes);
+                    const entity = batch[j];
+                    const detection = batchResults[j];
+                    entitiesProcessed++;
+
+                    if (!detection.Success) {
+                        entitiesFailed++;
+                        consecutiveFailures++;
+                        UpdateCurrentConsoleProgress(`   Failed: ${entity.Name}`, entitiesProcessed, sortedEntities.length, ConsoleColor.crimson);
+                        continue;
                     }
-                    else {
-                        result.Success = false;
-                        result.ErrorMessage = (result.ErrorMessage ? result.ErrorMessage + "\n" : "") + `Error detecting changes for ${e.Name}: ` + r.ErrorMessage;
+
+                    const changeCount = detection.Changes.length;
+                    totalDetected += changeCount;
+
+                    if (changeCount > 0) {
+                        const replayed = await this.replayEntityChanges(detection.Changes, replayProviders, replayBatchSize);
+                        totalReplayed += replayed;
                     }
-                    UpdateCurrentConsoleProgress(`   Finished change detection changes for ${e.Name}`, i + j + 1, entities.length, r.Success ? ConsoleColor.cyan : ConsoleColor.crimson);
+
+                    consecutiveFailures = 0;
+                    UpdateCurrentConsoleProgress(`   Done: ${entity.Name} (${changeCount} changes)`, entitiesProcessed, sortedEntities.length, ConsoleColor.cyan);
+                    // Changes go out of scope here — GC can reclaim the BaseEntity objects
+                }
+
+                i += batch.length;
+
+                // Cooldown after consecutive failures
+                if (consecutiveFailures >= CONSECUTIVE_FAILURE_COOLDOWN_THRESHOLD && i < sortedEntities.length) {
+                    LogStatus(`   ⏸ ${consecutiveFailures} consecutive failures, pausing ${COOLDOWN_PAUSE_MS / 1000}s...`);
+                    await new Promise(resolve => setTimeout(resolve, COOLDOWN_PAUSE_MS));
+                    consecutiveFailures = 0;
                 }
             }
 
-            return result;
+            run.Status = aborted ? 'Error' : 'Complete';
+            run.EndedAt = new Date();
+            await run.Save();
+
+            const summary = `${entitiesProcessed} entities processed, ${entitiesFailed} failed, ${totalDetected} changes detected, ${totalReplayed} replayed`;
+            LogStatus(`Run complete: ${summary}`);
+
+            return {
+                Success: entitiesFailed === 0 && !aborted,
+                ErrorMessage: aborted ? `Aborted after ${entitiesProcessed} entities` : undefined,
+                TotalDetected: totalDetected,
+                TotalReplayed: totalReplayed,
+                EntitiesProcessed: entitiesProcessed,
+                EntitiesFailed: entitiesFailed
+            };
         }
         catch (e) {
             LogError(e);
+            run.Status = 'Error';
+            run.EndedAt = new Date();
+            await run.Save();
             return {
                 Success: false,
-                ErrorMessage: e.message,
-                Changes: []
-            }
+                ErrorMessage: e instanceof Error ? e.message : String(e),
+                TotalDetected: totalDetected,
+                TotalReplayed: totalReplayed,
+                EntitiesProcessed: entitiesProcessed,
+                EntitiesFailed: entitiesFailed
+            };
         }
     }
 
-    public async DetectChangesForAllEligibleEntities(entityBatchSize: number = 10): Promise<ChangeDetectionResult> {
-        return await this.DetectChangesForEntities(this.EligibleEntities, entityBatchSize);
+    /**
+     * Replays a single entity's changes and returns the count of successful replays.
+     * Changes are processed in batches for concurrency but the entire set is for
+     * one entity only, keeping memory bounded.
+     */
+    private async replayEntityChanges(
+        changes: ChangeDetectionItem[],
+        providers: SQLServerDataProvider[],
+        batchSize: number
+    ): Promise<number> {
+        let successCount = 0;
+        for (let i = 0; i < changes.length; i += batchSize) {
+            const batch = changes.slice(i, i + batchSize);
+            const results = await Promise.all(
+                batch.map((c, idx) => this.ReplayChange(providers[idx], c))
+            );
+            successCount += results.filter(r => r).length;
+        }
+        return successCount;
+    }
+
+    /**
+     * Checks whether Node.js heap usage is approaching the V8 heap limit.
+     * Uses v8.getHeapStatistics().heap_size_limit which is the actual max
+     * (set by --max-old-space-size or V8's default), not the currently
+     * allocated heapTotal which starts small and grows on demand.
+     */
+    private isHeapPressureHigh(): boolean {
+        const stats = getHeapStatistics();
+        const usedRatio = stats.used_heap_size / stats.heap_size_limit;
+        return usedRatio > HEAP_USAGE_LIMIT_PERCENT;
+    }
+
+    /**
+     * Queries sys.partitions for fast approximate row counts (no table scans).
+     * Returns a Map of entityID → approx row count.
+     */
+    private async getApproxRowCounts(entities: EntityInfo[]): Promise<Map<string, number>> {
+        try {
+            const provider = Metadata.Provider as SQLServerDataProvider;
+            const entityIDs = entities.map(e => `'${e.ID}'`).join(',');
+            const sql = `
+                SELECT
+                    e.ID,
+                    ISNULL(SUM(p.rows), 0) AS ApproxRows
+                FROM ${provider.MJCoreSchemaName}.vwEntities e
+                LEFT JOIN sys.partitions p
+                    ON p.object_id = OBJECT_ID(e.SchemaName + '.' + e.BaseTable)
+                    AND p.index_id IN (0, 1)
+                WHERE e.ID IN (${entityIDs})
+                GROUP BY e.ID
+            `;
+            const rows = await provider.ExecuteSQL(sql);
+            const map = new Map<string, number>();
+            if (rows) {
+                for (const row of rows) {
+                    map.set(row.ID as string, row.ApproxRows as number);
+                }
+            }
+            return map;
+        }
+        catch (e) {
+            LogStatus('   Warning: Could not fetch row counts for dynamic concurrency, using default batch size');
+            return new Map<string, number>();
+        }
+    }
+
+    /**
+     * Determines the concurrency level for an entity based on its approximate row count.
+     */
+    private getConcurrencyForEntity(entity: EntityInfo, rowCounts: Map<string, number> | null): number {
+        if (!rowCounts || rowCounts.size === 0)
+            return 2;
+
+        const rows = rowCounts.get(entity.ID) ?? 0;
+        for (const tier of ExternalChangeDetectorEngine.CONCURRENCY_TIERS) {
+            if (rows <= tier.maxRows)
+                return tier.concurrency;
+        }
+        return 1;
+    }
+
+    /**
+     * @deprecated Use DetectAndReplayChanges() instead, which interleaves detection and replay
+     * per entity to keep memory bounded. This method accumulates all changes in memory.
+     */
+    public async DetectChangesForEntities(entities: EntityInfo[], maxConcurrency: number = 5): Promise<ChangeDetectionResult> {
+        if (!entities)
+            throw new Error("entities parameter is required");
+        if (entities.length === 0)
+            throw new Error("entities parameter must have at least one entity in it");
+
+        const result: ChangeDetectionResult = new ChangeDetectionResult();
+        result.Success = true;
+        result.Changes = [];
+
+        for (const entity of entities) {
+            const r = await this.DetectChangesForEntity(entity);
+            if (r.Success)
+                result.Changes.push(...r.Changes);
+            else {
+                result.Success = false;
+                result.ErrorMessage = (result.ErrorMessage || '') + `\n${entity.Name}: ${r.ErrorMessage}`;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @deprecated Use DetectAndReplayChanges() instead.
+     */
+    public async DetectChangesForAllEligibleEntities(maxConcurrency?: number): Promise<ChangeDetectionResult> {
+        return await this.DetectChangesForEntities(this.EligibleEntities, maxConcurrency);
     }
 
     /**

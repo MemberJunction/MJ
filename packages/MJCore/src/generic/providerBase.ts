@@ -2081,7 +2081,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 }
 
                 // Post Process Entities because there's some special handling of the sub-objects
-                simpleMetadata.AllEntities = this.PostProcessEntityMetadata(simpleMetadata.Entities, simpleMetadata.EntityFields, simpleMetadata.EntityFieldValues, simpleMetadata.EntityPermissions, simpleMetadata.EntityRelationships, simpleMetadata.EntitySettings);
+                simpleMetadata.AllEntities = this.PostProcessEntityMetadata(simpleMetadata.Entities, simpleMetadata.EntityFields, simpleMetadata.EntityFieldValues, simpleMetadata.EntityPermissions, simpleMetadata.EntityRelationships, simpleMetadata.EntitySettings, simpleMetadata.EntityOrganicKeys, simpleMetadata.EntityOrganicKeyRelatedEntities);
 
                 // Post Process the Applications, because we want to handle the sub-objects properly.
                 simpleMetadata.AllApplications = simpleMetadata.Applications.map((a: any) => {
@@ -2128,7 +2128,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param settings - Array of entity settings metadata
      * @returns Processed array of EntityInfo instances with all relationships established
      */
-    protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], settings: any[]): any[] {
+    protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], settings: any[], organicKeys?: any[], organicKeyRelatedEntities?: any[]): any[] {
         const result: any[] = [];
 
         // Sort entities alphabetically by name to ensure deterministic ordering
@@ -2141,11 +2141,26 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 f.EntityFieldValues = fieldValues.filter(fv => UUIDsEqual(fv.EntityFieldID, f.ID));
             }
 
+        // Link organic key related entities to their parent organic keys
+        if (organicKeys && organicKeyRelatedEntities && organicKeyRelatedEntities.length > 0) {
+            for (const ok of organicKeys) {
+                ok.EntityOrganicKeyRelatedEntities = organicKeyRelatedEntities.filter(
+                    okre => UUIDsEqual(okre.EntityOrganicKeyID, ok.ID)
+                );
+            }
+        }
+
         for (let e of sortedEntities) {
             e.EntityFields = fields.filter(f => UUIDsEqual(f.EntityID, e.ID)).sort((a, b) => a.Sequence - b.Sequence);
             e.EntityPermissions = permissions.filter(p => UUIDsEqual(p.EntityID, e.ID));
             e.EntityRelationships = relationships.filter(r => UUIDsEqual(r.EntityID, e.ID));
             e.EntitySettings = settings.filter(s => UUIDsEqual(s.EntityID, e.ID));
+            // Link active organic keys to the entity
+            if (organicKeys) {
+                e.EntityOrganicKeys = organicKeys.filter(
+                    ok => UUIDsEqual(ok.EntityID, e.ID) && ok.Status === 'Active'
+                );
+            }
             result.push(new EntityInfo(e));
         }
 

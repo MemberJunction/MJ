@@ -32,6 +32,12 @@ import { BrowserIndexedDBStorageProvider } from "./storage-providers";
 export type RefreshTokenFunction = () => Promise<string>;
 
 /**
+ * Callback invoked when token refresh fails irrecoverably (e.g., session fully expired).
+ * The client application should use this to notify the user and force re-authentication.
+ */
+export type AuthenticationErrorCallback = (error: Error) => void;
+
+/**
  * The GraphQLProviderConfigData class is used to configure the GraphQLDataProvider. It is passed to the Config method of the GraphQLDataProvider
  */
 export class GraphQLProviderConfigData extends ProviderConfigDataBase {
@@ -76,6 +82,13 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
      */
     get RefreshTokenFunction(): RefreshTokenFunction { return this.Data.RefreshFunction }
 
+    /**
+     * Optional callback invoked when token refresh fails irrecoverably.
+     * Use this to notify the user and force re-authentication (e.g., logout and redirect to login).
+     */
+    get OnAuthenticationError(): AuthenticationErrorCallback | undefined { return this.Data.OnAuthenticationError }
+    set OnAuthenticationError(callback: AuthenticationErrorCallback | undefined) { this.Data.OnAuthenticationError = callback }
+
 
     /**
      *
@@ -88,6 +101,7 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
      * @param excludeSchemas optional, an array of schema names to exclude from the metadata. If not passed, no schemas are excluded
      * @param mjAPIKey optional, a shared secret key that is static and provided by the publisher of the MJAPI server.
      * @param userAPIKey optional, a user-specific API key (mj_sk_* format) for authenticating as a specific user
+     * @param onAuthenticationError optional callback invoked when token refresh fails irrecoverably
      */
     constructor(token: string,
                 url: string,
@@ -97,7 +111,8 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
                 includeSchemas?: string[],
                 excludeSchemas?: string[],
                 mjAPIKey?: string,
-                userAPIKey?: string) {
+                userAPIKey?: string,
+                onAuthenticationError?: AuthenticationErrorCallback) {
         super(
                 {
                     Token: token,
@@ -106,6 +121,7 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
                     MJAPIKey: mjAPIKey,
                     UserAPIKey: userAPIKey,
                     RefreshTokenFunction: refreshTokenFunction,
+                    OnAuthenticationError: onAuthenticationError,
                 },
                 MJCoreSchemaName,
                 includeSchemas,
@@ -2231,36 +2247,97 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
     private async performTokenRefresh(): Promise<void> {
         if (this._configData.Data.RefreshTokenFunction) {
-            const newToken = await this._configData.Data.RefreshTokenFunction();
-            if (newToken) {
-                this._configData.Token = newToken; // update the token
-                const newClient = this.CreateNewGraphQLClient(this._configData.URL,
-                                                              this._configData.Token,
-                                                              this._sessionId,
-                                                              this._configData.MJAPIKey,
-                                                              this._configData.UserAPIKey);
+            try {
+                const newToken = await this._configData.Data.RefreshTokenFunction();
+                if (newToken) {
+                    this._configData.Token = newToken; // update the token
+                    const newClient = this.CreateNewGraphQLClient(this._configData.URL,
+                                                                  this._configData.Token,
+                                                                  this._sessionId,
+                                                                  this._configData.MJAPIKey,
+                                                                  this._configData.UserAPIKey);
 
-                // Update this instance's client
-                this._client = newClient;
+                    // Update this instance's client
+                    this._client = newClient;
 
-                // CRITICAL: Also update the singleton's client if we're in singleton mode
-                // Check if this._configData is the same reference as Instance._configData
-                if (GraphQLDataProvider.Instance &&
-                    GraphQLDataProvider.Instance._configData === this._configData) {
-                    GraphQLDataProvider.Instance._client = newClient;
+                    // CRITICAL: Also update the singleton's client if we're in singleton mode
+                    // Check if this._configData is the same reference as Instance._configData
+                    if (GraphQLDataProvider.Instance &&
+                        GraphQLDataProvider.Instance._configData === this._configData) {
+                        GraphQLDataProvider.Instance._client = newClient;
+                    }
+                }
+                else {
+                    const error = new Error('Refresh token function returned null or undefined token');
+                    this.notifyAuthenticationError(error);
+                    throw error;
                 }
             }
-            else {
-                throw new Error('Refresh token function returned null or undefined token');
+            catch (e) {
+                const error = e instanceof Error ? e : new Error(String(e));
+                this.notifyAuthenticationError(error);
+                throw e;
             }
         }
         else {
-            throw new Error('No refresh token function provided');
+            const error = new Error('No refresh token function provided');
+            this.notifyAuthenticationError(error);
+            throw error;
+        }
+    }
+
+    /**
+     * Invokes the OnAuthenticationError callback if one is configured.
+     * Called when token refresh fails irrecoverably, giving the client app
+     * a chance to notify the user and force re-authentication.
+     */
+    private notifyAuthenticationError(error: Error): void {
+        try {
+            const callback = this._configData?.OnAuthenticationError;
+            if (callback) {
+                callback(error);
+            }
+        }
+        catch (callbackError) {
+            console.error('[GraphQLDataProvider] Error in OnAuthenticationError callback:', callbackError);
         }
     }
 
     public static async RefreshToken(): Promise<void> {
         return GraphQLDataProvider.Instance.RefreshToken();
+    }
+
+    /**
+     * Clears all MJ client-side caches that are tied to a user session.
+     *
+     * Call this on logout to ensure that a subsequent login as a different user
+     * does not see stale metadata or cached data rows from the previous session.
+     *
+     * Specifically clears:
+     * - The `MJ_Metadata` IndexedDB database (entity definitions, RunView/RunQuery/Dataset caches)
+     * - All localStorage keys except those in `preservedKeys`
+     *
+     * @param preservedKeys localStorage keys to keep across logout (e.g. theme preference).
+     *        Defaults to an empty set.
+     */
+    public static async clearClientCache(preservedKeys: Set<string> = new Set<string>()): Promise<void> {
+        // Clear all localStorage except explicitly preserved keys
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && !preservedKeys.has(key)) {
+                keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+
+        // Delete the MJ IndexedDB metadata cache
+        await new Promise<void>((resolve) => {
+            const req = indexedDB.deleteDatabase('MJ_Metadata');
+            req.onsuccess = () => resolve();
+            req.onerror = () => resolve();
+            req.onblocked = () => resolve();
+        });
     }
 
     protected CreateNewGraphQLClient(url: string, token: string, sessionId: string, mjAPIKey: string, userAPIKey?: string): GraphQLClient {

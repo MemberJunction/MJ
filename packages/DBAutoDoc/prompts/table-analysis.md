@@ -83,6 +83,17 @@ The database owner has provided the following authoritative documentation. Your 
 {% if seedContext.customInstructions %}- **Special Instructions**: {{ seedContext.customInstructions }}{% endif %}
 {% endif %}
 
+{% if fkCandidateStats and fkCandidateStats.length > 0 %}
+## FK Evidence from Statistical Analysis
+The following columns in this table were identified as potential foreign keys by statistical analysis. Use this evidence to inform (but not limit) your FK assessment — you may identify additional FKs not listed here.
+
+{% for fk in fkCandidateStats %}
+- **{{ fk.sourceColumn }}** → {{ fk.targetSchema }}.{{ fk.targetTable }}.{{ fk.targetColumn }} (value overlap: {{ (fk.valueOverlap * 100) | round(1) }}%, cardinality ratio: {{ fk.cardinalityRatio | round(2) }}, confidence: {{ fk.confidence }}%)
+{% endfor %}
+
+*Value overlap = % of source values that exist in the target column. 100% = strong FK evidence. Cardinality ratio = source distinct / target distinct — values > 1 suggest child→parent direction.*
+{% endif %}
+
 {% if allTables %}
 ## All Database Tables
 **IMPORTANT**: When referring to foreign key relationships, you MUST use one of these exact table names:
@@ -111,6 +122,11 @@ Based on the evidence above, generate a JSON response with this exact structure:
       "reasoning": "Brief explanation of the evidence"
     }
   ],
+  "primaryKey": {
+    "columns": ["CustomerID"],
+    "confidence": 0.95,
+    "reasoning": "Single auto-increment column with 100% uniqueness, named after the table"
+  },
   "foreignKeys": [
     {
       "columnName": "prd_id",
@@ -136,14 +152,23 @@ Based on the evidence above, generate a JSON response with this exact structure:
 2. **Reasoning**: Reference specific evidence (column names, FK relationships, sample values, cardinality patterns)
 3. **Confidence**: 0-1 scale. Be conservative. Use < 0.7 if ambiguous.
 4. **Column Descriptions**: Every column should be described. Explain its role and meaning.
-5. **Foreign Keys**: **CRITICAL** - Use structured format for ALL foreign key relationships:
+5. **Primary Key**: Identify the column(s) that most likely form this table's primary key.
+   - Look for columns with 100% uniqueness, zero nulls, and names like `ID`, `TableNameID`, or `Code`
+   - For junction/bridge tables (e.g., `ProductModelIllustration`), the PK is likely a composite of the FK columns
+   - If the table inherits an ID from a parent (e.g., `Employee` using `BusinessEntityID` from `BusinessEntity`), that inherited column IS the PK
+   - Use `"columns": ["Col1", "Col2"]` for composite keys
+   - Confidence should reflect how certain you are (0-1 scale)
+   - If a PK is already marked in the column list above, you may confirm it or propose a different one
+6. **Foreign Keys**: **CRITICAL** - Use structured format for ALL foreign key relationships:
    - Include EVERY column that references another table
    - Use EXACT schema and table names from the "All Database Tables" list above
    - Specify confidence (0-1 scale) based on evidence strength
    - Example: If `prd_id` exists, add: `{"columnName": "prd_id", "referencesSchema": "inv", "referencesTable": "prd", "referencesColumn": "prd_id", "confidence": 0.95}`
    - **Leave empty array if no foreign keys detected**
-6. **Business Domain**: Infer from table name and purpose (e.g., "Sales", "HR", "Inventory", "Billing", "Security")
-7. **Parent Table Insights**: If analyzing this child table reveals new information about parent tables, include it. Examples:
+   - **Inheritance/specialization**: When a column could reference either a generic base table (e.g., BusinessEntity) or a more specialized table (e.g., Person, Employee, Vendor) that inherits from it, **always prefer the most specialized table**. The specialized table is the one that adds domain-specific columns beyond the base table. For example, `Employee.BusinessEntityID` should reference `Person.BusinessEntityID` (not `BusinessEntity.BusinessEntityID`) because Person is the specialized entity that Employee relates to.
+   - **Polymorphic FKs**: Some columns may reference different tables depending on the row (e.g., a `ReferenceOrderID` that could point to a SalesOrder, PurchaseOrder, or WorkOrder). If you detect this pattern, pick the **single most common/likely target** and note the polymorphic nature in your reasoning. Do not create multiple FK entries for the same column pointing to different tables unless you are highly confident each is valid.
+7. **Business Domain**: Infer from table name and purpose (e.g., "Sales", "HR", "Inventory", "Billing", "Security")
+8. **Parent Table Insights**: If analyzing this child table reveals new information about parent tables, include it. Examples:
    - Discovering enum values in the parent (e.g., "Member table has a 'Type' column with values: Individual, Corporate, Student")
    - Revealing parent table classification/purpose (e.g., "BoardMember reveals that Member table includes leadership roles, not just general members")
    - Identifying parent table patterns (e.g., "Multiple child tables suggest Organization serves as a multi-tenant partition key")

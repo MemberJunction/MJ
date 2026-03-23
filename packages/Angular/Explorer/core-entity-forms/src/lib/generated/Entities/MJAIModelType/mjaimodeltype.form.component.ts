@@ -18,6 +18,7 @@ export class MJAIModelTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'modelInformation', sectionName: 'Model Information', isExpanded: true },
             { sectionKey: 'defaultModality', sectionName: 'Default Modality', isExpanded: true },
+            { sectionKey: 'prefillSettings', sectionName: 'Prefill Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIModels', sectionName: 'AI Models', isExpanded: false },
             { sectionKey: 'mJAIPrompts', sectionName: 'AI Prompts', isExpanded: false }

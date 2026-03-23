@@ -426,4 +426,114 @@ describe('AnthropicLLM', () => {
             expect(result[1].content).toEqual([{ type: 'text', text: 'OK' }]);
         });
     });
+
+    describe('assistantPrefill', () => {
+        describe('appendPrefillMessage (private)', () => {
+            const callMethod = (messages: Array<{ role: string; content: unknown }>, prefill: string | undefined): Array<{ role: string; content: unknown }> => {
+                return (instance as ReturnType<typeof Object.create>)['appendPrefillMessage'](messages, prefill);
+            };
+
+            it('should return the original messages array when prefill is undefined', () => {
+                const messages = [
+                    { role: ChatMessageRole.user, content: 'Hello' }
+                ];
+                const result = callMethod(messages, undefined);
+                expect(result).toBe(messages); // same reference, not a copy
+                expect(result).toHaveLength(1);
+            });
+
+            it('should return the original messages array when prefill is empty string', () => {
+                const messages = [
+                    { role: ChatMessageRole.user, content: 'Hello' }
+                ];
+                const result = callMethod(messages, '');
+                expect(result).toBe(messages); // same reference, not a copy
+                expect(result).toHaveLength(1);
+            });
+
+            it('should append an assistant message when prefill is provided', () => {
+                const messages = [
+                    { role: ChatMessageRole.user, content: 'Hello' }
+                ];
+                const result = callMethod(messages, '{"result":');
+                expect(result).toHaveLength(2);
+                expect(result[0]).toEqual({ role: ChatMessageRole.user, content: 'Hello' });
+                expect(result[1]).toEqual({ role: ChatMessageRole.assistant, content: '{"result":' });
+            });
+
+            it('should not mutate the original messages array', () => {
+                const messages = [
+                    { role: ChatMessageRole.user, content: 'Hello' }
+                ];
+                const result = callMethod(messages, 'prefill text');
+                expect(messages).toHaveLength(1); // original unchanged
+                expect(result).toHaveLength(2); // new array has the prefill
+            });
+        });
+
+        describe('nonStreamingChatCompletion with assistantPrefill', () => {
+            it('should include prefill in messages sent to the Anthropic API', async () => {
+                // Set up the mock to return a valid stream-like object
+                const mockFinalMessage = vi.fn().mockResolvedValue({
+                    content: [{ type: 'text', text: 'completed response' }],
+                    usage: { input_tokens: 10, output_tokens: 5 },
+                    stop_reason: 'end_turn'
+                });
+                const mockOn = vi.fn().mockReturnValue({ finalMessage: mockFinalMessage });
+                mockStream.mockReturnValue({ on: mockOn });
+
+                const params = {
+                    messages: [
+                        { role: ChatMessageRole.user, content: 'Generate JSON' }
+                    ],
+                    model: 'claude-sonnet-4-20250514',
+                    maxOutputTokens: 1024,
+                    assistantPrefill: '{"data":',
+                    enableCaching: false
+                };
+
+                await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'](params);
+
+                // Verify mockStream (messages.stream) was called
+                expect(mockStream).toHaveBeenCalledTimes(1);
+                const callArgs = mockStream.mock.calls[0][0];
+
+                // The messages passed to the API should include the prefill as the last message
+                const apiMessages = callArgs.messages;
+                const lastMessage = apiMessages[apiMessages.length - 1];
+                expect(lastMessage.role).toBe('assistant');
+                // The content is formatted through formatMessagesWithCaching, so check for the prefill text
+                expect(lastMessage.content).toEqual([{ type: 'text', text: '{"data":', cache_control: { type: 'ephemeral' } }]);
+            });
+
+            it('should not add prefill message when assistantPrefill is not set', async () => {
+                const mockFinalMessage = vi.fn().mockResolvedValue({
+                    content: [{ type: 'text', text: 'response' }],
+                    usage: { input_tokens: 10, output_tokens: 5 },
+                    stop_reason: 'end_turn'
+                });
+                const mockOn = vi.fn().mockReturnValue({ finalMessage: mockFinalMessage });
+                mockStream.mockReturnValue({ on: mockOn });
+
+                const params = {
+                    messages: [
+                        { role: ChatMessageRole.user, content: 'Hello' }
+                    ],
+                    model: 'claude-sonnet-4-20250514',
+                    maxOutputTokens: 1024,
+                    enableCaching: false
+                };
+
+                await (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion'](params);
+
+                expect(mockStream).toHaveBeenCalledTimes(1);
+                const callArgs = mockStream.mock.calls[0][0];
+                const apiMessages = callArgs.messages;
+
+                // Should only have the user message, no assistant prefill
+                expect(apiMessages).toHaveLength(1);
+                expect(apiMessages[0].role).toBe('user');
+            });
+        });
+    });
 });

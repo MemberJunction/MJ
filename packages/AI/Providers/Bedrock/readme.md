@@ -79,6 +79,14 @@ AWS credentials are passed as a JSON string containing:
 | `secretAccessKey` | AWS secret access key |
 | `sessionToken` | Optional session token for temporary credentials |
 
+## Supported Features
+
+| Feature | Supported | Notes |
+|---------|-----------|-------|
+| stopSequences | Yes | Supported for Anthropic Claude, AI21, and Amazon Titan models |
+| assistantPrefill | Yes (Claude only) | Pre-seed the assistant's response for `anthropic.*` model IDs ([guide](../../Prompts/PREFILL_AND_STOP_SEQUENCES.md)) |
+| streaming | Yes | Real-time streaming via `InvokeModelWithResponseStream` |
+
 ## Class Registration
 
 - `BedrockLLM` -- Registered via `@RegisterClass(BaseLLM, 'BedrockLLM')`

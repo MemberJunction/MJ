@@ -272,8 +272,8 @@ describe('MistralLLM', () => {
     });
 
     describe('MapMJMessagesToMistral', () => {
-        const callMethod = (messages: Array<{ role: string; content: unknown }>): unknown[] => {
-            return (instance as ReturnType<typeof Object.create>)['MapMJMessagesToMistral'](messages);
+        const callMethod = (messages: Array<{ role: string; content: unknown }>, prefill?: string): unknown[] => {
+            return (instance as ReturnType<typeof Object.create>)['MapMJMessagesToMistral'](messages, prefill);
         };
 
         it('should convert simple string messages', () => {
@@ -325,6 +325,108 @@ describe('MistralLLM', () => {
         it('should handle empty message array', () => {
             const result = callMethod([]);
             expect(result).toHaveLength(0);
+        });
+
+        describe('assistantPrefill', () => {
+            it('should append an assistant message with prefix: true when prefill is provided', () => {
+                const messages = [
+                    { role: 'system', content: 'You are helpful' },
+                    { role: 'user', content: 'Write JSON' }
+                ];
+                const result = callMethod(messages, '{"result":') as Array<Record<string, unknown>>;
+                expect(result).toHaveLength(3);
+                expect(result[2]).toEqual({
+                    role: 'assistant',
+                    content: '{"result":',
+                    prefix: true
+                });
+            });
+
+            it('should NOT append the dummy "ok" user message when prefill is provided', () => {
+                const messages = [
+                    { role: 'user', content: 'Hello' },
+                    { role: 'assistant', content: 'Hi there!' }
+                ];
+                const result = callMethod(messages, 'Sure, here is') as Array<Record<string, unknown>>;
+                // Should have original 2 messages + 1 prefill assistant message, but NOT an extra 'ok' user message
+                expect(result).toHaveLength(3);
+                expect(result[2]).toEqual({
+                    role: 'assistant',
+                    content: 'Sure, here is',
+                    prefix: true
+                });
+                // Verify no 'ok' user message was inserted
+                const userOkMessages = result.filter(m => m.role === 'user' && m.content === 'ok');
+                expect(userOkMessages).toHaveLength(0);
+            });
+
+            it('should still append dummy "ok" user message when prefill is NOT provided and last message is assistant', () => {
+                const messages = [
+                    { role: 'user', content: 'Hello' },
+                    { role: 'assistant', content: 'Hi!' }
+                ];
+                const result = callMethod(messages) as Array<Record<string, unknown>>;
+                expect(result).toHaveLength(3);
+                expect(result[2]).toEqual({ role: 'user', content: 'ok' });
+            });
+
+            it('should still append dummy "ok" user message when prefill is undefined and last message is assistant', () => {
+                const messages = [
+                    { role: 'user', content: 'Hello' },
+                    { role: 'assistant', content: 'Hi!' }
+                ];
+                const result = callMethod(messages, undefined) as Array<Record<string, unknown>>;
+                expect(result).toHaveLength(3);
+                expect(result[2]).toEqual({ role: 'user', content: 'ok' });
+            });
+
+            it('should not append dummy "ok" when prefill is empty string (falsy)', () => {
+                const messages = [
+                    { role: 'user', content: 'Hello' },
+                    { role: 'assistant', content: 'Hi!' }
+                ];
+                // Empty string is falsy, so prefill branch should NOT activate; dummy 'ok' should be appended
+                const result = callMethod(messages, '') as Array<Record<string, unknown>>;
+                expect(result).toHaveLength(3);
+                expect(result[2]).toEqual({ role: 'user', content: 'ok' });
+            });
+
+            it('should work with prefill when last message is already a user message', () => {
+                const messages = [
+                    { role: 'system', content: 'Be helpful' },
+                    { role: 'user', content: 'Give me JSON' }
+                ];
+                const result = callMethod(messages, '{') as Array<Record<string, unknown>>;
+                // Original 2 messages + 1 prefill assistant message
+                expect(result).toHaveLength(3);
+                expect(result[2]).toEqual({
+                    role: 'assistant',
+                    content: '{',
+                    prefix: true
+                });
+            });
+
+            it('should preserve all original messages when prefill is provided', () => {
+                const messages = [
+                    { role: 'system', content: 'System prompt' },
+                    { role: 'user', content: 'User message' },
+                    { role: 'assistant', content: 'Assistant reply' },
+                    { role: 'user', content: 'Follow-up' }
+                ];
+                const result = callMethod(messages, 'Here is my response:') as Array<Record<string, unknown>>;
+                expect(result).toHaveLength(5);
+                // First 4 should be the originals
+                expect(result[0]).toEqual({ role: 'system', content: 'System prompt' });
+                expect(result[1]).toEqual({ role: 'user', content: 'User message' });
+                expect(result[2]).toEqual({ role: 'assistant', content: 'Assistant reply' });
+                expect(result[3]).toEqual({ role: 'user', content: 'Follow-up' });
+                // Last should be the prefill
+                expect(result[4]).toEqual({
+                    role: 'assistant',
+                    content: 'Here is my response:',
+                    prefix: true
+                });
+            });
         });
     });
 

@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ai
 
+## 5.15.0
+
+### Minor Changes
+
+- c3e8b94: metadata updates and migration
+
+### Patch Changes
+
+- @memberjunction/global@5.15.0
+
 ## 5.14.0
 
 ### Patch Changes

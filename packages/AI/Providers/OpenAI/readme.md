@@ -1,6 +1,8 @@
+[Back to AI Framework Overview](../../README.md) | [All Providers](../README.md)
+
 # @memberjunction/ai-openai
 
-MemberJunction AI provider for OpenAI. This is the foundational LLM provider in MemberJunction, implementing `BaseLLM` and `BaseEmbeddings` from `@memberjunction/ai`. Many other providers (Groq, Cerebras, Fireworks, OpenRouter, LMStudio, xAI) extend this package since they use OpenAI-compatible APIs.
+MemberJunction AI provider for OpenAI. Implements `BaseLLM`, `BaseEmbeddings`, `BaseImageGenerator`, and `BaseAudio` from `@memberjunction/ai`. This is the foundational LLM provider in MemberJunction -- many other providers (Groq, Cerebras, Fireworks, OpenRouter, LMStudio, xAI) extend this package since they use OpenAI-compatible APIs.
 
 ## Architecture
 
@@ -44,15 +46,17 @@ graph TD
 
 ## Features
 
-- **Chat Completions**: Full support for GPT-4, GPT-4o, o1, o3, and other OpenAI models
+- **Chat Completions**: Full support for GPT-4.1, GPT-4o, o1, o3, o4-mini, and other OpenAI models
 - **Streaming**: Real-time response streaming with chunk processing
-- **Thinking/Reasoning**: Extraction of thinking content from `<think>` blocks in reasoning model responses
-- **Embeddings**: Text embedding generation via OpenAI embedding models
-- **Multimodal Input**: Support for text and image content in messages
-- **Response Formats**: JSON mode, text, and other format controls
+- **Thinking/Reasoning**: Extraction of thinking content from reasoning model responses
+- **Embeddings**: Text embedding generation via text-embedding-3-small/large and other models
+- **Image Generation**: DALL-E integration via `BaseImageGenerator`
+- **Audio**: Text-to-speech and speech-to-text via `BaseAudio`
+- **Multimodal Input**: Support for text, image, audio, and file content in messages
+- **Response Formats**: JSON mode, text, and structured output controls
 - **Effort Level**: Maps MJ effort levels to OpenAI reasoning effort parameters
 - **Error Analysis**: Integrated error analysis via `ErrorAnalyzer`
-- **Extensible Base**: Designed as the foundation for OpenAI-compatible providers
+- **Extensible Base**: Designed as the foundation for any OpenAI-compatible provider
 
 ## Installation
 
@@ -65,18 +69,18 @@ npm install @memberjunction/ai-openai
 ### Chat Completion
 
 ```typescript
-import { OpenAILLM } from '@memberjunction/ai-openai';
+import { OpenAILLM } from "@memberjunction/ai-openai";
 
-const llm = new OpenAILLM('your-openai-api-key');
+const llm = new OpenAILLM("your-openai-api-key");
 
 const result = await llm.ChatCompletion({
-    model: 'gpt-4o',
+    model: "gpt-4.1",
     messages: [
-        { role: 'system', content: 'You are a helpful assistant.' },
-        { role: 'user', content: 'Explain quantum computing.' }
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: "Explain quantum computing." },
     ],
     temperature: 0.7,
-    maxOutputTokens: 1000
+    maxOutputTokens: 1000,
 });
 
 if (result.success) {
@@ -88,26 +92,26 @@ if (result.success) {
 
 ```typescript
 const result = await llm.ChatCompletion({
-    model: 'gpt-4o',
-    messages: [{ role: 'user', content: 'Write a detailed essay.' }],
+    model: "gpt-4.1",
+    messages: [{ role: "user", content: "Write a detailed essay." }],
     streaming: true,
     streamingCallbacks: {
         OnContent: (content) => process.stdout.write(content),
-        OnComplete: (result) => console.log('\nDone!')
-    }
+        OnComplete: (result) => console.log("\nDone!"),
+    },
 });
 ```
 
 ### Embeddings
 
 ```typescript
-import { OpenAIEmbedding } from '@memberjunction/ai-openai';
+import { OpenAIEmbedding } from "@memberjunction/ai-openai";
 
-const embedder = new OpenAIEmbedding('your-openai-api-key');
+const embedder = new OpenAIEmbedding("your-openai-api-key");
 
 const result = await embedder.EmbedText({
-    text: 'Sample text for embedding',
-    model: 'text-embedding-3-small'
+    text: "Sample text for embedding",
+    model: "text-embedding-3-small",
 });
 
 console.log(`Dimensions: ${result.vector.length}`);
@@ -132,21 +136,21 @@ console.log(`Dimensions: ${result.vector.length}`);
 
 ## Extending for Compatible APIs
 
-This provider is designed as a base class for any OpenAI-compatible API. To create a new provider, override the base URL:
+This provider is designed as a base class for any OpenAI-compatible API. Override the base URL to point to a different service:
 
 ```typescript
-import { OpenAILLM } from '@memberjunction/ai-openai';
-import { RegisterClass } from '@memberjunction/global';
-import { BaseLLM } from '@memberjunction/ai';
+import { OpenAILLM } from "@memberjunction/ai-openai";
+import { RegisterClass } from "@memberjunction/global";
+import { BaseLLM } from "@memberjunction/ai";
+import OpenAI from "openai";
 
-@RegisterClass(BaseLLM, 'MyProviderLLM')
+@RegisterClass(BaseLLM, "MyProviderLLM")
 export class MyProviderLLM extends OpenAILLM {
     constructor(apiKey: string) {
         super(apiKey);
-        // Override the base URL
         this._openai = new OpenAI({
-            apiKey: apiKey,
-            baseURL: 'https://api.my-provider.com/v1'
+            apiKey,
+            baseURL: "https://api.my-provider.com/v1",
         });
     }
 }
@@ -154,8 +158,8 @@ export class MyProviderLLM extends OpenAILLM {
 
 ## Class Registration
 
-- `OpenAILLM` -- Registered via `@RegisterClass(BaseLLM, 'OpenAILLM')`
-- `OpenAIEmbedding` -- Registered via `@RegisterClass(BaseEmbeddings, 'OpenAIEmbedding')`
+- `OpenAILLM` -- Registered via `@RegisterClass(BaseLLM, OpenAILLM)`
+- `OpenAIEmbedding` -- Registered via `@RegisterClass(BaseEmbeddings, OpenAIEmbedding)`
 
 ## Dependencies
 

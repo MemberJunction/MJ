@@ -60,6 +60,8 @@ export interface TableAnalysisContext {
   allTables?: Array<{ schema: string; name: string }>;
   /** Ground truth for this table from config — AI must align with this */
   groundTruth?: TableGroundTruthContext;
+  /** Cross-table FK candidate stats from discovery phase — helps LLM make better FK decisions */
+  fkCandidateStats?: Array<{ sourceColumn: string; targetSchema: string; targetTable: string; targetColumn: string; valueOverlap: number; cardinalityRatio: number; confidence: number }>;
 }
 
 export interface TableGroundTruthContext {

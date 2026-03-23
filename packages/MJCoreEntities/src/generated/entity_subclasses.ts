@@ -3932,7 +3932,7 @@ export const MJAICredentialBindingSchema = z.object({
         * * Default Value: newsequentialid()`),
     CredentialID: z.string().describe(`
         * * Field Name: CredentialID
-        * * Display Name: Credential ID
+        * * Display Name: Credential
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
         * * Description: Reference to the credential being bound.`),
@@ -3948,19 +3948,19 @@ export const MJAICredentialBindingSchema = z.object({
         * * Description: The type of AI entity this credential is bound to: Vendor (broadest), ModelVendor (model+vendor specific), or PromptModel (most specific). Resolution follows prompt → model → vendor hierarchy.`),
     AIVendorID: z.string().nullable().describe(`
         * * Field Name: AIVendorID
-        * * Display Name: AI Vendor ID
+        * * Display Name: AI Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
         * * Description: Reference to AIVendor when BindingType is Vendor. NULL otherwise.`),
     AIModelVendorID: z.string().nullable().describe(`
         * * Field Name: AIModelVendorID
-        * * Display Name: AI Model Vendor ID
+        * * Display Name: AI Model Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Vendors (vwAIModelVendors.ID)
         * * Description: Reference to AIModelVendor when BindingType is ModelVendor. NULL otherwise.`),
     AIPromptModelID: z.string().nullable().describe(`
         * * Field Name: AIPromptModelID
-        * * Display Name: AI Prompt Model ID
+        * * Display Name: AI Prompt Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Models (vwAIPromptModels.ID)
         * * Description: Reference to AIPromptModel when BindingType is PromptModel. NULL otherwise.`),
@@ -3972,7 +3972,7 @@ export const MJAICredentialBindingSchema = z.object({
         * * Description: Priority for credential selection when multiple bindings exist at the same level. Lower values have higher priority (0 is highest). Enables failover when primary credentials are unavailable.`),
     IsActive: z.boolean().describe(`
         * * Field Name: IsActive
-        * * Display Name: Is Active
+        * * Display Name: Active
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When false, this binding is ignored during credential resolution. Allows temporary disabling without deletion.`),
@@ -3988,19 +3988,19 @@ export const MJAICredentialBindingSchema = z.object({
         * * Default Value: getutcdate()`),
     Credential: z.string().describe(`
         * * Field Name: Credential
-        * * Display Name: Credential
+        * * Display Name: Credential Name
         * * SQL Data Type: nvarchar(200)`),
     AIVendor: z.string().nullable().describe(`
         * * Field Name: AIVendor
-        * * Display Name: AI Vendor
+        * * Display Name: Vendor Name
         * * SQL Data Type: nvarchar(50)`),
     AIModelVendor: z.string().nullable().describe(`
         * * Field Name: AIModelVendor
-        * * Display Name: AI Model Vendor
-        * * SQL Data Type: nvarchar(50)`),
+        * * Display Name: Model Vendor Name
+        * * SQL Data Type: nvarchar(100)`),
     AIPromptModel: z.string().nullable().describe(`
         * * Field Name: AIPromptModel
-        * * Display Name: AI Prompt Model
+        * * Display Name: Prompt Model Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -4494,13 +4494,24 @@ export const MJAIModelTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
         * * Description: Default output modality for this model type. Models of this type inherit this as their primary output modality unless overridden.`),
+    SupportsPrefill: z.boolean().describe(`
+        * * Field Name: SupportsPrefill
+        * * Display Name: Supports Prefill
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether models of this type generally support assistant prefill. This is a default value that individual AI Model Vendor records can override. For LLM types, many providers support prefill; for image/audio types, this is typically false.`),
+    PrefillFallbackText: z.string().nullable().describe(`
+        * * Field Name: PrefillFallbackText
+        * * Display Name: Prefill Fallback Text
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Default fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Use {{prefill}} as a placeholder for the actual prefill text. Example: "IMPORTANT: You must begin your response with exactly: {{prefill}}". Individual AI Model Vendor records can override this. If null, a generic fallback is used.`),
     DefaultInputModality: z.string().describe(`
         * * Field Name: DefaultInputModality
-        * * Display Name: Default Input Modality
+        * * Display Name: Default Input Modality Name
         * * SQL Data Type: nvarchar(50)`),
     DefaultOutputModality: z.string().describe(`
         * * Field Name: DefaultOutputModality
-        * * Display Name: Default Output Modality
+        * * Display Name: Default Output Modality Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -4517,12 +4528,12 @@ export const MJAIModelVendorSchema = z.object({
         * * Default Value: newsequentialid()`),
     ModelID: z.string().describe(`
         * * Field Name: ModelID
-        * * Display Name: Model ID
+        * * Display Name: Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
     VendorID: z.string().describe(`
         * * Field Name: VendorID
-        * * Display Name: Vendor ID
+        * * Display Name: Vendor
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
     Priority: z.number().describe(`
@@ -4598,21 +4609,31 @@ export const MJAIModelVendorSchema = z.object({
         * * Default Value: getutcdate()`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
         * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)`),
+    SupportsPrefill: z.boolean().nullable().describe(`
+        * * Field Name: SupportsPrefill
+        * * Display Name: Supports Prefill
+        * * SQL Data Type: bit
+        * * Description: Whether this specific model-vendor implementation supports assistant prefill. Overrides the AI Model Type default when set. NULL means inherit from the AI Model Type. For example, Claude via Anthropic supports prefill (true), but GPT-4 via OpenAI does not (false).`),
+    PrefillFallbackText: z.string().nullable().describe(`
+        * * Field Name: PrefillFallbackText
+        * * Display Name: Prefill Fallback Text
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Model-specific fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default. Use {{prefill}} as a placeholder. Allows tuning the fallback instruction per model since different models respond better to different phrasing.`),
     Model: z.string().describe(`
         * * Field Name: Model
-        * * Display Name: Model
+        * * Display Name: Model Name
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().describe(`
         * * Field Name: Vendor
-        * * Display Name: Vendor
+        * * Display Name: Vendor Name
         * * SQL Data Type: nvarchar(50)`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Type Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -4691,9 +4712,19 @@ export const MJAIModelSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: Reference to the previous version of this model, creating a version lineage chain. For example, GPT-4 Turbo might reference GPT-4 as its prior version.`),
+    SupportsPrefill: z.boolean().nullable().describe(`
+        * * Field Name: SupportsPrefill
+        * * Display Name: Supports Prefill
+        * * SQL Data Type: bit
+        * * Description: Whether this model supports assistant prefill. Overrides the AI Model Type default when set. NULL means inherit from the AI Model Type. Can be further overridden per-vendor in AI Model Vendor.`),
+    PrefillFallbackText: z.string().nullable().describe(`
+        * * Field Name: PrefillFallbackText
+        * * Display Name: Prefill Fallback Text
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Model-level fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default, can be further overridden per-vendor in AI Model Vendor. Use {{prefill}} as a placeholder.`),
     AIModelType: z.string().describe(`
         * * Field Name: AIModelType
-        * * Display Name: AI Model Type
+        * * Display Name: Model Type Name
         * * SQL Data Type: nvarchar(50)`),
     Vendor: z.string().nullable().describe(`
         * * Field Name: Vendor
@@ -5054,17 +5085,17 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The output result from the model.`),
     TokensUsed: z.number().nullable().describe(`
         * * Field Name: TokensUsed
-        * * Display Name: Tokens Used
+        * * Display Name: Total Tokens Used
         * * SQL Data Type: int
         * * Description: Total number of tokens used (prompt + completion).`),
     TokensPrompt: z.number().nullable().describe(`
         * * Field Name: TokensPrompt
-        * * Display Name: Tokens Prompt
+        * * Display Name: Prompt Tokens
         * * SQL Data Type: int
         * * Description: Number of tokens in the prompt.`),
     TokensCompletion: z.number().nullable().describe(`
         * * Field Name: TokensCompletion
-        * * Display Name: Tokens Completion
+        * * Display Name: Completion Tokens
         * * SQL Data Type: int
         * * Description: Number of tokens in the completion/result.`),
     TotalCost: z.number().nullable().describe(`
@@ -5095,7 +5126,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Default Value: getutcdate()`),
     ParentID: z.string().nullable().describe(`
         * * Field Name: ParentID
-        * * Display Name: Parent ID
+        * * Display Name: Parent Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.`),
@@ -5118,7 +5149,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Execution order for parallel child runs and result selector runs. Used to track the sequence of execution within a parallel run group. NULL for single runs and parallel parent runs.`),
     AgentRunID: z.string().nullable().describe(`
         * * Field Name: AgentRunID
-        * * Display Name: Agent Run ID
+        * * Display Name: Agent Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
         * * Description: Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.`),
@@ -5134,17 +5165,17 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: ISO 4217 currency code for the Cost field (e.g., USD, EUR, GBP). Different AI providers may use different currencies.`),
     TokensUsedRollup: z.number().nullable().describe(`
         * * Field Name: TokensUsedRollup
-        * * Display Name: Tokens Used Rollup
+        * * Display Name: Total Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.`),
     TokensPromptRollup: z.number().nullable().describe(`
         * * Field Name: TokensPromptRollup
-        * * Display Name: Tokens Prompt Rollup
+        * * Display Name: Prompt Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.`),
     TokensCompletionRollup: z.number().nullable().describe(`
         * * Field Name: TokensCompletionRollup
-        * * Display Name: Tokens Completion Rollup
+        * * Display Name: Completion Tokens (Rollup)
         * * SQL Data Type: int
         * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.`),
     Temperature: z.number().nullable().describe(`
@@ -5194,12 +5225,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: The response format requested for this run (e.g., 'JSON', 'Text', 'Markdown')`),
     LogProbs: z.boolean().nullable().describe(`
         * * Field Name: LogProbs
-        * * Display Name: Log Probs
+        * * Display Name: Log Probabilities
         * * SQL Data Type: bit
         * * Description: Whether log probabilities were requested for this run`),
     TopLogProbs: z.number().nullable().describe(`
         * * Field Name: TopLogProbs
-        * * Display Name: Top Log Probs
+        * * Display Name: Top Log Probabilities
         * * SQL Data Type: int
         * * Description: Number of top log probabilities requested per token (if LogProbs is true)`),
     DescendantCost: z.number().nullable().describe(`
@@ -5295,7 +5326,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: JSON array of duration in milliseconds for each failover attempt`),
     OriginalModelID: z.string().nullable().describe(`
         * * Field Name: OriginalModelID
-        * * Display Name: Original Model ID
+        * * Display Name: Original Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
         * * Description: The AI Model ID that was originally attempted before any failovers`),
@@ -5306,12 +5337,12 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Timestamp when the original request started, before any failovers`),
     TotalFailoverDuration: z.number().nullable().describe(`
         * * Field Name: TotalFailoverDuration
-        * * Display Name: Total Failover Duration
+        * * Display Name: Total Failover Duration (ms)
         * * SQL Data Type: int
         * * Description: Total time spent in failover attempts in milliseconds`),
     RerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RerunFromPromptRunID
-        * * Display Name: Rerun From Prompt Run ID
+        * * Display Name: Rerun From
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
         * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID`),
@@ -5372,7 +5403,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Unique key used for caching this prompt result, typically a hash of the prompt and parameters`),
     JudgeID: z.string().nullable().describe(`
         * * Field Name: JudgeID
-        * * Display Name: Judge ID
+        * * Display Name: Judge
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results`),
@@ -5395,7 +5426,7 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Indicates whether streaming was enabled for this prompt execution`),
     FirstTokenTime: z.number().nullable().describe(`
         * * Field Name: FirstTokenTime
-        * * Display Name: First Token Time
+        * * Display Name: First Token Time (ms)
         * * SQL Data Type: int
         * * Description: Time in milliseconds from request initiation to receiving the first token from the model`),
     ErrorDetails: z.string().nullable().describe(`
@@ -5405,23 +5436,23 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Detailed error information in JSON format if the prompt execution failed, including stack traces and error codes`),
     ChildPromptID: z.string().nullable().describe(`
         * * Field Name: ChildPromptID
-        * * Display Name: Child Prompt ID
+        * * Display Name: Child Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.`),
     QueueTime: z.number().nullable().describe(`
         * * Field Name: QueueTime
-        * * Display Name: Queue Time
+        * * Display Name: Queue Time (ms)
         * * SQL Data Type: int
         * * Description: Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.`),
     PromptTime: z.number().nullable().describe(`
         * * Field Name: PromptTime
-        * * Display Name: Prompt Time
+        * * Display Name: Prompt Time (ms)
         * * SQL Data Type: int
         * * Description: Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.`),
     CompletionTime: z.number().nullable().describe(`
         * * Field Name: CompletionTime
-        * * Display Name: Completion Time
+        * * Display Name: Completion Time (ms)
         * * SQL Data Type: int
         * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.`),
     ModelSpecificResponseDetails: z.string().nullable().describe(`
@@ -5446,10 +5477,15 @@ export const MJAIPromptRunSchema = z.object({
         * * Description: Human-readable notes and comments about this prompt run`),
     TestRunID: z.string().nullable().describe(`
         * * Field Name: TestRunID
-        * * Display Name: Test Run ID
+        * * Display Name: Test Run
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this prompt run to a test run if this prompt execution was part of a test. Enables testing individual prompts for quality and consistency before agent integration.`),
+    AssistantPrefill: z.string().nullable().describe(`
+        * * Field Name: AssistantPrefill
+        * * Display Name: Assistant Prefill
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The assistant prefill text that was used during this prompt execution. Records whether native prefill or fallback was applied. NULL means no prefill was used.`),
     Prompt: z.string().describe(`
         * * Field Name: Prompt
         * * Display Name: Prompt
@@ -5484,7 +5520,7 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     RerunFromPromptRun: z.string().nullable().describe(`
         * * Field Name: RerunFromPromptRun
-        * * Display Name: Rerun From Prompt Run
+        * * Display Name: Rerun From
         * * SQL Data Type: nvarchar(255)`),
     Judge: z.string().nullable().describe(`
         * * Field Name: Judge
@@ -5500,11 +5536,11 @@ export const MJAIPromptRunSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
+        * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
     RootRerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RootRerunFromPromptRunID
-        * * Display Name: Root Rerun From Prompt Run ID
+        * * Display Name: Root Rerun From
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -5560,19 +5596,19 @@ export const MJAIPromptSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     TemplateID: z.string().describe(`
         * * Field Name: TemplateID
-        * * Display Name: Template ID
+        * * Display Name: Template
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Templates (vwTemplates.ID)
         * * Description: Reference to the template used for the prompt.`),
     CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
-        * * Display Name: Category ID
+        * * Display Name: Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Categories (vwAIPromptCategories.ID)
         * * Description: Reference to the category the prompt belongs to.`),
     TypeID: z.string().describe(`
         * * Field Name: TypeID
-        * * Display Name: Type ID
+        * * Display Name: Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompt Types (vwAIPromptTypes.ID)
         * * Description: Reference to the type of the prompt.`),
@@ -5615,13 +5651,13 @@ export const MJAIPromptSchema = z.object({
         * * Description: A JSON-formatted string containing model-specific response format instructions. This will be parsed and provided as a JSON object to the model.`),
     AIModelTypeID: z.string().nullable().describe(`
         * * Field Name: AIModelTypeID
-        * * Display Name: AI Model Type ID
+        * * Display Name: AI Model Type
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Model Types (vwAIModelTypes.ID)
         * * Description: References the type of AI model this prompt is designed for (LLM, Image, Audio, etc.).`),
     MinPowerRank: z.number().nullable().describe(`
         * * Field Name: MinPowerRank
-        * * Display Name: Min Power Rank
+        * * Display Name: Minimum Power Rank
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: The minimum power rank required for models to be considered for this prompt.`),
@@ -5666,7 +5702,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: When ParallelizationMode is StaticCount, specifies the number of parallel executions.`),
     ParallelConfigParam: z.string().nullable().describe(`
         * * Field Name: ParallelConfigParam
-        * * Display Name: Parallel Config Param
+        * * Display Name: Parallel Config Parameter
         * * SQL Data Type: nvarchar(100)
         * * Description: When ParallelizationMode is ConfigParam, specifies the name of the configuration parameter that contains the parallel count.`),
     OutputType: z.union([z.literal('boolean'), z.literal('date'), z.literal('number'), z.literal('object'), z.literal('string')]).describe(`
@@ -5706,7 +5742,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Maximum number of retry attempts for API failures.`),
     RetryDelayMS: z.number().describe(`
         * * Field Name: RetryDelayMS
-        * * Display Name: Retry Delay MS
+        * * Display Name: Retry Delay (ms)
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Delay between retry attempts in milliseconds.`),
@@ -5723,7 +5759,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Strategy for calculating retry delays: Fixed (same delay each time), Exponential (doubling delay), or Linear (linearly increasing delay).`),
     ResultSelectorPromptID: z.string().nullable().describe(`
         * * Field Name: ResultSelectorPromptID
-        * * Display Name: Result Selector Prompt ID
+        * * Display Name: Result Selector Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: References another prompt that selects the best result from multiple parallel executions.`),
@@ -5735,7 +5771,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: When true, results from this prompt will be cached for potential reuse.`),
     CacheTTLSeconds: z.number().nullable().describe(`
         * * Field Name: CacheTTLSeconds
-        * * Display Name: Cache TTL Seconds
+        * * Display Name: Cache TTL (Seconds)
         * * SQL Data Type: int
         * * Description: Time-to-live in seconds for cached results. NULL means results never expire.`),
     CacheMatchType: z.union([z.literal('Exact'), z.literal('Vector')]).describe(`
@@ -5773,7 +5809,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: When true, the agent context must match for a cache hit. When false, agent-specific and non-agent results can be used interchangeably.`),
     CacheMustMatchConfig: z.boolean().describe(`
         * * Field Name: CacheMustMatchConfig
-        * * Display Name: Cache Must Match Config
+        * * Display Name: Cache Must Match Configuration
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.`),
@@ -5841,13 +5877,13 @@ export const MJAIPromptSchema = z.object({
         * * Description: Default stop sequences for this prompt. Comma-delimited list of sequences that will stop generation when encountered. Can be overridden at runtime.`),
     IncludeLogProbs: z.boolean().nullable().describe(`
         * * Field Name: IncludeLogProbs
-        * * Display Name: Include Log Probs
+        * * Display Name: Include Log Probabilities
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Default setting for including log probabilities in the response. Can be overridden at runtime.`),
     TopLogProbs: z.number().nullable().describe(`
         * * Field Name: TopLogProbs
-        * * Display Name: Top Log Probs
+        * * Display Name: Top Log Probabilities
         * * SQL Data Type: int
         * * Description: Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.`),
     FailoverStrategy: z.union([z.literal('NextBestModel'), z.literal('NextBestModel'), z.literal('None'), z.literal('None'), z.literal('PowerRank'), z.literal('PowerRank'), z.literal('SameModelDifferentVendor'), z.literal('SameModelDifferentVendor')]).describe(`
@@ -5874,7 +5910,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Maximum number of failover attempts before giving up`),
     FailoverDelaySeconds: z.number().nullable().describe(`
         * * Field Name: FailoverDelaySeconds
-        * * Display Name: Failover Delay Seconds
+        * * Display Name: Failover Delay (seconds)
         * * SQL Data Type: int
         * * Default Value: 5
         * * Description: Initial delay in seconds between failover attempts`),
@@ -5913,29 +5949,45 @@ export const MJAIPromptSchema = z.object({
         * * Display Name: Effort Level
         * * SQL Data Type: int
         * * Description: Effort level for this specific prompt (1-100, where 1=minimal effort, 100=maximum effort). Higher values request more thorough reasoning and analysis. Can be overridden by agent DefaultPromptEffortLevel or runtime parameters.`),
+    AssistantPrefill: z.string().nullable().describe(`
+        * * Field Name: AssistantPrefill
+        * * Display Name: Assistant Prefill
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional text to prefill the assistant response. The model will continue generating from where this text ends. Used with StopSequences for structured output extraction (e.g., prefill with \`\`\`json to get raw JSON). Only effective with providers that support prefill natively; see PrefillFallbackMode for non-supporting providers.`),
+    PrefillFallbackMode: z.union([z.literal('Ignore'), z.literal('None'), z.literal('SystemInstruction')]).describe(`
+        * * Field Name: PrefillFallbackMode
+        * * Display Name: Prefill Fallback Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Ignore
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Ignore
+    *   * None
+    *   * SystemInstruction
+        * * Description: Controls behavior when the selected provider does not support native assistant prefill. Ignore = silently skip prefill, SystemInstruction = inject a system message instructing the model to start its response with the prefill text (uses fallback text from AI Model Vendor or AI Model Type), None = no fallback (prefill only works with supported providers).`),
     Template: z.string().describe(`
         * * Field Name: Template
-        * * Display Name: Template
+        * * Display Name: Template Text
         * * SQL Data Type: nvarchar(255)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Type
+        * * Display Name: Type Name
         * * SQL Data Type: nvarchar(255)`),
     AIModelType: z.string().nullable().describe(`
         * * Field Name: AIModelType
-        * * Display Name: AI Model Type
+        * * Display Name: AI Model Type Name
         * * SQL Data Type: nvarchar(50)`),
     ResultSelectorPrompt: z.string().nullable().describe(`
         * * Field Name: ResultSelectorPrompt
-        * * Display Name: Result Selector Prompt
+        * * Display Name: Result Selector Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     RootResultSelectorPromptID: z.string().nullable().describe(`
         * * Field Name: RootResultSelectorPromptID
-        * * Display Name: Root Result Selector Prompt ID
+        * * Display Name: Root Result Selector Prompt
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -8559,7 +8611,7 @@ export const MJCompanyIntegrationRunSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)`),
     RunByUserID: z.string().describe(`
         * * Field Name: RunByUserID
-        * * Display Name: Run By User
+        * * Display Name: Run By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     StartedAt: z.date().nullable().describe(`
@@ -8608,9 +8660,15 @@ export const MJCompanyIntegrationRunSchema = z.object({
         * * Description: Optional error log information for the integration run.`),
     ConfigData: z.string().nullable().describe(`
         * * Field Name: ConfigData
-        * * Display Name: Config Data
+        * * Display Name: Configuration Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional configuration data in JSON format for the request that started the integration run for audit purposes.`),
+    ScheduledJobRunID: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRunID
+        * * Display Name: Scheduled Job Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+        * * Description: Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
@@ -8748,7 +8806,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Description: The company's identifier in the external system, used for API calls.`),
     IsExternalSystemReadOnly: z.boolean().describe(`
         * * Field Name: IsExternalSystemReadOnly
-        * * Display Name: External System Read Only
+        * * Display Name: Is Read Only
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if data can only be read from the external system, not written back.`),
@@ -8857,13 +8915,19 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Display Name: Lock Expires At
         * * SQL Data Type: datetimeoffset
         * * Description: When the lock should be considered stale and eligible for cleanup`),
+    ScheduledJobID: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobID
+        * * Display Name: Scheduled Job
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
+        * * Description: Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.`),
     Company: z.string().describe(`
         * * Field Name: Company
-        * * Display Name: Company
+        * * Display Name: Company Name
         * * SQL Data Type: nvarchar(50)`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration
+        * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(100)`),
     DriverClassName: z.string().nullable().describe(`
         * * Field Name: DriverClassName
@@ -8875,7 +8939,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
-        * * Display Name: Last Run ID
+        * * Display Name: Last Run
         * * SQL Data Type: uniqueidentifier`),
     LastRunStartedAt: z.date().nullable().describe(`
         * * Field Name: LastRunStartedAt
@@ -13804,6 +13868,189 @@ export const MJEntityFieldSchema = z.object({
 });
 
 export type MJEntityFieldEntityType = z.infer<typeof MJEntityFieldSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Entity Organic Key Related Entities
+ */
+export const MJEntityOrganicKeyRelatedEntitySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityOrganicKeyID: z.string().describe(`
+        * * Field Name: EntityOrganicKeyID
+        * * Display Name: Organic Key ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Organic Keys (vwEntityOrganicKeys.ID)`),
+    RelatedEntityID: z.string().describe(`
+        * * Field Name: RelatedEntityID
+        * * Display Name: Related Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    RelatedEntityFieldNames: z.string().nullable().describe(`
+        * * Field Name: RelatedEntityFieldNames
+        * * Display Name: Related Entity Fields
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Comma-delimited field names in the related entity, positionally matching MatchFieldNames on the parent key. NULL when using transitive matching.`),
+    TransitiveObjectName: z.string().nullable().describe(`
+        * * Field Name: TransitiveObjectName
+        * * Display Name: Transitive Object Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Schema-qualified name of a SQL view or table that bridges the organic key to the related entity (e.g., "dbo.vwContactRecipientBridge"). This object encapsulates any number of join hops. NULL for direct matches.`),
+    TransitiveObjectMatchFieldNames: z.string().nullable().describe(`
+        * * Field Name: TransitiveObjectMatchFieldNames
+        * * Display Name: Transitive Match Fields
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Comma-delimited field names in the transitive object that match the organic key values, positionally aligned with MatchFieldNames. NULL for direct matches.`),
+    TransitiveObjectOutputFieldName: z.string().nullable().describe(`
+        * * Field Name: TransitiveObjectOutputFieldName
+        * * Display Name: Transitive Output Field
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The field in the transitive object that produces the value to join against the related entity. NULL for direct matches.`),
+    RelatedEntityJoinFieldName: z.string().nullable().describe(`
+        * * Field Name: RelatedEntityJoinFieldName
+        * * Display Name: Related Entity Join Field
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The field in the related entity that matches TransitiveObjectOutputFieldName. NULL for direct matches.`),
+    DisplayName: z.string().nullable().describe(`
+        * * Field Name: DisplayName
+        * * Display Name: Display Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Tab/section label override. If NULL, defaults to the related entity's display name.`),
+    DisplayLocation: z.union([z.literal('After Field Tabs'), z.literal('Before Field Tabs')]).describe(`
+        * * Field Name: DisplayLocation
+        * * Display Name: Display Location
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: After Field Tabs
+    * * Value List Type: List
+    * * Possible Values 
+    *   * After Field Tabs
+    *   * Before Field Tabs
+        * * Description: Where to render the organic key tab relative to FK relationship tabs. After Field Tabs or Before Field Tabs.`),
+    DisplayComponentID: z.string().nullable().describe(`
+        * * Field Name: DisplayComponentID
+        * * Display Name: Display Component
+        * * SQL Data Type: uniqueidentifier
+        * * Description: FK to component registry for a custom display component. NULL uses the default EntityDataGrid.`),
+    DisplayComponentConfiguration: z.string().nullable().describe(`
+        * * Field Name: DisplayComponentConfiguration
+        * * Display Name: Display Component Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration passed to the display component.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Tab ordering within this organic key's related entities. Lower values appear first.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EntityOrganicKey: z.string().describe(`
+        * * Field Name: EntityOrganicKey
+        * * Display Name: Organic Key
+        * * SQL Data Type: nvarchar(255)`),
+    RelatedEntity: z.string().describe(`
+        * * Field Name: RelatedEntity
+        * * Display Name: Related Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJEntityOrganicKeyRelatedEntityEntityType = z.infer<typeof MJEntityOrganicKeyRelatedEntitySchema>;
+
+/**
+ * zod schema definition for the entity MJ: Entity Organic Keys
+ */
+export const MJEntityOrganicKeySchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable label for this organic key (e.g., "Email Match", "SSN Match"). Must be unique per entity.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional explanation of the key's purpose and matching semantics.`),
+    MatchFieldNames: z.string().describe(`
+        * * Field Name: MatchFieldNames
+        * * Display Name: Match Fields
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Comma-delimited field names in the owning entity that constitute the key. Single value for simple keys (e.g., "EmailAddress"), multiple for compound keys (e.g., "FirstName,LastName,DateOfBirth"). Field names must match EntityField.Name values.`),
+    NormalizationStrategy: z.union([z.literal('Custom'), z.literal('ExactMatch'), z.literal('LowerCaseTrim'), z.literal('Trim')]).describe(`
+        * * Field Name: NormalizationStrategy
+        * * Display Name: Normalization Strategy
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: LowerCaseTrim
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * ExactMatch
+    *   * LowerCaseTrim
+    *   * Trim
+        * * Description: How field values are normalized before comparison. LowerCaseTrim = LOWER(TRIM(x)), Trim = TRIM(x), ExactMatch = no transformation, Custom = uses CustomNormalizationExpression.`),
+    CustomNormalizationExpression: z.string().nullable().describe(`
+        * * Field Name: CustomNormalizationExpression
+        * * Display Name: Custom Normalization Expression
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: SQL expression template when NormalizationStrategy is Custom. Uses {{FieldName}} as placeholder. Example: "REPLACE(REPLACE({{FieldName}}, '-', ''), ' ', '')" for phone number normalization.`),
+    AutoCreateRelatedViewOnForm: z.boolean().describe(`
+        * * Field Name: AutoCreateRelatedViewOnForm
+        * * Display Name: Auto Create Related View
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, a future discovery process will automatically scan entities and create EntityOrganicKeyRelatedEntity rows for entities with matching field patterns.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Ordering when an entity has multiple organic keys. Lower values = higher priority.`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Active or Disabled. Disabled keys are ignored at runtime.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJEntityOrganicKeyEntityType = z.infer<typeof MJEntityOrganicKeySchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Permissions
@@ -33770,7 +34017,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: CredentialID
-    * * Display Name: Credential ID
+    * * Display Name: Credential
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Credentials (vwCredentials.ID)
     * * Description: Reference to the credential being bound.
@@ -33802,7 +34049,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: AIVendorID
-    * * Display Name: AI Vendor ID
+    * * Display Name: AI Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     * * Description: Reference to AIVendor when BindingType is Vendor. NULL otherwise.
@@ -33816,7 +34063,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: AIModelVendorID
-    * * Display Name: AI Model Vendor ID
+    * * Display Name: AI Model Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Vendors (vwAIModelVendors.ID)
     * * Description: Reference to AIModelVendor when BindingType is ModelVendor. NULL otherwise.
@@ -33830,7 +34077,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: AIPromptModelID
-    * * Display Name: AI Prompt Model ID
+    * * Display Name: AI Prompt Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Models (vwAIPromptModels.ID)
     * * Description: Reference to AIPromptModel when BindingType is PromptModel. NULL otherwise.
@@ -33858,7 +34105,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: IsActive
-    * * Display Name: Is Active
+    * * Display Name: Active
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When false, this binding is ignored during credential resolution. Allows temporary disabling without deletion.
@@ -33892,7 +34139,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: Credential
-    * * Display Name: Credential
+    * * Display Name: Credential Name
     * * SQL Data Type: nvarchar(200)
     */
     get Credential(): string {
@@ -33901,7 +34148,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: AIVendor
-    * * Display Name: AI Vendor
+    * * Display Name: Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
     get AIVendor(): string | null {
@@ -33910,8 +34157,8 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: AIModelVendor
-    * * Display Name: AI Model Vendor
-    * * SQL Data Type: nvarchar(50)
+    * * Display Name: Model Vendor Name
+    * * SQL Data Type: nvarchar(100)
     */
     get AIModelVendor(): string | null {
         return this.Get('AIModelVendor');
@@ -33919,7 +34166,7 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
 
     /**
     * * Field Name: AIPromptModel
-    * * Display Name: AI Prompt Model
+    * * Display Name: Prompt Model Name
     * * SQL Data Type: nvarchar(255)
     */
     get AIPromptModel(): string | null {
@@ -35373,8 +35620,35 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
     }
 
     /**
+    * * Field Name: SupportsPrefill
+    * * Display Name: Supports Prefill
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether models of this type generally support assistant prefill. This is a default value that individual AI Model Vendor records can override. For LLM types, many providers support prefill; for image/audio types, this is typically false.
+    */
+    get SupportsPrefill(): boolean {
+        return this.Get('SupportsPrefill');
+    }
+    set SupportsPrefill(value: boolean) {
+        this.Set('SupportsPrefill', value);
+    }
+
+    /**
+    * * Field Name: PrefillFallbackText
+    * * Display Name: Prefill Fallback Text
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Default fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Use {{prefill}} as a placeholder for the actual prefill text. Example: "IMPORTANT: You must begin your response with exactly: {{prefill}}". Individual AI Model Vendor records can override this. If null, a generic fallback is used.
+    */
+    get PrefillFallbackText(): string | null {
+        return this.Get('PrefillFallbackText');
+    }
+    set PrefillFallbackText(value: string | null) {
+        this.Set('PrefillFallbackText', value);
+    }
+
+    /**
     * * Field Name: DefaultInputModality
-    * * Display Name: Default Input Modality
+    * * Display Name: Default Input Modality Name
     * * SQL Data Type: nvarchar(50)
     */
     get DefaultInputModality(): string {
@@ -35383,7 +35657,7 @@ export class MJAIModelTypeEntity extends BaseEntity<MJAIModelTypeEntityType> {
 
     /**
     * * Field Name: DefaultOutputModality
-    * * Display Name: Default Output Modality
+    * * Display Name: Default Output Modality Name
     * * SQL Data Type: nvarchar(50)
     */
     get DefaultOutputModality(): string {
@@ -35492,7 +35766,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: ModelID
-    * * Display Name: Model ID
+    * * Display Name: Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
@@ -35505,7 +35779,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: VendorID
-    * * Display Name: Vendor ID
+    * * Display Name: Vendor
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
     */
@@ -35679,7 +35953,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Vendor Type Definitions (vwAIVendorTypeDefinitions.ID)
     * * Description: References the type/role of the vendor for this model (e.g., model developer, inference provider)
@@ -35692,8 +35966,34 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
     }
 
     /**
+    * * Field Name: SupportsPrefill
+    * * Display Name: Supports Prefill
+    * * SQL Data Type: bit
+    * * Description: Whether this specific model-vendor implementation supports assistant prefill. Overrides the AI Model Type default when set. NULL means inherit from the AI Model Type. For example, Claude via Anthropic supports prefill (true), but GPT-4 via OpenAI does not (false).
+    */
+    get SupportsPrefill(): boolean | null {
+        return this.Get('SupportsPrefill');
+    }
+    set SupportsPrefill(value: boolean | null) {
+        this.Set('SupportsPrefill', value);
+    }
+
+    /**
+    * * Field Name: PrefillFallbackText
+    * * Display Name: Prefill Fallback Text
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Model-specific fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default. Use {{prefill}} as a placeholder. Allows tuning the fallback instruction per model since different models respond better to different phrasing.
+    */
+    get PrefillFallbackText(): string | null {
+        return this.Get('PrefillFallbackText');
+    }
+    set PrefillFallbackText(value: string | null) {
+        this.Set('PrefillFallbackText', value);
+    }
+
+    /**
     * * Field Name: Model
-    * * Display Name: Model
+    * * Display Name: Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get Model(): string {
@@ -35702,7 +36002,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: Vendor
-    * * Display Name: Vendor
+    * * Display Name: Vendor Name
     * * SQL Data Type: nvarchar(50)
     */
     get Vendor(): string {
@@ -35711,7 +36011,7 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Type Name
     * * SQL Data Type: nvarchar(50)
     */
     get Type(): string {
@@ -35973,8 +36273,34 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     }
 
     /**
+    * * Field Name: SupportsPrefill
+    * * Display Name: Supports Prefill
+    * * SQL Data Type: bit
+    * * Description: Whether this model supports assistant prefill. Overrides the AI Model Type default when set. NULL means inherit from the AI Model Type. Can be further overridden per-vendor in AI Model Vendor.
+    */
+    get SupportsPrefill(): boolean | null {
+        return this.Get('SupportsPrefill');
+    }
+    set SupportsPrefill(value: boolean | null) {
+        this.Set('SupportsPrefill', value);
+    }
+
+    /**
+    * * Field Name: PrefillFallbackText
+    * * Display Name: Prefill Fallback Text
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Model-level fallback instruction text used when PrefillFallbackMode is SystemInstruction and the provider does not support native prefill. Overrides the AI Model Type default, can be further overridden per-vendor in AI Model Vendor. Use {{prefill}} as a placeholder.
+    */
+    get PrefillFallbackText(): string | null {
+        return this.Get('PrefillFallbackText');
+    }
+    set PrefillFallbackText(value: string | null) {
+        this.Set('PrefillFallbackText', value);
+    }
+
+    /**
     * * Field Name: AIModelType
-    * * Display Name: AI Model Type
+    * * Display Name: Model Type Name
     * * SQL Data Type: nvarchar(50)
     */
     get AIModelType(): string {
@@ -37099,7 +37425,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensUsed
-    * * Display Name: Tokens Used
+    * * Display Name: Total Tokens Used
     * * SQL Data Type: int
     * * Description: Total number of tokens used (prompt + completion).
     */
@@ -37112,7 +37438,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPrompt
-    * * Display Name: Tokens Prompt
+    * * Display Name: Prompt Tokens
     * * SQL Data Type: int
     * * Description: Number of tokens in the prompt.
     */
@@ -37125,7 +37451,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletion
-    * * Display Name: Tokens Completion
+    * * Display Name: Completion Tokens
     * * SQL Data Type: int
     * * Description: Number of tokens in the completion/result.
     */
@@ -37198,7 +37524,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ParentID
-    * * Display Name: Parent ID
+    * * Display Name: Parent Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
     * * Description: References the parent AIPromptRun.ID for hierarchical execution tracking. NULL for top-level runs, populated for parallel children and result selector runs.
@@ -37245,7 +37571,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: AgentRunID
-    * * Display Name: Agent Run ID
+    * * Display Name: Agent Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
     * * Description: Optional reference to the AIAgentRun that initiated this prompt execution. Links prompt runs to their parent agent runs for comprehensive execution tracking.
@@ -37285,7 +37611,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensUsedRollup
-    * * Display Name: Tokens Used Rollup
+    * * Display Name: Total Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total tokens used including this execution and all child/grandchild executions. This provides a complete view of token usage for hierarchical prompt trees. Calculated as TokensPromptRollup + TokensCompletionRollup.
     */
@@ -37298,7 +37624,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensPromptRollup
-    * * Display Name: Tokens Prompt Rollup
+    * * Display Name: Prompt Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total prompt/input tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensPrompt. For parent nodes, this includes the sum of all descendant prompt tokens.
     */
@@ -37311,7 +37637,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TokensCompletionRollup
-    * * Display Name: Tokens Completion Rollup
+    * * Display Name: Completion Tokens (Rollup)
     * * SQL Data Type: int
     * * Description: Total completion/output tokens including this execution and all child/grandchild executions. For leaf nodes (no children), this equals TokensCompletion. For parent nodes, this includes the sum of all descendant completion tokens.
     */
@@ -37441,7 +37767,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: LogProbs
-    * * Display Name: Log Probs
+    * * Display Name: Log Probabilities
     * * SQL Data Type: bit
     * * Description: Whether log probabilities were requested for this run
     */
@@ -37454,7 +37780,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TopLogProbs
-    * * Display Name: Top Log Probs
+    * * Display Name: Top Log Probabilities
     * * SQL Data Type: int
     * * Description: Number of top log probabilities requested per token (if LogProbs is true)
     */
@@ -37702,7 +38028,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: OriginalModelID
-    * * Display Name: Original Model ID
+    * * Display Name: Original Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     * * Description: The AI Model ID that was originally attempted before any failovers
@@ -37729,7 +38055,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TotalFailoverDuration
-    * * Display Name: Total Failover Duration
+    * * Display Name: Total Failover Duration (ms)
     * * SQL Data Type: int
     * * Description: Total time spent in failover attempts in milliseconds
     */
@@ -37742,7 +38068,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RerunFromPromptRunID
-    * * Display Name: Rerun From Prompt Run ID
+    * * Display Name: Rerun From
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
     * * Description: If this run was initiated as a re-run of another prompt run, this field links back to the original run ID
@@ -37875,7 +38201,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: JudgeID
-    * * Display Name: Judge ID
+    * * Display Name: Judge
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     * * Description: ID of the AIPrompt used as a judge to evaluate and rank multiple parallel execution results
@@ -37930,7 +38256,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: FirstTokenTime
-    * * Display Name: First Token Time
+    * * Display Name: First Token Time (ms)
     * * SQL Data Type: int
     * * Description: Time in milliseconds from request initiation to receiving the first token from the model
     */
@@ -37956,7 +38282,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: ChildPromptID
-    * * Display Name: Child Prompt ID
+    * * Display Name: Child Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     * * Description: References the specific child prompt that was executed as part of hierarchical prompt composition. NULL for regular prompts or parent prompts that don't directly execute a child.
@@ -37970,7 +38296,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: QueueTime
-    * * Display Name: Queue Time
+    * * Display Name: Queue Time (ms)
     * * SQL Data Type: int
     * * Description: Queue time in milliseconds before the model started processing the request. Provider-specific timing metric.
     */
@@ -37983,7 +38309,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: PromptTime
-    * * Display Name: Prompt Time
+    * * Display Name: Prompt Time (ms)
     * * SQL Data Type: int
     * * Description: Time in milliseconds for the model to ingest and process the prompt. Provider-specific timing metric.
     */
@@ -37996,7 +38322,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: CompletionTime
-    * * Display Name: Completion Time
+    * * Display Name: Completion Time (ms)
     * * SQL Data Type: int
     * * Description: Time in milliseconds for the model to generate the completion/response tokens. Provider-specific timing metric.
     */
@@ -38061,7 +38387,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: TestRunID
-    * * Display Name: Test Run ID
+    * * Display Name: Test Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
     * * Description: Optional Foreign Key - Links this prompt run to a test run if this prompt execution was part of a test. Enables testing individual prompts for quality and consistency before agent integration.
@@ -38071,6 +38397,19 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     }
     set TestRunID(value: string | null) {
         this.Set('TestRunID', value);
+    }
+
+    /**
+    * * Field Name: AssistantPrefill
+    * * Display Name: Assistant Prefill
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The assistant prefill text that was used during this prompt execution. Records whether native prefill or fallback was applied. NULL means no prefill was used.
+    */
+    get AssistantPrefill(): string | null {
+        return this.Get('AssistantPrefill');
+    }
+    set AssistantPrefill(value: string | null) {
+        this.Set('AssistantPrefill', value);
     }
 
     /**
@@ -38147,7 +38486,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RerunFromPromptRun
-    * * Display Name: Rerun From Prompt Run
+    * * Display Name: Rerun From
     * * SQL Data Type: nvarchar(255)
     */
     get RerunFromPromptRun(): string | null {
@@ -38183,7 +38522,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
+    * * Display Name: Root Parent
     * * SQL Data Type: uniqueidentifier
     */
     get RootParentID(): string | null {
@@ -38192,7 +38531,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
 
     /**
     * * Field Name: RootRerunFromPromptRunID
-    * * Display Name: Root Rerun From Prompt Run ID
+    * * Display Name: Root Rerun From
     * * SQL Data Type: uniqueidentifier
     */
     get RootRerunFromPromptRunID(): string | null {
@@ -38519,7 +38858,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: TemplateID
-    * * Display Name: Template ID
+    * * Display Name: Template
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Templates (vwTemplates.ID)
     * * Description: Reference to the template used for the prompt.
@@ -38533,7 +38872,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: CategoryID
-    * * Display Name: Category ID
+    * * Display Name: Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Categories (vwAIPromptCategories.ID)
     * * Description: Reference to the category the prompt belongs to.
@@ -38547,7 +38886,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: TypeID
-    * * Display Name: Type ID
+    * * Display Name: Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompt Types (vwAIPromptTypes.ID)
     * * Description: Reference to the type of the prompt.
@@ -38632,7 +38971,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: AIModelTypeID
-    * * Display Name: AI Model Type ID
+    * * Display Name: AI Model Type
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Model Types (vwAIModelTypes.ID)
     * * Description: References the type of AI model this prompt is designed for (LLM, Image, Audio, etc.).
@@ -38646,7 +38985,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: MinPowerRank
-    * * Display Name: Min Power Rank
+    * * Display Name: Minimum Power Rank
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: The minimum power rank required for models to be considered for this prompt.
@@ -38731,7 +39070,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: ParallelConfigParam
-    * * Display Name: Parallel Config Param
+    * * Display Name: Parallel Config Parameter
     * * SQL Data Type: nvarchar(100)
     * * Description: When ParallelizationMode is ConfigParam, specifies the name of the configuration parameter that contains the parallel count.
     */
@@ -38811,7 +39150,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: RetryDelayMS
-    * * Display Name: Retry Delay MS
+    * * Display Name: Retry Delay (ms)
     * * SQL Data Type: int
     * * Default Value: 0
     * * Description: Delay between retry attempts in milliseconds.
@@ -38844,7 +39183,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: ResultSelectorPromptID
-    * * Display Name: Result Selector Prompt ID
+    * * Display Name: Result Selector Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     * * Description: References another prompt that selects the best result from multiple parallel executions.
@@ -38872,7 +39211,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: CacheTTLSeconds
-    * * Display Name: Cache TTL Seconds
+    * * Display Name: Cache TTL (Seconds)
     * * SQL Data Type: int
     * * Description: Time-to-live in seconds for cached results. NULL means results never expire.
     */
@@ -38958,7 +39297,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: CacheMustMatchConfig
-    * * Display Name: Cache Must Match Config
+    * * Display Name: Cache Must Match Configuration
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.
@@ -39114,7 +39453,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: IncludeLogProbs
-    * * Display Name: Include Log Probs
+    * * Display Name: Include Log Probabilities
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Default setting for including log probabilities in the response. Can be overridden at runtime.
@@ -39128,7 +39467,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: TopLogProbs
-    * * Display Name: Top Log Probs
+    * * Display Name: Top Log Probabilities
     * * SQL Data Type: int
     * * Description: Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.
     */
@@ -39179,7 +39518,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: FailoverDelaySeconds
-    * * Display Name: Failover Delay Seconds
+    * * Display Name: Failover Delay (seconds)
     * * SQL Data Type: int
     * * Default Value: 5
     * * Description: Initial delay in seconds between failover attempts
@@ -39251,8 +39590,40 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
 
     /**
+    * * Field Name: AssistantPrefill
+    * * Display Name: Assistant Prefill
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional text to prefill the assistant response. The model will continue generating from where this text ends. Used with StopSequences for structured output extraction (e.g., prefill with \`\`\`json to get raw JSON). Only effective with providers that support prefill natively; see PrefillFallbackMode for non-supporting providers.
+    */
+    get AssistantPrefill(): string | null {
+        return this.Get('AssistantPrefill');
+    }
+    set AssistantPrefill(value: string | null) {
+        this.Set('AssistantPrefill', value);
+    }
+
+    /**
+    * * Field Name: PrefillFallbackMode
+    * * Display Name: Prefill Fallback Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Ignore
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Ignore
+    *   * None
+    *   * SystemInstruction
+    * * Description: Controls behavior when the selected provider does not support native assistant prefill. Ignore = silently skip prefill, SystemInstruction = inject a system message instructing the model to start its response with the prefill text (uses fallback text from AI Model Vendor or AI Model Type), None = no fallback (prefill only works with supported providers).
+    */
+    get PrefillFallbackMode(): 'Ignore' | 'None' | 'SystemInstruction' {
+        return this.Get('PrefillFallbackMode');
+    }
+    set PrefillFallbackMode(value: 'Ignore' | 'None' | 'SystemInstruction') {
+        this.Set('PrefillFallbackMode', value);
+    }
+
+    /**
     * * Field Name: Template
-    * * Display Name: Template
+    * * Display Name: Template Text
     * * SQL Data Type: nvarchar(255)
     */
     get Template(): string {
@@ -39261,7 +39632,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(255)
     */
     get Category(): string | null {
@@ -39270,7 +39641,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Type
+    * * Display Name: Type Name
     * * SQL Data Type: nvarchar(255)
     */
     get Type(): string {
@@ -39279,7 +39650,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: AIModelType
-    * * Display Name: AI Model Type
+    * * Display Name: AI Model Type Name
     * * SQL Data Type: nvarchar(50)
     */
     get AIModelType(): string | null {
@@ -39288,7 +39659,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: ResultSelectorPrompt
-    * * Display Name: Result Selector Prompt
+    * * Display Name: Result Selector Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get ResultSelectorPrompt(): string | null {
@@ -39297,7 +39668,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: RootResultSelectorPromptID
-    * * Display Name: Root Result Selector Prompt ID
+    * * Display Name: Root Result Selector Prompt
     * * SQL Data Type: uniqueidentifier
     */
     get RootResultSelectorPromptID(): string | null {
@@ -45972,7 +46343,7 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
 
     /**
     * * Field Name: RunByUserID
-    * * Display Name: Run By User
+    * * Display Name: Run By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -46087,7 +46458,7 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
 
     /**
     * * Field Name: ConfigData
-    * * Display Name: Config Data
+    * * Display Name: Configuration Data
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional configuration data in JSON format for the request that started the integration run for audit purposes.
     */
@@ -46096,6 +46467,20 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
     }
     set ConfigData(value: string | null) {
         this.Set('ConfigData', value);
+    }
+
+    /**
+    * * Field Name: ScheduledJobRunID
+    * * Display Name: Scheduled Job Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+    * * Description: Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.
+    */
+    get ScheduledJobRunID(): string | null {
+        return this.Get('ScheduledJobRunID');
+    }
+    set ScheduledJobRunID(value: string | null) {
+        this.Set('ScheduledJobRunID', value);
     }
 
     /**
@@ -46441,7 +46826,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: IsExternalSystemReadOnly
-    * * Display Name: External System Read Only
+    * * Display Name: Is Read Only
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if data can only be read from the external system, not written back.
@@ -46705,8 +47090,22 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
     }
 
     /**
+    * * Field Name: ScheduledJobID
+    * * Display Name: Scheduled Job
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
+    * * Description: Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.
+    */
+    get ScheduledJobID(): string | null {
+        return this.Get('ScheduledJobID');
+    }
+    set ScheduledJobID(value: string | null) {
+        this.Set('ScheduledJobID', value);
+    }
+
+    /**
     * * Field Name: Company
-    * * Display Name: Company
+    * * Display Name: Company Name
     * * SQL Data Type: nvarchar(50)
     */
     get Company(): string {
@@ -46715,7 +47114,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration
+    * * Display Name: Integration Name
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {
@@ -46742,7 +47141,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: LastRunID
-    * * Display Name: Last Run ID
+    * * Display Name: Last Run
     * * SQL Data Type: uniqueidentifier
     */
     get LastRunID(): string | null {
@@ -59365,6 +59764,500 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     */
     get RelatedEntityClassName(): string | null {
         return this.Get('RelatedEntityClassName');
+    }
+}
+
+
+/**
+ * MJ: Entity Organic Key Related Entities - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityOrganicKeyRelatedEntity
+ * * Base View: vwEntityOrganicKeyRelatedEntities
+ * * @description Maps a related entity to an organic key, defining how records are matched — either by direct field comparison or transitively via a SQL view/table that bridges multiple hops.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Organic Key Related Entities')
+export class MJEntityOrganicKeyRelatedEntityEntity extends BaseEntity<MJEntityOrganicKeyRelatedEntityEntityType> {
+    /**
+    * Loads the MJ: Entity Organic Key Related Entities record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Organic Key Related Entities record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityOrganicKeyRelatedEntityEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Organic Key Related Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: To ensure clear data mapping, you must define a relationship using either the Related Entity Field Names or a complete Transitive Object configuration. This constraint prevents ambiguous setups by ensuring that only one of these two methods is used and that all required fields for a transitive relationship are provided together.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRelatedEntityOrTransitiveMapping(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * To ensure clear data mapping, you must define a relationship using either the Related Entity Field Names or a complete Transitive Object configuration. This constraint prevents ambiguous setups by ensuring that only one of these two methods is used and that all required fields for a transitive relationship are provided together.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRelatedEntityOrTransitiveMapping(result: ValidationResult) {
+    	const hasRelatedFields = this.RelatedEntityFieldNames != null;
+    	const hasTransitiveName = this.TransitiveObjectName != null;
+    	const hasTransitiveMatch = this.TransitiveObjectMatchFieldNames != null;
+    	const hasTransitiveOutput = this.TransitiveObjectOutputFieldName != null;
+    	const hasJoinField = this.RelatedEntityJoinFieldName != null;
+    
+    	// Option 1: Only RelatedEntityFieldNames is provided
+    	const isDirectMapping = hasRelatedFields && !hasTransitiveName && !hasTransitiveMatch && !hasTransitiveOutput && !hasJoinField;
+    	
+    	// Option 2: All transitive fields are provided and RelatedEntityFieldNames is null
+    	const isTransitiveMapping = !hasRelatedFields && hasTransitiveName && hasTransitiveMatch && hasTransitiveOutput && hasJoinField;
+    
+    	if (!isDirectMapping && !isTransitiveMapping) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RelatedEntityFieldNames",
+    			"You must provide either only the Related Entity Field Names OR a complete set of Transitive Object fields (Object Name, Match Fields, Output Field, and Join Field). Partial or overlapping configurations are not allowed.",
+    			this.RelatedEntityFieldNames,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityOrganicKeyID
+    * * Display Name: Organic Key ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Organic Keys (vwEntityOrganicKeys.ID)
+    */
+    get EntityOrganicKeyID(): string {
+        return this.Get('EntityOrganicKeyID');
+    }
+    set EntityOrganicKeyID(value: string) {
+        this.Set('EntityOrganicKeyID', value);
+    }
+
+    /**
+    * * Field Name: RelatedEntityID
+    * * Display Name: Related Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get RelatedEntityID(): string {
+        return this.Get('RelatedEntityID');
+    }
+    set RelatedEntityID(value: string) {
+        this.Set('RelatedEntityID', value);
+    }
+
+    /**
+    * * Field Name: RelatedEntityFieldNames
+    * * Display Name: Related Entity Fields
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Comma-delimited field names in the related entity, positionally matching MatchFieldNames on the parent key. NULL when using transitive matching.
+    */
+    get RelatedEntityFieldNames(): string | null {
+        return this.Get('RelatedEntityFieldNames');
+    }
+    set RelatedEntityFieldNames(value: string | null) {
+        this.Set('RelatedEntityFieldNames', value);
+    }
+
+    /**
+    * * Field Name: TransitiveObjectName
+    * * Display Name: Transitive Object Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Schema-qualified name of a SQL view or table that bridges the organic key to the related entity (e.g., "dbo.vwContactRecipientBridge"). This object encapsulates any number of join hops. NULL for direct matches.
+    */
+    get TransitiveObjectName(): string | null {
+        return this.Get('TransitiveObjectName');
+    }
+    set TransitiveObjectName(value: string | null) {
+        this.Set('TransitiveObjectName', value);
+    }
+
+    /**
+    * * Field Name: TransitiveObjectMatchFieldNames
+    * * Display Name: Transitive Match Fields
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Comma-delimited field names in the transitive object that match the organic key values, positionally aligned with MatchFieldNames. NULL for direct matches.
+    */
+    get TransitiveObjectMatchFieldNames(): string | null {
+        return this.Get('TransitiveObjectMatchFieldNames');
+    }
+    set TransitiveObjectMatchFieldNames(value: string | null) {
+        this.Set('TransitiveObjectMatchFieldNames', value);
+    }
+
+    /**
+    * * Field Name: TransitiveObjectOutputFieldName
+    * * Display Name: Transitive Output Field
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The field in the transitive object that produces the value to join against the related entity. NULL for direct matches.
+    */
+    get TransitiveObjectOutputFieldName(): string | null {
+        return this.Get('TransitiveObjectOutputFieldName');
+    }
+    set TransitiveObjectOutputFieldName(value: string | null) {
+        this.Set('TransitiveObjectOutputFieldName', value);
+    }
+
+    /**
+    * * Field Name: RelatedEntityJoinFieldName
+    * * Display Name: Related Entity Join Field
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The field in the related entity that matches TransitiveObjectOutputFieldName. NULL for direct matches.
+    */
+    get RelatedEntityJoinFieldName(): string | null {
+        return this.Get('RelatedEntityJoinFieldName');
+    }
+    set RelatedEntityJoinFieldName(value: string | null) {
+        this.Set('RelatedEntityJoinFieldName', value);
+    }
+
+    /**
+    * * Field Name: DisplayName
+    * * Display Name: Display Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Tab/section label override. If NULL, defaults to the related entity's display name.
+    */
+    get DisplayName(): string | null {
+        return this.Get('DisplayName');
+    }
+    set DisplayName(value: string | null) {
+        this.Set('DisplayName', value);
+    }
+
+    /**
+    * * Field Name: DisplayLocation
+    * * Display Name: Display Location
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: After Field Tabs
+    * * Value List Type: List
+    * * Possible Values 
+    *   * After Field Tabs
+    *   * Before Field Tabs
+    * * Description: Where to render the organic key tab relative to FK relationship tabs. After Field Tabs or Before Field Tabs.
+    */
+    get DisplayLocation(): 'After Field Tabs' | 'Before Field Tabs' {
+        return this.Get('DisplayLocation');
+    }
+    set DisplayLocation(value: 'After Field Tabs' | 'Before Field Tabs') {
+        this.Set('DisplayLocation', value);
+    }
+
+    /**
+    * * Field Name: DisplayComponentID
+    * * Display Name: Display Component
+    * * SQL Data Type: uniqueidentifier
+    * * Description: FK to component registry for a custom display component. NULL uses the default EntityDataGrid.
+    */
+    get DisplayComponentID(): string | null {
+        return this.Get('DisplayComponentID');
+    }
+    set DisplayComponentID(value: string | null) {
+        this.Set('DisplayComponentID', value);
+    }
+
+    /**
+    * * Field Name: DisplayComponentConfiguration
+    * * Display Name: Display Component Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration passed to the display component.
+    */
+    get DisplayComponentConfiguration(): string | null {
+        return this.Get('DisplayComponentConfiguration');
+    }
+    set DisplayComponentConfiguration(value: string | null) {
+        this.Set('DisplayComponentConfiguration', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Tab ordering within this organic key's related entities. Lower values appear first.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityOrganicKey
+    * * Display Name: Organic Key
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EntityOrganicKey(): string {
+        return this.Get('EntityOrganicKey');
+    }
+
+    /**
+    * * Field Name: RelatedEntity
+    * * Display Name: Related Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RelatedEntity(): string {
+        return this.Get('RelatedEntity');
+    }
+}
+
+
+/**
+ * MJ: Entity Organic Keys - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityOrganicKey
+ * * Base View: vwEntityOrganicKeys
+ * * @description Defines organic keys on entities — sets of fields that constitute natural identifiers for cross-system matching (e.g., email, phone, SSN). Enables related record views across integration boundaries without foreign keys.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Organic Keys')
+export class MJEntityOrganicKeyEntity extends BaseEntity<MJEntityOrganicKeyEntityType> {
+    /**
+    * Loads the MJ: Entity Organic Keys record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Organic Keys record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityOrganicKeyEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable label for this organic key (e.g., "Email Match", "SSN Match"). Must be unique per entity.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional explanation of the key's purpose and matching semantics.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: MatchFieldNames
+    * * Display Name: Match Fields
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Comma-delimited field names in the owning entity that constitute the key. Single value for simple keys (e.g., "EmailAddress"), multiple for compound keys (e.g., "FirstName,LastName,DateOfBirth"). Field names must match EntityField.Name values.
+    */
+    get MatchFieldNames(): string {
+        return this.Get('MatchFieldNames');
+    }
+    set MatchFieldNames(value: string) {
+        this.Set('MatchFieldNames', value);
+    }
+
+    /**
+    * * Field Name: NormalizationStrategy
+    * * Display Name: Normalization Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: LowerCaseTrim
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * ExactMatch
+    *   * LowerCaseTrim
+    *   * Trim
+    * * Description: How field values are normalized before comparison. LowerCaseTrim = LOWER(TRIM(x)), Trim = TRIM(x), ExactMatch = no transformation, Custom = uses CustomNormalizationExpression.
+    */
+    get NormalizationStrategy(): 'Custom' | 'ExactMatch' | 'LowerCaseTrim' | 'Trim' {
+        return this.Get('NormalizationStrategy');
+    }
+    set NormalizationStrategy(value: 'Custom' | 'ExactMatch' | 'LowerCaseTrim' | 'Trim') {
+        this.Set('NormalizationStrategy', value);
+    }
+
+    /**
+    * * Field Name: CustomNormalizationExpression
+    * * Display Name: Custom Normalization Expression
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: SQL expression template when NormalizationStrategy is Custom. Uses {{FieldName}} as placeholder. Example: "REPLACE(REPLACE({{FieldName}}, '-', ''), ' ', '')" for phone number normalization.
+    */
+    get CustomNormalizationExpression(): string | null {
+        return this.Get('CustomNormalizationExpression');
+    }
+    set CustomNormalizationExpression(value: string | null) {
+        this.Set('CustomNormalizationExpression', value);
+    }
+
+    /**
+    * * Field Name: AutoCreateRelatedViewOnForm
+    * * Display Name: Auto Create Related View
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, a future discovery process will automatically scan entities and create EntityOrganicKeyRelatedEntity rows for entities with matching field patterns.
+    */
+    get AutoCreateRelatedViewOnForm(): boolean {
+        return this.Get('AutoCreateRelatedViewOnForm');
+    }
+    set AutoCreateRelatedViewOnForm(value: boolean) {
+        this.Set('AutoCreateRelatedViewOnForm', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordering when an entity has multiple organic keys. Lower values = higher priority.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Active or Disabled. Disabled keys are ignored at runtime.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
     }
 }
 

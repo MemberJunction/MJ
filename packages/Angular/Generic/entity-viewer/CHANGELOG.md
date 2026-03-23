@@ -1,5 +1,21 @@
 # @memberjunction/ng-entity-viewer
 
+## 5.15.0
+
+### Patch Changes
+
+- Updated dependencies [662d56b]
+- Updated dependencies [d01f697]
+  - @memberjunction/core@5.15.0
+  - @memberjunction/ng-filter-builder@5.15.0
+  - @memberjunction/ng-shared-generic@5.15.0
+  - @memberjunction/ng-timeline@5.15.0
+  - @memberjunction/core-entities@5.15.0
+  - @memberjunction/ng-export-service@5.15.0
+  - @memberjunction/ng-pagination@5.15.0
+  - @memberjunction/export-engine@5.15.0
+  - @memberjunction/global@5.15.0
+
 ## 5.14.0
 
 ### Patch Changes

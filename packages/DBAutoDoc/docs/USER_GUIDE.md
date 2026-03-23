@@ -2,6 +2,9 @@
 
 A comprehensive guide to using DBAutoDoc for AI-powered database documentation.
 
+
+> **Benchmark Results**: DBAutoDoc achieves Grade A+ (96.1%) on AdventureWorks2022 across multiple LLM providers. See the [research paper](../research/v1/paper.md) and [benchmark results](../research/v1/results/) for detailed evaluation across 6 databases.
+
 ## Table of Contents
 
 1. [Quick Start Guide](#quick-start-guide)
@@ -242,7 +245,7 @@ The `config.json` file controls all aspects of DBAutoDoc:
 {
   "ai": {
     "provider": "openai",
-    "model": "gpt-4-turbo-preview",
+    "model": "gemini-3-flash-preview",
     "apiKey": "sk-...",
     "temperature": 0.1,
     "maxTokens": 4000,
@@ -257,7 +260,7 @@ The `config.json` file controls all aspects of DBAutoDoc:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `provider` | string | Required | `openai`, `anthropic`, `groq`, `mistral`, `gemini` |
-| `model` | string | Required | Model identifier (e.g., `gpt-4-turbo-preview`) |
+| `model` | string | Required | Model identifier (e.g., `gemini-3-flash-preview`) |
 | `apiKey` | string | Required | API key for provider |
 | `temperature` | number | 0.1 | Randomness (0=deterministic, 1=creative). Use 0.1 for documentation |
 | `maxTokens` | number | 4000 | Max tokens per API call |
@@ -267,7 +270,7 @@ The `config.json` file controls all aspects of DBAutoDoc:
 **Supported Models:**
 
 #### OpenAI
-- `gpt-4-turbo-preview` - Highest quality, most expensive
+- `gemini-3-flash-preview` - Highest quality, most expensive
 - `gpt-4` - Very capable, expensive
 - `gpt-3.5-turbo` - Cheaper, adequate quality
 
@@ -1192,7 +1195,7 @@ Confidence = (
 // Strategy 4: Better model
 {
   "ai": {
-    "model": "gpt-4-turbo-preview",  // Higher quality
+    "model": "gemini-3-flash-preview",  // Higher quality
     "temperature": 0.05              // More deterministic
   }
 }
