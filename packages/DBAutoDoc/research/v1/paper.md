@@ -1,3 +1,12 @@
+# =====================================================================
+# THIS FILE IS ARCHIVED — DO NOT EDIT
+# =====================================================================
+# The authoritative version of this paper has moved to Overleaf (LaTeX).
+# See: research/v1/latex/ for the LaTeX source files.
+# All future edits should be made in the Overleaf project.
+# This Markdown version is preserved for reference only.
+# =====================================================================
+
 # DBAutoDoc: Automated Discovery and Documentation of Undocumented Database Schemas via Statistical Analysis and Iterative LLM Refinement
 
 *Technical Report — Preprint (not peer-reviewed)*
