@@ -21,7 +21,6 @@ import { IntegrationCardComponent } from './components/widgets/integration-card.
 import { RunHistoryPanelComponent } from './components/widgets/run-history-panel.component';
 import { VisualFieldEditorComponent } from './components/visual-editor/visual-editor.component';
 import { IntegrationDataService } from './services/integration-data.service';
-import { ApiTestHarnessComponent } from './components/api-test-harness/api-test-harness.component';
 
 @NgModule({
   declarations: [
@@ -46,8 +45,7 @@ import { ApiTestHarnessComponent } from './components/api-test-harness/api-test-
     SharedGenericModule,
     CredentialsModule,
     NgTreesModule,
-    SchedulingModule,
-    ApiTestHarnessComponent
+    SchedulingModule
   ],
   providers: [
     IntegrationDataService
@@ -61,8 +59,7 @@ import { ApiTestHarnessComponent } from './components/api-test-harness/api-test-
     SchedulesComponent,
     IntegrationCardComponent,
     RunHistoryPanelComponent,
-    VisualFieldEditorComponent,
-    ApiTestHarnessComponent
+    VisualFieldEditorComponent
   ]
 })
 export class IntegrationModule { }
