@@ -1435,6 +1435,29 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    /**
+     * Reactivates a previously deactivated CompanyIntegration by setting IsActive=true.
+     */
+    @Mutation(() => MutationResultOutput)
+    async IntegrationReactivateConnection(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<MutationResultOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const md = new Metadata();
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            const loaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
+            if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
+            ci.IsActive = true;
+            if (!await ci.Save()) return { Success: false, Message: `Failed to reactivate: ${ci.LatestResult?.Message ?? 'Unknown error'}` };
+            return { Success: true, Message: 'Reactivated' };
+        } catch (e) {
+            LogError(`IntegrationReactivateConnection error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
     // ── ENTITY MAPS ─────────────────────────────────────────────────────
 
     /**
