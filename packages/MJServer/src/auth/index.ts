@@ -6,12 +6,9 @@ import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
 import { MJUserEntity, MJUserEntityType } from '@memberjunction/core-entities';
-import { AuthProviderFactory } from './AuthProviderFactory.js';
+import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { initializeAuthProviders } from './initializeProviders.js';
 
-export { TokenExpiredError } from './tokenExpiredError.js';
-export { IAuthProvider } from './IAuthProvider.js';
-export { AuthProviderFactory } from './AuthProviderFactory.js';
 export * from './APIKeyScopeAuth.js';
 
 // This is a hard-coded forever constant due to internal migrations
