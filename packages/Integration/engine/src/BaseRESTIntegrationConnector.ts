@@ -161,6 +161,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         );
 
         return objects.map(obj => ({
+            ID: obj.ID,
             Name: obj.Name,
             Label: obj.DisplayName ?? obj.Name,
             Description: obj.Description ?? undefined,
