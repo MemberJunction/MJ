@@ -1,5 +1,5 @@
 import { ElementRef, Injectable } from '@angular/core';
-import { LogError, Metadata } from '@memberjunction/core';
+import { LogError, Metadata, StartupManager } from '@memberjunction/core';
 import { UserInfoEngine, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal, GetGlobalObjectStore } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -46,8 +46,16 @@ export class MJNotificationService {
           }
           break;
         case MJEventType.LoggedIn:
-          if (MJNotificationService._loaded === false) 
-            MJNotificationService.RefreshUserNotifications();
+          if (MJNotificationService._loaded === false) {
+            // Wait for StartupManager to complete before refreshing notifications.
+            // UserInfoEngine (which backs RefreshUserNotifications) is @RegisterForStartup
+            // and its _metadataConfigs are only populated during Config() which runs
+            // as part of StartupManager.Startup(). Calling RefreshItem() before that
+            // completes would silently find no config and return nothing.
+            StartupManager.Instance.Startup().then(() => {
+              MJNotificationService.RefreshUserNotifications();
+            });
+          }
 
           // Subscribe to UserInfoEngine's DataChange$ so that when CACHE_INVALIDATION
           // updates the _UserNotifications array, we immediately sync our BehaviorSubjects.

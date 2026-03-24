@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/core
 
+## 5.16.0
+
+### Patch Changes
+
+- 2387400: Migrated singleton classes to BaseSingleton pattern and extracted auth providers into standalone package
+- 11dba07: no migration
+  - @memberjunction/global@5.16.0
+
 ## 5.15.0
 
 ### Minor Changes
