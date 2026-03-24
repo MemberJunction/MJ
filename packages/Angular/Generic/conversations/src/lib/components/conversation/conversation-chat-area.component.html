@@ -43,11 +43,11 @@
             <span class="members-badge">{{ memberCount }}</span>
           </button>
         }
-        <button class="action-btn" (click)="exportConversation()" title="Export conversation">
+        <button mjButton variant="flat" size="sm" (click)="exportConversation()" title="Export conversation">
           <i class="fas fa-download"></i>
           <span class="btn-label">Export</span>
         </button>
-        <button class="action-btn share-btn"
+        <button mjButton variant="flat" size="sm"
           [class.shared]="isShared"
           (click)="shareConversation()"
           [title]="isShared ? 'Manage sharing' : 'Share conversation'">

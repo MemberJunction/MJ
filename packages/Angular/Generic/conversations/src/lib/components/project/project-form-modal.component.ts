@@ -152,8 +152,8 @@ const DEFAULT_PROJECT_ICONS = [
       </div>
 
       <kendo-dialog-actions>
-        <button kendoButton (click)="onCancel()">Cancel</button>
-        <button kendoButton [themeColor]="'primary'" (click)="onSave()">
+        <button mjButton (click)="onCancel()">Cancel</button>
+        <button mjButton variant="primary" (click)="onSave()">
           {{ isEditMode ? 'Save' : 'Create' }}
         </button>
       </kendo-dialog-actions>

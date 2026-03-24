@@ -105,11 +105,11 @@ import { ToastService } from '../../services/toast.service';
           }
         </div>
         <kendo-dialog-actions>
-          <button kendoButton [disabled]="isExporting" (click)="onCancel()">
+          <button mjButton [disabled]="isExporting" (click)="onCancel()">
             <i class="fa-solid fa-times"></i>
             Cancel
           </button>
-          <button kendoButton [primary]="true" [disabled]="!canExport" (click)="onExport()">
+          <button mjButton variant="primary" [disabled]="!canExport" (click)="onExport()">
             <i class="fa-solid fa-download"></i>
             Export
           </button>

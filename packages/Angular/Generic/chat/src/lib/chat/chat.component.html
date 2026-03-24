@@ -63,14 +63,14 @@
                         (keyup.enter)="SendCurrentMessage()" >
             </textarea>
         </div>
-        <button kendoButton 
+        <button mjButton variant="flat"
                 [disabled]="Messages.length === 0 || ShowWaitingIndicator"
                 (click)="showingClearAllDialog = true">
             <span class="fa-solid fa-trash-can" title="Clear Chat">
             </span>
         </button>
-        <button kendoButton
-                [disabled]="!InternalAllowSend || currentMessage.length === 0 || ShowWaitingIndicator" 
+        <button mjButton variant="primary"
+                [disabled]="!InternalAllowSend || currentMessage.length === 0 || ShowWaitingIndicator"
                 (click)="SendCurrentMessage()">
                 <span class="fas fa-solid fa-arrow-up" title="Send Message"></span>
         </button>
@@ -80,8 +80,8 @@
     <kendo-dialog>
         <p>{{ClearAllMessagesPrompt}}</p>
           <kendo-dialog-actions>
-            <button kendoButton (click)="HandleClearChat()" themeColor="primary">Yes</button>
-            <button kendoButton (click)="showingClearAllDialog = false">No</button>
+            <button mjButton variant="primary" (click)="HandleClearChat()">Yes</button>
+            <button mjButton (click)="showingClearAllDialog = false">No</button>
           </kendo-dialog-actions>
     </kendo-dialog>
 }

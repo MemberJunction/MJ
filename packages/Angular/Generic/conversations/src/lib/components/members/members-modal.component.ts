@@ -38,7 +38,7 @@ interface ConversationMember {
                 [valueField]="'value'"
                 [style.width.px]="120">
               </kendo-dropdownlist>
-              <button kendoButton [primary]="true" [disabled]="isLoading" (click)="onAddMember()">
+              <button mjButton variant="primary" [disabled]="isLoading" (click)="onAddMember()">
                 Add
               </button>
             </div>
@@ -91,7 +91,7 @@ interface ConversationMember {
           }
         </div>
         <kendo-dialog-actions>
-          <button kendoButton (click)="onCancel()">Close</button>
+          <button mjButton (click)="onCancel()">Close</button>
         </kendo-dialog-actions>
       </kendo-dialog>
     }

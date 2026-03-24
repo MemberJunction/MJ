@@ -3,10 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 
-// Kendo UI modules
+// Kendo UI modules (remaining Kendo — migrated in Phase 2.2/2.3)
 import { DialogModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { InputsModule } from '@progress/kendo-angular-inputs';
+// MJ UI Components
+import { MjButtonDirective } from '@memberjunction/ng-ui-components';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
@@ -132,7 +133,7 @@ const COMPONENTS = [
     RouterModule,
     DialogModule,
     WindowModule,
-    ButtonsModule,
+    MjButtonDirective,
     InputsModule,
     LayoutModule,
     IndicatorsModule,

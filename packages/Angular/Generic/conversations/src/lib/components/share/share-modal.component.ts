@@ -31,7 +31,7 @@ interface SharePermission {
                 placeholder="Enter email address"
                 [style.flex]="1">
               </kendo-textbox>
-              <button kendoButton [primary]="true" (click)="onAddUser()">
+              <button mjButton variant="primary" (click)="onAddUser()">
                 Add
               </button>
             </div>
@@ -89,7 +89,7 @@ interface SharePermission {
                   [readonly]="true"
                   [style.flex]="1">
                 </kendo-textbox>
-                <button kendoButton (click)="onCopyLink()">
+                <button mjButton variant="flat" (click)="onCopyLink()">
                   <i class="fas fa-copy"></i> Copy
                 </button>
               </div>
@@ -97,7 +97,7 @@ interface SharePermission {
           </div>
         </div>
         <kendo-dialog-actions>
-          <button kendoButton (click)="onClose()">Close</button>
+          <button mjButton (click)="onClose()">Close</button>
         </kendo-dialog-actions>
       </kendo-dialog>
     }

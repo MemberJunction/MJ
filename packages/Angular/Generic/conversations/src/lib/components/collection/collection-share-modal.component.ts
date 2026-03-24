@@ -99,11 +99,11 @@ interface PermissionDisplay extends CollectionPermission {
                                 </div>
 
                                 <div class="form-actions">
-                                    <button kendoButton (click)="onAddUser()" [disabled]="!selectedUser" class="btn-primary">
+                                    <button mjButton variant="primary" (click)="onAddUser()" [disabled]="!selectedUser">
                                         <i class="fa-solid fa-plus"></i>
                                         Add User
                                     </button>
-                                    <button kendoButton (click)="onClearSelection()" class="btn-secondary">
+                                    <button mjButton (click)="onClearSelection()">
                                         Cancel
                                     </button>
                                 </div>
@@ -190,17 +190,17 @@ interface PermissionDisplay extends CollectionPermission {
                                         @if (canModifyPermissions) {
                                             <div class="permission-actions">
                                                 @if (!permission.isEditing) {
-                                                    <button kendoButton class="btn-icon" (click)="onEditPermission(permission)" title="Edit">
+                                                    <button mjButton variant="flat" size="sm" (click)="onEditPermission(permission)" title="Edit">
                                                         <i class="fa-solid fa-pen"></i>
                                                     </button>
-                                                    <button kendoButton class="btn-icon btn-danger" (click)="onRevokePermission(permission)" title="Remove">
+                                                    <button mjButton variant="danger" size="sm" (click)="onRevokePermission(permission)" title="Remove">
                                                         <i class="fa-solid fa-xmark"></i>
                                                     </button>
                                                 } @else {
-                                                    <button kendoButton class="btn-icon btn-success" (click)="onSavePermission(permission)" title="Save">
+                                                    <button mjButton variant="success" size="sm" (click)="onSavePermission(permission)" title="Save">
                                                         <i class="fa-solid fa-check"></i>
                                                     </button>
-                                                    <button kendoButton class="btn-icon" (click)="onCancelEdit(permission)" title="Cancel">
+                                                    <button mjButton variant="flat" size="sm" (click)="onCancelEdit(permission)" title="Cancel">
                                                         <i class="fa-solid fa-xmark"></i>
                                                     </button>
                                                 }
@@ -214,7 +214,7 @@ interface PermissionDisplay extends CollectionPermission {
                 </div>
 
                 <div class="modal-actions">
-                    <button kendoButton (click)="onCancel()">Close</button>
+                    <button mjButton (click)="onCancel()">Close</button>
                 </div>
             </kendo-window>
         }

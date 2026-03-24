@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { DialogModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
+import { MjButtonDirective } from '@memberjunction/ng-ui-components';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ToastService } from '../../services/toast.service';
@@ -33,7 +33,7 @@ interface CollectionNode {
   imports: [
     FormsModule,
     DialogModule,
-    ButtonsModule,
+    MjButtonDirective,
     InputsModule,
     SharedGenericModule
 ],
@@ -159,14 +159,14 @@ interface CollectionNode {
                   (keydown.enter)="createCollection()"
                   #newCollectionInput>
                 <div class="create-actions">
-                  <button class="btn-create" kendoButton (click)="createCollection()" [disabled]="isCreatingCollection || !newCollectionName.trim()">
+                  <button mjButton variant="primary" size="sm" (click)="createCollection()" [disabled]="isCreatingCollection || !newCollectionName.trim()">
                     @if (isCreatingCollection) {
                       <i class="fas fa-spinner fa-spin"></i>
                     } @else {
                       Create
                     }
                   </button>
-                  <button class="btn-cancel" kendoButton (click)="showCreateForm = false; newCollectionName = ''">
+                  <button mjButton size="sm" (click)="showCreateForm = false; newCollectionName = ''">
                     Cancel
                   </button>
                 </div>
@@ -175,11 +175,11 @@ interface CollectionNode {
           </div>
         </div>
         <kendo-dialog-actions>
-          <button kendoButton (click)="onCancel()">
+          <button mjButton (click)="onCancel()">
             Cancel
           </button>
-          <button kendoButton
-            [primary]="true"
+          <button mjButton
+            variant="primary"
             (click)="onSave()"
             [disabled]="selectedCollections.length === 0 || isSaving">
             @if (isSaving) {

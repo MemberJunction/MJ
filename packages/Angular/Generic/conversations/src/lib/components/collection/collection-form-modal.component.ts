@@ -58,11 +58,11 @@ import { UUIDsEqual } from '@memberjunction/global';
           }
         </div>
         <kendo-dialog-actions>
-          <button kendoButton (click)="onCancel()" [disabled]="isSaving">
+          <button mjButton (click)="onCancel()" [disabled]="isSaving">
             Cancel
           </button>
-          <button kendoButton
-            [primary]="true"
+          <button mjButton
+            variant="primary"
             (click)="onSave()"
             [disabled]="!canSave || isSaving">
             {{ isSaving ? 'Saving...' : 'Save' }}

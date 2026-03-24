@@ -45,31 +45,30 @@ export interface ProjectWithStats extends MJProjectEntity {
 
       <div class="project-actions">
         @if (selectedProject) {
-          <button
-            kendoButton
-            [icon]="'edit'"
+          <button mjButton
+            variant="flat"
+            size="sm"
             [disabled]="disabled"
             (click)="onEditProject()"
-            title="Edit Project"
-            class="btn-icon">
+            title="Edit Project">
+            <i class="fa-solid fa-pen"></i>
           </button>
-          <button
-            kendoButton
-            [icon]="'trash'"
+          <button mjButton
+            variant="danger"
+            size="sm"
             [disabled]="disabled"
             (click)="onDeleteProject()"
-            title="Delete Project"
-            class="btn-icon btn-danger">
+            title="Delete Project">
+            <i class="fa-solid fa-trash"></i>
           </button>
         }
-        <button
-          kendoButton
-          [icon]="'plus'"
+        <button mjButton
+          variant="primary"
+          size="sm"
           [disabled]="disabled"
           (click)="onCreateProject()"
-          title="Create New Project"
-          [themeColor]="'primary'"
-          class="btn-icon">
+          title="Create New Project">
+          <i class="fa-solid fa-plus"></i>
         </button>
       </div>
     </div>
