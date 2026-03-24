@@ -1,5 +1,30 @@
 # @memberjunction/core-entities-server
 
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/ai-engine-base@5.16.0
+  - @memberjunction/ai-core-plus@5.16.0
+  - @memberjunction/aiengine@5.16.0
+  - @memberjunction/ai-prompts@5.16.0
+  - @memberjunction/ai-vector-dupe@5.16.0
+  - @memberjunction/ai-vectors-memory@5.16.0
+  - @memberjunction/actions-base@5.16.0
+  - @memberjunction/doc-utils@5.16.0
+  - @memberjunction/generic-database-provider@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/sqlserver-dataprovider@5.16.0
+  - @memberjunction/skip-types@5.16.0
+  - @memberjunction/ai-provider-bundle@5.16.0
+  - @memberjunction/ai@5.16.0
+  - @memberjunction/global@5.16.0
+  - @memberjunction/sql-converter@5.16.0
+  - @memberjunction/sql-parser@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes
