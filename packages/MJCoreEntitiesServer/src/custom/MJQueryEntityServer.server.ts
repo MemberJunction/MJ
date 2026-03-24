@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryParameterInfo, QueryPermissionInfo, RunView, SimpleEmbeddingResult, SQLDialectInfo, TypeScriptTypeFromSQLType } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, EntitySaveOptions, IMetadataProvider, LogError, Metadata, QueryEntityInfo, QueryFieldInfo, QueryInfo, QueryParameterInfo, QueryPermissionInfo, SimpleEmbeddingResult, SQLDialectInfo, TypeScriptTypeFromSQLType } from "@memberjunction/core";
 import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
 import { MJQueryEntity, MJQueryParameterEntity, MJQueryFieldEntity, MJQueryEntityEntity, MJQuerySQLEntity, MJQueryDependencyEntity } from "@memberjunction/core-entities";
 import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
@@ -22,7 +22,7 @@ import {
 } from "@memberjunction/sql-converter";
 import { EmbedTextLocalHelper } from "./util";
 import { SQLParser } from "@memberjunction/sql-parser";
-import type { MJParameterInfo } from "@memberjunction/sql-parser";
+import type { MJParameterInfo, SQLSelectColumn } from "@memberjunction/sql-parser";
 
 interface ExtractedParameter {
     name: string;
@@ -32,6 +32,43 @@ interface ExtractedParameter {
     usage: string[];
     defaultValue: string | null;
     sampleValue: string | null;
+}
+
+/**
+ * Metadata inherited from a dependency query's parameter for passthrough parameters.
+ * Used as a fallback source for description and sampleValue when LLM enrichment is unavailable.
+ */
+interface PassthroughParamContext {
+    /** Description from the dependency query's parameter (may be null if not set) */
+    description: string | null;
+    /** Sample value from the dependency query's parameter */
+    sampleValue: string | null;
+    /** Name of the dependency query */
+    depQueryName: string;
+    /** Parameter name in the dependency query */
+    depParamName: string;
+}
+
+/**
+ * A fully resolved composition reference. Produced once by `resolveCompositionReferences()`,
+ * then consumed by both dependency sync and passthrough parameter extraction.
+ */
+interface ResolvedCompositionReference {
+    /** The resolved dependency query from metadata */
+    depQuery: QueryInfo;
+    /** Full path as written in the composition token (e.g., "Demos/Active Users") */
+    referencePath: string;
+    /** SQL alias following the token (e.g., "base" in `{{query:"Q"}} base`) */
+    alias: string | null;
+    /** Parameter mapping: depParamName → static value or @passthroughName */
+    parameterMapping: Record<string, string> | null;
+    /** Passthrough parameter mappings from this composition ref */
+    passthroughMappings: Array<{
+        /** Variable name in the parent/outer query */
+        parentParamName: string;
+        /** Parameter name in the dependency query */
+        depParamName: string;
+    }>;
 }
 
 interface ExtractedField {
@@ -46,6 +83,10 @@ interface ExtractedField {
     isComputed?: boolean;              // True if field is an expression/calculation (not direct column)
     isSummary?: boolean;               // True if field uses aggregate function (SUM, COUNT, AVG, etc.)
     computationDescription?: string;   // Explanation of how the field is computed (if applicable)
+    // Deterministic SQL type overrides — set when resolved from dependency query fields or entity metadata.
+    // When present, these take priority over the generic type→SQL mapping in syncQueryFields.
+    sqlBaseType?: string | null;       // e.g., "nvarchar", "int", "decimal"
+    sqlFullType?: string | null;       // e.g., "nvarchar(100)", "int", "decimal(18,2)"
 }
 
 interface ParameterExtractionResult {
@@ -266,7 +307,15 @@ export class MJQueryEntityServer extends MJQueryEntity {
             // ── Deterministic analysis via SQLParser (source of truth) ──
             const analysis = SQLParser.Analyze(this.SQL);
             const deterministicParams = SQLParser.ExtractParameterInfo(this.SQL);
-            const hasTemplateParameters = analysis.hasTemplateExpressions && deterministicParams.length > 0;
+
+            // ── Composition reference resolution (single pass) ──
+            // Resolves all {{query:"..."}} tokens, validates existence and Reusable flag,
+            // and extracts passthrough parameter mappings. Throws on invalid references.
+            const resolvedRefs = this.resolveCompositionReferences(this.SQL);
+            const { params: passthroughParams, contextMap: passthroughContext } = this.buildPassthroughParams(resolvedRefs);
+            const allDeterministicParams = this.mergePassthroughParams(deterministicParams, passthroughParams);
+
+            const hasParameters = allDeterministicParams.length > 0;
 
             // Extract entity metadata deterministically (for LLM context and entity sync)
             const entityMetadata = await this.extractEntityMetadataFromSQL();
@@ -278,20 +327,31 @@ export class MJQueryEntityServer extends MJQueryEntity {
             const syncPromises: Promise<void>[] = [];
 
             // Parameters: SQLParser provides name, type, isRequired, defaultValue.
+            // Passthrough params inherit metadata from the dependency query's parameters.
             // LLM provides description and sampleValue as enrichment.
-            if (hasTemplateParameters) {
-                const enrichedParams = this.mergeParametersWithLLM(deterministicParams, llmResult);
+            if (hasParameters) {
+                const enrichedParams = this.mergeParametersWithLLM(allDeterministicParams, llmResult, passthroughContext);
                 syncPromises.push(this.syncQueryParameters(enrichedParams));
             } else {
                 syncPromises.push(this.removeAllQueryParameters());
             }
 
-            // Fields: deterministic for SELECT *, LLM for explicit column lists
+            // Fields: deterministic for SELECT *, LLM for explicit column lists.
+            // Enrich with deterministic SQL types from:
+            //   1. Composition ref fields (for composed queries)
+            //   2. Entity view/table metadata (for base queries referencing entity views)
+            // Composition enrichment runs first; entity enrichment fills remaining gaps.
             const selectStarFields = this.buildFieldsForSelectStar();
             if (selectStarFields) {
-                syncPromises.push(this.syncQueryFields(selectStarFields));
+                const enriched = this.enrichFieldTypesFromEntityMetadata(
+                    this.enrichFieldTypesFromCompositions(selectStarFields, resolvedRefs)
+                );
+                syncPromises.push(this.syncQueryFields(enriched));
             } else if (llmResult?.selectClause && Array.isArray(llmResult.selectClause) && llmResult.selectClause.length > 0) {
-                syncPromises.push(this.syncQueryFields(llmResult.selectClause));
+                const enriched = this.enrichFieldTypesFromEntityMetadata(
+                    this.enrichFieldTypesFromCompositions(llmResult.selectClause, resolvedRefs)
+                );
+                syncPromises.push(this.syncQueryFields(enriched));
             }
 
             // Entities: deterministic SQL parsing (more reliable than LLM)
@@ -299,12 +359,14 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 syncPromises.push(this.syncQueryEntities(entityMetadata));
             }
 
-            // Dependencies: deterministic composition token parsing (no LLM)
-            syncPromises.push(this.extractAndSyncQueryDependencies());
+            // Dependencies: sync from already-resolved composition references
+            syncPromises.push(this.syncResolvedDependencies(resolvedRefs));
 
             await Promise.all(syncPromises);
 
-            this.UsesTemplate = hasTemplateParameters;
+            // UsesTemplate is true when the query needs parameter values at execution time.
+            // This includes direct template expressions AND passthrough parameters from compositions.
+            this.UsesTemplate = hasParameters;
 
         } catch (e) {
             LogError(`Query "${this.Name}" extraction error:`, e);
@@ -355,12 +417,17 @@ export class MJQueryEntityServer extends MJQueryEntity {
     /**
      * Merges deterministic parameter extraction (SQLParser) with LLM enrichment.
      *
+     * Priority chain for description and sampleValue:
+     *   1. LLM enrichment (best quality when available)
+     *   2. Inherited from dependency query parameter (for passthrough params)
+     *   3. Heuristic fallback (generated from type/name)
+     *
      * SQLParser is the authority for: name, type, isRequired, defaultValue
-     * LLM provides: description, sampleValue (with heuristic fallbacks if LLM unavailable)
      */
     private mergeParametersWithLLM(
         deterministicParams: MJParameterInfo[],
-        llmResult: ParameterExtractionResult | null
+        llmResult: ParameterExtractionResult | null,
+        passthroughContext: Map<string, PassthroughParamContext> = new Map()
     ): ExtractedParameter[] {
         const llmParams = llmResult?.parameters ?? [];
 
@@ -368,14 +435,20 @@ export class MJQueryEntityServer extends MJQueryEntity {
             // Find matching LLM parameter by name (case-insensitive)
             const llmMatch = llmParams.find(lp => lp.name.toLowerCase() === dp.name.toLowerCase());
 
+            // For passthrough params, use inherited description/sampleValue as mid-tier fallback
+            const ptContext = passthroughContext.get(dp.name.toLowerCase());
+            const inheritedDescription = ptContext
+                ? this.buildPassthroughDescription(dp, ptContext)
+                : null;
+
             return {
                 name: dp.name,
                 type: dp.type === 'unknown' ? (llmMatch?.type ?? 'string') : dp.type,
                 isRequired: dp.isRequired,
-                description: llmMatch?.description ?? this.generateParameterDescription(dp),
+                description: llmMatch?.description ?? inheritedDescription ?? this.generateParameterDescription(dp),
                 usage: llmMatch?.usage ?? dp.usageLocations,
                 defaultValue: dp.defaultValue !== null ? String(dp.defaultValue) : (llmMatch?.defaultValue ?? null),
-                sampleValue: llmMatch?.sampleValue ?? this.generateSampleValue(dp),
+                sampleValue: llmMatch?.sampleValue ?? ptContext?.sampleValue ?? this.generateSampleValue(dp),
             };
         });
     }
@@ -402,6 +475,22 @@ export class MJQueryEntityServer extends MJQueryEntity {
     }
 
     /**
+     * Builds a description for a passthrough parameter by inheriting from the dependency
+     * query's parameter description and adding composition context.
+     */
+    private buildPassthroughDescription(param: MJParameterInfo, context: PassthroughParamContext): string {
+        const suffix = ` (passed through to "${context.depQueryName}" as "${context.depParamName}")`;
+
+        // If the dependency param has a description, use it with passthrough context
+        if (context.description) {
+            return `${context.description}${suffix}`;
+        }
+
+        // Otherwise generate a type-based description with passthrough context
+        return `${this.generateParameterDescription(param)}${suffix}`;
+    }
+
+    /**
      * Generates a deterministic sample value based on the parameter type.
      */
     private generateSampleValue(param: MJParameterInfo): string | null {
@@ -416,7 +505,425 @@ export class MJQueryEntityServer extends MJQueryEntity {
             default: return null;
         }
     }
-    
+
+    // ─── Composition Reference Resolution ─────────────────────────────────────
+
+    /**
+     * Resolves all {{query:"..."}} composition references in the SQL to their QueryInfo targets.
+     *
+     * This is the **single entry point** for composition resolution. Both dependency syncing
+     * and passthrough parameter extraction consume the results of this method.
+     *
+     * Throws if:
+     *  - A referenced query does not exist in the metadata cache
+     *  - A referenced query is not marked Reusable
+     */
+    private resolveCompositionReferences(sql: string): ResolvedCompositionReference[] {
+        const compositionEngine = new QueryCompositionEngine();
+        if (!compositionEngine.HasCompositionTokens(sql)) return [];
+
+        const tokens = compositionEngine.ParseCompositionTokens(sql);
+        if (tokens.length === 0) return [];
+
+        const allQueries = Metadata.Provider.Queries;
+        const resolved: ResolvedCompositionReference[] = [];
+
+        for (const token of tokens) {
+            const depQuery = this.resolveQueryByNameAndCategory(token.QueryName, token.CategorySegments, allQueries);
+
+            if (!depQuery) {
+                throw new Error(
+                    `Query "${this.Name}" references "${token.FullPath}" via {{query:"..."}} syntax, ` +
+                    `but no matching query was found in the metadata. ` +
+                    `Ensure the referenced query exists and has been saved before using it in composition.`
+                );
+            }
+
+            if (!depQuery.Reusable) {
+                throw new Error(
+                    `Query "${this.Name}" references "${token.FullPath}" via composition syntax, ` +
+                    `but "${depQuery.Name}" is not marked as Reusable. ` +
+                    `Set Reusable=true on "${depQuery.Name}" before using it in {{query:"..."}} references.`
+                );
+            }
+
+            const alias = this.extractAliasFromSQL(token.FullToken);
+            const { parameterMapping, passthroughMappings } = this.buildParameterMappings(token.Parameters);
+
+            resolved.push({
+                depQuery,
+                referencePath: token.FullPath,
+                alias,
+                parameterMapping,
+                passthroughMappings,
+            });
+        }
+
+        return resolved;
+    }
+
+    /**
+     * Resolves a query by name and optional category path segments from the metadata cache.
+     * Tries category-qualified lookup first, then falls back to name-only (if unambiguous).
+     */
+    private resolveQueryByNameAndCategory(
+        queryName: string,
+        categorySegments: string[],
+        allQueries: QueryInfo[]
+    ): QueryInfo | undefined {
+        const queryNameLower = queryName.toLowerCase();
+
+        // Try category-qualified lookup first
+        if (categorySegments.length > 0) {
+            const expectedPath = `/${categorySegments.join('/')}/`;
+            const match = allQueries.find(q =>
+                q.Name.toLowerCase() === queryNameLower &&
+                q.CategoryPath.toLowerCase() === expectedPath.toLowerCase()
+            );
+            if (match) return match;
+        }
+
+        // Fall back to name-only (unambiguous match)
+        const nameMatches = allQueries.filter(q => q.Name.toLowerCase() === queryNameLower);
+        return nameMatches.length === 1 ? nameMatches[0] : undefined;
+    }
+
+    /**
+     * Builds the parameter mapping and extracts passthrough mappings from parsed composition parameters.
+     */
+    private buildParameterMappings(params: Array<{ Name: string; StaticValue: string | null; PassThroughName: string | null }>): {
+        parameterMapping: Record<string, string> | null;
+        passthroughMappings: Array<{ parentParamName: string; depParamName: string }>;
+    } {
+        if (params.length === 0) return { parameterMapping: null, passthroughMappings: [] };
+
+        const parameterMapping: Record<string, string> = {};
+        const passthroughMappings: Array<{ parentParamName: string; depParamName: string }> = [];
+
+        for (const param of params) {
+            if (param.StaticValue !== null) {
+                parameterMapping[param.Name] = param.StaticValue;
+            } else if (param.PassThroughName !== null) {
+                parameterMapping[param.Name] = `@${param.PassThroughName}`;
+                passthroughMappings.push({
+                    parentParamName: param.PassThroughName,
+                    depParamName: param.Name,
+                });
+            }
+        }
+
+        return {
+            parameterMapping: Object.keys(parameterMapping).length > 0 ? parameterMapping : null,
+            passthroughMappings,
+        };
+    }
+
+    /**
+     * Extracts passthrough MJParameterInfo entries and PassthroughParamContext from resolved refs.
+     * Inherits type, isRequired, defaultValue, description, and sampleValue from the dependency
+     * query's parameter metadata when available.
+     */
+    private buildPassthroughParams(resolvedRefs: ResolvedCompositionReference[]): {
+        params: MJParameterInfo[];
+        contextMap: Map<string, PassthroughParamContext>;
+    } {
+        const passthroughParams: MJParameterInfo[] = [];
+        const contextMap = new Map<string, PassthroughParamContext>();
+        const seenParamNames = new Set<string>();
+
+        for (const ref of resolvedRefs) {
+            for (const mapping of ref.passthroughMappings) {
+                const nameLower = mapping.parentParamName.toLowerCase();
+                if (seenParamNames.has(nameLower)) continue;
+                seenParamNames.add(nameLower);
+
+                const depParam = ref.depQuery.Parameters.find(
+                    p => p.Name.toLowerCase() === mapping.depParamName.toLowerCase()
+                );
+
+                passthroughParams.push({
+                    name: mapping.parentParamName,
+                    type: depParam ? this.mapQueryParamTypeToParserType(depParam.Type) : 'string',
+                    isRequired: depParam ? depParam.IsRequired : true,
+                    defaultValue: depParam?.DefaultValue ?? null,
+                    filters: [],
+                    usageLocations: [ref.referencePath],
+                });
+
+                contextMap.set(nameLower, {
+                    description: depParam?.Description ?? null,
+                    sampleValue: depParam?.SampleValue ?? null,
+                    depQueryName: ref.depQuery.Name,
+                    depParamName: mapping.depParamName,
+                });
+            }
+        }
+
+        return { params: passthroughParams, contextMap };
+    }
+
+    /**
+     * Merges passthrough parameters into the deterministic parameter list,
+     * skipping any that are already detected as direct template expressions.
+     */
+    private mergePassthroughParams(
+        deterministicParams: MJParameterInfo[],
+        passthroughParams: MJParameterInfo[]
+    ): MJParameterInfo[] {
+        if (passthroughParams.length === 0) return deterministicParams;
+
+        const existingNames = new Set(deterministicParams.map(p => p.name.toLowerCase()));
+        const merged = [...deterministicParams];
+
+        for (const pt of passthroughParams) {
+            if (!existingNames.has(pt.name.toLowerCase())) {
+                merged.push(pt);
+                existingNames.add(pt.name.toLowerCase());
+            }
+        }
+
+        return merged;
+    }
+
+    /**
+     * Maps a QueryParameterInfo.Type value to the MJParameterInfo type union.
+     */
+    private mapQueryParamTypeToParserType(
+        type: 'string' | 'number' | 'date' | 'boolean' | 'array'
+    ): MJParameterInfo['type'] {
+        const validTypes: Set<MJParameterInfo['type']> = new Set(['string', 'number', 'date', 'boolean', 'array']);
+        return validTypes.has(type as MJParameterInfo['type']) ? (type as MJParameterInfo['type']) : 'string';
+    }
+
+    // ─── Field Type Resolution from Composition References ────────────────────────
+
+    /**
+     * Enriches extracted fields with deterministic SQL types from composed query field metadata.
+     *
+     * For queries that reference other queries via {{query:"..."}}, we resolve field types
+     * by matching field names against the dependency query's QueryFieldInfo. This gives us
+     * the exact types that the dependency query publishes, rather than relying on LLM guesses.
+     *
+     * Uses SQLParser.ExtractSelectColumns() for deterministic SELECT clause parsing,
+     * which handles direct columns and AS aliases via AST parsing.
+     */
+    private enrichFieldTypesFromCompositions(
+        fields: ExtractedField[],
+        resolvedRefs: ResolvedCompositionReference[]
+    ): ExtractedField[] {
+        if (resolvedRefs.length === 0 || fields.length === 0 || !this.SQL) return fields;
+
+        // Build alias → resolved ref map
+        const aliasToRef = new Map<string, ResolvedCompositionReference>();
+        for (const ref of resolvedRefs) {
+            if (ref.alias) {
+                aliasToRef.set(ref.alias.toLowerCase(), ref);
+            }
+        }
+
+        // Parse SELECT columns once via SQLParser (handles AS aliases deterministically)
+        const selectColumns = SQLParser.ExtractSelectColumns(this.SQL);
+        // Build outputName → select column map for quick lookup
+        const outputNameToSelectCol = new Map<string, SQLSelectColumn>();
+        for (const col of selectColumns) {
+            outputNameToSelectCol.set(col.OutputName.toLowerCase(), col);
+        }
+
+        // Collect all dependency query fields into a flat lookup for unqualified fallback
+        const allDepFields = this.buildDependencyFieldLookup(resolvedRefs);
+
+        return fields.map(field => {
+            if (field.sqlBaseType && field.sqlFullType) return field;
+
+            const matchedField = this.resolveFieldFromSelectColumns(
+                field.name, outputNameToSelectCol, aliasToRef
+            ) ?? allDepFields.get(field.name.toLowerCase());
+
+            if (matchedField) {
+                return {
+                    ...field,
+                    sqlBaseType: matchedField.SQLBaseType,
+                    sqlFullType: matchedField.SQLFullType,
+                    sourceEntity: field.sourceEntity ?? (matchedField.SourceEntityID ? this.findEntityNameByID(matchedField.SourceEntityID) : null),
+                    sourceFieldName: field.sourceFieldName ?? matchedField.SourceFieldName,
+                    isComputed: field.isComputed ?? matchedField.IsComputed ?? false,
+                    isSummary: field.isSummary ?? matchedField.IsSummary ?? false,
+                };
+            }
+
+            return field;
+        });
+    }
+
+    /**
+     * Resolves a field's output name to a QueryFieldInfo by using the parsed SELECT columns.
+     *
+     * Uses the SQLParser-extracted SELECT column map to find the source column and table qualifier,
+     * then matches against the composition ref's dependency query fields.
+     *
+     * Handles:
+     *   - Direct: `u.Name` → OutputName="Name", SourceColumn="Name", TableQualifier="u"
+     *   - AS alias: `e.Name AS EntityName` → OutputName="EntityName", SourceColumn="Name", TableQualifier="e"
+     */
+    private resolveFieldFromSelectColumns(
+        fieldName: string,
+        selectColumnMap: Map<string, SQLSelectColumn>,
+        aliasToRef: Map<string, ResolvedCompositionReference>
+    ): QueryFieldInfo | undefined {
+        const selectCol = selectColumnMap.get(fieldName.toLowerCase());
+        if (!selectCol || selectCol.IsExpression) return undefined;
+
+        // If the select column has a table qualifier, look up the composition ref by alias
+        if (selectCol.TableQualifier) {
+            const ref = aliasToRef.get(selectCol.TableQualifier.toLowerCase());
+            if (ref) {
+                return ref.depQuery.Fields.find(
+                    f => f.Name.toLowerCase() === selectCol.SourceColumn.toLowerCase()
+                );
+            }
+        }
+
+        // No table qualifier — try all composition refs
+        for (const ref of aliasToRef.values()) {
+            const match = ref.depQuery.Fields.find(
+                f => f.Name.toLowerCase() === selectCol.SourceColumn.toLowerCase()
+            );
+            if (match) return match;
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Builds a flat field name → QueryFieldInfo lookup across all dependency queries.
+     * Used as a fallback when alias-qualified matching doesn't succeed.
+     * If the same field name exists in multiple dependencies, the first match wins.
+     */
+    private buildDependencyFieldLookup(
+        resolvedRefs: ResolvedCompositionReference[]
+    ): Map<string, QueryFieldInfo> {
+        const lookup = new Map<string, QueryFieldInfo>();
+
+        for (const ref of resolvedRefs) {
+            for (const field of ref.depQuery.Fields) {
+                const nameLower = field.Name.toLowerCase();
+                if (!lookup.has(nameLower)) {
+                    lookup.set(nameLower, field);
+                }
+            }
+        }
+
+        return lookup;
+    }
+
+    /**
+     * Finds an entity name by its ID from the metadata cache.
+     */
+    private findEntityNameByID(entityID: string): string | null {
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
+        const entity = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
+        return entity?.Name ?? null;
+    }
+
+    /**
+     * Enriches extracted fields with deterministic SQL types from entity view/table metadata.
+     *
+     * For queries that directly reference entity views (e.g., `FROM __mj.vwUsers u`),
+     * we resolve field types by matching field names against the entity's field metadata.
+     * This is the source of truth for base queries — entity metadata provides exact SQL types
+     * (e.g., `nvarchar(100)`) rather than the generic LLM fallback (`nvarchar(MAX)`).
+     *
+     * Uses SQLParser.ExtractSelectColumns() for deterministic SELECT clause parsing
+     * and SQLParser.ExtractTableRefs() for entity view resolution.
+     */
+    private enrichFieldTypesFromEntityMetadata(fields: ExtractedField[]): ExtractedField[] {
+        if (fields.length === 0 || !this.SQL) return fields;
+
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
+        const tableRefs = SQLParser.ExtractTableRefs(this.SQL);
+        if (tableRefs.length === 0) return fields;
+
+        // Build alias → entity map from table refs
+        const aliasToEntity = new Map<string, { entity: typeof md.Entities[number] }>();
+        for (const tableRef of tableRefs) {
+            const matchingEntity = md.Entities.find(e =>
+                (e.BaseView.toLowerCase() === tableRef.TableName.toLowerCase() ||
+                 e.BaseTable.toLowerCase() === tableRef.TableName.toLowerCase()) &&
+                e.SchemaName.toLowerCase() === tableRef.SchemaName.toLowerCase()
+            );
+            if (matchingEntity) {
+                aliasToEntity.set(tableRef.Alias.toLowerCase(), { entity: matchingEntity });
+            }
+        }
+
+        if (aliasToEntity.size === 0) return fields;
+
+        // Parse SELECT columns via SQLParser for deterministic alias resolution
+        const selectColumns = SQLParser.ExtractSelectColumns(this.SQL);
+        const outputNameToSelectCol = new Map<string, SQLSelectColumn>();
+        for (const col of selectColumns) {
+            outputNameToSelectCol.set(col.OutputName.toLowerCase(), col);
+        }
+
+        // Build flat unqualified lookup (first entity wins for ambiguous names)
+        const flatLookup = new Map<string, { field: typeof md.Entities[number]['Fields'][number]; entityName: string }>();
+        for (const { entity } of aliasToEntity.values()) {
+            for (const f of entity.Fields) {
+                const nameLower = f.Name.toLowerCase();
+                if (!flatLookup.has(nameLower)) {
+                    flatLookup.set(nameLower, { field: f, entityName: entity.Name });
+                }
+            }
+        }
+
+        return fields.map(field => {
+            if (field.sqlBaseType && field.sqlFullType) return field;
+
+            // Use parsed SELECT column to find the source column and table qualifier
+            const selectCol = outputNameToSelectCol.get(field.name.toLowerCase());
+            let matched: { field: typeof md.Entities[number]['Fields'][number]; entityName: string } | undefined;
+
+            if (selectCol && !selectCol.IsExpression) {
+                // Try alias-qualified match via the parsed SELECT column's table qualifier
+                if (selectCol.TableQualifier) {
+                    const entityEntry = aliasToEntity.get(selectCol.TableQualifier.toLowerCase());
+                    if (entityEntry) {
+                        const entityField = entityEntry.entity.Fields.find(
+                            f => f.Name.toLowerCase() === selectCol.SourceColumn.toLowerCase()
+                        );
+                        if (entityField) {
+                            matched = { field: entityField, entityName: entityEntry.entity.Name };
+                        }
+                    }
+                }
+
+                // No table qualifier or no entity match — try unqualified by source column name
+                if (!matched) {
+                    matched = flatLookup.get(selectCol.SourceColumn.toLowerCase());
+                }
+            }
+
+            // Final fallback: try unqualified by output name directly
+            if (!matched) {
+                matched = flatLookup.get(field.name.toLowerCase());
+            }
+
+            if (matched) {
+                return {
+                    ...field,
+                    sqlBaseType: matched.field.Type,
+                    sqlFullType: matched.field.SQLFullType,
+                    sourceEntity: field.sourceEntity ?? matched.entityName,
+                    sourceFieldName: field.sourceFieldName ?? matched.field.Name,
+                };
+            }
+
+            return field;
+        });
+    }
+
+    // ─── End Field Type Resolution ───────────────────────────────────────────────
+
     /**
      * Extracts entity metadata from the SQL to provide context to the LLM for parameter type inference.
      * Uses SQLParser for robust SQL parsing with MJ template support.
@@ -893,23 +1400,29 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 newField.Description = field.description;
                 newField.Sequence = i + 1;
                 
-                // Map type to SQL types
-                switch (field.type) {
-                    case 'number':
-                        newField.SQLBaseType = 'decimal';
-                        newField.SQLFullType = 'decimal(18,2)';
-                        break;
-                    case 'date':
-                        newField.SQLBaseType = 'datetime';
-                        newField.SQLFullType = 'datetime';
-                        break;
-                    case 'boolean':
-                        newField.SQLBaseType = 'bit';
-                        newField.SQLFullType = 'bit';
-                        break;
-                    default:
-                        newField.SQLBaseType = 'nvarchar';
-                        newField.SQLFullType = 'nvarchar(MAX)';
+                // Use deterministic SQL types when available (from dependency query fields
+                // or entity metadata), otherwise fall back to generic type mapping.
+                if (field.sqlBaseType && field.sqlFullType) {
+                    newField.SQLBaseType = field.sqlBaseType;
+                    newField.SQLFullType = field.sqlFullType;
+                } else {
+                    switch (field.type) {
+                        case 'number':
+                            newField.SQLBaseType = 'decimal';
+                            newField.SQLFullType = 'decimal(18,2)';
+                            break;
+                        case 'date':
+                            newField.SQLBaseType = 'datetime';
+                            newField.SQLFullType = 'datetime';
+                            break;
+                        case 'boolean':
+                            newField.SQLBaseType = 'bit';
+                            newField.SQLFullType = 'bit';
+                            break;
+                        default:
+                            newField.SQLBaseType = 'nvarchar';
+                            newField.SQLFullType = 'nvarchar(MAX)';
+                    }
                 }
                 
                 // Set computed/summary flags
@@ -981,6 +1494,18 @@ export class MJQueryEntityServer extends MJQueryEntity {
                     if (existingField.Sequence !== fieldsToSync.indexOf(extractedField) + 1) {
                         existingField.Sequence = fieldsToSync.indexOf(extractedField) + 1;
                         hasChanges = true;
+                    }
+
+                    // Update SQL types if deterministic types are available
+                    if (extractedField.sqlBaseType && extractedField.sqlFullType) {
+                        if (existingField.SQLBaseType !== extractedField.sqlBaseType) {
+                            existingField.SQLBaseType = extractedField.sqlBaseType;
+                            hasChanges = true;
+                        }
+                        if (existingField.SQLFullType !== extractedField.sqlFullType) {
+                            existingField.SQLFullType = extractedField.sqlFullType;
+                            hasChanges = true;
+                        }
                     }
 
                     if (hasChanges) {
@@ -1148,116 +1673,33 @@ export class MJQueryEntityServer extends MJQueryEntity {
     }
 
     /**
-     * Deterministically extracts {{query:"..."}} composition references from this query's SQL
-     * and syncs the QueryDependency records accordingly. No LLM needed — uses regex parsing.
+     * Syncs QueryDependency records from already-resolved composition references.
+     * Performs cycle detection before writing to the database.
+     * Removes stale dependencies if no composition references exist.
      */
-    private async extractAndSyncQueryDependencies(): Promise<void> {
-        const compositionEngine = new QueryCompositionEngine();
-        const sql = this.SQL;
-
-        if (!sql || !compositionEngine.HasCompositionTokens(sql)) {
-            // No composition tokens — remove any stale dependency records
+    private async syncResolvedDependencies(resolvedRefs: ResolvedCompositionReference[]): Promise<void> {
+        if (resolvedRefs.length === 0) {
             await this.removeAllQueryDependencies();
             return;
         }
 
-        // Parse all {{query:"..."}} tokens
-        const tokens = compositionEngine.ParseCompositionTokens(sql);
-        if (tokens.length === 0) {
-            await this.removeAllQueryDependencies();
-            return;
-        }
-
-        // Resolve each token to a QueryInfo to get its ID
-        const extractedDeps = this.resolveTokensToQueryDependencies(tokens);
+        // Map resolved refs to the shape expected by syncQueryDependencies
+        const extractedDeps = resolvedRefs.map(ref => ({
+            dependsOnQueryID: ref.depQuery.ID,
+            referencePath: ref.referencePath,
+            alias: ref.alias,
+            parameterMapping: ref.parameterMapping,
+        }));
 
         // Check for cycles before syncing
         const cycleError = await this.detectDependencyCycles(extractedDeps);
         if (cycleError) {
-            LogError(`Query "${this.Name}" creates circular dependency: ${cycleError}. Dependencies will not be synced.`);
-            return;
+            throw new Error(
+                `Query "${this.Name}" creates circular dependency: ${cycleError}.`
+            );
         }
 
         await this.syncQueryDependencies(extractedDeps);
-    }
-
-    /**
-     * Resolves parsed composition tokens to dependency records with QueryIDs.
-     */
-    private resolveTokensToQueryDependencies(tokens: ReturnType<QueryCompositionEngine['ParseCompositionTokens']>): Array<{
-        dependsOnQueryID: string;
-        referencePath: string;
-        alias: string | null;
-        parameterMapping: Record<string, string> | null;
-    }> {
-        const allQueries = Metadata.Provider.Queries;
-        const deps: Array<{
-            dependsOnQueryID: string;
-            referencePath: string;
-            alias: string | null;
-            parameterMapping: Record<string, string> | null;
-        }> = [];
-
-        for (const token of tokens) {
-            const queryName = token.QueryName.toLowerCase();
-
-            // Try category-qualified lookup first
-            let matchedQuery: typeof allQueries[number] | undefined;
-            if (token.CategorySegments.length > 0) {
-                const expectedPath = `/${token.CategorySegments.join('/')}/`;
-                matchedQuery = allQueries.find(q =>
-                    q.Name.toLowerCase() === queryName &&
-                    q.CategoryPath.toLowerCase() === expectedPath.toLowerCase()
-                );
-            }
-
-            // Fall back to name-only
-            if (!matchedQuery) {
-                const nameMatches = allQueries.filter(q => q.Name.toLowerCase() === queryName);
-                if (nameMatches.length === 1) {
-                    matchedQuery = nameMatches[0];
-                }
-            }
-
-            if (!matchedQuery) {
-                LogError(`Query "${this.Name}": Referenced query not found: "${token.FullPath}". Dependency will not be tracked.`);
-                continue;
-            }
-
-            // Validate the referenced query is marked Reusable
-            if (!matchedQuery.Reusable) {
-                throw new Error(
-                    `Query "${this.Name}" references "${token.FullPath}" via composition syntax, ` +
-                    `but "${matchedQuery.Name}" is not marked as Reusable. ` +
-                    `Set Reusable=true on "${matchedQuery.Name}" before using it in {{query:"..."}} references.`
-                );
-            }
-
-            // Extract alias from SQL context (look for the token followed by whitespace + identifier)
-            const alias = this.extractAliasFromSQL(token.FullToken);
-
-            // Build parameter mapping
-            let parameterMapping: Record<string, string> | null = null;
-            if (token.Parameters.length > 0) {
-                parameterMapping = {};
-                for (const param of token.Parameters) {
-                    if (param.StaticValue !== null) {
-                        parameterMapping[param.Name] = param.StaticValue;
-                    } else if (param.PassThroughName !== null) {
-                        parameterMapping[param.Name] = `@${param.PassThroughName}`;
-                    }
-                }
-            }
-
-            deps.push({
-                dependsOnQueryID: matchedQuery.ID,
-                referencePath: token.FullPath,
-                alias,
-                parameterMapping
-            });
-        }
-
-        return deps;
     }
 
     /**

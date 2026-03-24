@@ -4,6 +4,7 @@ export type {
     MJAstifyResult,
     SQLTableReference,
     SQLColumnReference,
+    SQLSelectColumn,
     SQLCTEExtraction,
     MJParameterInfo,
     SQLParseResult,

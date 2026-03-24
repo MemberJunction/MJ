@@ -85,6 +85,18 @@ export interface SQLCTEExtraction {
     UsedASTParsing: boolean;
 }
 
+/** A column in the SELECT clause with its output alias and source info */
+export interface SQLSelectColumn {
+    /** The output column name (the AS alias if present, otherwise the source column name) */
+    OutputName: string;
+    /** The source column name (before AS alias) */
+    SourceColumn: string;
+    /** Table alias or name qualifier (e.g., "u" in "u.Name"), or null if unqualified */
+    TableQualifier: string | null;
+    /** Whether this column uses an expression (not a simple column ref) */
+    IsExpression: boolean;
+}
+
 /** Deterministic parameter info extracted from template expressions */
 export interface MJParameterInfo {
     name: string;
@@ -355,6 +367,116 @@ export class SQLParser {
         } catch {
             return [];
         }
+    }
+
+    // ─── SELECT Column Extraction ─────────────────────────
+
+    /**
+     * Extracts the SELECT clause columns with their output names, source columns, and table qualifiers.
+     *
+     * Handles:
+     *   - Simple columns: `u.Name` → { OutputName: "Name", SourceColumn: "Name", TableQualifier: "u" }
+     *   - AS aliases: `e.Name AS EntityName` → { OutputName: "EntityName", SourceColumn: "Name", TableQualifier: "e" }
+     *   - Expressions: `COUNT(*)` → { OutputName: "COUNT(*)", SourceColumn: "COUNT(*)", IsExpression: true }
+     *   - MJ template tokens are replaced with placeholders before AST parsing.
+     */
+    static ExtractSelectColumns(sql: string, dialect: string = 'TransactSQL'): SQLSelectColumn[] {
+        if (!sql || sql.trim().length === 0) return [];
+
+        const cleanSQL = SQLParser.getCleanSQL(sql);
+
+        try {
+            const parser = new Parser();
+            const ast = parser.astify(cleanSQL, { database: dialect });
+            const statements = Array.isArray(ast) ? ast : [ast];
+            const columns: SQLSelectColumn[] = [];
+
+            for (const statement of statements) {
+                const selectColumns = SQLParser.extractSelectColumnsFromAST(statement);
+                columns.push(...selectColumns);
+            }
+
+            return columns;
+        } catch {
+            return [];
+        }
+    }
+
+    /**
+     * Walks an AST statement node to extract SELECT clause column definitions.
+     */
+    private static extractSelectColumnsFromAST(node: unknown): SQLSelectColumn[] {
+        const columns: SQLSelectColumn[] = [];
+        if (!node || typeof node !== 'object') return columns;
+
+        const stmt = node as Record<string, unknown>;
+
+        // node-sql-parser SELECT statements have a `columns` array
+        const cols = stmt['columns'];
+        if (!Array.isArray(cols)) return columns;
+
+        for (const col of cols) {
+            if (col === '*') {
+                columns.push({
+                    OutputName: '*',
+                    SourceColumn: '*',
+                    TableQualifier: null,
+                    IsExpression: false,
+                });
+                continue;
+            }
+
+            if (!col || typeof col !== 'object') continue;
+            const colNode = col as Record<string, unknown>;
+
+            // The output alias (AS name), or null
+            const asAlias = colNode['as'] as string | null | undefined;
+
+            // The expression node
+            const expr = colNode['expr'] as Record<string, unknown> | undefined;
+            if (!expr) continue;
+
+            const exprType = expr['type'] as string | undefined;
+
+            if (exprType === 'column_ref') {
+                const columnName = expr['column'] as string;
+                const table = expr['table'] as string | null;
+
+                columns.push({
+                    OutputName: asAlias ?? columnName,
+                    SourceColumn: columnName,
+                    TableQualifier: table ?? null,
+                    IsExpression: false,
+                });
+            } else {
+                // Expression (aggregate, function, etc.)
+                const outputName = asAlias ?? SQLParser.exprToString(expr);
+                columns.push({
+                    OutputName: outputName,
+                    SourceColumn: outputName,
+                    TableQualifier: null,
+                    IsExpression: true,
+                });
+            }
+        }
+
+        return columns;
+    }
+
+    /**
+     * Best-effort string representation of an AST expression node (for expression columns).
+     */
+    private static exprToString(expr: Record<string, unknown>): string {
+        const type = expr['type'] as string | undefined;
+        if (type === 'aggr_func') {
+            const name = expr['name'] as string ?? 'EXPR';
+            return `${name}(...)`;
+        }
+        if (type === 'function') {
+            const name = (expr['name'] as Record<string, unknown>)?.['name'] as string ?? 'FUNC';
+            return `${name}(...)`;
+        }
+        return 'EXPR';
     }
 
     // ─── CTE Extraction ────────────────────────────────
