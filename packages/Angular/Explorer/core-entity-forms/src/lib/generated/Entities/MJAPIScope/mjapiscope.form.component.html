@@ -156,31 +156,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- API Scopes Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAPIScopes"
-        SectionName="API Scopes"
-        Icon="fa fa-key"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAPIScopes')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Scopes','ParentID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Scopes')"
-                [AllowLoad]="IsSectionExpanded('mJAPIScopes')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAPIScopes', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- API Application Scopes Section -->
     <mj-collapsible-panel
         SectionKey="mJAPIApplicationScopes"
@@ -200,6 +175,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIApplicationScopes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- API Scopes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAPIScopes"
+        SectionName="API Scopes"
+        Icon="fa fa-key"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAPIScopes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Scopes','ParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: API Scopes')"
+                [AllowLoad]="IsSectionExpanded('mJAPIScopes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAPIScopes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
