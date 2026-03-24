@@ -503,6 +503,82 @@ export class SQLParser {
     // ─── MJ Template Extraction ────────────────────────
 
     /**
+     * Renames a template variable in all `{{ variable | filters }}` expressions throughout the SQL.
+     * Preserves the filter chain and whitespace formatting.
+     *
+     * Example: `RenameTemplateVariable("WHERE x = {{ region | sqlString }}", "region", "userRegion")`
+     *   → `"WHERE x = {{ userRegion | sqlString }}"`
+     *
+     * Uses MJLexer for deterministic token identification — no regex guessing.
+     */
+    static RenameTemplateVariable(sql: string, oldName: string, newName: string): string {
+        const tokens = MJLexer.Tokenize(sql);
+        const oldNameLower = oldName.toLowerCase();
+
+        // Collect matching tokens in reverse order so positional replacements don't shift offsets
+        const matches = tokens
+            .filter(t =>
+                t.type === 'MJ_TEMPLATE_EXPR' &&
+                (t.parsed as MJTemplateExprContent).variable.toLowerCase() === oldNameLower
+            )
+            .sort((a, b) => b.start - a.start); // reverse order
+
+        let result = sql;
+        for (const token of matches) {
+            const rebuilt = SQLParser.rebuildTemplateExpr(newName, (token.parsed as MJTemplateExprContent).filters);
+            result = result.substring(0, token.start) + rebuilt + result.substring(token.end);
+        }
+
+        return result;
+    }
+
+    /**
+     * Substitutes a template variable with a literal value in all `{{ variable | filters }}` expressions.
+     * The entire expression (including filters) is replaced with the literal value, since filters
+     * are irrelevant when injecting a concrete value.
+     *
+     * Example: `SubstituteTemplateVariable("WHERE x = {{ region | sqlString }}", "region", "'West'")`
+     *   → `"WHERE x = 'West'"`
+     *
+     * Uses MJLexer for deterministic token identification — no regex guessing.
+     */
+    static SubstituteTemplateVariable(sql: string, variableName: string, literalValue: string): string {
+        const tokens = MJLexer.Tokenize(sql);
+        const varNameLower = variableName.toLowerCase();
+
+        // Collect matching tokens in reverse order
+        const matches = tokens
+            .filter(t =>
+                t.type === 'MJ_TEMPLATE_EXPR' &&
+                (t.parsed as MJTemplateExprContent).variable.toLowerCase() === varNameLower
+            )
+            .sort((a, b) => b.start - a.start);
+
+        let result = sql;
+        for (const token of matches) {
+            result = result.substring(0, token.start) + literalValue + result.substring(token.end);
+        }
+
+        return result;
+    }
+
+    /**
+     * Rebuilds a `{{ variable | filter1 | filter2(args) }}` template expression string
+     * from a variable name and filter chain.
+     */
+    private static rebuildTemplateExpr(variable: string, filters: MJFilter[]): string {
+        if (filters.length === 0) return `{{${variable}}}`;
+
+        const filterChain = filters.map(f => {
+            if (f.args.length === 0) return f.name;
+            const args = f.args.map(a => typeof a === 'string' ? `'${a}'` : String(a)).join(', ');
+            return `${f.name}(${args})`;
+        }).join(' | ');
+
+        return `{{${variable} | ${filterChain}}}`;
+    }
+
+    /**
      * Extract all {{ variable | filter }} expressions from SQL.
      * Returns structured info for each expression including variable name and filter chain.
      */
