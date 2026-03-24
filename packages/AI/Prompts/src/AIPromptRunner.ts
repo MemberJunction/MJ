@@ -1821,19 +1821,22 @@ export class AIPromptRunner {
   ): ModelVendorCandidate[] {
     const candidates: ModelVendorCandidate[] = [];
 
-    for (const pm of promptModels) {
+    for (let i = 0; i < promptModels.length; i++) {
+      const pm = promptModels[i];
+      // Compute priority as inverse of array position so highest-priority (first) gets the largest number
+      const computedPriority = promptModels.length - i;
       const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, pm.ModelID));
       if (!model || !model.IsActive) continue;
 
       if (pm.VendorID) {
         // Specific vendor specified - create single candidate
-        const candidate = this.createCandidateForSpecificVendor(model, pm);
+        const candidate = this.createCandidateForSpecificVendor(model, pm, computedPriority);
         if (candidate) {
           candidates.push(candidate);
         }
       } else {
         // No vendor specified - create candidates for all vendors
-        const vendorCandidates = this.createCandidatesForAllVendors(model);
+        const vendorCandidates = this.createCandidatesForAllVendors(model, computedPriority);
         candidates.push(...vendorCandidates);
       }
     }
@@ -1846,7 +1849,8 @@ export class AIPromptRunner {
    */
   private createCandidateForSpecificVendor(
     model: MJAIModelEntityExtended,
-    promptModel: MJAIPromptModelEntity
+    promptModel: MJAIPromptModelEntity,
+    computedPriority: number = 0
   ): ModelVendorCandidate | null {
     const modelVendor = AIEngine.Instance.ModelVendors.find(
       mv => UUIDsEqual(mv.ModelID, promptModel.ModelID) &&
@@ -1866,7 +1870,7 @@ export class AIPromptRunner {
       supportsEffortLevel: modelVendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
       effortLevel: promptModel.EffortLevel ?? undefined, // Model-specific effort level override
       isPreferredVendor: false,
-      priority: 0,  // Order is determined by promptModels sort
+      priority: computedPriority,
       source: 'prompt-model'
     };
   }
@@ -1875,7 +1879,8 @@ export class AIPromptRunner {
    * Helper: Create candidates for all vendors of a model, sorted by vendor priority.
    */
   private createCandidatesForAllVendors(
-    model: MJAIModelEntityExtended
+    model: MJAIModelEntityExtended,
+    computedPriority: number = 0
   ): ModelVendorCandidate[] {
     const vendors = AIEngine.Instance.ModelVendors
       .filter(mv =>
@@ -1896,7 +1901,7 @@ export class AIPromptRunner {
         apiName: vendor.APIName || model.APIName,
         supportsEffortLevel: vendor.SupportsEffortLevel ?? model.SupportsEffortLevel ?? false,
         isPreferredVendor: false,
-        priority: 0,  // Order is determined by promptModels sort
+        priority: computedPriority,
         source: 'prompt-model'
       });
     }
@@ -1909,7 +1914,7 @@ export class AIPromptRunner {
         apiName: model.APIName,
         supportsEffortLevel: model.SupportsEffortLevel ?? false,
         isPreferredVendor: false,
-        priority: 0,
+        priority: computedPriority,
         source: 'prompt-model'
       });
     }
