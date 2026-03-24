@@ -64,14 +64,27 @@ export class Metadata {
         if (!entityName || typeof entityName !== 'string' || entityName.trim().length === 0) {
             throw new Error('EntityByName: entityName must be a non-empty string');
         }
-        return this.Entities.find(e => e.Name.toLowerCase().trim() === entityName.toLowerCase().trim());
+        try {
+            const p = Metadata.Provider;
+            if (p?.EntityByName) {
+                return p.EntityByName(entityName);
+            }
+        } catch { /* Provider not set — fall through to linear search */ }
+        const key = entityName.trim().toLowerCase();
+        return this.Entities.find(e => e.Name.toLowerCase().trim() === key);
     }
     /**
      * Helper method to find an entity by ID
-     * @param entityID 
-     * @returns 
+     * @param entityID
+     * @returns
      */
     public EntityByID(entityID: string): EntityInfo {
+        try {
+            const p = Metadata.Provider;
+            if (p?.EntityByID) {
+                return p.EntityByID(entityID);
+            }
+        } catch { /* Provider not set — fall through to linear search */ }
         return this.Entities.find(e => UUIDsEqual(e.ID, entityID));
     }
 
@@ -134,7 +147,7 @@ export class Metadata {
      * @returns 
      */
     public EntityIDFromName(entityName: string): string {
-        let entity = this.Entities.find(e => e.Name.toLowerCase().trim() === entityName.toLowerCase().trim());
+        const entity = this.EntityByName(entityName);
         if (entity != null)
             return entity.ID;
         else
@@ -143,15 +156,15 @@ export class Metadata {
 
     /**
      * Helper function to return an Entity Name from an Entity ID
-     * @param entityID 
-     * @returns 
+     * @param entityID
+     * @returns
      */
     public EntityNameFromID(entityID: string): string {
-        let entity = this.Entities.find(e => UUIDsEqual(e.ID, entityID));
-        if(entity){
+        const entity = this.EntityByID(entityID);
+        if (entity) {
             return entity.Name;
         }
-        else{
+        else {
             LogError(`Entity ID: ${entityID} not found`);
             return null;
         }
@@ -162,11 +175,11 @@ export class Metadata {
      * @param entityID
      */
     public EntityFromEntityID(entityID: string): EntityInfo | null {
-        let entity = this.Entities.find(e => UUIDsEqual(e.ID, entityID));
-        if(entity){
+        const entity = this.EntityByID(entityID);
+        if (entity) {
             return entity;
         }
-        else{
+        else {
             LogError(`Entity ID: ${entityID} not found`);
             return null;
         }

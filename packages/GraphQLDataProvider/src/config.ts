@@ -14,10 +14,16 @@ export async function setupGraphQLClient(config: GraphQLProviderConfigData): Pro
 
     await provider.Config(config);
 
-    // fire off the logged in event if we get here
-    await StartupManager.Instance.Startup();
-    
+    // Fire LoggedIn event BEFORE awaiting StartupManager, so that subscribers
+    // (e.g., SharedService.preWarmEngines) can start overlapping with startup.
+    // StartupManager.Startup() is idempotent — SharedService's LoggedIn handler
+    // also calls it, and both join the same underlying promise.
     MJGlobal.Instance.RaiseEvent({ event: MJEventType.LoggedIn, eventCode: null, component: this, args: null });
+
+    // Now await startup completion. This joins the same promise that SharedService
+    // kicked off in its LoggedIn handler, ensuring all engines are loaded before
+    // setupGraphQLClient returns.
+    await StartupManager.Instance.Startup();
 
     return provider;
 }

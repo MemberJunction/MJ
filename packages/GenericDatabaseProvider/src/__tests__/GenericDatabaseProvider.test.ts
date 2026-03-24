@@ -6,6 +6,20 @@ import { SqlLoggingSessionImpl } from '../SqlLogger';
 vi.mock('sql-formatter', () => ({
     format: (sql: string) => sql, // passthrough for tests
 }));
+
+// Mock encryption engine for EncryptFieldValuesForSave tests
+const mockEncryptionEngine = {
+    Config: vi.fn(),
+    Encrypt: vi.fn(),
+    IsEncrypted: vi.fn().mockReturnValue(false),
+    GetKeyByID: vi.fn().mockReturnValue({ Marker: '$ENC$' }),
+};
+
+vi.mock('@memberjunction/encryption', () => ({
+    EncryptionEngine: {
+        get Instance() { return mockEncryptionEngine; }
+    }
+}));
 import {
     DatabaseProviderBase,
     SaveSQLResult,
@@ -105,6 +119,15 @@ class TestGenericProvider extends GenericDatabaseProvider {
             get: () => this._testQueryCategories ?? [],
             configurable: true,
         });
+    }
+
+    // Expose EncryptFieldValuesForSave for security testing
+    public async testEncryptFieldValuesForSave(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        return this.EncryptFieldValuesForSave(entity, fieldValues, contextUser);
     }
 
     // Track ExecuteSQL calls for Load testing
@@ -553,6 +576,124 @@ describe('GenericDatabaseProvider', () => {
 
             expect(results).toHaveLength(1);
             expect(results[0]).toEqual([{ ID: '1', Name: 'Only' }]);
+        });
+    });
+
+    describe('EncryptFieldValuesForSave - error sanitization (security)', () => {
+        it('should NOT leak detailed encryption error messages to caller', async () => {
+            // Simulate an encryption failure with infrastructure details
+            const detailedError = new Error(
+                'Encryption key not found in environment variable: "MJ_ENCRYPTION_KEY_PII". ' +
+                'Ensure the environment variable is set with a base64-encoded key value.'
+            );
+            mockEncryptionEngine.Encrypt.mockRejectedValue(detailedError);
+            mockEncryptionEngine.IsEncrypted.mockReturnValue(false);
+            mockEncryptionEngine.GetKeyByID.mockReturnValue({ Marker: '$ENC$' });
+
+            const encryptedField = {
+                Name: 'SSN',
+                Encrypt: true,
+                EncryptionKeyID: 'some-key-id',
+            } as unknown as EntityFieldInfo;
+
+            const entity = {
+                EntityInfo: { Name: 'Employees' },
+            } as unknown as BaseEntity;
+
+            const fieldValues = new Map<EntityFieldInfo, unknown>();
+            fieldValues.set(encryptedField, 'sensitive-ssn-value');
+
+            try {
+                await provider.testEncryptFieldValuesForSave(entity, fieldValues, mockUser);
+                expect.fail('Expected an error to be thrown');
+            } catch (err) {
+                const message = (err as Error).message;
+
+                // The thrown error should NOT contain infrastructure details
+                expect(message).not.toContain('MJ_ENCRYPTION_KEY_PII');
+                expect(message).not.toContain('environment variable');
+                expect(message).not.toContain('base64-encoded');
+
+                // It SHOULD contain a generic message pointing to server logs
+                expect(message).toContain('Check server logs for details');
+                expect(message).toContain('SSN');
+                expect(message).toContain('Employees');
+            }
+        });
+
+        it('should NOT leak config file paths in encryption error messages', async () => {
+            const detailedError = new Error(
+                'Configuration file not loaded. Ensure /opt/app/mj.config.cjs exists with an "encryptionKeys" section.'
+            );
+            mockEncryptionEngine.Encrypt.mockRejectedValue(detailedError);
+            mockEncryptionEngine.IsEncrypted.mockReturnValue(false);
+            mockEncryptionEngine.GetKeyByID.mockReturnValue({ Marker: '$ENC$' });
+
+            const encryptedField = {
+                Name: 'APIKey',
+                Encrypt: true,
+                EncryptionKeyID: 'key-id',
+            } as unknown as EntityFieldInfo;
+
+            const entity = {
+                EntityInfo: { Name: 'API Keys' },
+            } as unknown as BaseEntity;
+
+            const fieldValues = new Map<EntityFieldInfo, unknown>();
+            fieldValues.set(encryptedField, 'sk-live-abc123');
+
+            try {
+                await provider.testEncryptFieldValuesForSave(entity, fieldValues, mockUser);
+                expect.fail('Expected an error to be thrown');
+            } catch (err) {
+                const message = (err as Error).message;
+
+                // Should NOT contain file paths or config structure details
+                expect(message).not.toContain('mj.config.cjs');
+                expect(message).not.toContain('encryptionKeys');
+                expect(message).not.toContain('/opt/app');
+
+                // Should contain generic guidance
+                expect(message).toContain('Check server logs');
+            }
+        });
+
+        it('should NOT leak vault URLs in encryption error messages', async () => {
+            const detailedError = new Error(
+                'Azure Key Vault access denied for: https://prod-vault.vault.azure.net/secrets/master-key. ' +
+                'Ensure the application has Secret Get permission.'
+            );
+            mockEncryptionEngine.Encrypt.mockRejectedValue(detailedError);
+            mockEncryptionEngine.IsEncrypted.mockReturnValue(false);
+            mockEncryptionEngine.GetKeyByID.mockReturnValue({ Marker: '$ENC$' });
+
+            const encryptedField = {
+                Name: 'Token',
+                Encrypt: true,
+                EncryptionKeyID: 'key-id',
+            } as unknown as EntityFieldInfo;
+
+            const entity = {
+                EntityInfo: { Name: 'Tokens' },
+            } as unknown as BaseEntity;
+
+            const fieldValues = new Map<EntityFieldInfo, unknown>();
+            fieldValues.set(encryptedField, 'token-value');
+
+            try {
+                await provider.testEncryptFieldValuesForSave(entity, fieldValues, mockUser);
+                expect.fail('Expected an error to be thrown');
+            } catch (err) {
+                const message = (err as Error).message;
+
+                // Should NOT contain vault URLs or permission details
+                expect(message).not.toContain('vault.azure.net');
+                expect(message).not.toContain('Secret Get permission');
+                expect(message).not.toContain('prod-vault');
+
+                // Should contain generic guidance
+                expect(message).toContain('Check server logs');
+            }
         });
     });
 });
