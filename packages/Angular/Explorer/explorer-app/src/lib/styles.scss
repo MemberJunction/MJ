@@ -47,6 +47,9 @@
 @import './styles/badges';
 @import './styles/utilities';
 
+// MJ UI Components styles
+@import '@memberjunction/ng-ui-components/dist/lib/button/button';
+
 // Ensure button groups have correct colors (override any conflicting styles)
 kendo-buttongroup button,
 kendo-buttongroup .k-button {

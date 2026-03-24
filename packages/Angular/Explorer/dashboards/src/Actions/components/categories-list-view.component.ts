@@ -64,9 +64,9 @@ interface CategoryWithStats extends MJActionCategoryEntity {
               </div>
               
               <div class="category-footer">
-                <button kendoButton 
-                  [fillMode]="'outline'" 
-                  [size]="'small'"
+                <button mjButton
+                  variant="outline"
+                  size="sm"
                   (click)="viewActions(category, $event)">
                   <i class="fa-solid fa-cogs"></i> View Actions
                 </button>

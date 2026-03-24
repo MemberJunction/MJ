@@ -11,9 +11,9 @@
         </ng-template>
         @if (Filters.searchTerm) {
           <ng-template kendoTextBoxSuffixTemplate>
-            <button kendoButton
-              [fillMode]="'flat'"
-              [size]="'small'"
+            <button mjButton
+              variant="flat"
+              size="sm"
               (click)="clearSearch()">
               <i class="fa-solid fa-times"></i>
             </button>
@@ -24,8 +24,8 @@
 
     <!-- Filters Dropdown -->
     <div class="dropdown-container" (clickOutside)="ShowFiltersDropdown = false">
-      <button kendoButton
-        [fillMode]="'outline'"
+      <button mjButton
+        variant="outline"
         [class.active]="hasActiveFilters()"
         (click)="toggleFiltersDropdown()">
         <i class="fa-solid fa-filter"></i>
@@ -42,9 +42,9 @@
             <div class="section-header">
               <span>Status</span>
               @if (Filters.statuses.length > 0) {
-                <button kendoButton
-                  [fillMode]="'flat'"
-                  [size]="'small'"
+                <button mjButton
+                  variant="flat"
+                  size="sm"
                   (click)="StateService.setStatusFilter([])">
                   Clear
                 </button>
@@ -67,9 +67,9 @@
             <div class="section-header">
               <span>Type</span>
               @if (Filters.types.length > 0) {
-                <button kendoButton
-                  [fillMode]="'flat'"
-                  [size]="'small'"
+                <button mjButton
+                  variant="flat"
+                  size="sm"
                   (click)="StateService.setTypeFilter([])">
                   Clear
                 </button>
@@ -90,9 +90,8 @@
 
           @if (hasActiveFilters()) {
             <div class="dropdown-footer">
-              <button kendoButton
-                [fillMode]="'flat'"
-                [themeColor]="'error'"
+              <button mjButton
+                variant="danger"
                 (click)="clearFilters()">
                 <i class="fa-solid fa-times"></i>
                 Clear All Filters
@@ -138,8 +137,8 @@
 
     <!-- Sort Dropdown -->
     <div class="dropdown-container" (clickOutside)="ShowSortDropdown = false">
-      <button kendoButton
-        [fillMode]="'outline'"
+      <button mjButton
+        variant="outline"
         (click)="toggleSortDropdown()">
         <i [class]="getSortIcon()"></i>
         {{ getSortLabel() }}
@@ -165,23 +164,20 @@
 
     <!-- View Mode Toggle -->
     <div class="view-toggle">
-      <button kendoButton
-        [fillMode]="ViewMode === 'card' ? 'solid' : 'outline'"
-        [themeColor]="ViewMode === 'card' ? 'primary' : 'base'"
+      <button mjButton
+        [variant]="ViewMode === 'card' ? 'primary' : 'outline'"
         title="Card View"
         (click)="setViewMode('card')">
         <i class="fa-solid fa-grip"></i>
       </button>
-      <button kendoButton
-        [fillMode]="ViewMode === 'list' ? 'solid' : 'outline'"
-        [themeColor]="ViewMode === 'list' ? 'primary' : 'base'"
+      <button mjButton
+        [variant]="ViewMode === 'list' ? 'primary' : 'outline'"
         title="List View"
         (click)="setViewMode('list')">
         <i class="fa-solid fa-list"></i>
       </button>
-      <button kendoButton
-        [fillMode]="ViewMode === 'compact' ? 'solid' : 'outline'"
-        [themeColor]="ViewMode === 'compact' ? 'primary' : 'base'"
+      <button mjButton
+        [variant]="ViewMode === 'compact' ? 'primary' : 'outline'"
         title="Compact View"
         (click)="setViewMode('compact')">
         <i class="fa-solid fa-bars"></i>
@@ -189,17 +185,16 @@
     </div>
 
     <!-- Refresh Button -->
-    <button kendoButton
-      [fillMode]="'flat'"
+    <button mjButton
+      variant="flat"
       title="Refresh"
       (click)="onRefresh()">
       <i class="fa-solid fa-refresh"></i>
     </button>
 
     <!-- New Action Button -->
-    <button kendoButton
-      [fillMode]="'solid'"
-      [themeColor]="'primary'"
+    <button mjButton
+      variant="primary"
       (click)="onNewAction()">
       <i class="fa-solid fa-plus"></i>
       New Action

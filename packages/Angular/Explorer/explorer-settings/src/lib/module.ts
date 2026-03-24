@@ -4,6 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
 import { WindowModule } from '@progress/kendo-angular-dialog';
+import { MjButtonDirective } from '@memberjunction/ng-ui-components';
 
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
@@ -79,7 +80,8 @@ import { ApplicationDialogComponent } from './application-management/application
     CodeEditorModule,
     SharedSettingsModule,
     SharedGenericModule,
-    WindowModule
+    WindowModule,
+    MjButtonDirective
   ],
   exports: [
     // Main settings container

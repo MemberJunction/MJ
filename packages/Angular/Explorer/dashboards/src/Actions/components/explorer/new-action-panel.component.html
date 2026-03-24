@@ -6,8 +6,8 @@
           <i class="fa-solid fa-bolt"></i>
           New Action
         </h2>
-        <button kendoButton
-          [fillMode]="'flat'"
+        <button mjButton
+          variant="flat"
           (click)="onClose()">
           <i class="fa-solid fa-times"></i>
         </button>
@@ -100,9 +100,8 @@
       </div>
 
       <div class="panel-footer">
-        <button kendoButton
-          [fillMode]="'solid'"
-          [themeColor]="'primary'"
+        <button mjButton
+          variant="primary"
           [disabled]="IsSaving"
           (click)="onSave()">
           @if (IsSaving) {
@@ -113,8 +112,8 @@
             Create Action
           }
         </button>
-        <button kendoButton
-          [fillMode]="'outline'"
+        <button mjButton
+          variant="outline"
           [disabled]="IsSaving"
           (click)="onClose()">
           Cancel
