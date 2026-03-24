@@ -66,13 +66,10 @@ export * from './directives/index.js';
 export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
 export {
-    TokenExpiredError,
     getSystemUser,
     getSigningKeys,
     extractUserInfoFromPayload,
     verifyUserRecord,
-    AuthProviderFactory,
-    IAuthProvider,
 } from './auth/index.js';
 export * from './auth/APIKeyScopeAuth.js';
 

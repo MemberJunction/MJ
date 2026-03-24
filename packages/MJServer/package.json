@@ -117,7 +117,8 @@
     "typedi": "^0.10.0",
     "uuid": "^13.0.0",
     "ws": "^8.19.0",
-    "zod": "~3.24.4"
+    "zod": "~3.24.4",
+    "@memberjunction/auth-providers": "5.15.0"
   },
   "devDependencies": {
     "pkgroll": "2.23.0",
