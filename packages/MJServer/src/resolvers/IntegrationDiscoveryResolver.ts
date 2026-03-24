@@ -23,6 +23,7 @@ import {
     ExternalFieldSchema,
     ConnectionTestResult,
     IntegrationEngine,
+    IntegrationSyncOptions,
     SourceSchemaInfo
 } from "@memberjunction/integration-engine";
 import {
@@ -2083,7 +2084,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     private async startSyncAfterApply(companyIntegrationID: string, user: UserInfo, entityMapIDs?: string[], fullSync?: boolean): Promise<string | null> {
         try {
             await IntegrationEngine.Instance.Config(false, user);
-            const options: Record<string, unknown> = {};
+            const options: IntegrationSyncOptions = {};
             if (entityMapIDs?.length) options.EntityMapIDs = entityMapIDs;
             if (fullSync) options.FullSync = true;
             const finalOptions = Object.keys(options).length > 0 ? options : undefined;

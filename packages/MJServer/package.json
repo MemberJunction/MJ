@@ -78,6 +78,7 @@
     "@memberjunction/scheduling-base-types": "5.16.0",
     "@memberjunction/scheduling-engine": "5.16.0",
     "@memberjunction/scheduling-engine-base": "5.16.0",
+    "@memberjunction/schema-engine": "5.15.0",
     "@memberjunction/skip-types": "5.16.0",
     "@memberjunction/sqlserver-dataprovider": "5.16.0",
     "@memberjunction/storage": "5.16.0",

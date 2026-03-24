@@ -81,6 +81,9 @@ class RSUConfig {
   get IsAuditLogEnabled(): boolean {
     return process.env.RSU_AUDIT_LOG_ENABLED !== '0';
   }
+  get PendingWorkPath(): string {
+    return process.env.RSU_PENDING_WORK_PATH || '.rsu_pending';
+  }
   get ProtectedSchemas(): string[] {
     const envSchemas = process.env.RSU_PROTECTED_SCHEMAS;
     return envSchemas ? envSchemas.split(',').map((s) => s.trim()) : [];
@@ -339,7 +342,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   public async WritePendingWork(data: RSUPendingWork): Promise<string> {
     const { writeFileSync, mkdirSync } = await import('node:fs');
     const { join } = await import('node:path');
-    const dir = join(rsuConfig.WorkDir, '.rsu_pending');
+    const dir = join(rsuConfig.WorkDir, rsuConfig.PendingWorkPath);
     mkdirSync(dir, { recursive: true });
     const filePath = join(dir, `${Date.now()}.json`);
     writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
@@ -351,7 +354,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   public async ReadAndClearPendingWork(): Promise<RSUPendingWork[]> {
     const { readdirSync, readFileSync, unlinkSync, existsSync } = await import('node:fs');
     const { join } = await import('node:path');
-    const dir = join(rsuConfig.WorkDir, '.rsu_pending');
+    const dir = join(rsuConfig.WorkDir, rsuConfig.PendingWorkPath);
     if (!existsSync(dir)) return [];
     const files = readdirSync(dir).filter((f) => f.endsWith('.json'));
     const results: RSUPendingWork[] = [];
@@ -740,12 +743,31 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     return true;
   }
 
-  /** Verify the filesystem paths RSU needs to write to are actually writable. */
+  /**
+   * Verify ALL filesystem paths RSU may write to are actually writable.
+   * Paths checked:
+   *  - MigrationsPath     (migration SQL files)
+   *  - PendingWorkPath    (post-restart task JSONs)
+   *  - AdditionalSchemaInfoPath parent dir (soft FK / soft PK config)
+   *  - CodeGenDir         (temp codegen script)
+   *  - WorkDir            (pipeline log file)
+   */
   private async validateFilesystemWritable(): Promise<void> {
     const { writeFileSync, unlinkSync, mkdirSync, existsSync } = await import('node:fs');
+    const { dirname } = await import('node:path');
     const workDir = rsuConfig.WorkDir;
-    const pathsToCheck = [nodePath.join(workDir, rsuConfig.MigrationsPath), nodePath.join(workDir, '.rsu_pending')];
-    for (const dir of pathsToCheck) {
+
+    const directoriesToCheck = [
+      nodePath.join(workDir, rsuConfig.MigrationsPath),
+      nodePath.join(workDir, rsuConfig.PendingWorkPath),
+      dirname(nodePath.join(workDir, rsuConfig.AdditionalSchemaInfoPath)),
+      rsuConfig.CodeGenDir,
+      workDir, // pipeline log
+    ];
+    // Deduplicate (e.g. CodeGenDir may equal WorkDir)
+    const uniqueDirs = [...new Set(directoriesToCheck.map(d => nodePath.resolve(d)))];
+
+    for (const dir of uniqueDirs) {
       if (!existsSync(dir)) {
         try {
           mkdirSync(dir, { recursive: true });

@@ -4,7 +4,7 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent } from '@memberjunction/core';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView } from '@memberjunction/core';
 import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
@@ -43,6 +43,16 @@ import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
+import { RuntimeSchemaManager } from '@memberjunction/schema-engine';
+import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
+import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
+import {
+  MJCompanyIntegrationEntity,
+  MJIntegrationEntity,
+  MJCompanyIntegrationEntityMapEntity,
+  MJCompanyIntegrationFieldMapEntity,
+  MJScheduledJobEntity,
+} from '@memberjunction/core-entities';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -852,7 +862,6 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
  * Reads pending work files, creates entity maps + field maps, starts sync.
  */
 async function processRSUPendingWork(): Promise<void> {
-  const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
   const rsm = RuntimeSchemaManager.Instance;
   const pendingItems = await rsm.ReadAndClearPendingWork();
   if (pendingItems.length === 0) return;
@@ -864,11 +873,9 @@ async function processRSUPendingWork(): Promise<void> {
 
   for (const item of pendingItems) {
     try {
-      const { Metadata, RunView } = await import('@memberjunction/core');
       const md = new Metadata();
 
       // Get system user for server-side operations
-      const { UserCache } = await import('@memberjunction/sqlserver-dataprovider');
       const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
       if (!systemUser) {
         console.warn(`[RSU] No system user found, skipping pending work for ${item.CompanyIntegrationID}`);
@@ -878,12 +885,8 @@ async function processRSUPendingWork(): Promise<void> {
       await Metadata.Provider.Refresh();
 
       // Resolve connector
-      const { ConnectorFactory } = await import('@memberjunction/integration-engine');
-      const CoreEntities = await import('@memberjunction/core-entities');
-      type CompanyIntegrationType = InstanceType<typeof CoreEntities.MJCompanyIntegrationEntity>;
-      type IntegrationType = InstanceType<typeof CoreEntities.MJIntegrationEntity>;
       const rv = new RunView();
-      const ciResult = await rv.RunView<CompanyIntegrationType>({
+      const ciResult = await rv.RunView<MJCompanyIntegrationEntity>({
         EntityName: 'MJ: Company Integrations',
         ExtraFilter: `ID='${item.CompanyIntegrationID}'`,
         ResultType: 'entity_object',
@@ -895,8 +898,7 @@ async function processRSUPendingWork(): Promise<void> {
       }
 
       const integrationName = companyIntegration.Integration;
-      // Resolve the Integration entity for ConnectorFactory
-      const integrationResult = await rv.RunView<IntegrationType>({
+      const integrationResult = await rv.RunView<MJIntegrationEntity>({
         EntityName: 'MJ: Integrations',
         ExtraFilter: `Name='${integrationName}'`,
         ResultType: 'entity_object',
@@ -928,11 +930,8 @@ async function processRSUPendingWork(): Promise<void> {
           continue;
         }
 
-        const { MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity } =
-          await import('@memberjunction/core-entities');
-
         // Check if entity map already exists for this connector + entity
-        const existingMapResult = await rvPending.RunView<typeof MJCompanyIntegrationEntityMapEntity.prototype>({
+        const existingMapResult = await rvPending.RunView<MJCompanyIntegrationEntityMapEntity>({
           EntityName: 'MJ: Company Integration Entity Maps',
           ExtraFilter: `CompanyIntegrationID='${item.CompanyIntegrationID}' AND EntityID='${entity.ID}'`,
           ResultType: 'entity_object',
@@ -942,12 +941,10 @@ async function processRSUPendingWork(): Promise<void> {
         let isNewMap = false;
 
         if (existingMapResult.Success && existingMapResult.Results.length > 0) {
-          // Entity map already exists — reuse it
           entityMapID = existingMapResult.Results[0].ID;
           console.log(`[RSU] Entity map already exists for ${objName} → ${entity.Name} (${entityMapID})`);
         } else {
-          // Create new entity map
-          const entityMap = await md.GetEntityObject<typeof MJCompanyIntegrationEntityMapEntity.prototype>(
+          const entityMap = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>(
             'MJ: Company Integration Entity Maps', systemUser
           );
           entityMap.NewRecord();
@@ -981,7 +978,7 @@ async function processRSUPendingWork(): Promise<void> {
             : (sourceObj?.Fields ?? []);
 
           // Load existing field maps to avoid duplicates
-          const existingFieldMaps = await rvPending.RunView<typeof MJCompanyIntegrationFieldMapEntity.prototype>({
+          const existingFieldMaps = await rvPending.RunView<MJCompanyIntegrationFieldMapEntity>({
             EntityName: 'MJ: Company Integration Field Maps',
             ExtraFilter: `EntityMapID='${entityMapID}'`,
             ResultType: 'simple',
@@ -993,8 +990,8 @@ async function processRSUPendingWork(): Promise<void> {
 
           let fieldCount = 0;
           for (const field of fieldsToMap) {
-            if (existingFieldNames.has(field.Name.toLowerCase())) continue; // Skip existing
-            const fieldMap = await md.GetEntityObject<typeof MJCompanyIntegrationFieldMapEntity.prototype>(
+            if (existingFieldNames.has(field.Name.toLowerCase())) continue;
+            const fieldMap = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>(
               'MJ: Company Integration Field Maps', systemUser
             );
             fieldMap.NewRecord();
@@ -1013,9 +1010,8 @@ async function processRSUPendingWork(): Promise<void> {
       // Start sync if requested
       if (item.StartSync !== false) {
         try {
-          const { IntegrationEngine } = await import('@memberjunction/integration-engine');
           await IntegrationEngine.Instance.Config(false, systemUser);
-          const syncOptions: Record<string, unknown> = {};
+          const syncOptions: IntegrationSyncOptions = {};
           if (item.SyncScope !== 'all' && createdEntityMapIDs.length > 0) syncOptions.EntityMapIDs = createdEntityMapIDs;
           if (item.FullSync) syncOptions.FullSync = true;
           const opts = Object.keys(syncOptions).length > 0 ? syncOptions : undefined;
@@ -1032,18 +1028,15 @@ async function processRSUPendingWork(): Promise<void> {
       if (item.CronExpression) {
         try {
           const rvSched = new RunView();
-          const { CronExpressionHelper } = await import('@memberjunction/scheduling-engine');
-          const { MJScheduledJobEntity } = await import('@memberjunction/core-entities');
-          type ScheduledJobType = InstanceType<typeof MJScheduledJobEntity>;
 
           // Find existing schedule by loading all integration sync jobs and matching Configuration JSON exactly
-          const allJobsResult = await rvSched.RunView<ScheduledJobType>({
+          const allJobsResult = await rvSched.RunView<MJScheduledJobEntity>({
             EntityName: 'MJ: Scheduled Jobs',
             ExtraFilter: `Status IN ('Active', 'Paused')`,
             ResultType: 'entity_object',
           }, systemUser);
 
-          let existingJob: ScheduledJobType | null = null;
+          let existingJob: MJScheduledJobEntity | null = null;
           if (allJobsResult.Success) {
             for (const j of allJobsResult.Results) {
               try {
@@ -1056,7 +1049,7 @@ async function processRSUPendingWork(): Promise<void> {
             }
           }
 
-          let job: ScheduledJobType;
+          let job: MJScheduledJobEntity;
           let isUpdate = false;
 
           if (existingJob) {
@@ -1076,7 +1069,7 @@ async function processRSUPendingWork(): Promise<void> {
               throw new Error('Job type not found');
             }
 
-            job = await md.GetEntityObject<ScheduledJobType>('MJ: Scheduled Jobs', systemUser);
+            job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', systemUser);
             job.NewRecord();
             job.JobTypeID = jobTypeResult.Results[0].ID;
             job.OwnerUserID = systemUser.ID;
