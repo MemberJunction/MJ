@@ -38,16 +38,18 @@ export class SharedService {
       switch (event.event) {
         case MJEventType.LoggedIn:
           if (SharedService._loaded === false)  {
-            // Handle app startup
-            await StartupManager.Instance.Startup();          
+            // Pre-warm non-critical engines IMMEDIATELY on LoggedIn, before
+            // StartupManager.Startup() completes. These engines only need
+            // Metadata.Provider (set during setupGraphQLClient's provider.Config()).
+            // Firing them here allows their RunViews calls to be coalesced with
+            // the startup engines' calls into fewer mega-batched GraphQL requests.
+            SharedService.preWarmEngines();
+
+            // Handle app startup — joins the same Startup() promise that
+            // setupGraphQLClient kicked off.
+            await StartupManager.Instance.Startup();
 
             await SharedService.RefreshData(false);
-
-            // Pre-warm other engines in the background (fire and forget)
-            // These are not needed immediately but will be ready when user navigates to
-            // Conversations, Dashboards, or Artifacts. The BaseEngine pattern ensures
-            // subsequent callers will wait for the existing load rather than starting a new one.
-            SharedService.preWarmEngines();
           }
         break;
       }
@@ -181,7 +183,9 @@ export class SharedService {
 
     this._resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
 
-    await SharedService.RefreshUserNotifications();  
+    // Note: RefreshUserNotifications() removed here because MJNotificationService
+    // already handles it via its own MJEventType.LoggedIn subscription. Calling it
+    // from both places caused a duplicate User Notifications GraphQL request on login.
   }  
 
   FormatColumnValue(col: ViewColumnInfo, value: any, maxLength: number = 0, trailingChars: string = "...") {

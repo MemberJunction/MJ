@@ -685,7 +685,11 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      * @returns {EntityInfo} The source entity metadata, or undefined if not linked to an entity
      */
     get SourceEntityInfo(): EntityInfo {
-        return Metadata.Provider.Entities.find(e => UUIDsEqual(e.ID, this.SourceEntityID));
+        const p = Metadata.Provider;
+        if (p.EntityByID) {
+            return p.EntityByID(this.SourceEntityID);
+        }
+        return p.Entities.find(e => UUIDsEqual(e.ID, this.SourceEntityID));
     }
 
     /**
@@ -797,7 +801,11 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      * @returns {EntityInfo} The entity metadata
      */
     get EntityInfo(): EntityInfo {
-        return Metadata.Provider.Entities.find(e => UUIDsEqual(e.ID, this.EntityID));
+        const p = Metadata.Provider;
+        if (p.EntityByID) {
+            return p.EntityByID(this.EntityID);
+        }
+        return p.Entities.find(e => UUIDsEqual(e.ID, this.EntityID));
     }
 }
 
