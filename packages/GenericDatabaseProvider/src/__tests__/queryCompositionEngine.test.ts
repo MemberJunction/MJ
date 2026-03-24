@@ -2285,4 +2285,130 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
             expect(result.CTEs[0].Parameters['MinActivityCount']).toBe('3');
         });
     });
+
+    // ================================================================
+    // Filter Chain Preservation in Parameter Substitution
+    // ================================================================
+    describe('Filter chain preservation in parameter substitution', () => {
+        it('should preserve sqlNumber filter on pass-through parameter', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'fc-num-1',
+                Name: 'Recent Changes',
+                CategoryPath: '/Demos/',
+                SQL: "SELECT * FROM Changes WHERE CreatedAt >= DATEADD(DAY, -{{ lookbackDays | sqlNumber }}, GETUTCDATE())",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Demos/Recent Changes(lookbackDays=numDays)"}} rc';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Pass-through: inner {{ lookbackDays | sqlNumber }} should become {{ numDays | sqlNumber }}
+            expect(result.CTEs[0].ResolvedSQL).toContain('numDays');
+            expect(result.CTEs[0].ResolvedSQL).toContain('sqlNumber');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('lookbackDays');
+        });
+
+        it('should preserve sqlString filter on pass-through parameter', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'fc-str-1',
+                Name: 'By Region',
+                CategoryPath: '/Sales/',
+                SQL: "SELECT * FROM Customers WHERE Region = {{ region | sqlString }}",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Sales/By Region(region=userRegion)"}} c';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Pass-through: inner {{ region | sqlString }} should become {{ userRegion | sqlString }}
+            expect(result.CTEs[0].ResolvedSQL).toContain('userRegion');
+            expect(result.CTEs[0].ResolvedSQL).toContain('sqlString');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('region |');
+        });
+
+        it('should preserve default+filter chain on pass-through parameter', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'fc-chain-1',
+                Name: 'Limited Results',
+                CategoryPath: '/Test/',
+                SQL: "SELECT TOP {{ limit | default(25) | sqlNumber }} * FROM Items",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Limited Results(limit=maxRows)"}} lr';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Pass-through: {{ limit | default(25) | sqlNumber }} should become {{ maxRows | default(25) | sqlNumber }}
+            expect(result.CTEs[0].ResolvedSQL).toContain('maxRows');
+            expect(result.CTEs[0].ResolvedSQL).toContain('default(25)');
+            expect(result.CTEs[0].ResolvedSQL).toContain('sqlNumber');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('limit');
+        });
+
+        it('should replace entire expression (including filter) for static string value', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'fc-static-str',
+                Name: 'By Region',
+                CategoryPath: '/Sales/',
+                SQL: "SELECT * FROM Customers WHERE Region = {{ region | sqlString }}",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = `SELECT * FROM {{query:"Sales/By Region(region='West')"}} c`;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Static value: entire {{ region | sqlString }} replaced with literal 'West'
+            expect(result.CTEs[0].ResolvedSQL).toContain("'West'");
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('sqlString');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('{{');
+        });
+
+        it('should replace entire expression (including filter) for static numeric value', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'fc-static-num',
+                Name: 'Recent Changes',
+                CategoryPath: '/Demos/',
+                SQL: "SELECT * FROM Changes WHERE CreatedAt >= DATEADD(DAY, -{{ lookbackDays | sqlNumber }}, GETUTCDATE())",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = `SELECT * FROM {{query:"Demos/Recent Changes(lookbackDays='30')"}} rc`;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Static numeric: entire {{ lookbackDays | sqlNumber }} replaced with bare 30
+            expect(result.CTEs[0].ResolvedSQL).toContain('30');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('sqlNumber');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('lookbackDays');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('{{');
+        });
+
+        it('should handle mixed static and pass-through params both with filters', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'fc-mixed-1',
+                Name: 'Regional Changes',
+                CategoryPath: '/Analytics/',
+                SQL: "SELECT * FROM Changes WHERE Region = {{ region | sqlString }} AND CreatedAt >= DATEADD(DAY, -{{ lookbackDays | sqlNumber }}, GETUTCDATE())",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            // region is static, lookbackDays is pass-through
+            const sql = `SELECT * FROM {{query:"Analytics/Regional Changes(region='West', lookbackDays=numDays)"}} rc`;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Static region: filter dropped, literal substituted
+            expect(result.CTEs[0].ResolvedSQL).toContain("'West'");
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('region');
+
+            // Pass-through lookbackDays: renamed to numDays, filter preserved
+            expect(result.CTEs[0].ResolvedSQL).toContain('numDays');
+            expect(result.CTEs[0].ResolvedSQL).toContain('sqlNumber');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('lookbackDays');
+        });
+    });
 });

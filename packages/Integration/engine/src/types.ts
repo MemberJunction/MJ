@@ -197,6 +197,19 @@ export interface SyncProgress {
 /** Callback for progress tracking during sync */
 export type OnProgressCallback = (progress: SyncProgress) => void;
 
+/** Snapshot of sync progress for a connector — stored in IntegrationEngine's static map */
+export interface SyncProgressSnapshot {
+    StartedAt: Date;
+    CurrentEntity: string;
+    EntityMapsTotal: number;
+    EntityMapsCompleted: number;
+    RecordsProcessed: number;
+    RecordsCreated: number;
+    RecordsUpdated: number;
+    RecordsErrored: number;
+    TriggerType: string;
+}
+
 /** Notification event type — what triggered the notification */
 export type SyncNotificationEvent = 'SyncCompleted' | 'SyncFailed' | 'SyncCompletedWithErrors';
 
