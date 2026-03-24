@@ -592,7 +592,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             const currentFavoriteId = await this.GetRecordFavoriteID(userId, entityName, compositeKey);
             if ((currentFavoriteId === null && !isFavorite) || (currentFavoriteId !== null && isFavorite)) return;
 
-            const e = this.Entities.find((e) => e.Name === entityName);
+            const e = this.EntityByName(entityName);
             const ufEntity: BaseEntity = await this.GetEntityObject('MJ: User Favorites', contextUser || this.CurrentUser);
             if (currentFavoriteId !== null) {
                 // delete the record since we are setting isFavorite to FALSE
@@ -660,9 +660,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     private parseRecordDependencyResults(result: Record<string, unknown>[]): RecordDependency[] {
         const recordDependencies: RecordDependency[] = [];
         for (const r of result) {
-            const entityInfo: EntityInfo | undefined = this.Entities.find(
-                (e) => e.Name.trim().toLowerCase() === (r.EntityName as string)?.trim().toLowerCase()
-            );
+            const entityInfo = this.EntityByName(r.EntityName as string);
             if (!entityInfo) {
                 throw new Error(`Entity ${r.EntityName} not found in metadata`);
             }
@@ -865,7 +863,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @throws Error if contextUser is null, entity is not found, or user lacks read permission
      */
     protected CheckUserReadPermissions(entityName: string, contextUser: UserInfo): void {
-        const entityInfo = this.Entities.find((e) => e.Name === entityName);
+        const entityInfo = this.EntityByName(entityName);
         if (!contextUser) throw new Error('contextUser is null');
         if (entityInfo) {
             const userPermissions = entityInfo.GetUserPermisions(contextUser);
@@ -1018,7 +1016,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @returns The SQL query string, or null if the entity has no name field
      */
     protected BuildEntityRecordNameSQL(entityName: string, compositeKey: CompositeKey): string | null {
-        const e = this.Entities.find((e) => e.Name === entityName);
+        const e = this.EntityByName(entityName);
         if (!e) throw new Error('Entity ' + entityName + ' not found');
 
         const f = e.NameField;
@@ -1745,7 +1743,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @returns The merge result
      */
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, _options?: EntityMergeOptions): Promise<RecordMergeResult> {
-        const e = this.Entities.find((e) => e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
+        const e = this.EntityByName(request.EntityName);
         if (!e || !e.AllowRecordMerge)
             throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
 
@@ -1827,7 +1825,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     protected async StartMergeLogging(request: RecordMergeRequest, result: RecordMergeResult, contextUser?: UserInfo): Promise<BaseEntity> {
         try {
             const recordMergeLog: BaseEntity = await this.GetEntityObject('MJ: Record Merge Logs', contextUser);
-            const entity = this.Entities.find((e) => e.Name === request.EntityName);
+            const entity = this.EntityByName(request.EntityName);
             if (!entity) throw new Error(`Entity ${request.EntityName} not found in metadata`);
             if (!contextUser && !this.CurrentUser) throw new Error('contextUser is null and no CurrentUser is set');
 
