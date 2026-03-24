@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { mjCoreSchema, outputOptionValue, configInfo, resolveEntityPackageName } from '../Config/config';
 import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './related-entity-components';
-import { sortBySequenceAndCreatedAt } from '../Misc/util';
+import { sortBySequenceAndCreatedAt, sortRelatedEntities } from '../Misc/util';
 
 /**
  * Represents metadata about an Angular form section that is generated for an entity
@@ -859,7 +859,7 @@ ${indentedFormHTML}
         const isaChildIDs = new Set(entity.ChildEntities.map(c => c.ID));
 
         // Sort related entities deterministically using the shared sort with cascading tiebreakers
-        const sortedRelatedEntities = sortBySequenceAndCreatedAt(
+        const sortedRelatedEntities = sortRelatedEntities(
             entity.RelatedEntities.filter(re => re.DisplayInForm && !isaChildIDs.has(re.RelatedEntityID))
         );
         let index = startIndex;
