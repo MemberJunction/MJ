@@ -1,4 +1,5 @@
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { MJCompanyIntegrationSyncWatermarkEntity } from '@memberjunction/core-entities';
 import type { ICompanyIntegrationSyncWatermark } from './entity-types.js';
 import type { WatermarkType } from './types.js';
 
@@ -125,11 +126,11 @@ export class WatermarkService {
         contextUser: UserInfo
     ): Promise<void> {
         const md = new Metadata();
-        const watermark = await md.GetEntityObject(
+        const watermark = await md.GetEntityObject<MJCompanyIntegrationSyncWatermarkEntity>(
             'MJ: Company Integration Sync Watermarks',
             contextUser
-        ) as unknown as ICompanyIntegrationSyncWatermark;
-        watermark.NewRecord!();
+        );
+        watermark.NewRecord();
         watermark.EntityMapID = entityMapID;
         watermark.WatermarkValue = newValue;
         watermark.Direction = 'Pull';
@@ -137,9 +138,10 @@ export class WatermarkService {
         watermark.LastSyncAt = new Date();
         watermark.RecordsSynced = 0;
 
-        const saved = await watermark.Save!();
+        const saved = await watermark.Save();
         if (!saved) {
-            throw new Error(`Failed to create watermark for EntityMapID=${entityMapID}`);
+            const err = watermark.LatestResult?.Message || 'Unknown error';
+            throw new Error(`Failed to create watermark for EntityMapID=${entityMapID}: ${err}`);
         }
     }
 }

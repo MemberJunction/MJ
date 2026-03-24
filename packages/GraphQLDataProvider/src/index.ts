@@ -62,5 +62,7 @@ export type {
     PreviewDataResult,
     DefaultFieldMappingResult,
     DefaultObjectConfigResult,
-    DefaultConfigResult
+    DefaultConfigResult,
+    ApplyAllEntityMapCreated,
+    ApplyAllResult
 } from './graphQLIntegrationClient';
