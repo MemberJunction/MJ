@@ -70,7 +70,10 @@ module.exports = {
     }
   },
   optimization: {
-    minimize: true
+    // minimize disabled: the UMD bundle is only used in test harness (Playwright)
+    // contexts, and terser's name mangling causes variable collisions between
+    // ClassFactory and entity classes, breaking bundle initialization.
+    minimize: false
   },
   performance: {
     hints: false,

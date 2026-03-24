@@ -52,6 +52,7 @@ import {
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
+import { ServerExtensionLoader, ServerExtensionConfig } from '@memberjunction/server-extensions-core';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -71,6 +72,8 @@ export { MaxLength } from 'class-validator';
 export * from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
+export { ServerExtensionLoader, BaseServerExtension } from '@memberjunction/server-extensions-core';
+export type { ServerExtensionConfig, ExtensionInitResult, ExtensionHealthResult } from '@memberjunction/server-extensions-core';
 export * from './directives/index.js';
 export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
 export * from './types.js';
@@ -717,6 +720,23 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // client from reading the error code and triggering token refresh.
   app.use(cors<cors.CorsRequest>());
 
+  // ─── Server extensions (before auth — extensions handle their own auth) ─────
+  // Slack uses HMAC signature verification, Teams uses Bot Framework JWT validation.
+  // These must be registered before the unified auth middleware so webhook
+  // requests aren't rejected for lacking an MJ bearer token.
+  const extensionLoader = new ServerExtensionLoader();
+  const extensionConfigs = (configInfo.serverExtensions ?? []) as ServerExtensionConfig[];
+  if (extensionConfigs.length > 0) {
+    await extensionLoader.LoadExtensions(app, extensionConfigs);
+  }
+
+  // Extension health endpoint (always available, returns empty array if no extensions)
+  app.get('/health/extensions', async (_req, res) => {
+    const results = await extensionLoader.HealthCheckAll();
+    const allHealthy = results.length === 0 || results.every(r => r.Healthy);
+    res.status(allHealthy ? 200 : 503).json({ extensions: results });
+  });
+
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
   app.use(createUnifiedAuthMiddleware(dataSources));
 
@@ -820,6 +840,16 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // Set up graceful shutdown handlers
   const gracefulShutdown = async (signal: string) => {
     console.log(`\n${signal} received, shutting down gracefully...`);
+
+    // Stop server extensions
+    if (extensionLoader.ExtensionCount > 0) {
+      try {
+        await extensionLoader.ShutdownAll();
+        console.log('✅ Server extensions shut down');
+      } catch (error) {
+        console.error('❌ Error shutting down server extensions:', error);
+      }
+    }
 
     // Stop scheduled jobs service
     if (scheduledJobsService?.IsRunning) {
