@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 5.17.0
+
+### Patch Changes
+
+- 9881045: no metadata or migration files, patch release
+  - @memberjunction/global@5.17.0
+
 ## 5.16.0
 
 ### Patch Changes

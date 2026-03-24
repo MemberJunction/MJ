@@ -1,5 +1,11 @@
 # @memberjunction/unit-testing
 
+## 5.17.0
+
+### Patch Changes
+
+- @memberjunction/global@5.17.0
+
 ## 5.16.0
 
 ### Patch Changes

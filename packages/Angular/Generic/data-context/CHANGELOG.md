@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/ng-data-context
 
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [9881045]
+  - @memberjunction/core@5.17.0
+  - @memberjunction/ng-container-directives@5.17.0
+  - @memberjunction/ng-shared-generic@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/global@5.17.0
+
 ## 5.16.0
 
 ### Patch Changes

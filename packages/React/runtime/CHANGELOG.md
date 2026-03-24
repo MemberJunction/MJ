@@ -1,5 +1,18 @@
 # @memberjunction/react-runtime
 
+## 5.17.0
+
+### Patch Changes
+
+- 9881045: no metadata or migration files, patch release
+- Updated dependencies [bbfbf5e]
+- Updated dependencies [9881045]
+  - @memberjunction/graphql-dataprovider@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/interactive-component-types@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/global@5.17.0
+
 ## 5.16.0
 
 ### Patch Changes

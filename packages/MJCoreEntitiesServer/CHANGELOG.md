@@ -1,5 +1,31 @@
 # @memberjunction/core-entities-server
 
+## 5.17.0
+
+### Patch Changes
+
+- 4b6fd2a: Add composable query passthrough parameter bubbling, deterministic field type resolution from dependency queries and entity metadata, MJLexer-based template variable manipulation, and refactor MJQueryEntityServer into a 5-stage extraction pipeline
+- Updated dependencies [4b6fd2a]
+- Updated dependencies [9881045]
+  - @memberjunction/sql-parser@5.17.0
+  - @memberjunction/generic-database-provider@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/sqlserver-dataprovider@5.17.0
+  - @memberjunction/ai-engine-base@5.17.0
+  - @memberjunction/ai-core-plus@5.17.0
+  - @memberjunction/aiengine@5.17.0
+  - @memberjunction/ai-prompts@5.17.0
+  - @memberjunction/ai-vector-dupe@5.17.0
+  - @memberjunction/ai-vectors-memory@5.17.0
+  - @memberjunction/actions-base@5.17.0
+  - @memberjunction/doc-utils@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/skip-types@5.17.0
+  - @memberjunction/ai-provider-bundle@5.17.0
+  - @memberjunction/ai@5.17.0
+  - @memberjunction/global@5.17.0
+  - @memberjunction/sql-converter@5.17.0
+
 ## 5.16.0
 
 ### Patch Changes
