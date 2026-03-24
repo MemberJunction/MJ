@@ -2196,7 +2196,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // so the app can start initializing (engines, UI) while we validate in the background.
         // This is a stale-while-revalidate pattern: serve cached data instantly, then
         // refresh if the server says it's outdated.
-        if (!hardRefresh && !this._localMetadata?.AllEntities?.length) {
+        if (!this.TrustLocalCacheCompletely && !hardRefresh && !this._localMetadata?.AllEntities?.length) {
             await this.LoadLocalMetadataFromStorage();
             if (this._localMetadata?.AllEntities?.length) {
                 LogStatusEx({ message: `⚡ [Fast-Start] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — deferring server validation`, verboseOnly: false });
