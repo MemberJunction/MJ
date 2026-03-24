@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { SQLParser } from '@memberjunction/sql-parser';
-import type { MJParameterInfo } from '@memberjunction/sql-parser';
+import type { MJParameterInfo, SQLSelectColumn } from '@memberjunction/sql-parser';
 
 // ═══════════════════════════════════════════════════
 // Test the deterministic extraction via SQLParser
@@ -978,5 +978,567 @@ WHERE base.Category = {{ Year | sqlNumber }}`;
             expect(merged[0].name).toBe('Year');
             expect(merged[0].type).toBe('number'); // From direct extraction (sqlNumber filter)
         });
+    });
+});
+
+// ═══════════════════════════════════════════════════
+// Test field type enrichment from composition references
+// and entity metadata (mirrors the private enrichment
+// methods in MJQueryEntityServer)
+// ═══════════════════════════════════════════════════
+
+interface ExtractedField {
+    name: string;
+    dynamicName?: boolean;
+    description: string;
+    type: 'number' | 'string' | 'date' | 'boolean';
+    optional: boolean;
+    sourceEntity?: string | null;
+    sourceFieldName?: string | null;
+    isComputed?: boolean;
+    isSummary?: boolean;
+    computationDescription?: string;
+    sqlBaseType?: string | null;
+    sqlFullType?: string | null;
+}
+
+/**
+ * Minimal field info representing a dependency query field or entity field.
+ * Mirrors the properties used from QueryFieldInfo / EntityFieldInfo during enrichment.
+ */
+interface MockFieldInfo {
+    Name: string;
+    SQLBaseType: string;
+    SQLFullType: string;
+    SourceEntityID?: string | null;
+    SourceFieldName?: string | null;
+    IsComputed?: boolean;
+    IsSummary?: boolean;
+    Type?: string;           // Entity metadata uses "Type" for base SQL type
+}
+
+// ─── Composition field enrichment (pure function) ────────────────────────────
+
+/**
+ * Re-implements enrichFieldTypesFromCompositions as a pure function.
+ *
+ * @param fields - Extracted fields to enrich
+ * @param selectColumns - Parsed SELECT columns (from SQLParser.ExtractSelectColumns)
+ * @param depFieldsByAlias - Map<alias, Map<fieldNameLower, MockFieldInfo>> representing
+ *                           dependency query fields keyed by the composition ref alias
+ */
+function enrichFieldsFromCompositionRefs(
+    fields: ExtractedField[],
+    selectColumns: SQLSelectColumn[],
+    depFieldsByAlias: Map<string, Map<string, MockFieldInfo>>
+): ExtractedField[] {
+    // Build outputName → select column map
+    const outputNameToSelectCol = new Map<string, SQLSelectColumn>();
+    for (const col of selectColumns) {
+        outputNameToSelectCol.set(col.OutputName.toLowerCase(), col);
+    }
+
+    // Build flat unqualified lookup (first dep wins for ambiguous names)
+    const flatLookup = new Map<string, MockFieldInfo>();
+    for (const depFields of depFieldsByAlias.values()) {
+        for (const [nameLower, field] of depFields) {
+            if (!flatLookup.has(nameLower)) {
+                flatLookup.set(nameLower, field);
+            }
+        }
+    }
+
+    return fields.map(field => {
+        if (field.sqlBaseType && field.sqlFullType) return field;
+
+        // Try to resolve via parsed SELECT columns
+        const selectCol = outputNameToSelectCol.get(field.name.toLowerCase());
+        let matched: MockFieldInfo | undefined;
+
+        if (selectCol && !selectCol.IsExpression) {
+            if (selectCol.TableQualifier) {
+                const depFields = depFieldsByAlias.get(selectCol.TableQualifier.toLowerCase());
+                if (depFields) {
+                    matched = depFields.get(selectCol.SourceColumn.toLowerCase());
+                }
+            }
+
+            // Unqualified fallback: search all deps by source column name
+            if (!matched) {
+                for (const depFields of depFieldsByAlias.values()) {
+                    matched = depFields.get(selectCol.SourceColumn.toLowerCase());
+                    if (matched) break;
+                }
+            }
+        }
+
+        // Final fallback: flat lookup by output name
+        if (!matched) {
+            matched = flatLookup.get(field.name.toLowerCase());
+        }
+
+        if (matched) {
+            return {
+                ...field,
+                sqlBaseType: matched.SQLBaseType,
+                sqlFullType: matched.SQLFullType,
+                sourceEntity: field.sourceEntity ?? null,
+                sourceFieldName: field.sourceFieldName ?? matched.SourceFieldName ?? null,
+                isComputed: field.isComputed ?? matched.IsComputed ?? false,
+                isSummary: field.isSummary ?? matched.IsSummary ?? false,
+            };
+        }
+
+        return field;
+    });
+}
+
+// ─── Entity metadata field enrichment (pure function) ────────────────────────
+
+/**
+ * Re-implements enrichFieldTypesFromEntityMetadata as a pure function.
+ *
+ * @param fields - Extracted fields to enrich
+ * @param selectColumns - Parsed SELECT columns
+ * @param entityFieldsByAlias - Map<alias, Map<fieldNameLower, { field: MockFieldInfo, entityName: string }>>
+ */
+function enrichFieldsFromEntityMetadata(
+    fields: ExtractedField[],
+    selectColumns: SQLSelectColumn[],
+    entityFieldsByAlias: Map<string, Map<string, { field: MockFieldInfo; entityName: string }>>
+): ExtractedField[] {
+    // Build outputName → select column map
+    const outputNameToSelectCol = new Map<string, SQLSelectColumn>();
+    for (const col of selectColumns) {
+        outputNameToSelectCol.set(col.OutputName.toLowerCase(), col);
+    }
+
+    // Build flat unqualified lookup (first entity wins)
+    const flatLookup = new Map<string, { field: MockFieldInfo; entityName: string }>();
+    for (const entityFields of entityFieldsByAlias.values()) {
+        for (const [nameLower, entry] of entityFields) {
+            if (!flatLookup.has(nameLower)) {
+                flatLookup.set(nameLower, entry);
+            }
+        }
+    }
+
+    return fields.map(field => {
+        if (field.sqlBaseType && field.sqlFullType) return field;
+
+        const selectCol = outputNameToSelectCol.get(field.name.toLowerCase());
+        let matched: { field: MockFieldInfo; entityName: string } | undefined;
+
+        if (selectCol && !selectCol.IsExpression) {
+            // Alias-qualified match
+            if (selectCol.TableQualifier) {
+                const entityFields = entityFieldsByAlias.get(selectCol.TableQualifier.toLowerCase());
+                if (entityFields) {
+                    matched = entityFields.get(selectCol.SourceColumn.toLowerCase());
+                }
+            }
+
+            // Unqualified fallback by source column
+            if (!matched) {
+                matched = flatLookup.get(selectCol.SourceColumn.toLowerCase());
+            }
+        }
+
+        // Final fallback by output name directly
+        if (!matched) {
+            matched = flatLookup.get(field.name.toLowerCase());
+        }
+
+        if (matched) {
+            return {
+                ...field,
+                sqlBaseType: matched.field.Type ?? matched.field.SQLBaseType,
+                sqlFullType: matched.field.SQLFullType,
+                sourceEntity: field.sourceEntity ?? matched.entityName,
+                sourceFieldName: field.sourceFieldName ?? matched.field.Name,
+            };
+        }
+
+        return field;
+    });
+}
+
+// ─── Helper to build dep field maps from simple objects ──────────────────────
+
+function buildDepFieldMap(fields: MockFieldInfo[]): Map<string, MockFieldInfo> {
+    const map = new Map<string, MockFieldInfo>();
+    for (const f of fields) {
+        map.set(f.Name.toLowerCase(), f);
+    }
+    return map;
+}
+
+function buildEntityFieldMap(
+    fields: MockFieldInfo[],
+    entityName: string
+): Map<string, { field: MockFieldInfo; entityName: string }> {
+    const map = new Map<string, { field: MockFieldInfo; entityName: string }>();
+    for (const f of fields) {
+        map.set(f.Name.toLowerCase(), { field: f, entityName });
+    }
+    return map;
+}
+
+// ═══════════════════════════════════════════════════
+// Composition field enrichment tests
+// ═══════════════════════════════════════════════════
+
+describe('Field Type Enrichment from Composition References', () => {
+    it('should resolve direct column match via table qualifier', () => {
+        const fields: ExtractedField[] = [{
+            name: 'Name', description: 'User name', type: 'string', optional: false,
+        }];
+
+        const selectColumns: SQLSelectColumn[] = [{
+            OutputName: 'Name', SourceColumn: 'Name', TableQualifier: 'u', IsExpression: false,
+        }];
+
+        const depFieldsByAlias = new Map([
+            ['u', buildDepFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)' },
+            ])],
+        ]);
+
+        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        expect(result).toHaveLength(1);
+        expect(result[0].sqlBaseType).toBe('nvarchar');
+        expect(result[0].sqlFullType).toBe('nvarchar(100)');
+    });
+
+    it('should resolve AS alias match via table qualifier', () => {
+        const fields: ExtractedField[] = [{
+            name: 'EntityName', description: 'Entity name', type: 'string', optional: false,
+        }];
+
+        // SELECT e.Name AS EntityName
+        const selectColumns: SQLSelectColumn[] = [{
+            OutputName: 'EntityName', SourceColumn: 'Name', TableQualifier: 'e', IsExpression: false,
+        }];
+
+        const depFieldsByAlias = new Map([
+            ['e', buildDepFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(255)', SourceFieldName: 'Name' },
+                { Name: 'ID', SQLBaseType: 'uniqueidentifier', SQLFullType: 'uniqueidentifier' },
+            ])],
+        ]);
+
+        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        expect(result).toHaveLength(1);
+        expect(result[0].sqlBaseType).toBe('nvarchar');
+        expect(result[0].sqlFullType).toBe('nvarchar(255)');
+        expect(result[0].sourceFieldName).toBe('Name'); // Resolved source field name
+    });
+
+    it('should skip expression fields (IsExpression=true)', () => {
+        const fields: ExtractedField[] = [{
+            name: 'UserCount', description: 'Count of users', type: 'number', optional: false,
+        }];
+
+        const selectColumns: SQLSelectColumn[] = [{
+            OutputName: 'UserCount', SourceColumn: 'COUNT(*)', TableQualifier: null, IsExpression: true,
+        }];
+
+        const depFieldsByAlias = new Map([
+            ['u', buildDepFieldMap([
+                { Name: 'UserCount', SQLBaseType: 'int', SQLFullType: 'int' },
+            ])],
+        ]);
+
+        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        expect(result).toHaveLength(1);
+        // Expression columns are skipped during SELECT column resolution, but flat lookup still applies
+        // since the dep has a field named "UserCount". The flat lookup is the final fallback.
+        expect(result[0].sqlBaseType).toBe('int');
+    });
+
+    it('should skip fields that already have sqlBaseType and sqlFullType', () => {
+        const fields: ExtractedField[] = [{
+            name: 'Name', description: 'Already resolved', type: 'string', optional: false,
+            sqlBaseType: 'varchar', sqlFullType: 'varchar(50)',
+        }];
+
+        const selectColumns: SQLSelectColumn[] = [{
+            OutputName: 'Name', SourceColumn: 'Name', TableQualifier: 'u', IsExpression: false,
+        }];
+
+        const depFieldsByAlias = new Map([
+            ['u', buildDepFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)' },
+            ])],
+        ]);
+
+        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        expect(result).toHaveLength(1);
+        expect(result[0].sqlBaseType).toBe('varchar');     // Unchanged
+        expect(result[0].sqlFullType).toBe('varchar(50)'); // Unchanged
+    });
+
+    it('should use unqualified fallback when no table qualifier', () => {
+        const fields: ExtractedField[] = [{
+            name: 'Status', description: 'Status field', type: 'string', optional: false,
+        }];
+
+        // No table qualifier in select column
+        const selectColumns: SQLSelectColumn[] = [{
+            OutputName: 'Status', SourceColumn: 'Status', TableQualifier: null, IsExpression: false,
+        }];
+
+        const depFieldsByAlias = new Map([
+            ['a', buildDepFieldMap([
+                { Name: 'Status', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(20)' },
+            ])],
+        ]);
+
+        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        expect(result).toHaveLength(1);
+        expect(result[0].sqlBaseType).toBe('nvarchar');
+        expect(result[0].sqlFullType).toBe('nvarchar(20)');
+    });
+
+    it('should disambiguate same field name across multiple deps using qualifier', () => {
+        const fields: ExtractedField[] = [
+            { name: 'Name', description: 'From users', type: 'string', optional: false },
+            { name: 'EntityName', description: 'From entities', type: 'string', optional: false },
+        ];
+
+        // SELECT u.Name, e.Name AS EntityName
+        const selectColumns: SQLSelectColumn[] = [
+            { OutputName: 'Name', SourceColumn: 'Name', TableQualifier: 'u', IsExpression: false },
+            { OutputName: 'EntityName', SourceColumn: 'Name', TableQualifier: 'e', IsExpression: false },
+        ];
+
+        const depFieldsByAlias = new Map([
+            ['u', buildDepFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)' },
+            ])],
+            ['e', buildDepFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(255)' },
+            ])],
+        ]);
+
+        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        expect(result).toHaveLength(2);
+
+        const nameField = result.find(f => f.name === 'Name')!;
+        expect(nameField.sqlBaseType).toBe('nvarchar');
+        expect(nameField.sqlFullType).toBe('nvarchar(100)'); // From "u" dep
+
+        const entityNameField = result.find(f => f.name === 'EntityName')!;
+        expect(entityNameField.sqlBaseType).toBe('nvarchar');
+        expect(entityNameField.sqlFullType).toBe('nvarchar(255)'); // From "e" dep
+    });
+
+    it('should leave field unchanged when no matching dep field exists', () => {
+        const fields: ExtractedField[] = [{
+            name: 'UnknownField', description: 'Not in any dep', type: 'string', optional: false,
+        }];
+
+        const selectColumns: SQLSelectColumn[] = [{
+            OutputName: 'UnknownField', SourceColumn: 'UnknownField', TableQualifier: 'x', IsExpression: false,
+        }];
+
+        const depFieldsByAlias = new Map([
+            ['u', buildDepFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)' },
+            ])],
+        ]);
+
+        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        expect(result).toHaveLength(1);
+        expect(result[0].sqlBaseType).toBeUndefined();
+        expect(result[0].sqlFullType).toBeUndefined();
+    });
+
+    it('should not overwrite existing sourceEntity on the field', () => {
+        const fields: ExtractedField[] = [{
+            name: 'Name', description: 'User name', type: 'string', optional: false,
+            sourceEntity: 'Users', // Already set
+        }];
+
+        const selectColumns: SQLSelectColumn[] = [{
+            OutputName: 'Name', SourceColumn: 'Name', TableQualifier: 'u', IsExpression: false,
+        }];
+
+        const depFieldsByAlias = new Map([
+            ['u', buildDepFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)' },
+            ])],
+        ]);
+
+        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        expect(result[0].sourceEntity).toBe('Users'); // Preserved, not overwritten
+    });
+});
+
+// ═══════════════════════════════════════════════════
+// Entity metadata field enrichment tests
+// ═══════════════════════════════════════════════════
+
+describe('Field Type Enrichment from Entity Metadata', () => {
+    it('should resolve direct column from entity metadata via SQLParser', () => {
+        const sql = 'SELECT u.Name FROM __mj.vwUsers u';
+        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+
+        const fields: ExtractedField[] = [{
+            name: 'Name', description: 'User name', type: 'string', optional: false,
+        }];
+
+        const entityFieldsByAlias = new Map([
+            ['u', buildEntityFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
+                { Name: 'Email', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(255)', Type: 'nvarchar' },
+            ], 'Users')],
+        ]);
+
+        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        expect(result).toHaveLength(1);
+        expect(result[0].sqlBaseType).toBe('nvarchar');
+        expect(result[0].sqlFullType).toBe('nvarchar(100)');
+        expect(result[0].sourceEntity).toBe('Users');
+        expect(result[0].sourceFieldName).toBe('Name');
+    });
+
+    it('should resolve AS alias to source column from entity metadata', () => {
+        const sql = 'SELECT u.__mj_CreatedAt AS CreatedAt FROM __mj.vwUsers u';
+        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+
+        const fields: ExtractedField[] = [{
+            name: 'CreatedAt', description: 'Creation timestamp', type: 'date', optional: false,
+        }];
+
+        const entityFieldsByAlias = new Map([
+            ['u', buildEntityFieldMap([
+                { Name: '__mj_CreatedAt', SQLBaseType: 'datetimeoffset', SQLFullType: 'datetimeoffset(7)', Type: 'datetimeoffset' },
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
+            ], 'Users')],
+        ]);
+
+        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        expect(result).toHaveLength(1);
+        expect(result[0].sqlBaseType).toBe('datetimeoffset');
+        expect(result[0].sqlFullType).toBe('datetimeoffset(7)');
+        expect(result[0].sourceEntity).toBe('Users');
+        expect(result[0].sourceFieldName).toBe('__mj_CreatedAt');
+    });
+
+    it('should disambiguate multiple tables by alias', () => {
+        const sql = 'SELECT u.Name, e.Name AS EntityName FROM __mj.vwUsers u JOIN __mj.vwEntities e ON u.ID = e.ID';
+        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+
+        const fields: ExtractedField[] = [
+            { name: 'Name', description: 'User name', type: 'string', optional: false },
+            { name: 'EntityName', description: 'Entity name', type: 'string', optional: false },
+        ];
+
+        const entityFieldsByAlias = new Map([
+            ['u', buildEntityFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
+                { Name: 'ID', SQLBaseType: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', Type: 'uniqueidentifier' },
+            ], 'Users')],
+            ['e', buildEntityFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(255)', Type: 'nvarchar' },
+                { Name: 'ID', SQLBaseType: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', Type: 'uniqueidentifier' },
+            ], 'Entities')],
+        ]);
+
+        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        expect(result).toHaveLength(2);
+
+        const nameField = result.find(f => f.name === 'Name')!;
+        expect(nameField.sqlFullType).toBe('nvarchar(100)'); // From Users (alias "u")
+        expect(nameField.sourceEntity).toBe('Users');
+
+        const entityNameField = result.find(f => f.name === 'EntityName')!;
+        expect(entityNameField.sqlFullType).toBe('nvarchar(255)'); // From Entities (alias "e")
+        expect(entityNameField.sourceEntity).toBe('Entities');
+        expect(entityNameField.sourceFieldName).toBe('Name'); // Source column, not the alias
+    });
+
+    it('should skip fields that already have sqlBaseType and sqlFullType', () => {
+        const sql = 'SELECT u.Name FROM __mj.vwUsers u';
+        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+
+        const fields: ExtractedField[] = [{
+            name: 'Name', description: 'Already resolved', type: 'string', optional: false,
+            sqlBaseType: 'varchar', sqlFullType: 'varchar(50)',
+        }];
+
+        const entityFieldsByAlias = new Map([
+            ['u', buildEntityFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
+            ], 'Users')],
+        ]);
+
+        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        expect(result[0].sqlBaseType).toBe('varchar');     // Unchanged
+        expect(result[0].sqlFullType).toBe('varchar(50)'); // Unchanged
+    });
+
+    it('should fall back to flat lookup when no SELECT column matches', () => {
+        // Field "Email" is not in the SELECT clause but exists in the entity
+        const sql = 'SELECT u.Name FROM __mj.vwUsers u';
+        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+
+        const fields: ExtractedField[] = [{
+            name: 'Email', description: 'User email', type: 'string', optional: false,
+        }];
+
+        const entityFieldsByAlias = new Map([
+            ['u', buildEntityFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
+                { Name: 'Email', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(255)', Type: 'nvarchar' },
+            ], 'Users')],
+        ]);
+
+        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        expect(result[0].sqlBaseType).toBe('nvarchar');
+        expect(result[0].sqlFullType).toBe('nvarchar(255)');
+        expect(result[0].sourceEntity).toBe('Users');
+    });
+
+    it('should not overwrite existing sourceEntity on the field', () => {
+        const sql = 'SELECT u.Name FROM __mj.vwUsers u';
+        const selectColumns = SQLParser.ExtractSelectColumns(sql);
+
+        const fields: ExtractedField[] = [{
+            name: 'Name', description: 'User name', type: 'string', optional: false,
+            sourceEntity: 'Custom Users', // Already set by LLM
+        }];
+
+        const entityFieldsByAlias = new Map([
+            ['u', buildEntityFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
+            ], 'Users')],
+        ]);
+
+        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        expect(result[0].sourceEntity).toBe('Custom Users'); // Preserved
+    });
+
+    it('should handle unqualified SELECT columns by searching all entities', () => {
+        // SELECT Name (no table qualifier)
+        const selectColumns: SQLSelectColumn[] = [{
+            OutputName: 'Name', SourceColumn: 'Name', TableQualifier: null, IsExpression: false,
+        }];
+
+        const fields: ExtractedField[] = [{
+            name: 'Name', description: 'Some name', type: 'string', optional: false,
+        }];
+
+        const entityFieldsByAlias = new Map([
+            ['u', buildEntityFieldMap([
+                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
+            ], 'Users')],
+        ]);
+
+        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        expect(result[0].sqlBaseType).toBe('nvarchar');
+        expect(result[0].sqlFullType).toBe('nvarchar(100)');
+        expect(result[0].sourceEntity).toBe('Users');
     });
 });
