@@ -729,7 +729,7 @@ export class GraphQLIntegrationClient {
     public async GetSyncHistory(companyIntegrationID: string, limit = 20): Promise<MutationResult & { Runs?: string }> {
         try {
             const query = gql`query IntegrationGetSyncHistory($companyIntegrationID: String!, $limit: Float!) {
-                IntegrationGetSyncHistory(companyIntegrationID: $companyIntegrationID, limit: $limit) { Success Message Runs }
+                IntegrationGetSyncHistory(companyIntegrationID: $companyIntegrationID, limit: $limit) { Success Message Runs { ID Status StartedAt EndedAt TotalRecords RunByUserID } }
             }`;
             const result = await this._dataProvider.ExecuteGQL(query, { companyIntegrationID, limit });
             return result?.IntegrationGetSyncHistory ?? { Success: false, Message: 'No response' };

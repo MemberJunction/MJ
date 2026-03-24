@@ -69,6 +69,7 @@
     "@memberjunction/ai-vertex": "5.15.0",
     "@memberjunction/ai-xai": "5.15.0",
     "@memberjunction/ai-zhipu": "5.15.0",
+    "@memberjunction/codegen-lib": "5.15.0",
     "@memberjunction/communication-ms-graph": "5.15.0",
     "@memberjunction/communication-sendgrid": "5.15.0",
     "@memberjunction/communication-types": "5.15.0",

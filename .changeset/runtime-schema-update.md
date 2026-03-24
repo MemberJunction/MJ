@@ -2,7 +2,9 @@
 "@memberjunction/schema-engine": minor
 "@memberjunction/server": minor
 "@memberjunction/integration-schema-builder": minor
+"@memberjunction/integration-engine": minor
 "@memberjunction/graphql-dataprovider": minor
+"@memberjunction/server-bootstrap": patch
 ---
 
-Add Runtime Schema Update (RSU) system for programmatic database table creation. New @memberjunction/schema-engine package provides platform-aware DDL generation with pluggable SQL Server and PostgreSQL providers via ClassFactory. RuntimeSchemaManager orchestrates the full pipeline: validate, execute migration, run CodeGen, compile, restart MJAPI, and commit to git with PR creation. Integration SchemaBuilder delegates DDL generation to SchemaEngine. New integration lifecycle endpoints added to MJServer.
+Runtime Schema Update (RSU) system with 32 integration lifecycle API endpoints, schema evolution, sync cancellation, watermark filtering, progress polling, and cascade delete fixes.

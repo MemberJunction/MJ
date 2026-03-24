@@ -95,6 +95,9 @@ export class SchemaBuilder {
             if (!sourceObj) continue;
 
             const diff = this.Evolution.DiffSchema(sourceObj, config, existing, input.Platform);
+            if (diff.Warnings.length > 0) {
+                output.Warnings.push(...diff.Warnings);
+            }
             if (diff.AddedColumns.length === 0 && diff.ModifiedColumns.length === 0 && diff.RemovedColumns.length === 0) {
                 continue; // No changes
             }

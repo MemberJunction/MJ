@@ -12,7 +12,9 @@ import {
     MJCompanyIntegrationRecordMapEntity,
     MJScheduledJobEntity,
     MJScheduledJobTypeEntity,
-    MJScheduledJobRunEntity
+    MJScheduledJobRunEntity,
+    MJCompanyIntegrationRunDetailEntity,
+    MJEmployeeCompanyIntegrationEntity
 } from "@memberjunction/core-entities";
 import {
     BaseIntegrationConnector,
@@ -37,6 +39,7 @@ import type { SchemaBuilderOutput } from "@memberjunction/integration-schema-bui
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
+import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 
 // ─── RSU Pipeline Output Types ──────────────────────────────────────────────
 
@@ -69,9 +72,15 @@ class ApplySchemaBatchItemInput {
 // ─── Apply All Input/Output Types ───────────────────────────────────────────
 
 @InputType()
+class SourceObjectInput {
+    @Field({ description: 'Source object ID (IntegrationObject.ID)' }) SourceObjectID: string;
+    @Field(() => [String], { nullable: true, description: 'Optional field selection. Empty/null = all fields (including any new ones). Only specified fields get field maps.' }) Fields?: string[];
+}
+
+@InputType()
 class ApplyAllInput {
     @Field() CompanyIntegrationID: string;
-    @Field(() => [String]) SourceObjectIDs: string[];
+    @Field(() => [SourceObjectInput]) SourceObjects: SourceObjectInput[];
     @Field({ nullable: true }) CronExpression?: string;
     @Field({ nullable: true }) ScheduleTimezone?: string;
     @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips the sync step after schema + entity maps are created' }) StartSync?: boolean;
@@ -123,7 +132,7 @@ class ApplySchemaBatchOutput {
 @InputType()
 class ApplyAllBatchConnectorInput {
     @Field() CompanyIntegrationID: string;
-    @Field(() => [String]) SourceObjectIDs: string[];
+    @Field(() => [SourceObjectInput]) SourceObjects: SourceObjectInput[];
     /** Optional per-connector schedule. Applied on success. */
     @Field({ nullable: true }) CronExpression?: string;
     @Field({ nullable: true }) ScheduleTimezone?: string;
@@ -351,6 +360,9 @@ class SchemaPreviewObjectInput {
 
     @Field()
     EntityName: string;
+
+    @Field(() => [String], { nullable: true, description: 'Optional field selection. If provided, only these source fields are included. Default = all fields.' })
+    Fields?: string[];
 }
 
 @ObjectType()
@@ -605,6 +617,27 @@ class SyncHistoryOutput {
     @Field() Message: string;
     @Field(() => [SyncRunSummaryOutput], { nullable: true }) Runs?: SyncRunSummaryOutput[];
 }
+
+@ObjectType()
+class OperationProgressOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field({ nullable: true }) OperationType?: string; // 'sync' | 'rsu' | 'none'
+    @Field({ nullable: true }) IsRunning?: boolean;
+    @Field({ nullable: true }) CurrentEntity?: string;
+    @Field({ nullable: true }) EntityMapsTotal?: number;
+    @Field({ nullable: true }) EntityMapsCompleted?: number;
+    @Field({ nullable: true }) RecordsProcessed?: number;
+    @Field({ nullable: true }) RecordsCreated?: number;
+    @Field({ nullable: true }) RecordsUpdated?: number;
+    @Field({ nullable: true }) RecordsErrored?: number;
+    @Field({ nullable: true }) RSUStep?: string;
+    @Field({ nullable: true }) RSURunning?: boolean;
+    @Field({ nullable: true }) ElapsedMs?: number;
+    @Field({ nullable: true }) StartedAt?: string;
+}
+
+// Sync progress is now tracked inside IntegrationEngine itself via IntegrationEngine.GetSyncProgress()
 
 @ObjectType()
 class ConnectionSummaryOutput {
@@ -876,7 +909,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
                 MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/rsu',
                 MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
-                ExistingTables: [],
+                ExistingTables: this.buildExistingTables(targetConfigs),
                 EntitySettingsForTargets: {}
             };
 
@@ -942,10 +975,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 ContextUser: user
             });
 
+            const truncated = result.Records.slice(0, limit);
             return {
                 Success: true,
-                Message: `Fetched ${result.Records.length} preview records`,
-                Records: result.Records.map(r => ({
+                Message: `Fetched ${truncated.length} preview records${result.Records.length > limit ? ` (truncated from ${result.Records.length})` : ''}`,
+                Records: truncated.map(r => ({
                     Data: JSON.stringify(r.Fields)
                 }))
             };
@@ -977,7 +1011,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const sourceObj = sourceSchema.Objects.find(o => o.ExternalName.toLowerCase() === obj.SourceObjectName.toLowerCase());
             const objDescriptions = connectorDescriptions.get(obj.SourceObjectName.toLowerCase());
 
-            const columns: TargetColumnConfig[] = (sourceObj?.Fields ?? []).map(f => ({
+            // Filter fields if caller specified a subset
+            const selectedFieldSet = obj.Fields?.length
+                ? new Set(obj.Fields.map(f => f.toLowerCase()))
+                : null;
+            const sourceFields = (sourceObj?.Fields ?? []).filter(f =>
+                !selectedFieldSet || selectedFieldSet.has(f.Name.toLowerCase()) || f.IsPrimaryKey
+            );
+
+            const columns: TargetColumnConfig[] = sourceFields.map(f => ({
                 SourceFieldName: f.Name,
                 TargetColumnName: f.Name.replace(/[^A-Za-z0-9_]/g, '_'),
                 TargetSqlType: mapper.MapSourceType(f.SourceType, platform, f),
@@ -1007,6 +1049,33 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /** Builds a lookup of object name → { objectDescription, fields: fieldName → description } from the connector's static metadata. */
+    /** Build ExistingTableInfo[] from MJ Metadata for tables that already exist in the target schemas. */
+    private buildExistingTables(targetConfigs: TargetTableConfig[]): ExistingTableInfo[] {
+        const md = new Metadata();
+        const result: ExistingTableInfo[] = [];
+        for (const config of targetConfigs) {
+            const entity = md.Entities.find(e =>
+                e.SchemaName.toLowerCase() === config.SchemaName.toLowerCase() &&
+                e.BaseTable.toLowerCase() === config.TableName.toLowerCase()
+            );
+            if (entity) {
+                result.push({
+                    SchemaName: config.SchemaName,
+                    TableName: config.TableName,
+                    Columns: entity.Fields.map(f => ({
+                        Name: f.Name,
+                        SqlType: f.SQLFullType || 'NVARCHAR(MAX)',
+                        IsNullable: f.AllowsNull,
+                        MaxLength: f.MaxLength,
+                        Precision: f.Precision,
+                        Scale: f.Scale,
+                    }))
+                });
+            }
+        }
+        return result;
+    }
+
     private buildDescriptionLookup(connector?: BaseIntegrationConnector): Map<string, { objectDescription?: string; fields: Map<string, string> }> {
         const result = new Map<string, { objectDescription?: string; fields: Map<string, string> }>();
         if (!connector) return result;
@@ -1101,6 +1170,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             throw new Error("User is not authenticated");
         }
         return user;
+    }
+
+    /** Get system user for server-side operations that need elevated permissions (cascade deletes, etc.) */
+    private getSystemUser(): UserInfo {
+        const sysUser = UserCache.Instance.GetSystemUser();
+        if (!sysUser) throw new Error('System user not available');
+        return sysUser;
     }
 
     /**
@@ -1616,7 +1692,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
                 MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/rsu',
                 MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
-                ExistingTables: [],
+                ExistingTables: this.buildExistingTables(targetConfigs),
                 EntitySettingsForTargets: {}
             };
 
@@ -1741,11 +1817,23 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const { connector, companyIntegration } = await this.resolveConnector(input.CompanyIntegrationID, user);
             const schemaName = this.deriveSchemaName(companyIntegration.Integration);
 
-            // Step 2: Resolve object IDs to names, then build inputs
+            // Step 2: Resolve object IDs to names, build inputs with per-object Fields
             const sourceSchema = await (connector.IntrospectSchema.bind(connector) as
                 (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
-            const resolvedNames = await this.resolveSourceObjectNames(input.SourceObjectIDs, undefined, sourceSchema, companyIntegration.IntegrationID, user);
-            const objects = this.buildObjectInputsFromNames(resolvedNames, schemaName);
+            const objectIDs = input.SourceObjects.map(so => so.SourceObjectID);
+            const resolvedNames = await this.resolveSourceObjectNames(objectIDs, undefined, sourceSchema, companyIntegration.IntegrationID, user);
+
+            // Build SchemaPreviewObjectInput with Fields carried from SourceObjectInput
+            const fieldsByID = new Map(input.SourceObjects.map(so => [so.SourceObjectID, so.Fields]));
+            const objects = resolvedNames.map((name, i) => {
+                const obj = new SchemaPreviewObjectInput();
+                obj.SourceObjectName = name;
+                obj.SchemaName = schemaName;
+                obj.TableName = name.replace(/[^A-Za-z0-9_]/g, '_');
+                obj.EntityName = name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
+                obj.Fields = fieldsByID.get(objectIDs[i]) ?? undefined;
+                return obj;
+            });
 
             // Step 3: Build schema and RSU pipeline input
             const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
@@ -1753,15 +1841,22 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             );
 
             // Step 4: Inject integration post-restart payload into RSU input.
-            // RSU writes this file to disk before restart — it doesn't read or interpret it.
-            // The integration layer's startup hook picks it up after restart.
             const { join } = await import('node:path');
             const rsuWorkDir = process.env.RSU_WORK_DIR || process.cwd();
             const pendingWorkDir = join(rsuWorkDir, '.rsu_pending');
             const pendingFilePath = join(pendingWorkDir, `${Date.now()}.json`);
+
+            // Build per-object field map for pending file (null = all fields)
+            const sourceObjectFields: Record<string, string[] | null> = {};
+            for (const so of input.SourceObjects) {
+                const resolvedName = resolvedNames[objectIDs.indexOf(so.SourceObjectID)];
+                if (resolvedName) sourceObjectFields[resolvedName] = so.Fields ?? null;
+            }
+
             const pendingPayload = {
                 CompanyIntegrationID: input.CompanyIntegrationID,
                 SourceObjectNames: resolvedNames,
+                SourceObjectFields: sourceObjectFields,
                 SchemaName: schemaName,
                 CronExpression: input.CronExpression,
                 ScheduleTimezone: input.ScheduleTimezone,
@@ -2060,7 +2155,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
             MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/rsu',
             MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
-            ExistingTables: [],
+            ExistingTables: this.buildExistingTables(targetConfigs),
             EntitySettingsForTargets: {}
         };
 
@@ -2097,7 +2192,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (fullSync) syncOptions.FullSync = true;
             if (entityMapIDs?.length) syncOptions.EntityMapIDs = entityMapIDs;
 
-            // Fire and forget
+            // Fire and forget — progress is tracked inside IntegrationEngine
             const syncPromise = IntegrationEngine.Instance.RunSync(
                 companyIntegrationID,
                 user,
@@ -2165,27 +2260,19 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      */
     @Mutation(() => MutationResultOutput)
     async IntegrationCancelSync(
-        @Arg("runID") runID: string,
+        @Arg("companyIntegrationID") companyIntegrationID: string,
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
-            const user = this.getAuthenticatedUser(ctx);
-            const md = new Metadata();
-            const run = await md.GetEntityObject<MJCompanyIntegrationRunEntity>('MJ: Company Integration Runs', user);
-            const loaded = await run.InnerLoad(CompositeKey.FromID(runID));
-            if (!loaded) return { Success: false, Message: 'Run not found' };
+            this.getAuthenticatedUser(ctx);
 
-            if (run.Status !== 'In Progress') {
-                return { Success: false, Message: `Cannot cancel run with status '${run.Status}'` };
+            // Signal the engine to abort the running sync
+            const cancelled = IntegrationEngine.CancelSync(companyIntegrationID);
+            if (!cancelled) {
+                return { Success: false, Message: 'No active sync found for this connector' };
             }
-            // TODO: 'Cancelled' is not yet in the Status value list ('Failed' | 'In Progress' | 'Pending' | 'Success').
-            // A migration should add 'Cancelled' to the allowed values and CodeGen must regenerate types before this can be set.
-            // Until then, mark the run as 'Failed' (closest available status) with a cancellation note.
-            run.Status = 'Failed';
-            run.Comments = (run.Comments ? run.Comments + '\n' : '') + 'Cancelled by user';
-            run.EndedAt = new Date();
-            if (!await run.Save()) return { Success: false, Message: 'Failed to cancel' };
-            return { Success: true, Message: 'Cancelled' };
+
+            return { Success: true, Message: 'Sync cancellation signalled — will stop after current batch completes' };
         } catch (e) {
             LogError(`IntegrationCancelSync error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
@@ -2281,17 +2368,21 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     @Mutation(() => MutationResultOutput)
     async IntegrationToggleSchedule(
         @Arg("scheduledJobID") scheduledJobID: string,
-        @Arg("enabled") enabled: boolean,
+        @Arg("enabled", () => Boolean) enabled: boolean,
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
-            const user = this.getAuthenticatedUser(ctx);
+            this.getAuthenticatedUser(ctx); // verify caller is authenticated
+            const sysUser = this.getSystemUser();
             const md = new Metadata();
-            const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
+            const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', sysUser);
             const loaded = await job.InnerLoad(CompositeKey.FromID(scheduledJobID));
             if (!loaded) return { Success: false, Message: 'ScheduledJob not found' };
             job.Status = enabled ? 'Active' : 'Paused';
-            if (!await job.Save()) return { Success: false, Message: 'Failed to toggle' };
+            if (!await job.Save()) {
+                const err = job.LatestResult?.Message || 'Unknown error';
+                return { Success: false, Message: `Failed to toggle: ${err}` };
+            }
             return { Success: true, Message: enabled ? 'Activated' : 'Paused' };
         } catch (e) {
             LogError(`IntegrationToggleSchedule error: ${e}`);
@@ -2306,12 +2397,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
-            const user = this.getAuthenticatedUser(ctx);
+            this.getAuthenticatedUser(ctx); // verify caller is authenticated
+            const sysUser = this.getSystemUser(); // use system user for delete operations
             const md = new Metadata();
 
             // Unlink from CI if provided
             if (companyIntegrationID) {
-                const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+                const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', sysUser);
                 const ciLoaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
                 if (ciLoaded) {
                     ci.ScheduleEnabled = false;
@@ -2327,7 +2419,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 EntityName: 'MJ: Company Integrations',
                 ExtraFilter: `ScheduledJobID='${scheduledJobID}'`,
                 ResultType: 'entity_object',
-            }, user);
+            }, sysUser);
             if (ciResult.Success) {
                 for (const refCI of ciResult.Results) {
                     refCI.ScheduledJobID = null;
@@ -2337,27 +2429,49 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             }
 
-            // Delete child run records
-            const runsResult = await rv.RunView<MJScheduledJobRunEntity>({
+            // Null out ScheduledJobRunID on CompanyIntegrationRuns that reference this job's runs
+            const jobRunsResult = await rv.RunView<MJScheduledJobRunEntity>({
                 EntityName: 'MJ: Scheduled Job Runs',
                 ExtraFilter: `ScheduledJobID='${scheduledJobID}'`,
                 ResultType: 'entity_object',
-            }, user);
-            if (runsResult.Success) {
-                for (const run of runsResult.Results) {
+            }, sysUser);
+            if (jobRunsResult.Success) {
+                for (const jr of jobRunsResult.Results) {
+                    // Find CompanyIntegrationRuns referencing this job run and null the FK
+                    const ciRunsResult = await rv.RunView<MJCompanyIntegrationRunEntity>({
+                        EntityName: 'MJ: Company Integration Runs',
+                        ExtraFilter: `ScheduledJobRunID='${jr.ID}'`,
+                        ResultType: 'entity_object',
+                    }, sysUser);
+                    if (ciRunsResult.Success) {
+                        for (const ciRun of ciRunsResult.Results) {
+                            ciRun.ScheduledJobRunID = null;
+                            await ciRun.Save();
+                        }
+                    }
+                }
+            }
+
+            // Now delete job runs + job in a transaction
+            const tg = await Metadata.Provider.CreateTransactionGroup();
+            if (jobRunsResult.Success) {
+                for (const run of jobRunsResult.Results) {
+                    run.TransactionGroup = tg;
                     await run.Delete();
                 }
             }
 
-            const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
+            const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', sysUser);
             const loaded = await job.InnerLoad(CompositeKey.FromID(scheduledJobID));
             if (!loaded) return { Success: false, Message: 'ScheduledJob not found' };
-            const deleted = await job.Delete();
+            job.TransactionGroup = tg;
+            await job.Delete();
+            const deleted = await tg.Submit();
             if (!deleted) {
                 const err = job.LatestResult?.Message || 'Unknown error';
                 return { Success: false, Message: `Failed to delete: ${err}` };
             }
-            return { Success: true, Message: `Deleted (${runsResult.Results?.length ?? 0} runs removed)` };
+            return { Success: true, Message: `Deleted (${jobRunsResult.Results?.length ?? 0} runs removed)` };
         } catch (e) {
             LogError(`IntegrationDeleteSchedule error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
@@ -2509,36 +2623,117 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Ctx() ctx: AppContext
     ): Promise<MutationResultOutput> {
         try {
-            const user = this.getAuthenticatedUser(ctx);
+            this.getAuthenticatedUser(ctx);
+            const sysUser = this.getSystemUser();
             const md = new Metadata();
             const rv = new RunView();
+            const tg = await Metadata.Provider.CreateTransactionGroup();
             const errors: string[] = [];
 
             for (const entityMapID of entityMapIDs) {
-                const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', user);
+                const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps', sysUser);
                 const loaded = await em.InnerLoad(CompositeKey.FromID(entityMapID));
                 if (!loaded) { errors.push(`${entityMapID}: not found`); continue; }
 
-                // Delete associated field maps first
-                const fieldMapsResult = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
+                // Delete field maps
+                const fmResult = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
                     EntityName: 'MJ: Company Integration Field Maps',
                     ExtraFilter: `EntityMapID='${entityMapID}'`,
                     ResultType: 'entity_object'
-                }, user);
-
-                if (fieldMapsResult.Success) {
-                    for (const fm of fieldMapsResult.Results) {
-                        await fm.Delete();
-                    }
+                }, sysUser);
+                if (fmResult.Success) {
+                    for (const fm of fmResult.Results) { fm.TransactionGroup = tg; await fm.Delete(); }
                 }
 
-                if (!await em.Delete()) errors.push(`${entityMapID}: failed to delete`);
+                // Delete watermarks
+                const wmResult = await rv.RunView<MJCompanyIntegrationSyncWatermarkEntity>({
+                    EntityName: 'MJ: Company Integration Sync Watermarks',
+                    ExtraFilter: `EntityMapID='${entityMapID}'`,
+                    ResultType: 'entity_object'
+                }, sysUser);
+                if (wmResult.Success) {
+                    for (const wm of wmResult.Results) { wm.TransactionGroup = tg; await wm.Delete(); }
+                }
+
+                // Delete record maps for THIS entity only (filter by CI + EntityID)
+                const rmResult = await rv.RunView<MJCompanyIntegrationRecordMapEntity>({
+                    EntityName: 'MJ: Company Integration Record Maps',
+                    ExtraFilter: `CompanyIntegrationID='${em.CompanyIntegrationID}' AND EntityID='${em.EntityID}'`,
+                    ResultType: 'entity_object'
+                }, sysUser);
+                if (rmResult.Success) {
+                    for (const rm of rmResult.Results) { rm.TransactionGroup = tg; await rm.Delete(); }
+                }
+
+                em.TransactionGroup = tg;
+                await em.Delete();
             }
 
-            if (errors.length > 0) return { Success: false, Message: `Errors: ${errors.join('; ')}` };
-            return { Success: true, Message: `Deleted ${entityMapIDs.length} entity maps (including field maps)` };
+            const submitted = await tg.Submit();
+            if (!submitted) return { Success: false, Message: 'Transaction failed — all deletes rolled back' };
+            if (errors.length > 0) return { Success: false, Message: `Partial: ${errors.join('; ')}` };
+            return { Success: true, Message: `Deleted ${entityMapIDs.length} entity maps (with field maps, watermarks, record maps)` };
         } catch (e) {
             LogError(`IntegrationDeleteEntityMaps error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    // ── OPERATION PROGRESS (polling) ──────────────────────────────────
+
+    @Query(() => OperationProgressOutput)
+    async IntegrationGetRSUProgress(
+        @Ctx() ctx: AppContext
+    ): Promise<OperationProgressOutput> {
+        try {
+            this.getAuthenticatedUser(ctx);
+            const rsm = RuntimeSchemaManager.Instance;
+            const rsuStatus = rsm.GetStatus();
+            if (rsuStatus.Running) {
+                return {
+                    Success: true,
+                    Message: 'RSU pipeline in progress',
+                    OperationType: 'rsu',
+                    IsRunning: true,
+                    RSURunning: true,
+                    RSUStep: rsuStatus.LastRunResult ?? 'running',
+                    StartedAt: rsuStatus.LastRunAt?.toISOString(),
+                    ElapsedMs: rsuStatus.LastRunAt ? Date.now() - rsuStatus.LastRunAt.getTime() : undefined,
+                };
+            }
+            return { Success: true, Message: 'No RSU pipeline running', OperationType: 'none', IsRunning: false };
+        } catch (e) {
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    @Query(() => OperationProgressOutput)
+    async IntegrationGetSyncProgress(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<OperationProgressOutput> {
+        try {
+            this.getAuthenticatedUser(ctx);
+            const syncProgress = IntegrationEngine.GetSyncProgress(companyIntegrationID);
+            if (syncProgress) {
+                return {
+                    Success: true,
+                    Message: `Sync in progress (${syncProgress.TriggerType})`,
+                    OperationType: 'sync',
+                    IsRunning: true,
+                    CurrentEntity: syncProgress.CurrentEntity,
+                    EntityMapsTotal: syncProgress.EntityMapsTotal,
+                    EntityMapsCompleted: syncProgress.EntityMapsCompleted,
+                    RecordsProcessed: syncProgress.RecordsProcessed,
+                    RecordsCreated: syncProgress.RecordsCreated,
+                    RecordsUpdated: syncProgress.RecordsUpdated,
+                    RecordsErrored: syncProgress.RecordsErrored,
+                    StartedAt: syncProgress.StartedAt.toISOString(),
+                    ElapsedMs: Date.now() - syncProgress.StartedAt.getTime(),
+                };
+            }
+            return { Success: true, Message: 'No sync running for this connector', OperationType: 'none', IsRunning: false };
+        } catch (e) {
             return { Success: false, Message: this.formatError(e) };
         }
     }
@@ -2694,15 +2889,33 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     const { connector, companyIntegration } = await this.resolveConnector(connInput.CompanyIntegrationID, user);
                     const schemaName = this.deriveSchemaName(companyIntegration.Integration);
 
-                    // Resolve object IDs to names
+                    // Resolve object IDs to names with per-object Fields
                     const sourceSchema = await (connector.IntrospectSchema.bind(connector) as
                         (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
-                    const resolvedNames = await this.resolveSourceObjectNames(connInput.SourceObjectIDs, undefined, sourceSchema, companyIntegration.IntegrationID, user);
-                    const objects = this.buildObjectInputsFromNames(resolvedNames, schemaName);
+                    const objectIDs = connInput.SourceObjects.map(so => so.SourceObjectID);
+                    const resolvedNames = await this.resolveSourceObjectNames(objectIDs, undefined, sourceSchema, companyIntegration.IntegrationID, user);
+
+                    const fieldsByID = new Map(connInput.SourceObjects.map(so => [so.SourceObjectID, so.Fields]));
+                    const objects = resolvedNames.map((name, i) => {
+                        const obj = new SchemaPreviewObjectInput();
+                        obj.SourceObjectName = name;
+                        obj.SchemaName = schemaName;
+                        obj.TableName = name.replace(/[^A-Za-z0-9_]/g, '_');
+                        obj.EntityName = name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
+                        obj.Fields = fieldsByID.get(objectIDs[i]) ?? undefined;
+                        return obj;
+                    });
 
                     const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
                         connInput.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart
                     );
+
+                    // Build per-object field map for pending file
+                    const sourceObjectFields: Record<string, string[] | null> = {};
+                    for (const so of connInput.SourceObjects) {
+                        const resolvedName = resolvedNames[objectIDs.indexOf(so.SourceObjectID)];
+                        if (resolvedName) sourceObjectFields[resolvedName] = so.Fields ?? null;
+                    }
 
                     // Inject post-restart pending work payload
                     const { join } = await import('node:path');
@@ -2712,6 +2925,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     const pendingPayload = {
                         CompanyIntegrationID: connInput.CompanyIntegrationID,
                         SourceObjectNames: resolvedNames,
+                        SourceObjectFields: sourceObjectFields,
                         SchemaName: schemaName,
                         CronExpression: connInput.CronExpression,
                         ScheduleTimezone: connInput.ScheduleTimezone,
@@ -2936,118 +3150,162 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Ctx() ctx: AppContext
     ): Promise<DeleteConnectionOutput> {
         try {
-            const user = this.getAuthenticatedUser(ctx);
+            this.getAuthenticatedUser(ctx); // verify caller is authenticated
+            const sysUser = this.getSystemUser(); // use system user for cascade delete
             const md = new Metadata();
             const rv = new RunView();
 
             // Step 1: Load CompanyIntegration
-            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', sysUser);
             const ciLoaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
             if (!ciLoaded) return { Success: false, Message: 'CompanyIntegration not found' };
 
-            // Step 2: Load all entity maps
-            const entityMapsResult = await rv.RunView<MJCompanyIntegrationEntityMapEntity>({
-                EntityName: 'MJ: Company Integration Entity Maps',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
-                ResultType: 'entity_object'
-            }, user);
-
-            const entityMaps = entityMapsResult.Success ? entityMapsResult.Results : [];
+            // Cascade delete in FK-safe order using TransactionGroup
+            const tg = await Metadata.Provider.CreateTransactionGroup();
             let fieldMapsDeleted = 0;
-
-            // Step 3: Delete field maps, watermarks, and record maps for each entity map
-            for (const em of entityMaps) {
-                // Field maps
-                const fmResult = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
-                    EntityName: 'MJ: Company Integration Field Maps',
-                    ExtraFilter: `EntityMapID='${em.ID}'`,
-                    ResultType: 'entity_object'
-                }, user);
-                if (fmResult.Success) {
-                    for (const fm of fmResult.Results) {
-                        if (await fm.Delete()) fieldMapsDeleted++;
-                    }
-                }
-
-                // Watermarks
-                const wmResult = await rv.RunView<MJCompanyIntegrationSyncWatermarkEntity>({
-                    EntityName: 'MJ: Company Integration Sync Watermarks',
-                    ExtraFilter: `EntityMapID='${em.ID}'`,
-                    ResultType: 'entity_object'
-                }, user);
-                if (wmResult.Success) {
-                    for (const wm of wmResult.Results) {
-                        await wm.Delete();
-                    }
-                }
-
-                // Record maps
-                const rmResult = await rv.RunView<MJCompanyIntegrationRecordMapEntity>({
-                    EntityName: 'MJ: Company Integration Record Maps',
-                    ExtraFilter: `EntityMapID='${em.ID}'`,
-                    ResultType: 'entity_object'
-                }, user);
-                if (rmResult.Success) {
-                    for (const rm of rmResult.Results) {
-                        await rm.Delete();
-                    }
-                }
-            }
-
-            // Step 4: Delete all entity maps
             let entityMapsDeleted = 0;
-            for (const em of entityMaps) {
-                if (await em.Delete()) entityMapsDeleted++;
-            }
+            let schedulesDeleted = 0;
 
-            // Step 5: Delete company integration runs
-            const runsResult = await rv.RunView<MJCompanyIntegrationRunEntity>({
+            // Step 2: Null out ScheduledJobRunID on CompanyIntegrationRuns (break FK before deleting job runs)
+            const ciRunsResult = await rv.RunView<MJCompanyIntegrationRunEntity>({
                 EntityName: 'MJ: Company Integration Runs',
                 ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
                 ResultType: 'entity_object'
-            }, user);
-            if (runsResult.Success) {
-                for (const run of runsResult.Results) {
-                    await run.Delete();
+            }, sysUser);
+            if (ciRunsResult.Success) {
+                for (const ciRun of ciRunsResult.Results) {
+                    if (ciRun.ScheduledJobRunID) {
+                        ciRun.ScheduledJobRunID = null;
+                        await ciRun.Save();
+                    }
                 }
             }
 
-            // Step 6: Delete scheduled jobs + their runs
+            // Step 3: Delete scheduled job runs + jobs (reference CI via Configuration JSON)
             const jobsResult = await rv.RunView<MJScheduledJobEntity>({
                 EntityName: 'MJ: Scheduled Jobs',
                 ExtraFilter: `Configuration LIKE '%${companyIntegrationID}%'`,
                 ResultType: 'entity_object'
-            }, user);
-
-            let schedulesDeleted = 0;
+            }, sysUser);
             if (jobsResult.Success) {
                 for (const job of jobsResult.Results) {
                     try {
                         const config = JSON.parse(job.Configuration || '{}') as Record<string, unknown>;
                         if (config.CompanyIntegrationID === companyIntegrationID) {
-                            // Delete job runs first
                             const jobRunsResult = await rv.RunView<MJScheduledJobRunEntity>({
                                 EntityName: 'MJ: Scheduled Job Runs',
                                 ExtraFilter: `ScheduledJobID='${job.ID}'`,
                                 ResultType: 'entity_object'
-                            }, user);
+                            }, sysUser);
                             if (jobRunsResult.Success) {
                                 for (const jr of jobRunsResult.Results) {
-                                    await (jr as unknown as { Delete: () => Promise<boolean> }).Delete();
+                                    jr.TransactionGroup = tg;
+                                    await jr.Delete();
                                 }
                             }
-                            if (await job.Delete()) schedulesDeleted++;
+                            job.TransactionGroup = tg;
+                            await job.Delete();
+                            schedulesDeleted++;
                         }
                     } catch { /* skip invalid config */ }
                 }
             }
 
-            // Step 7: Delete the CompanyIntegration itself
-            if (!await ci.Delete()) {
-                return { Success: false, Message: 'Failed to delete CompanyIntegration' };
+            // Step 4: Delete run details then runs (reuse ciRunsResult from Step 2)
+            if (ciRunsResult.Success) {
+                for (const run of ciRunsResult.Results) {
+                    // Delete run details first
+                    const detailsResult = await rv.RunView<MJCompanyIntegrationRunDetailEntity>({
+                        EntityName: 'MJ: Company Integration Run Details',
+                        ExtraFilter: `CompanyIntegrationRunID='${run.ID}'`,
+                        ResultType: 'entity_object'
+                    }, sysUser);
+                    if (detailsResult.Success) {
+                        for (const detail of detailsResult.Results) {
+                            detail.TransactionGroup = tg;
+                            await detail.Delete();
+                        }
+                    }
+                    run.TransactionGroup = tg;
+                    await run.Delete();
+                }
             }
 
-            // Note: deleteData=true does not drop tables yet — flagged for future implementation
+            // Step 4: Delete entity map children (field maps, watermarks, record maps)
+            const entityMapsResult = await rv.RunView<MJCompanyIntegrationEntityMapEntity>({
+                EntityName: 'MJ: Company Integration Entity Maps',
+                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ResultType: 'entity_object'
+            }, sysUser);
+            const entityMaps = entityMapsResult.Success ? entityMapsResult.Results : [];
+
+            for (const em of entityMaps) {
+                const fmResult = await rv.RunView<MJCompanyIntegrationFieldMapEntity>({
+                    EntityName: 'MJ: Company Integration Field Maps',
+                    ExtraFilter: `EntityMapID='${em.ID}'`,
+                    ResultType: 'entity_object'
+                }, sysUser);
+                if (fmResult.Success) {
+                    for (const fm of fmResult.Results) {
+                        fm.TransactionGroup = tg;
+                        if (await fm.Delete()) fieldMapsDeleted++;
+                    }
+                }
+
+                const wmResult = await rv.RunView<MJCompanyIntegrationSyncWatermarkEntity>({
+                    EntityName: 'MJ: Company Integration Sync Watermarks',
+                    ExtraFilter: `EntityMapID='${em.ID}'`,
+                    ResultType: 'entity_object'
+                }, sysUser);
+                if (wmResult.Success) {
+                    for (const wm of wmResult.Results) {
+                        wm.TransactionGroup = tg;
+                        await wm.Delete();
+                    }
+                }
+
+                const rmResult = await rv.RunView<MJCompanyIntegrationRecordMapEntity>({
+                    EntityName: 'MJ: Company Integration Record Maps',
+                    ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                    ResultType: 'entity_object'
+                }, sysUser);
+                if (rmResult.Success) {
+                    for (const rm of rmResult.Results) {
+                        rm.TransactionGroup = tg;
+                        await rm.Delete();
+                    }
+                }
+            }
+
+            // Step 5: Delete entity maps
+            for (const em of entityMaps) {
+                em.TransactionGroup = tg;
+                if (await em.Delete()) entityMapsDeleted++;
+            }
+
+            // Step 6: Delete employee-company integration links
+            const empResult = await rv.RunView<MJEmployeeCompanyIntegrationEntity>({
+                EntityName: 'MJ: Employee Company Integrations',
+                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ResultType: 'entity_object'
+            }, sysUser);
+            if (empResult.Success) {
+                for (const emp of empResult.Results) {
+                    emp.TransactionGroup = tg;
+                    await emp.Delete();
+                }
+            }
+
+            // Step 7: Delete the CompanyIntegration itself
+            ci.TransactionGroup = tg;
+            await ci.Delete();
+
+            // Submit the transaction
+            const submitted = await tg.Submit();
+            if (!submitted) {
+                return { Success: false, Message: 'Transaction failed — all deletes rolled back' };
+            }
+
             if (deleteData) {
                 LogError(`IntegrationDeleteConnection: deleteData=true requested but table deletion not yet implemented for ${companyIntegrationID}`);
             }

@@ -893,6 +893,9 @@ async function processRSUPendingWork(): Promise<void> {
 
       // Create entity maps + field maps for each source object
       const createdEntityMapIDs: string[] = [];
+      const rvPending = new RunView();
+      const sourceObjectFields: Record<string, string[] | null> = item.SourceObjectFields ?? {};
+
       for (const objName of item.SourceObjectNames) {
         const tableName = objName.replace(/[^A-Za-z0-9_]/g, '_').toLowerCase();
         const entity = md.Entities.find(
@@ -904,47 +907,83 @@ async function processRSUPendingWork(): Promise<void> {
           continue;
         }
 
-        // Create entity map
         const { MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity } =
           await import('@memberjunction/core-entities');
 
-        const entityMap = await md.GetEntityObject<typeof MJCompanyIntegrationEntityMapEntity.prototype>(
-          'MJ: Company Integration Entity Maps', systemUser
-        );
-        entityMap.NewRecord();
-        entityMap.CompanyIntegrationID = item.CompanyIntegrationID;
-        entityMap.EntityID = entity.ID;
-        entityMap.ExternalObjectName = objName;
-        entityMap.SyncDirection = 'Pull';
-        entityMap.Status = 'Active';
-        entityMap.SyncEnabled = true;
-        const mapSaved = await entityMap.Save();
-        if (!mapSaved) {
-          console.warn(`[RSU] Failed to save entity map for ${objName}`);
-          continue;
-        }
-        createdEntityMapIDs.push(entityMap.ID);
+        // Check if entity map already exists for this connector + entity
+        const existingMapResult = await rvPending.RunView<typeof MJCompanyIntegrationEntityMapEntity.prototype>({
+          EntityName: 'MJ: Company Integration Entity Maps',
+          ExtraFilter: `CompanyIntegrationID='${item.CompanyIntegrationID}' AND EntityID='${entity.ID}'`,
+          ResultType: 'entity_object',
+        }, systemUser);
 
-        // Discover fields and create 1:1 field maps
+        let entityMapID: string;
+        let isNewMap = false;
+
+        if (existingMapResult.Success && existingMapResult.Results.length > 0) {
+          // Entity map already exists — reuse it
+          entityMapID = existingMapResult.Results[0].ID;
+          console.log(`[RSU] Entity map already exists for ${objName} → ${entity.Name} (${entityMapID})`);
+        } else {
+          // Create new entity map
+          const entityMap = await md.GetEntityObject<typeof MJCompanyIntegrationEntityMapEntity.prototype>(
+            'MJ: Company Integration Entity Maps', systemUser
+          );
+          entityMap.NewRecord();
+          entityMap.CompanyIntegrationID = item.CompanyIntegrationID;
+          entityMap.EntityID = entity.ID;
+          entityMap.ExternalObjectName = objName;
+          entityMap.SyncDirection = 'Pull';
+          entityMap.Status = 'Active';
+          entityMap.SyncEnabled = true;
+          const mapSaved = await entityMap.Save();
+          if (!mapSaved) {
+            console.warn(`[RSU] Failed to save entity map for ${objName}`);
+            continue;
+          }
+          entityMapID = entityMap.ID;
+          isNewMap = true;
+        }
+
+        if (isNewMap) createdEntityMapIDs.push(entityMapID);
+
+        // Create field maps — filter by SourceObjectFields (null = all)
         try {
           const introspect = connector.IntrospectSchema.bind(connector) as
             (ci: unknown, u: unknown) => Promise<{ Objects: Array<{ ExternalName: string; Fields: Array<{ Name: string }> }> }>;
           const schema = await introspect(companyIntegration, systemUser);
           const sourceObj = schema.Objects.find(o => o.ExternalName.toLowerCase() === objName.toLowerCase());
-          let fieldCount = 0;
 
-          for (const field of sourceObj?.Fields ?? []) {
+          const selectedFields = sourceObjectFields[objName]; // null = all, string[] = specific
+          const fieldsToMap = selectedFields
+            ? (sourceObj?.Fields ?? []).filter(f => selectedFields.some(sf => sf.toLowerCase() === f.Name.toLowerCase()))
+            : (sourceObj?.Fields ?? []);
+
+          // Load existing field maps to avoid duplicates
+          const existingFieldMaps = await rvPending.RunView<typeof MJCompanyIntegrationFieldMapEntity.prototype>({
+            EntityName: 'MJ: Company Integration Field Maps',
+            ExtraFilter: `EntityMapID='${entityMapID}'`,
+            ResultType: 'simple',
+            Fields: ['SourceFieldName'],
+          }, systemUser);
+          const existingFieldNames = new Set(
+            (existingFieldMaps.Success ? existingFieldMaps.Results : []).map((fm: { SourceFieldName: string }) => fm.SourceFieldName.toLowerCase())
+          );
+
+          let fieldCount = 0;
+          for (const field of fieldsToMap) {
+            if (existingFieldNames.has(field.Name.toLowerCase())) continue; // Skip existing
             const fieldMap = await md.GetEntityObject<typeof MJCompanyIntegrationFieldMapEntity.prototype>(
               'MJ: Company Integration Field Maps', systemUser
             );
             fieldMap.NewRecord();
-            fieldMap.EntityMapID = entityMap.ID;
+            fieldMap.EntityMapID = entityMapID;
             fieldMap.SourceFieldName = field.Name;
             fieldMap.DestinationFieldName = field.Name.replace(/[^A-Za-z0-9_]/g, '_');
             fieldMap.Status = 'Active';
             if (await fieldMap.Save()) fieldCount++;
           }
-          console.log(`[RSU] Created entity map for ${objName} → ${entity.Name} with ${fieldCount} field maps`);
+          console.log(`[RSU] Created entity map for ${objName} → ${entity.Name} with ${fieldCount} field maps${isNewMap ? '' : ' (existing map, new fields only)'}`);
         } catch (fieldErr) {
           console.warn(`[RSU] Field map creation failed for ${objName}: ${fieldErr}`);
         }
@@ -968,42 +1007,74 @@ async function processRSUPendingWork(): Promise<void> {
         console.log(`[RSU] Sync skipped for ${item.CompanyIntegrationID} (StartSync=false)`);
       }
 
-      // Create schedule if CronExpression provided
+      // Create or update schedule if CronExpression provided
       if (item.CronExpression) {
         try {
-          const rv = new RunView();
-          const jobTypeResult = await rv.RunView<{ ID: string }>({
-            EntityName: 'MJ: Scheduled Job Types',
-            ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
-            MaxRows: 1,
-            ResultType: 'simple',
-            Fields: ['ID']
+          const rvSched = new RunView();
+          const { CronExpressionHelper } = await import('@memberjunction/scheduling-engine');
+          const { MJScheduledJobEntity } = await import('@memberjunction/core-entities');
+          type ScheduledJobType = InstanceType<typeof MJScheduledJobEntity>;
+
+          // Find existing schedule by loading all integration sync jobs and matching Configuration JSON exactly
+          const allJobsResult = await rvSched.RunView<ScheduledJobType>({
+            EntityName: 'MJ: Scheduled Jobs',
+            ExtraFilter: `Status IN ('Active', 'Paused')`,
+            ResultType: 'entity_object',
           }, systemUser);
 
-          if (jobTypeResult.Success && jobTypeResult.Results.length > 0) {
-            const { MJScheduledJobEntity } = await import('@memberjunction/core-entities');
-            type ScheduledJobType = InstanceType<typeof MJScheduledJobEntity>;
-            const job = await md.GetEntityObject<ScheduledJobType>('MJ: Scheduled Jobs', systemUser);
+          let existingJob: ScheduledJobType | null = null;
+          if (allJobsResult.Success) {
+            for (const j of allJobsResult.Results) {
+              try {
+                const config = JSON.parse(j.Configuration || '{}') as Record<string, unknown>;
+                if (config.CompanyIntegrationID === item.CompanyIntegrationID) {
+                  existingJob = j;
+                  break;
+                }
+              } catch { /* skip invalid JSON */ }
+            }
+          }
+
+          let job: ScheduledJobType;
+          let isUpdate = false;
+
+          if (existingJob) {
+            job = existingJob;
+            isUpdate = true;
+          } else {
+            const jobTypeResult = await rvSched.RunView<{ ID: string }>({
+              EntityName: 'MJ: Scheduled Job Types',
+              ExtraFilter: `DriverClass='IntegrationSyncScheduledJobDriver'`,
+              MaxRows: 1,
+              ResultType: 'simple',
+              Fields: ['ID']
+            }, systemUser);
+
+            if (!jobTypeResult.Success || jobTypeResult.Results.length === 0) {
+              console.warn(`[RSU] IntegrationSyncScheduledJobDriver job type not found`);
+              throw new Error('Job type not found');
+            }
+
+            job = await md.GetEntityObject<ScheduledJobType>('MJ: Scheduled Jobs', systemUser);
             job.NewRecord();
             job.JobTypeID = jobTypeResult.Results[0].ID;
-            job.Name = `${integrationName} Scheduled Sync`;
-            job.CronExpression = item.CronExpression;
-            job.Timezone = item.ScheduleTimezone || 'UTC';
-            job.Status = 'Active';
             job.OwnerUserID = systemUser.ID;
             job.Configuration = JSON.stringify({ CompanyIntegrationID: item.CompanyIntegrationID });
-            // Compute NextRunAt so the scheduler picks it up immediately
-            const { CronExpressionHelper } = await import('@memberjunction/scheduling-engine');
-            job.NextRunAt = CronExpressionHelper.GetNextRunTime(item.CronExpression, item.ScheduleTimezone || 'UTC');
-            if (await job.Save()) {
-              console.log(`[RSU] Created schedule "${job.Name}" (${item.CronExpression}, NextRunAt=${job.NextRunAt.toISOString()}) for ${item.CompanyIntegrationID}`);
-              companyIntegration.ScheduleEnabled = true;
-              companyIntegration.ScheduleType = 'Cron';
-              companyIntegration.CronExpression = item.CronExpression;
-              await companyIntegration.Save();
-            } else {
-              console.warn(`[RSU] Failed to save schedule for ${item.CompanyIntegrationID}`);
-            }
+          }
+
+          job.Name = `${integrationName} Scheduled Sync`;
+          job.CronExpression = item.CronExpression;
+          job.Timezone = item.ScheduleTimezone || 'UTC';
+          job.Status = 'Active';
+          job.NextRunAt = CronExpressionHelper.GetNextRunTime(item.CronExpression, item.ScheduleTimezone || 'UTC');
+          if (await job.Save()) {
+            console.log(`[RSU] ${isUpdate ? 'Updated' : 'Created'} schedule "${job.Name}" (${item.CronExpression}, NextRunAt=${job.NextRunAt.toISOString()}) for ${item.CompanyIntegrationID}`);
+            companyIntegration.ScheduleEnabled = true;
+            companyIntegration.ScheduleType = 'Cron';
+            companyIntegration.CronExpression = item.CronExpression;
+            await companyIntegration.Save();
+          } else {
+            console.warn(`[RSU] Failed to save schedule for ${item.CompanyIntegrationID}`);
           }
         } catch (schedErr) {
           console.warn(`[RSU] Schedule creation failed: ${schedErr}`);

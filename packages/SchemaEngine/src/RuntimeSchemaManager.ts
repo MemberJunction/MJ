@@ -186,6 +186,8 @@ interface PostMigrationResult {
 export interface RSUPendingWork {
   CompanyIntegrationID: string;
   SourceObjectNames: string[];
+  /** Per-object field selections. Key = source object name, value = field names (null = all fields). */
+  SourceObjectFields?: Record<string, string[] | null>;
   SchemaName: string;
   CreatedAt: string;
   CronExpression?: string;
@@ -588,9 +590,10 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       }
     }
 
-    // Write caller-provided PostRestartFiles to disk before restart.
-    // RSU does not interpret these — it just persists them so they survive the restart.
-    await this.writePostRestartFiles(inputs);
+    // Write caller-provided PostRestartFiles ONLY for successful migrations.
+    // Failed migrations should not trigger post-restart entity maps or syncs.
+    const successfulInputs = successfulItems.map(r => r.Input);
+    await this.writePostRestartFiles(successfulInputs);
 
     // Restart LAST — PM2 restart kills this process, nothing runs after this
     if (!inputs.every((i) => i.SkipRestart)) {
