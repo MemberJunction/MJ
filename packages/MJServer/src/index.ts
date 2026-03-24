@@ -43,7 +43,6 @@ import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PubSubManager } from './generic/PubSubManager.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
-import { RuntimeSchemaManager } from '@memberjunction/schema-engine';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
 import {
@@ -862,6 +861,8 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
  * Reads pending work files, creates entity maps + field maps, starts sync.
  */
 async function processRSUPendingWork(): Promise<void> {
+  // Dynamic import — schema-engine is not yet published to npm, only exists as a workspace package
+  const { RuntimeSchemaManager } = await import('@memberjunction/schema-engine');
   const rsm = RuntimeSchemaManager.Instance;
   const pendingItems = await rsm.ReadAndClearPendingWork();
   if (pendingItems.length === 0) return;
