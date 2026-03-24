@@ -368,9 +368,26 @@ import {
     MJOktaProvider,
 } from '@memberjunction/ng-auth-services';
 
-// @memberjunction/ng-core-entity-forms (1 classes)
+// @memberjunction/ng-core-entity-forms (18 classes)
 import {
     FlowAgentFormSectionComponent,
+    MJAIAgentFormComponentExtended,
+    MJAIAgentRunFormComponentExtended,
+    MJAIPromptFormComponentExtended,
+    MJAIPromptRunFormComponentExtended,
+    MJActionExecutionLogFormComponentExtended,
+    MJActionFormComponentExtended,
+    MJEntityActionFormComponentExtended,
+    MJEntityFormComponentExtended,
+    MJListFormComponentExtended,
+    MJQueryFormComponentExtended,
+    MJTemplateFormComponentExtended,
+    MJTestFormComponentExtended,
+    MJTestRubricFormComponentExtended,
+    MJTestRunFeedbackFormComponentExtended,
+    MJTestRunFormComponentExtended,
+    MJTestSuiteFormComponentExtended,
+    MJTestSuiteRunFormComponentExtended,
 } from '@memberjunction/ng-core-entity-forms';
 
 // @memberjunction/ng-dashboard-viewer (8 classes)
@@ -734,6 +751,23 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJMSALProvider,
     MJOktaProvider,
     FlowAgentFormSectionComponent,
+    MJAIAgentFormComponentExtended,
+    MJAIAgentRunFormComponentExtended,
+    MJAIPromptFormComponentExtended,
+    MJAIPromptRunFormComponentExtended,
+    MJActionExecutionLogFormComponentExtended,
+    MJActionFormComponentExtended,
+    MJEntityActionFormComponentExtended,
+    MJEntityFormComponentExtended,
+    MJListFormComponentExtended,
+    MJQueryFormComponentExtended,
+    MJTemplateFormComponentExtended,
+    MJTestFormComponentExtended,
+    MJTestRubricFormComponentExtended,
+    MJTestRunFeedbackFormComponentExtended,
+    MJTestRunFormComponentExtended,
+    MJTestSuiteFormComponentExtended,
+    MJTestSuiteRunFormComponentExtended,
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
     QueryConfigPanelComponent,
@@ -757,7 +791,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 343;
+export const CLASS_REGISTRATIONS_COUNT = 360;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

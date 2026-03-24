@@ -1,5 +1,23 @@
 # @memberjunction/ai-agents
 
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/ai-engine-base@5.16.0
+  - @memberjunction/ai-core-plus@5.16.0
+  - @memberjunction/aiengine@5.16.0
+  - @memberjunction/ai-prompts@5.16.0
+  - @memberjunction/ai-reranker@5.16.0
+  - @memberjunction/actions-base@5.16.0
+  - @memberjunction/actions@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/ai@5.16.0
+  - @memberjunction/global@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

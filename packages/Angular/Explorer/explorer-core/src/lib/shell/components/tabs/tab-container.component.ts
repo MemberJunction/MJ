@@ -28,7 +28,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData, MJResourceTypeEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager } from './component-cache-manager';
 import { LazyModuleRegistry } from '../../../services/lazy-module-registry';
@@ -871,6 +871,16 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Get ResourceType entity by name (includes DriverClass field)
    */
   private async getResourceTypeEntity(resourceType: string): Promise<MJResourceTypeEntity | null> {
+    // Use ResourcePermissionEngine's cached data instead of fetching the dataset again.
+    // The engine loads ResourceTypes during startup and keeps them in memory.
+    const resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
+    if (resourceTypes && resourceTypes.length > 0) {
+      const rt = resourceTypes.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase());
+      return rt || null;
+    }
+
+    // Fallback: if engine hasn't loaded yet (shouldn't happen in normal flow),
+    // fetch the dataset directly
     const md = new Metadata();
     const ds = TabContainerComponent._resourceTypesDataset || await md.GetDatasetByName("ResourceTypes");
     if (!ds || !ds.Success || ds.Results.length === 0) {

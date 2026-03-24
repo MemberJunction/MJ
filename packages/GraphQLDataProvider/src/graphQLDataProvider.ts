@@ -8,7 +8,7 @@
 import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
          EntityInfo, EntityFieldInfo, EntityFieldTSType, TenantContext,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
-         ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError,
+         ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
          EntityRecordNameResult, IRunReportProvider, RunReportResult, RunReportParams, RecordDependency, RecordMergeRequest, RecordMergeResult,
          RunQueryResult, PotentialDuplicateRequest, PotentialDuplicateResponse, CompositeKey, EntityDeleteOptions,
@@ -16,7 +16,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
          KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
-import { MJGlobal, MJEventType, UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -138,15 +138,35 @@ export class GraphQLProviderConfigData extends ProviderConfigDataBase {
  * MJAPI server using GraphQL. This class is used to interact with the server to get and save data, as well as to get metadata about the entities and fields in the system.
  */
 export class GraphQLDataProvider extends ProviderBase implements IEntityDataProvider, IMetadataProvider, IRunReportProvider {
-    private static _instance: GraphQLDataProvider;
+    /**
+     * Global Object Store key — follows BaseSingleton's naming convention so the
+     * singleton is discoverable in the same way as BaseSingleton-derived classes.
+     *
+     * NOTE: GraphQLDataProvider cannot extend BaseSingleton because it already
+     * extends ProviderBase (TypeScript single-inheritance constraint). Instead we
+     * use GetGlobalObjectStore() directly with the same key format.
+     */
+    private static readonly _globalStoreKey = '___SINGLETON__GraphQLDataProvider';
+
+    /**
+     * Returns the singleton instance of GraphQLDataProvider.
+     * Uses the Global Object Store to guarantee a single instance across the
+     * entire process, even if bundlers duplicate this module.
+     */
     public static get Instance(): GraphQLDataProvider {
-        return GraphQLDataProvider._instance;
+        const g = GetGlobalObjectStore();
+        return g ? g[GraphQLDataProvider._globalStoreKey] as GraphQLDataProvider : undefined;
     }
 
     constructor() {
         super();
-        if (!GraphQLDataProvider._instance)
-            GraphQLDataProvider._instance = this;
+        const g = GetGlobalObjectStore();
+        if (g && g[GraphQLDataProvider._globalStoreKey]) {
+            return g[GraphQLDataProvider._globalStoreKey] as this;
+        }
+        if (g) {
+            g[GraphQLDataProvider._globalStoreKey] = this;
+        }
     }
 
     private _client: GraphQLClient;
@@ -1935,7 +1955,112 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    // ── Dataset Status Coalescing ──────────────────────────────────────
+    // Multiple engines call GetDatasetStatusByName during startup. Instead of
+    // firing 3 separate GraphQL requests, we coalesce them into one batched call.
+    private static _datasetStatusQueue: Array<{
+        datasetName: string;
+        itemFilters?: DatasetItemFilterType[];
+        resolve: (result: DatasetStatusResultType) => void;
+        reject: (err: unknown) => void;
+    }> = [];
+    private static _datasetStatusTimer: ReturnType<typeof setTimeout> | null = null;
+    private static _datasetStatusCoalesceMs = 10;
+
     public async GetDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType> {
+        // If coalescing is enabled and there are no item filters (simple case),
+        // enqueue for batching
+        if (GraphQLDataProvider._datasetStatusCoalesceMs > 0 && !itemFilters) {
+            return this.enqueueDatasetStatusCheck(datasetName);
+        }
+        return this.executeDatasetStatusByName(datasetName, itemFilters);
+    }
+
+    private enqueueDatasetStatusCheck(datasetName: string): Promise<DatasetStatusResultType> {
+        return new Promise<DatasetStatusResultType>((resolve, reject) => {
+            GraphQLDataProvider._datasetStatusQueue.push({ datasetName, resolve, reject });
+            if (!GraphQLDataProvider._datasetStatusTimer) {
+                GraphQLDataProvider._datasetStatusTimer = setTimeout(
+                    () => this.flushDatasetStatusQueue(),
+                    GraphQLDataProvider._datasetStatusCoalesceMs
+                );
+            }
+        });
+    }
+
+    private async flushDatasetStatusQueue(): Promise<void> {
+        GraphQLDataProvider._datasetStatusTimer = null;
+        const queue = GraphQLDataProvider._datasetStatusQueue.splice(0);
+        if (queue.length === 0) return;
+
+        // Single request — no batching needed
+        if (queue.length === 1) {
+            try {
+                const result = await this.executeDatasetStatusByName(queue[0].datasetName, queue[0].itemFilters);
+                queue[0].resolve(result);
+            } catch (err) {
+                queue[0].reject(err);
+            }
+            return;
+        }
+
+        // Batch: use GetMultipleDatasetStatusByName
+        const names = queue.map(q => q.datasetName);
+        LogStatus(`⚡ [Coalesce] Batching ${names.length} dataset status checks into 1 request: [${names.join(', ')}]`);
+
+        try {
+            const batchQuery = gql`query GetMultipleDatasetStatusByName($DatasetNames: [String!]!) {
+                GetMultipleDatasetStatusByName(DatasetNames: $DatasetNames) {
+                    DatasetID
+                    DatasetName
+                    Success
+                    Status
+                    LatestUpdateDate
+                    EntityUpdateDates
+                }
+            }`;
+            const data = await this.ExecuteGQL(batchQuery, { DatasetNames: names });
+            const results: DatasetStatusResultType[] = (data?.GetMultipleDatasetStatusByName || []).map((r: Record<string, unknown>) => ({
+                DatasetID: r.DatasetID as string,
+                DatasetName: r.DatasetName as string,
+                Success: r.Success as boolean,
+                Status: r.Status as string,
+                LatestUpdateDate: r.LatestUpdateDate ? new Date(r.LatestUpdateDate as string) : null,
+                EntityUpdateDates: r.EntityUpdateDates ? JSON.parse(r.EntityUpdateDates as string) : null,
+            }));
+
+            // Match results back to callers by dataset name
+            for (const entry of queue) {
+                const result = results.find(r => r.DatasetName === entry.datasetName);
+                if (result) {
+                    entry.resolve(result);
+                } else {
+                    entry.resolve({
+                        DatasetID: "",
+                        DatasetName: entry.datasetName,
+                        Success: false,
+                        Status: 'Not found in batch response',
+                        LatestUpdateDate: null,
+                        EntityUpdateDates: null
+                    });
+                }
+            }
+        } catch (err) {
+            // Fall back to individual calls if batch fails
+            LogError(`Dataset status batch failed, falling back to individual calls: ${err}`);
+            const fallbackPromises = queue.map(async (entry) => {
+                try {
+                    const result = await this.executeDatasetStatusByName(entry.datasetName, entry.itemFilters);
+                    entry.resolve(result);
+                } catch (fallbackErr) {
+                    entry.reject(fallbackErr);
+                }
+            });
+            await Promise.all(fallbackPromises);
+        }
+    }
+
+    private async executeDatasetStatusByName(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<DatasetStatusResultType> {
         const query = gql`query GetDatasetStatusByName($DatasetName: String!, $ItemFilters: [DatasetItemFilterTypeGQL!]) {
             GetDatasetStatusByName(DatasetName: $DatasetName, ItemFilters: $ItemFilters) {
                 DatasetID
@@ -1945,7 +2070,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 LatestUpdateDate
                 EntityUpdateDates
             }
-        }`
+        }`;
         const data = await this.ExecuteGQL(query,  {DatasetName: datasetName, ItemFilters: itemFilters});
         if (data && data.GetDatasetStatusByName && data.GetDatasetStatusByName.Success) {
             return {
@@ -1955,7 +2080,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 Status: data.GetDatasetStatusByName.Status,
                 LatestUpdateDate: new Date(data.GetDatasetStatusByName.LatestUpdateDate),
                 EntityUpdateDates: JSON.parse(data.GetDatasetStatusByName.EntityUpdateDates)
-            }
+            };
         }
         else {
             return {

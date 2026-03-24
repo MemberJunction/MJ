@@ -6,7 +6,7 @@ import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, NormalizeUUID, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -110,6 +110,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
     private _localMetadata: AllMetadata = new AllMetadata();
+    private _entityMapByName = new Map<string, EntityInfo>();
+    private _entityMapByID = new Map<string, EntityInfo>();
     private _entityRecordNameCache = new Map<string, string>();
 
     private _refresh = false;
@@ -142,6 +144,53 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Set to 0 to disable auto-caching. Default 250.
      */
     public static ServerAutoCacheMaxRows: number = 250;
+
+    // ── Request Coalescing ─────────────────────────────────────────────
+    /**
+     * When enabled, concurrent RunViews calls arriving within the same
+     * microtask (or within CoalesceWindowMs) are merged into a single
+     * mega-batch before hitting the network. This dramatically reduces
+     * the number of HTTP round-trips during startup when multiple engines
+     * independently call RunViews in parallel.
+     *
+     * Set to 0 to disable coalescing. Default 10ms — enough to capture
+     * all engines that fire in the same tick, without adding perceptible delay.
+     */
+    public static CoalesceWindowMs: number = 10;
+
+    /**
+     * Pending coalesced requests waiting to be flushed.
+     * Each entry tracks the original params, contextUser, and a resolver
+     * so the caller's promise resolves with only their slice of results.
+     */
+    private _coalesceQueue: Array<{
+        params: RunViewParams[];
+        contextUser?: UserInfo;
+        resolve: (results: RunViewResult[]) => void;
+        reject: (err: unknown) => void;
+    }> = [];
+
+    /** Timer handle for the coalesce flush */
+    private _coalesceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // ── Fast Startup Mode ─────────────────────────────────────────────
+    /**
+     * When enabled, the first round of RunViews calls after startup will
+     * trust the local IndexedDB/localStorage cache without server validation.
+     * This eliminates the smart cache check round-trips during initial load,
+     * making warm page refreshes near-instant.
+     *
+     * After the first round of engine loads completes, FastStartupMode
+     * automatically disables itself so subsequent data access uses normal
+     * server validation.
+     *
+     * Only applies to client-side providers (TrustLocalCacheCompletely=false).
+     * Set to false to disable.
+     */
+    public static FastStartupMode: boolean = true;
+
+    /** Tracks whether fast startup has been consumed (auto-disables after first use) */
+    private static _fastStartupConsumed = false;
 
     // ── Request Deduplication + Linger Window ──────────────────────────
     /**
@@ -484,6 +533,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return this.ExecuteRunViewsPipeline<T>(params, contextUser);
         }
 
+        // ── Coalescing: merge concurrent RunViews into one mega-batch ──
+        if (ProviderBase.CoalesceWindowMs > 0 && !this.TrustLocalCacheCompletely) {
+            // Only coalesce on the client side where cache validation round-trips are expensive.
+            // Server-side trusts its cache (no network calls), so coalescing adds no benefit.
+            return this.enqueueCoalescedRunViews<T>(params, contextUser);
+        }
+
         const key = this.GenerateDedupKey(params, contextUser);
         const existing = this._inflightViews.get(key);
 
@@ -594,6 +650,140 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         await this.PostRunViews(finalResults, params, preResult, contextUser);
 
         return finalResults as RunViewResult<T>[];
+    }
+
+    // ── Coalescing implementation ─────────────────────────────────────
+
+    /**
+     * Enqueues a RunViews call for coalescing. Multiple calls arriving within
+     * CoalesceWindowMs are merged into a single mega-batch, executed once, and
+     * each caller receives only their slice of the results.
+     */
+    private enqueueCoalescedRunViews<T>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        return new Promise<RunViewResult<T>[]>((resolve, reject) => {
+            this._coalesceQueue.push({
+                params,
+                contextUser,
+                resolve: resolve as (results: RunViewResult[]) => void,
+                reject
+            });
+
+            // Start the coalesce timer if not already running
+            if (!this._coalesceTimer) {
+                this._coalesceTimer = setTimeout(() => this.flushCoalesceQueue(), ProviderBase.CoalesceWindowMs);
+            }
+        });
+    }
+
+    /**
+     * Flushes the coalesce queue: merges all pending RunViews params into one
+     * mega-batch, executes it, then splits results back to each original caller.
+     */
+    private async flushCoalesceQueue(): Promise<void> {
+        this._coalesceTimer = null;
+
+        // Grab and clear the queue atomically
+        const queue = this._coalesceQueue.splice(0);
+        if (queue.length === 0) return;
+
+        // If only one caller, no merging needed
+        if (queue.length === 1) {
+            const entry = queue[0];
+            try {
+                const results = await this.RunViewsUncoalesced(entry.params, entry.contextUser);
+                entry.resolve(results);
+            } catch (err) {
+                entry.reject(err);
+            }
+            return;
+        }
+
+        // Merge all params into one mega-batch, tracking boundaries
+        const allParams: RunViewParams[] = [];
+        const boundaries: Array<{ start: number; count: number }> = [];
+        // Use the first caller's contextUser (all should be the same on client-side)
+        const contextUser = queue[0].contextUser;
+
+        for (const entry of queue) {
+            boundaries.push({ start: allParams.length, count: entry.params.length });
+            allParams.push(...entry.params);
+        }
+
+        const entityNames = allParams.map(p => p.EntityName || p.ViewName || '?').join(', ');
+        LogStatusEx({
+            message: `⚡ [Coalesce] Merged ${queue.length} RunViews calls (${allParams.length} total entities) into 1 mega-batch: [${entityNames}]`,
+            verboseOnly: false
+        });
+
+        try {
+            // Execute the mega-batch as a single pipeline call
+            const allResults = await this.RunViewsUncoalesced(allParams, contextUser);
+
+            // Split results back to each original caller
+            for (let i = 0; i < queue.length; i++) {
+                const { start, count } = boundaries[i];
+                const callerResults = allResults.slice(start, start + count);
+                queue[i].resolve(callerResults);
+            }
+        } catch (err) {
+            // If the mega-batch fails, reject all callers
+            for (const entry of queue) {
+                entry.reject(err);
+            }
+        }
+    }
+
+    /**
+     * Runs RunViews without coalescing (used internally after coalescing merge).
+     * This goes through dedup + linger + the full pipeline.
+     */
+    private async RunViewsUncoalesced<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
+        const key = this.GenerateDedupKey(params, contextUser);
+        const existing = this._inflightViews.get(key);
+
+        // ── Linger hit ──
+        if (existing?.resolvedResults && existing.resolvedAt) {
+            const age = Date.now() - existing.resolvedAt;
+            if (age < ProviderBase.DedupLingerMs) {
+                return existing.resolvedResults.map(r => this.ShallowCopyResult<T>(r));
+            }
+            this._inflightViews.delete(key);
+        }
+
+        // ── In-flight hit ──
+        if (existing && !existing.resolvedResults) {
+            const results = await existing.promise;
+            return results.map(r => this.ShallowCopyResult<T>(r));
+        }
+
+        // ── Fresh execution ──
+        const promise = this.ExecuteRunViewsPipeline<T>(params, contextUser)
+            .then(results => {
+                const entry = this._inflightViews.get(key);
+                if (entry && entry.promise === promise) {
+                    entry.resolvedResults = results as RunViewResult[];
+                    entry.resolvedAt = Date.now();
+                    if (ProviderBase.DedupLingerMs > 0) {
+                        setTimeout(() => {
+                            const current = this._inflightViews.get(key);
+                            if (current && current.promise === promise) {
+                                this._inflightViews.delete(key);
+                            }
+                        }, ProviderBase.DedupLingerMs);
+                    } else {
+                        this._inflightViews.delete(key);
+                    }
+                }
+                return results as RunViewResult[];
+            })
+            .catch(err => {
+                this._inflightViews.delete(key);
+                throw err;
+            });
+
+        this._inflightViews.set(key, { promise });
+        const results = await promise;
+        return results.map(r => this.ShallowCopyResult<T>(r));
     }
 
     /**
@@ -733,7 +923,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected async EntityStatusCheck(params: RunViewParams, callerName: string) {
         const entityName = await RunView.GetEntityNameFromRunViewParams(params, this);
-        const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === entityName?.trim().toLowerCase());
+        const entity = entityName ? this.EntityByName(entityName) : undefined;
         if (!entity) {
             throw new Error(`Entity ${entityName} not found in metadata`);
         }
@@ -889,7 +1079,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Handle entity_object result type - need all fields
         const entityLookupStart = performance.now();
         if (params.ResultType === 'entity_object') {
-            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
+            const entity = this.EntityByName(params.EntityName);
             if (!entity)
                 throw new Error(`Entity ${params.EntityName} not found in metadata`);
             params.Fields = entity.Fields.map(f => f.Name);
@@ -975,9 +1165,52 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Server-side providers trust the cache completely and fall through to
         // the traditional flow which returns cached data immediately on hit.
         if (!this.TrustLocalCacheCompletely) {
-            const useSmartCacheCheck = params.some(p => p.CacheLocal);
-            if (useSmartCacheCheck && LocalCacheManager.Instance.IsInitialized) {
-                return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
+            // FastStartupMode: on the first engine load after a page refresh, trust
+            // the local IndexedDB cache without server validation. This eliminates
+            // the RunViewsWithCacheCheck round-trips that dominate warm-load TTI.
+            // After the first batch of engine loads, auto-disable so subsequent
+            // requests use normal server validation for data freshness.
+            const useFastStartup = ProviderBase.FastStartupMode
+                && !ProviderBase._fastStartupConsumed
+                && LocalCacheManager.Instance.IsInitialized
+                && params.some(p => p.CacheLocal);
+
+            if (useFastStartup) {
+                // Check if we actually have cached data for ALL params
+                let allHaveCachedData = true;
+                for (const param of params) {
+                    if (param.CacheLocal) {
+                        const fp = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
+                        const cached = await LocalCacheManager.Instance.GetRunViewResult(fp);
+                        if (!cached) {
+                            allHaveCachedData = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (allHaveCachedData) {
+                    // Mark fast startup as consumed — subsequent loads will validate normally
+                    ProviderBase._fastStartupConsumed = true;
+                    const entityNames = params.map(p => p.EntityName || p.ViewName || '?').join(', ');
+                    LogStatusEx({
+                        message: `⚡ [Fast-Start] Trusting local cache for ${params.length} views [${entityNames}] — skipping server validation`,
+                        verboseOnly: false
+                    });
+                    // Fall through to the traditional flow below which will return cached data
+                } else {
+                    // Not all params have cached data — use normal smart cache check
+                    ProviderBase._fastStartupConsumed = true; // Still consume the fast-start flag
+                    const useSmartCacheCheck = params.some(p => p.CacheLocal);
+                    if (useSmartCacheCheck) {
+                        return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
+                    }
+                }
+            } else if (!useFastStartup) {
+                const useSmartCacheCheck = params.some(p => p.CacheLocal);
+                if (useSmartCacheCheck && LocalCacheManager.Instance.IsInitialized) {
+                    return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
+                }
             }
         }
 
@@ -995,7 +1228,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Handle entity_object result type - need all fields
             if (param.ResultType === 'entity_object') {
-                const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName.trim().toLowerCase());
+                const entity = this.EntityByName(param.EntityName);
                 if (!entity) {
                     throw new Error(`Entity ${param.EntityName} not found in metadata`);
                 }
@@ -1069,7 +1302,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Handle entity_object result type - need all fields
             if (param.ResultType === 'entity_object') {
-                const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName?.trim().toLowerCase());
+                const entity = this.EntityByName(param.EntityName);
                 if (!entity) {
                     throw new Error(`Entity ${param.EntityName} not found in metadata`);
                 }
@@ -1238,7 +1471,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
 
             // Get entity info for primary key field name
-            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName?.trim().toLowerCase());
+            const entity = this.EntityByName(param.EntityName);
             const primaryKeyFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
 
             // Apply differential update to cache
@@ -1796,7 +2029,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // so that we can get the data to populate the entity object with.
         if (params.ResultType === 'entity_object') {
             // we need to get the entity definition and then get all the fields for it
-            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
+            const entity = this.EntityByName(params.EntityName);
             if (!entity)
                 throw new Error(`Entity ${params.EntityName} not found in metadata`);
             params.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
@@ -1854,8 +2087,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // so that we can get the data to populate the entity object with.
                 if (param.ResultType === 'entity_object') {
                     // we need to get the entity definition and then get all the fields for it
-                    const entity: EntityInfo | undefined = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName.trim().toLowerCase());
-                    if (!entity){
+                    const entity = this.EntityByName(param.EntityName);
+                    if (!entity) {
                         throw new Error(`Entity ${param.EntityName} not found in metadata`);
                     }
                     param.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
@@ -1956,6 +2189,26 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Capture the hard-refresh flag before resetting it — when true, we must bypass all
         // caching (including LocalCacheManager) so GetDatasetByName hits the actual database.
         const hardRefresh = this._refresh;
+
+        // ── Fast-start from cached metadata ──────────────────────────────────
+        // On warm loads (page refresh), try loading metadata from IndexedDB/localStorage
+        // BEFORE checking with the server. If cached metadata exists, use it immediately
+        // so the app can start initializing (engines, UI) while we validate in the background.
+        // This is a stale-while-revalidate pattern: serve cached data instantly, then
+        // refresh if the server says it's outdated.
+        if (!this.TrustLocalCacheCompletely && !hardRefresh && !this._localMetadata?.AllEntities?.length) {
+            await this.LoadLocalMetadataFromStorage();
+            if (this._localMetadata?.AllEntities?.length) {
+                LogStatusEx({ message: `⚡ [Fast-Start] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — deferring server validation`, verboseOnly: false });
+
+                // Kick off background validation — if metadata is stale, it will
+                // be atomically swapped when the server response arrives.
+                this.backgroundValidateAndRefresh(providerToUse);
+
+                return true; // App can proceed immediately with cached metadata
+            }
+        }
+
         if (hardRefresh || await this.CheckToSeeIfRefreshNeeded(providerToUse)) {
             // either a hard refresh flag was set within Refresh(), or LocalMetadata is Obsolete
 
@@ -1985,6 +2238,35 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         return true;
+    }
+
+    /**
+     * Background validation for the stale-while-revalidate fast-start pattern.
+     * Checks if local metadata is still current; if stale, fetches fresh metadata
+     * and atomically swaps it in. The app continues operating on cached data
+     * during this process — no blocking.
+     */
+    private async backgroundValidateAndRefresh(providerToUse?: IMetadataProvider): Promise<void> {
+        try {
+            const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
+            if (needsRefresh) {
+                LogStatusEx({ message: `⚡ [Fast-Start] Background check: metadata is stale — refreshing...`, verboseOnly: false });
+                const start = Date.now();
+                const res = await this.GetAllMetadata(providerToUse, false);
+                const elapsed = Date.now() - start;
+                if (res) {
+                    this.UpdateLocalMetadata(res);
+                    this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps;
+                    await this.SaveLocalMetadataToStorage();
+                    LogStatusEx({ message: `⚡ [Fast-Start] Background refresh complete (${elapsed}ms) — metadata updated in place`, verboseOnly: false });
+                }
+            } else {
+                LogStatusEx({ message: `⚡ [Fast-Start] Background check: metadata is current — no refresh needed`, verboseOnly: false });
+            }
+        } catch (e) {
+            LogError(`[Fast-Start] Background validation failed: ${e}`);
+            // Not critical — app continues with cached metadata
+        }
     }
 
     protected CloneAllMetadata(toClone: AllMetadata): AllMetadata {
@@ -2194,6 +2476,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public get Entities(): EntityInfo[] {
         return this._localMetadata.AllEntities;
     }
+
+    public EntityByName(entityName: string): EntityInfo | undefined {
+        if (!entityName) return undefined;
+        const key = entityName.trim().toLowerCase();
+        if (this._entityMapByName.size > 0) {
+            return this._entityMapByName.get(key);
+        }
+        // Fallback to linear search if maps haven't been built yet
+        return this.Entities.find(e => e.Name.trim().toLowerCase() === key);
+    }
+
+    public EntityByID(entityID: string): EntityInfo | undefined {
+        if (!entityID) return undefined;
+        const key = NormalizeUUID(entityID);
+        if (this._entityMapByID.size > 0) {
+            return this._entityMapByID.get(key);
+        }
+        // Fallback to linear search if maps haven't been built yet
+        return this.Entities.find(e => UUIDsEqual(e.ID, entityID));
+    }
+
     /**
      * Gets all application metadata in the system.
      * @returns Array of ApplicationInfo objects representing all applications
@@ -2553,6 +2856,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType> {
         // first see if we have anything in cache at all, no reason to check server dates if we dont
         if (await this.IsDatasetCached(datasetName, itemFilters)) {
+            // FastStartupMode: on warm loads, trust the cached dataset without server validation.
+            // Same pattern as FastStartupMode for RunViews — serve from IndexedDB immediately.
+            if (ProviderBase.FastStartupMode && !this.TrustLocalCacheCompletely) {
+                LogStatusEx({
+                    message: `⚡ [Fast-Start] Serving cached dataset "${datasetName}" from local cache — skipping server validation`,
+                    verboseOnly: false
+                });
+                return this.GetCachedDataset(datasetName, itemFilters);
+            }
+
             // compare the local version, if exists to the server version dates
             if (await this.IsDatasetCacheUpToDate(datasetName, itemFilters)) {
                 // we're up to date, all we need to do is get the local cache and return it
@@ -2868,6 +3181,23 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected UpdateLocalMetadata(res: AllMetadata) {
         this._localMetadata = res;
+        this.RebuildEntityMaps();
+    }
+
+    /**
+     * Rebuilds the O(1) entity lookup Maps from the current AllEntities array.
+     * Called automatically from UpdateLocalMetadata().
+     */
+    protected RebuildEntityMaps(): void {
+        const entities = this._localMetadata?.AllEntities;
+        this._entityMapByName.clear();
+        this._entityMapByID.clear();
+        if (entities) {
+            for (const e of entities) {
+                this._entityMapByName.set(e.Name.trim().toLowerCase(), e);
+                this._entityMapByID.set(NormalizeUUID(e.ID), e);
+            }
+        }
     }
 
     /**

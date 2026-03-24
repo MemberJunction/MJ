@@ -2824,7 +2824,7 @@ export abstract class BaseEntity<T = unknown> {
         contextUser?: UserInfo
     ): Promise<{ LeafEntityName: string; IsLeaf: boolean }> {
         const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        const entityInfo = md.EntityByName(entityName);
         if (!entityInfo) {
             return { LeafEntityName: entityName, IsLeaf: true };
         }
