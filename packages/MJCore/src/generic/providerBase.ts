@@ -6,7 +6,7 @@ import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
+import { MJGlobal, NormalizeUUID, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -110,6 +110,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
     private _localMetadata: AllMetadata = new AllMetadata();
+    private _entityMapByName = new Map<string, EntityInfo>();
+    private _entityMapByID = new Map<string, EntityInfo>();
     private _entityRecordNameCache = new Map<string, string>();
 
     private _refresh = false;
@@ -921,7 +923,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected async EntityStatusCheck(params: RunViewParams, callerName: string) {
         const entityName = await RunView.GetEntityNameFromRunViewParams(params, this);
-        const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === entityName?.trim().toLowerCase());
+        const entity = entityName ? this.EntityByName(entityName) : undefined;
         if (!entity) {
             throw new Error(`Entity ${entityName} not found in metadata`);
         }
@@ -1077,7 +1079,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // Handle entity_object result type - need all fields
         const entityLookupStart = performance.now();
         if (params.ResultType === 'entity_object') {
-            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
+            const entity = this.EntityByName(params.EntityName);
             if (!entity)
                 throw new Error(`Entity ${params.EntityName} not found in metadata`);
             params.Fields = entity.Fields.map(f => f.Name);
@@ -1226,7 +1228,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Handle entity_object result type - need all fields
             if (param.ResultType === 'entity_object') {
-                const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName.trim().toLowerCase());
+                const entity = this.EntityByName(param.EntityName);
                 if (!entity) {
                     throw new Error(`Entity ${param.EntityName} not found in metadata`);
                 }
@@ -1300,7 +1302,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             // Handle entity_object result type - need all fields
             if (param.ResultType === 'entity_object') {
-                const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName?.trim().toLowerCase());
+                const entity = this.EntityByName(param.EntityName);
                 if (!entity) {
                     throw new Error(`Entity ${param.EntityName} not found in metadata`);
                 }
@@ -1469,7 +1471,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
 
             // Get entity info for primary key field name
-            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName?.trim().toLowerCase());
+            const entity = this.EntityByName(param.EntityName);
             const primaryKeyFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
 
             // Apply differential update to cache
@@ -2027,7 +2029,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // so that we can get the data to populate the entity object with.
         if (params.ResultType === 'entity_object') {
             // we need to get the entity definition and then get all the fields for it
-            const entity = this.Entities.find(e => e.Name.trim().toLowerCase() === params.EntityName.trim().toLowerCase());
+            const entity = this.EntityByName(params.EntityName);
             if (!entity)
                 throw new Error(`Entity ${params.EntityName} not found in metadata`);
             params.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
@@ -2085,8 +2087,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // so that we can get the data to populate the entity object with.
                 if (param.ResultType === 'entity_object') {
                     // we need to get the entity definition and then get all the fields for it
-                    const entity: EntityInfo | undefined = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName.trim().toLowerCase());
-                    if (!entity){
+                    const entity = this.EntityByName(param.EntityName);
+                    if (!entity) {
                         throw new Error(`Entity ${param.EntityName} not found in metadata`);
                     }
                     param.Fields = entity.Fields.map(f => f.Name); // just override whatever was passed in with all the fields - or if nothing was passed in, we set it. For loading the entity object, we need ALL the fields.
@@ -2474,6 +2476,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public get Entities(): EntityInfo[] {
         return this._localMetadata.AllEntities;
     }
+
+    public EntityByName(entityName: string): EntityInfo | undefined {
+        if (!entityName) return undefined;
+        const key = entityName.trim().toLowerCase();
+        if (this._entityMapByName.size > 0) {
+            return this._entityMapByName.get(key);
+        }
+        // Fallback to linear search if maps haven't been built yet
+        return this.Entities.find(e => e.Name.trim().toLowerCase() === key);
+    }
+
+    public EntityByID(entityID: string): EntityInfo | undefined {
+        if (!entityID) return undefined;
+        const key = NormalizeUUID(entityID);
+        if (this._entityMapByID.size > 0) {
+            return this._entityMapByID.get(key);
+        }
+        // Fallback to linear search if maps haven't been built yet
+        return this.Entities.find(e => UUIDsEqual(e.ID, entityID));
+    }
+
     /**
      * Gets all application metadata in the system.
      * @returns Array of ApplicationInfo objects representing all applications
@@ -3158,6 +3181,23 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected UpdateLocalMetadata(res: AllMetadata) {
         this._localMetadata = res;
+        this.RebuildEntityMaps();
+    }
+
+    /**
+     * Rebuilds the O(1) entity lookup Maps from the current AllEntities array.
+     * Called automatically from UpdateLocalMetadata().
+     */
+    protected RebuildEntityMaps(): void {
+        const entities = this._localMetadata?.AllEntities;
+        this._entityMapByName.clear();
+        this._entityMapByID.clear();
+        if (entities) {
+            for (const e of entities) {
+                this._entityMapByName.set(e.Name.trim().toLowerCase(), e);
+                this._entityMapByID.set(NormalizeUUID(e.ID), e);
+            }
+        }
     }
 
     /**
