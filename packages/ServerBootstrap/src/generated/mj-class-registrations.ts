@@ -903,6 +903,12 @@ import {
     AgentEvalDriver,
 } from '@memberjunction/testing-engine';
 
+// @memberjunction/messaging-adapters (2 classes)
+import {
+    SlackMessagingExtension,
+    TeamsMessagingExtension,
+} from '@memberjunction/messaging-adapters';
+
 /**
  * Runtime references to every @RegisterClass decorated class.
  * This array creates a static code path the bundler cannot tree-shake.
@@ -1565,13 +1571,15 @@ export const CLASS_REGISTRATIONS: any[] = [
     AIPromptExtension,
     TemplateEmbedExtension,
     AgentEvalDriver,
+    SlackMessagingExtension,
+    TeamsMessagingExtension,
 ];
 
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 656;
+export const CLASS_REGISTRATIONS_COUNT = 658;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -1634,4 +1642,5 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/storage',
     '@memberjunction/templates',
     '@memberjunction/testing-engine',
+    '@memberjunction/messaging-adapters',
 ] as const;

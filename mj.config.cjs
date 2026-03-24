@@ -204,6 +204,50 @@ module.exports = {
 
   /**
    * ====================
+   * Server Extensions
+   * ====================
+   */
+  serverExtensions: [
+    {
+      Enabled: true,
+      DriverClass: 'SlackMessagingExtension',
+      RootPath: '/webhook/slack',
+      Settings: {
+        DefaultAgentName: process.env.MJ_BOT_DEFAULT_AGENT_NAME || 'Sage',
+        ContextUserEmail: process.env.MJ_BOT_CONTEXT_USER_EMAIL || 'your-service-account@company.com',
+        BotToken: process.env.SLACK_BOT_TOKEN,
+        SigningSecret: process.env.SLACK_SIGNING_SECRET,
+        ConnectionMode: 'http',
+        MaxThreadMessages: 50,
+        StreamingUpdateIntervalMs: 1500,
+        ExplorerBaseURL: 'http://localhost:4201',
+        SlashCommands: {
+          '/sage': 'Sage',
+          '/skip': 'Skip',
+          '/research': 'Research Agent',
+          '/marketing': 'Marketing Agent',
+          '/codesmith': 'Codesmith Agent',
+          '/query': 'Query Builder',
+        },
+      }
+    },
+    {
+      Enabled: true,
+      DriverClass: 'TeamsMessagingExtension',
+      RootPath: '/webhook/teams',
+      Settings: {
+        DefaultAgentName: process.env.MJ_BOT_DEFAULT_AGENT_NAME || 'Sage',
+        ContextUserEmail: process.env.MJ_BOT_CONTEXT_USER_EMAIL || 'your-service-account@company.com',
+        MicrosoftAppId: process.env.MICROSOFT_APP_ID,
+        MicrosoftAppPassword: process.env.MICROSOFT_APP_PASSWORD,
+        MaxThreadMessages: 50,
+        StreamingUpdateIntervalMs: 2000,
+      }
+    }
+  ],
+
+  /**
+   * ====================
    * QueryGen Overrides
    * ====================
    */

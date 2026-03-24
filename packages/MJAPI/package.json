@@ -27,6 +27,7 @@
     "@memberjunction/communication-sendgrid": "5.16.0",
     "@memberjunction/core": "5.16.0",
     "@memberjunction/global": "5.16.0",
+    "@memberjunction/messaging-adapters": "5.16.0",
     "@memberjunction/server": "5.16.0",
     "@memberjunction/server-bootstrap": "5.16.0",
     "@memberjunction/sqlserver-dataprovider": "5.16.0",
