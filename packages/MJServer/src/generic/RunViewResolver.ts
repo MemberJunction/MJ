@@ -170,6 +170,8 @@ export class RunViewByIDInput {
     description:
       'Optional: Name of an alternative database view to query from instead of the entity\'s default BaseView. Must be registered in the entity\'s AdditionalBaseViews metadata.',
   })
+  /** Name of an alternative database view to query instead of the entity's default BaseView.
+   *  Must be registered in the entity's AdditionalBaseViews metadata. */
   AlternateViewName?: string;
 }
 
@@ -278,6 +280,8 @@ export class RunViewByNameInput {
     description:
       'Optional: Name of an alternative database view to query from instead of the entity\'s default BaseView. Must be registered in the entity\'s AdditionalBaseViews metadata.',
   })
+  /** Name of an alternative database view to query instead of the entity's default BaseView.
+   *  Must be registered in the entity's AdditionalBaseViews metadata. */
   AlternateViewName?: string;
 }
 
@@ -372,6 +376,8 @@ export class RunDynamicViewInput {
     description:
       'Optional: Name of an alternative database view to query from instead of the entity\'s default BaseView. Must be registered in the entity\'s AdditionalBaseViews metadata.',
   })
+  /** Name of an alternative database view to query instead of the entity's default BaseView.
+   *  Must be registered in the entity's AdditionalBaseViews metadata. */
   AlternateViewName?: string;
 }
 
@@ -495,6 +501,8 @@ export class RunViewGenericInput {
     description:
       'Optional: Name of an alternative database view to query from instead of the entity\'s default BaseView. Must be registered in the entity\'s AdditionalBaseViews metadata.',
   })
+  /** Name of an alternative database view to query instead of the entity's default BaseView.
+   *  Must be registered in the entity's AdditionalBaseViews metadata. */
   AlternateViewName?: string;
 }
 
@@ -1044,6 +1052,7 @@ export class RunViewResolver extends ResolverBase {
           AuditLogDescription: item.params.AuditLogDescription,
           ResultType: (item.params.ResultType || 'simple') as 'simple' | 'entity_object' | 'count_only',
           StartRow: item.params.StartRow,
+          AlternateViewName: item.params.AlternateViewName,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,

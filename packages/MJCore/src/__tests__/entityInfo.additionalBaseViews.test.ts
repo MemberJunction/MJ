@@ -178,6 +178,18 @@ describe('EntityInfo AdditionalBaseViews', () => {
             expect(parsed![0].SchemaName).toBeUndefined();
             expect(parsed![0].UserSearchable).toBeUndefined();
         });
+
+        it('should return empty array when AdditionalBaseViews is an empty JSON array', () => {
+            const entity = new EntityInfo(makeEntityData({ AdditionalBaseViews: '[]' }));
+
+            const parsed = entity.AdditionalBaseViewsParsed;
+            expect(parsed).not.toBeNull();
+            expect(parsed).toHaveLength(0);
+
+            // GetAdditionalBaseView should return null on empty array
+            expect(entity.GetAdditionalBaseView('vwAnything')).toBeNull();
+            expect(entity.IsValidAdditionalBaseView('vwAnything')).toBe(false);
+        });
     });
 
     describe('GetAdditionalBaseView', () => {

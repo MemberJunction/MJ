@@ -897,6 +897,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
 
             // ── Resolve effective view name/schema (alternate view support) ──
+            // When AlternateViewName is provided, look it up in the entity's AdditionalBaseViews
+            // and use its Name/SchemaName for all SQL construction (SELECT, COUNT, aggregates).
+            // Falls back to the entity's default BaseView/SchemaName if the alternate isn't found
+            // (ProviderBase.PreRunView already validates, so this is a defensive fallback).
             let effectiveViewName = entityInfo.BaseView;
             let effectiveSchemaName = entityInfo.SchemaName;
             if (params.AlternateViewName && params.AlternateViewName.trim().length > 0) {

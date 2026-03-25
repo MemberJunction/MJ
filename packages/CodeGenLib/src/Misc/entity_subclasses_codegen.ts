@@ -121,7 +121,9 @@ export const loadModule = () => {
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
-        // JSONType override: if the field has JSONType metadata, use it for the type
+        // JSONType override: when a field has JSONType metadata, emit a strongly-typed
+        // getter (JSON.parse) and setter (JSON.stringify) using the named interface/type
+        // instead of the default string getter/setter. Supports array types via JSONTypeIsArray.
         const hasJSONType = e.JSONType && e.JSONType.trim().length > 0;
         let typeString: string = TypeScriptTypeFromSQLType(e.Type) + (e.AllowsNull ? ' | null' : '');
         if (hasJSONType) {
@@ -291,7 +293,10 @@ export const loadModule = () => {
         `\n * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
     const disabledFlag: string = status === 'disabled' ? 
         `\n * @disabled This entity is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
-      // Collect and deduplicate JSONTypeDefinitions for this entity
+      // Collect and deduplicate JSONTypeDefinitions for this entity.
+      // These are raw TypeScript interface/type definitions (from EntityField.JSONTypeDefinition)
+      // that get emitted above the entity class so the typed getters/setters can reference them.
+      // A Set is used because multiple fields may share the same definition (e.g., a shared config type).
       const jsonTypeDefinitions = new Set<string>();
       for (const field of sortedFields) {
           if (field.JSONTypeDefinition && field.JSONTypeDefinition.trim().length > 0) {
@@ -496,10 +501,11 @@ ${validationFunctions}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
+        // JSONType fields use z.any() in the Zod schema since the actual validation is
+        // handled by the TypeScript interface (full Zod schema generation is a future phase).
         const hasJSONType = e.JSONType && e.JSONType.trim().length > 0;
         let typeString: string = `${TypeScriptTypeFromSQLType(e.Type).toLowerCase()}()` + (e.AllowsNull ? '.nullable()' : '');
         if (hasJSONType) {
-          // JSONType fields: use z.any() for now (full Zod schema generation is a future phase)
           typeString = `any()${e.AllowsNull ? '.nullable()' : ''}`;
         } else if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values

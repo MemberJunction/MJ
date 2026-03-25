@@ -1336,6 +1336,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 param.Fields = entity.Fields.map(f => f.Name);
             }
 
+            // Validate AlternateViewName if provided
+            if (param.AlternateViewName && param.AlternateViewName.trim().length > 0) {
+                const entityForViewCheck = this.Entities.find(e => e.Name.trim().toLowerCase() === param.EntityName?.trim().toLowerCase());
+                if (entityForViewCheck && !entityForViewCheck.IsValidAdditionalBaseView(param.AlternateViewName)) {
+                    throw new Error(
+                        `View '${param.AlternateViewName}' is not registered in AdditionalBaseViews ` +
+                        `for entity '${entityForViewCheck.Name}'. Available views: ${
+                            entityForViewCheck.AdditionalBaseViewsParsed?.map(v => v.Name).join(', ') || '(none)'
+                        }`
+                    );
+                }
+            }
+
             // Build the cache check param with optional cache status
             let cacheStatus: RunViewCacheStatus | undefined;
 

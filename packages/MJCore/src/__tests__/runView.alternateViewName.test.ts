@@ -87,6 +87,22 @@ describe('RunViewParams AlternateViewName', () => {
             expect(RunViewParams.Equals(a, b)).toBe(false);
         });
 
+        it('should treat whitespace-only AlternateViewName as different from undefined', () => {
+            // Equals() uses strict !== comparison, so '   ' !== undefined
+            // This means whitespace-only values create separate cache entries,
+            // which is correct — ProviderBase validation will skip whitespace-only
+            // values, but the cache should still differentiate them.
+            const a: RunViewParams = {
+                EntityName: 'Test Entity',
+                AlternateViewName: '   ',
+            };
+            const b: RunViewParams = {
+                EntityName: 'Test Entity',
+            };
+
+            expect(RunViewParams.Equals(a, b)).toBe(false);
+        });
+
         it('should return true when all fields including AlternateViewName match', () => {
             const a: RunViewParams = {
                 EntityName: 'Test Entity',

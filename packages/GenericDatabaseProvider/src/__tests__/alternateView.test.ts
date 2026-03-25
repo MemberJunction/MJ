@@ -160,6 +160,19 @@ describe('GenericDatabaseProvider AlternateViewName resolution', () => {
             expect(result.schemaName).toBe('__mj');
         });
 
+        it('should fall back to entity SchemaName when alternate view SchemaName is empty string', () => {
+            // Empty string is falsy in JS, so `|| entityInfo.SchemaName` kicks in
+            const entity = createMockEntityInfo({
+                baseView: 'vwEntities',
+                schemaName: '__mj',
+                additionalViews: [{ Name: 'vwEntitiesCustom', SchemaName: '' }],
+            });
+
+            const result = resolveEffectiveView(entity, 'vwEntitiesCustom');
+            expect(result.viewName).toBe('vwEntitiesCustom');
+            expect(result.schemaName).toBe('__mj');
+        });
+
         it('should keep default view when AlternateViewName is not found in additional views', () => {
             const entity = createMockEntityInfo({
                 baseView: 'vwEntities',

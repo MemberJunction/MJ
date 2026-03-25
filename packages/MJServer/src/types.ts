@@ -77,6 +77,11 @@ export type DirectiveBuilder = {
   transformer: (schema: GraphQLSchema) => GraphQLSchema;
 };
 
+/**
+ * Parameters for the generic RunView pipeline used by ResolverBase.
+ * Maps from GraphQL input types (PascalCase) to internal RunViewParams (camelCase)
+ * before being passed to the provider layer.
+ */
 export type RunViewGenericParams = {
   viewInfo: MJUserViewEntityExtended;
   provider: DatabaseProviderBase;
@@ -96,6 +101,8 @@ export type RunViewGenericParams = {
   resultType?: string;
   userPayload?: UserPayload;
   aggregates?: AggregateExpression[];
+  /** Name of an alternative database view to query instead of the entity's default BaseView.
+   *  Must be registered in the entity's AdditionalBaseViews metadata. */
   alternateViewName?: string;
 };
 

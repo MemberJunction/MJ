@@ -426,6 +426,17 @@ export class ResolverBase {
     }
   }
 
+  /**
+   * Resolves an array of GraphQL view inputs into {@link RunViewGenericParams} and
+   * delegates to {@link RunViewsGenericInternal} for batch execution. Each input
+   * can specify a view by name, ID, or entity name (dynamic view). All fields
+   * including AlternateViewName are mapped through to the provider layer.
+   *
+   * @param viewInputs - Array of GraphQL input objects (union of ByName, ByID, Dynamic)
+   * @param provider - Database provider for metadata lookups and query execution
+   * @param userPayload - Authenticated user context
+   * @returns Array of RunViewResult objects or null on error
+   */
   async RunViewsGeneric(
     viewInputs: (RunViewByNameInput & RunViewByIDInput & RunDynamicViewInput)[],
     provider: DatabaseProviderBase,
@@ -642,9 +653,31 @@ export class ResolverBase {
   }
 
   /**
-   * Optimized RunViewGenericInternal implementation with:
-   * - Field filtering at source (Fix #7)
-   * - Improved error handling (Fix #9)
+   * Executes a single RunView call against the provider, building RunViewParams from the
+   * individual parameters passed in from the GraphQL resolver layer.
+   *
+   * @param provider - Database provider to execute the query against
+   * @param viewInfo - The resolved user view entity containing view metadata
+   * @param extraFilter - Additional SQL WHERE clause to append
+   * @param orderBy - SQL ORDER BY clause
+   * @param userSearchString - Free-text search string applied to searchable fields
+   * @param excludeUserViewRunID - Exclude results from a specific prior view run
+   * @param overrideExcludeFilter - Override the default exclude filter
+   * @param saveViewResults - Whether to persist view run results for future exclusion
+   * @param fields - Specific fields to return (ignored for entity_object ResultType)
+   * @param ignoreMaxRows - Bypass the entity's MaxRows limit
+   * @param excludeDataFromAllPriorViewRuns - Exclude rows returned in any prior view run
+   * @param forceAuditLog - Force audit logging even when not configured
+   * @param auditLogDescription - Description for the audit log entry
+   * @param resultType - 'simple', 'entity_object', or 'count_only'
+   * @param userPayload - Authenticated user context
+   * @param maxRows - Maximum number of rows to return
+   * @param startRow - Row offset for pagination
+   * @param aggregates - Aggregate expressions (SUM, COUNT, AVG, etc.) to compute
+   * @param alternateViewName - Name of an alternative database view registered in the entity's
+   *   AdditionalBaseViews metadata. When provided, the query runs against this view instead of
+   *   the entity's default BaseView.
+   * @returns The RunView result or null if viewInfo/userPayload is missing
    */
   protected async RunViewGenericInternal(
     provider: DatabaseProviderBase,
@@ -770,10 +803,19 @@ export class ResolverBase {
   }
 
   /**
-   * Optimized implementation that:
+   * Transforms an array of {@link RunViewGenericParams} (from the GraphQL layer) into
+   * {@link RunViewParams} and executes them as a batch via the provider's RunViews method.
+   *
+   * Key optimizations:
    * 1. Fetches user info only once (fixes N+1 query)
    * 2. Processes views in parallel for independent operations
    * 3. Implements structured error logging
+   *
+   * All fields from RunViewGenericParams are mapped to RunViewParams, including
+   * `alternateViewName` → `AlternateViewName` for alternate base view support.
+   *
+   * @param params - Array of generic view parameters from the GraphQL resolver
+   * @returns Array of RunViewResult objects, one per input parameter
    */
   protected async RunViewsGenericInternal(params: RunViewGenericParams[]): Promise<RunViewResult[]> {
     try {

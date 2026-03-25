@@ -1538,12 +1538,16 @@ export class EntityInfo extends BaseInfo {
     _oneToManyCount: number = 0
     _floatCount: number = 0
 
+    /** Cached result of parsing AdditionalBaseViews JSON. `undefined` means not yet parsed. */
     private _additionalBaseViewsParsed: IAdditionalBaseView[] | null = undefined;
+    /** Set to true when JSON parsing fails, preventing repeated parse attempts. */
     private _additionalBaseViewsFailedParsing: boolean = false;
 
     /**
-     * Typed accessor for AdditionalBaseViews. Parses the JSON string on first access
-     * and caches the result. Returns null if not set or if parsing fails.
+     * Typed accessor for the {@link AdditionalBaseViews} JSON string. Lazily parses on first
+     * access and caches the result. If the JSON is malformed, logs an error and returns null
+     * on this and all subsequent accesses.
+     * @returns The parsed array of additional view definitions, or null if not set / invalid.
      */
     get AdditionalBaseViewsParsed(): IAdditionalBaseView[] | null {
         if (this._additionalBaseViewsFailedParsing) return null;
@@ -1560,7 +1564,10 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Look up a specific additional view by name. Case-insensitive comparison.
+     * Look up a specific additional base view by name. Comparison is case-insensitive
+     * and trims whitespace from both the query and stored view names.
+     * @param viewName - The view name to search for (e.g., "vwEntities_ActiveOnly")
+     * @returns The matching view definition, or null if not found or AdditionalBaseViews is not set.
      */
     GetAdditionalBaseView(viewName: string): IAdditionalBaseView | null {
         const views = this.AdditionalBaseViewsParsed;
@@ -1569,7 +1576,10 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Check if a view name is registered in AdditionalBaseViews.
+     * Check whether a view name is registered in this entity's AdditionalBaseViews.
+     * Convenience wrapper around {@link GetAdditionalBaseView} that returns a boolean.
+     * @param viewName - The view name to validate (case-insensitive)
+     * @returns true if the view exists in AdditionalBaseViews, false otherwise.
      */
     IsValidAdditionalBaseView(viewName: string): boolean {
         return this.GetAdditionalBaseView(viewName) !== null;
