@@ -6,8 +6,8 @@
         This will overwrite an existing file named '{{ConfirmQueue[0][0].name}}'. Are you sure you want to continue?
       </p>
       <kendo-dialog-actions>
-        <button kendoButton (click)="CancelConfirm()">Cancel</button>
-        <button kendoButton (click)="Confirm()" themeColor="primary">Overwrite</button>
+        <button mjButton (click)="CancelConfirm()">Cancel</button>
+        <button mjButton variant="primary" (click)="Confirm()">Overwrite</button>
       </kendo-dialog-actions>
     </kendo-dialog>
   }

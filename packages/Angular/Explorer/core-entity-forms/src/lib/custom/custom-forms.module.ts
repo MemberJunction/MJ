@@ -4,6 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { InputsModule, TextBoxModule, TextAreaModule, NumericTextBoxModule, SwitchModule, CheckBoxModule } from '@progress/kendo-angular-inputs';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule, ButtonModule, SplitButtonModule } from '@progress/kendo-angular-buttons';
+import { MjButtonDirective } from '@memberjunction/ng-ui-components';
 import { DropDownsModule, ComboBoxModule, DropDownTreesModule, DropDownListModule } from '@progress/kendo-angular-dropdowns';
 import { LayoutModule, ExpansionPanelModule, TabStripModule, SplitterModule, PanelBarModule } from '@progress/kendo-angular-layout';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
@@ -135,6 +136,7 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         ButtonsModule,
         ButtonModule,
         SplitButtonModule,
+        MjButtonDirective,
         DateInputsModule,
         LinkDirectivesModule,
         JoinGridModule,

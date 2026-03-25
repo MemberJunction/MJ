@@ -103,9 +103,7 @@
                     <!-- Actions -->
                     <div class="param-actions">
                       @if (!param.isFromTemplate && parameters.length > 1) {
-                        <button kendoButton fillMode="flat"
-                          themeColor="error"
-                          size="small"
+                        <button mjButton variant="danger" size="sm"
                           (click)="removeParameter(i)"
                           [disabled]="isRunning"
                           title="Remove parameter">
@@ -117,9 +115,7 @@
                 }
                 <!-- Add Parameter Row -->
                 <div class="add-param-row">
-                  <button kendoButton fillMode="outline"
-                    themeColor="success"
-                    size="small"
+                  <button mjButton variant="success" size="sm"
                     (click)="addParameter()"
                     [disabled]="isRunning">
                     <i class="fa-solid fa-plus"></i> Add Parameter
@@ -130,7 +126,7 @@
               <div class="no-params-state">
                 <i class="fa-solid fa-info-circle"></i>
                 <p>No parameters defined yet</p>
-                <button kendoButton themeColor="primary" size="small"
+                <button mjButton variant="primary" size="sm"
                   (click)="addParameter()"
                   [disabled]="isRunning">
                   <i class="fa-solid fa-plus"></i> Add First Parameter
@@ -196,10 +192,9 @@
                   }
                   <div class="result-stat">
                     <div class="result-stat-label">ACTIONS</div>
-                    <button kendoButton fillMode="flat" size="small"
+                    <button mjButton variant="flat" size="sm"
                       (click)="saveResults()"
-                      title="Save results to file"
-                      style="min-width: auto; padding: 4px 8px;">
+                      title="Save results to file">
                       <i class="fa-solid fa-download"></i>
                     </button>
                   </div>
@@ -244,8 +239,7 @@
       <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
         <div>
           @if (hasUnsavedParameters) {
-            <button kendoButton fillMode="outline"
-              themeColor="info"
+            <button mjButton variant="outline"
               (click)="updateTemplateParams()"
               [disabled]="isRunning">
               <i class="fa-solid fa-save"></i> Update Template Params
@@ -253,15 +247,15 @@
           }
         </div>
         <div style="display: flex; gap: 8px;">
-          <button kendoButton fillMode="outline" (click)="close()">
+          <button mjButton variant="outline" (click)="close()">
             Close
           </button>
           @if (testResult) {
-            <button kendoButton fillMode="outline" themeColor="info" (click)="saveResults()">
+            <button mjButton variant="outline" (click)="saveResults()">
               <i class="fa-solid fa-download"></i> Save Results
             </button>
           }
-          <button kendoButton themeColor="primary"
+          <button mjButton variant="primary"
             [disabled]="isRunning || isLoading"
             (click)="runTemplate()">
             @if (isRunning) {

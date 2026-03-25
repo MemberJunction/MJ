@@ -4,7 +4,7 @@ import { NgModule } from '@angular/core';
 // Kendo UI Angular imports
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
+import { MjButtonDirective } from '@memberjunction/ng-ui-components';
 import { DialogsModule } from '@progress/kendo-angular-dialog';
 import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
 import { GridModule } from '@progress/kendo-angular-grid';
@@ -49,7 +49,7 @@ import { FileGridComponent } from './file-browser/file-grid.component';
     ExcelExportModule,
     ContainerDirectivesModule,
     SharedGenericModule,
-    ButtonsModule,
+    MjButtonDirective,
     LabelModule,
     GridModule,
     DropDownsModule,

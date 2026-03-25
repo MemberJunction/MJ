@@ -7,16 +7,15 @@
     <kendo-grid-column field="Status" title="Status"> </kendo-grid-column>
     <kendo-grid-column field="Actions">
       <ng-template kendoGridCellTemplate let-dataItem>
-        <button kendoButton
+        <button mjButton variant="flat" size="sm"
           [disabled]="dataItem.Status!=='Uploaded'"
-          (click)="downloadFile(dataItem)"
-          >
+          (click)="downloadFile(dataItem)">
           <span class="fa-solid fa-download"></span>
         </button>
-        <button kendoButton [disabled]="!canBeDeleted(dataItem)" (click)="deleteFile(dataItem)">
+        <button mjButton variant="danger" size="sm" [disabled]="!canBeDeleted(dataItem)" (click)="deleteFile(dataItem)">
           <span class="fa-solid fa-trash-can"></span>
         </button>
-        <button kendoButton
+        <button mjButton variant="flat" size="sm"
           [disabled]="dataItem.Status!=='Uploaded'"
           (click)="editFile = dataItem"
           >
@@ -53,8 +52,8 @@
         </form>
       </div>
       <kendo-dialog-actions>
-        <button kendoButton (click)="resetEditFile()" [disabled]="isLoading">Cancel</button>
-        <button kendoButton (click)="saveEditFile()" [disabled]="isLoading || !editFile.Dirty" themeColor="primary">Save</button>
+        <button mjButton (click)="resetEditFile()" [disabled]="isLoading">Cancel</button>
+        <button mjButton variant="primary" (click)="saveEditFile()" [disabled]="isLoading || !editFile.Dirty">Save</button>
       </kendo-dialog-actions>
     </kendo-dialog>
   }

@@ -31,7 +31,7 @@
           <div class="entity-map-header">
             <span class="panel-label" style="margin: 0;">Entity Maps</span>
             <div class="header-actions">
-              <button kendoButton [look]="'flat'" [size]="'small'"
+              <button mjButton variant="flat" size="sm"
                       (click)="OpenAddPanel()" title="Add entity map">
                 <i class="fa-solid fa-plus"></i> Add Map
               </button>
@@ -146,7 +146,7 @@
                   <!-- DDL Preview -->
                   @if (SelectedSourceObjectName && NewEntitySchemaName && NewEntityTableName) {
                     <div class="ddl-preview-section">
-                      <button kendoButton [look]="'outline'" [size]="'small'"
+                      <button mjButton variant="outline" size="sm"
                               [disabled]="IsGeneratingDDL"
                               (click)="PreviewDDL()">
                         @if (IsGeneratingDDL) {
@@ -179,7 +179,7 @@
 
               <!-- Save / Cancel -->
               <div class="add-form-actions">
-                <button kendoButton [themeColor]="'primary'" [size]="'small'"
+                <button mjButton variant="primary" size="sm"
                         [disabled]="!IsAddFormValid || IsSavingEntityMap"
                         (click)="SaveAddMap()">
                   @if (IsSavingEntityMap) {
@@ -190,7 +190,7 @@
                     <i class="fa-solid fa-check"></i> Add Map
                   }
                 </button>
-                <button kendoButton [size]="'small'" (click)="CloseAddPanel()">
+                <button mjButton size="sm" (click)="CloseAddPanel()">
                   Cancel
                 </button>
               </div>
@@ -312,7 +312,7 @@
                 </h4>
                 <pre class="ddl-code-block">{{ SelectedPendingMap.DDLContent }}</pre>
                 <div class="ddl-actions">
-                  <button kendoButton [look]="'outline'" [size]="'small'"
+                  <button mjButton variant="outline" size="sm"
                           (click)="CopyDDLToClipboard(SelectedPendingMap.DDLContent)">
                     <i class="fa-solid fa-copy"></i> Copy DDL
                   </button>
@@ -356,7 +356,7 @@
               <div class="banner-text">
                 <p><strong>{{ AutoMapCount }} field{{ AutoMapCount !== 1 ? 's' : '' }} auto-mapped</strong> by matching source and destination field names.</p>
               </div>
-              <button kendoButton [look]="'flat'" [size]="'small'" (click)="DismissAutoMapBanner()">
+              <button mjButton variant="flat" size="sm" (click)="DismissAutoMapBanner()">
                 <i class="fa-solid fa-times"></i>
               </button>
             </div>
@@ -380,16 +380,16 @@
               <span class="field-count">({{ ActiveEditableFields.length }})</span>
             </h3>
             <div class="field-mapping-actions">
-              <button kendoButton [look]="'outline'" [size]="'small'"
+              <button mjButton variant="outline" size="sm"
                       [disabled]="IsLoadingSourceFields"
                       (click)="RerunAutoMap()" title="Auto-match source and destination fields by name">
                 <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map
               </button>
-              <button kendoButton [look]="'outline'" [size]="'small'"
+              <button mjButton variant="outline" size="sm"
                       (click)="AddFieldMapping()">
                 <i class="fa-solid fa-plus"></i> Add Field
               </button>
-              <button kendoButton [themeColor]="'primary'" [size]="'small'"
+              <button mjButton variant="primary" size="sm"
                       [disabled]="!HasDirtyFields || IsSavingFields"
                       (click)="SaveFieldMappings()">
                 @if (IsSavingFields) {
@@ -687,12 +687,12 @@
           <!-- Data Preview Section -->
           <div class="data-preview-section">
             <div class="preview-actions">
-              <button kendoButton [look]="'outline'" [size]="'small'"
+              <button mjButton variant="outline" size="sm"
                       [disabled]="IsLoadingSourcePreview"
                       (click)="LoadSourcePreview()">
                 <i class="fa-solid fa-cloud-arrow-down"></i> Preview Source
               </button>
-              <button kendoButton [look]="'outline'" [size]="'small'"
+              <button mjButton variant="outline" size="sm"
                       [disabled]="IsLoadingDestPreview"
                       (click)="LoadDestPreview()">
                 <i class="fa-solid fa-database"></i> Preview Destination

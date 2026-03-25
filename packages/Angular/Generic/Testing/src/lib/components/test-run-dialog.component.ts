@@ -637,21 +637,21 @@ interface ProgressUpdate {
         <!-- Dialog Actions -->
         <div class="dialog-actions">
           @if (!isRunning && !hasCompleted) {
-            <button class="action-btn cancel-btn" (click)="onClose()">Cancel</button>
-            <button class="action-btn run-btn"
+            <button mjButton (click)="onClose()">Cancel</button>
+            <button mjButton variant="primary"
                     [disabled]="!canRun()"
                     (click)="runTest()">
               <i class="fa-solid fa-play"></i>
               Run {{ runMode === 'test' ? 'Test' : 'Suite' }}
             </button>
           } @else if (hasCompleted) {
-            <button class="action-btn cancel-btn" (click)="onClose()">Close</button>
-            <button class="action-btn run-btn" (click)="resetDialog()">
+            <button mjButton (click)="onClose()">Close</button>
+            <button mjButton variant="primary" (click)="resetDialog()">
               <i class="fa-solid fa-redo"></i>
               Run Another
             </button>
           } @else {
-            <button class="action-btn run-btn" [disabled]="true">
+            <button mjButton variant="primary" [disabled]="true">
               <i class="fa-solid fa-spinner fa-spin"></i>
               Running...
             </button>

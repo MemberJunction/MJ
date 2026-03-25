@@ -2,9 +2,9 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
-// Kendo UI modules
+// Kendo UI modules (remaining — migrated in Phase 2.2/2.3)
 import { DialogModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
+import { MjButtonDirective } from '@memberjunction/ng-ui-components';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
@@ -48,7 +48,7 @@ import { EvaluationPreferencesService } from './services/evaluation-preferences.
     FormsModule,
     ReactiveFormsModule,
     DialogModule,
-    ButtonsModule,
+    MjButtonDirective,
     InputsModule,
     DropDownsModule,
     IndicatorsModule,

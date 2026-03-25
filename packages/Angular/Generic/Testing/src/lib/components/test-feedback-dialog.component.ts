@@ -99,14 +99,14 @@ export interface TestFeedbackDialogData {
       }
     
       <kendo-dialog-actions layout="start">
-        <button kendoButton
-          [primary]="true"
+        <button mjButton
+          variant="primary"
           (click)="onSubmit()"
           [disabled]="!canSubmit() || isSaving || isLoading">
           <i class="fas" [ngClass]="isSaving ? 'fa-spinner fa-spin' : 'fa-check'"></i>
           {{ isSaving ? 'Saving...' : (existingFeedback ? 'Update Feedback' : 'Submit Feedback') }}
         </button>
-        <button kendoButton (click)="onCancel()" [disabled]="isSaving || isLoading">Cancel</button>
+        <button mjButton (click)="onCancel()" [disabled]="isSaving || isLoading">Cancel</button>
       </kendo-dialog-actions>
     `,
   styles: [`
