@@ -330,7 +330,8 @@ export class ResolverBase {
           userPayload,
           viewInput.MaxRows,
           viewInput.StartRow,
-          viewInput.Aggregates
+          viewInput.Aggregates,
+          viewInput.AlternateViewName
         );
       }
       else {
@@ -371,7 +372,8 @@ export class ResolverBase {
         userPayload,
         viewInput.MaxRows,
         viewInput.StartRow,
-        viewInput.Aggregates
+        viewInput.Aggregates,
+        viewInput.AlternateViewName
       );
     } catch (err) {
       console.log(err);
@@ -415,7 +417,8 @@ export class ResolverBase {
         userPayload,
         viewInput.MaxRows,
         viewInput.StartRow,
-        viewInput.Aggregates
+        viewInput.Aggregates,
+        viewInput.AlternateViewName
       );
     } catch (err) {
       console.log(err);
@@ -485,6 +488,7 @@ export class ResolverBase {
           resultType: viewInput.ResultType,
           userPayload,
           aggregates: viewInput.Aggregates,
+          alternateViewName: viewInput.AlternateViewName,
         });
       } catch (err) {
         LogError(err);
@@ -660,7 +664,8 @@ export class ResolverBase {
     userPayload: UserPayload | null,
     maxRows: number | undefined,
     startRow: number | undefined,
-    aggregates?: AggregateExpression[]
+    aggregates?: AggregateExpression[],
+    alternateViewName?: string
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -723,6 +728,7 @@ export class ResolverBase {
           AuditLogDescription: auditLogDescription,
           ResultType: rt,
           Aggregates: aggregates,
+          AlternateViewName: alternateViewName,
         },
         user
       );
@@ -833,6 +839,7 @@ export class ResolverBase {
           AuditLogDescription: param.auditLogDescription,
           ResultType: rt,
           Aggregates: param.aggregates,
+          AlternateViewName: param.alternateViewName,
         });
       }
 

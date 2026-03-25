@@ -62,6 +62,12 @@ export class RunViewParams {
      */
     EntityName?: string;
     /**
+     * Optional: Name of an alternative database view to query from instead of the entity's
+     * default BaseView. Must be a view registered in the entity's AdditionalBaseViews metadata.
+     * If not provided, the default BaseView is used.
+     */
+    AlternateViewName?: string;
+    /**
      * An optional SQL WHERE clause that you can add to the existing filters on a stored view. For dynamic views, you can either
      * run a view without a filter (if the entity definition allows it with AllowAllRowsAPI=1) or filter with any valid SQL WHERE clause.
      *
@@ -238,6 +244,7 @@ export class RunViewParams {
         if (a.ViewID !== b.ViewID) return false;
         if (a.ViewName !== b.ViewName) return false;
         if (a.EntityName !== b.EntityName) return false;
+        if (a.AlternateViewName !== b.AlternateViewName) return false;
         if (!RunViewParams.platformSQLEqual(a.ExtraFilter, b.ExtraFilter)) return false;
         if (!RunViewParams.platformSQLEqual(a.OrderBy, b.OrderBy)) return false;
         if (a.UserSearchString !== b.UserSearchString) return false;

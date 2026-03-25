@@ -96,6 +96,7 @@ export type RunViewGenericParams = {
   resultType?: string;
   userPayload?: UserPayload;
   aggregates?: AggregateExpression[];
+  alternateViewName?: string;
 };
 
 
