@@ -49,30 +49,22 @@ interface LoopAgentResponse {
     };
 }
 ```
+
+## Referenced Types
 {% if __agentTypePromptParams.includeResponseTypeDefinition.payload != false %}
-```ts
-{@include ../../../../packages/AI/CorePlus/src/agent-payload-change-request.ts}
-```
+{@include ../../../../packages/AI/CorePlus/generated-for-prompt/agent-payload-change-request.ts.generated-for-prompt.md}
 {% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.responseForms != false %}
-```ts
-{@include ../../../../packages/AI/CorePlus/src/response-forms.ts}
-```
+{@include ../../../../packages/AI/CorePlus/generated-for-prompt/response-forms.ts.generated-for-prompt.md}
 {% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.commands != false %}
-```ts
-{@include ../../../../packages/AI/CorePlus/src/ui-commands.ts}
-```
+{@include ../../../../packages/AI/CorePlus/generated-for-prompt/ui-commands.ts.generated-for-prompt.md}
 {% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %}
-```ts
-{@include ../../../../packages/AI/CorePlus/src/foreach-operation.ts}
-```
+{@include ../../../../packages/AI/CorePlus/generated-for-prompt/foreach-operation.ts.generated-for-prompt.md}
 {% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %}
-```ts
-{@include ../../../../packages/AI/CorePlus/src/while-operation.ts}
-```
+{@include ../../../../packages/AI/CorePlus/generated-for-prompt/while-operation.ts.generated-for-prompt.md}
 {% endif %}
 
 # Execution Pattern
@@ -87,37 +79,6 @@ Each iteration:
 4. Loop until done or blocked
 
 Stop only when: goal complete OR unrecoverable failure.
-
-{% if parentAgentName == '' and subAgentCount > 0 %}
-# Role: Top-Level Agent
-You have {{subAgentCount}} sub-agents. Delegate appropriately.
-{% elseif parentAgentName != '' %}
-# Role: Sub-Agent
-Parent: {{ parentAgentName }}. Your results return to parent, not user.
-{% endif -%}
-
-{%- if subAgentCount > 0 or actionCount > 0 %}
-# Capabilities
-{%- if subAgentCount > 0 %}
-## Sub-Agents ({{subAgentCount}} available)
-Execute one at a time. Their completion ≠ your task completion.
-{{ subAgentDetails | safe }}
-{%- endif -%}
-
-{%- if actionCount > 0 %}
-## Actions ({{actionCount}} available)
-Execute multiple in parallel if independent. Retry failed actions up to 3x with adjusted parameters.
-{{ actionDetails | safe }}
-{%- endif -%}
-{%- endif %}
-
-# Agent Definition
-Your name is {{ agentName }}
-
-{{ agentDescription | safe }}
-
-## Specialization
-{{ agentSpecificPrompt | safe }}
 
 ## Key Rules
 - `taskComplete`: true only when **ENTIRE** user request fulfilled
@@ -204,10 +165,10 @@ Loop results appear in a temporary message for ONE turn only, then are removed t
   "reasoning": "Loop completed successfully. Extracting key data to payload for later use.",
   "payloadChangeRequest": {
     "newElements": {
-      "searchSummaries": [], // Your job is to extract from loop results and put stuff here
-      "processedCount": 50, // example of summary field
-      "successfulCount": 48, // another example field
-      "failedUrls": ["url1", "url2"] // stuff specific to your needs
+      "searchSummaries": [],
+      "processedCount": 50,
+      "successfulCount": 48,
+      "failedUrls": ["url1", "url2"]
     }
   },
   "nextStep": {
@@ -354,22 +315,10 @@ Loop results appear in a temporary message for ONE turn only, then are removed t
 {% if __agentTypePromptParams.includeForEachDocs != false %}- `"ForEach"`: Iterate over a collection, executing action/sub-agent per item{% endif %}
 {% if __agentTypePromptParams.includeWhileDocs != false %}- `"While"`: Loop while condition is true, executing action/sub-agent per iteration{% endif %}
 
-{% if __agentTypePromptParams.includePayloadInPrompt != false %}
-## Current State
-**Payload:** Represents your work state. Request changes via `payloadChangeRequest`
-```json
-{{ _CURRENT_PAYLOAD | dump | safe }}
-```
-{% endif %}
-
 {% if __agentTypePromptParams.includeResponseFormDocs != false %}
-## User Input Collection with Response Forms
+## Response Forms
 
-When you need information from the user, use `responseForm` to collect structured input:
-
-### Simple Choice (Renders as Buttons)
-
-For quick selections, use a single question with button options:
+Use `responseForm` to collect structured user input. Single question with buttongroup/radio and no title renders as inline buttons; everything else renders as a form dialog.
 
 ```json
 {
@@ -393,177 +342,17 @@ For quick selections, use a single question with button options:
   }
 }
 ```
-
-### Collecting Multiple Pieces of Information
-
-When you need several data points, create a full form:
-
-```json
-{
-  "taskComplete": false,
-  "message": "I'll help you create a new customer. Please provide the details:",
-  "responseForm": {
-    "title": "New Customer",
-    "submitLabel": "Create Customer",
-    "questions": [
-      {
-        "id": "name",
-        "label": "Company Name",
-        "type": { "type": "text", "placeholder": "Acme Corp" },
-        "required": true
-      },
-      {
-        "id": "industry",
-        "label": "Industry",
-        "type": {
-          "type": "dropdown",
-          "options": [
-            { "value": "tech", "label": "Technology" },
-            { "value": "finance", "label": "Finance" },
-            { "value": "retail", "label": "Retail" },
-            { "value": "other", "label": "Other" }
-          ]
-        },
-        "required": true
-      },
-      {
-        "id": "revenue",
-        "label": "Annual Revenue (optional)",
-        "type": { "type": "currency", "prefix": "$" },
-        "required": false,
-        "helpText": "Estimated annual revenue in USD"
-      },
-      {
-        "id": "startDate",
-        "label": "Expected Start Date",
-        "type": { "type": "date" },
-        "required": false
-      }
-    ]
-  }
-}
-```
-
-### Question Types Available
-
-- **Text:** `{ "type": "text", "placeholder": "..." }`, `{ "type": "textarea" }`, `{ "type": "email" }`
-- **Numbers:** `{ "type": "number", "min": 0, "max": 100 }`, `{ "type": "currency", "prefix": "$" }`
-- **Dates:** `{ "type": "date" }`, `{ "type": "datetime" }`
-- **Choices:** `{ "type": "buttongroup", "options": [...] }`, `{ "type": "radio", "options": [...] }`, `{ "type": "dropdown", "options": [...] }`, `{ "type": "checkbox", "options": [...], "multiple": true }`
 {% endif %}
 
 {% if __agentTypePromptParams.includeCommandDocs != false %}
-## Providing Actions After Completion
+## Commands
 
-When you complete work, provide easy navigation to what you created:
-
-### Opening Resources
-
-```json
-{
-  "taskComplete": true,
-  "message": "Customer record created successfully!",
-  "actionableCommands": [
-    {
-      "type": "open:resource",
-      "label": "Open Customer Record",
-      "icon": "fa-user",
-      "resourceType": "Record",
-      "resourceId": "abc-123",
-      "mode": "view"
-    }
-  ],
-  "automaticCommands": [
-    {
-      "type": "notification",
-      "message": "Customer 'Acme Corp' created successfully",
-      "severity": "success"
-    }
-  ]
-}
-```
-
-### Opening Dashboards
-
-```json
-{
-  "taskComplete": true,
-  "message": "Created 'Sales Metrics Dashboard' with 6 widgets showing revenue, pipeline, and conversions.",
-  "actionableCommands": [
-    {
-      "type": "open:resource",
-      "label": "View Dashboard",
-      "icon": "fa-chart-line",
-      "resourceType": "Dashboard",
-      "resourceId": "dash-456"
-    }
-  ]
-}
-```
-
-### Opening External URLs
-
-```json
-{
-  "taskComplete": true,
-  "message": "Here's the company information I found.",
-  "actionableCommands": [
-    {
-      "type": "open:url",
-      "label": "Visit Company Website",
-      "icon": "fa-external-link",
-      "url": "https://example.com",
-      "newTab": true
-    }
-  ]
-}
-```
-
-## Refreshing UI After Changes
-
-When you modify system configuration or entity data, tell the UI to refresh:
-
-### Refresh Specific Entities
-
-```json
-{
-  "automaticCommands": [
-    {
-      "type": "refresh:data",
-      "scope": "entity",
-      "entityNames": ["Customers", "Contacts"]
-    }
-  ]
-}
-```
-
-### Refresh AI Cache (After Modifying Agents/Prompts)
-
-```json
-{
-  "automaticCommands": [
-    {
-      "type": "refresh:data",
-      "scope": "cache",
-      "cacheName": "AI"
-    }
-  ]
-}
-```
-
-### Cache Names Available
-
-- `"Core"` - Core metadata (entities, fields, etc.)
-- `"AI"` - AI metadata (agents, prompts, models, etc.)
-- `"Actions"` - Action metadata (actions, params, etc.)
-
-## Complete Example: Agent Manager Creating New Agent
+After completing work, use `actionableCommands` for navigation buttons and `automaticCommands` for immediate UI updates (data refresh, notifications).
 
 ```json
 {
   "taskComplete": true,
   "message": "Successfully created 'Customer Service Agent' with 3 sub-agents and 12 actions.",
-  "reasoning": "Agent architecture designed, database records created, configuration validated",
   "actionableCommands": [
     {
       "type": "open:resource",
@@ -595,3 +384,42 @@ When you modify system configuration or entity data, tell the UI to refresh:
 {% if __agentTypePromptParams.includeResponseFormDocs != false %}- Use `responseForm` when you need user input (replaces old suggestedResponses pattern){% endif %}
 {% if __agentTypePromptParams.includeCommandDocs != false %}- Use `actionableCommands` to provide navigation buttons after completing work
 - Use `automaticCommands` to refresh data or show notifications{% endif %}
+
+# Agent Definition
+Your name is {{ agentName }}
+
+{{ agentDescription | safe }}
+
+## Specialization
+{{ agentSpecificPrompt | safe }}
+
+{% if parentAgentName == '' and subAgentCount > 0 %}
+# Role: Top-Level Agent
+You have {{subAgentCount}} sub-agents. Delegate appropriately.
+{% elseif parentAgentName != '' %}
+# Role: Sub-Agent
+Parent: {{ parentAgentName }}. Your results return to parent, not user.
+{% endif -%}
+
+{%- if subAgentCount > 0 or actionCount > 0 %}
+# Capabilities
+{%- if subAgentCount > 0 %}
+## Sub-Agents ({{subAgentCount}} available)
+Execute one at a time. Their completion ≠ your task completion.
+{{ subAgentDetails | safe }}
+{%- endif -%}
+
+{%- if actionCount > 0 %}
+## Actions ({{actionCount}} available)
+Execute multiple in parallel if independent. Retry failed actions up to 3x with adjusted parameters.
+{{ actionDetails | safe }}
+{%- endif -%}
+{%- endif %}
+
+{% if __agentTypePromptParams.includePayloadInPrompt != false %}
+## Current State
+**Payload:** Represents your work state. Request changes via `payloadChangeRequest`
+```json
+{{ _CURRENT_PAYLOAD | dump | safe }}
+```
+{% endif %}

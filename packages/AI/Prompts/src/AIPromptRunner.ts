@@ -2418,6 +2418,11 @@ export class AIPromptRunner {
 
       promptRun.PromptID = prompt.ID;
       promptRun.ModelID = model.ID;
+
+      // Set ChildPromptID if this is a hierarchical execution with child prompts
+      if (params.childPrompts && params.childPrompts.length > 0) {
+        promptRun.ChildPromptID = params.childPrompts[0].childPrompt.prompt.ID;
+      }
       
       // Set initial status and tracking fields
       promptRun.Status = 'Running';

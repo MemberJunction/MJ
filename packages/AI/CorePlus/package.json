@@ -11,6 +11,7 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
+    "postbuild": "node scripts/generate-prompt-types.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

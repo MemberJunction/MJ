@@ -1091,11 +1091,11 @@ export type AgentContextData = {
     parentAgentName?: string | null;
     /** Number of sub-agents available to this agent */
     subAgentCount: number;
-    /** JSON stringified array of MJAIAgentEntityExtended objects representing sub-agents */
+    /** Markdown formatted list of sub-agent names and descriptions */
     subAgentDetails: string;
     /** Number of actions available to this agent */
     actionCount: number;
-    /** JSON stringified array of MJActionEntity objects representing available actions */
+    /** Markdown formatted details of available actions (name, params, result codes) */
     actionDetails: string;
 }
 
