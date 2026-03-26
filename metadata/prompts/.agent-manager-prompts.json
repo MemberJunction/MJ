@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/agent-manager/agent-manager.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
       "EffortLevel": 100,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -59,8 +62,8 @@
       "ID": "96BCAE1C-B1F0-4FC4-9988-54B067BC962A"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:46.964Z",
-      "checksum": "738afab5c63e348c6ad38611adb7184a8222e663a29618442c9b27733b243ead"
+      "lastModified": "2026-03-26T19:47:36.377Z",
+      "checksum": "021015c54be4aa61b1061611b835a0e4680bde57b6bb62ca387aed82a6cb01a0"
     }
   },
   {
@@ -71,6 +74,9 @@
       "TemplateText": "@file:templates/agent-manager/requirements-analyst-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
       "EffortLevel": 100,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -123,8 +129,8 @@
       "ID": "B41F7FAD-49F5-4897-92C9-4904C79DD5F5"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:46.966Z",
-      "checksum": "d1a9e8979955e7601e33d434249de2e0b60c99599e22fe084627f250e930f6fd"
+      "lastModified": "2026-03-26T19:47:36.403Z",
+      "checksum": "ad452301ef8c8995e0900b13c6b07148e37fb9f7f500c977ffb7c10e9f55cbae"
     }
   },
   {
@@ -135,6 +141,9 @@
       "TemplateText": "@file:templates/agent-manager/planning-designer-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
       "EffortLevel": 100,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -187,8 +196,8 @@
       "ID": "2B405BA2-A446-4F1E-9402-D88C51CC8F9F"
     },
     "sync": {
-      "lastModified": "2026-03-20T21:19:30.788Z",
-      "checksum": "2b45f438b0e4e60f5734519e89059f24b156d00222c878c6f2bd18a75f1301a2"
+      "lastModified": "2026-03-26T19:47:36.428Z",
+      "checksum": "955c5c24fd04c7ce82bca5cf6095a6440d634f0161693e78f4aa8d0ffb7004bd"
     }
   },
   {
@@ -199,6 +208,9 @@
       "TemplateText": "@file:templates/agent-manager/architect-agent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
       "EffortLevel": 100,
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -266,8 +278,8 @@
       "ID": "FA0031BB-4838-4C16-A161-ED670E9A147B"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:46.970Z",
-      "checksum": "d5e66956bd5a412024eb7f5275bd49962e2b54f446cdb8f365e68342fa052ccd"
+      "lastModified": "2026-03-26T19:47:36.450Z",
+      "checksum": "6ef511f6be3608cce6c3f4b5ddc154ebc0cb5a6d3b222e28ef1fb6bf4f60062e"
     }
   }
 ]

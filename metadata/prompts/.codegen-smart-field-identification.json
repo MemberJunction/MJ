@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/codegen/smart-field-identification.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Balanced",
       "OutputType": "object",
@@ -102,8 +105,8 @@
       "ID": "7FF02D68-02AE-49A1-AA5E-843D52367D57"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:55.630Z",
-      "checksum": "660c168a263990b5f3a33de425d4b426f8fa9f24666cc0732a09409755cc3526"
+      "lastModified": "2026-03-26T19:47:36.958Z",
+      "checksum": "ee1ee93cda81dfaff556baeeaa3871e931782a7f0f498978d92af5626f8cdfe1"
     }
   }
 ]

@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/codegen/entity-descriptions.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -102,8 +105,8 @@
       "ID": "D33B976C-C409-4AF8-97BA-9CB44CAAC9F6"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:55.111Z",
-      "checksum": "52c161d5f86149a35e670b9818ef2cc3f622bb961d700fed5a63af3ebf7ae952"
+      "lastModified": "2026-03-26T19:47:36.715Z",
+      "checksum": "0b872be4a06522feb655964a21c01280803764b6b3dddffa8e20f1525df8ab19"
     }
   }
 ]
