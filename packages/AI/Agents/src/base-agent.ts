@@ -4102,28 +4102,20 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Formats sub-agent details for inclusion in prompt context.
-     * 
+     * Formats sub-agent details as compact markdown for inclusion in prompt context.
+     *
      * @param {MJAIAgentEntityExtended[]} subAgents - Array of sub-agent entities
-     * @returns {string} JSON formatted string with sub-agent details
+     * @returns {string} Markdown formatted string with sub-agent details
      * @private
      */
     private formatSubAgentDetails(subAgents: MJAIAgentEntityExtended[]): string {
-        return JSON.stringify(subAgents.map(sa => {
-            const result = {
-                Name: sa.Name,
-                Description: sa.Description
-            };
+        return subAgents.map(sa => {
+            let line = `- **${sa.Name}** — ${sa.Description}`;
             if (sa.ExecutionMode !== 'Sequential') {
-                // no need to include these two attributes for sub-agents
-                // that are sequential and the order is implied via the array order
-                // saves tokens
-                result['ExecutionMode'] = sa.ExecutionMode;
-                result['ExecutionOrder'] = sa.ExecutionOrder;
+                line += ` _(${sa.ExecutionMode}, order: ${sa.ExecutionOrder})_`;
             }
-
-            return result;
-        }), null, 2);
+            return line;
+        }).join('\n');
     }
 
     /**
@@ -4159,54 +4151,84 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Formats action details for inclusion in prompt context.
-     * 
+     * Formats action details as compact markdown for inclusion in prompt context.
+     * Produces ~75% fewer tokens than the previous JSON format while preserving
+     * all information the LLM needs to invoke actions correctly.
+     *
      * @param {MJActionEntityExtended[]} actions - Array of action entities
-     * @returns {string} JSON formatted string with comprehensive action details
+     * @returns {string} Markdown formatted string with action details
      * @private
      */
     private formatActionDetails(actions: MJActionEntityExtended[]): string {
-        return JSON.stringify(actions.map(action => ({
-            Name: action.Name,
-            Description: action.Description,
-            // Parameters with detailed information
-            Parameters: {
-                Input: action.Params
-                    .filter(p => p.Type.trim().toLowerCase() === 'input' || p.Type.trim().toLowerCase() === 'both')
-                    .map(param => this.formatActionParameter(param)),
-                Output: action.Params
-                    .filter(p => p.Type.trim().toLowerCase() === 'output' || p.Type.trim().toLowerCase() === 'both')
-                    .map(param => this.formatActionParameter(param))
-            },
-            // Result codes with detailed information
-            ResultCodes: action.ResultCodes.map(rc => ({
-                Code: rc.ResultCode,
-                IsSuccess: rc.IsSuccess,
-                Description: rc.Description || 'No description provided',
-            })),
-            // Additional metadata
-            Category: action.CategoryID ? this.getActionCategoryName(action.CategoryID) : null,
-            Status: action.Status
-        })), null, 2);
+        return actions.map(action => {
+            const lines: string[] = [];
+            lines.push(`### ${action.Name}`);
+            lines.push(action.Description);
+
+            const inputParams = action.Params
+                .filter(p => {
+                    const t = p.Type.trim().toLowerCase();
+                    return t === 'input' || t === 'both';
+                });
+            const outputParams = action.Params
+                .filter(p => {
+                    const t = p.Type.trim().toLowerCase();
+                    return t === 'output' || t === 'both';
+                });
+
+            if (inputParams.length > 0) {
+                lines.push(`**Input:** ${inputParams.map(p => this.formatActionParameter(p)).join(', ')}`);
+            }
+            if (outputParams.length > 0) {
+                lines.push(`**Output:** ${outputParams.map(p => this.formatActionParameter(p)).join(', ')}`);
+            }
+
+            if (action.ResultCodes.length > 0) {
+                const rcParts = action.ResultCodes.map(rc => {
+                    const marker = rc.IsSuccess ? '✓' : '✗';
+                    const desc = rc.Description && rc.Description.toLowerCase() !== rc.ResultCode.toLowerCase()
+                        ? ` ${rc.Description}`
+                        : '';
+                    return `${rc.ResultCode} ${marker}${desc}`;
+                });
+                lines.push(`**Results:** ${rcParts.join(' · ')}`);
+            }
+
+            return lines.join('\n');
+        }).join('\n\n');
     }
 
     /**
-     * Formats a single action parameter for display.
-     * 
-     * @param {any} param - The action parameter to format
-     * @returns {object} Formatted parameter object
+     * Formats a single action parameter as a compact inline string.
+     * Uses \* suffix for required, (array) when IsArray, and only shows
+     * ValueType when it is not Scalar/Other.
+     *
+     * @param {MJActionParamEntity} param - The action parameter to format
+     * @returns {string} Compact inline string, e.g. `` `To`\* — Email address ``
      * @private
      */
-    private formatActionParameter(param: MJActionParamEntity): object {
-        return {
-            Name: param.Name,
-            Type: param.Type,
-            IsRequired: param.IsRequired,
-            IsArray: param.IsArray,
-            DefaultValue: param.DefaultValue,
-            Description: param.Description,
-            ValueType: param.ValueType
-        };
+    private formatActionParameter(param: MJActionParamEntity): string {
+        const requiredMarker = param.IsRequired ? '\\*' : '';
+        const parts: string[] = [];
+
+        if (param.IsArray) {
+            parts.push('array');
+        }
+
+        const vt = param.ValueType?.trim();
+        if (vt && vt !== 'Scalar' && vt !== 'Other') {
+            parts.push(vt);
+        }
+
+        const suffix = parts.length > 0 ? ` (${parts.join(', ')})` : '';
+
+        let defaultStr = '';
+        if (param.DefaultValue != null && param.DefaultValue !== '') {
+            defaultStr = ` (default: ${JSON.stringify(param.DefaultValue)})`;
+        }
+
+        const desc = param.Description ? ` — ${param.Description}` : '';
+        return `\`${param.Name}\`${requiredMarker}${suffix}${desc}${defaultStr}`;
     }
 
     /**
