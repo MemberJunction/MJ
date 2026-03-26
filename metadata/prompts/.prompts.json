@@ -110,6 +110,9 @@
       "TemplateText": "@file:templates/system/loop-agent-type-system-prompt.template.md",
       "Status": "Active",
       "ResponseFormat": "Any",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -206,8 +209,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:57.952Z",
-      "checksum": "7cb9ee9f1531602b9cbd5f8f6a89061891699966f2d91610a5de85bb3235df53"
+      "lastModified": "2026-03-26T15:51:19.732Z",
+      "checksum": "ba71df8b658dfb64e3b11ff4b4d56c480070d2e8e5abdfb94babd07ffe3d2c93"
     }
   },
   {

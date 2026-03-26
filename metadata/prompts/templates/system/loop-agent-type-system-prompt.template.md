@@ -591,7 +591,6 @@ When you modify system configuration or entity data, tell the UI to refresh:
 {% endif %}
 
 # **CRITICAL**
-- Your **entire** response must be only JSON with no leading or trailing characters!
 - Must adhere to [LoopAgentResponse](#response-format)
 {% if __agentTypePromptParams.includeResponseFormDocs != false %}- Use `responseForm` when you need user input (replaces old suggestedResponses pattern){% endif %}
 {% if __agentTypePromptParams.includeCommandDocs != false %}- Use `actionableCommands` to provide navigation buttons after completing work
