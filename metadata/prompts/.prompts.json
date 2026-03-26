@@ -110,6 +110,9 @@
       "TemplateText": "@file:templates/system/loop-agent-type-system-prompt.template.md",
       "Status": "Active",
       "ResponseFormat": "Any",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -218,6 +221,9 @@
       "TemplateText": "@file:templates/system/flow-agent-type-system-prompt.template.md",
       "Status": "Active",
       "ResponseFormat": "Any",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -299,8 +305,8 @@
       "ID": "43A6D122-4A76-453F-97D6-82CACC619227"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:57.939Z",
-      "checksum": "3e8dfbe1460d9ea9d474ac1c066e3b133658adfe1aad7ec7dff2cba2eb5c8615"
+      "lastModified": "2026-03-26T19:47:37.976Z",
+      "checksum": "46dd9b3726e7a2b0fcfc4ffea7c1a88e6485dee1523584f07b3730ef7556f60f"
     }
   },
   {
