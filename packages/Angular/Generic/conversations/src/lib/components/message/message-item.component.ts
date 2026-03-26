@@ -67,7 +67,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
   @Input() public attachments: MessageAttachment[] = []; // Attachments for this message
 
-  @Output() public pinClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public retryClicked = new EventEmitter<MJConversationDetailEntity>();
@@ -711,12 +710,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return false;
     }
     return this.message.OriginalMessageChanged === true;
-  }
-
-  public onPinClick(): void {
-    if (!this.isProcessing) {
-      this.pinClicked.emit(this.message);
-    }
   }
 
   public onEditClick(): void {

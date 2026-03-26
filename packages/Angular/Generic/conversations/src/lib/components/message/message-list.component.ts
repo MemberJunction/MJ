@@ -44,7 +44,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public attachmentsMap: Map<string, MessageAttachment[]> = new Map();
 
-  @Output() public pinMessage = new EventEmitter<MJConversationDetailEntity>();
   @Output() public editMessage = new EventEmitter<MJConversationDetailEntity>();
   @Output() public deleteMessage = new EventEmitter<MJConversationDetailEntity>();
   @Output() public retryMessage = new EventEmitter<MJConversationDetailEntity>();
@@ -299,7 +298,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.attachments = this.attachmentsMap.get(message.ID) || [];
 
           // Subscribe to outputs
-          instance.pinClicked.subscribe((msg: MJConversationDetailEntity) => this.pinMessage.emit(msg));
           instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.editMessage.emit(msg));
           instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.deleteMessage.emit(msg));
           instance.retryClicked.subscribe((msg: MJConversationDetailEntity) => this.retryMessage.emit(msg));

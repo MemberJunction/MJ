@@ -19,6 +19,7 @@ import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
 import { DialogService } from '@progress/kendo-angular-dialog';
+import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
@@ -265,7 +266,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     private artifactPermissionService: ArtifactPermissionService,
     private dialogService: DialogService,
     private attachmentService: ConversationAttachmentService,
-    private streamingService: ConversationStreamingService
+    private streamingService: ConversationStreamingService,
+    private confirmDialog: ConversationsDialogService
   ) {}
 
   async ngOnInit() {
@@ -602,6 +604,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     for (const row of conversationData) {
       if (!row.ID) continue;
+      if (row.HiddenToUser) continue; // Skip soft-deleted messages
 
       const message = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
       message.LoadFromData(row);
@@ -1009,7 +1012,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
       const result = await rv.RunView<MJConversationDetailEntity>({
         EntityName: 'MJ: Conversation Details',
-        ExtraFilter: `ConversationID='${conversationId}'`,
+        ExtraFilter: `ConversationID='${conversationId}' AND HiddenToUser=0`,
         OrderBy: '__mj_CreatedAt ASC',
         ResultType: 'entity_object'
       }, this.currentUser);
@@ -1633,6 +1636,52 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     } else {
       console.error('MessageInputComponent not available and not in a valid state to create conversation');
     }
+  }
+
+  async onDeleteMessage(message: MJConversationDetailEntity): Promise<void> {
+    if (!UUIDsEqual(this.conversation?.UserID, this.currentUser?.ID)) return;
+
+    // Find this message and all messages after it sorted by creation time
+    const sortedMessages = [...this.messages].sort((a, b) =>
+      new Date(a.__mj_CreatedAt!).getTime() - new Date(b.__mj_CreatedAt!).getTime()
+    );
+    const targetIndex = sortedMessages.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    if (targetIndex === -1) return;
+
+    const toHide = sortedMessages.slice(targetIndex);
+    const count = toHide.length;
+
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Delete Messages',
+      message: count === 1
+        ? 'Delete this message? This cannot be undone.'
+        : `Delete this message and the ${count - 1} message${count - 1 === 1 ? '' : 's'} after it? This cannot be undone.`,
+      okText: 'Delete',
+      cancelText: 'Cancel'
+    });
+    if (!confirmed) return;
+
+    const md = new Metadata();
+    for (const msg of toHide) {
+      try {
+        const entity = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
+        const loaded = await entity.Load(msg.ID);
+        if (loaded) {
+          entity.HiddenToUser = true;
+          const saved = await entity.Save();
+          if (!saved) {
+            console.error(`Failed to hide message ${msg.ID}`);
+          }
+        }
+      } catch (err) {
+        console.error(`Error hiding message ${msg.ID}:`, err);
+      }
+    }
+
+    const hideIds = new Set(toHide.map(m => m.ID));
+    this.messages = this.messages.filter(m => !hideIds.has(m.ID));
+    this.invalidateConversationCache(this.conversationId!);
+    this.cdr.detectChanges();
   }
 
   onRetryMessage(message: MJConversationDetailEntity): void {

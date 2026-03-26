@@ -180,33 +180,32 @@
       }
     </div>
 
-    <!-- Message Footer: Rating buttons and action buttons for last completed AI message -->
-    @if (isAIMessage && !isEditing && messageStatus === 'Complete' && (isLastMessage || hasRatings())) {
+    <!-- Message Footer: ratings for completed AI messages + delete for conversation owner -->
+    @if (!isEditing && (
+      (isAIMessage && messageStatus === 'Complete' && (isLastMessage || hasRatings())) ||
+      isConversationOwner
+    )) {
       <div class="message-footer">
-        <!-- Rating component (thumbs up/down) -->
-        <mj-conversation-message-rating
-          [conversationDetailId]="message.ID"
-          [currentUser]="currentUser"
-          [ratingsData]="ratings">
-        </mj-conversation-message-rating>
-
-        <!-- Pin/Delete buttons (only for last message) -->
-        @if (isLastMessage) {
+        @if (isConversationOwner) {
           <div class="inline-actions">
-            <button class="action-bar-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin Message' : 'Pin Message'">
-              <i class="fas fa-thumbtack" [class.pinned]="message.IsPinned"></i>
-            </button>
-            <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete Message">
+            <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete this message and all messages below it">
               <i class="fas fa-trash"></i>
             </button>
           </div>
+        }
+        @if (isAIMessage && messageStatus === 'Complete' && (isLastMessage || hasRatings())) {
+          <mj-conversation-message-rating
+            [conversationDetailId]="message.ID"
+            [currentUser]="currentUser"
+            [ratingsData]="ratings">
+          </mj-conversation-message-rating>
         }
       </div>
     }
 
     <!-- Agent details content section -->
     <div class="agent-details-section">
-      <!-- Message Action Bar (appears when gear expanded for non-last messages) -->
+      <!-- Message Action Bar (appears when gear expanded for non-last AI messages) -->
       @if (isAgentDetailsExpanded && !isLastMessage && isAIMessage && messageStatus === 'Complete') {
         <div class="message-action-bar">
           <div class="action-bar-container">
@@ -215,15 +214,6 @@
               [currentUser]="currentUser"
               [ratingsData]="ratings">
             </mj-conversation-message-rating>
-
-            <div class="action-buttons">
-              <button class="action-bar-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin Message' : 'Pin Message'">
-                <i class="fas fa-thumbtack" [class.pinned]="message.IsPinned"></i>
-              </button>
-              <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete Message">
-                <i class="fas fa-trash"></i>
-              </button>
-            </div>
           </div>
         </div>
       }
