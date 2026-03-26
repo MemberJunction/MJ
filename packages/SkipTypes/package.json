@@ -23,7 +23,8 @@
     "@memberjunction/core": "5.17.0",
     "@memberjunction/interactive-component-types": "5.17.0",
     "@memberjunction/ai-core-plus": "5.17.0",
-    "@memberjunction/data-context": "5.17.0"
+    "@memberjunction/data-context": "5.17.0",
+    "@memberjunction/sql-dialect": "5.17.0"
   },
   "repository": {
     "type": "git",

@@ -98,14 +98,6 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 this.EmbeddingModelID = null;
             }
 
-            // Auto-set Reusable=true for queries in Golden-Queries/ categories
-            if (this.CategoryID) {
-                const categoryPath = this.buildCategoryPathFromID(this.CategoryID);
-                if (categoryPath.toLowerCase().startsWith('golden-queries/') || categoryPath.toLowerCase() === 'golden-queries') {
-                    this.Reusable = true;
-                }
-            }
-
             // Save the query first without AI processing
             const saveResult = await super.Save(options);
             if (!saveResult) {
@@ -152,9 +144,9 @@ export class MJQueryEntityServer extends MJQueryEntity {
 
     /**
      * Builds a category path string from a CategoryID by walking up the category hierarchy.
-     * Returns a path like "Golden-Queries/Sales" or "Golden-Queries".
+     * Returns a slash-delimited path like "Ground-Truth-Queries/Sales" or "Ground-Truth-Queries".
      */
-    private buildCategoryPathFromID(categoryID: string): string {
+    public BuildCategoryPathFromID(categoryID: string): string {
         const categories = Metadata.Provider.QueryCategories;
         const segments: string[] = [];
         let currentID: string | null = categoryID;
