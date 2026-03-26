@@ -180,9 +180,9 @@
       }
     </div>
 
-    <!-- Message Footer: ratings for completed AI messages + delete for conversation owner -->
+    <!-- Message Footer: ratings for all completed AI messages + delete for conversation owner -->
     @if (!isEditing && (
-      (isAIMessage && messageStatus === 'Complete' && (isLastMessage || hasRatings())) ||
+      (isAIMessage && messageStatus === 'Complete') ||
       isConversationOwner
     )) {
       <div class="message-footer">
@@ -193,7 +193,7 @@
             </button>
           </div>
         }
-        @if (isAIMessage && messageStatus === 'Complete' && (isLastMessage || hasRatings())) {
+        @if (isAIMessage && messageStatus === 'Complete') {
           <mj-conversation-message-rating
             [conversationDetailId]="message.ID"
             [currentUser]="currentUser"
@@ -205,19 +205,6 @@
 
     <!-- Agent details content section -->
     <div class="agent-details-section">
-      <!-- Message Action Bar (appears when gear expanded for non-last AI messages) -->
-      @if (isAgentDetailsExpanded && !isLastMessage && isAIMessage && messageStatus === 'Complete') {
-        <div class="message-action-bar">
-          <div class="action-bar-container">
-            <mj-conversation-message-rating
-              [conversationDetailId]="message.ID"
-              [currentUser]="currentUser"
-              [ratingsData]="ratings">
-            </mj-conversation-message-rating>
-          </div>
-        </div>
-      }
-
       <!-- Agent Run Details Panel (expandable) -->
       @if (isAgentDetailsExpanded && hasAgentRun) {
         <!-- Agent Run Details Panel -->
