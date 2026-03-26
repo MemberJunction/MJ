@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/doc-utils
 
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/core@5.18.0
+- @memberjunction/core-entities@5.18.0
+- @memberjunction/global@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

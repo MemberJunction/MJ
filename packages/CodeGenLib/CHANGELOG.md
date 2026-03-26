@@ -1,5 +1,30 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [322dac6]
+- Updated dependencies [931740a]
+- Updated dependencies [48f7296]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/sql-parser@5.18.0
+  - @memberjunction/core-entities-server@5.18.0
+  - @memberjunction/ai-prompts@5.18.0
+  - @memberjunction/server-bootstrap-lite@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/actions@5.18.0
+  - @memberjunction/sqlserver-dataprovider@5.18.0
+  - @memberjunction/postgresql-dataprovider@5.18.0
+  - @memberjunction/ai-provider-bundle@5.18.0
+  - @memberjunction/ai@5.18.0
+  - @memberjunction/actions-base@5.18.0
+  - @memberjunction/config@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+  - @memberjunction/sql-dialect@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

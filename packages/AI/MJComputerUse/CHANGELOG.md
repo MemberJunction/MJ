@@ -1,5 +1,23 @@
 # @memberjunction/computer-use-engine
 
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [322dac6]
+- Updated dependencies [48f7296]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/ai-prompts@5.18.0
+  - @memberjunction/testing-engine@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/actions@5.18.0
+  - @memberjunction/computer-use@5.18.0
+  - @memberjunction/ai@5.18.0
+  - @memberjunction/actions-base@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

@@ -1,5 +1,15 @@
 # @memberjunction/integration-actions
 
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/actions@5.18.0
+- @memberjunction/integration-engine@5.18.0
+- @memberjunction/actions-base@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/global@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

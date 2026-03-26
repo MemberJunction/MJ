@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ai-vectors
 
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [322dac6]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/ai@5.18.0
+  - @memberjunction/ai-vectordb@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes
