@@ -15,6 +15,7 @@ import { ChatMessage } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
+import { AgentScratchpad } from './agent-scratchpad';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
@@ -372,6 +373,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     forEach?: ForEachOperation;
     /** While operation details when step is 'While' (v2.112+) */
     while?: WhileOperation;
+    /**
+     * Scratchpad changes from the agent's response.
+     * Processed inline (zero turn cost) alongside payload changes.
+     * @since 2.46.0
+     */
+    scratchpad?: AgentScratchpad;
     /**
      * Media outputs to promote to the agent's final outputs.
      * When set, these media items will be added to the agent's mediaOutputs collection

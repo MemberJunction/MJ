@@ -1,4 +1,4 @@
-import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad } from "@memberjunction/ai-core-plus";
 
 // Re-export universal types for backward compatibility
 export type { ForEachOperation, WhileOperation };
@@ -43,6 +43,14 @@ export interface LoopAgentResponse<P = any> {
      */
     payloadChangeRequest?: AgentPayloadChangeRequest<P>;
     
+    /**
+     * Private working memory — not shared with parent or sub-agents.
+     * Processed inline on the same turn as other response fields (zero turn cost).
+     * Use for internal reasoning notes and structured task tracking.
+     * @since 2.46.0
+     */
+    scratchpad?: AgentScratchpad;
+
     /**
      * Internal reasoning for debugging
      */

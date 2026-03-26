@@ -54,6 +54,7 @@ import {
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
+import { ScratchpadManager } from './ScratchpadManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
@@ -666,6 +667,14 @@ export class BaseAgent {
     private _payloadManager: PayloadManager = new PayloadManager();
 
     /**
+     * Scratchpad manager for private agent working memory (notes + task list).
+     * Instantiated per agent run, garbage collected when the run ends.
+     * @private
+     * @since 2.46.0
+     */
+    private _scratchpadManager: ScratchpadManager = new ScratchpadManager();
+
+    /**
      * Effective actions available to this agent after applying actionChanges.
      * Populated during gatherPromptTemplateData() and used for validation in executeActionsStep().
      * @private
@@ -1012,6 +1021,9 @@ export class BaseAgent {
             if (params.convertUIMarkupToPlainText !== false) {
                 this.convertUIMarkupInMessages(wrappedParams.conversationMessages);
             }
+
+            // Reset scratchpad for each new execution (ephemeral per run)
+            this._scratchpadManager.Clear();
 
             await this.initializeStartingPayload(wrappedParams);
 
@@ -1837,6 +1849,17 @@ export class BaseAgent {
             agentId: params.agent.ID,
             agentRunId: this._agentRun?.ID
         });
+
+        // Inject scratchpad template variables if scratchpad is enabled
+        if (promptParams.data) {
+            const agentTypePromptParams = promptParams.data.__agentTypePromptParams as Record<string, unknown> | undefined;
+            const scratchpadEnabled = agentTypePromptParams?.includeScratchpadDocs !== false;
+            if (scratchpadEnabled && this._scratchpadManager) {
+                promptParams.data['_SCRATCHPAD_NOTES'] = this._scratchpadManager.GetNotes() || '_(no notes yet)_';
+                promptParams.data['_SCRATCHPAD_TASKS'] = this._scratchpadManager.ToPromptString();
+                promptParams.data['_SCRATCHPAD_TASK_SUMMARY'] = this._scratchpadManager.GetTaskSummary();
+            }
+        }
 
         // Only set up child prompts if we have a system prompt
         if (systemPrompt) {
@@ -3756,7 +3779,8 @@ The context is now within limits. Please retry your request with the recovered c
                 responseForms: true,
                 commands: true,
                 forEach: true,
-                while: true
+                while: true,
+                scratchpad: true
             };
         }
 
@@ -3768,7 +3792,8 @@ The context is now within limits. Please retry your request with the recovered c
             { docsFlag: 'includeResponseFormDocs', responseTypeKey: 'responseForms' },
             { docsFlag: 'includeCommandDocs', responseTypeKey: 'commands' },
             { docsFlag: 'includeForEachDocs', responseTypeKey: 'forEach' },
-            { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' }
+            { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' },
+            { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' }
         ];
 
         for (const { docsFlag, responseTypeKey } of alignmentMappings) {
@@ -5223,7 +5248,8 @@ The context is now within limits. Please retry your request with the recovered c
         const promptId = promptToUse?.ID;
         const promptName = promptToUse?.Name;
         
-        // Prepare input data for the step
+        // Prepare input data for the step (includes scratchpad snapshot before LLM response)
+        const scratchpadSnapshotBeforeStep = this._scratchpadManager.HasContent() ? this._scratchpadManager.ToJSON() : undefined;
         const inputData = {
             promptId: promptId,
             promptName: promptName,
@@ -5233,6 +5259,7 @@ The context is now within limits. Please retry your request with the recovered c
                 instructions: previousDecision.retryInstructions
             } : undefined,
             conversationMessages: params.conversationMessages,
+            ...(scratchpadSnapshotBeforeStep && { scratchpad: scratchpadSnapshotBeforeStep }),
         };
         
         // Prepare prompt parameters
@@ -5444,6 +5471,19 @@ The context is now within limits. Please retry your request with the recovered c
                 finalPayload = changeResult.result;
             }
 
+            // Apply scratchpad changes if provided (zero turn cost — processed inline)
+            if (initialNextStep.scratchpad) {
+                this._scratchpadManager.ApplyScratchpadChanges(initialNextStep.scratchpad);
+                // Enforce task limit using the default (50) — the prompt params were already
+                // used during prompt preparation. We use a simple default here to avoid
+                // re-fetching prompt params just for this value.
+                const maxTasks = 50;
+                const pruned = this._scratchpadManager.EnforceTaskLimit(maxTasks);
+                if (pruned > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
+                    LogStatus(`Scratchpad: pruned ${pruned} completed tasks (limit: ${maxTasks})`);
+                }
+            }
+
             // now that we have processed the payload, we can process the next step which does validation and changes the next step if
             // validation fails
             const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, finalPayload, stepEntity);
@@ -5463,6 +5503,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // Include payload change metadata if changes were made
                 ...(currentStepPayloadChangeResult && {
                     payloadChangeResult: currentStepPayloadChangeResult
+                }),
+                // Include scratchpad snapshot after changes for audit/training data
+                ...(this._scratchpadManager.HasContent() && {
+                    scratchpad: this._scratchpadManager.ToJSON()
                 }),
                 // Include memory attribution for observability
                 // This tracks which notes/examples were injected and influenced this step

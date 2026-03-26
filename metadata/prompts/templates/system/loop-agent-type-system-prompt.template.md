@@ -24,6 +24,10 @@ interface LoopAgentResponse {
     /** Payload changes. Omit if no changes needed */
     payloadChangeRequest?: AgentPayloadChangeRequest;
 {% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.scratchpad != false %}
+    /** Private working memory — notes and task tracking. Processed inline, zero turn cost */
+    scratchpad?: AgentScratchpad;
+{% endif %}
     /** Internal reasoning for debugging */
     reasoning?: string;
     /** Confidence level (0.0-1.0) */
@@ -65,6 +69,9 @@ interface LoopAgentResponse {
 {% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %}
 {@include ../../../../packages/AI/CorePlus/generated-for-prompt/while-operation.ts.generated-for-prompt.md}
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.scratchpad != false %}
+{@include ../../../../packages/AI/CorePlus/generated-for-prompt/agent-scratchpad.ts.generated-for-prompt.md}
 {% endif %}
 
 # Execution Pattern
@@ -385,6 +392,39 @@ After completing work, use `actionableCommands` for navigation buttons and `auto
 {% if __agentTypePromptParams.includeCommandDocs != false %}- Use `actionableCommands` to provide navigation buttons after completing work
 - Use `automaticCommands` to refresh data or show notifications{% endif %}
 
+{% if __agentTypePromptParams.includeScratchpadDocs != false %}
+## Scratchpad
+
+You have a private scratchpad for internal working memory. Use it to organize your thoughts and track work items. The scratchpad is **never shared** with parent or sub-agents — it's purely for your own use.
+
+**Two sections:**
+- **`notes`**: Free-form text for reasoning, intermediate conclusions, reminders for future turns
+- **`taskList`**: Structured task tracking with `upsert` (add/update) and `remove` operations
+
+**Example:**
+```json
+{
+  "taskComplete": false,
+  "message": "Starting analysis of 5 data sources",
+  "scratchpad": {
+    "notes": "User wants YoY comparison. Sales DB has data back to 2019. Marketing DB only goes to 2021.",
+    "taskList": {
+      "upsert": [
+        { "id": "t1", "title": "Analyze sales data", "status": "in_progress" },
+        { "id": "t2", "title": "Analyze marketing data", "status": "pending" },
+        { "id": "t3", "title": "Cross-reference findings", "status": "pending" }
+      ]
+    }
+  },
+  "nextStep": { "type": "Actions", "actions": [{ "name": "Query Sales DB", "params": {} }] }
+}
+```
+
+**Task statuses:** `pending`, `in_progress`, `completed`, `blocked`
+**Task IDs:** Use simple sequential IDs (`t1`, `t2`, `t3`).
+**Token efficiency:** Your scratchpad is injected into every turn — keep it lean. Use notes for key reasoning and decisions, not verbose logs. Task notes should be succinct. Everything here costs tokens on every subsequent turn.
+{% endif %}
+
 # Agent Definition
 Your name is {{ agentName }}
 
@@ -422,4 +462,15 @@ Execute multiple in parallel if independent. Retry failed actions up to 3x with 
 ```json
 {{ _CURRENT_PAYLOAD | dump | safe }}
 ```
+{% endif %}
+
+{% if __agentTypePromptParams.includeScratchpadDocs != false %}
+## Scratchpad State
+Your private working memory. Manage via `scratchpad` in your response.
+
+### Notes
+{{ _SCRATCHPAD_NOTES | safe }}
+
+### Tasks ({{ _SCRATCHPAD_TASK_SUMMARY }})
+{{ _SCRATCHPAD_TASKS | safe }}
 {% endif %}
