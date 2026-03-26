@@ -8878,7 +8878,14 @@ The context is now within limits. Please retry your request with the recovered c
         // and we trim whitespace first
         const trimmedValue = value.trim();
         if (trimmedValue.startsWith('{{') && trimmedValue.endsWith('}}')) {
+            // Single-variable case: "{{city.name}}" — strip wrappers, fall through to
+            // single-variable resolution below which can return non-string types (objects, numbers)
             value = trimmedValue.substring(2, trimmedValue.length - 2).trim();
+        } else if (trimmedValue.includes('{{')) {
+            // Inline template interpolation: "text {{var.prop}} more {{var2.field}}"
+            // The string contains embedded {{}} expressions mixed with literal text.
+            // Each expression is resolved individually and stringified back into the template.
+            return this.resolveInlineTemplateExpressions(trimmedValue, context, itemVariable);
         }
 
         // Check itemVariable reference (the custom loop variable name like "entityName" or "user")
@@ -8916,6 +8923,37 @@ The context is now within limits. Please retry your request with the recovered c
 
         // Static value - no variable reference found, return as literal string
         return value;
+    }
+
+    /**
+     * Resolves multiple {{expression}} placeholders embedded within a literal string.
+     *
+     * Unlike the single-variable path (which can return objects/numbers), this always
+     * returns a string because the resolved values are interpolated back into surrounding text.
+     *
+     * @example
+     * // Given itemVariable="cityInfo", context.item={city:"Tokyo", country:"Japan"}
+     * resolveInlineTemplateExpressions(
+     *   "largest company in {{cityInfo.city}} {{cityInfo.country}}",
+     *   context, "cityInfo"
+     * )
+     * // → "largest company in Tokyo Japan"
+     */
+    protected resolveInlineTemplateExpressions(
+        template: string,
+        context: Record<string, any>,
+        itemVariable: string
+    ): string {
+        const expressionPattern = /\{\{\s*([^}]+?)\s*\}\}/g;
+        return template.replace(expressionPattern, (_match: string, expr: string) => {
+            // Resolve each expression using the single-variable path (without {{ }} wrappers)
+            const resolved = this.resolveValueFromContext(expr.trim(), context, itemVariable);
+            // If the expression didn't resolve (returned unchanged), keep original {{ }} for transparency
+            if (resolved === expr.trim()) {
+                return _match;
+            }
+            return String(resolved ?? '');
+        });
     }
 
     /**
