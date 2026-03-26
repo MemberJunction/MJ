@@ -1,6 +1,7 @@
 /**
  * Unit tests for prompt formatting methods that emit compact markdown
- * for action details and sub-agent details in agent system prompts.
+ * for action details, sub-agent details, and execution results in agent
+ * system prompts and conversation messages.
  *
  * These tests use standalone implementations mirroring the private methods
  * in BaseAgent so we can test the formatting logic without class dependencies.
@@ -519,5 +520,383 @@ describe('formatSubAgentDetails', () => {
         const lines = result.split('\n');
         expect(lines[0]).not.toContain('Sequential');
         expect(lines[1]).toContain('_(Parallel, order: 2)_');
+    });
+});
+
+// ============================================================================
+// Types and standalone implementations for action/sub-agent RESULT formatting
+// ============================================================================
+
+interface MockOutputParam {
+    Name: string;
+    Value: unknown;
+    Type: 'Input' | 'Output' | 'Both';
+}
+
+interface MockActionResultSummary {
+    actionName: string;
+    success: boolean;
+    params: MockOutputParam[];
+    resultCode: string;
+    message: string;
+}
+
+interface MockExecuteAgentResult {
+    success: boolean;
+    payload?: unknown;
+    agentRun?: {
+        Status?: string;
+        ErrorMessage?: string;
+    };
+}
+
+function formatParamValueForResult(value: unknown, maxLength: number = 500): string {
+    if (value === null || value === undefined) {
+        return '`null`';
+    }
+
+    if (typeof value === 'boolean' || typeof value === 'number') {
+        return `\`${String(value)}\``;
+    }
+
+    let stringValue: string;
+    if (typeof value === 'string') {
+        stringValue = value;
+    } else {
+        stringValue = JSON.stringify(value);
+    }
+
+    if (stringValue.length > maxLength) {
+        return `${stringValue.substring(0, maxLength)}…`;
+    }
+
+    return stringValue;
+}
+
+function formatActionResultsAsMarkdown(actionSummaries: MockActionResultSummary[]): string {
+    return actionSummaries.map(a => {
+        const marker = a.success ? '✓' : '✗';
+        const lines: string[] = [];
+
+        lines.push(`## ${a.actionName} ${marker}`);
+        lines.push(`**Result:** ${a.resultCode} — ${a.message || '(no message)'}`);
+
+        if (a.params && a.params.length > 0) {
+            lines.push('**Output:**');
+            for (const p of a.params) {
+                lines.push(`• \`${p.Name}\`: ${formatParamValueForResult(p.Value)}`);
+            }
+        }
+
+        return lines.join('\n');
+    }).join('\n\n');
+}
+
+function formatSubAgentResultAsMarkdown(subAgentName: string, result: MockExecuteAgentResult): string {
+    const marker = result.success ? '✓' : '✗';
+    const lines: string[] = [];
+
+    lines.push(`## Sub-agent: ${subAgentName} ${marker}`);
+
+    const status = result.agentRun?.Status || (result.success ? 'Completed' : 'Failed');
+    lines.push(`**Status:** ${status}`);
+
+    if (!result.success && result.agentRun?.ErrorMessage) {
+        lines.push(`**Error:** ${result.agentRun.ErrorMessage}`);
+    }
+
+    if (result.payload != null) {
+        const payloadStr = typeof result.payload === 'string'
+            ? result.payload
+            : JSON.stringify(result.payload);
+        if (payloadStr.length > 4000) {
+            lines.push(`**Payload** (truncated):\n${payloadStr.substring(0, 4000)}…`);
+        } else {
+            lines.push(`**Payload:**\n${payloadStr}`);
+        }
+    }
+
+    return lines.join('\n');
+}
+
+// ============================================================================
+// Fixtures for result formatting
+// ============================================================================
+
+function makeOutputParam(overrides: Partial<MockOutputParam> = {}): MockOutputParam {
+    return {
+        Name: 'OutputParam',
+        Value: 'some value',
+        Type: 'Output',
+        ...overrides,
+    };
+}
+
+function makeActionResult(overrides: Partial<MockActionResultSummary> = {}): MockActionResultSummary {
+    return {
+        actionName: 'Test Action',
+        success: true,
+        params: [],
+        resultCode: 'SUCCESS',
+        message: 'Action completed',
+        ...overrides,
+    };
+}
+
+// ============================================================================
+// formatParamValueForResult Tests
+// ============================================================================
+
+describe('formatParamValueForResult', () => {
+    it('should format null as backtick-wrapped null', () => {
+        expect(formatParamValueForResult(null)).toBe('`null`');
+    });
+
+    it('should format undefined as backtick-wrapped null', () => {
+        expect(formatParamValueForResult(undefined)).toBe('`null`');
+    });
+
+    it('should format booleans with backticks', () => {
+        expect(formatParamValueForResult(true)).toBe('`true`');
+        expect(formatParamValueForResult(false)).toBe('`false`');
+    });
+
+    it('should format numbers with backticks', () => {
+        expect(formatParamValueForResult(42)).toBe('`42`');
+        expect(formatParamValueForResult(3.14)).toBe('`3.14`');
+    });
+
+    it('should format strings as-is (no extra wrapping)', () => {
+        expect(formatParamValueForResult('hello world')).toBe('hello world');
+    });
+
+    it('should use compact JSON for objects', () => {
+        const result = formatParamValueForResult({ key: 'value', count: 5 });
+        expect(result).toBe('{"key":"value","count":5}');
+        // No pretty-printing (no newlines)
+        expect(result).not.toContain('\n');
+    });
+
+    it('should use compact JSON for arrays', () => {
+        const result = formatParamValueForResult([1, 2, 3]);
+        expect(result).toBe('[1,2,3]');
+    });
+
+    it('should truncate very long strings', () => {
+        const longString = 'x'.repeat(600);
+        const result = formatParamValueForResult(longString, 500);
+        expect(result.length).toBeLessThanOrEqual(502); // 500 + '…'
+        expect(result).toContain('…');
+    });
+
+    it('should not truncate strings within the limit', () => {
+        const shortString = 'hello';
+        const result = formatParamValueForResult(shortString, 500);
+        expect(result).toBe('hello');
+        expect(result).not.toContain('…');
+    });
+});
+
+// ============================================================================
+// formatActionResultsAsMarkdown Tests
+// ============================================================================
+
+describe('formatActionResultsAsMarkdown', () => {
+    it('should format a successful action with ✓ marker', () => {
+        const result = formatActionResultsAsMarkdown([makeActionResult({
+            actionName: 'Send Email',
+            success: true,
+            resultCode: 'SUCCESS',
+            message: 'Email sent',
+        })]);
+        expect(result).toContain('## Send Email ✓');
+        expect(result).toContain('**Result:** SUCCESS — Email sent');
+    });
+
+    it('should format a failed action with ✗ marker', () => {
+        const result = formatActionResultsAsMarkdown([makeActionResult({
+            actionName: 'Send Email',
+            success: false,
+            resultCode: 'ERROR',
+            message: 'Connection timeout',
+        })]);
+        expect(result).toContain('## Send Email ✗');
+        expect(result).toContain('**Result:** ERROR — Connection timeout');
+    });
+
+    it('should include output params as bullet list', () => {
+        const result = formatActionResultsAsMarkdown([makeActionResult({
+            actionName: 'Fetch Data',
+            params: [
+                makeOutputParam({ Name: 'MessageId', Value: 'abc-123' }),
+                makeOutputParam({ Name: 'Status', Value: 'queued' }),
+            ],
+        })]);
+        expect(result).toContain('**Output:**');
+        expect(result).toContain('• `MessageId`: abc-123');
+        expect(result).toContain('• `Status`: queued');
+    });
+
+    it('should omit output section when no params', () => {
+        const result = formatActionResultsAsMarkdown([makeActionResult({
+            params: [],
+        })]);
+        expect(result).not.toContain('**Output:**');
+    });
+
+    it('should format object param values as compact JSON', () => {
+        const result = formatActionResultsAsMarkdown([makeActionResult({
+            params: [
+                makeOutputParam({ Name: 'Data', Value: { rows: 10, status: 'ok' } }),
+            ],
+        })]);
+        expect(result).toContain('• `Data`: {"rows":10,"status":"ok"}');
+    });
+
+    it('should format boolean and numeric param values with backticks', () => {
+        const result = formatActionResultsAsMarkdown([makeActionResult({
+            params: [
+                makeOutputParam({ Name: 'Count', Value: 42 }),
+                makeOutputParam({ Name: 'IsValid', Value: true }),
+            ],
+        })]);
+        expect(result).toContain('• `Count`: `42`');
+        expect(result).toContain('• `IsValid`: `true`');
+    });
+
+    it('should separate multiple actions with blank lines', () => {
+        const result = formatActionResultsAsMarkdown([
+            makeActionResult({ actionName: 'Action A', resultCode: 'SUCCESS' }),
+            makeActionResult({ actionName: 'Action B', resultCode: 'SUCCESS' }),
+        ]);
+        expect(result).toContain('## Action A ✓');
+        expect(result).toContain('## Action B ✓');
+        expect(result).toContain('\n\n');
+    });
+
+    it('should return empty string for empty array', () => {
+        expect(formatActionResultsAsMarkdown([])).toBe('');
+    });
+
+    it('should handle missing message gracefully', () => {
+        const result = formatActionResultsAsMarkdown([makeActionResult({
+            message: '',
+        })]);
+        expect(result).toContain('(no message)');
+    });
+
+    it('should produce significantly fewer characters than equivalent pretty-printed JSON', () => {
+        const summaries = [
+            makeActionResult({
+                actionName: 'Web Search',
+                resultCode: 'SUCCESS',
+                message: 'Found 15 results',
+                params: [
+                    makeOutputParam({ Name: 'ResultCount', Value: 15 }),
+                    makeOutputParam({ Name: 'TopResult', Value: 'https://example.com/article' }),
+                    makeOutputParam({ Name: 'Metadata', Value: { source: 'google', latency: 230 } }),
+                ],
+            }),
+            makeActionResult({
+                actionName: 'Summarize Content',
+                resultCode: 'SUCCESS',
+                message: 'Summary generated',
+                params: [
+                    makeOutputParam({ Name: 'Summary', Value: 'This is a summary of the content found during web search.' }),
+                    makeOutputParam({ Name: 'WordCount', Value: 120 }),
+                ],
+            }),
+        ];
+
+        const md = formatActionResultsAsMarkdown(summaries);
+        const json = JSON.stringify(summaries, null, 2);
+
+        // Markdown should be meaningfully smaller than pretty-printed JSON
+        expect(md.length).toBeLessThan(json.length * 0.75);
+    });
+});
+
+// ============================================================================
+// formatSubAgentResultAsMarkdown Tests
+// ============================================================================
+
+describe('formatSubAgentResultAsMarkdown', () => {
+    it('should format a successful sub-agent result with ✓', () => {
+        const result = formatSubAgentResultAsMarkdown('DataGather', {
+            success: true,
+            agentRun: { Status: 'Completed' },
+            payload: 'Here is the gathered data.',
+        });
+        expect(result).toContain('## Sub-agent: DataGather ✓');
+        expect(result).toContain('**Status:** Completed');
+        expect(result).toContain('**Payload:**');
+        expect(result).toContain('Here is the gathered data.');
+    });
+
+    it('should format a failed sub-agent result with ✗ and error', () => {
+        const result = formatSubAgentResultAsMarkdown('Analysis', {
+            success: false,
+            agentRun: { Status: 'Failed', ErrorMessage: 'Out of memory' },
+        });
+        expect(result).toContain('## Sub-agent: Analysis ✗');
+        expect(result).toContain('**Status:** Failed');
+        expect(result).toContain('**Error:** Out of memory');
+    });
+
+    it('should default status to Completed/Failed when agentRun.Status is absent', () => {
+        const successResult = formatSubAgentResultAsMarkdown('Agent', { success: true });
+        expect(successResult).toContain('**Status:** Completed');
+
+        const failResult = formatSubAgentResultAsMarkdown('Agent', { success: false });
+        expect(failResult).toContain('**Status:** Failed');
+    });
+
+    it('should omit error line for successful results', () => {
+        const result = formatSubAgentResultAsMarkdown('Agent', {
+            success: true,
+            agentRun: { Status: 'Completed' },
+        });
+        expect(result).not.toContain('**Error:**');
+    });
+
+    it('should omit payload section when payload is null/undefined', () => {
+        const result = formatSubAgentResultAsMarkdown('Agent', {
+            success: true,
+            payload: undefined,
+        });
+        expect(result).not.toContain('**Payload');
+    });
+
+    it('should serialize object payloads as JSON', () => {
+        const result = formatSubAgentResultAsMarkdown('Agent', {
+            success: true,
+            payload: { report: 'quarterly', items: [1, 2, 3] },
+        });
+        expect(result).toContain('**Payload:**');
+        expect(result).toContain('"report":"quarterly"');
+    });
+
+    it('should truncate very large payloads', () => {
+        const largePayload = 'x'.repeat(5000);
+        const result = formatSubAgentResultAsMarkdown('Agent', {
+            success: true,
+            payload: largePayload,
+        });
+        expect(result).toContain('**Payload** (truncated):');
+        expect(result).toContain('…');
+        // Should be capped around 4000 chars of payload content
+        const payloadLine = result.split('**Payload** (truncated):\n')[1];
+        expect(payloadLine.length).toBeLessThanOrEqual(4002); // 4000 + '…'
+    });
+
+    it('should not truncate payloads within the 4000-char limit', () => {
+        const normalPayload = 'Some analysis results that fit easily.';
+        const result = formatSubAgentResultAsMarkdown('Agent', {
+            success: true,
+            payload: normalPayload,
+        });
+        expect(result).toContain('**Payload:**');
+        expect(result).not.toContain('(truncated)');
+        expect(result).not.toContain('…');
     });
 });
