@@ -826,6 +826,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   async onMessageSent(message: MJConversationDetailEntity): Promise<void> {
+    // Guard: ignore events from hidden message-input instances belonging to other conversations.
+    // Multiple inputs are kept alive in the DOM cache (one per visited conversation) and all
+    // emit events to this single parent. Without this check, a background agent's response
+    // for conversation A would pollute conversation B's message list.
+    if (!UUIDsEqual(message.ConversationID, this.conversationId)) {
+      // Invalidate that conversation's cache so fresh data loads when the user switches back
+      if (message.ConversationID) {
+        this.invalidateConversationCache(message.ConversationID);
+      }
+      return;
+    }
+
     // Clear pending message if it was sent - notify parent via output
     if (this.pendingMessage) {
       this.pendingMessageConsumed.emit();
@@ -1133,6 +1145,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   async onAgentResponse(event: {message: MJConversationDetailEntity, agentResult: any}): Promise<void> {
+    // Guard: ignore agent responses from background inputs for other conversations.
+    // See onMessageSent() for the full explanation.
+    if (!UUIDsEqual(event.message.ConversationID, this.conversationId)) {
+      if (event.message.ConversationID) {
+        this.invalidateConversationCache(event.message.ConversationID);
+      }
+      return;
+    }
+
     // Add the agent's response message to the conversation
     this.messages = [...this.messages, event.message];
 
