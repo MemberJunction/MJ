@@ -1,6 +1,8 @@
 import { BaseAction } from "@memberjunction/actions";
 import { RunActionParams } from "@memberjunction/actions-base";
-import { Metadata, RunView, BaseEntity } from "@memberjunction/core";
+import { Metadata, RunView } from "@memberjunction/core";
+import { MJFileEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity } from "@memberjunction/core-entities";
+import { initializeDriverWithAccountCredentials } from "@memberjunction/storage";
 
 /**
  * Base class for actions that handle file inputs from multiple sources
@@ -56,7 +58,7 @@ export abstract class BaseFileHandlerAction extends BaseAction {
     }
 
     /**
-     * Load file from MJ Storage (Document Libraries)
+     * Load file from MJ Storage (MJ: Files entity)
      */
     private async loadFromMJStorage(fileId: string, params: RunActionParams): Promise<{
         content: string | Buffer;
@@ -66,24 +68,25 @@ export abstract class BaseFileHandlerAction extends BaseAction {
     }> {
         try {
             const rv = new RunView();
-            const result = await rv.RunView<BaseEntity>({
-                EntityName: 'Document Libraries',
+            const fileResult = await rv.RunView<MJFileEntity>({
+                EntityName: 'MJ: Files',
                 ExtraFilter: `ID = '${fileId}'`,
                 ResultType: 'entity_object'
             }, params.ContextUser);
 
-            if (!result.Success || !result.Results || result.Results.length === 0) {
-                throw new Error(`File not found in Document Libraries: ${fileId}`);
+            if (!fileResult.Success || fileResult.Results.length === 0) {
+                throw new Error(`File not found in MJ: Files: ${fileId}`);
             }
 
-            const doc = result.Results[0];
-            
-            // Get the actual file content (this would need implementation based on your storage provider)
-            // For now, returning the file info - actual implementation would fetch from storage
+            const file = fileResult.Results[0];
+            const driver = await this.initializeDriverForFile(file, params);
+            const objectName = file.ProviderKey ?? file.Name;
+            const content = await driver.GetObject({ fullPath: objectName });
+
             return {
-                content: '', // TODO: Implement actual file retrieval based on storage provider
-                fileName: doc.Get('FileName'),
-                mimeType: doc.Get('MimeType'),
+                content,
+                fileName: file.Name,
+                mimeType: file.ContentType ?? undefined,
                 source: 'storage'
             };
         } catch (error) {
@@ -143,7 +146,9 @@ export abstract class BaseFileHandlerAction extends BaseAction {
     }
 
     /**
-     * Save file to MJ Storage
+     * Save file to MJ Storage. Uploads the content to the first active FileStorageAccount
+     * and creates the corresponding MJ: Files entity record.
+     * @returns The ID of the newly created MJ: Files record
      */
     protected async saveToMJStorage(
         content: string | Buffer,
@@ -152,30 +157,99 @@ export abstract class BaseFileHandlerAction extends BaseAction {
         params: RunActionParams
     ): Promise<string> {
         try {
+            const { accountEntity, providerEntity } = await this.loadDefaultStorageAccount(params);
+            const driver = await initializeDriverWithAccountCredentials({
+                accountEntity,
+                providerEntity,
+                contextUser: params.ContextUser
+            });
+
+            const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content);
+            const storagePath = `artifacts/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}/${fileName}`;
+            const uploaded = await driver.PutObject(storagePath, buffer, mimeType);
+            if (!uploaded) {
+                throw new Error(`PutObject returned false for path: ${storagePath}`);
+            }
+
             const md = new Metadata();
-            const doc = await md.GetEntityObject<BaseEntity>('Document Libraries', params.ContextUser);
-            
-            if (!doc) {
-                throw new Error('Failed to create Document Library entity');
+            const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', params.ContextUser);
+            fileEntity.Name = fileName;
+            fileEntity.ContentType = mimeType;
+            fileEntity.ProviderID = providerEntity.ID;
+            fileEntity.ProviderKey = storagePath;
+            fileEntity.Status = 'Uploaded';
+
+            const saved = await fileEntity.Save();
+            if (!saved) {
+                throw new Error('Failed to save MJ: Files record after upload');
             }
 
-            doc.Set('FileName', fileName);
-            doc.Set('MimeType', mimeType);
-            // TODO: Set appropriate fields based on your Document Libraries schema
-            // doc.Set('FileSize', Buffer.byteLength(content));
-            // doc.Set('StorageProvider', 'default');
-            
-            const saveResult = await doc.Save();
-            if (!saveResult) {
-                throw new Error('Failed to save document to library');
-            }
-
-            // TODO: Actually store the file content to the storage provider
-            
-            return doc.Get('ID');
+            return fileEntity.ID;
         } catch (error) {
             throw new Error(`Failed to save file to storage: ${error instanceof Error ? error.message : String(error)}`);
         }
+    }
+
+    /**
+     * Loads the first active FileStorageAccount along with its provider entity.
+     * Used by saveToMJStorage to determine where to upload files.
+     */
+    private async loadDefaultStorageAccount(params: RunActionParams): Promise<{
+        accountEntity: MJFileStorageAccountEntity;
+        providerEntity: MJFileStorageProviderEntity;
+    }> {
+        const rv = new RunView();
+        const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
+            EntityName: 'MJ: File Storage Accounts',
+            OrderBy: '__mj_CreatedAt ASC',
+            MaxRows: 1,
+            ResultType: 'entity_object'
+        }, params.ContextUser);
+
+        if (!accountResult.Success || accountResult.Results.length === 0) {
+            throw new Error('No active FileStorageAccount found. Configure at least one storage account.');
+        }
+
+        const accountEntity = accountResult.Results[0];
+        const md = new Metadata();
+        const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>(
+            'MJ: File Storage Providers', params.ContextUser
+        );
+        const providerLoaded = await providerEntity.Load(accountEntity.ProviderID);
+        if (!providerLoaded) {
+            throw new Error(`FileStorageProvider ${accountEntity.ProviderID} not found for account "${accountEntity.Name}"`);
+        }
+
+        return { accountEntity, providerEntity };
+    }
+
+    /**
+     * Initializes a storage driver for the given file by looking up its storage account.
+     */
+    private async initializeDriverForFile(file: MJFileEntity, params: RunActionParams) {
+        const rv = new RunView();
+        const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
+            EntityName: 'MJ: File Storage Accounts',
+            ExtraFilter: `ProviderID = '${file.ProviderID}'`,
+            MaxRows: 1,
+            ResultType: 'entity_object'
+        }, params.ContextUser);
+
+        if (!accountResult.Success || accountResult.Results.length === 0) {
+            throw new Error(`No FileStorageAccount found for ProviderID ${file.ProviderID}`);
+        }
+
+        const accountEntity = accountResult.Results[0];
+        const md = new Metadata();
+        const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>(
+            'MJ: File Storage Providers', params.ContextUser
+        );
+        const providerLoaded = await providerEntity.Load(file.ProviderID);
+        if (!providerLoaded) {
+            throw new Error(`FileStorageProvider ${file.ProviderID} not found`);
+        }
+
+        return initializeDriverWithAccountCredentials({ accountEntity, providerEntity, contextUser: params.ContextUser });
     }
 
     /**
