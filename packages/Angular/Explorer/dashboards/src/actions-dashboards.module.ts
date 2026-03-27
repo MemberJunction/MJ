@@ -1,13 +1,10 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ButtonsModule } from '@progress/kendo-angular-buttons'; // kept for kendo-chip — migrated in Phase 2.3
-import { MjButtonDirective } from '@memberjunction/ng-ui-components';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { TreeViewModule } from '@progress/kendo-angular-treeview';
+import { MjButtonDirective, MjDropdownComponent } from '@memberjunction/ng-ui-components';
+import { GridModule } from '@progress/kendo-angular-grid'; // kept — Phase 2.3
+import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog'; // kept — Phase 2.2
+import { TreeViewModule } from '@progress/kendo-angular-treeview'; // kept — Phase 2.3
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { ActionGalleryModule } from '@memberjunction/ng-action-gallery';
@@ -65,11 +62,9 @@ import {
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    ButtonsModule,
     MjButtonDirective,
+    MjDropdownComponent,
     GridModule,
-    DropDownsModule,
-    InputsModule,
     DialogsModule,
     WindowModule,
     TreeViewModule,

@@ -2,24 +2,19 @@
   <div class="toolbar-left">
     <!-- Search -->
     <div class="search-container">
-      <kendo-textbox
-        [placeholder]="'Search actions...'"
-        [value]="Filters.searchTerm"
-        (valueChange)="onSearchInput($event)">
-        <ng-template kendoTextBoxPrefixTemplate>
-          <i class="fa-solid fa-search"></i>
-        </ng-template>
+      <div class="search-input-wrapper">
+        <i class="fa-solid fa-search search-icon"></i>
+        <input type="text" class="mj-input"
+          placeholder="Search actions..."
+          [value]="Filters.searchTerm"
+          (input)="onSearchInput($any($event.target).value)" />
         @if (Filters.searchTerm) {
-          <ng-template kendoTextBoxSuffixTemplate>
-            <button mjButton
-              variant="flat"
-              size="sm"
-              (click)="clearSearch()">
-              <i class="fa-solid fa-times"></i>
-            </button>
-          </ng-template>
+          <button mjButton variant="flat" size="sm" class="search-clear"
+            (click)="clearSearch()">
+            <i class="fa-solid fa-times"></i>
+          </button>
         }
-      </kendo-textbox>
+      </div>
     </div>
 
     <!-- Filters Dropdown -->
@@ -106,20 +101,14 @@
     @if (hasActiveFilters()) {
       <div class="active-filters">
         @for (status of Filters.statuses; track status) {
-          <kendo-chip
-            [removable]="true"
-            [size]="'small'"
-            (remove)="toggleStatus(status)">
-            Status: {{ status }}
-          </kendo-chip>
+          <span class="status-chip removable" (click)="toggleStatus(status)">
+            Status: {{ status }} <i class="fa-solid fa-times"></i>
+          </span>
         }
         @for (type of Filters.types; track type) {
-          <kendo-chip
-            [removable]="true"
-            [size]="'small'"
-            (remove)="toggleType(type)">
-            Type: {{ type === 'Generated' ? 'AI Generated' : type }}
-          </kendo-chip>
+          <span class="status-chip removable" (click)="toggleType(type)">
+            Type: {{ type === 'Generated' ? 'AI Generated' : type }} <i class="fa-solid fa-times"></i>
+          </span>
         }
       </div>
     }

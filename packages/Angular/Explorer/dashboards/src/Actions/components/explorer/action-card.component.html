@@ -10,15 +10,13 @@
       <div class="action-header">
         <h3 class="action-name" [title]="Action.Name">{{ Action.Name }}</h3>
         <div class="action-badges">
-          <kendo-chip
-            [themeColor]="getStatusColor()"
-            [size]="'small'">
+          <span class="status-chip" [attr.data-color]="getStatusColor()">
             {{ Action.Status }}
-          </kendo-chip>
+          </span>
           @if (Action.Type === 'Generated') {
-            <kendo-chip themeColor="info" [size]="'small'">
+            <span class="status-chip" data-color="info">
               <i class="fa-solid fa-robot"></i> AI
-            </kendo-chip>
+            </span>
           }
         </div>
       </div>

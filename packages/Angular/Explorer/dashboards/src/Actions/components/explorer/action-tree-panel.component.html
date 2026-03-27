@@ -29,25 +29,19 @@
       </div>
 
       <div class="tree-search">
-        <kendo-textbox
-          [placeholder]="'Filter categories...'"
-          [value]="SearchTerm"
-          (valueChange)="onSearchChange($event)"
-          [size]="'small'">
-          <ng-template kendoTextBoxPrefixTemplate>
-            <i class="fa-solid fa-search"></i>
-          </ng-template>
+        <div class="search-input-wrapper">
+          <i class="fa-solid fa-search search-icon"></i>
+          <input type="text" class="mj-input"
+            placeholder="Filter categories..."
+            [value]="SearchTerm"
+            (input)="onSearchChange($any($event.target).value)" />
           @if (SearchTerm) {
-            <ng-template kendoTextBoxSuffixTemplate>
-              <button mjButton
-                variant="flat"
-                size="sm"
-                (click)="onSearchChange('')">
-                <i class="fa-solid fa-times"></i>
-              </button>
-            </ng-template>
+            <button mjButton variant="flat" size="sm" class="search-clear"
+              (click)="onSearchChange('')">
+              <i class="fa-solid fa-times"></i>
+            </button>
           }
-        </kendo-textbox>
+        </div>
       </div>
     </div>
 

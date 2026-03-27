@@ -3,45 +3,44 @@
   <div class="overview-header">
     <div class="filters-row">
       <div class="search-container">
-        <kendo-textbox 
-          placeholder="Search actions..." 
-          [value]="searchTerm$.value"
-          (valueChange)="onSearchChange($event)">
-          <ng-template kendoTextBoxPrefixTemplate>
-            <i class="fa-solid fa-search"></i>
-          </ng-template>
-        </kendo-textbox>
+        <div class="search-input-wrapper">
+          <i class="fa-solid fa-search search-icon"></i>
+          <input type="text" class="mj-input"
+            placeholder="Search actions..."
+            [value]="searchTerm$.value"
+            (input)="onSearchChange($any($event.target).value)" />
+        </div>
       </div>
       
       <div class="filter-container">
-        <kendo-dropdownlist 
-          [data]="[
+        <mj-dropdown
+          [Data]="[
             { text: 'All Statuses', value: 'all' },
             { text: 'Active', value: 'Active' },
             { text: 'Pending', value: 'Pending' },
             { text: 'Disabled', value: 'Disabled' }
           ]"
-          textField="text"
-          valueField="value"
-          [valuePrimitive]="true"
-          [value]="selectedStatus$.value"
-          (valueChange)="onStatusFilterChange($event)">
-        </kendo-dropdownlist>
+          TextField="text"
+          ValueField="value"
+          [ValuePrimitive]="true"
+          [ngModel]="selectedStatus$.value"
+          (ValueChange)="onStatusFilterChange($any($event))">
+        </mj-dropdown>
       </div>
       
       <div class="filter-container">
-        <kendo-dropdownlist 
-          [data]="[
+        <mj-dropdown
+          [Data]="[
             { text: 'All Types', value: 'all' },
             { text: 'AI Generated', value: 'Generated' },
             { text: 'Custom', value: 'Custom' }
           ]"
-          textField="text"
-          valueField="value"
-          [valuePrimitive]="true"
-          [value]="selectedType$.value"
-          (valueChange)="onTypeFilterChange($event)">
-        </kendo-dropdownlist>
+          TextField="text"
+          ValueField="value"
+          [ValuePrimitive]="true"
+          [ngModel]="selectedType$.value"
+          (ValueChange)="onTypeFilterChange($any($event))">
+        </mj-dropdown>
       </div>
     </div>
   </div>
@@ -174,11 +173,9 @@
                   <div class="action-description">{{ action.Description || 'No description' }}</div>
                 </div>
                 <div class="action-status">
-                  <kendo-chip 
-                    [themeColor]="getStatusColor(action.Status)"
-                    [size]="'small'">
+                  <span class="status-chip" [attr.data-color]="getStatusColor(action.Status)">
                     {{ action.Status }}
-                  </kendo-chip>
+                  </span>
                 </div>
               </div>
             }
@@ -211,11 +208,9 @@
                     <div class="execution-user">{{ execution.User || 'User ID: ' + execution.UserID }}</div>
                   </div>
                   <div class="execution-result">
-                    <kendo-chip 
-                      [themeColor]="isExecutionSuccess(execution) ? 'success' : 'error'"
-                      [size]="'small'">
+                    <span class="status-chip" [attr.data-color]="isExecutionSuccess(execution) ? 'success' : 'error'">
                       {{ execution.ResultCode || 'Unknown' }}
-                    </kendo-chip>
+                    </span>
                   </div>
                   <div class="execution-expand-icon">
                     <i [class]="execution.isExpanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>

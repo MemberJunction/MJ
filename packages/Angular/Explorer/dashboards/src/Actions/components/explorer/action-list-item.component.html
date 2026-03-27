@@ -20,11 +20,9 @@
 
   <!-- Status -->
   <div class="item-status">
-    <kendo-chip
-      [themeColor]="getStatusColor()"
-      [size]="'small'">
+    <span class="status-chip" [attr.data-color]="getStatusColor()">
       {{ Action.Status }}
-    </kendo-chip>
+    </span>
   </div>
 
   <!-- Type -->
