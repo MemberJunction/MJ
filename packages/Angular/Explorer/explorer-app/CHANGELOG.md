@@ -1,5 +1,16 @@
 # @memberjunction/ng-explorer-app
 
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ng-bootstrap@5.20.0
+  - @memberjunction/ng-auth-services@5.20.0
+  - @memberjunction/ng-explorer-core@5.20.0
+  - @memberjunction/ng-workspace-initializer@5.20.0
+
 ## 5.19.0
 
 ### Patch Changes

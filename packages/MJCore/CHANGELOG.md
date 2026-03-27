@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/core
 
+## 5.20.0
+
+### Minor Changes
+
+- 2298f8a: Metadata Migration for v5.20.0
+
+### Patch Changes
+
+- @memberjunction/global@5.20.0
+
 ## 5.19.0
 
 ### Patch Changes
