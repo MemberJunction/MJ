@@ -1,5 +1,18 @@
 # @memberjunction/ai-reranker
 
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/ai-prompts@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/global@5.20.0
+
 ## 5.19.0
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @memberjunction/ai-zhipu
 
+## 5.20.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.20.0
+- @memberjunction/ai-openai@5.20.0
+- @memberjunction/global@5.20.0
+
 ## 5.19.0
 
 ### Patch Changes
