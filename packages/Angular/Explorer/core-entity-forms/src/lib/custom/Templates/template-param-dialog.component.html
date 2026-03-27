@@ -1,10 +1,9 @@
 @if (_isVisible) {
-  <kendo-dialog
-    [minWidth]="600"
-    [width]="800"
-    [height]="700"
-    (close)="close()"
-    [title]="'Test Template: ' + (template?.Name || 'Unknown')">
+  <mj-dialog
+    [Visible]="true"
+    [Width]="800"
+    (Close)="close()">
+    <mj-dialog-titlebar>Test Template: {{ template?.Name || 'Unknown' }}</mj-dialog-titlebar>
     <div class="dialog-content" style="display: flex; flex-direction: column; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
       <!-- Header Section -->
       <div class="dlg-header">
@@ -24,20 +23,10 @@
         </div>
       } @else {
         <!-- Template Parameters Section -->
-        <kendo-expansionpanel
-          [(expanded)]="parametersExpanded"
+        <mj-accordion-panel
+          [Title]="'Template Parameters'"
+          [(Expanded)]="parametersExpanded"
           style="margin-bottom: 16px; flex-shrink: 0;">
-          <ng-template kendoExpansionPanelTitleDirective>
-            <span class="dlg-panel-title">
-              <i class="fa-solid fa-sliders"></i>
-              Template Parameters
-              @if (parameters.length > 0) {
-                <span class="count-badge">
-                  {{ parameters.length }}
-                </span>
-              }
-            </span>
-          </ng-template>
           <div style="padding: 12px 0;">
             <div class="dlg-info-text">
               <i class="fa-solid fa-info-circle"></i>
@@ -82,23 +71,23 @@
                           </div>
                         }
                       } @else {
-                        <kendo-textbox [(ngModel)]="param.key"
+                        <input type="text" class="mj-input"
+                          [(ngModel)]="param.key"
                           (ngModelChange)="onParameterChange()"
                           placeholder="Parameter name..."
                           [disabled]="isRunning"
-                          style="font-family: 'Courier New', monospace; width: 100%;">
-                        </kendo-textbox>
+                          style="font-family: 'Courier New', monospace; width: 100%;" />
                       }
                     </div>
                     <!-- Parameter Value -->
                     <div class="param-value">
-                      <kendo-textarea [(ngModel)]="param.value"
+                      <textarea class="mj-textarea"
+                        [(ngModel)]="param.value"
                         (ngModelChange)="onParameterChange()"
                         [rows]="2"
                         placeholder="Enter value (JSON strings, numbers, objects)..."
                         [disabled]="isRunning"
-                        style="font-family: 'Courier New', monospace; font-size: 0.9em; width: 100%;">
-                      </kendo-textarea>
+                        style="font-family: 'Courier New', monospace; font-size: 0.9em; width: 100%;"></textarea>
                     </div>
                     <!-- Actions -->
                     <div class="param-actions">
@@ -134,40 +123,23 @@
               </div>
             }
           </div>
-        </kendo-expansionpanel>
+        </mj-accordion-panel>
         <!-- JSON Preview Section -->
-        <kendo-expansionpanel
-          [(expanded)]="jsonPreviewExpanded"
+        <mj-accordion-panel
+          [Title]="'Context Data (JSON)'"
+          [(Expanded)]="jsonPreviewExpanded"
           style="margin-bottom: 16px; flex-shrink: 0;">
-          <ng-template kendoExpansionPanelTitleDirective>
-            <span class="dlg-panel-title">
-              <i class="fa-solid fa-code"></i>
-              Context Data (JSON)
-            </span>
-          </ng-template>
           <div style="padding: 12px 0;">
             <div class="json-preview-box">
               <pre>{{ parametersAsJson }}</pre>
             </div>
           </div>
-        </kendo-expansionpanel>
+        </mj-accordion-panel>
         <!-- Test Results Section -->
-        <kendo-expansionpanel
-          [(expanded)]="resultsExpanded"
+        <mj-accordion-panel
+          [Title]="'Test Results'"
+          [(Expanded)]="resultsExpanded"
           style="margin-bottom: 16px; flex: 1; display: flex; flex-direction: column;">
-          <ng-template kendoExpansionPanelTitleDirective>
-            <span class="dlg-panel-title">
-              <i class="fa-solid fa-chart-line"></i>
-              Test Results
-              @if (testResult) {
-                @if (testResult.success) {
-                  <span class="result-badge-success">Success</span>
-                } @else {
-                  <span class="result-badge-error">Error</span>
-                }
-              }
-            </span>
-          </ng-template>
           <div style="padding: 12px 0; flex: 1; display: flex; flex-direction: column;">
             @if (isRunning) {
               <div class="dlg-loading" style="flex: 1;">
@@ -231,11 +203,11 @@
               </div>
             }
           </div>
-        </kendo-expansionpanel>
+        </mj-accordion-panel>
       }
     </div>
     <!-- Dialog Actions -->
-    <kendo-dialog-actions>
+    <mj-dialog-actions>
       <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
         <div>
           @if (hasUnsavedParameters) {
@@ -266,6 +238,6 @@
           </button>
         </div>
       </div>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    </mj-dialog-actions>
+  </mj-dialog>
 }

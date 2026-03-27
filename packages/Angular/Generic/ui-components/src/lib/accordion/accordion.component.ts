@@ -1,4 +1,4 @@
-import { Component, Input, HostBinding } from '@angular/core';
+import { Component, Input, Output, EventEmitter, HostBinding } from '@angular/core';
 
 /**
  * mj-accordion-panel — Collapsible panel. Replaces `<kendo-panelbar-item>` and `<kendo-expansionpanel>`.
@@ -32,9 +32,11 @@ import { Component, Input, HostBinding } from '@angular/core';
 export class MjAccordionPanelComponent {
   @Input() Title = '';
   @Input() Expanded = false;
+  @Output() ExpandedChange = new EventEmitter<boolean>();
   @HostBinding('class.mj-accordion-panel-host') readonly hostClass = true;
 
   Toggle(): void {
     this.Expanded = !this.Expanded;
+    this.ExpandedChange.emit(this.Expanded);
   }
 }
