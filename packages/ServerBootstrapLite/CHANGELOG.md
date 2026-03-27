@@ -1,5 +1,62 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [7ab01a8]
+- Updated dependencies [2298f8a]
+  - @memberjunction/ai-agents@5.20.0
+  - @memberjunction/core@5.20.0
+  - @memberjunction/core-actions@5.20.0
+  - @memberjunction/core-entities-server@5.20.0
+  - @memberjunction/ai-agent-manager@5.20.0
+  - @memberjunction/scheduling-engine@5.20.0
+  - @memberjunction/testing-engine@5.20.0
+  - @memberjunction/ai-engine-base@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/ai-recommendations-rex@5.20.0
+  - @memberjunction/ai-vectors-pinecone@5.20.0
+  - @memberjunction/ai-reranker@5.20.0
+  - @memberjunction/actions-apollo@5.20.0
+  - @memberjunction/actions-base@5.20.0
+  - @memberjunction/actions-bizapps-accounting@5.20.0
+  - @memberjunction/actions-bizapps-crm@5.20.0
+  - @memberjunction/actions-bizapps-formbuilders@5.20.0
+  - @memberjunction/actions-bizapps-lms@5.20.0
+  - @memberjunction/actions-bizapps-social@5.20.0
+  - @memberjunction/actions@5.20.0
+  - @memberjunction/doc-utils@5.20.0
+  - @memberjunction/encryption@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/data-context-server@5.20.0
+  - @memberjunction/scheduling-actions@5.20.0
+  - @memberjunction/scheduling-engine-base@5.20.0
+  - @memberjunction/templates@5.20.0
+  - @memberjunction/ai-provider-bundle@5.20.0
+  - @memberjunction/ai-anthropic@5.20.0
+  - @memberjunction/ai-azure@5.20.0
+  - @memberjunction/ai-bedrock@5.20.0
+  - @memberjunction/ai-betty-bot@5.20.0
+  - @memberjunction/ai-blackforestlabs@5.20.0
+  - @memberjunction/ai-cerebras@5.20.0
+  - @memberjunction/ai-cohere@5.20.0
+  - @memberjunction/ai-elevenlabs@5.20.0
+  - @memberjunction/ai-fireworks@5.20.0
+  - @memberjunction/ai-gemini@5.20.0
+  - @memberjunction/ai-groq@5.20.0
+  - @memberjunction/ai-heygen@5.20.0
+  - @memberjunction/ai-lmstudio@5.20.0
+  - @memberjunction/ai-local-embeddings@5.20.0
+  - @memberjunction/ai-minimax@5.20.0
+  - @memberjunction/ai-mistral@5.20.0
+  - @memberjunction/ai-ollama@5.20.0
+  - @memberjunction/ai-openai@5.20.0
+  - @memberjunction/ai-openrouter@5.20.0
+  - @memberjunction/ai-vertex@5.20.0
+  - @memberjunction/ai-zhipu@5.20.0
+  - @memberjunction/ai-xai@5.20.0
+
 ## 5.19.0
 
 ### Patch Changes
