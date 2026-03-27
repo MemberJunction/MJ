@@ -1061,6 +1061,35 @@
   align-items: center;
 }
 
+.message-item.pinned {
+  border-left: 3px solid var(--mj-brand-primary);
+  background-color: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+}
+
+/* Wraps pin button + rating component on the right side of the footer */
+.ai-message-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.action-bar-btn.pin-btn {
+  color: var(--mj-text-muted);
+}
+
+.action-bar-btn.pin-btn:hover {
+  color: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+}
+
+.action-bar-btn.pin-btn.pinned {
+  opacity: 1;
+  color: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+}
+
 /* Agent details section wrapper */
 .agent-details-section {
   margin-top: 8px;

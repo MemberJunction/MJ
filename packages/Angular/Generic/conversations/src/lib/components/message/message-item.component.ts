@@ -787,6 +787,21 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  public async PinMessage(): Promise<void> {
+    // Optimistic update — toggle immediately so the UI responds at once
+    const previousValue = this.message.IsPinned;
+    this.message.IsPinned = !previousValue;
+    this.cdRef.detectChanges();
+
+    const saved = await this.message.Save();
+    if (!saved) {
+      // Revert on failure
+      this.message.IsPinned = previousValue;
+      this.cdRef.detectChanges();
+      console.error('Failed to save pin state for message', this.message.ID);
+    }
+  }
+
   public onTestFeedbackClick(): void {
     if (!this.isProcessing) {
       this.testFeedbackClicked.emit(this.message);

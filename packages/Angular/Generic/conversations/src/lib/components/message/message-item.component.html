@@ -194,11 +194,21 @@
           </div>
         }
         @if (isAIMessage && messageStatus === 'Complete') {
-          <mj-conversation-message-rating
-            [conversationDetailId]="message.ID"
-            [currentUser]="currentUser"
-            [ratingsData]="ratings">
-          </mj-conversation-message-rating>
+          <div class="ai-message-actions">
+            <button
+              class="action-bar-btn pin-btn"
+              [class.pinned]="message.IsPinned"
+              (click)="PinMessage()"
+              [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
+              type="button">
+              <i class="fas fa-thumbtack"></i>
+            </button>
+            <mj-conversation-message-rating
+              [conversationDetailId]="message.ID"
+              [currentUser]="currentUser"
+              [ratingsData]="ratings">
+            </mj-conversation-message-rating>
+          </div>
         }
       </div>
     }
