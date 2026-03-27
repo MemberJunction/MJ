@@ -1,26 +1,38 @@
 %%
-%% This is file `sn-basic.bst',
+%% This is file `spbasic.bst',
 %% generated with the docstrip utility.
 %%
-%% The original source files were: merlin.mbs
+%% The original source files were:
+%%
+%% merlin.mbs  (with options: `ay,nat,seq-lab,vonx,nm-rvx,ed-rev,jnrlst,dt-beg,yr-par,yrp-x,yrpp-xsp,note-yr,jxper,jttl-rm,thtit-a,pgsep-c,num-xser,ser-vol,jnm-x,btit-rm,bt-rm,pre-pub,doi,edparxc,blk-tit,in-col,fin-bare,pp,ed,abr,mth-bare,ord,jabr,xand,eprint,url,url-blk,em-x,nfss,')
 %% ----------------------------------------
 %%
-%%**************************************************************************************%%
-%%											%%
-%% For Springer medical, life sciences, chemistry, geology, engineering and		%%
-%%   computer science publications.							%%
-%% For use with the natbib package (see below). Default is author-year citations.	%%
-%% When citations are numbered, please use \documentclass[sn-basic, Numbered]{sn-jnl}.  %%
-%%											%%
-%% Per default the reference list entries are alphabetized.				%%
-%% If the entries in the list should be numbered consecutively comment out the		%%
-%% two lines including SORT (in uppercase).						%% 
-%%**************************************************************************************%%
- % This file can be redistributed and/or modified under the terms
+%%********************************************************************************%%
+%%                                                                                %%
+%% For Springer medical, life sciences, chemistry, geology, engineering and       %%
+%%   computer science publications.                                               %%
+%% For use with the natbib package (see below). Default is author-year citations. %%
+%%   When citations are numbered, please use \usepackage[numbers]{natbib}.        %%
+%% A lack of punctuation is the key feature. Springer-Verlag 2004/10/15           %%
+%% Report bugs and improvements to: Joylene Vette-Guillaume or Frank Holzwarth    %%
+%%                                                                                %%
+%%********************************************************************************%%
+%%
+%% Copyright 1994-2004 Patrick W Daly
+ % ===============================================================
+ % IMPORTANT NOTICE:
+ % This bibliographic style (bst) file has been generated from one or
+ % more master bibliographic style (mbs) files, listed above.
+ %
+ % This generated file can be redistributed and/or modified under the terms
  % of the LaTeX Project Public License Distributed from CTAN
  % archives in directory macros/latex/base/lppl.txt; either
  % version 1 of the License, or any later version.
- %
+ % ===============================================================
+ % Name and version information of the main mbs file:
+ % \ProvidesFile{merlin.mbs}[2004/02/09 4.13 (PWD, AO, DPC)]
+ %   For use with BibTeX version 0.99a or later
+ %-------------------------------------------------------------------
  % This bibliography style file is intended for texts in ENGLISH
  % This is an author-year citation style bibliography. As such, it is
  % non-standard LaTeX, and requires a special package file to function properly.
@@ -39,22 +51,15 @@
  % The \cite command functions as follows:
  %   \citet{key} ==>>                Jones et al. (1990)
  %   \citet*{key} ==>>               Jones, Baker, and Smith (1990)
- %   \citep{key} ==>>                (Jones et al. 1990)
- %   \citep*{key} ==>>               (Jones, Baker, and Smith 1990)
- %   \citep[chap. 2]{key} ==>>       (Jones et al. 1990, chap. 2)
- %   \citep[e.g.][]{key} ==>>        (e.g. Jones et al. 1990)
+ %   \citep{key} ==>>                (Jones et al., 1990)
+ %   \citep*{key} ==>>               (Jones, Baker, and Smith, 1990)
+ %   \citep[chap. 2]{key} ==>>       (Jones et al., 1990, chap. 2)
+ %   \citep[e.g.][]{key} ==>>        (e.g. Jones et al., 1990)
  %   \citep[e.g.][p. 32]{key} ==>>   (e.g. Jones et al., p. 32)
  %   \citeauthor{key} ==>>           Jones et al.
  %   \citeauthor*{key} ==>>          Jones, Baker, and Smith
  %   \citeyear{key} ==>>             1990
  %---------------------------------------------------------------------
-
-FUNCTION {identify.basic.version}
-{ % Put identifying string in the .blg file
-  "sn-basic.bst"
-  " [2024/07/19 v1.1 bibliography style]"
-  * top$
-}
 
 ENTRY
   { address
@@ -71,7 +76,6 @@ ENTRY
     institution
     journal
     key
-    keywords
     month
     note
     number
@@ -85,11 +89,6 @@ ENTRY
     url
     volume
     year
-    archivePrefix
-    primaryClass
-    adsurl
-    adsnote
-    version
   }
   {}
   { label extra.label sort.label short.list }
@@ -235,9 +234,6 @@ FUNCTION {bbl.and}
 { "and"}
 
 FUNCTION {bbl.etal}
-{ "et~al." }
-
-FUNCTION {refbbl.etal}
 { "et~al" }
 
 FUNCTION {bbl.editors}
@@ -250,7 +246,7 @@ FUNCTION {bbl.edby}
 { "edited by" }
 
 FUNCTION {bbl.edition}
-{ "edn." }
+{ "edn" }
 
 FUNCTION {bbl.volume}
 { "vol" }
@@ -269,9 +265,6 @@ FUNCTION {bbl.in}
 
 FUNCTION {bbl.pages}
 { "pp" }
-
-FUNCTION {bbl.incoll.pages}
-{ "p" }
 
 FUNCTION {bbl.page}
 { "p" }
@@ -437,87 +430,18 @@ FUNCTION {bibinfo.warn}
     }
   if$
 }
-
-%%Commented on 17th July 2024
-%FUNCTION {format.eprint}
-%{ eprint duplicate$ empty$
-%    'skip$
-%    { "\eprint"
-%      archive empty$
-%        'skip$
-%        { "[" * archive * "]" * }
-%      if$
-%      "{" * swap$ * "}" *
-%    }
-%  if$
-%}
-
-FUNCTION {format.archive}
-{
-  archivePrefix empty$
-      { "" }
-      { archivePrefix ":" *}
-  if$           
-}
-
-%%Updated on 17th July 2024
 FUNCTION {format.eprint}
-{ eprint empty$
-     { ""}
-     { archive empty$
-          {"{\href{https://arxiv.org/abs/" eprint * "}" *
-             "{{" * format.archive * eprint * "}}}" *}
-          {"{\href{https://arxiv.org/abs/" eprint * "}" *
-             "{{" * format.archive * eprint * "}}}" *}
-       if$
-     }
-     if$
+{ eprint duplicate$ empty$
+    'skip$
+    { "\eprint"
+      archive empty$
+        'skip$
+        { "[" * archive * "]" * }
+      if$
+      "{" * swap$ * "}" *
+    }
+  if$
 }
-
-
-
-FUNCTION {format.primaryClass}
-{
-  primaryClass empty$
-      { "" }
-      { "{[" primaryClass * "]}" *}
-  if$           
-}
-
-FUNCTION {format.soft.eprint}
-{ eprint empty$
-     { ""}
-     { archive empty$
-          {"{\href{https://arxiv.org/abs/" eprint * "}" *
-             "{{" * format.archive * eprint * "}}}" *}
-          {"{\href{https://arxiv.org/abs/" eprint * "}" *
-             "{{" * format.archive * eprint * "}}}" *}
-       if$
-     }
-     if$
-}
-
-FUNCTION {format.softmisc.archive}
-{
-  archivePrefix empty$
-      { "" }
-      { "" }
-  if$           
-}
-
-FUNCTION {format.softmisc.eprint}
-{ eprint empty$
-     { ""}
-     { archive empty$
-          {"{\href{https://ascl.net/" format.softmisc.archive * eprint * "}" *
-             "{{" * format.archive * eprint * "}}}" *}
-          {"{\href{https://ascl.net/" format.softmisc.archive * eprint * "}" *
-             "{{" * format.archive * eprint * "}}}" *}
-       if$
-     }
-     if$
-}
-
 FUNCTION {format.url}
 { url empty$
     { "" }
@@ -538,18 +462,13 @@ FUNCTION {format.names}
   numnames 'namesleft :=
     { namesleft #0 > }
     { s nameptr
-      "{vv~}{ll}{ f{}}{jj}"
-      format.name$ 't :=
-     nameptr #1 >
-         {
-          nameptr #3
-          #1 + =
-          numnames #3
-          > and
-            { "others" 't :=
-              #1 'namesleft := }
-            'skip$
-          if$
+      "{vv~}{ll}{ f{}}{ jj}"
+      format.name$
+      remove.dots
+      bibinfo bibinfo.check
+      't :=
+      nameptr #1 >
+        {
           namesleft #1 >
             { ", " * t * }
             {
@@ -560,7 +479,7 @@ FUNCTION {format.names}
               if$
               t "others" =
                 {
-                  " " * refbbl.etal *
+                  " " * bbl.etal *
                 }
                 { " " * t * }
               if$
@@ -575,7 +494,6 @@ FUNCTION {format.names}
   while$
   } if$
 }
-
 FUNCTION {format.names.ed}
 {
   format.names
@@ -788,7 +706,7 @@ FUNCTION {n.separate}
 }
 FUNCTION {n.dashify}
 {
-%%  n.separate
+  n.separate
   't :=
   ""
     { t empty$ not }
@@ -1007,45 +925,6 @@ FUNCTION {format.journal.eid}
     }
   if$
 }
-
-FUNCTION {format.incoll.pages}
-{ pages duplicate$ empty$ 'skip$
-    { duplicate$ multi.page.check
-        {
-          bbl.incoll.pages swap$
-          n.dashify
-        }
-        {
-          bbl.page swap$
-        }
-      if$
-      tie.or.space.prefix
-      "pages" bibinfo.check
-      * *
-    }
-  if$
-}
-
-FUNCTION {format.incoll.chapter.pages}
-{ chapter empty$
-    'format.incoll.pages
-    { type empty$
-        { bbl.chapter }
-        { type "l" change.case$
-          "type" bibinfo.check
-        }
-      if$
-      chapter tie.or.space.prefix
-      "chapter" bibinfo.check
-      * *
-      pages empty$
-        'skip$
-        { ", " * format.incoll.pages * }
-      if$
-    }
-  if$
-}
-
 FUNCTION {format.vol.num.pages}
 { volume field.or.null
   duplicate$ empty$ 'skip$
@@ -1198,16 +1077,12 @@ FUNCTION {article}
       format.pages output
     }
   if$
-  new.sentence
   format.doi output
   format.url output
   format.note output
-  format.soft.eprint output
-  add.blank
-  format.primaryClass output
+  format.eprint output
   fin.entry
 }
-
 FUNCTION {book}
 { output.bibitem
   author empty$
@@ -1243,7 +1118,6 @@ FUNCTION {book}
   format.eprint output
   fin.entry
 }
-
 FUNCTION {booklet}
 { output.bibitem
   format.authors output
@@ -1311,13 +1185,12 @@ FUNCTION {incollection}
     { format.in.ed.booktitle "booktitle" output.check
       format.bvolume output
       format.edition output
-      new.sentence
       format.number.series output
       format.publisher.address output
-      format.incoll.chapter.pages output
+      format.chapter.pages output
     }
     { format.incoll.inproc.crossref output.nonnull
-      format.incoll.chapter.pages output
+      format.chapter.pages output
     }
   if$
   format.doi output
@@ -1339,11 +1212,10 @@ FUNCTION {inproceedings}
       publisher empty$
         { format.organization.address output }
         { organization "organization" bibinfo.check output
-	format.bvolume output
-	new.sentence
-    format.publisher.address output
+          format.publisher.address output
         }
       if$
+      format.bvolume output
       format.number.series output
       format.pages output
     }
@@ -1410,32 +1282,6 @@ FUNCTION {misc}
   format.eprint output
   fin.entry
 }
-
-FUNCTION {insert.comma}
-{ duplicate$ empty$
-    'skip$
-    { ", " * add.blank }
-  if$
-}
-
-FUNCTION {softmisc}
-{ output.bibitem
-  format.authors output
-  author format.key output
-  format.date "year" output.check
-  date.block
-  format.title output
-  insert.comma
-  version output
-  new.sentence
-  howpublished "howpublished" bibinfo.check output
-  format.doi output
-  format.url output
-  format.note output
-  format.softmisc.eprint output
-  fin.entry
-}
-
 FUNCTION {phdthesis}
 { output.bibitem
   format.authors "author" output.check
@@ -1512,9 +1358,6 @@ FUNCTION {unpublished}
 
 FUNCTION {default.type} { misc }
 READ
-
-EXECUTE {identify.basic.version}
-
 FUNCTION {sortify}
 { purify$
   "l" change.case$
@@ -1793,16 +1636,13 @@ FUNCTION {begin.bib}
   write$ newline$
   "\providecommand{\urlprefix}{URL }"
   write$ newline$
-  %%"\expandafter\ifx\csname urlstyle\endcsname\relax"
-  %%write$ newline$
-  %%"  \providecommand{\doi}[1]{\discretionary{}{}{}https://doi.org/#1}\else"
-  %%write$ newline$
-  %%"  \providecommand{\doi}{\discretionary{}{}{}\begingroup \urlstyle{rm}\Url}\fi"
-  "\providecommand{\doi}[1]{\url{https://doi.org/#1}}"
+  "\expandafter\ifx\csname urlstyle\endcsname\relax"
+  write$ newline$
+  "  \providecommand{\doi}[1]{DOI~\discretionary{}{}{}#1}\else"
+  write$ newline$
+  "  \providecommand{\doi}{DOI~\discretionary{}{}{}\begingroup \urlstyle{rm}\Url}\fi"
   write$ newline$
   "\providecommand{\eprint}[2][]{\url{#2}}"
-  write$ newline$
-  " \bibcommenthead "
   write$ newline$
 }
 EXECUTE {begin.bib}
@@ -1813,6 +1653,7 @@ FUNCTION {end.bib}
   "\end{thebibliography}" write$ newline$
 }
 EXECUTE {end.bib}
-
-%% End of file `sn-basic.bst'.
+%% End of customized bst file
+%%
+%% End of file `spbasic.bst'.
 
