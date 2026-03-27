@@ -50,7 +50,7 @@ import pdfParse from 'pdf-parse';
  * });
  * ```
  */
-@RegisterClass(BaseAction, "PDF Extractor")
+@RegisterClass(BaseAction, "__PDFExtractor")
 export class PDFExtractorAction extends BaseFileHandlerAction {
     
     /**

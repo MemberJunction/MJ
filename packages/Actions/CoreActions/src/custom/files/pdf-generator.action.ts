@@ -36,7 +36,7 @@ type NodeType =
  * Optional Puppeteer high-fidelity mode is activated automatically when
  * the `puppeteer` package is present in the runtime environment.
  */
-@RegisterClass(BaseAction, "PDF Generator")
+@RegisterClass(BaseAction, "__PDFGenerator")
 export class PDFGeneratorAction extends BaseFileHandlerAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {

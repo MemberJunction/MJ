@@ -172,7 +172,7 @@
             "ID": "02862A6E-5AAB-4DE2-B16D-8553145F668C"
           },
           "sync": {
-            "lastModified": "2026-02-13T21:09:24.566Z",
+            "lastModified": "2026-03-27T03:37:54.836Z",
             "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
           }
         },
@@ -370,6 +370,76 @@
           "sync": {
             "lastModified": "2026-02-13T21:09:24.831Z",
             "checksum": "4a9447b3f1107b741f1dd561bb10bf06fdccd154626325f10a5dc0f340a43b78"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=PDF Generator",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "988B4754-CF8E-4357-A6BB-515166B1945E"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:12:38.463Z",
+            "checksum": "f3cb024f80d312aa178cefd8c21454e74f7d59b2665206d90f8213c65581b25e"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=PDF Extractor",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "577EEC26-A9C9-49AB-A0DF-237335CAD95B"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:12:38.473Z",
+            "checksum": "af7daae6dc6080f0feb4726c419041d92cdc680dd46cf1b818500dacc1f23eac"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Excel Writer",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "153B5601-F541-4659-9DED-234D18BFEC18"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:12:38.483Z",
+            "checksum": "004aacf787b93272e2c5b7d15b96884ff9e5954e3060db44736c52a229fcc8a5"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Excel Reader",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D38BFDA4-53A2-432E-AD28-12A9D548BB8D"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:12:38.492Z",
+            "checksum": "2d22739d2c13d0ae8ba3fa6badd3825d759f35b03c2943e070924d33c523baae"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Word Document Generator",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C9E4A370-2A39-46F7-8AFA-2FBF53B992DF"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:12:38.501Z",
+            "checksum": "7d4bc1d9c891541ec0464dd19a899c1ea69977fd49fa506fbe6da55760edf3f0"
           }
         }
       ],

@@ -1043,7 +1043,7 @@
       "ID": "0F19E377-BBC5-4CFF-8FC3-878AECA37122"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:50.926Z",
+      "lastModified": "2026-03-27T05:11:32.630Z",
       "checksum": "e809579ec2912a536bd45d0b323dbe33f892980b26f12eb70ca1dab28426a25a"
     }
   },
@@ -1216,7 +1216,7 @@
       "ID": "5C8E357D-2CA3-481E-A5F2-94BFE504DF55"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:50.927Z",
+      "lastModified": "2026-03-27T05:11:32.631Z",
       "checksum": "6b1d84a888c7aa14a17b28b71fe8aa28e8959a0664a6a1e90cddd21a882e4c39"
     }
   },
@@ -5683,6 +5683,170 @@
     "sync": {
       "lastModified": "2025-12-30T23:06:51.284Z",
       "checksum": "099f2764ad19af5b5918d9851b93f0cc05394859cfacb1f8c4a16ff959fb05c5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Word Document Generator",
+      "Description": "Generate Word DOCX files from structured JSON sections, HTML, or Markdown content. Returns the document as base64 or saves it to MJ Storage.",
+      "DriverClass": "__WordDocumentGenerator",
+      "Type": "Custom",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Sections",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON array of document sections (structured input). Each section has a type (heading, paragraph, list, table, image) and associated content.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1730028E-68B8-4EEC-8921-50370E1020A4"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:11:40.833Z",
+            "checksum": "a7228417b00e529e994685b113b7b79151e34bffe1a8b12d12aa31795de6a7ce"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Content",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Raw content string (HTML or Markdown, used when Sections is not provided)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "39E4228E-2035-45B3-A4A0-FE58B8E78C6A"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:11:40.845Z",
+            "checksum": "dadffba3955ef41673488872a850cc9fc0a68f771e3335895487f0f484c81fdf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContentType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Type of content in the Content parameter: 'html' or 'markdown' (default: 'html')",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "06C39DB7-B55C-43ED-BCED-401F28DEA407"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:11:40.857Z",
+            "checksum": "ca9694829669f331bf90c1e4795acb2e2b14c4676fb9ee36bf9347465b7e1876"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FileName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Output file name (default: 'document.docx')",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "78F3AAEB-4C25-4090-AC5D-15825DAD4D7E"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:11:40.870Z",
+            "checksum": "6b4a02b6f3171d18a39c341b4296276d45c8d6b729fae426fa06e484167b9584"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Options",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON object with document options: title, author, subject, description, margins (top/bottom/left/right in twips)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DD63FC5F-B00F-42B8-9949-9E2CEFCEA470"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:11:40.879Z",
+            "checksum": "35fd53f2b83fa3395bb3f285884723ef31235b1b3638a55012ecc3315edb6c63"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OutputFileID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of an existing MJ File record to save the generated DOCX to MJ Storage",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "84E6E765-E29C-4F3D-AA75-0A8D68197899"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:11:40.912Z",
+            "checksum": "17b1c59ee1120abee7cdc02f048bae6733afebb8eab19b2298cdc4276562c450"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DocxData",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Base64-encoded DOCX file content (populated when OutputFileID is not provided)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "713208D7-6326-422C-9B36-003752106197"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:11:40.925Z",
+            "checksum": "d4d50d17a0a46ec643076b27ff609678735863cad90045376910d928bee604c6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GeneratedFileID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the MJ File record created/updated when OutputFileID is provided",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "73D2ADD9-0165-48E7-A237-08FD825D7306"
+          },
+          "sync": {
+            "lastModified": "2026-03-27T05:11:40.935Z",
+            "checksum": "7a8b9d44d2c8209528e7edde9fcd9f04fe01f13638633a0390c7dc6d528fa233"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "506B46D8-1F9B-4ABE-96B8-91F481BABE67"
+    },
+    "sync": {
+      "lastModified": "2026-03-27T05:11:38.076Z",
+      "checksum": "78b94ce2d815a5d1d61264c39271a49ab12cc3c473e79815ed3a4ff9395e58b9"
     }
   }
 ]
