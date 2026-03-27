@@ -66,9 +66,9 @@ export interface LoopAgentResponse<P = any> {
      */
     nextStep?: {
         /**
-         * Operation type: 'Actions' | 'Sub-Agent' | 'Chat' | 'ForEach' | 'While'
+         * Operation type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While'
          */
-        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'ForEach' | 'While';
+        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While';
 
         /**
          * Actions to execute (when type='Actions')
@@ -77,6 +77,17 @@ export interface LoopAgentResponse<P = any> {
             name: string;
             params: Record<string, unknown>;
         }>;
+
+        /**
+         * Index of a compacted message to expand (when type='Retry').
+         * The message is restored to full content and the prompt re-runs.
+         */
+        messageIndex?: number;
+
+        /**
+         * Reason for expanding the message (when type='Retry')
+         */
+        reason?: string;
 
         /**
          * Sub-agent details (when type='Sub-Agent')

@@ -726,14 +726,14 @@ describe('SqlLoggingSessionImpl', () => {
             const input = "INSERT INTO T VALUES (N'${someVar}')";
             const result = escapeFlyway(input);
             expect(result).not.toContain('${someVar}');
-            expect(result).toContain("$'+'{someVar}");
+            expect(result).toContain("$'+N'{someVar}");
         });
 
         it('should handle multiple ${...} occurrences', () => {
             const input = "N'${a} and ${b}'";
             const result = escapeFlyway(input);
-            expect(result).toContain("$'+'{a}");
-            expect(result).toContain("$'+'{b}");
+            expect(result).toContain("$'+N'{a}");
+            expect(result).toContain("$'+N'{b}");
         });
 
         it('should return unchanged SQL when no ${...} patterns exist', () => {
