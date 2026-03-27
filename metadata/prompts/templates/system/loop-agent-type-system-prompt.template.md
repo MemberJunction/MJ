@@ -238,7 +238,9 @@ When iterations are **independent** (don't depend on each other), use parallel e
 
 #### Composing Strings from Multiple Fields
 
-{% raw %}When a param needs literal text combined with variables, use `{{variable}}` inline template syntax:
+{% raw %} 
+{# NOTE: There needs to be white space between the raw tag and next token! #} 
+When a param needs literal text combined with variables, use `{{variable}}` inline template syntax:
 
 ```json
 {
