@@ -413,7 +413,7 @@ function normalizeFlatItems(items: RawSectionItem[]): DocumentSection[] {
                 sections.push(current);
             }
             current = {
-                heading: String(item['text'] ?? item['heading'] ?? ''),
+                heading: String(item['text'] ?? item['content'] ?? item['heading'] ?? ''),
                 level: typeof item['level'] === 'number' ? item['level'] : 1,
                 content: [],
             };
@@ -456,7 +456,7 @@ function normalizeContentItem(raw: RawSectionItem): ContentItem {
     // paragraph (default)
     return {
         type: 'paragraph',
-        text: String(raw['text'] ?? ''),
+        text: String(raw['text'] ?? raw['content'] ?? ''),
         bold: Boolean(raw['bold']),
         italic: Boolean(raw['italic']),
         align: typeof raw['align'] === 'string' ? raw['align'] : undefined,

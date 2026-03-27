@@ -57,7 +57,7 @@ import {
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Excel Writer")
+@RegisterClass(BaseAction, "__ExcelWriter")
 export class ExcelWriterAction extends BaseFileHandlerAction {
 
     /**
