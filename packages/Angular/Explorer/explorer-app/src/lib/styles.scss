@@ -49,6 +49,14 @@
 
 // MJ UI Components styles
 @import '@memberjunction/ng-ui-components/dist/lib/button/button';
+@import '@memberjunction/ng-ui-components/dist/lib/dialog/dialog';
+@import '@memberjunction/ng-ui-components/dist/lib/dropdown/dropdown';
+@import '@memberjunction/ng-ui-components/dist/lib/input/input';
+@import '@memberjunction/ng-ui-components/dist/lib/input/input-switch-progress';
+@import '@memberjunction/ng-ui-components/dist/lib/datepicker/datepicker';
+@import '@memberjunction/ng-ui-components/dist/lib/splitter/splitter';
+@import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
+@import '@memberjunction/ng-ui-components/dist/lib/window/window';
 
 // Ensure button groups have correct colors (override any conflicting styles)
 kendo-buttongroup button,

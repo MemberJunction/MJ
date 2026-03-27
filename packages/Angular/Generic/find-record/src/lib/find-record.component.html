@@ -1,13 +1,11 @@
 <div>
-  <kendo-textbox
-    class="find-textbox"
+  <input
     type="text"
+    class="mj-input find-textbox"
     placeholder="Start typing to search..."
     [(ngModel)]="searchTerm"
-    (ngModelChange)="onSearchTermChange($event)"
-    >
-  </kendo-textbox>
-  <button class="find-button" kendoButton (click)="onFind()">Find</button>
+    (ngModelChange)="onSearchTermChange($event)" />
+  <button mjButton variant="primary" class="find-button" (click)="onFind()">Find</button>
 
   @if (loading) {
     <div>Searching...</div>

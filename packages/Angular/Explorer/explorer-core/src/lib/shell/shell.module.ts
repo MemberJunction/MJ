@@ -10,8 +10,7 @@ import { CommandPaletteComponent } from '../command-palette/command-palette.comp
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { InputsModule } from '@progress/kendo-angular-inputs';
+import { MjDropdownComponent } from '@memberjunction/ng-ui-components';
 
 @NgModule({
   declarations: [
@@ -25,8 +24,7 @@ import { InputsModule } from '@progress/kendo-angular-inputs';
   imports: [
     CommonModule,
     FormsModule,
-    DropDownsModule,
-    InputsModule,
+    MjDropdownComponent,
     ExplorerSettingsModule,
     SharedGenericModule
   ],
