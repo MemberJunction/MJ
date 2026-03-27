@@ -718,6 +718,22 @@ export class SQLParser {
             }
         }
 
+        // Variables that appear only in {% if %}/{% elif %} condition expressions
+        // (never in a {{ }} template expression) still need to be surfaced as
+        // optional parameters so callers can supply them at runtime.
+        for (const varName of conditionalVars.onlyInConditional) {
+            if (!paramMap.has(varName)) {
+                paramMap.set(varName, {
+                    name: varName,
+                    type: 'string',
+                    isRequired: false,
+                    defaultValue: null,
+                    filters: [],
+                    usageLocations: [],
+                });
+            }
+        }
+
         return Array.from(paramMap.values());
     }
 
@@ -1484,14 +1500,22 @@ export class SQLParser {
         return { onlyInConditional, outsideConditional };
     }
 
+    /** Jinja2 keywords that should never be treated as user-defined variables. */
+    private static readonly JINJA_KEYWORDS = new Set([
+        'and', 'or', 'not', 'in', 'is', 'true', 'false', 'none', 'null', 'undefined',
+        'if', 'elif', 'else', 'endif', 'for', 'endfor',
+    ]);
+
     private static addConditionVariables(token: MJToken, varSet: Set<string>): void {
         const parsed = token.parsed as MJBlockTagContent;
         if (parsed.expression) {
-            const words = parsed.expression.split(/\s+(?:and|or|not)\s+|\s+/i);
-            for (const word of words) {
-                const trimmed = word.replace(/[!=<>'"()]/g, '').trim();
-                if (trimmed && /^[A-Za-z_]\w*$/.test(trimmed)) {
-                    varSet.add(trimmed);
+            // Strip quoted string literals first so 'Year', "active", etc. don't
+            // get mistaken for variable identifiers.
+            const withoutStrings = parsed.expression.replace(/'[^']*'|"[^"]*"/g, '');
+            const identifiers = withoutStrings.match(/\b[A-Za-z_]\w*\b/g) || [];
+            for (const id of identifiers) {
+                if (!SQLParser.JINJA_KEYWORDS.has(id.toLowerCase())) {
+                    varSet.add(id);
                 }
             }
         }

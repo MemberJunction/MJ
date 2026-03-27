@@ -235,6 +235,37 @@ When iterations are **independent** (don't depend on each other), use parallel e
 - CPU-bound (data processing): 2-8
 - Sub-agent spawning: 2-5
 - Database operations: 5-10
+
+#### Composing Strings from Multiple Fields
+
+{% raw %} 
+{# NOTE: There needs to be white space between the raw tag and next token! #} 
+When a param needs literal text combined with variables, use `{{variable}}` inline template syntax:
+
+```json
+{
+  "nextStep": {
+    "type": "ForEach",
+    "forEach": {
+      "collectionPath": "cities",
+      "itemVariable": "city",
+      "action": {
+        "name": "Web Search",
+        "params": {
+          "SearchTerms": "largest publicly traded company in {{city.name}} {{city.country}}"
+        }
+      },
+      "executionMode": "parallel",
+      "continueOnError": true
+    }
+  }
+}
+```
+
+Note the difference:
+- `"city.name"` → whole-value reference, resolves to the raw value (string, number, or object)
+- `"company in {{city.name}}"` → inline template, interpolates `{{}}` expressions into the surrounding text
+{% endraw %}
 {% endif %}
 
 {% if __agentTypePromptParams.includeWhileDocs != false %}
@@ -278,12 +309,22 @@ Loop results appear in a temporary message for ONE turn only, then are removed t
 
 {% if __agentTypePromptParams.includeVariableRefsDocs != false %}
 ### Variable References in Params
+{% raw %}
+**Whole-value references** (entire param value is one variable — can resolve to strings, numbers, or objects):
+- `"customer.email"` → item's `email` property
+- `"customer"` → entire item object
+- `"payload.results"` → a payload field
+- `"index"` → loop counter (0-based)
 
-- `"item.field"` - Current item's property (ForEach)
-- `"attempt.attemptNumber"` - Current attempt number (While)
-- `"payload.field"` - Value from payload
-- `"index"` - Loop counter (0-based)
-- Static values need no prefix: `"Welcome!"`
+**Inline template syntax** (variables embedded in a larger string — always resolves to a string):
+- `"Search for {{customer.name}} in {{customer.city}}"` → interpolates each `{{}}` expression
+- `"Item #{{index}}: {{item.title}}"` → mix variables with literal text
+- `"{{item.firstName}} {{item.lastName}}"` → combine multiple fields into one string
+
+⚠️ **IMPORTANT:** Use `{{variable}}` double-curly-brace syntax for inline templates. JavaScript `${variable}` syntax does NOT work.
+
+Static values need no syntax: `"Welcome!"`
+{% endraw %}
 {% endif %}
 
 {% if __agentTypePromptParams.includeForEachDocs != false %}
