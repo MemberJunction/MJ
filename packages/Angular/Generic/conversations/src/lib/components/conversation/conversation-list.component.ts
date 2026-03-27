@@ -775,6 +775,16 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     // Load conversations on init
     this.conversationData.loadConversations(this.environmentId, this.currentUser);
 
+    // Re-run change detection whenever the conversations list changes (pin, archive, rename, etc.).
+    // filteredConversations/pinnedConversations/unpinnedConversations are pure getters that read
+    // conversationData.conversations directly, so Angular doesn't know to re-evaluate them unless
+    // we explicitly trigger a check here.
+    this.conversationData.conversations$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.cdr.detectChanges();
+    });
+
     // Subscribe to conversation IDs with active tasks (hot set)
     this.activeTasksService.conversationIdsWithTasks$.pipe(
       takeUntil(this.destroy$)
