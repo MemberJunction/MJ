@@ -1,4 +1,4 @@
-<div [class]="messageClasses" [attr.data-message-id]="message.ID">
+<div [class]="messageClasses" [attr.data-message-id]="message.ID" (click)="onMessageBubbleClick($event)">
   <div class="message-avatar">
     <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage">
       @if (isUserMessage) {

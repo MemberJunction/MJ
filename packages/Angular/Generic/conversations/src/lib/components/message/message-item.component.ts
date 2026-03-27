@@ -77,6 +77,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
+  @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId on Shift+Click
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -165,6 +166,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       clearInterval(this._elapsedTimeInterval);
       this._elapsedTimeInterval = null;
     }
+  }
+
+  /**
+   * Handles clicks on the message bubble.
+   * Shift+Click on any AI message emits a diagnosticRequested event so the parent
+   * can dump live streaming state to the browser console — useful for debugging
+   * stuck or forever-spinning conversations without any code changes.
+   */
+  public onMessageBubbleClick(event: MouseEvent): void {
+    if (!event.shiftKey || !this.isAIMessage) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.diagnosticRequested.emit(this.message.ID);
   }
 
   /**

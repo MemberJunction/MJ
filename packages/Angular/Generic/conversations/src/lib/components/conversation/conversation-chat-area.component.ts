@@ -871,6 +871,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Load attachments for the new message (if any were saved with it)
       // This ensures attachments are displayed immediately after sending
       await this.loadAttachmentsForMessage(message.ID);
+
+      // CRITICAL: If this is a new In-Progress AI message, add it to inProgressMessageIds
+      // immediately so message-input registers a PubSub streaming callback for it.
+      // buildMessagesFromCache handles the nav-away/nav-back reconnection case;
+      // this handles the active-session case where the agent just started.
+      // Without this, inProgressMessageIds stays [] and the completion event is never received.
+      if (message.Status === 'In-Progress' && message.ID && !this.inProgressMessageIds.includes(message.ID)) {
+        this.inProgressMessageIds = [...this.inProgressMessageIds, message.ID];
+      }
     }
 
     // Scroll to bottom when new message is sent
@@ -2060,6 +2069,37 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       entityName: 'MJ: Test Runs',
       compositeKey
     });
+  }
+
+  /**
+   * Handles Shift+Click on an AI message bubble.
+   * Dumps a live snapshot of in-memory streaming and agent-run state to the browser
+   * console so engineers can debug stuck/forever-spinning conversations without
+   * needing to add any temporary code.
+   *
+   * Usage: Hold Shift and click any AI message bubble. Open DevTools Console to see the dump.
+   */
+  onDiagnosticRequested(messageId: string): void {
+    const streaming = this.streamingService.getDiagnosticSnapshot(messageId);
+    const agentRun = this.agentRunsByDetailId.get(messageId);
+    const isInProgress = this.inProgressMessageIds.includes(messageId);
+
+    console.group(`%c[MJ Diagnostic Dump] Message ${messageId}`, 'color: #0076b6; font-weight: bold');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('ConversationID:', this.conversationId);
+    console.log('isInProgress (UI):', isInProgress);
+    console.log('All inProgressMessageIds:', [...this.inProgressMessageIds]);
+    console.log('Streaming connection:', streaming.connectionStatus);
+    console.log('Streaming callbacks registered:', streaming.callbackCount);
+    if (streaming.recentCompletion) {
+      console.log('Recent completion (not yet processed):', streaming.recentCompletion);
+    }
+    if (agentRun) {
+      console.log('Agent run:', { id: agentRun.ID, status: agentRun.Status, name: agentRun.Agent });
+    } else {
+      console.log('Agent run: none loaded for this message');
+    }
+    console.groupEnd();
   }
 
   onTestFeedbackMessage(message: MJConversationDetailEntity): void {
