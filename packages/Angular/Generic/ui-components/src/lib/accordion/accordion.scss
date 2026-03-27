@@ -12,7 +12,7 @@
 .mj-accordion-header {
   display: flex; align-items: center; justify-content: space-between;
   width: 100%; padding: 12px 16px;
-  background: var(--mj-bg-surface-card); border: none; cursor: pointer;
+  background: var(--mj-bg-surface-sunken); border: none; cursor: pointer;
   font-family: var(--mj-font-family); font-size: var(--mj-text-sm);
   font-weight: var(--mj-font-semibold); color: var(--mj-text-primary);
   text-align: left; transition: background var(--mj-transition-fast);

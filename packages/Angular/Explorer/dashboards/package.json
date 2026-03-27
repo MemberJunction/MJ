@@ -134,6 +134,7 @@
     "@memberjunction/templates-base-types": "5.19.0",
     "@memberjunction/testing-engine-base": "5.19.0",
     "@memberjunction/ng-markdown": "5.19.0",
+    "angular-split": "^20.0.0",
     "@progress/kendo-angular-buttons": "22.0.1",
     "@progress/kendo-angular-dateinputs": "22.0.1",
     "@progress/kendo-angular-dialog": "22.0.1",

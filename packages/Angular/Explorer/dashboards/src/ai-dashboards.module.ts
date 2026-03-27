@@ -7,7 +7,7 @@ import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { TabStripModule, SplitterModule } from '@progress/kendo-angular-layout';
+import { AngularSplitModule } from 'angular-split';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -68,8 +68,7 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     IndicatorsModule,
     DialogsModule,
     WindowModule,
-    TabStripModule,
-    SplitterModule,
+    AngularSplitModule,
     TreeViewModule,
     ContainerDirectivesModule,
     CodeEditorModule,

@@ -2,16 +2,23 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
-// Kendo UI Modules
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
+// Kendo UI Modules (remaining — used by older services)
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { LayoutModule } from '@progress/kendo-angular-layout';
 import { NotificationModule } from '@progress/kendo-angular-notification';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { TooltipsModule } from '@progress/kendo-angular-tooltip';
 import { IconsModule } from '@progress/kendo-angular-icons';
+
+// MJ UI Components
+import {
+  MjWindowComponent, MjWindowTitlebarComponent,
+  MjButtonDirective,
+  MjDropdownComponent,
+  MjNumericInputComponent,
+  MjSwitchComponent,
+  MjAccordionPanelComponent,
+  MjDialogComponent, MjDialogTitlebarComponent, MjDialogActionsComponent
+} from '@memberjunction/ng-ui-components';
+import { AngularSplitModule } from 'angular-split';
 
 // MemberJunction imports
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -48,17 +55,24 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    // Kendo UI
-    ButtonsModule,
+    // Kendo UI (remaining)
     DialogsModule,
     WindowModule,
-    DropDownsModule,
-    InputsModule,
-    LayoutModule,
     NotificationModule,
-    IndicatorsModule,
     TooltipsModule,
     IconsModule,
+    // MJ UI Components
+    MjWindowComponent,
+    MjWindowTitlebarComponent,
+    MjButtonDirective,
+    MjDropdownComponent,
+    MjNumericInputComponent,
+    MjSwitchComponent,
+    MjAccordionPanelComponent,
+    MjDialogComponent,
+    MjDialogTitlebarComponent,
+    MjDialogActionsComponent,
+    AngularSplitModule,
     // MemberJunction
     ContainerDirectivesModule,
     CodeEditorModule,

@@ -47,6 +47,8 @@
     "@memberjunction/ng-notifications": "5.19.0",
     "@memberjunction/ng-shared": "5.19.0",
     "@memberjunction/ng-shared-generic": "5.19.0",
+    "@memberjunction/ng-ui-components": "5.19.0",
+    "angular-split": "^20.0.0",
     "@progress/kendo-angular-buttons": "22.0.1",
     "@progress/kendo-angular-dialog": "22.0.1",
     "@progress/kendo-angular-dropdowns": "22.0.1",
