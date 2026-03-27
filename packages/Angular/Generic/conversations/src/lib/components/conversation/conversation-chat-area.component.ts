@@ -612,7 +612,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     for (const row of conversationData) {
       if (!row.ID) continue;
-      if (row.HiddenToUser) continue; // Skip soft-deleted messages
 
       const message = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
       message.LoadFromData(row);
@@ -1041,7 +1040,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
       const result = await rv.RunView<MJConversationDetailEntity>({
         EntityName: 'MJ: Conversation Details',
-        ExtraFilter: `ConversationID='${conversationId}' AND HiddenToUser=0`,
+        ExtraFilter: `ConversationID='${conversationId}'`,
         OrderBy: '__mj_CreatedAt ASC',
         ResultType: 'entity_object'
       }, this.currentUser);
@@ -1750,7 +1749,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     });
     if (!confirmed) return;
 
-    // Load all entities in parallel (reads cannot be batched but can be parallelized)
+    // Load all entities in parallel, then delete in parallel.
+    // entity.Delete() calls spDeleteConversationDetail which handles all FK children:
+    // hard-deletes junction tables (Artifact/Attachment/Rating), nullifies FKs on AI* records.
     const md = new Metadata();
     const loadResults = await Promise.all(
       toHide.map(async msg => {
@@ -1762,17 +1763,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     const entities = loadResults.filter((e): e is MJConversationDetailEntity => e !== null);
     if (entities.length === 0) return;
 
-    // Batch all saves into a single transaction — one network round trip, one DB COMMIT
-    const tg = await md.CreateTransactionGroup();
-    for (const entity of entities) {
-      entity.HiddenToUser = true;
-      entity.TransactionGroup = tg;
-      await entity.Save();
-    }
-    const success = await tg.Submit();
-
-    if (!success) {
-      console.error('Transaction failed — some messages may not have been hidden');
+    // Sequential deletes — parallel fires concurrent server-side transactions which race on
+    // SQLServerDataProvider's singleton _transactionDepth counter and fail with SAVE TRANSACTION errors.
+    for (const e of entities) {
+      const ok = await e.Delete();
+      if (!ok) {
+        const last = e.ResultHistory[e.ResultHistory.length - 1];
+        console.error(`Failed to delete ConversationDetail ${e.ID}: ${last?.Message ?? 'unknown error'}`, last?.Error ?? '');
+      }
     }
 
     const hideIds = new Set(toHide.map(m => m.ID));
