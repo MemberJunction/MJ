@@ -677,7 +677,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Flushes the coalesce queue: merges all pending RunViews params into one
-     * mega-batch, executes it, then splits results back to each original caller.
+     * mega-batch with intra-batch deduplication, executes it, then splits
+     * results back to each original caller.
+     *
+     * Deduplication works by fingerprinting each individual RunViewParams.
+     * When multiple callers request the same entity with the same filters,
+     * that query is sent to the server only once. The shared result is then
+     * distributed to every caller that requested it.
      */
     private async flushCoalesceQueue(): Promise<void> {
         this._coalesceTimer = null;
@@ -698,31 +704,51 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             return;
         }
 
-        // Merge all params into one mega-batch, tracking boundaries
-        const allParams: RunViewParams[] = [];
-        const boundaries: Array<{ start: number; count: number }> = [];
         // Use the first caller's contextUser (all should be the same on client-side)
         const contextUser = queue[0].contextUser;
 
+        // ── Deduplicate params across all callers ──
+        // Build a map from fingerprint -> unique index, and for each caller's
+        // param record which unique index it maps to.
+        const uniqueParams: RunViewParams[] = [];
+        const fingerprintToUniqueIndex = new Map<string, number>();
+        // For each queue entry, store the unique-index for each of its params
+        const callerParamMappings: number[][] = [];
+
         for (const entry of queue) {
-            boundaries.push({ start: allParams.length, count: entry.params.length });
-            allParams.push(...entry.params);
+            const mapping: number[] = [];
+            for (const param of entry.params) {
+                const fp = this.GenerateParamFingerprint(param, contextUser);
+                let idx = fingerprintToUniqueIndex.get(fp);
+                if (idx === undefined) {
+                    idx = uniqueParams.length;
+                    fingerprintToUniqueIndex.set(fp, idx);
+                    uniqueParams.push(param);
+                }
+                mapping.push(idx);
+            }
+            callerParamMappings.push(mapping);
         }
 
-        const entityNames = allParams.map(p => p.EntityName || p.ViewName || '?').join(', ');
+        const totalRequested = queue.reduce((sum, e) => sum + e.params.length, 0);
+        const dedupSaved = totalRequested - uniqueParams.length;
+        const uniqueEntityNames = uniqueParams.map(p => p.EntityName || p.ViewName || '?').join(', ');
+
         LogStatusEx({
-            message: `⚡ [Coalesce] Merged ${queue.length} RunViews calls (${allParams.length} total entities) into 1 mega-batch: [${entityNames}]`,
+            message: dedupSaved > 0
+                ? `⚡ [Coalesce] Merged ${queue.length} RunViews calls (${totalRequested} total requests, ${dedupSaved} duplicates eliminated) into 1 batch of ${uniqueParams.length} unique queries: [${uniqueEntityNames}]`
+                : `⚡ [Coalesce] Merged ${queue.length} RunViews calls (${uniqueParams.length} unique queries) into 1 batch: [${uniqueEntityNames}]`,
             verboseOnly: false
         });
 
         try {
-            // Execute the mega-batch as a single pipeline call
-            const allResults = await this.RunViewsUncoalesced(allParams, contextUser);
+            // Execute only the deduplicated params
+            const uniqueResults = await this.RunViewsUncoalesced(uniqueParams, contextUser);
 
-            // Split results back to each original caller
+            // Distribute results back to each caller by mapping unique indices
             for (let i = 0; i < queue.length; i++) {
-                const { start, count } = boundaries[i];
-                const callerResults = allResults.slice(start, start + count);
+                const mapping = callerParamMappings[i];
+                const callerResults = mapping.map(idx => this.ShallowCopyResult(uniqueResults[idx]));
                 queue[i].resolve(callerResults);
             }
         } catch (err) {
@@ -787,23 +813,29 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
+     * Generates a deterministic fingerprint for a single RunViewParams entry.
+     * Used both for batch dedup keys and for intra-batch deduplication during coalescing.
+     */
+    private GenerateParamFingerprint(p: RunViewParams, contextUser?: UserInfo): string {
+        const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(p, this.InstanceConnectionString);
+        const extras = [
+            p.Fields?.join(',') ?? '',
+            p.UserSearchString ?? '',
+            p.ViewID ?? '',
+            p.ViewName ?? '',
+            contextUser?.ID ?? ''
+        ].join('|');
+        return `${base}|${extras}`;
+    }
+
+    /**
      * Generates a deterministic dedup key for a batch of RunViewParams.
      * Extends the local-cache fingerprint with additional fields that
      * affect result identity (Fields, UserSearchString, ViewID, ViewName,
      * contextUser).
      */
     private GenerateDedupKey(params: RunViewParams[], contextUser?: UserInfo): string {
-        const parts = params.map(p => {
-            const base = LocalCacheManager.Instance.GenerateRunViewFingerprint(p, this.InstanceConnectionString);
-            const extras = [
-                p.Fields?.join(',') ?? '',
-                p.UserSearchString ?? '',
-                p.ViewID ?? '',
-                p.ViewName ?? '',
-                contextUser?.ID ?? ''
-            ].join('|');
-            return `${base}|${extras}`;
-        });
+        const parts = params.map(p => this.GenerateParamFingerprint(p, contextUser));
         return parts.join('||');
     }
 
