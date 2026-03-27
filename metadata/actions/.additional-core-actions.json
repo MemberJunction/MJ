@@ -5702,15 +5702,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "JSON array of document sections (structured input). Each section has a type (heading, paragraph, list, table, image) and associated content.",
+            "Description": "Array of flat content items. Each item must have a \"type\" field. Valid types and required fields: Heading: { \"type\": \"heading\", \"text\": \"Title\", \"level\": 1 } | Paragraph: { \"type\": \"paragraph\", \"text\": \"Body text\" } | Table: { \"type\": \"table\", \"headers\": [\"Col1\", \"Col2\"], \"rows\": [[\"val1\", \"val2\"]] } -- headers and rows MUST be top-level, NOT nested inside a content field | List: { \"type\": \"list\", \"items\": [\"Item 1\", \"Item 2\"], \"ordered\": false }. Do NOT use a nested content field. Do NOT use type:section wrappers.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "1730028E-68B8-4EEC-8921-50370E1020A4"
           },
           "sync": {
-            "lastModified": "2026-03-27T05:11:40.833Z",
-            "checksum": "a7228417b00e529e994685b113b7b79151e34bffe1a8b12d12aa31795de6a7ce"
+            "lastModified": "2026-03-27T19:30:40.506Z",
+            "checksum": "408f14467e4222043d357247ef62fd06be44eae3f881ed6dc64dc57bd1db546e"
           }
         },
         {

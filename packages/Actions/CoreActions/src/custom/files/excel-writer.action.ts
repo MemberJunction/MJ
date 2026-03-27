@@ -113,6 +113,11 @@ export class ExcelWriterAction extends BaseFileHandlerAction {
             // Validate and convert sheet definitions
             const sheetDefinitions: SheetDefinition[] = [];
             for (const sheetInput of sheets) {
+                // Normalize: LLMs sometimes send columns+rows instead of data
+                if (!sheetInput.data && sheetInput.rows) {
+                    sheetInput.data = this.normalizeRowsToData(sheetInput.rows, sheetInput.columns);
+                }
+
                 if (!sheetInput.name || !sheetInput.data) {
                     return {
                         Success: false,
@@ -214,18 +219,36 @@ export class ExcelWriterAction extends BaseFileHandlerAction {
     }
 
     /**
+     * Convert columns+rows format to the data array format expected by export-engine.
+     * Produces an array of objects keyed by column name.
+     */
+    private normalizeRowsToData(rows: unknown[][], columns?: string[]): Record<string, unknown>[] {
+        if (columns && columns.length > 0) {
+            return rows.map(row => {
+                const obj: Record<string, unknown> = {};
+                columns.forEach((col, i) => { obj[col] = (row as unknown[])[i]; });
+                return obj;
+            });
+        }
+        // No column names — return as-is (2D array, export-engine handles it)
+        return rows as unknown as Record<string, unknown>[];
+    }
+
+    /**
      * Convert the input sheet definition to the export-engine SheetDefinition format
      */
     private convertToSheetDefinition(input: SheetInputDefinition): SheetDefinition {
         const sheetDef: SheetDefinition = {
             name: input.name,
-            data: input.data,
+            data: input.data!,
             includeHeaders: true
         };
 
-        // Map headers
+        // Map headers — fall back to columns if headers not provided
         if (input.headers) {
             sheetDef.headers = input.headers;
+        } else if (input.columns) {
+            sheetDef.headers = input.columns;
         }
 
         // Map column widths
@@ -362,7 +385,10 @@ export class ExcelWriterAction extends BaseFileHandlerAction {
  */
 interface SheetInputDefinition {
     name: string;
-    data: Record<string, unknown>[] | unknown[][];
+    data?: Record<string, unknown>[] | unknown[][];
+    /** Alternative to data: LLMs sometimes send rows+columns instead */
+    rows?: unknown[][];
+    columns?: string[];
     headers?: string[];
     columnWidths?: number[];
     styles?: {
