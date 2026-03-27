@@ -1682,21 +1682,29 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     });
     if (!confirmed) return;
 
+    // Load all entities in parallel (reads cannot be batched but can be parallelized)
     const md = new Metadata();
-    for (const msg of toHide) {
-      try {
+    const loadResults = await Promise.all(
+      toHide.map(async msg => {
         const entity = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
         const loaded = await entity.Load(msg.ID);
-        if (loaded) {
-          entity.HiddenToUser = true;
-          const saved = await entity.Save();
-          if (!saved) {
-            console.error(`Failed to hide message ${msg.ID}`);
-          }
-        }
-      } catch (err) {
-        console.error(`Error hiding message ${msg.ID}:`, err);
-      }
+        return loaded ? entity : null;
+      })
+    );
+    const entities = loadResults.filter((e): e is MJConversationDetailEntity => e !== null);
+    if (entities.length === 0) return;
+
+    // Batch all saves into a single transaction — one network round trip, one DB COMMIT
+    const tg = await md.CreateTransactionGroup();
+    for (const entity of entities) {
+      entity.HiddenToUser = true;
+      entity.TransactionGroup = tg;
+      await entity.Save();
+    }
+    const success = await tg.Submit();
+
+    if (!success) {
+      console.error('Transaction failed — some messages may not have been hidden');
     }
 
     const hideIds = new Set(toHide.map(m => m.ID));
