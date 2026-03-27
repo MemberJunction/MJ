@@ -1,5 +1,15 @@
 # @memberjunction/ng-action-gallery
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ng-ai-test-harness@5.19.0
+- @memberjunction/ng-container-directives@5.19.0
+- @memberjunction/ng-shared-generic@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+
 ## 5.18.0
 
 ### Patch Changes

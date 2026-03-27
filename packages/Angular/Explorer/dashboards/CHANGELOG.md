@@ -1,5 +1,51 @@
 # @memberjunction/ng-dashboards
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.19.0
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/api-keys-base@5.19.0
+- @memberjunction/actions-base@5.19.0
+- @memberjunction/ng-base-application@5.19.0
+- @memberjunction/ng-core-entity-forms@5.19.0
+- @memberjunction/ng-explorer-settings@5.19.0
+- @memberjunction/ng-shared@5.19.0
+- @memberjunction/ng-testing@5.19.0
+- @memberjunction/ng-action-gallery@5.19.0
+- @memberjunction/ng-actions@5.19.0
+- @memberjunction/ng-agent-requests@5.19.0
+- @memberjunction/ng-agents@5.19.0
+- @memberjunction/ng-ai-test-harness@5.19.0
+- @memberjunction/ng-code-editor@5.19.0
+- @memberjunction/ng-container-directives@5.19.0
+- @memberjunction/ng-credentials@5.19.0
+- @memberjunction/ng-dashboard-viewer@5.19.0
+- @memberjunction/ng-entity-relationship-diagram@5.19.0
+- @memberjunction/ng-entity-viewer@5.19.0
+- @memberjunction/ng-export-service@5.19.0
+- @memberjunction/ng-filter-builder@5.19.0
+- @memberjunction/ng-list-management@5.19.0
+- @memberjunction/ng-markdown@5.19.0
+- @memberjunction/ng-notifications@5.19.0
+- @memberjunction/ng-query-viewer@5.19.0
+- @memberjunction/ng-react@5.19.0
+- @memberjunction/ng-scheduling@5.19.0
+- @memberjunction/ng-shared-generic@5.19.0
+- @memberjunction/ng-trees@5.19.0
+- @memberjunction/ng-versions@5.19.0
+- @memberjunction/graphql-dataprovider@5.19.0
+- @memberjunction/integration-engine-base@5.19.0
+- @memberjunction/interactive-component-types@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/export-engine@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/skip-types@5.19.0
+- @memberjunction/templates-base-types@5.19.0
+- @memberjunction/testing-engine-base@5.19.0
+
 ## 5.18.0
 
 ### Patch Changes

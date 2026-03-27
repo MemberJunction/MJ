@@ -1,5 +1,15 @@
 # @memberjunction/ng-explorer-app
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ng-bootstrap@5.19.0
+- @memberjunction/ng-auth-services@5.19.0
+- @memberjunction/ng-explorer-core@5.19.0
+- @memberjunction/ng-workspace-initializer@5.19.0
+- @memberjunction/core@5.19.0
+
 ## 5.18.0
 
 ### Patch Changes

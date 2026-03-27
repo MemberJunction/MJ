@@ -1,5 +1,15 @@
 # @memberjunction/postgresql-dataprovider
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/generic-database-provider@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/query-processor@5.19.0
+- @memberjunction/sql-dialect@5.19.0
+
 ## 5.18.0
 
 ### Patch Changes

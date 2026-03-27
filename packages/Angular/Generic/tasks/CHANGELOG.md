@@ -1,5 +1,15 @@
 # @memberjunction/ng-tasks
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.19.0
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/ng-shared-generic@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+
 ## 5.18.0
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @memberjunction/ng-entity-relationship-diagram
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/core@5.19.0
+
 ## 5.18.0
 
 ### Patch Changes
