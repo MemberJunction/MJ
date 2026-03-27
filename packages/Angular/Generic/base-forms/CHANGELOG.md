@@ -1,5 +1,17 @@
 # @memberjunction/ng-base-forms
 
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/ng-list-management@5.18.0
+- @memberjunction/ng-record-changes@5.18.0
+- @memberjunction/ng-base-types@5.18.0
+- @memberjunction/ng-entity-viewer@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/core-entities@5.18.0
+- @memberjunction/global@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

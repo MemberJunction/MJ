@@ -1,5 +1,14 @@
 # @memberjunction/schema-engine
 
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/queue@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/global@5.18.0
+- @memberjunction/sql-dialect@5.18.0
+
 ## 5.17.0
 
 ### Minor Changes

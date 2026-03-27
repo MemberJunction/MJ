@@ -24,6 +24,10 @@ interface LoopAgentResponse {
     /** Payload changes. Omit if no changes needed */
     payloadChangeRequest?: AgentPayloadChangeRequest;
 {% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.scratchpad != false %}
+    /** Private working memory — notes and task tracking. Processed inline, zero turn cost */
+    scratchpad?: AgentScratchpad;
+{% endif %}
     /** Internal reasoning for debugging */
     reasoning?: string;
     /** Confidence level (0.0-1.0) */
@@ -65,6 +69,9 @@ interface LoopAgentResponse {
 {% endif %}
 {% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %}
 {@include ../../../../packages/AI/CorePlus/generated-for-prompt/while-operation.ts.generated-for-prompt.md}
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.scratchpad != false %}
+{@include ../../../../packages/AI/CorePlus/generated-for-prompt/agent-scratchpad.ts.generated-for-prompt.md}
 {% endif %}
 
 # Execution Pattern
@@ -228,6 +235,37 @@ When iterations are **independent** (don't depend on each other), use parallel e
 - CPU-bound (data processing): 2-8
 - Sub-agent spawning: 2-5
 - Database operations: 5-10
+
+#### Composing Strings from Multiple Fields
+
+{% raw %} 
+{# NOTE: There needs to be white space between the raw tag and next token! #} 
+When a param needs literal text combined with variables, use `{{variable}}` inline template syntax:
+
+```json
+{
+  "nextStep": {
+    "type": "ForEach",
+    "forEach": {
+      "collectionPath": "cities",
+      "itemVariable": "city",
+      "action": {
+        "name": "Web Search",
+        "params": {
+          "SearchTerms": "largest publicly traded company in {{city.name}} {{city.country}}"
+        }
+      },
+      "executionMode": "parallel",
+      "continueOnError": true
+    }
+  }
+}
+```
+
+Note the difference:
+- `"city.name"` → whole-value reference, resolves to the raw value (string, number, or object)
+- `"company in {{city.name}}"` → inline template, interpolates `{{}}` expressions into the surrounding text
+{% endraw %}
 {% endif %}
 
 {% if __agentTypePromptParams.includeWhileDocs != false %}
@@ -271,12 +309,22 @@ Loop results appear in a temporary message for ONE turn only, then are removed t
 
 {% if __agentTypePromptParams.includeVariableRefsDocs != false %}
 ### Variable References in Params
+{% raw %}
+**Whole-value references** (entire param value is one variable — can resolve to strings, numbers, or objects):
+- `"customer.email"` → item's `email` property
+- `"customer"` → entire item object
+- `"payload.results"` → a payload field
+- `"index"` → loop counter (0-based)
 
-- `"item.field"` - Current item's property (ForEach)
-- `"attempt.attemptNumber"` - Current attempt number (While)
-- `"payload.field"` - Value from payload
-- `"index"` - Loop counter (0-based)
-- Static values need no prefix: `"Welcome!"`
+**Inline template syntax** (variables embedded in a larger string — always resolves to a string):
+- `"Search for {{customer.name}} in {{customer.city}}"` → interpolates each `{{}}` expression
+- `"Item #{{index}}: {{item.title}}"` → mix variables with literal text
+- `"{{item.firstName}} {{item.lastName}}"` → combine multiple fields into one string
+
+⚠️ **IMPORTANT:** Use `{{variable}}` double-curly-brace syntax for inline templates. JavaScript `${variable}` syntax does NOT work.
+
+Static values need no syntax: `"Welcome!"`
+{% endraw %}
 {% endif %}
 
 {% if __agentTypePromptParams.includeForEachDocs != false %}
@@ -380,11 +428,43 @@ After completing work, use `actionableCommands` for navigation buttons and `auto
 {% endif %}
 
 # **CRITICAL**
-- Your **entire** response must be only JSON with no leading or trailing characters!
 - Must adhere to [LoopAgentResponse](#response-format)
 {% if __agentTypePromptParams.includeResponseFormDocs != false %}- Use `responseForm` when you need user input (replaces old suggestedResponses pattern){% endif %}
 {% if __agentTypePromptParams.includeCommandDocs != false %}- Use `actionableCommands` to provide navigation buttons after completing work
 - Use `automaticCommands` to refresh data or show notifications{% endif %}
+
+{% if __agentTypePromptParams.includeScratchpadDocs != false %}
+## Scratchpad
+
+You have a private scratchpad for internal working memory. Use it to organize your thoughts and track work items. The scratchpad is **never shared** with parent or sub-agents — it's purely for your own use.
+
+**Two sections:**
+- **`notes`**: Free-form text for reasoning, intermediate conclusions, reminders for future turns
+- **`taskList`**: Structured task tracking with `upsert` (add/update) and `remove` operations
+
+**Example:**
+```json
+{
+  "taskComplete": false,
+  "message": "Starting analysis of 5 data sources",
+  "scratchpad": {
+    "notes": "User wants YoY comparison. Sales DB has data back to 2019. Marketing DB only goes to 2021.",
+    "taskList": {
+      "upsert": [
+        { "id": "t1", "title": "Analyze sales data", "status": "in_progress" },
+        { "id": "t2", "title": "Analyze marketing data", "status": "pending" },
+        { "id": "t3", "title": "Cross-reference findings", "status": "pending" }
+      ]
+    }
+  },
+  "nextStep": { "type": "Actions", "actions": [{ "name": "Query Sales DB", "params": {} }] }
+}
+```
+
+**Task statuses:** `pending`, `in_progress`, `completed`, `blocked`
+**Task IDs:** Use simple sequential IDs (`t1`, `t2`, `t3`).
+**Token efficiency:** Your scratchpad is injected into every turn — keep it lean. Use notes for key reasoning and decisions, not verbose logs. Task notes should be succinct. Everything here costs tokens on every subsequent turn.
+{% endif %}
 
 # Agent Definition
 Your name is {{ agentName }}
@@ -423,4 +503,15 @@ Execute multiple in parallel if independent. Retry failed actions up to 3x with 
 ```json
 {{ _CURRENT_PAYLOAD | dump | safe }}
 ```
+{% endif %}
+
+{% if __agentTypePromptParams.includeScratchpadDocs != false %}
+## Scratchpad State
+Your private working memory. Manage via `scratchpad` in your response.
+
+### Notes
+{{ _SCRATCHPAD_NOTES | safe }}
+
+### Tasks ({{ _SCRATCHPAD_TASK_SUMMARY }})
+{{ _SCRATCHPAD_TASKS | safe }}
 {% endif %}

@@ -57,6 +57,15 @@ const FILE_CONFIGS = [
         src: 'while-operation.ts',
         supplementary: null,
     },
+    {
+        src: 'agent-scratchpad.ts',
+        supplementary: [
+            'The scratchpad is private working memory for loop agents — never shared with parent or sub-agents.',
+            'Use simple sequential IDs for tasks (t1, t2, t3). The full task list is injected every turn.',
+            'Notes have no hard character limit but the agent should keep them concise (injected every turn = token cost).',
+            'Task list is capped at a configurable max (default 50). Completed tasks are auto-pruned when over limit.',
+        ].join('\n'),
+    },
 ];
 
 // ---------------------------------------------------------------------------
