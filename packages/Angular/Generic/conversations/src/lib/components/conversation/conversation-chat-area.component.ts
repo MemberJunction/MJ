@@ -1650,7 +1650,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // via LoadFromData from the cache) preserves the new pin state.
     const cachedData = this.conversationDataCache.get(this.conversationId!);
     if (cachedData) {
-      const row = cachedData.find(r => r.ID === message.ID);
+      const row = cachedData.find(r => UUIDsEqual(r.ID, message.ID));
       if (row) {
         row.IsPinned = message.IsPinned;
       }
