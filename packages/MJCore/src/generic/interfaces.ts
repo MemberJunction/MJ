@@ -89,37 +89,59 @@ export class PotentialDuplicate extends CompositeKey {
 }
 
 /**
+ * Configuration options for duplicate detection behavior.
+ * Controls retrieval, scoring, hybrid search, and reranking parameters.
+ */
+export interface DuplicateDetectionOptions {
+    /** ID of an existing Duplicate Run record to continue */
+    DuplicateRunID?: string;
+    /** Number of nearest neighbors to retrieve per record (default: 5) */
+    TopK?: number;
+    /** Enable post-retrieval reranking via BaseReranker (default: false) */
+    ReRankingEnabled?: boolean;
+    /** AI Model ID for the reranker; if omitted, uses default reranker */
+    ReRankingModelID?: string;
+    /** Max candidates to send to reranker per record (default: all retrieved) */
+    ReRankingTopK?: number;
+    /** Fusion method when combining vector + keyword results (default: 'rrf') */
+    FusionMethod?: 'rrf' | 'weighted';
+    /** Weight for keyword search in hybrid mode: 0.0 = pure vector, 1.0 = pure keyword (default: 0.3) */
+    KeywordSearchWeight?: number;
+    /** Enable incremental mode — only check records not in a completed prior run (default: false) */
+    IncrementalOnly?: boolean;
+    /** Progress callback invoked at natural milestones during detection */
+    OnProgress?: (progress: DuplicateDetectionProgress) => void;
+}
+
+/**
+ * Progress information emitted during long-running duplicate detection operations.
+ */
+export interface DuplicateDetectionProgress {
+    Phase: 'Vectorizing' | 'Embedding' | 'Querying' | 'Matching' | 'Merging';
+    TotalRecords: number;
+    ProcessedRecords: number;
+    MatchesFound: number;
+    CurrentRecordID?: string;
+    ElapsedMs: number;
+}
+
+/**
  * Request parameters for finding potential duplicate records.
- * Supports various matching strategies including list-based and document-based comparisons.
- * Can use either a pre-defined list or entity document for duplicate detection.
+ * Supports list-based batch detection and single-record checks.
  */
 export class PotentialDuplicateRequest {
-    /**
-    * The ID of the entity the record belongs to
-    **/
+    /** The ID of the entity the record belongs to */
     EntityID: string;
-    /**
-    * The ID of the List entity to use
-    **/
+    /** The ID of the List entity to use for batch detection */
     ListID: string;
-    /**
-     * The Primary Key values of each record
-     * we're checking for duplicates
-     */
-    RecordIDs: CompositeKey[]; 
-    /**
-    * The ID of the entity document to use
-    **/
+    /** The Primary Key values of each record being checked for duplicates */
+    RecordIDs: CompositeKey[];
+    /** The ID of the entity document defining the vectorization template */
     EntityDocumentID?: string;
-    /**
-    * The minimum score in order to consider a record a potential duplicate
-    **/
+    /** Minimum score to consider a record a potential duplicate */
     ProbabilityScore?: number;
-
-    /**
-    * Additional options to pass to the provider
-    **/
-    Options?: any;
+    /** Detection options controlling retrieval, scoring, and behavior */
+    Options?: DuplicateDetectionOptions;
 }
 
 /**

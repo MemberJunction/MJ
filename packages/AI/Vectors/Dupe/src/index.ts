@@ -1,3 +1,2 @@
-export * from './generic/vectorSyncBase';
-export * from './models/entitySyncConfig';
-export * from './duplicateRecordDetector';
+export { DuplicateRecordDetector } from './duplicateRecordDetector';
+export { ComputeRRF, ScoredCandidate } from './scoring/ReciprocalRankFusion';
