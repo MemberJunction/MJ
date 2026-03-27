@@ -1,5 +1,24 @@
 # @memberjunction/ng-entity-relationship-diagram
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/core@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/core@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [9881045]
+  - @memberjunction/core@5.17.0
+
 ## 5.16.0
 
 ### Patch Changes

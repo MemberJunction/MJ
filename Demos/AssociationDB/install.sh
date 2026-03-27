@@ -10,9 +10,14 @@
 
 cd "$(dirname "$0")"
 
-# Load environment variables from .env file
+# Load DB_* environment variables from .env file
 if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
+    while IFS='=' read -r key value; do
+        value="${value%$'\r'}"
+        value="${value#[\'\"]}"
+        value="${value%[\'\"]}"
+        export "$key"="$value"
+    done < <(grep -v '^\s*#' .env | grep '^DB_')
 else
     echo "Error: .env file not found!"
     echo "Please create a .env file with database credentials."
@@ -20,10 +25,16 @@ else
     exit 1
 fi
 
+# Support both naming conventions: DB_HOST/DB_USERNAME/DB_DATABASE (repo root)
+# and DB_SERVER/DB_USER/DB_NAME (legacy local .env)
+DB_SERVER="${DB_SERVER:-$DB_HOST}"
+DB_USER="${DB_USER:-$DB_USERNAME}"
+DB_NAME="${DB_NAME:-$DB_DATABASE}"
+
 # Validate required environment variables
 if [ -z "$DB_SERVER" ] || [ -z "$DB_NAME" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ]; then
     echo "Error: Missing required environment variables in .env file"
-    echo "Required: DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD"
+    echo "Required: DB_SERVER (or DB_HOST), DB_NAME (or DB_DATABASE), DB_USER (or DB_USERNAME), DB_PASSWORD"
     exit 1
 fi
 

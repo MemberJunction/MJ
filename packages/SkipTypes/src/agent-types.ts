@@ -166,6 +166,7 @@ export class SkipLearningCycleRequestChange {
 
 /**
  * API Request shape to ask the /learn end point to learn from conversation history and pass back "notes" that can be stored in the database for future requests
+ * @deprecated No longer invoked from the client side, all within Skip
  */
 export class SkipAPILearningCycleRequest {
     /**

@@ -1,5 +1,19 @@
 # @memberjunction/sql-parser
 
+## 5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- 931740a: Fix SQLParser to extract parameters from Jinja2 control flow conditions ({% if %}/{% elif %}) and remove hardcoded golden-queries reusability check from QueryEntityServer.
+
+## 5.17.0
+
+### Patch Changes
+
+- 4b6fd2a: Add composable query passthrough parameter bubbling, deterministic field type resolution from dependency queries and entity metadata, MJLexer-based template variable manipulation, and refactor MJQueryEntityServer into a 5-stage extraction pipeline
+
 ## 5.16.0
 
 ## 5.15.0

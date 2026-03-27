@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SchemaBuilder } from '../SchemaBuilder.js';
 import type { SchemaBuilderInput, SourceSchemaInfo, TargetTableConfig } from '../interfaces.js';
+import { RuntimeSchemaManager } from '@memberjunction/schema-engine';
 
 function MakeSourceSchema(): SourceSchemaInfo {
     return {
@@ -285,6 +286,76 @@ describe('SchemaBuilder (integration)', () => {
             for (const f of output.MigrationFiles) {
                 expect(f.FilePath).toMatch(/^migrations\/v2\/V\d{12}__v5\.6\.0\.x_Integration_HubSpot_\w+\.sql$/);
             }
+        });
+    });
+
+    describe('RunSchemaPipeline', () => {
+        beforeEach(() => {
+            vi.restoreAllMocks();
+        });
+
+        it('should return schema errors without calling RSU pipeline', async () => {
+            const input = MakeInput({
+                TargetConfigs: [{
+                    SourceObjectName: 'contacts',
+                    SchemaName: '__mj',
+                    TableName: 'Contact',
+                    EntityName: 'Contacts',
+                    PrimaryKeyFields: [],
+                    Columns: [],
+                    SoftForeignKeys: [],
+                }],
+                EntitySettingsForTargets: {},
+            });
+
+            const { SchemaOutput, PipelineResult } = await builder.RunSchemaPipeline(input);
+
+            expect(SchemaOutput.Errors.length).toBeGreaterThan(0);
+            expect(PipelineResult.Success).toBe(false);
+            expect(PipelineResult.ErrorStep).toBe('BuildSchema');
+        });
+
+        it('should return success when no migration SQL is produced', async () => {
+            const input = MakeInput({
+                TargetConfigs: [],
+            });
+
+            const { SchemaOutput, PipelineResult } = await builder.RunSchemaPipeline(input);
+
+            expect(SchemaOutput.Errors).toHaveLength(0);
+            expect(PipelineResult.Success).toBe(true);
+            expect(PipelineResult.Steps[0]?.Status).toBe('skipped');
+        });
+
+        it('should call RuntimeSchemaManager.RunPipeline when migration SQL is produced', async () => {
+            const mockResult = {
+                Success: true,
+                APIRestarted: true,
+                GitCommitSuccess: false,
+                Steps: [{ Name: 'Mock', Status: 'success' as const, DurationMs: 10, Message: 'ok' }],
+            };
+
+            // Mock RunPipeline on the singleton
+            const runPipelineSpy = vi.spyOn(RuntimeSchemaManager.Instance, 'RunPipeline')
+                .mockResolvedValue(mockResult);
+
+            const input = MakeInput();
+            const { SchemaOutput, PipelineResult } = await builder.RunSchemaPipeline(input, { SkipGitCommit: true });
+
+            expect(SchemaOutput.Errors).toHaveLength(0);
+            expect(SchemaOutput.MigrationFiles).toHaveLength(1);
+            expect(runPipelineSpy).toHaveBeenCalledOnce();
+
+            // Verify the RSU input was correctly built
+            const rsuInput = runPipelineSpy.mock.calls[0][0];
+            expect(rsuInput.Description).toContain('HubSpot');
+            expect(rsuInput.AffectedTables).toContain('hubspot.Contact');
+            expect(rsuInput.AffectedTables).toContain('hubspot.Deal');
+            expect(rsuInput.MigrationSQL).toContain('CREATE TABLE');
+            expect(rsuInput.SkipGitCommit).toBe(true);
+            expect(rsuInput.AdditionalSchemaInfo).toBeDefined();
+
+            expect(PipelineResult.Success).toBe(true);
         });
     });
 });

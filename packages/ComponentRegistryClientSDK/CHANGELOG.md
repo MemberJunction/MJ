@@ -1,5 +1,30 @@
 # @memberjunction/component-registry-client-sdk
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [9881045]
+  - @memberjunction/core@5.17.0
+  - @memberjunction/interactive-component-types@5.17.0
+  - @memberjunction/global@5.17.0
+
 ## 5.16.0
 
 ### Patch Changes

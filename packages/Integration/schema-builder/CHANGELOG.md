@@ -1,5 +1,34 @@
 # @memberjunction/integration-schema-builder
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/integration-engine@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/schema-engine@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/integration-engine@5.18.0
+- @memberjunction/schema-engine@5.18.0
+- @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Minor Changes
+
+- bbfbf5e: Runtime Schema Update (RSU) system with 32 integration lifecycle API endpoints, schema evolution, sync cancellation, watermark filtering, progress polling, and cascade delete fixes.
+
+### Patch Changes
+
+- Updated dependencies [bbfbf5e]
+  - @memberjunction/schema-engine@5.17.0
+  - @memberjunction/integration-engine@5.17.0
+  - @memberjunction/global@5.17.0
+
 ## 5.16.0
 
 ### Patch Changes

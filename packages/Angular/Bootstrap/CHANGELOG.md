@@ -1,5 +1,77 @@
 # @memberjunction/ng-bootstrap
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.19.0
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/actions-base@5.19.0
+- @memberjunction/ng-auth-services@5.19.0
+- @memberjunction/ng-core-entity-forms@5.19.0
+- @memberjunction/ng-dashboards@5.19.0
+- @memberjunction/ng-explorer-core@5.19.0
+- @memberjunction/ng-explorer-settings@5.19.0
+- @memberjunction/ng-shared@5.19.0
+- @memberjunction/ng-artifacts@5.19.0
+- @memberjunction/ng-dashboard-viewer@5.19.0
+- @memberjunction/ng-file-storage@5.19.0
+- @memberjunction/communication-types@5.19.0
+- @memberjunction/entity-communications-base@5.19.0
+- @memberjunction/graphql-dataprovider@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- 931740a: Fix SQLParser to extract parameters from Jinja2 control flow conditions ({% if %}/{% elif %}) and remove hardcoded golden-queries reusability check from QueryEntityServer.
+- Updated dependencies [322dac6]
+- Updated dependencies [ee4bf94]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/ng-core-entity-forms@5.18.0
+  - @memberjunction/ai-engine-base@5.18.0
+  - @memberjunction/ng-dashboards@5.18.0
+  - @memberjunction/ng-explorer-core@5.18.0
+  - @memberjunction/graphql-dataprovider@5.18.0
+  - @memberjunction/ng-artifacts@5.18.0
+  - @memberjunction/ng-shared@5.18.0
+  - @memberjunction/ng-explorer-settings@5.18.0
+  - @memberjunction/ng-file-storage@5.18.0
+  - @memberjunction/ng-dashboard-viewer@5.18.0
+  - @memberjunction/actions-base@5.18.0
+  - @memberjunction/ng-auth-services@5.18.0
+  - @memberjunction/communication-types@5.18.0
+  - @memberjunction/entity-communications-base@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [bbfbf5e]
+- Updated dependencies [001fd3e]
+- Updated dependencies [9881045]
+  - @memberjunction/graphql-dataprovider@5.17.0
+  - @memberjunction/ng-core-entity-forms@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/ng-dashboards@5.17.0
+  - @memberjunction/ng-explorer-core@5.17.0
+  - @memberjunction/ng-explorer-settings@5.17.0
+  - @memberjunction/ng-shared@5.17.0
+  - @memberjunction/ng-file-storage@5.17.0
+  - @memberjunction/ai-engine-base@5.17.0
+  - @memberjunction/ai-core-plus@5.17.0
+  - @memberjunction/actions-base@5.17.0
+  - @memberjunction/ng-auth-services@5.17.0
+  - @memberjunction/ng-artifacts@5.17.0
+  - @memberjunction/ng-dashboard-viewer@5.17.0
+  - @memberjunction/communication-types@5.17.0
+  - @memberjunction/entity-communications-base@5.17.0
+  - @memberjunction/core-entities@5.17.0
+
 ## 5.16.0
 
 ### Patch Changes

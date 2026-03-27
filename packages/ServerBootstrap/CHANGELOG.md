@@ -1,5 +1,227 @@
 # @memberjunction/server-bootstrap
 
+## 5.19.0
+
+### Patch Changes
+
+- Updated dependencies [f9001de]
+  - @memberjunction/ai-agents@5.19.0
+  - @memberjunction/ai-agent-manager@5.19.0
+  - @memberjunction/core-actions@5.19.0
+  - @memberjunction/server@5.19.0
+  - @memberjunction/messaging-adapters@5.19.0
+  - @memberjunction/scheduling-engine@5.19.0
+  - @memberjunction/testing-engine@5.19.0
+  - @memberjunction/codegen-lib@5.19.0
+  - @memberjunction/computer-use-engine@5.19.0
+  - @memberjunction/ai-engine-base@5.19.0
+  - @memberjunction/ai-core-plus@5.19.0
+  - @memberjunction/ai-anthropic@5.19.0
+  - @memberjunction/ai-azure@5.19.0
+  - @memberjunction/ai-bedrock@5.19.0
+  - @memberjunction/ai-betty-bot@5.19.0
+  - @memberjunction/ai-blackforestlabs@5.19.0
+  - @memberjunction/ai-provider-bundle@5.19.0
+  - @memberjunction/ai-cerebras@5.19.0
+  - @memberjunction/ai-cohere@5.19.0
+  - @memberjunction/ai-elevenlabs@5.19.0
+  - @memberjunction/ai-fireworks@5.19.0
+  - @memberjunction/ai-gemini@5.19.0
+  - @memberjunction/ai-groq@5.19.0
+  - @memberjunction/ai-heygen@5.19.0
+  - @memberjunction/ai-lmstudio@5.19.0
+  - @memberjunction/ai-local-embeddings@5.19.0
+  - @memberjunction/ai-minimax@5.19.0
+  - @memberjunction/ai-mistral@5.19.0
+  - @memberjunction/ai-ollama@5.19.0
+  - @memberjunction/ai-openai@5.19.0
+  - @memberjunction/ai-openrouter@5.19.0
+  - @memberjunction/ai-recommendations-rex@5.19.0
+  - @memberjunction/ai-vectors-pinecone@5.19.0
+  - @memberjunction/ai-vertex@5.19.0
+  - @memberjunction/ai-zhipu@5.19.0
+  - @memberjunction/ai-xai@5.19.0
+  - @memberjunction/ai-reranker@5.19.0
+  - @memberjunction/actions-apollo@5.19.0
+  - @memberjunction/actions-base@5.19.0
+  - @memberjunction/actions-bizapps-accounting@5.19.0
+  - @memberjunction/actions-bizapps-crm@5.19.0
+  - @memberjunction/actions-bizapps-formbuilders@5.19.0
+  - @memberjunction/actions-bizapps-lms@5.19.0
+  - @memberjunction/actions-bizapps-social@5.19.0
+  - @memberjunction/actions@5.19.0
+  - @memberjunction/communication-types@5.19.0
+  - @memberjunction/entity-communications-base@5.19.0
+  - @memberjunction/communication-ms-graph@5.19.0
+  - @memberjunction/communication-sendgrid@5.19.0
+  - @memberjunction/content-autotagging@5.19.0
+  - @memberjunction/doc-utils@5.19.0
+  - @memberjunction/encryption@5.19.0
+  - @memberjunction/integration-actions@5.19.0
+  - @memberjunction/integration-connectors@5.19.0
+  - @memberjunction/integration-engine@5.19.0
+  - @memberjunction/core@5.19.0
+  - @memberjunction/core-entities@5.19.0
+  - @memberjunction/core-entities-server@5.19.0
+  - @memberjunction/data-context-server@5.19.0
+  - @memberjunction/queue@5.19.0
+  - @memberjunction/storage@5.19.0
+  - @memberjunction/scheduling-actions@5.19.0
+  - @memberjunction/scheduling-engine-base@5.19.0
+  - @memberjunction/server-extensions-core@5.19.0
+  - @memberjunction/templates@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [322dac6]
+- Updated dependencies [931740a]
+- Updated dependencies [5f91957]
+- Updated dependencies [ee4bf94]
+  - @memberjunction/ai-agents@5.18.0
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/core-entities-server@5.18.0
+  - @memberjunction/ai-agent-manager@5.18.0
+  - @memberjunction/core-actions@5.18.0
+  - @memberjunction/server@5.18.0
+  - @memberjunction/messaging-adapters@5.18.0
+  - @memberjunction/scheduling-engine@5.18.0
+  - @memberjunction/testing-engine@5.18.0
+  - @memberjunction/ai-engine-base@5.18.0
+  - @memberjunction/computer-use-engine@5.18.0
+  - @memberjunction/ai-reranker@5.18.0
+  - @memberjunction/actions@5.18.0
+  - @memberjunction/codegen-lib@5.18.0
+  - @memberjunction/templates@5.18.0
+  - @memberjunction/integration-engine@5.18.0
+  - @memberjunction/ai-vectors-pinecone@5.18.0
+  - @memberjunction/communication-ms-graph@5.18.0
+  - @memberjunction/content-autotagging@5.18.0
+  - @memberjunction/queue@5.18.0
+  - @memberjunction/actions-apollo@5.18.0
+  - @memberjunction/actions-bizapps-accounting@5.18.0
+  - @memberjunction/actions-bizapps-crm@5.18.0
+  - @memberjunction/actions-bizapps-formbuilders@5.18.0
+  - @memberjunction/actions-bizapps-lms@5.18.0
+  - @memberjunction/actions-bizapps-social@5.18.0
+  - @memberjunction/integration-actions@5.18.0
+  - @memberjunction/scheduling-actions@5.18.0
+  - @memberjunction/integration-connectors@5.18.0
+  - @memberjunction/ai-provider-bundle@5.18.0
+  - @memberjunction/ai-anthropic@5.18.0
+  - @memberjunction/ai-azure@5.18.0
+  - @memberjunction/ai-bedrock@5.18.0
+  - @memberjunction/ai-betty-bot@5.18.0
+  - @memberjunction/ai-blackforestlabs@5.18.0
+  - @memberjunction/ai-cerebras@5.18.0
+  - @memberjunction/ai-cohere@5.18.0
+  - @memberjunction/ai-elevenlabs@5.18.0
+  - @memberjunction/ai-fireworks@5.18.0
+  - @memberjunction/ai-gemini@5.18.0
+  - @memberjunction/ai-groq@5.18.0
+  - @memberjunction/ai-heygen@5.18.0
+  - @memberjunction/ai-lmstudio@5.18.0
+  - @memberjunction/ai-local-embeddings@5.18.0
+  - @memberjunction/ai-minimax@5.18.0
+  - @memberjunction/ai-mistral@5.18.0
+  - @memberjunction/ai-ollama@5.18.0
+  - @memberjunction/ai-openai@5.18.0
+  - @memberjunction/ai-openrouter@5.18.0
+  - @memberjunction/ai-recommendations-rex@5.18.0
+  - @memberjunction/ai-vertex@5.18.0
+  - @memberjunction/ai-zhipu@5.18.0
+  - @memberjunction/ai-xai@5.18.0
+  - @memberjunction/actions-base@5.18.0
+  - @memberjunction/communication-types@5.18.0
+  - @memberjunction/entity-communications-base@5.18.0
+  - @memberjunction/communication-sendgrid@5.18.0
+  - @memberjunction/doc-utils@5.18.0
+  - @memberjunction/encryption@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/data-context-server@5.18.0
+  - @memberjunction/storage@5.18.0
+  - @memberjunction/scheduling-engine-base@5.18.0
+  - @memberjunction/server-extensions-core@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- bbfbf5e: Runtime Schema Update (RSU) system with 32 integration lifecycle API endpoints, schema evolution, sync cancellation, watermark filtering, progress polling, and cascade delete fixes.
+- ecf8b77: Add Slack and Teams messaging adapters for MJ AI agents with server extension framework
+- Updated dependencies [4b6fd2a]
+- Updated dependencies [bbfbf5e]
+- Updated dependencies [001fd3e]
+- Updated dependencies [ecf8b77]
+- Updated dependencies [9881045]
+  - @memberjunction/core-entities-server@5.17.0
+  - @memberjunction/server@5.17.0
+  - @memberjunction/integration-engine@5.17.0
+  - @memberjunction/codegen-lib@5.17.0
+  - @memberjunction/messaging-adapters@5.17.0
+  - @memberjunction/server-extensions-core@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/core-actions@5.17.0
+  - @memberjunction/integration-actions@5.17.0
+  - @memberjunction/integration-connectors@5.17.0
+  - @memberjunction/scheduling-engine@5.17.0
+  - @memberjunction/ai-agent-manager@5.17.0
+  - @memberjunction/ai-agents@5.17.0
+  - @memberjunction/ai-engine-base@5.17.0
+  - @memberjunction/ai-core-plus@5.17.0
+  - @memberjunction/computer-use-engine@5.17.0
+  - @memberjunction/ai-recommendations-rex@5.17.0
+  - @memberjunction/ai-vectors-pinecone@5.17.0
+  - @memberjunction/ai-reranker@5.17.0
+  - @memberjunction/actions-apollo@5.17.0
+  - @memberjunction/actions-base@5.17.0
+  - @memberjunction/actions-bizapps-accounting@5.17.0
+  - @memberjunction/actions-bizapps-crm@5.17.0
+  - @memberjunction/actions-bizapps-formbuilders@5.17.0
+  - @memberjunction/actions-bizapps-lms@5.17.0
+  - @memberjunction/actions-bizapps-social@5.17.0
+  - @memberjunction/actions@5.17.0
+  - @memberjunction/communication-types@5.17.0
+  - @memberjunction/entity-communications-base@5.17.0
+  - @memberjunction/communication-ms-graph@5.17.0
+  - @memberjunction/communication-sendgrid@5.17.0
+  - @memberjunction/content-autotagging@5.17.0
+  - @memberjunction/doc-utils@5.17.0
+  - @memberjunction/encryption@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/data-context-server@5.17.0
+  - @memberjunction/queue@5.17.0
+  - @memberjunction/storage@5.17.0
+  - @memberjunction/scheduling-actions@5.17.0
+  - @memberjunction/scheduling-engine-base@5.17.0
+  - @memberjunction/templates@5.17.0
+  - @memberjunction/testing-engine@5.17.0
+  - @memberjunction/ai-provider-bundle@5.17.0
+  - @memberjunction/ai-anthropic@5.17.0
+  - @memberjunction/ai-azure@5.17.0
+  - @memberjunction/ai-bedrock@5.17.0
+  - @memberjunction/ai-betty-bot@5.17.0
+  - @memberjunction/ai-blackforestlabs@5.17.0
+  - @memberjunction/ai-cerebras@5.17.0
+  - @memberjunction/ai-cohere@5.17.0
+  - @memberjunction/ai-elevenlabs@5.17.0
+  - @memberjunction/ai-fireworks@5.17.0
+  - @memberjunction/ai-gemini@5.17.0
+  - @memberjunction/ai-groq@5.17.0
+  - @memberjunction/ai-heygen@5.17.0
+  - @memberjunction/ai-lmstudio@5.17.0
+  - @memberjunction/ai-local-embeddings@5.17.0
+  - @memberjunction/ai-minimax@5.17.0
+  - @memberjunction/ai-mistral@5.17.0
+  - @memberjunction/ai-ollama@5.17.0
+  - @memberjunction/ai-openai@5.17.0
+  - @memberjunction/ai-openrouter@5.17.0
+  - @memberjunction/ai-vertex@5.17.0
+  - @memberjunction/ai-zhipu@5.17.0
+  - @memberjunction/ai-xai@5.17.0
+
 ## 5.16.0
 
 ### Patch Changes

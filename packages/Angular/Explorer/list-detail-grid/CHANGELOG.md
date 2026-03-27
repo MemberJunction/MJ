@@ -1,5 +1,39 @@
 # Change Log - @memberjunction/ng-list-detail-grid
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@5.19.0
+- @memberjunction/ng-entity-viewer@5.19.0
+- @memberjunction/ng-shared-generic@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@5.18.0
+- @memberjunction/ng-entity-viewer@5.18.0
+- @memberjunction/ng-shared-generic@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/core-entities@5.18.0
+- @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [9881045]
+  - @memberjunction/core@5.17.0
+  - @memberjunction/ng-shared@5.17.0
+  - @memberjunction/ng-entity-viewer@5.17.0
+  - @memberjunction/ng-shared-generic@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/global@5.17.0
+
 ## 5.16.0
 
 ### Patch Changes
