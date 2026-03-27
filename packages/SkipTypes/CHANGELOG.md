@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/skip-types
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/interactive-component-types@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/data-context@5.19.0
+- @memberjunction/sql-dialect@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [322dac6]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/interactive-component-types@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/data-context@5.18.0
+  - @memberjunction/sql-dialect@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

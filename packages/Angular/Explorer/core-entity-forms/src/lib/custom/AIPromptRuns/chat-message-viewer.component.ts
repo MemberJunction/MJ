@@ -22,6 +22,11 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
     public showUser = true;
     public showAssistant = true;
     
+    // Full-screen overlay state
+    public FullScreenContent: string | null = null;
+    public FullScreenLanguage = 'markdown';
+    public FullScreenTitle = '';
+
     // Track expanded state for content parts
     private contentPartStates = new Map<string, boolean>();
     
@@ -355,5 +360,32 @@ export class ChatMessageViewerComponent implements OnInit, OnChanges {
     public toggleContentPart(partId: string): void {
         const currentState = this.contentPartStates.get(partId) || false;
         this.contentPartStates.set(partId, !currentState);
+    }
+
+    /**
+     * Open the full-screen overlay with the given content
+     */
+    public openFullScreen(content: string, language: string, title: string): void {
+        this.FullScreenContent = content;
+        this.FullScreenLanguage = language;
+        this.FullScreenTitle = title;
+    }
+
+    /**
+     * Close the full-screen overlay
+     */
+    public closeFullScreen(): void {
+        this.FullScreenContent = null;
+    }
+
+    /**
+     * Copy text to clipboard
+     */
+    public copyToClipboard(text: string): void {
+        navigator.clipboard.writeText(text).then(() => {
+            console.log('Content copied to clipboard');
+        }).catch(err => {
+            console.error('Failed to copy:', err);
+        });
     }
 }

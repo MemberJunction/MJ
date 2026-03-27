@@ -131,10 +131,12 @@ export interface MarkdownConfig {
   prismTheme?: string;
 
   /**
-   * Mermaid theme configuration
-   * @default 'default'
+   * Mermaid theme configuration.
+   * 'auto' (default) detects light/dark from the document's data-theme attribute
+   * and maps to mermaid's 'default' (light) or 'dark' theme accordingly.
+   * @default 'auto'
    */
-  mermaidTheme?: 'default' | 'dark' | 'forest' | 'neutral' | 'base';
+  mermaidTheme?: 'auto' | 'default' | 'dark' | 'forest' | 'neutral' | 'base';
 
   /**
    * Whether to sanitize HTML output
@@ -165,7 +167,7 @@ export const DEFAULT_MARKDOWN_CONFIG: Required<Omit<MarkdownConfig, 'autoExpandL
   enableLineNumbers: false,
   containerClass: '',
   prismTheme: 'prism-okaidia',
-  mermaidTheme: 'default',
+  mermaidTheme: 'auto',
   sanitize: true
 };
 

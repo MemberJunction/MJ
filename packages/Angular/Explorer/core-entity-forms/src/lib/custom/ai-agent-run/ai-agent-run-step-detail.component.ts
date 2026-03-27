@@ -3,6 +3,16 @@ import { TimelineItem } from './ai-agent-run-timeline.component';
 import { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 
+interface ScratchpadSnapshotView {
+  notes: string;
+  tasks: Array<{
+    id: string;
+    title: string;
+    status: string;
+    notes?: string;
+  }>;
+}
+
 @Component({
   standalone: false,
   selector: 'mj-ai-agent-run-step-detail',
@@ -16,15 +26,23 @@ export class AIAgentRunStepDetailComponent {
   @Output() copyToClipboard = new EventEmitter<string>();
 
   selectedItemJsonString = '{}';
-  detailPaneTab: 'json' | 'diff' = 'diff';
+  detailPaneTab: 'json' | 'diff' | 'scratchpad' = 'diff';
+  scratchpadSubTab: 'input' | 'output' | 'diff' = 'diff';
 
   constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnChanges() {
     if (this.selectedTimelineItem) {
       this.selectedItemJsonString = this.getSelectedItemJson();
-      // Default to diff tab if step has payload diff, otherwise json tab
-      this.detailPaneTab = this.showStepPayloadDiff ? 'diff' : 'json';
+      // Default to diff tab if step has payload diff, scratchpad if available, otherwise json
+      if (this.showStepPayloadDiff) {
+        this.detailPaneTab = 'diff';
+      } else if (this.showScratchpadTab) {
+        this.detailPaneTab = 'scratchpad';
+      } else {
+        this.detailPaneTab = 'json';
+      }
+      this.scratchpadSubTab = 'diff';
       this.cdr.detectChanges();
     }
   }
@@ -145,5 +163,80 @@ export class AIAgentRunStepDetailComponent {
 
   onCopyToClipboard() {
     this.copyToClipboard.emit(this.getSelectedItemJson());
+  }
+
+  /**
+   * Whether the scratchpad tab should be shown (step has scratchpad data in InputData or OutputData)
+   */
+  get showScratchpadTab(): boolean {
+    if (!this.selectedTimelineItem || this.selectedTimelineItem.type !== 'step') {
+      return false;
+    }
+    return this.stepScratchpadInput !== null || this.stepScratchpadOutput !== null;
+  }
+
+  /**
+   * Parse scratchpad snapshot from InputData JSON
+   */
+  get stepScratchpadInput(): ScratchpadSnapshotView | null {
+    return this.extractScratchpadFromField('InputData');
+  }
+
+  /**
+   * Parse scratchpad snapshot from OutputData JSON
+   */
+  get stepScratchpadOutput(): ScratchpadSnapshotView | null {
+    return this.extractScratchpadFromField('OutputData');
+  }
+
+  /**
+   * Number of tasks that changed between input and output scratchpad snapshots
+   */
+  get scratchpadTaskChangeCount(): number {
+    const input = this.stepScratchpadInput;
+    const output = this.stepScratchpadOutput;
+    if (!input && !output) return 0;
+    if (!input || !output) return (output?.tasks?.length ?? 0) + (input?.tasks?.length ?? 0);
+
+    let changes = 0;
+    const inputMap = new Map(input.tasks.map(t => [t.id, t]));
+    const outputMap = new Map(output.tasks.map(t => [t.id, t]));
+
+    for (const [id, task] of outputMap) {
+      const prev = inputMap.get(id);
+      if (!prev || prev.status !== task.status || prev.title !== task.title || prev.notes !== task.notes) {
+        changes++;
+      }
+    }
+    for (const id of inputMap.keys()) {
+      if (!outputMap.has(id)) changes++; // removed tasks
+    }
+    if (input.notes !== output.notes) changes++;
+    return changes;
+  }
+
+  private extractScratchpadFromField(fieldName: 'InputData' | 'OutputData'): ScratchpadSnapshotView | null {
+    if (!this.selectedTimelineItem || this.selectedTimelineItem.type !== 'step') {
+      return null;
+    }
+
+    const stepData = this.selectedTimelineItem.data;
+    const rawValue = stepData?.[fieldName];
+    if (!rawValue) return null;
+
+    try {
+      let parsed = rawValue;
+      if (typeof parsed === 'string') {
+        parsed = JSON.parse(parsed);
+      }
+      const scratchpad = parsed?.scratchpad;
+      if (!scratchpad) return null;
+      return {
+        notes: scratchpad.notes ?? '',
+        tasks: Array.isArray(scratchpad.tasks) ? scratchpad.tasks : []
+      };
+    } catch {
+      return null;
+    }
   }
 }
