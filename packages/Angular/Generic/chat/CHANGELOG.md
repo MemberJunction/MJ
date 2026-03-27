@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ng-chat
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@5.19.0
+- @memberjunction/ng-markdown@5.19.0
+- @memberjunction/ng-shared-generic@5.19.0
+- @memberjunction/core@5.19.0
+
 ## 5.18.0
 
 ### Patch Changes

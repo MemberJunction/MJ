@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/server-bootstrap-lite@5.19.0
+- @memberjunction/ai@5.19.0
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/aiengine@5.19.0
+- @memberjunction/ai-prompts@5.19.0
+- @memberjunction/ai-provider-bundle@5.19.0
+- @memberjunction/actions-base@5.19.0
+- @memberjunction/actions@5.19.0
+- @memberjunction/config@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/core-entities-server@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/postgresql-dataprovider@5.19.0
+- @memberjunction/sql-dialect@5.19.0
+- @memberjunction/sql-parser@5.19.0
+- @memberjunction/sqlserver-dataprovider@5.19.0
+
 ## 5.18.0
 
 ### Patch Changes

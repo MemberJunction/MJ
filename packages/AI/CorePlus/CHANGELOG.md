@@ -1,5 +1,16 @@
 # @memberjunction/ai-core-plus
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.19.0
+- @memberjunction/actions-base@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/templates-base-types@5.19.0
+
 ## 5.18.0
 
 ### Minor Changes

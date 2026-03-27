@@ -1,5 +1,7 @@
 # Change Log - @memberjunction/global
 
+## 5.19.0
+
 ## 5.18.0
 
 ## 5.17.0

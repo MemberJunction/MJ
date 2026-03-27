@@ -1,5 +1,14 @@
 # @memberjunction/db-auto-doc
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/server-bootstrap@5.19.0
+- @memberjunction/ai@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/global@5.19.0
+
 ## 5.18.0
 
 ### Patch Changes
