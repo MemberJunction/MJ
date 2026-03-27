@@ -2,7 +2,8 @@
 
 > **Status**: PLANNING
 > **Created**: 2026-03-27
-> **Supersedes**: `plans/unified-data-snapshots-component-events-plan.md`, `plans/visualization-layer-design.md`
+> **Builds on**: `plans/unified-data-snapshots-component-events-plan.md` (PR #2237), `plans/visualization-layer-design.md` (PR #2215)
+> **Related**: `plans/file-artifact-io-plan.md` (file-based artifact I/O)
 > **Scope**: `@memberjunction/interactive-component-types`, `@memberjunction/ng-artifacts`, `@memberjunction/ng-react`, agent integration, future visualization foundation
 
 ## Table of Contents
@@ -10,18 +11,19 @@
 1. [Executive Summary](#1-executive-summary)
 2. [Current State & Gaps](#2-current-state--gaps)
 3. [Architecture Overview](#3-architecture-overview)
-4. [Phase 1: Core Type System](#4-phase-1-core-type-system)
-5. [Phase 2: Composable Data Transform Toolkit](#5-phase-2-composable-data-transform-toolkit)
-6. [Phase 3: Component Event System](#6-phase-3-component-event-system)
-7. [Phase 4: Artifact-Level State Snapshots](#7-phase-4-artifact-level-state-snapshots)
-8. [Phase 5: Multi-Table Viewer UX](#8-phase-5-multi-table-viewer-ux)
-9. [Phase 6: Agent-Component Dialog Bridge](#9-phase-6-agent-component-dialog-bridge)
-10. [Phase 7: Interactive Component Data Contract](#10-phase-7-interactive-component-data-contract)
+4. [Core Type System & Utilities](#4-core-type-system--utilities)
+5. [Component Event System](#5-component-event-system)
+6. [Artifact-Level State Snapshots](#6-artifact-level-state-snapshots)
+7. [Multi-Table Viewer UX](#7-multi-table-viewer-ux)
+8. [Agent-Component Dialog Bridge](#8-agent-component-dialog-bridge)
+9. [Interactive Component Data Contract](#9-interactive-component-data-contract)
+10. [Relationship to File Artifact I/O](#10-relationship-to-file-artifact-io)
 11. [Future: Visualization Foundation Layer](#11-future-visualization-foundation-layer)
-12. [Cross-Cutting Concerns](#12-cross-cutting-concerns)
-13. [File Inventory](#13-file-inventory)
-14. [Implementation Order & Dependencies](#14-implementation-order--dependencies)
-15. [Open Items & Future Considerations](#15-open-items--future-considerations)
+12. [Future: External Consumption & MCP](#12-future-external-consumption--mcp)
+13. [Cross-Cutting Concerns](#13-cross-cutting-concerns)
+14. [File Inventory](#14-file-inventory)
+15. [Implementation Order & Dependencies](#15-implementation-order--dependencies)
+16. [Open Items & Future Considerations](#16-open-items--future-considerations)
 
 ---
 
@@ -35,36 +37,48 @@ MemberJunction's interactive component system and artifact viewer system both pr
 | **Multi-table data** | `DataArtifactSpec` supports one table (one `rows[]`, one `columns[]`). Dashboards and multi-query results can't be represented as a single artifact. | Expand to a `tables[]` array of named datasets, with per-table metadata, while keeping full backward compatibility with the single-table format. |
 | **Agent visibility into live components** | Agents cannot see what a user is looking at. If a user is viewing a filtered, sorted, paged grid — the agent has no access to that state. | Add `GetCurrentStateSnapshot()` to every artifact viewer plugin, returning a structured `DataSnapshot` that captures the live data, visual state, computations, and interpretation. |
 
-Two additional capabilities complete the picture:
+An additional capability completes the picture:
 
 | Capability | Gap Today | Solution |
 |---|---|---|
 | **Component event subscription** | Interactive components have declarative event metadata but no runtime subscription mechanism. Containers can't react to or cancel component actions. | Add a `ComponentEventBus` with `on`/`off`/`emit`, Before/After event pairs, and cancellation support. |
-| **Composable data processing** | No standard way to transform, filter, truncate, or format data snapshots for different consumers (agents, export, comparison). Each consumer writes bespoke logic. | Provide a toolkit of small, composable transform functions that operate on `DataSnapshot` and `DataTable`. Pipeline them together for any use case. |
+
+### Design Philosophy
+
+This plan unifies two prior design efforts:
+
+- **PR #2215 (Visualization Layer)** established the principle that MJ needs a clean, generic, potentially external-facing data interchange format — one that could work outside MJ via MCP or be consumed by non-MJ agents. That thinking shaped the layered column hierarchy (`ColumnDescriptor` as the generic base, `MJColumnDescriptor` adding entity lineage) and the separation between data description and rendering.
+
+- **PR #2237 (Data Snapshots)** identified the concrete problems and designed practical solutions: multi-table expansion, snapshot capture methods, the component event system, and the agent bridge. The vast majority of the implementation design comes from this plan.
+
+This plan is the union — concrete solutions built on a type system that's generic enough to be useful beyond MJ's immediate boundaries.
 
 ### Key Design Decisions
 
 **One unified type hierarchy.** Rather than separate types for "component data," "artifact data," "agent data," and "export data," there is ONE layered type system. A query builder produces a `DataSnapshot`. A dashboard component produces a `DataSnapshot`. A chart produces a `DataSnapshot`. An agent can reason over any of them because they share the same shape.
 
-**Composable transforms over class hierarchies.** Data processing (truncation, column selection, formatting for agents, export to flat formats) is implemented as small, independent, data-in/data-out functions that compose into pipelines. This keeps each transform testable, reusable, and combinable in any order — without building a monolithic processor class.
+**Generic at the base, MJ-native where it matters.** `ColumnDescriptor` is deliberately generic — no MJ-specific fields. This is the layer that could be exposed via MCP or consumed by external agents. `MJColumnDescriptor` adds entity lineage for the rich MJ experience. Both levels exist because both use cases are real.
 
-**Stateful capture, pure processing.** Capturing a snapshot from a live component is inherently stateful (it reads current grid state, filters, selections). Everything after capture — transforms, formatting, delivery — operates on immutable data. This boundary is explicit in the architecture.
+**Artifact types own their snapshot shape.** Each artifact type knows what "current data state" means for its content. A data artifact ejects its grid data. An interactive component proxies through to the running React component. A PDF viewer returns text and metadata. The base class provides a default; subclasses override with type-specific logic.
 
-### Dependencies Between Phases
+**The component contract includes both get AND set.** `getCurrentDataState()` captures the current state. `setDataState()` enables rehydrating a component with historical data — loading a prior snapshot back into a live component. The get side is the immediate implementation; the set side is scaffolded in the contract for near-term follow-up.
+
+### Implementation Structure
+
+This is one body of work, not a multi-month phased rollout. The sections below are ordered by dependency (what must exist before the next piece can be built), not by timeline:
 
 ```
-Phase 1: Core Type System (types)
-    ├──▶ Phase 2: Composable Transform Toolkit (functions over types)
-    ├──▶ Phase 3: Component Event System (types + runtime)
-    ├──▶ Phase 4: Artifact-Level State Snapshots (base class method)
-    ├──▶ Phase 5: Multi-Table Viewer UX (Angular)
-    └──▶ Phase 7: Interactive Component Data Contract (React runtime)
+Core Type System & Utilities (foundation)
+    ├──▶ Component Event System (types + runtime)
+    ├──▶ Artifact-Level State Snapshots (base class method)
+    ├──▶ Multi-Table Viewer UX (Angular)
+    └──▶ Interactive Component Data Contract (React runtime)
               │
               ▼
-         Phase 6: Agent-Component Dialog Bridge (integration, depends on 4 + 7)
+         Agent-Component Dialog Bridge (integration, depends on snapshots + contract)
 ```
 
-Phases 2–5 and 7 can proceed in parallel after Phase 1 is complete. Phase 6 depends on Phases 4 and 7.
+All sections after the core types can proceed in parallel.
 
 ---
 
@@ -284,7 +298,7 @@ The boundary: **stateful capture** (left side — reading live component state) 
 
 ---
 
-## 4. Phase 1: Core Type System
+## 4. Core Type System & Utilities
 
 ### 4.1 Column Descriptors
 
@@ -1001,15 +1015,11 @@ Add `packages/InteractiveComponents/src/__tests__/core-types.test.ts`:
 
 ---
 
-## 5. Phase 2: Composable Data Transform Toolkit
+### 4.8 Utility Functions: `packages/InteractiveComponents/src/data-transforms.ts`
 
-### 5.1 Overview
+The core types ship with a set of utility functions for common operations on `DataSnapshot` and `DataTable` objects. These are straightforward helpers — not a separate architectural layer. They're shipped alongside the types because the multi-table viewer, snapshot methods, and agent bridge all need them.
 
-Provide a set of small, independent, data-in/data-out functions for processing `DataSnapshot` and `DataTable` objects. Each function does one thing. They compose into pipelines for specific use cases (agent context, export, comparison, persistence).
-
-### 5.2 New File: `packages/InteractiveComponents/src/data-transforms.ts`
-
-#### 5.2.1 Pipeline Utility
+#### 4.8.1 Pipeline Utility
 
 ```typescript
 /**
@@ -1033,7 +1043,7 @@ export function pipe(
 }
 ```
 
-#### 5.2.2 The `mapTables` Transform
+#### 4.8.2 The `mapTables` Transform
 
 This is the core building block. It applies a function to every table in a snapshot while preserving the snapshot's context (title, computations, visual state, interpretation).
 
@@ -1078,7 +1088,7 @@ export function mapTables(
 }
 ```
 
-#### 5.2.3 Row Operations
+#### 4.8.3 Row Operations
 
 ```typescript
 /**
@@ -1138,7 +1148,7 @@ export function sortTableRows(
 }
 ```
 
-#### 5.2.4 Column Operations
+#### 4.8.4 Column Operations
 
 ```typescript
 /**
@@ -1203,7 +1213,7 @@ export function stripEntityLineage(
 }
 ```
 
-#### 5.2.5 Table-Level Operations
+#### 4.8.5 Table-Level Operations
 
 ```typescript
 /**
@@ -1243,7 +1253,7 @@ export function getTable(
 }
 ```
 
-#### 5.2.6 Context Operations
+#### 4.8.6 Context Operations
 
 ```typescript
 /**
@@ -1325,7 +1335,7 @@ export function withTimestamp(
 }
 ```
 
-#### 5.2.7 Output Formatters
+#### 4.8.7 Output Formatters
 
 ```typescript
 /**
@@ -1431,7 +1441,7 @@ export function toFlatDataSets(snap: DataSnapshot): Array<{
 }
 ```
 
-### 5.3 Pipeline Examples
+### 4.9 Pipeline Examples
 
 These illustrate how the transforms compose for real use cases:
 
@@ -1481,51 +1491,22 @@ const focusOnRevenue = pipe(
 );
 ```
 
-### 5.4 Export from Package
-
 Add to `packages/InteractiveComponents/src/index.ts`:
 ```typescript
 export * from './data-transforms';
 ```
 
-### 5.5 Unit Tests
-
-Add `packages/InteractiveComponents/src/__tests__/data-transforms.test.ts`:
-
-- `pipe()` composes transforms left-to-right
-- `pipe()` with zero transforms returns input unchanged
-- `mapTables()` applies function to each table
-- `mapTables()` normalizes single-table snapshot to tables[]
-- `mapTables()` preserves non-table context (title, computations, etc.)
-- `truncateRows()` caps rows at limit
-- `truncateRows()` preserves totalAvailableRows
-- `truncateRows()` is no-op when rows are under limit
-- `sortTableRows()` sorts ascending and descending
-- `sortTableRows()` handles null values
-- `selectColumns()` keeps only specified columns in both definitions and row data
-- `excludeColumns()` removes specified columns
-- `filterTables()` keeps matching tables
-- `getTable()` finds table by name
-- `withInterpretation()` adds/replaces interpretation
-- `addComputation()` appends computation
-- `stripVisualState()` removes visual state
-- `withTimestamp()` stamps each table's fetchedAt
-- `formatSnapshotForAgent()` produces expected markdown structure
-- `formatSnapshotForAgent()` handles empty snapshots
-- `toFlatDataSets()` strips MJ-specific context
-- All transforms are non-destructive (don't mutate input)
-
 ---
 
-## 6. Phase 3: Component Event System
+## 5. Component Event System
 
-### 6.1 Overview
+### 5.1 Overview
 
 Add a runtime event subscription system to `ComponentObject` in `@memberjunction/interactive-component-types`. This enables consumers (Angular containers, agents, dashboards) to subscribe to component events and optionally cancel or modify default behavior.
 
-The existing `ComponentEvent` metadata in `ComponentSpec` already declares what events a component CAN emit. This phase adds the **runtime layer** that makes those declarations actionable.
+The existing `ComponentEvent` metadata in `ComponentSpec` already declares what events a component CAN emit. This section adds the **runtime layer** that makes those declarations actionable.
 
-### 6.2 Design Principles
+### 5.2 Design Principles
 
 1. **Before/After pattern**: Mirrors the proven pattern from MJ's Angular generic components (grids, trees, timelines)
 2. **Cancelable before events**: Before events carry a `cancel` flag; setting it to `true` prevents the default behavior
@@ -1534,7 +1515,7 @@ The existing `ComponentEvent` metadata in `ComponentSpec` already declares what 
 5. **Framework-agnostic**: Types work in React, Angular, or vanilla JS
 6. **Typed event args**: Each standard event has a strongly-typed args interface, but the bus is generic to support custom events
 
-### 6.3 New File: `packages/InteractiveComponents/src/component-events.ts`
+### 5.3 New File: `packages/InteractiveComponents/src/component-events.ts`
 
 ```typescript
 // ─── BASE EVENT ARGS ───
@@ -1786,7 +1767,7 @@ export interface ComponentEventBus {
 }
 ```
 
-### 6.4 New File: `packages/InteractiveComponents/src/component-event-bus.ts`
+### 5.4 New File: `packages/InteractiveComponents/src/component-event-bus.ts`
 
 ```typescript
 import {
@@ -1848,7 +1829,7 @@ export class DefaultComponentEventBus implements ComponentEventBus {
 }
 ```
 
-### 6.5 Update ComponentSpec Events Metadata
+### 5.5 Update ComponentSpec Events Metadata
 
 In `packages/InteractiveComponents/src/component-props-events.ts`, enhance `ComponentEvent`:
 
@@ -1866,7 +1847,7 @@ export interface ComponentEvent {
 }
 ```
 
-### 6.6 Export from Package
+### 5.6 Export from Package
 
 Add to `packages/InteractiveComponents/src/index.ts`:
 ```typescript
@@ -1874,7 +1855,7 @@ export * from './component-events';
 export * from './component-event-bus';
 ```
 
-### 6.7 Unit Tests
+### 5.7 Unit Tests
 
 Add `packages/InteractiveComponents/src/__tests__/component-events.test.ts`:
 
@@ -1891,13 +1872,13 @@ Add `packages/InteractiveComponents/src/__tests__/component-events.test.ts`:
 
 ---
 
-## 7. Phase 4: Artifact-Level State Snapshots
+## 6. Artifact-Level State Snapshots
 
-### 7.1 Overview
+### 6.1 Overview
 
 Add `GetCurrentStateSnapshot()` to `BaseArtifactViewerPluginComponent` so that ALL artifact viewer plugins inherit a standard mechanism for exposing their current state. Each plugin type overrides this to return type-appropriate structured data.
 
-### 7.2 Changes to BaseArtifactViewerPluginComponent
+### 6.2 Changes to BaseArtifactViewerPluginComponent
 
 In `packages/Angular/Generic/artifacts/src/lib/components/base-artifact-viewer.component.ts`:
 
@@ -1953,7 +1934,7 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
 }
 ```
 
-### 7.3 Data Artifact Viewer Override
+### 6.3 Data Artifact Viewer Override
 
 In `data-artifact-viewer.component.ts`:
 
@@ -1988,7 +1969,7 @@ public override GetCurrentStateSnapshot(): DataSnapshot | null {
 }
 ```
 
-### 7.4 Component Artifact Viewer Override
+### 6.4 Component Artifact Viewer Override
 
 In `component-artifact-viewer.component.ts`:
 
@@ -2020,7 +2001,7 @@ public override GetCurrentStateSnapshot(): DataSnapshot | Record<string, unknown
 }
 ```
 
-### 7.5 JSON Artifact Viewer Override
+### 6.5 JSON Artifact Viewer Override
 
 ```typescript
 public override GetCurrentStateSnapshot(): Record<string, unknown> | null {
@@ -2028,7 +2009,7 @@ public override GetCurrentStateSnapshot(): Record<string, unknown> | null {
 }
 ```
 
-### 7.6 Code Artifact Viewer Override
+### 6.6 Code Artifact Viewer Override
 
 ```typescript
 public override GetCurrentStateSnapshot(): Record<string, unknown> | null {
@@ -2044,7 +2025,7 @@ public override GetCurrentStateSnapshot(): Record<string, unknown> | null {
 }
 ```
 
-### 7.7 Panel Passthrough
+### 6.7 Panel Passthrough
 
 In `artifact-viewer-panel.component.ts`:
 
@@ -2062,7 +2043,7 @@ public GetCurrentStateSnapshot(): DataSnapshot | Record<string, unknown> | null 
 
 ---
 
-## 8. Phase 5: Multi-Table Viewer UX
+## 7. Multi-Table Viewer UX
 
 ### 8.1 Overview
 
@@ -2497,7 +2478,7 @@ import {
 
 ---
 
-## 9. Phase 6: Agent-Component Dialog Bridge
+## 8. Agent-Component Dialog Bridge
 
 ### 9.1 Overview
 
@@ -2605,13 +2586,13 @@ Agent subscribes to component events and invokes methods in real-time. Requires 
 
 ---
 
-## 10. Phase 7: Interactive Component Data Contract
+## 9. Interactive Component Data Contract
 
-### 10.1 Overview
+### 9.1 Overview
 
-Update the `ComponentObject` interface so that `getCurrentDataState()` returns a `DataSnapshot` instead of `any`. This makes interactive components first-class participants in the snapshot ecosystem. An agent can call through to a React dashboard component and get back structured multi-table data with computations and visual state.
+Update the `ComponentObject` interface so that `getCurrentDataState()` returns a `DataSnapshot` instead of `any`, and add `setDataState()` for rehydrating components with historical data. This makes interactive components first-class participants in the snapshot ecosystem — agents can read component state, and the system can restore prior state from persisted snapshots.
 
-### 10.2 Changes to ComponentObject
+### 9.2 Changes to ComponentObject
 
 In `packages/InteractiveComponents/src/runtime-types.ts`:
 
@@ -2643,6 +2624,22 @@ export interface ComponentObject {
     getCurrentDataState?: () => DataSnapshot | undefined;
 
     /**
+     * Sets the component's data state from a previously captured snapshot.
+     *
+     * This enables rehydrating a component with historical data — loading
+     * a prior snapshot back into a live component so the user can see
+     * "what this dashboard looked like last Tuesday."
+     *
+     * The component is responsible for interpreting the snapshot and
+     * updating its internal state accordingly. Not all components will
+     * support this — it's optional.
+     *
+     * @param snapshot - A previously captured DataSnapshot to restore
+     * @returns true if the state was successfully applied
+     */
+    setDataState?: (snapshot: DataSnapshot) => boolean;
+
+    /**
      * Gets the history of data state changes in the component.
      * Returns an array of timestamped snapshots.
      *
@@ -2671,7 +2668,7 @@ export interface ComponentObject {
 }
 ```
 
-### 10.3 React Component Guide: Implementing getCurrentDataState()
+### 9.3 React Component Guide: Implementing getCurrentDataState()
 
 Update `packages/React/mj-component-spec-guide.md` with guidance for component authors:
 
@@ -2744,7 +2741,7 @@ getCurrentDataState: () => ({
 })
 ```
 
-### 10.4 Angular Bridge Update
+### 9.4 Angular Bridge Update
 
 In `packages/Angular/Generic/react/src/lib/components/mj-react-component.component.ts`:
 
@@ -2760,15 +2757,46 @@ public GetCurrentDataState(): DataSnapshot | undefined {
 }
 ```
 
-### 10.5 Backward Compatibility
+### 9.5 Backward Compatibility
 
 Components that currently return arbitrary objects from `getCurrentDataState()` will continue to work at the JavaScript level — TypeScript allows returning a more specific type where `any` was expected. The consuming infrastructure (snapshot methods, agent bridge) now has a structured contract to rely on, with the `Record<string, unknown>` fallback in `GetCurrentStateSnapshot()` handling non-conforming components gracefully.
 
 ---
 
+## 10. Relationship to File Artifact I/O
+
+A parallel effort (branch `file-artifact-io-plan`) is building file-based artifact I/O — PDF generation/extraction, Excel read/write, Word document generation. That work and this plan are **complementary with near-zero collision**.
+
+### 10.1 Where the Work Touches
+
+| Area | File Artifact I/O | This Plan | Collision? |
+|---|---|---|---|
+| `ArtifactVersion` entity | Adds `FileID`, `MimeType`, `FileName` columns | No changes | None |
+| `ArtifactType` entity | Adds PDF/Excel/Word type records | Adds "Data Snapshot" type record | None — different records |
+| `BaseArtifactViewerPluginComponent` | Doesn't modify | Adds `GetCurrentStateSnapshot()` | None — new file viewers inherit the method |
+| Artifact viewer plugins | Creates NEW plugins (PDF, Excel, Word) | Modifies EXISTING plugins (data, component, JSON) | None — different files |
+| Agent actions | PDF Generator, Excel Writer, etc. | No new actions | None |
+
+### 10.2 Complementary Integration Points
+
+**File viewers get snapshot capability for free.** When the PDF, Excel, and Word viewer plugins are built, they inherit `GetCurrentStateSnapshot()` from the base class. An Excel viewer could override it to return a `DataSnapshot` where each sheet becomes a `DataTable` — then agents can analyze spreadsheet data the same way they analyze query results.
+
+**Excel writer can consume DataSnapshot.** When a user says "export this dashboard to Excel," the flow is: capture `DataSnapshot` → pass each `DataTable` to the Excel writer action → each table becomes a sheet. The types align naturally.
+
+**"Attach Artifact" pairs with the agent bridge.** File-artifact-io builds UI for attaching artifacts to conversations (input side). This plan's Section 8 builds the snapshot → agent context bridge (output side). Same pipeline, different directions.
+
+### 10.3 Coordination Needed
+
+When file viewer plugins are built, they should implement `GetCurrentStateSnapshot()` overrides:
+- **Excel viewer**: Return `DataSnapshot` with each sheet as a `DataTable`
+- **PDF viewer**: Return `{ contentType: 'pdf', pageCount, title, extractedText }`
+- **Word viewer**: Return `{ contentType: 'docx', sections, title }`
+
+---
+
 ## 11. Future: Visualization Foundation Layer
 
-This section documents the longer-term architectural direction for MJ's artifact and visualization system. These capabilities build on the data layer defined above but are not part of the immediate implementation phases.
+This section documents the longer-term architectural direction for MJ's artifact and visualization system. These capabilities build on the data layer defined above but are not part of the immediate implementation.
 
 ### 11.1 Artifact Type Formalization
 
@@ -2818,7 +2846,7 @@ class ArtifactRendererRegistry {
 }
 ```
 
-This enables commercial products (like Skip) to register enhanced renderers at higher priority that automatically win over base MJ renderers — without modifying any MJ code.
+This enables commercial products to register enhanced renderers at higher priority that automatically win over base MJ renderers — without modifying any MJ code.
 
 ### 11.3 Package Structure (Future)
 
@@ -2836,7 +2864,41 @@ The existing artifact system (database metadata + viewer plugins) continues to w
 
 ---
 
-## 12. Cross-Cutting Concerns
+## 12. Future: External Consumption & MCP
+
+### 12.1 The Generic Layer
+
+The `ColumnDescriptor` base type (Section 4.1) is deliberately free of MJ-specific fields — no entity lineage, no MJ metadata. This is intentional: it's the layer that could be exposed to external consumers.
+
+When MJ exposes artifact data state via MCP (Model Context Protocol), the `DataSnapshot` format works as-is. External agents receive:
+- Named tables with typed columns and flat rows
+- Computations with formatted values
+- Visual state describing what the user sees
+- Interpretation text
+
+None of this requires understanding MJ entities, RunView, or the class factory system. An external agent (Claude, GPT, a custom integration) can reason over the JSON structure without any MJ knowledge.
+
+### 12.2 MCP Integration Path
+
+The natural MCP integration is an MCP resource or tool that returns the current `DataSnapshot` for a given artifact or component:
+
+```
+Tool: get_artifact_data_state
+Input: { artifactId: "..." }
+Output: DataSnapshot JSON
+```
+
+This builds directly on `GetCurrentStateSnapshot()` (Section 6) — the MCP server calls the same method and returns the result. No additional transformation needed because `DataSnapshot` is already JSON-serializable and self-describing.
+
+### 12.3 Non-MJ Agents
+
+Amith's vision includes scenarios where non-MJ agents consume data state — e.g., a Slack bot, a Teams integration, or an external automation. The `DataSnapshot` format is designed to support this: it's standard JSON, it's self-describing (column types, table descriptions, computation labels), and it doesn't require MJ libraries to parse.
+
+The `MJColumnDescriptor` fields (`sourceEntity`, `sourceFieldName`) are optional. External consumers ignore them. MJ-aware consumers use them for entity linking and schema understanding.
+
+---
+
+## 13. Cross-Cutting Concerns
 
 ### 12.1 Package Dependencies
 
@@ -2899,7 +2961,7 @@ All changes are additive. No breaking changes to existing interfaces:
 
 ---
 
-## 13. File Inventory
+## 14. File Inventory
 
 ### New Files
 
@@ -2934,86 +2996,80 @@ All changes are additive. No breaking changes to existing interfaces:
 
 ---
 
-## 14. Implementation Order & Dependencies
+## 15. Implementation Order & Dependencies
 
 ```
-1. Phase 1: Core Type System               ← DO FIRST (foundation for everything)
+1. Core Type System & Utilities             ← FOUNDATION (do first)
    │  column-descriptors.ts
    │  data-table.ts
    │  data-snapshot.ts
+   │  data-transforms.ts (utility functions)
    │  index.ts exports
-   │  core-types.test.ts
+   │  unit tests
    │
-   ├──▶ 2a. Phase 2: Transform Toolkit            (parallel after Phase 1)
-   │         data-transforms.ts
-   │         data-transforms.test.ts
-   │
-   ├──▶ 2b. Phase 3: Event System                 (parallel after Phase 1)
+   ├──▶ Component Event System                    (parallel after core types)
    │         component-events.ts
    │         component-event-bus.ts
-   │         component-events.test.ts
    │         runtime-types.ts update (events)
+   │         unit tests
    │
-   ├──▶ 2c. Phase 4: Artifact Snapshots            (parallel after Phase 1)
+   ├──▶ Artifact-Level State Snapshots            (parallel after core types)
    │         base-artifact-viewer update
    │         per-viewer overrides
    │         artifact-viewer-panel update
    │
-   ├──▶ 2d. Phase 5: Multi-Table Viewer UX         (parallel after Phase 1)
+   ├──▶ Multi-Table Viewer UX                     (parallel after core types)
    │         data-artifact-viewer (ts/html/css)
    │         migration: remove local interfaces
    │
-   └──▶ 2e. Phase 7: Component Data Contract       (parallel after Phase 1)
-              runtime-types.ts update (getCurrentDataState)
+   └──▶ Interactive Component Data Contract       (parallel after core types)
+              runtime-types.ts update (get/setDataState)
               mj-react-component update
               │
               ▼
-         3. Phase 6: Agent Bridge                   (after Phases 4 + 7)
+         Agent-Component Dialog Bridge             (after snapshots + contract)
               artifact-viewer-panel analyze action
-              formatSnapshotForAgent integration
               data-snapshot artifact type metadata
 ```
 
-**Estimated scope:**
-- ~600 lines: Core types (Phase 1)
-- ~400 lines: Transform toolkit (Phase 2)
-- ~350 lines: Event system (Phase 3)
-- ~200 lines: Snapshot methods (Phase 4)
-- ~300 lines: Multi-table viewer UX (Phase 5)
-- ~150 lines: Agent bridge (Phase 6)
-- ~100 lines: Component contract (Phase 7)
-- ~500 lines: Unit tests (across all phases)
-- **Total: ~2,600 lines of new/modified code**
+**Estimated scope:** ~2,600 lines of new/modified code + ~500 lines of unit tests
 
 ---
 
-## 15. Open Items & Future Considerations
+## 16. Open Items & Future Considerations
 
-### 15.1 Open Design Questions
+### 16.1 Open Design Questions
 
-1. **Snapshot size limits.** When a component has 100K rows, should `getCurrentDataState()` return all of them? Recommendation: truncate to configurable limit (default 1,000 rows) with `metadata.totalAvailableRows` indicating the full count. The agent can request more via a follow-up action if needed.
+1. **Snapshot size limits.** When a component has 100K rows, should `getCurrentDataState()` return all of them? Recommendation: return the full dataset in the snapshot, but provide schema + sample rows + exploration tools to agents rather than dumping all rows into conversation context. The snapshot itself is the source of truth; how it's consumed is consumer-specific.
 
-2. **Column naming: `displayName` vs `headerName`.** The new type uses `displayName` (more general). The existing `DataArtifactColumn` uses `headerName` (grid-specific). The migration is a simple rename in the data viewer, but component specs and agent output may reference either. Recommendation: support both during a transition period via a normalization function.
+2. **Agent data exploration tools.** Rather than truncating snapshots for agent consumption, the more scalable approach is to provide agents with tools to explore the data on demand — JSONPath-style search, row pagination, field aggregation. This keeps the snapshot complete while giving agents efficient access. Design this when the agent bridge is implemented.
 
-3. **QueryGridColumnConfig migration.** Should `QueryGridColumnConfig` eventually extend `GridColumnDescriptor`, or should conversion functions bridge the two? Recommendation: conversion functions first (non-breaking), with eventual migration to extend when the query viewer is next refactored.
+3. **Column naming: `displayName` vs `headerName`.** The new type uses `displayName` (more general). The existing `DataArtifactColumn` uses `headerName` (grid-specific). The migration is a simple rename in the data viewer, but component specs and agent output may reference either. Recommendation: support both during a transition period via a normalization function.
 
-4. **Computed table formalization.** When `source` is `'computed'`, the component built the data client-side. Should we formalize computation descriptions more (e.g., a mini-DSL)? Recommendation: start with the free-text `computationDescription` and evolve based on real usage patterns.
+4. **QueryGridColumnConfig migration.** Should `QueryGridColumnConfig` eventually extend `GridColumnDescriptor`, or should conversion functions bridge the two? Recommendation: conversion functions first (non-breaking), with eventual migration to extend when the query viewer is next refactored.
 
-5. **Snapshot diff.** Should the system support comparing two snapshots? Useful for "what changed since I last looked?" scenarios. Could be a transform function operating on two `DataSnapshot` objects. Recommendation: future phase, design when the first concrete use case emerges.
+5. **Computed table formalization.** When `source` is `'computed'`, the component built the data client-side. Should we formalize computation descriptions more (e.g., a mini-DSL)? Recommendation: start with the free-text `computationDescription` and evolve based on real usage patterns.
 
-### 15.2 Future Capabilities (Not In Scope)
+6. **Snapshot diff.** Should the system support comparing two snapshots? Useful for "what changed since I last looked?" scenarios. Could be a utility function operating on two `DataSnapshot` objects. Recommendation: design when the first concrete use case emerges.
+
+7. **AI-generated component compliance.** When this architecture is in place, AI code-generation agents that produce interactive components need to be updated so their generated components support `getCurrentDataState()` (and eventually `setDataState()`). The contract is defined here; updating the generation agents is a separate workstream.
+
+### 16.2 Future Capabilities (Not In Scope)
 
 | Capability | Description | Prerequisites |
 |---|---|---|
-| **Live Agent Dialog** | Agent subscribes to component events in real-time, can invoke methods | Phases 3, 6, WebSocket infrastructure |
-| **Snapshot Comparison** | Diff two snapshots to highlight changes | Phase 1, transform toolkit |
-| **Agent-Initiated Filtering** | Agent applies filters to running components via actions | Phases 3, 7, new MJ Actions |
-| **Cross-Component Snapshots** | Capture state of multiple components simultaneously | Phase 4, dashboard infrastructure |
-| **Snapshot Scheduling** | Automatically capture snapshots at intervals for trend analysis | Phase 6, scheduling infrastructure |
-| **Agent-Initiated Component Creation** | Agent produces a new DataSnapshot as a suggested "next view" that can be rendered directly | Phases 1, 5 |
+| **Component State Rehydration** | `setDataState()` implementation — load historical snapshots back into live components, browse artifact versions | Component contract (Section 9), artifact versioning |
+| **Agent Data Exploration Tools** | JSONPath/search/aggregate tools for agents to explore large snapshots without context bloat | Agent bridge (Section 8), agent tool registration |
+| **Live Agent Dialog** | Agent subscribes to component events in real-time, can invoke methods | Event system (Section 5), WebSocket infrastructure |
+| **Snapshot Comparison** | Diff two snapshots to highlight changes | Core types (Section 4) |
+| **Agent-Initiated Filtering** | Agent applies filters to running components via actions | Event system, component contract, new MJ Actions |
+| **Cross-Component Snapshots** | Capture state of multiple components simultaneously | Artifact snapshots (Section 6), dashboard infrastructure |
+| **Snapshot Scheduling** | Automatically capture snapshots at intervals for trend analysis | Agent bridge (Section 8), scheduling infrastructure |
+| **Agent-Initiated Component Creation** | Agent produces a new DataSnapshot as a suggested "next view" that can be rendered directly | Core types, multi-table viewer |
 
-### 15.3 Relationship to Existing Plans
+### 16.3 Relationship to Existing Plans
 
 - **Query Builder Agent Plan** (`plans/complete/query-builder-agent-plan.md`): This plan extends the Data artifact type created there. The multi-table expansion and snapshot system are additive.
 - **Component Artifact Viewer Improvements** (`plans/complete/3-component-artifact-viewer-improvements.md`): The snapshot system adds a new capability without modifying the existing rendering pipeline.
 - **Composable Queries Plan** (`plans/nested-queries-paging-caching-plan.md`): Multi-table `DataSnapshot` could represent composed query results where each sub-query becomes a named table.
+- **File Artifact I/O Plan** (`plans/file-artifact-io-plan.md`): Complementary work on file-based artifacts (PDF, Excel, Word). See Section 10 for coordination points.
