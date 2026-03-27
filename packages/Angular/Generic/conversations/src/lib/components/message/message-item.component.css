@@ -26,6 +26,19 @@
   background-color: transparent;
 }
 
+/* Jump-to beacon: pulsed amber glow applied programmatically after scroll */
+.message-item.pin-beacon {
+  animation: pinBeacon 1.5s ease-out forwards;
+}
+
+@keyframes pinBeacon {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-status-warning) 60%, transparent); }
+  20%  { box-shadow: 0 0 0 8px color-mix(in srgb, var(--mj-status-warning) 35%, transparent); }
+  50%  { box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-status-warning) 15%, transparent); }
+  70%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--mj-status-warning) 20%, transparent); }
+  100% { box-shadow: none; }
+}
+
 .message-item.in-progress {
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   border-left: 3px solid var(--mj-brand-primary);

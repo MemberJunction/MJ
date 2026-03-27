@@ -238,6 +238,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   // LocalStorage key
   private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
 
+  // Pinned messages panel state
+  public showPinsPanel: boolean = false;
+
+  /** All currently pinned messages in the active conversation, newest pin first */
+  get pinnedMessages(): MJConversationDetailEntity[] {
+    return this.messages.filter(m => m.IsPinned).reverse();
+  }
+
   // Image viewer state
   public showImageViewer: boolean = false;
   public selectedImageUrl: string = '';
@@ -1654,6 +1662,45 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       if (row) {
         row.IsPinned = message.IsPinned;
       }
+    }
+    // Auto-close the panel when the last pin is removed
+    if (this.showPinsPanel && this.pinnedMessages.length === 0) {
+      setTimeout(() => { this.showPinsPanel = false; this.cdr.detectChanges(); }, 600);
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Scrolls the message list to the target message and plays the beacon animation.
+   * Called when the user clicks "Jump to message" in the pins panel.
+   */
+  onJumpToMessage(messageId: string): void {
+    const el = this.scrollContainer?.nativeElement?.querySelector(`[data-message-id="${messageId}"]`);
+    if (!el) return;
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Add beacon animation after scroll settles
+    setTimeout(() => {
+      el.classList.add('pin-beacon');
+      setTimeout(() => el.classList.remove('pin-beacon'), 1500);
+    }, 350);
+  }
+
+  /**
+   * Unpins a message from the pins panel — saves to DB and patches the cache.
+   */
+  async onUnpinFromPanel(message: MJConversationDetailEntity): Promise<void> {
+    const previous = message.IsPinned;
+    message.IsPinned = false;
+    this.cdr.detectChanges();
+    try {
+      await message.Save();
+      this.onMessagePinToggled(message);
+    } catch (err) {
+      console.error('Failed to unpin message from panel:', err);
+      message.IsPinned = previous;
+      this.cdr.detectChanges();
     }
   }
 
