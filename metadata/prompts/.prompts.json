@@ -110,6 +110,9 @@
       "TemplateText": "@file:templates/system/loop-agent-type-system-prompt.template.md",
       "Status": "Active",
       "ResponseFormat": "Any",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -206,8 +209,8 @@
       "ID": "FF7D441F-36E1-458A-B548-0FC2208923BE"
     },
     "sync": {
-      "lastModified": "2026-03-26T18:02:55.991Z",
-      "checksum": "ef2e62e8ecfe40de106e3582b6384d6a294026ddc0c6fe0f0d4f972565e29789"
+      "lastModified": "2026-03-26T22:05:14.901Z",
+      "checksum": "117f575a299087d56cf2e231429f14345de54d5146a33228cd0c7a25c4b15527"
     }
   },
   {
@@ -218,6 +221,9 @@
       "TemplateText": "@file:templates/system/flow-agent-type-system-prompt.template.md",
       "Status": "Active",
       "ResponseFormat": "Any",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "SystemInstruction",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -299,8 +305,8 @@
       "ID": "43A6D122-4A76-453F-97D6-82CACC619227"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:57.939Z",
-      "checksum": "3e8dfbe1460d9ea9d474ac1c066e3b133658adfe1aad7ec7dff2cba2eb5c8615"
+      "lastModified": "2026-03-26T22:04:40.317Z",
+      "checksum": "46dd9b3726e7a2b0fcfc4ffea7c1a88e6485dee1523584f07b3730ef7556f60f"
     }
   },
   {

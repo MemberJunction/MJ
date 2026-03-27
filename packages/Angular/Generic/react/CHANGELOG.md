@@ -1,5 +1,31 @@
 # @memberjunction/ng-react
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.19.0
+- @memberjunction/ng-notifications@5.19.0
+- @memberjunction/graphql-dataprovider@5.19.0
+- @memberjunction/interactive-component-types@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/react-runtime@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.18.0
+- @memberjunction/ng-notifications@5.18.0
+- @memberjunction/react-runtime@5.18.0
+- @memberjunction/ai-vectors-memory@5.18.0
+- @memberjunction/interactive-component-types@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/core-entities@5.18.0
+- @memberjunction/global@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

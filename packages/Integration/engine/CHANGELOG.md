@@ -1,5 +1,24 @@
 # @memberjunction/integration-engine
 
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/integration-engine-base@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [d2c4e54]
+  - @memberjunction/integration-engine-base@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+
 ## 5.17.0
 
 ### Minor Changes
