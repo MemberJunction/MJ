@@ -1645,6 +1645,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Just ensure the UI reflects the changes
   }
 
+  onMessagePinToggled(message: MJConversationDetailEntity): void {
+    // Patch the raw cache entry in-place so that nav-away/back (which rebuilds entities
+    // via LoadFromData from the cache) preserves the new pin state.
+    const cachedData = this.conversationDataCache.get(this.conversationId!);
+    if (cachedData) {
+      const row = cachedData.find(r => r.ID === message.ID);
+      if (row) {
+        row.IsPinned = message.IsPinned;
+      }
+    }
+  }
+
   /**
    * Handle suggested response selection from user
    * Sends the selected response as a new user message WITHOUT modifying the visible input

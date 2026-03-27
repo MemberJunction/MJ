@@ -56,6 +56,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
   @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId
+  @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
 
   @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
@@ -309,6 +310,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.suggestedResponseSelected.emit(data));
           instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.attachmentClicked.emit(attachment));
           instance.diagnosticRequested.subscribe((messageId: string) => this.diagnosticRequested.emit(messageId));
+          instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.messagePinToggled.emit(msg));
 
           // Handle artifact actions if the output exists
           if (instance.artifactActionPerformed) {

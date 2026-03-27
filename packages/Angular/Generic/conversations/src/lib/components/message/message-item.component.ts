@@ -78,6 +78,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
   @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId on Shift+Click
+  @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -664,7 +665,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return this.agentRunDuration;
     }
 
-    // For completed or failed messages, show final generation time
+    // For completed/failed messages with an agent run, use agentRun timestamps.
+    // These are set when the run finishes and never change, so pin/edit saves on the
+    // message entity cannot corrupt the displayed duration.
+    if (this.agentRun?.__mj_CreatedAt && this.agentRun?.__mj_UpdatedAt) {
+      return this.agentRunDuration;
+    }
+
+    // No agent run — fall back to message entity timestamps
     return this.formattedGenerationTime;
   }
 
@@ -813,6 +821,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       this.message.IsPinned = previousValue;
       this.cdRef.detectChanges();
       console.error('Failed to save pin state for message', this.message.ID);
+    } else {
+      // Notify parent so it can patch the conversation cache in-place.
+      // Without this, navigating away and back rebuilds entities from stale cache data,
+      // causing the pin state to appear lost until the next full page reload.
+      this.messagePinToggled.emit(this.message);
     }
   }
 
