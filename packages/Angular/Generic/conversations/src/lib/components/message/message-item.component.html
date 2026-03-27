@@ -195,6 +195,14 @@
         }
         @if (isAIMessage && messageStatus === 'Complete') {
           <div class="ai-message-actions">
+            @if (isLastMessage) {
+              <!-- Thumbs visible inline only on the latest AI message, left of pin -->
+              <mj-conversation-message-rating
+                [conversationDetailId]="message.ID"
+                [currentUser]="currentUser"
+                [ratingsData]="ratings">
+              </mj-conversation-message-rating>
+            }
             <button
               class="action-bar-btn pin-btn"
               [class.pinned]="message.IsPinned"
@@ -203,11 +211,6 @@
               type="button">
               <i class="fas fa-thumbtack"></i>
             </button>
-            <mj-conversation-message-rating
-              [conversationDetailId]="message.ID"
-              [currentUser]="currentUser"
-              [ratingsData]="ratings">
-            </mj-conversation-message-rating>
           </div>
         }
       </div>
@@ -272,6 +275,21 @@
                   </div>
                 }
               </div>
+            </div>
+          }
+
+          <!-- Rating in gear panel for non-last AI messages -->
+          @if (!isLastMessage && messageStatus === 'Complete') {
+            <div class="agent-panel-ratings">
+              <div class="agent-details-header">
+                <i class="fas fa-thumbs-up"></i>
+                <span>Rate this response</span>
+              </div>
+              <mj-conversation-message-rating
+                [conversationDetailId]="message.ID"
+                [currentUser]="currentUser"
+                [ratingsData]="ratings">
+              </mj-conversation-message-rating>
             </div>
           }
 

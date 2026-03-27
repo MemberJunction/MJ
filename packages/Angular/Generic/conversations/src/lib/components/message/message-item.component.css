@@ -26,11 +26,6 @@
   background-color: transparent;
 }
 
-.message-item.pinned {
-  border-left: 3px solid var(--mj-brand-primary);
-  background-color: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
-}
-
 .message-item.in-progress {
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
   border-left: 3px solid var(--mj-brand-primary);
@@ -1059,11 +1054,18 @@
   display: flex;
   gap: 4px;
   align-items: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+/* Show delete button only when hovering the message row */
+.message-item:hover .inline-actions {
+  opacity: 1;
 }
 
 .message-item.pinned {
-  border-left: 3px solid var(--mj-brand-primary);
-  background-color: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+  border-left: 3px solid var(--mj-status-warning);
+  background-color: color-mix(in srgb, var(--mj-status-warning) 8%, transparent);
 }
 
 /* Wraps pin button + rating component on the right side of the footer */
@@ -1079,15 +1081,22 @@
 }
 
 .action-bar-btn.pin-btn:hover {
-  color: var(--mj-brand-primary);
-  border-color: var(--mj-brand-primary);
+  color: var(--mj-status-warning);
+  border-color: var(--mj-status-warning);
 }
 
 .action-bar-btn.pin-btn.pinned {
   opacity: 1;
-  color: var(--mj-brand-primary);
-  border-color: var(--mj-brand-primary);
-  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-status-warning);
+  border-color: var(--mj-status-warning-border);
+  background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
+}
+
+/* Rating section inside gear panel for non-last AI messages */
+.agent-panel-ratings {
+  padding: 12px 0 0;
+  border-top: 1px solid var(--mj-border-subtle);
+  margin-top: 8px;
 }
 
 /* Agent details section wrapper */

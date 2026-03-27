@@ -955,9 +955,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   async togglePin(conversation: MJConversationEntity, event?: Event): Promise<void> {
     if (event) event.stopPropagation();
+    this.closeMenu(); // Close immediately on user action — don't wait for the async op
     try {
       await this.conversationData.togglePin(conversation.ID, this.currentUser);
-      this.closeMenu();
     } catch (error) {
       console.error('Error toggling pin:', error);
       await this.dialogService.alert('Error', 'Failed to pin/unpin conversation. Please try again.');
