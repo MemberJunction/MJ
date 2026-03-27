@@ -11,6 +11,7 @@ import { CommandPaletteService } from '../command-palette/command-palette.servic
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MjDropdownComponent } from '@memberjunction/ng-ui-components';
+import { DialogsModule } from '@progress/kendo-angular-dialog'; // needed for kendoDialogContainer + SettingsDialogService
 
 @NgModule({
   declarations: [
@@ -25,6 +26,7 @@ import { MjDropdownComponent } from '@memberjunction/ng-ui-components';
     CommonModule,
     FormsModule,
     MjDropdownComponent,
+    DialogsModule,
     ExplorerSettingsModule,
     SharedGenericModule
   ],
