@@ -35,6 +35,13 @@
             </div>
           }
         </div>
+        @if (pluginViewer?.SupportsFeedback) {
+          <button class="feedback-btn"
+                  (click)="pluginViewer.AskUserForFeedback()"
+                  title="Rate this artifact">
+            <i class="fas fa-comment-dots"></i>
+          </button>
+        }
         @if (showSaveToCollection) {
           <button class="save-to-collection-btn"
                   [class.in-collection]="isInCollection"
