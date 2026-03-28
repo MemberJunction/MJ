@@ -1153,7 +1153,12 @@ export abstract class BaseMessagingAdapter {
         );
 
         if (!user) {
-            throw new Error(`Fallback context user not found: ${this.settings.ContextUserEmail}`);
+            throw new Error(
+                `Fallback context user not found: '${this.settings.ContextUserEmail}'. ` +
+                `Set the MJ_BOT_CONTEXT_USER_EMAIL environment variable to an email address ` +
+                `that exists in your MJ Users table, or set Enabled: false in mj.config.cjs ` +
+                `to disable this extension. See SETUP_GUIDE.md for details.`
+            );
         }
 
         this.fallbackContextUser = user;
