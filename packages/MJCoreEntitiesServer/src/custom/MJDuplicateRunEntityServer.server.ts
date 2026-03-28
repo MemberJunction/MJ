@@ -37,7 +37,7 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
 
             // Update the run record to reflect the error
             try {
-                this.ProcessingStatus = 'Error';
+                this.ProcessingStatus = 'Failed';
                 this.EndedAt = new Date();
                 await super.Save();
             } catch (updateError) {
