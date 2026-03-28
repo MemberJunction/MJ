@@ -294,21 +294,21 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
-## Human-in-the-Loop (HITL)
+## Documentation
 
-MemberJunction agents support **human-in-the-loop feedback requests** — a mechanism for agents to pause execution and request human input before proceeding. This enables approval workflows, quality review gates, and collaborative decision-making between agents and humans.
+Detailed guides are available in the [`docs/`](./docs/) directory:
 
-Key capabilities:
-- **Assignment strategies**: 5-level resolution chain (per-invocation → agent type → category tree → request type → fallback) determines who receives each request
-- **Agent categories**: Hierarchical category tree with inherited assignment strategies
-- **Request types**: Configurable request types (Approval, Review, Input, Escalation, Custom) with response schemas
-- **Request lifecycle**: Pending → Assigned → In Progress → Completed/Expired/Cancelled with full audit trail
-
-For the complete guide including architecture diagrams, integration examples, and API reference, see [HUMAN_IN_THE_LOOP.md](./HUMAN_IN_THE_LOOP.md).
-
-## Architecture Documentation
-
-For multi-tenant memory scoping (notes/examples), see [AGENT_MEMORY_SCOPING.md](./AGENT_MEMORY_SCOPING.md).
+| Guide | Description |
+|---|---|
+| [Actions Guide](./docs/actions-guide.md) | Action discovery, execution, result lifecycle, expiration/compaction, context recovery |
+| [Sub-Agents Guide](./docs/sub-agents-guide.md) | Child agents, related agents, payload flow, context propagation, loops |
+| [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md) | Feedback requests, assignment strategies, request lifecycle |
+| [Agent Memory Scoping](./docs/AGENT_MEMORY_SCOPING.md) | Multi-tenant memory (notes/examples) with UserScope support |
+| [Iterative Operations](./docs/guide-to-iterative-operations-in-agents.md) | ForEach and While loop patterns, parallel execution |
+| [State Management](./docs/state-management.md) | Payload management, agent type state |
+| [Expression Context (PRD)](./docs/prd-expression-context-phase1.md) | Expression evaluation in agent contexts |
+| [Agent Profiles (Proposal)](./docs/agent-profiles-proposal.md) | Proposed agent profile system |
+| [Code Refactoring Notes](./docs/code-refactoring.md) | Internal refactoring notes |
 
 ## Re-exports
 
