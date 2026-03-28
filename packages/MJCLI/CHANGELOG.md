@@ -1,5 +1,96 @@
 # Change Log - @memberjunction/cli
 
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/metadata-sync@5.20.0
+  - @memberjunction/sqlserver-dataprovider@5.20.0
+  - @memberjunction/ai-cli@5.20.0
+  - @memberjunction/server-bootstrap-lite@5.20.0
+  - @memberjunction/codegen-lib@5.20.0
+  - @memberjunction/db-auto-doc@5.20.0
+  - @memberjunction/query-gen@5.20.0
+  - @memberjunction/testing-cli@5.20.0
+  - @memberjunction/config@5.20.0
+  - @memberjunction/installer@5.20.0
+  - @memberjunction/sql-converter@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.19.0
+- @memberjunction/server-bootstrap-lite@5.19.0
+- @memberjunction/db-auto-doc@5.19.0
+- @memberjunction/codegen-lib@5.19.0
+- @memberjunction/metadata-sync@5.19.0
+- @memberjunction/testing-cli@5.19.0
+- @memberjunction/config@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/installer@5.19.0
+- @memberjunction/query-gen@5.19.0
+- @memberjunction/sql-converter@5.19.0
+- @memberjunction/sqlserver-dataprovider@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/ai-cli@5.18.0
+- @memberjunction/server-bootstrap-lite@5.18.0
+- @memberjunction/codegen-lib@5.18.0
+- @memberjunction/query-gen@5.18.0
+- @memberjunction/metadata-sync@5.18.0
+- @memberjunction/db-auto-doc@5.18.0
+- @memberjunction/testing-cli@5.18.0
+- @memberjunction/sqlserver-dataprovider@5.18.0
+- @memberjunction/config@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/installer@5.18.0
+- @memberjunction/sql-converter@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- 5ff5f32: use createRequire for ESM-compatible require in getMJVersion
+- Updated dependencies [001fd3e]
+- Updated dependencies [9881045]
+  - @memberjunction/codegen-lib@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/metadata-sync@5.17.0
+  - @memberjunction/sqlserver-dataprovider@5.17.0
+  - @memberjunction/ai-cli@5.17.0
+  - @memberjunction/server-bootstrap-lite@5.17.0
+  - @memberjunction/db-auto-doc@5.17.0
+  - @memberjunction/query-gen@5.17.0
+  - @memberjunction/testing-cli@5.17.0
+  - @memberjunction/config@5.17.0
+  - @memberjunction/installer@5.17.0
+  - @memberjunction/sql-converter@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/ai-cli@5.16.0
+  - @memberjunction/codegen-lib@5.16.0
+  - @memberjunction/db-auto-doc@5.16.0
+  - @memberjunction/metadata-sync@5.16.0
+  - @memberjunction/query-gen@5.16.0
+  - @memberjunction/sqlserver-dataprovider@5.16.0
+  - @memberjunction/server-bootstrap-lite@5.16.0
+  - @memberjunction/testing-cli@5.16.0
+  - @memberjunction/config@5.16.0
+  - @memberjunction/installer@5.16.0
+  - @memberjunction/sql-converter@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

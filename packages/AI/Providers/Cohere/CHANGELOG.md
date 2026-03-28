@@ -1,5 +1,40 @@
 # @memberjunction/ai-cohere
 
+## 5.20.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.20.0
+- @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.18.0
+- @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.17.0
+- @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.16.0
+- @memberjunction/global@5.16.0
+
 ## 5.15.0
 
 ### Minor Changes

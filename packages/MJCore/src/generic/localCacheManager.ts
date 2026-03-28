@@ -552,7 +552,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
 
         // Look up entity metadata for PK field names
         const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        const entityInfo = md.EntityByName(entityName);
         if (!entityInfo) {
             LogStatusVerbose(`LocalCacheManager: remote-invalidate — entity "${entityName}" not found in metadata, invalidating caches`);
             for (const fp of [...fingerprints]) {

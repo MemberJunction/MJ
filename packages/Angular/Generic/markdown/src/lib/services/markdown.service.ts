@@ -46,6 +46,7 @@ type ResolvedMarkdownConfig = Required<Omit<MarkdownConfig, 'autoExpandLevels'>>
 export class MarkdownService {
   private marked: Marked;
   private mermaidInitialized = false;
+  private lastMermaidTheme: string | null = null;
   private currentConfig: ResolvedMarkdownConfig = { ...DEFAULT_MARKDOWN_CONFIG };
   private headingList: HeadingInfo[] = [];
 
@@ -139,20 +140,40 @@ export class MarkdownService {
   }
 
   /**
-   * Initialize Mermaid with the current theme configuration
+   * Resolve the effective mermaid theme.
+   * 'auto' maps to 'dark' or 'default' based on the document's data-theme attribute.
+   */
+  private resolveEffectiveMermaidTheme(): 'default' | 'dark' | 'forest' | 'neutral' | 'base' {
+    const configTheme = this.currentConfig.mermaidTheme;
+    if (configTheme !== 'auto') {
+      return configTheme;
+    }
+    const isDark = typeof document !== 'undefined'
+      && document.documentElement.getAttribute('data-theme') === 'dark';
+    return isDark ? 'dark' : 'default';
+  }
+
+  /**
+   * Initialize Mermaid with the current theme configuration.
+   * Re-initializes when the effective theme changes.
    */
   private initializeMermaid(): void {
-    if (this.mermaidInitialized) return;
+    const effectiveTheme = this.resolveEffectiveMermaidTheme();
+
+    if (this.mermaidInitialized && this.lastMermaidTheme === effectiveTheme) {
+      return;
+    }
 
     mermaid.initialize({
       startOnLoad: false,
-      theme: this.currentConfig.mermaidTheme,
+      theme: effectiveTheme,
       securityLevel: 'loose',
       fontFamily: 'inherit',
       suppressErrorRendering: true // Suppress visual error diagrams - errors go to console only
     });
 
     this.mermaidInitialized = true;
+    this.lastMermaidTheme = effectiveTheme;
   }
 
   /**

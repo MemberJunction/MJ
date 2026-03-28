@@ -1,5 +1,76 @@
 # @memberjunction/ng-react
 
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ai-vectors-memory@5.20.0
+  - @memberjunction/ng-notifications@5.20.0
+  - @memberjunction/graphql-dataprovider@5.20.0
+  - @memberjunction/interactive-component-types@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/react-runtime@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.19.0
+- @memberjunction/ng-notifications@5.19.0
+- @memberjunction/graphql-dataprovider@5.19.0
+- @memberjunction/interactive-component-types@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/react-runtime@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@5.18.0
+- @memberjunction/ng-notifications@5.18.0
+- @memberjunction/react-runtime@5.18.0
+- @memberjunction/ai-vectors-memory@5.18.0
+- @memberjunction/interactive-component-types@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/core-entities@5.18.0
+- @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [bbfbf5e]
+- Updated dependencies [9881045]
+  - @memberjunction/graphql-dataprovider@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/react-runtime@5.17.0
+  - @memberjunction/ng-notifications@5.17.0
+  - @memberjunction/ai-vectors-memory@5.17.0
+  - @memberjunction/interactive-component-types@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [179a4ce]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/graphql-dataprovider@5.16.0
+  - @memberjunction/ai-vectors-memory@5.16.0
+  - @memberjunction/ng-notifications@5.16.0
+  - @memberjunction/interactive-component-types@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/react-runtime@5.16.0
+  - @memberjunction/global@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

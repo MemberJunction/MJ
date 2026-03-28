@@ -382,17 +382,29 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       return false;
     }
 
+    // Try the AI app first (has dedicated Agent Requests nav item)
     const aiApp = this.appManager.GetAppByName('AI');
-    if (!aiApp) {
-      return false;
+    if (aiApp) {
+      this.navigationService.OpenNavItemByName(
+        'Agent Requests',
+        { requestId: config.requestId },
+        aiApp.ID
+      );
+      return true;
     }
 
-    this.navigationService.OpenNavItemByName(
-      'Agent Requests',
-      { requestId: config.requestId },
-      aiApp.ID
-    );
-    return true;
+    // Fallback: navigate to Chat app's Conversations with the request context
+    const chatApp = this.appManager.GetAppByName('Chat');
+    if (chatApp) {
+      this.navigationService.OpenNavItemByName(
+        'Conversations',
+        { requestId: config.requestId },
+        chatApp.ID
+      );
+      return true;
+    }
+
+    return false;
   }
 
   /**

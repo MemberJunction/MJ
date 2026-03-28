@@ -1,8 +1,8 @@
 {
   "name": "@memberjunction/ai-vector-dupe",
   "type": "module",
-  "version": "5.15.0",
-  "description": "MemberJunction: AI Vector Duplicate Detection - Finds and manages duplicate records using vector similarity, hybrid search, and reranking",
+  "version": "5.20.0",
+  "description": "MemberJunction: AI Vector/Entity Sync Package - Handles synchronization between Vector DB and MJ CDP Data",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -17,14 +17,15 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai": "5.15.0",
-    "@memberjunction/ai-vectordb": "5.15.0",
-    "@memberjunction/ai-vectors": "5.15.0",
-    "@memberjunction/ai-vector-sync": "5.15.0",
-    "@memberjunction/aiengine": "5.15.0",
-    "@memberjunction/core": "5.15.0",
-    "@memberjunction/global": "5.15.0",
-    "@memberjunction/core-entities": "5.15.0"
+    "@memberjunction/ai": "5.20.0",
+    "@memberjunction/ai-vectordb": "5.20.0",
+    "@memberjunction/ai-vectors": "5.20.0",
+    "@memberjunction/ai-vector-sync": "5.20.0",
+    "@memberjunction/aiengine": "5.20.0",
+    "@memberjunction/core": "5.20.0",
+    "@memberjunction/global": "5.20.0",
+    "@memberjunction/core-entities": "5.20.0",
+    "dotenv": "^17.2.4"
   },
   "devDependencies": {
     "@types/mssql": "^9.1.9",

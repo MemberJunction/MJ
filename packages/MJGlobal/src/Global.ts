@@ -115,3 +115,20 @@ export class MJGlobal extends BaseSingleton<MJGlobal> {
         return this._objectCache;
     }
 }
+
+/**
+ * This utility function sends a message to all components that are listening requesting a window resize. This is a cross-platform method of requesting a resize and is loosely coupled from
+ * the actual implementation on a specific device/browser/etc.
+ * @param delay
+ * @param component
+ */
+export function InvokeManualResize(delay: number = 50, component: MJ.IMJComponent | null = null) {
+    setTimeout(() => {
+        MJGlobal.Instance.RaiseEvent({
+            event: MJ.MJEventType.ManualResizeRequest,
+            eventCode: '',
+            args: null,
+            component: component!
+        });
+    }, delay); // give the tabstrip time to render
+}

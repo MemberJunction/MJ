@@ -18,6 +18,8 @@
  * ```
  */
 
+import { BaseSingleton } from './BaseSingleton';
+
 /**
  * Configuration options for the warning system
  */
@@ -85,10 +87,11 @@ interface PendingRedundantLoadWarning {
 /**
  * Singleton class that manages warnings across the entire application session.
  * Tracks which warnings have been shown and batches them for clean, grouped output.
+ *
+ * Uses BaseSingleton to guarantee a single instance across the entire process,
+ * even if bundlers duplicate this module across multiple execution paths.
  */
-export class WarningManager {
-    private static instance: WarningManager;
-
+export class WarningManager extends BaseSingleton<WarningManager> {
     // Tracking for deprecation warnings
     private warnedDeprecatedEntities: Set<string> = new Set();
     private warnedDeprecatedFields: Map<string, Set<string>> = new Map(); // entityName -> Set<fieldName>
@@ -107,26 +110,25 @@ export class WarningManager {
 
     private debounceTimer: NodeJS.Timeout | null = null;
 
-    private config: WarningConfig;
+    private config: WarningConfig = {
+        DebounceMs: 10000,
+        ShowAll: false,
+        DisableWarnings: false,
+        GroupWarnings: true
+    };
 
-    private constructor() {
-        // Initialize with default configuration
-        this.config = {
-            DebounceMs: 10000,
-            ShowAll: false,
-            DisableWarnings: false,
-            GroupWarnings: true
-        };
+    /**
+     * Use WarningManager.Instance to get the singleton instance.
+     */
+    public constructor() {
+        super();
     }
 
     /**
      * Gets the singleton instance of the WarningManager
      */
     public static get Instance(): WarningManager {
-        if (!WarningManager.instance) {
-            WarningManager.instance = new WarningManager();
-        }
-        return WarningManager.instance;
+        return WarningManager.getInstance<WarningManager>();
     }
 
     /**

@@ -127,6 +127,37 @@
   font-size: 10px;
 }
 
+/* Pinned messages chip in chat header */
+.pin-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-status-warning) 45%, transparent);
+  border-radius: 20px;
+  color: var(--mj-status-warning-text, var(--mj-status-warning));
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pin-chip i {
+  font-size: 11px;
+}
+
+.pin-chip:hover,
+.pin-chip.active {
+  background: color-mix(in srgb, var(--mj-status-warning) 20%, var(--mj-bg-surface));
+  border-color: var(--mj-status-warning);
+}
+
+.pin-chip-count {
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .chat-members,
 .artifact-indicator {
   display: flex;

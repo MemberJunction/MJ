@@ -453,6 +453,18 @@ export interface IMetadataProvider {
 
     get Entities(): EntityInfo[]
 
+    /**
+     * O(1) entity lookup by name (case-insensitive, trimmed).
+     * Falls back to linear search if the internal Map hasn't been built yet.
+     */
+    EntityByName(entityName: string): EntityInfo | undefined
+
+    /**
+     * O(1) entity lookup by ID (UUID-normalized).
+     * Falls back to linear search if the internal Map hasn't been built yet.
+     */
+    EntityByID(entityID: string): EntityInfo | undefined
+
     get Applications(): ApplicationInfo[]
 
     get CurrentUser(): UserInfo

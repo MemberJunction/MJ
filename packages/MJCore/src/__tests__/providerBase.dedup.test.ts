@@ -58,11 +58,14 @@ describe('ProviderBase Request Deduplication', () => {
         provider.resetCounters();
         // Set a reasonable linger window for tests
         ProviderBase.DedupLingerMs = 5000;
+        // Disable coalescing so dedup tests run independently
+        ProviderBase.CoalesceWindowMs = 0;
     });
 
     afterEach(() => {
-        // Reset to default
+        // Reset to defaults
         ProviderBase.DedupLingerMs = 5000;
+        ProviderBase.CoalesceWindowMs = 10;
     });
 
     // Helper: the entity name loaded by TestMetadataProvider

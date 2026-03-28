@@ -1,5 +1,102 @@
 # @memberjunction/ai-agents
 
+## 5.20.0
+
+### Patch Changes
+
+- 7ab01a8: Fix 'Retry' nextStep type handling for message expansion in LoopAgentType to prevent skipped messages during agent loop iterations
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ai-engine-base@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/ai-prompts@5.20.0
+  - @memberjunction/ai-reranker@5.20.0
+  - @memberjunction/actions-base@5.20.0
+  - @memberjunction/actions@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Minor Changes
+
+- f9001de: metadata
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.19.0
+- @memberjunction/ai@5.19.0
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/aiengine@5.19.0
+- @memberjunction/ai-prompts@5.19.0
+- @memberjunction/ai-reranker@5.19.0
+- @memberjunction/actions-base@5.19.0
+- @memberjunction/actions@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Minor Changes
+
+- 322dac6: metadata update
+- 5f91957: metadata update
+
+### Patch Changes
+
+- ee4bf94: no migration
+- Updated dependencies [322dac6]
+- Updated dependencies [48f7296]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/ai-prompts@5.18.0
+  - @memberjunction/ai-engine-base@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/ai-reranker@5.18.0
+  - @memberjunction/actions@5.18.0
+  - @memberjunction/ai@5.18.0
+  - @memberjunction/actions-base@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [9881045]
+  - @memberjunction/core@5.17.0
+  - @memberjunction/ai-engine-base@5.17.0
+  - @memberjunction/ai-core-plus@5.17.0
+  - @memberjunction/aiengine@5.17.0
+  - @memberjunction/ai-prompts@5.17.0
+  - @memberjunction/ai-reranker@5.17.0
+  - @memberjunction/actions-base@5.17.0
+  - @memberjunction/actions@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/ai@5.17.0
+  - @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/ai-engine-base@5.16.0
+  - @memberjunction/ai-core-plus@5.16.0
+  - @memberjunction/aiengine@5.16.0
+  - @memberjunction/ai-prompts@5.16.0
+  - @memberjunction/ai-reranker@5.16.0
+  - @memberjunction/actions-base@5.16.0
+  - @memberjunction/actions@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/ai@5.16.0
+  - @memberjunction/global@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

@@ -38,6 +38,7 @@ import { ActionEngineServer } from "@memberjunction/actions";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { MJActionParamEntity } from "@memberjunction/core-entities";
+import { AuthProviderFactory } from "@memberjunction/auth-providers";
 // OAuth authentication imports
 import {
     MCPSessionContext as OAuthMCPSessionContext,
@@ -909,9 +910,8 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
             // Get provider names for logging
             if (providersConfigured) {
                 try {
-                    const { AuthProviderFactory } = await import('@memberjunction/server');
-                    const factory = AuthProviderFactory.getInstance();
-                    configuredProviderNames = factory.getAllProviders().map((p: { name: string }) => p.name);
+                    const factory = AuthProviderFactory.Instance;
+                    configuredProviderNames = factory.getAllProviders().map((p) => p.name);
                 } catch {
                     // Ignore errors getting provider names - just for logging
                 }
@@ -962,8 +962,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         if (isOAuthEnabled() && oauthProxyEnabled) {
             try {
                 // Get the upstream provider configuration
-                const { AuthProviderFactory } = await import('@memberjunction/server');
-                const factory = AuthProviderFactory.getInstance();
+                const factory = AuthProviderFactory.Instance;
                 const providers = factory.getAllProviders();
 
                 if (providers.length === 0) {
@@ -1104,9 +1103,7 @@ export async function initializeServer(filterOptions: ToolFilterOptions = {}): P
         if (isOAuthEnabled()) {
             app.get('/.well-known/oauth-protected-resource', async (_req: Request, res: Response) => {
                 try {
-                    // Dynamically import AuthProviderFactory to get configured providers
-                    const { AuthProviderFactory } = await import('@memberjunction/server');
-                    const factory = AuthProviderFactory.getInstance();
+                    const factory = AuthProviderFactory.Instance;
                     const providers = factory.getAllProviders();
 
                     // Extract issuer URLs from configured auth providers

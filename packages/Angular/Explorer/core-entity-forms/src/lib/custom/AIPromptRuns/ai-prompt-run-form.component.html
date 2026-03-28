@@ -18,33 +18,71 @@
                                 }
                             </h1>
                             <div class="run-meta">
-                                <span class="status-badge" [style.background-color]="getStatusColor()">
-                                    <i [class]="'fa-solid ' + getStatusIcon()"></i>
-                                    {{ getStatusText() }}
-                                </span>
+                                <!-- Status Card -->
+                                <div class="meta-card status-card">
+                                    <div class="c3-card-label">Status</div>
+                                    <div class="meta-card-body">
+                                        <span class="status-indicator" [style.background-color]="getStatusColor()"></span>
+                                        <i [class]="'fa-solid ' + getStatusIcon()" [style.color]="getStatusColor()"></i>
+                                        {{ getStatusText() }}
+                                    </div>
+                                </div>
+
+                                <!-- Execution Card -->
                                 @if (record.RunType) {
-                                    <span class="run-type-badge" [style.color]="getRunTypeColor(record.RunType)">
-                                        <i [class]="'fa-solid ' + getRunTypeIcon(record.RunType)"></i>
-                                        {{ record.RunType }}
-                                    </span>
+                                    <div class="meta-card execution-card">
+                                        <div class="c3-card-label">Execution</div>
+                                        <div class="meta-card-body">
+                                            <i [class]="'fa-solid ' + getRunTypeIcon(record.RunType)" [style.color]="getRunTypeColor(record.RunType)"></i>
+                                            {{ record.RunType }}
+                                        </div>
+                                    </div>
                                 }
+
+                                <!-- Prompt Card -->
                                 @if (prompt) {
-                                    <span class="prompt-name" (click)="navigateToEntity('MJ: AI Prompts', prompt.ID)" title="View Prompt">
-                                        <i class="fa-solid fa-comment-dots"></i>
-                                        {{ prompt.Name }}
-                                    </span>
+                                    @if (record.ChildPromptID) {
+                                        <!-- C3 Stacked Connector: child prompt prominent, parent nested -->
+                                        <div class="prompt-card-c3">
+                                            <div class="c3-card-label">Prompt</div>
+                                            <div class="c3-child-section" (click)="navigateToEntity('MJ: AI Prompts', record.ChildPromptID)" title="View Agent Prompt">
+                                                <i class="fa-solid fa-comment prompt-icon"></i>
+                                                {{ record.ChildPrompt }}
+                                            </div>
+                                            <div class="c3-divider">
+                                                <span class="c3-line"></span>
+                                                <span class="c3-divider-label">wrapped by</span>
+                                                <span class="c3-line"></span>
+                                            </div>
+                                            <div class="c3-parent-section" (click)="navigateToEntity('MJ: AI Prompts', prompt.ID)" title="View System Prompt">
+                                                <i class="fa-solid fa-cog"></i>
+                                                {{ prompt.Name }}
+                                                <i class="fa-solid fa-arrow-up-right-from-square c3-link-icon"></i>
+                                            </div>
+                                        </div>
+                                    } @else {
+                                        <!-- Single prompt (no child) — same card style -->
+                                        <div class="meta-card prompt-single-card">
+                                            <div class="c3-card-label">Prompt</div>
+                                            <div class="meta-card-body clickable" (click)="navigateToEntity('MJ: AI Prompts', prompt.ID)" title="View Prompt">
+                                                <i class="fa-solid fa-comment-dots" style="color: var(--mj-brand-primary);"></i>
+                                                {{ prompt.Name }}
+                                            </div>
+                                        </div>
+                                    }
                                 }
+
+                                <!-- Model Card -->
                                 @if (model) {
-                                    <span class="model-name" (click)="navigateToEntity('MJ: AI Models', model.ID)" title="View Model">
-                                        <i class="fa-solid fa-microchip"></i>
-                                        {{ model.Name }}
-                                    </span>
-                                }
-                                @if (record.Vendor) {
-                                    <span class="vendor-name" (click)="navigateToEntity('MJ: AI Vendors', record.VendorID)" title="View Vendor">
-                                        <i class="fa-solid fa-building"></i>
-                                        {{ record.Vendor }}
-                                    </span>
+                                    <div class="model-card-c3">
+                                        <div class="c3-card-label">Model</div>
+                                        <div class="c3-card-body" (click)="navigateToEntity('MJ: AI Models', model.ID)" title="View Model">
+                                            <span class="c3-model-name"><i class="fa-solid fa-microchip"></i> {{ model.Name }}</span>
+                                            @if (record.Vendor) {
+                                                <span class="c3-vendor-name">{{ record.Vendor }}</span>
+                                            }
+                                        </div>
+                                    </div>
                                 }
                                 @if (record.RerunFromPromptRunID) {
                                     <span class="original-run" title="View Original Run">
@@ -272,11 +310,18 @@
                                                     <div class="json-editor-container">
                                                         <div class="json-toolbar">
                                                             <button kendoButton
-                                                                fillMode="flat" 
+                                                                fillMode="flat"
                                                                 size="small"
                                                                 (click)="copyToClipboard(formattedData, 'Data')"
                                                                 title="Copy JSON">
                                                                 <i class="fa-solid fa-copy"></i> Copy
+                                                            </button>
+                                                            <button kendoButton
+                                                                fillMode="flat"
+                                                                size="small"
+                                                                (click)="openFullScreen(formattedData, 'json', 'Data')"
+                                                                title="View full screen">
+                                                                <i class="fa-solid fa-expand"></i>
                                                             </button>
                                                         </div>
                                                         <mj-code-editor 
@@ -312,11 +357,18 @@
                                                 <div class="json-editor-container">
                                                     <div class="json-toolbar">
                                                         <button kendoButton
-                                                            fillMode="flat" 
+                                                            fillMode="flat"
                                                             size="small"
                                                             (click)="copyToClipboard(formattedMessages, 'Messages')"
                                                             title="Copy JSON">
                                                             <i class="fa-solid fa-copy"></i> Copy
+                                                        </button>
+                                                        <button kendoButton
+                                                            fillMode="flat"
+                                                            size="small"
+                                                            (click)="openFullScreen(formattedMessages, 'json', 'Raw Messages')"
+                                                            title="View full screen">
+                                                            <i class="fa-solid fa-expand"></i>
                                                         </button>
                                                     </div>
                                                     <mj-code-editor 
@@ -377,6 +429,13 @@
                                                 title="Copy JSON">
                                                 <i class="fa-solid fa-copy"></i> Copy
                                             </button>
+                                            <button kendoButton
+                                                fillMode="flat"
+                                                size="small"
+                                                (click)="openFullScreen(formattedResult, 'json', 'Result')"
+                                                title="View full screen">
+                                                <i class="fa-solid fa-expand"></i>
+                                            </button>
                                         </div>
                                         <mj-code-editor 
                                             [(ngModel)]="formattedResult"
@@ -400,7 +459,16 @@
                                                 }
                                                 @if (formattedErrorDetails) {
                                                     <div class="error-details">
-                                                        <h4>Error Details</h4>
+                                                        <div class="json-toolbar">
+                                                            <h4 style="margin: 0;">Error Details</h4>
+                                                            <button kendoButton
+                                                                fillMode="flat"
+                                                                size="small"
+                                                                (click)="openFullScreen(formattedErrorDetails, 'json', 'Error Details')"
+                                                                title="View full screen">
+                                                                <i class="fa-solid fa-expand"></i>
+                                                            </button>
+                                                        </div>
                                                         <mj-code-editor
                                                             [ngModel]="formattedErrorDetails"
                                                             [disabled]="true"
@@ -662,9 +730,18 @@
                                     <!-- Validation Summary JSON -->
                                     @if (validationSummary) {
                                         <div class="validation-json">
-                                            <h4>Validation Summary Details</h4>
+                                            <div class="json-toolbar">
+                                                <h4 style="margin: 0;">Validation Summary Details</h4>
+                                                <button kendoButton
+                                                    fillMode="flat"
+                                                    size="small"
+                                                    (click)="openFullScreen(formattedValidationSummary, 'json', 'Validation Summary')"
+                                                    title="View full screen">
+                                                    <i class="fa-solid fa-expand"></i>
+                                                </button>
+                                            </div>
                                             <div class="json-viewer-container">
-                                                <mj-code-editor 
+                                                <mj-code-editor
                                                     [(ngModel)]="formattedValidationSummary"
                                                     name="formattedValidationSummary"
                                                     [readonly]="true"
@@ -679,9 +756,18 @@
                                     <!-- Validation Attempts JSON -->
                                     @if (record.ValidationAttempts) {
                                         <div class="validation-json">
-                                            <h4>Validation Attempts (Raw JSON)</h4>
+                                            <div class="json-toolbar">
+                                                <h4 style="margin: 0;">Validation Attempts (Raw JSON)</h4>
+                                                <button kendoButton
+                                                    fillMode="flat"
+                                                    size="small"
+                                                    (click)="openFullScreen(formattedValidationAttempts, 'json', 'Validation Attempts')"
+                                                    title="View full screen">
+                                                    <i class="fa-solid fa-expand"></i>
+                                                </button>
+                                            </div>
                                             <div class="json-viewer-container">
-                                                <mj-code-editor 
+                                                <mj-code-editor
                                                     [(ngModel)]="formattedValidationAttempts"
                                                     name="formattedValidationAttempts"
                                                     [readonly]="true"
@@ -931,6 +1017,13 @@
                                                 title="Copy JSON">
                                                 <i class="fa-solid fa-copy"></i> Copy
                                             </button>
+                                            <button kendoButton
+                                                fillMode="flat"
+                                                size="small"
+                                                (click)="openFullScreen(formattedModelSpecificResponseDetails, 'json', 'Model Specific Response Details')"
+                                                title="View full screen">
+                                                <i class="fa-solid fa-expand"></i>
+                                            </button>
                                         </div>
                                         <mj-code-editor 
                                             [(ngModel)]="formattedModelSpecificResponseDetails"
@@ -1080,9 +1173,18 @@
                                 <!-- Model Selection JSON -->
                                 @if (record.ModelSelection) {
                                     <div class="model-selection-json">
-                                        <h4>Model Selection Details</h4>
+                                        <div class="json-toolbar">
+                                            <h4 style="margin: 0;">Model Selection Details</h4>
+                                            <button kendoButton
+                                                fillMode="flat"
+                                                size="small"
+                                                (click)="openFullScreen(formattedModelSelection, 'json', 'Model Selection')"
+                                                title="View full screen">
+                                                <i class="fa-solid fa-expand"></i>
+                                            </button>
+                                        </div>
                                         <div class="json-viewer-container">
-                                            <mj-code-editor 
+                                            <mj-code-editor
                                                 [(ngModel)]="formattedModelSelection"
                                                 name="formattedModelSelection"
                                                 [readonly]="true"
@@ -1097,9 +1199,18 @@
                                 <!-- Error Details JSON -->
                                 @if (record.ErrorDetails) {
                                     <div class="error-details-json">
-                                        <h4>Error Details</h4>
+                                        <div class="json-toolbar">
+                                            <h4 style="margin: 0;">Error Details</h4>
+                                            <button kendoButton
+                                                fillMode="flat"
+                                                size="small"
+                                                (click)="openFullScreen(formattedErrorDetails, 'json', 'Error Details')"
+                                                title="View full screen">
+                                                <i class="fa-solid fa-expand"></i>
+                                            </button>
+                                        </div>
                                         <div class="json-viewer-container">
-                                            <mj-code-editor 
+                                            <mj-code-editor
                                                 [(ngModel)]="formattedErrorDetails"
                                                 name="formattedErrorDetails"
                                                 [readonly]="true"
@@ -1117,5 +1228,43 @@
                 </kendo-panelbar>
             </div>
         </form>
+    }
+
+    <!-- Full-screen overlay -->
+    @if (FullScreenContent) {
+        <div class="fullscreen-overlay" (click)="closeFullScreen()">
+            <div class="fullscreen-container" (click)="$event.stopPropagation()">
+                <div class="fullscreen-header">
+                    <span class="fullscreen-title">
+                        <i class="fa-solid fa-expand"></i>
+                        {{ FullScreenTitle }}
+                    </span>
+                    <div class="fullscreen-actions">
+                        <button kendoButton
+                            fillMode="flat"
+                            size="small"
+                            (click)="copyToClipboard(FullScreenContent, FullScreenTitle)"
+                            title="Copy content">
+                            <i class="fa-solid fa-copy"></i> Copy
+                        </button>
+                        <button kendoButton
+                            fillMode="flat"
+                            size="small"
+                            (click)="closeFullScreen()"
+                            title="Close">
+                            <i class="fa-solid fa-times"></i> Close
+                        </button>
+                    </div>
+                </div>
+                <div class="fullscreen-body">
+                    <mj-code-editor
+                        [value]="FullScreenContent"
+                        [readonly]="true"
+                        [language]="FullScreenLanguage"
+                        style="height: 100%; width: 100%;">
+                    </mj-code-editor>
+                </div>
+            </div>
+        </div>
     }
 </div>
