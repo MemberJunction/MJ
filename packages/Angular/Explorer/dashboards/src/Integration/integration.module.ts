@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MjButtonDirective } from '@memberjunction/ng-ui-components';
+import { MjButtonDirective, MjComboboxComponent } from '@memberjunction/ng-ui-components';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { GridModule } from '@progress/kendo-angular-grid';
@@ -38,6 +38,7 @@ import { IntegrationDataService } from './services/integration-data.service';
     CommonModule,
     FormsModule,
     MjButtonDirective,
+    MjComboboxComponent,
     DropDownsModule,
     InputsModule,
     GridModule,

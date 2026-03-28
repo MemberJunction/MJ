@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, HostListener, OnDestroy, ElementRef, Renderer2, AfterViewInit, ChangeDetectorRef, NgZone } from '@angular/core';
+import { Component, Input, Output, EventEmitter, HostListener, OnDestroy, ElementRef, Renderer2, ChangeDetectorRef, NgZone } from '@angular/core';
 
 /**
  * mj-window — Floating window panel. Replaces `<kendo-window>`.
@@ -71,7 +71,7 @@ import { Component, Input, Output, EventEmitter, HostListener, OnDestroy, Elemen
     }
   `
 })
-export class MjWindowComponent implements OnDestroy, AfterViewInit {
+export class MjWindowComponent implements OnDestroy {
   private _visible = false;
   private static nextId = 0;
 
@@ -80,10 +80,26 @@ export class MjWindowComponent implements OnDestroy, AfterViewInit {
   get Visible(): boolean { return this._visible; }
 
   @Input() Title = '';
-  @Input() Width: number | string | null = null;
-  @Input() Height: number | string | null = null;
-  @Input() Top: number | null = null;
-  @Input() Left: number | null = null;
+  @Input()
+  set Width(value: number | string | null) {
+    this._width = value;
+    if (value != null) this.currentWidth = this.parseSize(value);
+  }
+  get Width(): number | string | null { return this._width; }
+
+  @Input()
+  set Height(value: number | string | null) {
+    this._height = value;
+    if (value != null) this.currentHeight = this.parseSize(value);
+  }
+  get Height(): number | string | null { return this._height; }
+  @Input()
+  set Top(value: number | null) { if (value != null) this.currentTop = value; }
+  get Top(): number | null { return this.currentTop; }
+
+  @Input()
+  set Left(value: number | null) { if (value != null) this.currentLeft = value; }
+  get Left(): number | null { return this.currentLeft; }
   @Input() MinWidth: number | null = null;
   @Input() MinHeight: number | null = null;
   @Input() Draggable = false;
@@ -118,6 +134,8 @@ export class MjWindowComponent implements OnDestroy, AfterViewInit {
 
   // Internal position/size tracking
   private _state: 'default' | 'maximized' = 'default';
+  private _width: number | string | null = null;
+  private _height: number | string | null = null;
   private currentTop: number | null = null;
   private currentLeft: number | null = null;
   private currentWidth: number | null = null;
@@ -155,14 +173,6 @@ export class MjWindowComponent implements OnDestroy, AfterViewInit {
     private cdr: ChangeDetectorRef,
     private ngZone: NgZone
   ) {}
-
-  ngAfterViewInit(): void {
-    // Initialize current dimensions from inputs
-    if (this.Top != null) this.currentTop = this.Top;
-    if (this.Left != null) this.currentLeft = this.Left;
-    if (this.Width != null) this.currentWidth = this.parseSize(this.Width);
-    if (this.Height != null) this.currentHeight = this.parseSize(this.Height);
-  }
 
   get hasExplicitPosition(): boolean {
     return this.currentTop != null && this.currentLeft != null;

@@ -118,14 +118,14 @@
                   <div class="section-label">Define New Entity</div>
                   <div class="form-group">
                     <label>DB Schema</label>
-                    <kendo-combobox
-                      [data]="DBSchemas"
+                    <mj-combobox
+                      [Data]="DBSchemas"
                       [(ngModel)]="NewEntitySchemaName"
-                      (valueChange)="OnSchemaNameChange()"
-                      [allowCustom]="true"
-                      [filterable]="true"
-                      [placeholder]="'Select or type schema...'">
-                    </kendo-combobox>
+                      (ValueChange)="OnSchemaNameChange()"
+                      [AllowCustom]="true"
+                      [Filterable]="true"
+                      Placeholder="Select or type schema...">
+                    </mj-combobox>
                   </div>
                   <div class="form-row">
                     <div class="form-group">

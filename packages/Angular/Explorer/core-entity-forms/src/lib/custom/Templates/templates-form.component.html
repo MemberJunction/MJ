@@ -39,17 +39,17 @@
                             <div style="display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
                                 <div>
                                     <label class="field-label">Category</label>
-                                    <kendo-combobox [(ngModel)]="record.CategoryID"
+                                    <mj-combobox [(ngModel)]="record.CategoryID"
                                                    name="categoryId"
-                                                   [data]="categoryOptions"
-                                                   textField="text"
-                                                   valueField="value"
-                                                   [valuePrimitive]="true"
-                                                   [allowCustom]="true"
-                                                   (valueChange)="onCategoryChange($event)"
-                                                   placeholder="Select or enter new category..."
+                                                   [Data]="categoryOptions"
+                                                   TextField="text"
+                                                   ValueField="value"
+                                                   [ValuePrimitive]="true"
+                                                   [AllowCustom]="true"
+                                                   (ValueChange)="onCategoryChange($any($event))"
+                                                   Placeholder="Select or enter new category..."
                                                    style="width: 250px;">
-                                    </kendo-combobox>
+                                    </mj-combobox>
                                 </div>
                                 <div>
                                     <label class="field-label">Active</label>

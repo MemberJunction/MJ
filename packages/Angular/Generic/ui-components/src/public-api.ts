@@ -12,3 +12,4 @@ export * from './lib/datepicker/datepicker.component';
 export * from './lib/splitter/splitter.component';
 export * from './lib/accordion/accordion.component';
 export * from './lib/window/window.component';
+export * from './lib/combobox/combobox.component';

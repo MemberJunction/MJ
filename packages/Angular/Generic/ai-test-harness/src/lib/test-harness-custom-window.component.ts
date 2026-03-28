@@ -291,9 +291,11 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
             }
 
             this.loading = false;
+            this.cdr.detectChanges();
         } catch (err: unknown) {
             this.error = err instanceof Error ? err.message : 'Failed to load entity';
             this.loading = false;
+            this.cdr.detectChanges();
         }
     }
 
