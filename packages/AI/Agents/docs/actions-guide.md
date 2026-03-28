@@ -229,7 +229,7 @@ After action execution, the formatted results are pushed into `params.conversati
     content: 'Action results:\n## SendEmail ✓\n...',
     metadata: {
         turnAdded: 5,                    // Step count when added
-        messageType: 'action-result',    // Identifies this as an action result
+        messageType: 'action-result',    // Message type (see below)
         expirationTurns: 3,              // Expires after 3 more turns
         expirationMode: 'Compact',       // Compact when expired
         compactMode: 'First N Chars',    // Truncation strategy
@@ -240,6 +240,18 @@ After action execution, the formatted results are pushed into `params.conversati
 ```
 
 The agent then returns a `Retry` step, which loops back to the prompt step so the LLM can analyze the results and decide what to do next.
+
+### Message Types
+
+The `messageType` field distinguishes the three categories of result messages that participate in the expiration/compaction lifecycle:
+
+| `messageType` | Source | Default Expiration |
+|---|---|---|
+| `'action-result'` | Non-loop action execution | Never (configured per `AIAgentAction`) |
+| `'loop-result'` | ForEach/While loop completion summary | 3 turns then remove (or from action config) |
+| `'sub-agent-result'` | Sub-agent completion summary | 3 turns then remove (or from global override) |
+
+All three types carry the same metadata shape and participate in the same lifecycle (proactive expiration, compaction, expansion, context recovery).
 
 ### Default Behavior: No Expiration
 
@@ -398,7 +410,7 @@ When actions execute inside ForEach or While loops, `addConversationMessage` is 
 
 ### Aggregated Loop Results
 
-After the loop completes, a single aggregated message is injected (if the agent type opts in via `InjectLoopResultsAsMessage`):
+After the loop completes, a single aggregated message is injected (if the agent type opts in via `InjectLoopResultsAsMessage`). The results use the same **markdown format** as non-loop action results, and carry the same **expiration/compaction metadata** so they persist across multiple prompt turns rather than being deleted after one turn.
 
 ```markdown
 ## Loop Completed
@@ -406,17 +418,34 @@ After the loop completes, a single aggregated message is injected (if the agent 
 **Collection:** data.customers
 **Processed:** 25, **Errors:** 0
 
-**Results:**
-```json
-[
-  { "actionName": "SendEmail", "success": true, "resultCode": "SUCCESS" },
-  { "actionName": "SendEmail", "success": true, "resultCode": "SUCCESS" },
-  ...
-]
-```
+### Iteration 1
+## SendEmail ✓
+**Result:** SUCCESS — Email sent to alice@example.com
+**Output:**
+• `MessageID`: msg-abc-123
+
+### Iteration 2
+## SendEmail ✓
+**Result:** SUCCESS — Email sent to bob@example.com
+**Output:**
+• `MessageID`: msg-def-456
 ```
 
-This message is tagged with `{ _temporary: true, _loopResults: true }` metadata.
+This message carries `messageType: 'loop-result'` metadata with the standard expiration/compaction fields:
+
+```typescript
+{
+    turnAdded: 5,
+    messageType: 'loop-result',
+    expirationTurns: 3,          // From action config (most-restrictive-wins) or default 3
+    expirationMode: 'Remove',    // Or 'Compact' if configured on the action
+    compactMode: '...',          // Optional: 'First N Chars' or 'AI Summary'
+    compactLength: 500,          // Optional
+    compactPromptId: '...'       // Optional
+}
+```
+
+The expiration settings are resolved from the loop's action configuration using the same most-restrictive-wins logic as non-loop actions. If no action config is found, the default is 3 turns then remove. The `messageExpirationOverride` parameter on `ExecuteAgentParams` takes precedence if set.
 
 ### Parameter Resolution in Loops
 
@@ -481,9 +510,11 @@ The message lifecycle system emits events that callers can observe via `onMessag
 
 | Event Type | When |
 |---|---|
-| `message-compacted` | Action result compacted (proactive or recovery) |
-| `message-expired` | Action result removed due to expiration |
+| `message-compacted` | Action/loop/sub-agent result compacted (proactive or recovery) |
+| `message-expired` | Action/loop/sub-agent result removed due to expiration |
 | `message-expanded` | Compacted message restored to full content |
 | `message-removed` | Message removed during context recovery |
+
+All three message types (`action-result`, `loop-result`, `sub-agent-result`) participate in the same lifecycle. The `messageType` field distinguishes them for logging and debugging.
 
 Each event includes the turn number, message index, the message itself, reason, and token savings.
