@@ -89,6 +89,10 @@ vi.mock('@memberjunction/core', () => {
         LogStatus: vi.fn(),
         LogError: vi.fn(),
         RunViewResult: class {},
+        BaseEngine: class {
+            static Instance = {};
+            Config = vi.fn();
+        },
     };
 });
 
@@ -190,6 +194,21 @@ vi.mock('@memberjunction/aiengine', () => ({
 
 vi.mock('@memberjunction/ai-core-plus', () => ({
     MJAIModelEntityExtended: vi.fn(),
+}));
+
+vi.mock('@memberjunction/templates', () => ({
+    TemplateEngineServer: {
+        Instance: {
+            Config: vi.fn().mockResolvedValue(undefined),
+            SetupNunjucks: vi.fn(),
+            Templates: [{
+                ID: 'tmpl-1',
+                Content: [{ TemplateText: '{{Entity.Name}}' }],
+                Params: [{ Name: 'Entity', Type: 'Record' }],
+            }],
+            RenderTemplate: vi.fn().mockResolvedValue({ Success: true, Output: 'rendered template text' }),
+        },
+    },
 }));
 
 // ─────────────────────────────────────────────

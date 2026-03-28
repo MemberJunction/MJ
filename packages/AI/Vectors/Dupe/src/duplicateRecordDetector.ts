@@ -38,6 +38,8 @@ import {
 } from "@memberjunction/core-entities";
 import { VectorBase } from "@memberjunction/ai-vectors";
 import { EntityDocumentTemplateParser, EntityVectorSyncer, VectorizeEntityParams } from "@memberjunction/ai-vector-sync";
+import { TemplateEngineServer } from "@memberjunction/templates";
+import type { MJTemplateEntityExtended, MJTemplateContentEntity } from "@memberjunction/core-entities";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 
 /** Default number of nearest neighbors to retrieve per record */
@@ -295,6 +297,9 @@ export class DuplicateRecordDetector extends VectorBase {
 
     /**
      * Generate human-readable template text for each record using the entity document template.
+     *
+     * Loads the template from TemplateEngineServer and renders it via Nunjucks,
+     * matching the same approach used by the vectorization pipeline.
      */
     protected async GenerateTemplateTexts(
         templateParser: ReturnType<typeof EntityDocumentTemplateParser.CreateInstance>,
@@ -302,14 +307,49 @@ export class DuplicateRecordDetector extends VectorBase {
         records: BaseEntity[],
         contextUser: UserInfo
     ): Promise<string[]> {
+        await TemplateEngineServer.Instance.Config(false, contextUser);
+        const template = this.loadTemplate(entityDocument);
+        const templateContent = template.Content[0] as MJTemplateContentEntity;
+        TemplateEngineServer.Instance.SetupNunjucks();
+
         const templateTexts: string[] = [];
         for (const record of records) {
-            const text = await templateParser.Parse(
-                entityDocument.TemplateID, entityDocument.EntityID, record, contextUser
+            const data: Record<string, unknown> = {};
+            for (const param of template.Params) {
+                if (param.Type === 'Record') {
+                    data[param.Name] = record.GetAll();
+                }
+            }
+
+            const result = await TemplateEngineServer.Instance.RenderTemplate(
+                template, templateContent, data, true
             );
-            templateTexts.push(text);
+
+            if (result.Success) {
+                templateTexts.push(result.Output);
+            } else {
+                LogError(`Template render failed for record ${record.PrimaryKey.ToString()}: ${result.Message}`);
+                templateTexts.push('');
+            }
         }
         return templateTexts;
+    }
+
+    /**
+     * Load the template entity from TemplateEngineServer for the given entity document.
+     */
+    protected loadTemplate(entityDocument: MJEntityDocumentEntity): MJTemplateEntityExtended {
+        const template = TemplateEngineServer.Instance.Templates.find(
+            (t: MJTemplateEntityExtended) => UUIDsEqual(t.ID, entityDocument.TemplateID)
+        ) as MJTemplateEntityExtended;
+
+        if (!template) {
+            throw new Error(`Template not found for ID ${entityDocument.TemplateID}`);
+        }
+        if (template.Content.length === 0) {
+            throw new Error(`Template ${template.ID} has no content records`);
+        }
+        return template;
     }
 
     // ─────────────────────────────────────────────
