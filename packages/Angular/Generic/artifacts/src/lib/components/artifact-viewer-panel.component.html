@@ -37,7 +37,7 @@
         </div>
         @if (pluginViewer?.SupportsFeedback) {
           <button class="feedback-btn"
-                  (click)="pluginViewer.AskUserForFeedback()"
+                  (click)="pluginViewer?.AskUserForFeedback()"
                   title="Rate this artifact">
             <i class="fas fa-comment-dots"></i>
           </button>
