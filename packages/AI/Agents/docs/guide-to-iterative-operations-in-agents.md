@@ -806,6 +806,15 @@ ForEach Customer (Action body)
 
 ### Collecting Results
 
+When a loop completes (if the agent type opts in via `InjectLoopResultsAsMessage`), a single aggregated message is injected into the conversation. This message:
+
+- Uses **markdown format** (not JSON) matching the non-loop action result format, with per-iteration headers
+- Carries `messageType: 'loop-result'` metadata with standard expiration/compaction fields
+- **Persists for multiple prompt turns** (default: 3 turns then remove) rather than being deleted after one turn
+- Expiration settings are resolved from the loop's action configuration, with `messageExpirationOverride` taking precedence if set
+
+See the [Actions Guide](actions-guide.md#aggregated-loop-results) for full details on the result message format and lifecycle.
+
 #### Array Collection (Default)
 
 ```json
