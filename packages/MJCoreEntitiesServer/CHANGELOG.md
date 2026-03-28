@@ -1,5 +1,80 @@
 # @memberjunction/core-entities-server
 
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [cc954e1]
+- Updated dependencies [2298f8a]
+  - @memberjunction/generic-database-provider@5.20.0
+  - @memberjunction/core@5.20.0
+  - @memberjunction/sqlserver-dataprovider@5.20.0
+  - @memberjunction/ai-engine-base@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/ai-prompts@5.20.0
+  - @memberjunction/ai-vector-dupe@5.20.0
+  - @memberjunction/ai-vectors-memory@5.20.0
+  - @memberjunction/actions-base@5.20.0
+  - @memberjunction/doc-utils@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/skip-types@5.20.0
+  - @memberjunction/ai-provider-bundle@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/global@5.20.0
+  - @memberjunction/sql-converter@5.20.0
+  - @memberjunction/sql-parser@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.19.0
+- @memberjunction/ai@5.19.0
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/aiengine@5.19.0
+- @memberjunction/ai-prompts@5.19.0
+- @memberjunction/ai-provider-bundle@5.19.0
+- @memberjunction/ai-vector-dupe@5.19.0
+- @memberjunction/ai-vectors-memory@5.19.0
+- @memberjunction/actions-base@5.19.0
+- @memberjunction/doc-utils@5.19.0
+- @memberjunction/generic-database-provider@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/sql-converter@5.19.0
+- @memberjunction/sql-parser@5.19.0
+- @memberjunction/sqlserver-dataprovider@5.19.0
+- @memberjunction/skip-types@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- 931740a: Fix SQLParser to extract parameters from Jinja2 control flow conditions ({% if %}/{% elif %}) and remove hardcoded golden-queries reusability check from QueryEntityServer.
+- Updated dependencies [322dac6]
+- Updated dependencies [931740a]
+- Updated dependencies [48f7296]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/sql-parser@5.18.0
+  - @memberjunction/ai-prompts@5.18.0
+  - @memberjunction/ai-engine-base@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/skip-types@5.18.0
+  - @memberjunction/generic-database-provider@5.18.0
+  - @memberjunction/ai-vector-dupe@5.18.0
+  - @memberjunction/sqlserver-dataprovider@5.18.0
+  - @memberjunction/ai-provider-bundle@5.18.0
+  - @memberjunction/ai@5.18.0
+  - @memberjunction/ai-vectors-memory@5.18.0
+  - @memberjunction/actions-base@5.18.0
+  - @memberjunction/doc-utils@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+  - @memberjunction/sql-converter@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

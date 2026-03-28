@@ -1,5 +1,48 @@
 # Change Log - @memberjunction/ai-vector-dupe
 
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/ai-vectors-pinecone@5.20.0
+  - @memberjunction/ai-vectors@5.20.0
+  - @memberjunction/ai-vectordb@5.20.0
+  - @memberjunction/ai-vector-sync@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.19.0
+- @memberjunction/aiengine@5.19.0
+- @memberjunction/ai-vectors-pinecone@5.19.0
+- @memberjunction/ai-vectors@5.19.0
+- @memberjunction/ai-vectordb@5.19.0
+- @memberjunction/ai-vector-sync@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@5.18.0
+- @memberjunction/ai-vectors@5.18.0
+- @memberjunction/ai-vectors-pinecone@5.18.0
+- @memberjunction/ai-vector-sync@5.18.0
+- @memberjunction/ai@5.18.0
+- @memberjunction/ai-vectordb@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/core-entities@5.18.0
+- @memberjunction/global@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

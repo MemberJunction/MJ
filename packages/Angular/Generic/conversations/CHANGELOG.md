@@ -1,5 +1,74 @@
 # @memberjunction/ng-conversations
 
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ai-engine-base@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/ng-testing@5.20.0
+  - @memberjunction/ng-artifacts@5.20.0
+  - @memberjunction/ng-base-types@5.20.0
+  - @memberjunction/ng-code-editor@5.20.0
+  - @memberjunction/ng-container-directives@5.20.0
+  - @memberjunction/ng-notifications@5.20.0
+  - @memberjunction/ng-shared-generic@5.20.0
+  - @memberjunction/ng-tasks@5.20.0
+  - @memberjunction/graphql-dataprovider@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/ng-forms@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/ng-markdown@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.19.0
+- @memberjunction/ai@5.19.0
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/ng-testing@5.19.0
+- @memberjunction/ng-artifacts@5.19.0
+- @memberjunction/ng-base-types@5.19.0
+- @memberjunction/ng-code-editor@5.19.0
+- @memberjunction/ng-container-directives@5.19.0
+- @memberjunction/ng-forms@5.19.0
+- @memberjunction/ng-markdown@5.19.0
+- @memberjunction/ng-notifications@5.19.0
+- @memberjunction/ng-shared-generic@5.19.0
+- @memberjunction/ng-tasks@5.19.0
+- @memberjunction/graphql-dataprovider@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [322dac6]
+- Updated dependencies [de310bc]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/ng-markdown@5.18.0
+  - @memberjunction/ai-engine-base@5.18.0
+  - @memberjunction/ng-forms@5.18.0
+  - @memberjunction/ng-tasks@5.18.0
+  - @memberjunction/graphql-dataprovider@5.18.0
+  - @memberjunction/ng-artifacts@5.18.0
+  - @memberjunction/ng-testing@5.18.0
+  - @memberjunction/ng-notifications@5.18.0
+  - @memberjunction/ai@5.18.0
+  - @memberjunction/ng-base-types@5.18.0
+  - @memberjunction/ng-code-editor@5.18.0
+  - @memberjunction/ng-container-directives@5.18.0
+  - @memberjunction/ng-shared-generic@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

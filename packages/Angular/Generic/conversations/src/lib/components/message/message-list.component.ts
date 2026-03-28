@@ -44,7 +44,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public attachmentsMap: Map<string, MessageAttachment[]> = new Map();
 
-  @Output() public pinMessage = new EventEmitter<MJConversationDetailEntity>();
   @Output() public editMessage = new EventEmitter<MJConversationDetailEntity>();
   @Output() public deleteMessage = new EventEmitter<MJConversationDetailEntity>();
   @Output() public retryMessage = new EventEmitter<MJConversationDetailEntity>();
@@ -56,6 +55,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
+  @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId
+  @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
 
   @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
@@ -299,7 +300,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.attachments = this.attachmentsMap.get(message.ID) || [];
 
           // Subscribe to outputs
-          instance.pinClicked.subscribe((msg: MJConversationDetailEntity) => this.pinMessage.emit(msg));
           instance.editClicked.subscribe((msg: MJConversationDetailEntity) => this.editMessage.emit(msg));
           instance.deleteClicked.subscribe((msg: MJConversationDetailEntity) => this.deleteMessage.emit(msg));
           instance.retryClicked.subscribe((msg: MJConversationDetailEntity) => this.retryMessage.emit(msg));
@@ -309,6 +309,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.openEntityRecord.emit(data));
           instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.suggestedResponseSelected.emit(data));
           instance.attachmentClicked.subscribe((attachment: MessageAttachment) => this.attachmentClicked.emit(attachment));
+          instance.diagnosticRequested.subscribe((messageId: string) => this.diagnosticRequested.emit(messageId));
+          instance.messagePinToggled.subscribe((msg: MJConversationDetailEntity) => this.messagePinToggled.emit(msg));
 
           // Handle artifact actions if the output exists
           if (instance.artifactActionPerformed) {

@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/core-entities
 
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/interactive-component-types@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.19.0
+- @memberjunction/interactive-component-types@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.18.0
+- @memberjunction/interactive-component-types@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/global@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

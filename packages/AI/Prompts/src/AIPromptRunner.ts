@@ -2418,6 +2418,11 @@ export class AIPromptRunner {
 
       promptRun.PromptID = prompt.ID;
       promptRun.ModelID = model.ID;
+
+      // Set ChildPromptID if this is a hierarchical execution with child prompts
+      if (params.childPrompts && params.childPrompts.length > 0) {
+        promptRun.ChildPromptID = params.childPrompts[0].childPrompt.prompt.ID;
+      }
       
       // Set initial status and tracking fields
       promptRun.Status = 'Running';
@@ -3106,7 +3111,7 @@ export class AIPromptRunner {
       if (prompt.Seed != null) chatParams.seed = prompt.Seed;
       if (prompt.StopSequences) {
         // Parse comma-delimited stop sequences
-        chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.trim()).filter((s: string) => s.length > 0);
+        chatParams.stopSequences = prompt.StopSequences.split(',').map((s: string) => s.replace(AIPromptRunner.STOP_SEQUENCE_TRIM_REGEX, '')).filter((s: string) => s.length > 0);
       }
       if (prompt.IncludeLogProbs != null) chatParams.includeLogProbs = prompt.IncludeLogProbs;
       if (prompt.TopLogProbs != null) chatParams.topLogProbs = prompt.TopLogProbs;
@@ -3267,6 +3272,19 @@ export class AIPromptRunner {
    * at any level of the AIModelType → AIModel → AIModelVendor cascade.
    */
   private static readonly DEFAULT_PREFILL_FALLBACK = '# **CRITICAL**\nYour response must start with exactly: {{prefill}}\nDo not add quotes, markdown formatting, or any other characters before it.';
+
+  /**
+   * Regex used to trim only horizontal whitespace (spaces and tabs) from the start and end
+   * of each stop sequence token after comma-splitting.
+   *
+   * We intentionally do NOT use String.trim() here because stop sequences can legitimately
+   * begin or end with newline characters. For example, the sequence "\n```" is designed to
+   * match only a closing code fence (preceded by a newline), distinguishing it from an
+   * opening "```json" fence that does not start with a newline. Using trim() would strip
+   * that leading "\n", turning "\n```" into "```" and causing the stop to fire on the
+   * opening fence instead — producing an empty response for non-native prefill providers.
+   */
+  private static readonly STOP_SEQUENCE_TRIM_REGEX = /^[ \t]+|[ \t]+$/g;
 
   /**
    * Resolves whether the current model/vendor supports native assistant prefill.

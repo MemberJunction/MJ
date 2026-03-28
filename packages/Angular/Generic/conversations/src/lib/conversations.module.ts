@@ -71,6 +71,7 @@ import { ArtifactCollectionPickerModalComponent } from './components/collection/
 import { ArtifactShareModalComponent } from './components/artifact/artifact-share-modal.component';
 import { GlobalTasksPanelComponent } from './components/global-tasks/global-tasks-panel.component';
 import { ImageViewerComponent } from './components/attachment/image-viewer.component';
+import { PinnedMessagesPanelComponent } from './components/conversation/pinned-messages-panel.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -117,7 +118,8 @@ const COMPONENTS = [
   ToastComponent,
   InputDialogComponent,
   GlobalTasksPanelComponent,
-  ImageViewerComponent
+  ImageViewerComponent,
+  PinnedMessagesPanelComponent
 ];
 
 @NgModule({
