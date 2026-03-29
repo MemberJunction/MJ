@@ -1,5 +1,22 @@
 # @memberjunction/react-test-harness
 
+## 5.21.0
+
+### Patch Changes
+
+- 2585d4d: Skip required-queries-not-called lint rule for child-delegated queries in test harness
+- Updated dependencies [c7dfb20]
+- Updated dependencies [76cd2bc]
+  - @memberjunction/ai-vectors-memory@5.21.0
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/aiengine@5.21.0
+  - @memberjunction/interactive-component-types@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/react-runtime@5.21.0
+  - @memberjunction/global@5.21.0
+  - @memberjunction/sql-parser@5.21.0
+
 ## 5.20.0
 
 ### Patch Changes
