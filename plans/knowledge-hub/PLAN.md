@@ -8,20 +8,20 @@
 
 | Sub-Phase | Description | Status |
 |-----------|-------------|--------|
-| 1.0  | UX Mockups (HTML prototypes) | Not Started |
-| 1.1  | Knowledge Hub App Shell | Not Started |
-| 1.2  | Shared Index Architecture | Not Started |
-| 1.3  | Knowledge Pipeline | Not Started |
-| 1.4  | Unified Search API | Not Started |
+| 1.0  | UX Mockups (HTML prototypes) | Skipped (UX) |
+| 1.1  | Knowledge Hub App Shell | Partial (metadata only) |
+| 1.2  | Shared Index Architecture | Partial (types + filter, no migration) |
+| 1.3  | Knowledge Pipeline | Done |
+| 1.4  | Unified Search API | Done |
 | 1.5  | Full-Text Index Management | Not Started |
-| 1.6  | MJ Agent Client SDK | Not Started |
-| 1.7  | Angular Agent Client Adapter | Not Started |
-| 1.8  | mj-chat Modernization | Not Started |
-| 1.9  | mj-chat-agents-overlay | Not Started |
+| 1.6  | MJ Agent Client SDK | Done |
+| 1.7  | Angular Agent Client Adapter | Done |
+| 1.8  | mj-chat Modernization | Skipped (UX) |
+| 1.9  | mj-chat-agents-overlay | Skipped (UX) |
 | 1.10 | Conversation Continuity | Not Started |
-| 1.11 | Knowledge Agent | Not Started |
-| 1.12 | Knowledge Hub Search UX | Not Started |
-| 1.13 | MJ Explorer Global Search Enhancement | Not Started |
+| 1.11 | Knowledge Agent | Partial (metadata + prompt, no server impl) |
+| 1.12 | Knowledge Hub Search UX | Skipped (UX) |
+| 1.13 | MJ Explorer Global Search Enhancement | Skipped (UX) |
 | 1.14 | Advanced Features (document only) | Not Started |
 
 ---
@@ -190,7 +190,7 @@ Merge the existing Vectors, Duplicates, and Autotagging resource components into
 
 #### 1.1.1 Application Metadata
 
-- [ ] **1.1.1a** Create `metadata/applications/.knowledge-hub-application.json` with Application entity record:
+- [x] **1.1.1a** Create `metadata/applications/.knowledge-hub-application.json` with Application entity record:
   - `Name`: "Knowledge Hub"
   - `Description`: "Unified knowledge management: semantic search, vector management, duplicate detection, content autotagging, and AI assistant"
   - `DefaultForNewUser`: false
@@ -263,7 +263,7 @@ Migrate from per-EntityDocument vector indexes to a single shared index with met
 
 #### 1.2.1 Shared Index Metadata Types
 
-- [ ] **1.2.1a** Create `packages/AI/Vectors/Core/src/generic/SharedIndexMetadata.ts`:
+- [x] **1.2.1a** Create `packages/AI/Vectors/Core/src/generic/SharedIndexMetadata.ts`:
   ```typescript
   export interface SharedVectorMetadata {
       EntityName: string;
@@ -284,20 +284,20 @@ Migrate from per-EntityDocument vector indexes to a single shared index with met
       EntityDocumentIDs?: string[];
   }
   ```
-- [ ] **1.2.1b** Export from `packages/AI/Vectors/Core/src/index.ts`
+- [x] **1.2.1b** Export from `packages/AI/Vectors/Core/src/index.ts`
 - **Dependencies**: None
 - **Testing**: Unit test: type instantiation and validation
 
 #### 1.2.2 Extend VectorDBBase for Metadata Filtering
 
-- [ ] **1.2.2a** Add `MetadataFilteredQuery` method to `VectorDBBase` (`packages/AI/Vectors/Database/src/generic/VectorDBBase.ts`):
+- [x] **1.2.2a** Add `MetadataFilteredQuery` method to `VectorDBBase` (`packages/AI/Vectors/Database/src/generic/VectorDBBase.ts`):
   ```typescript
   public MetadataFilteredQuery(
       params: QueryOptions & { metadataFilter: SharedIndexFilterOptions }
   ): BaseResponse | Promise<BaseResponse>
   ```
   Default implementation converts `SharedIndexFilterOptions` to the provider's native filter format and delegates to `queryIndex`.
-- [ ] **1.2.2b** Add `BuildMetadataFilter(options: SharedIndexFilterOptions): object` abstract-optional method for providers to override
+- [x] **1.2.2b** Add `BuildMetadataFilter(options: SharedIndexFilterOptions): object` abstract-optional method for providers to override
 - [ ] **1.2.2c** Update `QueryParamsBase` in `packages/AI/Vectors/Database/src/generic/query.types.ts` to support structured `metadataFilter` alongside raw `filter`
 - **Dependencies**: 1.2.1
 - **Testing**: Unit test: metadata filter converts to expected format
@@ -350,7 +350,7 @@ Unified orchestration for ingest -> extract -> autotag -> vectorize, with progre
 
 #### 1.3.1 Pipeline Orchestrator Package
 
-- [ ] **1.3.1a** Create package structure:
+- [x] **1.3.1a** Create package structure:
   ```
   packages/AI/Knowledge/Pipeline/
     src/
@@ -363,7 +363,7 @@ Unified orchestration for ingest -> extract -> autotag -> vectorize, with progre
     tsconfig.json
     vitest.config.ts
   ```
-- [ ] **1.3.1b** Implement `KnowledgePipeline` class:
+- [x] **1.3.1b** Implement `KnowledgePipeline` class:
   ```typescript
   export class KnowledgePipeline {
       public async ProcessEntity(params: PipelineEntityParams, contextUser: UserInfo): Promise<PipelineResult>
@@ -372,7 +372,7 @@ Unified orchestration for ingest -> extract -> autotag -> vectorize, with progre
   }
   ```
   Stages: `'extract' | 'autotag' | 'vectorize' | 'index'`
-- [ ] **1.3.1c** Implement `PipelineProgress` event emitter for real-time progress tracking:
+- [x] **1.3.1c** Implement `PipelineProgress` event emitter for real-time progress tracking:
   ```typescript
   export interface PipelineProgressEvent {
       Stage: PipelineStage;
@@ -411,7 +411,7 @@ Server-side search service that combines vector search, full-text search, and en
 
 #### 1.4.1 Search Service Package
 
-- [ ] **1.4.1a** Create package structure:
+- [x] **1.4.1a** Create package structure:
   ```
   packages/AI/Knowledge/Search/
     src/
@@ -426,7 +426,7 @@ Server-side search service that combines vector search, full-text search, and en
     tsconfig.json
     vitest.config.ts
   ```
-- [ ] **1.4.1b** Define search types in `SearchTypes.ts`:
+- [x] **1.4.1b** Define search types in `SearchTypes.ts`:
   ```typescript
   export interface UnifiedSearchRequest {
       Query: string;
@@ -471,17 +471,17 @@ Server-side search service that combines vector search, full-text search, and en
 
 #### 1.4.2 Vector Search Provider
 
-- [ ] **1.4.2a** Implement `VectorSearchProvider` class:
+- [x] **1.4.2a** Implement `VectorSearchProvider` class:
   - Accepts query string, embeds it using configured embedding model
   - Queries shared vector index with optional metadata filters
   - Returns `ScoredCandidate[]` compatible with `ComputeRRF`
-- [ ] **1.4.2b** Reuse existing `VectorDBBase.MetadataFilteredQuery()` (from 1.2.2)
+- [x] **1.4.2b** Reuse existing `VectorDBBase.MetadataFilteredQuery()` (from 1.2.2)
 - **Dependencies**: 1.2.2, 1.4.1
 - **Testing**: Unit test with mocked embedding + vector DB
 
 #### 1.4.3 Full-Text Search Provider
 
-- [ ] **1.4.3a** Implement `FullTextSearchProvider` class:
+- [x] **1.4.3a** Implement `FullTextSearchProvider` class:
   - SQL Server path: generates `SELECT ... WHERE CONTAINS(columns, @query)` or `FREETEXT(columns, @query)`
   - PostgreSQL path: generates `SELECT ... WHERE to_tsvector(columns) @@ plainto_tsquery(@query)` with `ts_rank`
   - Uses `RunView` with raw SQL filter for cross-database compatibility
@@ -491,7 +491,7 @@ Server-side search service that combines vector search, full-text search, and en
 
 #### 1.4.4 Search Fusion (RRF)
 
-- [ ] **1.4.4a** Implement `SearchFusion` class that:
+- [x] **1.4.4a** Implement `SearchFusion` class that:
   - Takes ranked lists from vector, FTS, and entity providers
   - Maps results to `ScoredCandidate[]` format
   - Calls `ComputeRRF()` from `packages/AI/Vectors/Dupe/src/scoring/ReciprocalRankFusion.ts`
@@ -502,7 +502,7 @@ Server-side search service that combines vector search, full-text search, and en
 
 #### 1.4.5 Unified Search Service
 
-- [ ] **1.4.5a** Implement `UnifiedSearchService` class that orchestrates:
+- [x] **1.4.5a** Implement `UnifiedSearchService` class that orchestrates:
   1. Parse query and filters
   2. Execute all enabled search providers in parallel (`Promise.all`)
   3. Fuse results
@@ -581,7 +581,7 @@ Framework-agnostic TypeScript package for connecting to MJ agents from any clien
 
 #### 1.6.1 Package Scaffold
 
-- [ ] **1.6.1a** Create package structure:
+- [x] **1.6.1a** Create package structure:
   ```
   packages/AI/AgentsClient/
     src/
@@ -597,14 +597,14 @@ Framework-agnostic TypeScript package for connecting to MJ agents from any clien
     tsconfig.json
     vitest.config.ts
   ```
-- [ ] **1.6.1b** Add to root `package.json` workspaces array
-- [ ] **1.6.1c** Run `npm install` at repo root
+- [x] **1.6.1b** Add to root `package.json` workspaces array
+- [x] **1.6.1c** Run `npm install` at repo root
 - **Dependencies**: None
 - **Testing**: Package compiles
 
 #### 1.6.2 Transport Abstraction
 
-- [ ] **1.6.2a** Define `TransportAdapter` interface in `TransportAdapter.ts`:
+- [x] **1.6.2a** Define `TransportAdapter` interface in `TransportAdapter.ts`:
   ```typescript
   export interface TransportAdapter {
       Connect(url: string, options?: TransportOptions): Promise<void>;
@@ -616,14 +616,14 @@ Framework-agnostic TypeScript package for connecting to MJ agents from any clien
       get IsConnected(): boolean;
   }
   ```
-- [ ] **1.6.2b** Implement `WebSocketTransport` -- wraps native WebSocket
+- [x] **1.6.2b** Implement `WebSocketTransport` -- wraps native WebSocket
 - [ ] **1.6.2c** Implement `SSETransport` -- uses EventSource for server->client, fetch POST for client->server
 - **Dependencies**: 1.6.1
 - **Testing**: Unit tests with mock WebSocket
 
 #### 1.6.3 Client Tool Registry
 
-- [ ] **1.6.3a** Implement `ClientToolRegistry` in `ClientToolRegistry.ts`:
+- [x] **1.6.3a** Implement `ClientToolRegistry` in `ClientToolRegistry.ts`:
   ```typescript
   export type ClientToolHandler = (params: Record<string, unknown>) => Promise<ClientToolResult>;
 
@@ -642,13 +642,13 @@ Framework-agnostic TypeScript package for connecting to MJ agents from any clien
       public async Execute(name: string, params: Record<string, unknown>): Promise<ClientToolResult>;
   }
   ```
-- [ ] **1.6.3b** Add timeout wrapper (30s default) around tool execution
+- [x] **1.6.3b** Add timeout wrapper (30s default) around tool execution
 - **Dependencies**: 1.6.1
 - **Testing**: Unit tests: register tool, execute, timeout
 
 #### 1.6.4 Agent Client Session
 
-- [ ] **1.6.4a** Implement `AgentClientSession` in `AgentClientSession.ts`:
+- [x] **1.6.4a** Implement `AgentClientSession` in `AgentClientSession.ts`:
   ```typescript
   export class AgentClientSession {
       constructor(transport: TransportAdapter, toolRegistry: ClientToolRegistry);
@@ -668,12 +668,12 @@ Framework-agnostic TypeScript package for connecting to MJ agents from any clien
       public get IsConnected(): boolean;
   }
   ```
-- [ ] **1.6.4b** Handle `ClientToolRequest` flow:
+- [x] **1.6.4b** Handle `ClientToolRequest` flow:
   1. Server sends `ClientToolRequest` with `toolName` and `params`
   2. Session looks up tool in registry
   3. Executes tool handler
   4. Sends `ClientToolResponse` back with result
-- [ ] **1.6.4c** Handle conversation ID assignment (server may assign on first message)
+- [x] **1.6.4c** Handle conversation ID assignment (server may assign on first message)
 - **Dependencies**: 1.6.2, 1.6.3
 - **Testing**: Integration test with mock transport: send message, receive response, handle tool request
 
@@ -706,7 +706,7 @@ Framework-agnostic TypeScript package for connecting to MJ agents from any clien
 
 #### 1.7.1 Package Scaffold
 
-- [ ] **1.7.1a** Create package structure:
+- [x] **1.7.1a** Create package structure:
   ```
   packages/Angular/Generic/agent-client/
     src/
@@ -721,13 +721,13 @@ Framework-agnostic TypeScript package for connecting to MJ agents from any clien
     package.json   (name: @memberjunction/ng-agent-client)
     tsconfig.lib.json
   ```
-- [ ] **1.7.1b** Add to root workspaces, run `npm install`
+- [x] **1.7.1b** Add to root workspaces, run `npm install`
 - **Dependencies**: 1.6.1
 - **Testing**: Package compiles
 
 #### 1.7.2 AgentClientService
 
-- [ ] **1.7.2a** Implement `AgentClientService` as injectable Angular service:
+- [x] **1.7.2a** Implement `AgentClientService` as injectable Angular service:
   ```typescript
   @Injectable({ providedIn: 'root' })
   export class AgentClientService {
@@ -744,19 +744,19 @@ Framework-agnostic TypeScript package for connecting to MJ agents from any clien
       public RegisterTool(tool: ClientToolDefinition): void;
   }
   ```
-- [ ] **1.7.2b** Auto-register built-in navigation and component tools (see 1.7.3)
+- [x] **1.7.2b** Auto-register built-in navigation and component tools (see 1.7.3)
 - [ ] **1.7.2c** Connect transport to GraphQL WebSocket endpoint
 - **Dependencies**: 1.7.1, 1.6.4
 - **Testing**: Unit test with mock transport
 
 #### 1.7.3 Built-in Client Tools
 
-- [ ] **1.7.3a** Implement `NavigationTool` in `tools/navigation-tool.ts`:
+- [x] **1.7.3a** Implement `NavigationTool` in `tools/navigation-tool.ts`:
   - `navigate_to_record` -- opens entity record in MJExplorer
   - `navigate_to_app` -- switches to a different MJExplorer application
   - `navigate_to_tab` -- switches tab within current app
   - Uses Angular `Router` injected from the service
-- [ ] **1.7.3b** Implement `ComponentTool` in `tools/component-tool.ts`:
+- [x] **1.7.3b** Implement `ComponentTool` in `tools/component-tool.ts`:
   - `open_search_panel` -- opens/focuses search in Knowledge Hub
   - `apply_search_filter` -- applies filter to current search results
   - `show_entity_details` -- opens entity record details panel
@@ -933,12 +933,12 @@ BaseAgent subclass with server and client tools for knowledge management.
 
 #### 1.11.1 Agent Entity Record
 
-- [ ] **1.11.1a** Create metadata file `metadata/agents/.knowledge-agent.json`:
+- [x] **1.11.1a** Create metadata file `metadata/agents/.knowledge-agent.json`:
   - Name: "Knowledge Agent"
   - Description: "AI assistant specialized in knowledge management: search, vectorization, duplicate detection, and content navigation"
   - Agent Type: reference to appropriate type (e.g., Sage sub-agent type)
   - IsActive: true
-- [ ] **1.11.1b** Create AI prompt metadata for the Knowledge Agent system prompt
+- [x] **1.11.1b** Create AI prompt metadata for the Knowledge Agent system prompt
 - [ ] **1.11.1c** Push metadata: `npx mj sync push --dir=metadata --include="agents"`
 - **Dependencies**: None
 - **Testing**: Agent record appears in MJ: AI Agents entity
@@ -969,7 +969,7 @@ BaseAgent subclass with server and client tools for knowledge management.
 
 #### 1.11.3 Knowledge Agent Prompts
 
-- [ ] **1.11.3a** Create system prompt for Knowledge Agent in `metadata/prompts/`:
+- [x] **1.11.3a** Create system prompt for Knowledge Agent in `metadata/prompts/`:
   - Persona: knowledgeable assistant specialized in data management
   - Available tools described with examples
   - Decision tree: when to search vs. when to vectorize vs. when to detect duplicates
