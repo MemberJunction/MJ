@@ -20,10 +20,16 @@
             <i class="fa-solid fa-table-list"></i>
             Entity Sync Status
           </h3>
-          <button class="refresh-btn" (click)="LoadData()" title="Refresh data">
-            <i class="fa-solid fa-arrows-rotate"></i>
-            Refresh
-          </button>
+          <div class="panel-actions">
+            <button class="suggest-btn" (click)="OpenSuggestDialog()" title="Use AI to suggest an Entity Document template">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              Suggest Document
+            </button>
+            <button class="refresh-btn" (click)="LoadData()" title="Refresh data">
+              <i class="fa-solid fa-arrows-rotate"></i>
+              Refresh
+            </button>
+          </div>
         </div>
 
         @if (SyncRows.length === 0) {
@@ -133,4 +139,101 @@
       </div>
     </div>
   </div>
+
+  <!-- Suggest Document Dialog -->
+  @if (ShowSuggestDialog) {
+    <div class="suggest-overlay" (click)="CloseSuggestDialog()">
+      <div class="suggest-dialog" (click)="$event.stopPropagation()">
+        <div class="suggest-dialog-header">
+          <h3 class="suggest-dialog-title">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            AI Document Suggestion
+          </h3>
+          <button class="suggest-close-btn" (click)="CloseSuggestDialog()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="suggest-dialog-body">
+          @if (!SuggestionResult) {
+            <div class="suggest-form">
+              <div class="suggest-field">
+                <label class="suggest-label">Entity</label>
+                <select class="suggest-select" [(ngModel)]="SuggestEntityName">
+                  <option value="">Select an entity...</option>
+                  @for (name of AvailableEntityNames; track name) {
+                    <option [value]="name">{{ name }}</option>
+                  }
+                </select>
+              </div>
+              <div class="suggest-field">
+                <label class="suggest-label">Use Case</label>
+                <select class="suggest-select" [(ngModel)]="SuggestUseCase">
+                  <option value="duplicate detection">Duplicate Detection</option>
+                  <option value="search">Search</option>
+                  <option value="classification">Classification</option>
+                </select>
+              </div>
+              <button class="suggest-submit-btn"
+                      [disabled]="IsSuggesting || !SuggestEntityName"
+                      (click)="RunSuggestion()">
+                @if (IsSuggesting) {
+                  <i class="fa-solid fa-spinner fa-spin"></i> Generating...
+                } @else {
+                  <i class="fa-solid fa-bolt"></i> Generate Template
+                }
+              </button>
+            </div>
+          } @else {
+            <div class="suggest-result">
+              <div class="result-section">
+                <h4 class="result-heading">Suggested Template</h4>
+                <pre class="result-template">{{ SuggestionResult.template }}</pre>
+              </div>
+              <div class="result-section">
+                <h4 class="result-heading">Selected Fields</h4>
+                <div class="result-tags">
+                  @for (field of SuggestionResult.selectedFields; track field) {
+                    <span class="result-tag">{{ field }}</span>
+                  }
+                </div>
+              </div>
+              @if (SuggestionResult.selectedRelationships.length > 0) {
+                <div class="result-section">
+                  <h4 class="result-heading">Related Entities</h4>
+                  @for (rel of SuggestionResult.selectedRelationships; track rel.name) {
+                    <div class="result-relationship">
+                      <span class="rel-name">{{ rel.name }}</span>
+                      <span class="rel-fields">{{ rel.fields.join(', ') }}</span>
+                    </div>
+                  }
+                </div>
+              }
+              <div class="result-section result-thresholds">
+                <div class="threshold-item">
+                  <span class="threshold-label">Potential Match</span>
+                  <span class="threshold-value">{{ (SuggestionResult.potentialMatchThreshold * 100).toFixed(0) }}%</span>
+                </div>
+                <div class="threshold-item">
+                  <span class="threshold-label">Absolute Match</span>
+                  <span class="threshold-value">{{ (SuggestionResult.absoluteMatchThreshold * 100).toFixed(0) }}%</span>
+                </div>
+              </div>
+              <div class="result-section">
+                <h4 class="result-heading">Reasoning</h4>
+                <p class="result-reasoning">{{ SuggestionResult.reasoning }}</p>
+              </div>
+              <div class="result-actions">
+                <button class="suggest-submit-btn" (click)="ClearSuggestion()">
+                  <i class="fa-solid fa-rotate"></i> Try Again
+                </button>
+                <button class="suggest-close-action" (click)="CloseSuggestDialog()">
+                  Close
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
 }

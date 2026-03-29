@@ -1273,5 +1273,25 @@
       "lastModified": "2026-02-13T20:48:58.150Z",
       "checksum": "87035b445b4e82e370a0e0d832b4c1d0c6a193a04b63b2d149bf4ec5befcca91"
     }
+  },
+  {
+    "fields": {
+      "Name": "Entity Document Suggestion",
+      "Description": "Analyzes entity schemas and suggests Entity Document templates for vector similarity search and duplicate detection. Takes entity fields, types, and relationships as input and outputs a ready-to-use Nunjucks template with threshold recommendations.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/entity-document-suggestion.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Default",
+      "PowerPreference": "Medium",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": []
+    }
   }
 ]

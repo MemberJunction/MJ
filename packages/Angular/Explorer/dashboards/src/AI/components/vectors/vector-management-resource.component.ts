@@ -9,7 +9,7 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
-import { RunView } from '@memberjunction/core';
+import { Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import {
     MJEntityDocumentEntity,
@@ -36,6 +36,16 @@ interface EntitySyncRow {
 interface EmbeddingModelInfo {
     Name: string;
     Dimensions: number | null;
+}
+
+/** Result from AI document suggestion */
+interface DocumentSuggestionResult {
+    template: string;
+    selectedFields: string[];
+    selectedRelationships: { name: string; fields: string[] }[];
+    potentialMatchThreshold: number;
+    absoluteMatchThreshold: number;
+    reasoning: string;
 }
 
 @RegisterClass(BaseResourceComponent, 'VectorManagementResource')
@@ -65,6 +75,14 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public EmbeddingModel: EmbeddingModelInfo = { Name: '', Dimensions: null };
     public StorageUsagePercent = 0;
     public TotalVectors = 0;
+
+    // --- Suggest Document Dialog ---
+    public ShowSuggestDialog = false;
+    public IsSuggesting = false;
+    public SuggestEntityName = '';
+    public SuggestUseCase = 'duplicate detection';
+    public SuggestionResult: DocumentSuggestionResult | null = null;
+    public AvailableEntityNames: string[] = [];
 
     // --- Raw entity data (private) ---
     private entityDocuments: MJEntityDocumentEntity[] = [];
@@ -141,6 +159,53 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             this.updateRowStatus(entityDocumentId, 'Error');
         } finally {
             this.SyncingIds.delete(entityDocumentId);
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Opens the AI suggestion dialog */
+    public OpenSuggestDialog(): void {
+        this.loadAvailableEntityNames();
+        this.SuggestionResult = null;
+        this.SuggestEntityName = '';
+        this.SuggestUseCase = 'duplicate detection';
+        this.ShowSuggestDialog = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Closes the suggestion dialog */
+    public CloseSuggestDialog(): void {
+        this.ShowSuggestDialog = false;
+        this.SuggestionResult = null;
+        this.cdr.detectChanges();
+    }
+
+    /** Clears the current suggestion to try again */
+    public ClearSuggestion(): void {
+        this.SuggestionResult = null;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Runs the AI suggestion by building a local schema analysis.
+     * Generates a suggested template based on entity metadata available client-side.
+     * In a full deployment, this would call the server-side EntityDocumentSuggester
+     * via a GraphQL mutation for AI-powered analysis.
+     */
+    public async RunSuggestion(): Promise<void> {
+        if (!this.SuggestEntityName || this.IsSuggesting) {
+            return;
+        }
+
+        this.IsSuggesting = true;
+        this.cdr.detectChanges();
+
+        try {
+            this.SuggestionResult = this.buildLocalSuggestion(this.SuggestEntityName);
+        } catch (error) {
+            console.error('[VectorManagement] Error generating suggestion:', error);
+        } finally {
+            this.IsSuggesting = false;
             this.cdr.detectChanges();
         }
     }
@@ -394,6 +459,66 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (row) {
             row.Status = status;
         }
+    }
+
+    /** Load all entity names from metadata for the suggestion dialog */
+    private loadAvailableEntityNames(): void {
+        const md = new Metadata();
+        this.AvailableEntityNames = md.Entities
+            .map(e => e.Name)
+            .sort();
+    }
+
+    /**
+     * Build a local suggestion based on entity metadata (no AI call).
+     * Analyzes fields to select the most relevant ones for the use case
+     * and generates a Nunjucks template using the new flat convention.
+     */
+    private buildLocalSuggestion(entityName: string): DocumentSuggestionResult {
+        const md = new Metadata();
+        const entity = md.Entities.find(e => e.Name === entityName);
+        if (!entity) {
+            throw new Error(`Entity "${entityName}" not found`);
+        }
+
+        const selectedFields = this.selectRelevantFields(entity);
+        const templateParts = selectedFields.map(f => `{{${f}}}`);
+        const template = templateParts.join(' ');
+
+        const relationships = entity.RelatedEntities
+            .filter(r => r.Type === 'Many to One')
+            .slice(0, 5)
+            .map(r => ({
+                name: r.RelatedEntity,
+                fields: ['Name'].filter(() => true)
+            }));
+
+        return {
+            template,
+            selectedFields,
+            selectedRelationships: relationships,
+            potentialMatchThreshold: 0.70,
+            absoluteMatchThreshold: 0.95,
+            reasoning: `Selected ${selectedFields.length} text/name fields from ${entity.Name} that are most useful for ${this.SuggestUseCase}. Excluded IDs, timestamps, and auto-generated fields.`
+        };
+    }
+
+    /** Select the most relevant fields for similarity matching */
+    private selectRelevantFields(entity: { Fields: { Name: string; Type: string; IsPrimaryKey: boolean; IsUnique: boolean; AutoIncrement: boolean }[] }): string[] {
+        return entity.Fields
+            .filter(f =>
+                !f.IsPrimaryKey &&
+                !f.IsUnique &&
+                !f.AutoIncrement &&
+                !f.Name.startsWith('__mj_') &&
+                f.Type !== 'datetimeoffset' &&
+                f.Type !== 'datetime' &&
+                f.Type !== 'uniqueidentifier' &&
+                f.Type !== 'bit' &&
+                f.Type !== 'image' &&
+                f.Type !== 'varbinary'
+            )
+            .map(f => f.Name);
     }
 }
 

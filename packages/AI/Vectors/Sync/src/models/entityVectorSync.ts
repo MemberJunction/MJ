@@ -86,6 +86,7 @@ export class EntityVectorSyncer extends VectorBase {
     const vectorUpserter = this.createVectorUpserter(
       entityDocument, templateContent, obj.vectorDB, delayTimeMS, params.UpsertBatchCount
     );
+<<<<<<< ours
 
     const erdUpserter = new Transform({objectMode: true, transform: (chunk: EmbeddingData, _encoding: BufferEncoding, callback) => {
       this.UpsertEntityRecordDocumentRecords(chunk, super.CurrentUser).then(() => callback(null)).catch(callback);
@@ -102,6 +103,24 @@ export class EntityVectorSyncer extends VectorBase {
     return { success: true, status: 'Complete', errorMessage: '' };
   }
 
+=======
+
+    const erdUpserter = new Transform({objectMode: true, transform: (chunk: EmbeddingData, _encoding: BufferEncoding, callback) => {
+      this.UpsertEntityRecordDocumentRecords(chunk, super.CurrentUser).then(() => callback(null)).catch(callback);
+    }});
+
+    this.startDataPaging(dataStream, params, md, entity, template, vectorIndexEntity, pageSize);
+
+    LogStatus('Starting pipeline');
+    await pipeline(dataStream, vectorCreator, vectorUpserter, erdUpserter, new PassThrough({ objectMode: true }));
+
+    const elapsedSeconds: number = (new Date().getTime() - startTime) / 1000;
+    LogStatus(`Finished vectorizing ${entityDocument.Entity} entity in ${elapsedSeconds} seconds (${(elapsedSeconds / 60).toFixed(1)} minutes)`);
+
+    return { success: true, status: 'Complete', errorMessage: '' };
+  }
+
+>>>>>>> theirs
   /**
    * Creates an AsyncBatchTransform that renders templates and generates embeddings
    * in the main thread. This replaces the worker_threads-based VectorizeTemplates
@@ -155,6 +174,7 @@ export class EntityVectorSyncer extends VectorBase {
       },
     });
   }
+<<<<<<< ours
 
   /**
    * Creates an AsyncBatchTransform that upserts vectors to the vector database
@@ -193,6 +213,46 @@ export class EntityVectorSyncer extends VectorBase {
           LogError('Unable to save records to vector database', undefined, response.message);
         }
 
+=======
+
+  /**
+   * Creates an AsyncBatchTransform that upserts vectors to the vector database
+   * in the main thread. This replaces the worker_threads-based UpsertVectors
+   * worker for the same ClassFactory reasons.
+   */
+  private createVectorUpserter(
+    entityDocument: MJEntityDocumentEntity,
+    templateContent: MJTemplateContentEntity,
+    vectorDB: VectorDBBase,
+    delayTimeMS: number,
+    batchSize?: number
+  ): AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData> {
+    const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+    return new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
+      batchSize: batchSize || 50,
+      concurrencyLimit: 2,
+      processBatch: async (batch: EmbeddingData[]): Promise<EmbeddingData[]> => {
+        const vectorRecords: VectorRecord[] = batch.map((embeddingItem: EmbeddingData) => {
+          const guid: string = crypto.randomUUID();
+          embeddingItem.VectorID = guid;
+          return {
+            id: guid,
+            values: embeddingItem.Vector,
+            metadata: {
+              RecordID: String(embeddingItem.__mj_compositeKey ?? ''),
+              Entity: entityDocument.Entity,
+              TemplateID: templateContent.ID,
+            }
+          };
+        });
+
+        const response: BaseResponse = await vectorDB.createRecords(vectorRecords);
+        if (!response.success) {
+          LogError('Unable to save records to vector database', undefined, response.message);
+        }
+
+>>>>>>> theirs
         await delay(delayTimeMS);
         return batch;
       },
@@ -205,11 +265,19 @@ export class EntityVectorSyncer extends VectorBase {
   private validateTemplateInput(template: MJTemplateEntityExtended, data: Record<string, unknown>): ValidationResult {
     const result = new ValidationResult();
     const params = template.Params;
+<<<<<<< ours
 
     if (!params) {
       result.Errors.push({ Source: '', Message: 'Params property not found on the template.', Value: '', Type: 'Failure' });
     }
 
+=======
+
+    if (!params) {
+      result.Errors.push({ Source: '', Message: 'Params property not found on the template.', Value: '', Type: 'Failure' });
+    }
+
+>>>>>>> theirs
     params?.forEach((p) => {
       if (p.IsRequired) {
         const val = data[p.Name];
@@ -560,7 +628,7 @@ export class EntityVectorSyncer extends VectorBase {
 
   protected BuildTemplateContent(entityFields: EntityField[]): string {
     return entityFields.map((field: EntityField) => {
-      return `{{Entity.${field.Name}}}`;
+      return `{{${field.Name}}}`;
     }).join(' ');
   }
 
@@ -584,6 +652,7 @@ export class EntityVectorSyncer extends VectorBase {
   protected async GetTemplateData(entity: EntityInfo, record: Record<string, unknown>, template: MJTemplateEntityExtended, relatedData: TemplateParamData[]): Promise<Record<string, unknown>> {
     const templateData: Record<string, unknown> = {};
     for (const param of template.Params) {
+<<<<<<< ours
       if (templateData[param.Name]) {
         continue;
       }
@@ -593,11 +662,27 @@ export class EntityVectorSyncer extends VectorBase {
           templateData[param.Name] = record;
           break;
         case 'Entity': {
+=======
+      switch (param.Type) {
+        case 'Record':
+          // NEW convention: main entity fields are TOP-LEVEL variables (no Entity. prefix).
+          // Spread record fields directly into the root context so templates use {{FieldName}}.
+          Object.assign(templateData, record);
+          break;
+        case 'Entity': {
+          if (templateData[param.Name]) {
+            continue;
+          }
+>>>>>>> theirs
           const paramData: TemplateParamData | undefined = relatedData.find((rd: TemplateParamData) => rd.ParamName === param.Name);
           if (!paramData) {
             LogError(`No related data found for param ${param.Name} in template ${template.ID}`);
             break;
           }
+<<<<<<< ours
+=======
+          // Related entities use their relationship name as prefix: {{RelationshipName.FieldName}}
+>>>>>>> theirs
           const pkValue = record[entity.FirstPrimaryKey.Name];
           templateData[param.Name] = paramData.Data.filter((rdfr: unknown) => {
             const typedRdfr = rdfr as Record<string, unknown>;

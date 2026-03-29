@@ -203,7 +203,7 @@ vi.mock('@memberjunction/templates', () => ({
             SetupNunjucks: vi.fn(),
             Templates: [{
                 ID: 'tmpl-1',
-                Content: [{ TemplateText: '{{Entity.Name}}' }],
+                Content: [{ TemplateText: '{{Name}}' }],
                 Params: [{ Name: 'Entity', Type: 'Record' }],
             }],
             RenderTemplate: vi.fn().mockResolvedValue({ Success: true, Output: 'rendered template text' }),

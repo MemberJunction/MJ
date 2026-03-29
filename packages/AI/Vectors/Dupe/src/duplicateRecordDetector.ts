@@ -314,12 +314,9 @@ export class DuplicateRecordDetector extends VectorBase {
 
         const templateTexts: string[] = [];
         for (const record of records) {
-            const data: Record<string, unknown> = {};
-            for (const param of template.Params) {
-                if (param.Type === 'Record') {
-                    data[param.Name] = record.GetAll();
-                }
-            }
+            // NEW convention: main entity fields are TOP-LEVEL variables (no Entity. prefix).
+            // Spread record fields directly into root context so templates use {{FieldName}}.
+            const data: Record<string, unknown> = { ...record.GetAll() };
 
             const result = await TemplateEngineServer.Instance.RenderTemplate(
                 template, templateContent, data, true
