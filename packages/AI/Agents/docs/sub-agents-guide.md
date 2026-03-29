@@ -330,23 +330,21 @@ Result message format:
 ### Related Agent Results
 
 1. **Output mapping**: Result mapped via `SubAgentOutputMapping` back to parent payload
-2. **Result injection**: JSON summary pushed to parent conversation:
-   ```json
-   {
-       "agentName": "Customer Support Bot",
-       "subAgentName": "Knowledge Base Search",
-       "success": true,
-       "payload": { "articles": [...] },
-       "errorMessage": null
-   }
+2. **Result injection**: Markdown summary pushed to parent conversation with expiration metadata:
+   ```markdown
+   ## Sub-agent: Knowledge Base Search ✓
+   **Status:** Completed
+   **Payload:**
+   { "articles": [...] }
    ```
+   The message carries `messageType: 'sub-agent-result'` metadata with standard expiration/compaction fields. By default, sub-agent results persist for 3 turns then are removed. The `messageExpirationOverride` on `ExecuteAgentParams` can override this.
 3. **Media outputs**: Collected and merged into parent's media accumulator
 4. **Chat handling**: If the sub-agent returns a `Chat` step (wants to talk to the user), the relationship's `ChatHandlingOption` determines behavior — it can remap the Chat to Success, Failed, or Retry
 
 ### Parent Continuation
 
 After a sub-agent completes, the parent receives a `Retry` step, causing it to re-enter its prompt loop. The parent's LLM sees:
-- The sub-agent result message in the conversation
+- The sub-agent result message in the conversation (persists for multiple turns via expiration metadata)
 - The updated payload (merged via upstream paths or output mapping)
 - Any media outputs collected from the sub-agent
 
