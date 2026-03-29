@@ -112,6 +112,25 @@ export interface GenerateManifestOptions {
      * @default false
      */
     scanDist?: boolean;
+
+    /**
+     * When set, generates a lazy-loading feature config file at this path.
+     * The config maps @RegisterClass keys to dynamic import() loaders based on
+     * each package's subpath exports in package.json.
+     *
+     * Only classes whose base class is in `lazyBaseClasses` are included.
+     * Only packages matching `excludePackages` are scanned for lazy classes
+     * (packages in the eager manifest don't need lazy loading).
+     */
+    lazyConfigPath?: string;
+
+    /**
+     * Base class names that indicate a class should be lazy-loaded.
+     * Only used when `lazyConfigPath` is set.
+     *
+     * @example ['BaseResourceComponent', 'BaseDashboard']
+     */
+    lazyBaseClasses?: string[];
 }
 
 /**
@@ -138,6 +157,25 @@ export interface GenerateManifestResult {
     AddedDependencies: Record<string, string>;
     /** Any errors encountered */
     errors: string[];
+    /** Whether the lazy config file content changed and was written to disk */
+    LazyConfigChanged?: boolean;
+}
+
+/**
+ * Represents a lazy-loadable chunk: a group of @RegisterClass keys
+ * that are loaded together via a single dynamic import().
+ */
+export interface LazyChunk {
+    /** The npm package name */
+    packageName: string;
+    /** The subpath export (e.g., './ai-dashboards.module') or '.' for whole-package chunks */
+    subpath: string;
+    /** The full import path for dynamic import (e.g., '@memberjunction/ng-dashboards/ai-dashboards.module') */
+    importPath: string;
+    /** The generated variable name for the loader function */
+    loaderVarName: string;
+    /** The @RegisterClass key strings that map to this chunk */
+    keys: string[];
 }
 
 // ============================================================================
@@ -1023,6 +1061,512 @@ function sortObjectKeys(obj: Record<string, string>): Record<string, string> {
 }
 
 // ============================================================================
+// Lazy Config Generation
+// ============================================================================
+
+/**
+ * Collects all class names reachable from a `.d.ts` entry point by following
+ * both `export` and `import` chains. This is needed for Angular NgModule `.d.ts`
+ * files which use `import * as iN from './component'` rather than `export * from`.
+ * When a subpath is dynamically imported, ALL transitively-imported modules load,
+ * so their `@RegisterClass` decorators execute as side effects.
+ */
+function collectReachableClassNames(entryDtsPath: string): Set<string> {
+    const classNames = new Set<string>();
+    const visited = new Set<string>();
+
+    function processFile(filePath: string): void {
+        if (visited.has(filePath)) return;
+        visited.add(filePath);
+
+        let content: string;
+        try {
+            content = fs.readFileSync(filePath, 'utf-8');
+        } catch {
+            return;
+        }
+
+        const fileDir = path.dirname(filePath);
+
+        for (const line of content.split('\n')) {
+            const trimmed = line.trim();
+
+            // export declare class ClassName ...
+            const declareClassMatch = trimmed.match(/^export\s+declare\s+class\s+(\w+)/);
+            if (declareClassMatch) {
+                classNames.add(declareClassMatch[1]);
+                continue;
+            }
+
+            // export { Foo, Bar } from '...' or export { Foo, Bar }
+            const namedExportMatch = trimmed.match(/^export\s*\{([^}]+)\}/);
+            if (namedExportMatch) {
+                const names = namedExportMatch[1].split(',');
+                for (const name of names) {
+                    const parts = name.trim().split(/\s+as\s+/);
+                    const exportedName = parts.length > 1 ? parts[1].trim() : parts[0].trim();
+                    if (exportedName && /^\w+$/.test(exportedName)) {
+                        classNames.add(exportedName);
+                    }
+                }
+                const fromMatch = trimmed.match(/from\s+['"]([^'"]+)['"]/);
+                if (fromMatch) {
+                    const resolvedPath = resolveDtsImport(fromMatch[1], fileDir);
+                    if (resolvedPath) processFile(resolvedPath);
+                }
+                continue;
+            }
+
+            // export * from './something'
+            const starExportMatch = trimmed.match(/^export\s+\*\s+from\s+['"]([^'"]+)['"]/);
+            if (starExportMatch) {
+                const resolvedPath = resolveDtsImport(starExportMatch[1], fileDir);
+                if (resolvedPath) processFile(resolvedPath);
+                continue;
+            }
+
+            // import * as iN from './relative/path' — follow for reachable classes
+            // Only follow relative imports (not external packages like @angular/core)
+            const importStarMatch = trimmed.match(/^import\s+\*\s+as\s+\w+\s+from\s+['"](\.[^'"]+)['"]/);
+            if (importStarMatch) {
+                const resolvedPath = resolveDtsImport(importStarMatch[1], fileDir);
+                if (resolvedPath) processFile(resolvedPath);
+                continue;
+            }
+
+            // import { X } from './relative/path'
+            const importNamedMatch = trimmed.match(/^import\s+\{[^}]+\}\s+from\s+['"](\.[^'"]+)['"]/);
+            if (importNamedMatch) {
+                const resolvedPath = resolveDtsImport(importNamedMatch[1], fileDir);
+                if (resolvedPath) processFile(resolvedPath);
+                continue;
+            }
+        }
+    }
+
+    processFile(entryDtsPath);
+    return classNames;
+}
+
+/**
+ * Resolves subpath exports for a package by reading its `package.json` `exports`
+ * field and collecting all class names reachable from each subpath's `.d.ts` entry.
+ *
+ * Uses `collectReachableClassNames` which follows both `export` and `import` chains,
+ * since Angular NgModule `.d.ts` files use `import * as` patterns rather than re-exports.
+ *
+ * @returns Map of subpath name (e.g., './ai-dashboards.module') to Set of reachable class names.
+ *          The main entry (`.`) is excluded from the map.
+ */
+export function resolveSubpathExports(packageDir: string): Map<string, Set<string>> {
+    const result = new Map<string, Set<string>>();
+
+    const pkgPath = path.join(packageDir, 'package.json');
+    if (!fs.existsSync(pkgPath)) return result;
+
+    let pkg: Record<string, unknown>;
+    try {
+        pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    } catch {
+        return result;
+    }
+
+    const exports = pkg.exports as Record<string, Record<string, string> | string> | undefined;
+    if (!exports || typeof exports !== 'object') return result;
+
+    for (const [subpath, entry] of Object.entries(exports)) {
+        // Skip the main entry point
+        if (subpath === '.') continue;
+
+        // Handle both { types, default } and plain string entries
+        const typesField = typeof entry === 'object' && entry !== null ? entry.types : undefined;
+        if (!typesField) continue;
+
+        const dtsPath = path.resolve(packageDir, typesField);
+        if (!fs.existsSync(dtsPath)) continue;
+
+        const reachableNames = collectReachableClassNames(dtsPath);
+        if (reachableNames.size > 0) {
+            result.set(subpath, reachableNames);
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Checks whether a package has subpath exports defined in its package.json.
+ */
+function hasSubpathExports(packageDir: string): boolean {
+    const pkgPath = path.join(packageDir, 'package.json');
+    if (!fs.existsSync(pkgPath)) return false;
+
+    try {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+        const exports = pkg.exports;
+        if (!exports || typeof exports !== 'object') return false;
+        // Has subpath exports if any key other than '.' exists
+        return Object.keys(exports).some(k => k !== '.');
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Scans packages excluded from the eager manifest for lazy-loadable classes,
+ * then groups them into lazy chunks by package subpath export.
+ */
+/**
+ * Resolves which package (if any) contains a given file path.
+ * Checks if the file path is under any package's resolved directory.
+ */
+function resolveHostPackage(filePath: string, depTree: Map<string, string>): string | undefined {
+    const absolutePath = path.resolve(filePath);
+    for (const [depName, depDir] of depTree.entries()) {
+        if (absolutePath.startsWith(depDir + path.sep) || absolutePath.startsWith(depDir + '/')) {
+            return depName;
+        }
+    }
+    return undefined;
+}
+
+function buildLazyChunks(
+    excludePackages: string[],
+    lazyBaseClasses: string[],
+    fullDepTree: Map<string, string>,
+    excludePatterns: string[],
+    scanDist: boolean,
+    log: (msg: string) => void,
+    hostPackageName?: string
+): { chunks: LazyChunk[]; errors: string[] } {
+    const errors: string[] = [];
+    const lazyBaseSet = new Set(lazyBaseClasses);
+
+    // Find packages excluded from the eager manifest — these are lazy candidates
+    const lazyPackages = new Map<string, string>();
+    for (const [depName, depDir] of fullDepTree.entries()) {
+        if (isPackageExcluded(depName, excludePackages)) {
+            // Never include the package that hosts the lazy config file (would cause self-import)
+            if (hostPackageName && depName === hostPackageName) {
+                log(`Lazy config: skipping ${depName} (hosts the lazy config file)`);
+                continue;
+            }
+            lazyPackages.set(depName, depDir);
+        }
+    }
+
+    log(`Lazy config: ${lazyPackages.size} excluded packages to scan`);
+
+    // Scan lazy packages for @RegisterClass decorators
+    const lazyClasses = scanPackagesForDecorators(lazyPackages, excludePatterns, scanDist, errors);
+    log(`Lazy config: ${lazyClasses.length} total @RegisterClass decorators found`);
+
+    // Filter to classes with lazy base classes and a key
+    const filtered = lazyClasses.filter(c =>
+        c.baseClassName && lazyBaseSet.has(c.baseClassName) && c.key
+    );
+    log(`Lazy config: ${filtered.length} classes match lazy base classes`);
+
+    // Resolve subpath exports for each package and group classes into chunks
+    return { chunks: groupClassesIntoChunks(filtered, lazyPackages, log), errors };
+}
+
+/**
+ * Scans a set of packages for @RegisterClass decorators.
+ */
+async function scanPackagesForDecoratorsAsync(
+    packages: Map<string, string>,
+    excludePatterns: string[],
+    scanDist: boolean,
+    errors: string[]
+): Promise<RegisteredClassInfo[]> {
+    const classes: RegisteredClassInfo[] = [];
+
+    for (const [depName, depDir] of packages.entries()) {
+        const { files, isCompiledJS } = await findScannableFiles(depDir, excludePatterns, scanDist);
+        for (const filePath of files) {
+            try {
+                const sourceText = fs.readFileSync(filePath, 'utf-8');
+                const found = isCompiledJS
+                    ? extractRegisterClassFromCompiledJS(filePath, sourceText, depName)
+                    : extractRegisterClassDecorators(filePath, sourceText, depName);
+                classes.push(...found);
+            } catch (err) {
+                errors.push(`Error reading ${filePath}: ${err}`);
+            }
+        }
+    }
+
+    return classes;
+}
+
+/**
+ * Synchronous version of scanPackagesForDecorators that calls the glob-based
+ * file finder. Since glob is async, we use a sync glob fallback for the lazy path.
+ */
+function scanPackagesForDecorators(
+    packages: Map<string, string>,
+    excludePatterns: string[],
+    scanDist: boolean,
+    errors: string[]
+): RegisteredClassInfo[] {
+    const classes: RegisteredClassInfo[] = [];
+
+    for (const [depName, depDir] of packages.entries()) {
+        const srcDir = path.join(depDir, 'src');
+        const distDir = path.join(depDir, 'dist');
+        let files: string[] = [];
+        let isCompiledJS = false;
+
+        if (fs.existsSync(srcDir)) {
+            files = findSourceFilesSync(srcDir, excludePatterns);
+        } else if (scanDist && fs.existsSync(distDir)) {
+            files = findDistFilesSync(distDir, excludePatterns);
+            isCompiledJS = true;
+        }
+
+        for (const filePath of files) {
+            try {
+                const sourceText = fs.readFileSync(filePath, 'utf-8');
+                const found = isCompiledJS
+                    ? extractRegisterClassFromCompiledJS(filePath, sourceText, depName)
+                    : extractRegisterClassDecorators(filePath, sourceText, depName);
+                classes.push(...found);
+            } catch (err) {
+                errors.push(`Error reading ${filePath}: ${err}`);
+            }
+        }
+    }
+
+    return classes;
+}
+
+/**
+ * Synchronous file finder for TypeScript source files.
+ */
+function findSourceFilesSync(srcDir: string, excludePatterns: string[]): string[] {
+    return glob.sync('**/*.ts', {
+        cwd: srcDir,
+        absolute: true,
+        ignore: [
+            '**/node_modules/**', '**/dist/**', '**/build/**', '**/.git/**',
+            '**/__tests__/**', '**/*.d.ts', '**/*.spec.ts', '**/*.test.ts',
+            ...excludePatterns.map(p => `**/${p}/**`)
+        ],
+        nodir: true
+    });
+}
+
+/**
+ * Synchronous file finder for compiled JavaScript files.
+ */
+function findDistFilesSync(distDir: string, excludePatterns: string[]): string[] {
+    return glob.sync('**/*.{js,mjs,cjs}', {
+        cwd: distDir,
+        absolute: true,
+        ignore: [
+            '**/node_modules/**', '**/.git/**', '**/*.d.ts', '**/*.d.ts.map',
+            '**/*.js.map', '**/*.min.js',
+            ...excludePatterns.map(p => `**/${p}/**`)
+        ],
+        nodir: true
+    });
+}
+
+/**
+ * Groups lazy classes into chunks based on their package's subpath exports.
+ * Packages with subpath exports get one chunk per subpath.
+ * Packages without subpath exports get one chunk for the whole package.
+ */
+function groupClassesIntoChunks(
+    lazyClasses: RegisteredClassInfo[],
+    lazyPackages: Map<string, string>,
+    log: (msg: string) => void
+): LazyChunk[] {
+    // Build subpath export maps for packages that have them
+    const packageSubpaths = new Map<string, Map<string, Set<string>>>();
+    for (const [depName, depDir] of lazyPackages.entries()) {
+        const subpaths = resolveSubpathExports(depDir);
+        if (subpaths.size > 0) {
+            packageSubpaths.set(depName, subpaths);
+        }
+    }
+
+    // Map: "packageName::subpath" -> LazyChunk
+    const chunks = new Map<string, LazyChunk>();
+    const keysSeen = new Map<string, string>(); // key -> chunkKey (collision detection)
+
+    for (const cls of lazyClasses) {
+        if (!cls.key) continue;
+
+        const subpaths = packageSubpaths.get(cls.packageName);
+
+        let chunkKey: string;
+        let importPath: string;
+        let subpath: string;
+
+        if (subpaths) {
+            // Package has subpath exports — find which one contains this class
+            const foundSubpath = findClassSubpath(cls.className, subpaths);
+            if (!foundSubpath) {
+                log(`  Warning: ${cls.key} (${cls.className}) not found in any subpath of ${cls.packageName}, skipping`);
+                continue;
+            }
+            subpath = foundSubpath;
+            const subpathClean = foundSubpath.replace(/^\.\//, '');
+            importPath = `${cls.packageName}/${subpathClean}`;
+            chunkKey = `${cls.packageName}::${foundSubpath}`;
+        } else {
+            // No subpath exports — whole package is one chunk
+            subpath = '.';
+            importPath = cls.packageName;
+            chunkKey = `${cls.packageName}::.`;
+        }
+
+        // Collision detection: same key in different chunks
+        const existingChunk = keysSeen.get(cls.key);
+        if (existingChunk && existingChunk !== chunkKey) {
+            throw new Error(
+                `Lazy config collision: key '${cls.key}' is exported from both ` +
+                `${existingChunk} and ${chunkKey}`
+            );
+        }
+        keysSeen.set(cls.key, chunkKey);
+
+        if (!chunks.has(chunkKey)) {
+            chunks.set(chunkKey, {
+                packageName: cls.packageName,
+                subpath,
+                importPath,
+                loaderVarName: buildLoaderVarName(cls.packageName, subpath),
+                keys: []
+            });
+        }
+
+        chunks.get(chunkKey)!.keys.push(cls.key);
+    }
+
+    // Sort keys within each chunk for deterministic output
+    for (const chunk of chunks.values()) {
+        chunk.keys.sort();
+    }
+
+    return Array.from(chunks.values()).sort((a, b) => a.importPath.localeCompare(b.importPath));
+}
+
+/**
+ * Finds which subpath export contains a given class name.
+ */
+function findClassSubpath(className: string, subpaths: Map<string, Set<string>>): string | undefined {
+    for (const [subpath, exportedNames] of subpaths.entries()) {
+        if (exportedNames.has(className)) return subpath;
+    }
+    return undefined;
+}
+
+/**
+ * Builds a deterministic loader variable name from a package name and subpath.
+ *
+ * Examples:
+ *   ('@memberjunction/ng-dashboards', './ai-dashboards.module') → 'loadAiDashboardsModule'
+ *   ('@memberjunction/ng-explorer-settings', '.')               → 'loadNgExplorerSettings'
+ */
+function buildLoaderVarName(packageName: string, subpath: string): string {
+    if (subpath === '.') {
+        // Whole-package chunk: derive from package name
+        const parts = sanitizePackageName(packageName).split('_').filter(Boolean);
+        const pascalParts = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1));
+        return `load${pascalParts.join('')}`;
+    }
+
+    // Subpath chunk: derive from subpath name
+    const clean = subpath
+        .replace(/^\.\//, '')
+        .replace(/\.module$/, '-module')
+        .replace(/\.[^.]+$/, ''); // strip file extensions
+
+    const parts = clean.split(/[-./]/).filter(Boolean);
+    const pascalParts = parts.map(p => p.charAt(0).toUpperCase() + p.slice(1));
+    return `load${pascalParts.join('')}`;
+}
+
+/**
+ * Generates the content of the lazy feature config TypeScript file.
+ */
+function generateLazyConfigContent(chunks: LazyChunk[]): string {
+    const lines: string[] = [
+        '/**',
+        ' * AUTO-GENERATED FILE — DO NOT EDIT',
+        ' * Generated by: mj codegen manifest --lazy-config',
+        ' * Regenerate with: npm run mj:manifest:explorer',
+        ' *',
+        ' * Maps @RegisterClass keys to their lazy-loading chunks.',
+        ' * When ClassFactory cannot find a resource type, LazyModuleRegistry',
+        ' * uses this config to dynamically import the chunk containing it.',
+        ' */',
+        '',
+        '/** Helper to create a loader that all resource types in a feature share. */',
+        'function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {',
+        '  return () => importFn().then(() => {});',
+        '}',
+        ''
+    ];
+
+    // Emit one loader variable per chunk
+    for (const chunk of chunks) {
+        lines.push(`// --- ${chunk.packageName} → ${chunk.subpath} (${chunk.keys.length} keys) ---`);
+        lines.push(`const ${chunk.loaderVarName} = featureLoader(() => import('${chunk.importPath}'));`);
+        lines.push('');
+    }
+
+    // Emit the config record
+    lines.push('/**');
+    lines.push(' * Complete mapping of resource type strings to lazy-loading functions.');
+    lines.push(' * Covers both BaseResourceComponent and BaseDashboard registrations.');
+    lines.push(' */');
+    lines.push('export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {');
+
+    for (const chunk of chunks) {
+        lines.push(`  // ${chunk.packageName} → ${chunk.subpath}`);
+        for (const key of chunk.keys) {
+            lines.push(`  '${key}': ${chunk.loaderVarName},`);
+        }
+        lines.push('');
+    }
+
+    lines.push('};');
+    lines.push('');
+
+    // Count export
+    const totalKeys = chunks.reduce((sum, c) => sum + c.keys.length, 0);
+    lines.push(`export const LAZY_FEATURE_CONFIG_COUNT = ${totalKeys};`);
+    lines.push('');
+
+    return lines.join('\n');
+}
+
+/**
+ * Writes content to a file only if it has changed, preserving mtime for build caches.
+ * Returns true if the file was written.
+ */
+function writeIfChanged(filePath: string, content: string): boolean {
+    const absolutePath = path.resolve(filePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+
+    let existing = '';
+    try {
+        existing = fs.readFileSync(absolutePath, 'utf-8');
+    } catch {
+        // File doesn't exist yet
+    }
+
+    if (existing === content) return false;
+
+    fs.writeFileSync(absolutePath, content, 'utf-8');
+    return true;
+}
+
+// ============================================================================
 // Main Entry Point
 // ============================================================================
 
@@ -1060,7 +1604,9 @@ export async function generateClassRegistrationsManifest(
         excludePatterns = [],
         excludePackages = [],
         syncDependencies = true,
-        scanDist = false
+        scanDist = false,
+        lazyConfigPath,
+        lazyBaseClasses
     } = options;
 
     const errors: string[] = [];
@@ -1077,7 +1623,7 @@ export async function generateClassRegistrationsManifest(
     const appPkg = readPackageJson(absoluteAppDir);
     if (!appPkg) {
         errors.push(`No package.json found in ${absoluteAppDir}`);
-        return { success: false, outputPath, ManifestChanged: false, classes: [], packages: [], totalDepsWalked: 0, AddedDependencies: {}, errors };
+        return { success: false, outputPath, ManifestChanged: false, classes: [], packages: [], totalDepsWalked: 0, AddedDependencies: {}, errors, LazyConfigChanged: false };
     }
 
     log(`Building manifest for: ${appPkg.name}`);
@@ -1166,10 +1712,54 @@ export async function generateClassRegistrationsManifest(
         }
     }
 
+    // Lazy config generation
+    let lazyConfigChanged = false;
+    if (lazyConfigPath && lazyBaseClasses && lazyBaseClasses.length > 0 && excludePackages.length > 0) {
+        log('');
+        log('--- Lazy Config Generation ---');
+        log(`Lazy base classes: ${lazyBaseClasses.join(', ')}`);
+
+        try {
+            // Walk full dep tree (no excludes) to find packages excluded from the eager manifest
+            const fullDepTree = walkDependencyTree(absoluteAppDir, log, []);
+
+            // Detect the package that hosts the lazy config file to prevent self-imports
+            const hostPackageName = resolveHostPackage(lazyConfigPath, fullDepTree);
+            if (hostPackageName) {
+                log(`Lazy config host package: ${hostPackageName} (will be excluded from scan)`);
+            }
+
+            const { chunks, errors: lazyErrors } = buildLazyChunks(
+                excludePackages, lazyBaseClasses, fullDepTree,
+                excludePatterns, scanDist, log, hostPackageName
+            );
+            errors.push(...lazyErrors);
+
+            if (chunks.length > 0) {
+                const totalKeys = chunks.reduce((sum, c) => sum + c.keys.length, 0);
+                log(`Lazy config: ${totalKeys} keys across ${chunks.length} chunks`);
+
+                const lazyContent = generateLazyConfigContent(chunks);
+                lazyConfigChanged = writeIfChanged(lazyConfigPath, lazyContent);
+
+                if (lazyConfigChanged) {
+                    log(`Wrote lazy config to: ${path.resolve(lazyConfigPath)}`);
+                } else {
+                    log(`Lazy config unchanged, skipped write`);
+                }
+            } else {
+                log('Lazy config: no lazy-loadable classes found');
+            }
+        } catch (err) {
+            errors.push(`Error generating lazy config: ${err}`);
+        }
+    }
+
     return {
         success: errors.length === 0,
         outputPath: absoluteOutputPath,
         ManifestChanged: manifestChanged,
+        LazyConfigChanged: lazyConfigChanged,
         classes: verifiedClasses,
         packages: uniquePackages,
         totalDepsWalked: depTree.size,
