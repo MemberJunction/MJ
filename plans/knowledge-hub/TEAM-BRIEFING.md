@@ -24,6 +24,18 @@ MemberJunction has strong individual capabilities for vector search, duplicate d
 
 **Knowledge Agent** — A Sage sub-agent with deep Knowledge Hub integration. It has server tools (create entity documents, trigger vectorization, execute searches, run duplicate detection) and client tools (navigate to dashboards, open configuration panels, apply filters). A user can say "set up duplicate detection for our Members entity" and the agent will analyze the schema, suggest a template, create the entity document, trigger vectorization, and navigate the user to the results — all through natural conversation.
 
+## UX Mockups
+
+Interactive HTML prototypes are available for each major surface. Open the [mockup index](mockups/index.html) to browse all options, or jump directly to the selected designs:
+
+- **[Search Dashboard](mockups/search-option-a.html)** — Google-style clean layout with centered search bar, grouped results, and faceted sidebar filters. This is the default tab and the hero experience.
+- **[Global Search (Cmd+K)](mockups/search-option-b.html)** — Command palette / Spotlight overlay for MJ Explorer's global search, with instant grouped results and keyboard navigation.
+- **[Floating Chat Overlay](mockups/chat-overlay-option-b.html)** — Persistent bottom-right bubble that expands to a chat panel. Stays visible across navigation, auto-minimizes in full Conversations workspace.
+- **[Vector Management](mockups/vectors-option-a.html)** — Index-centric view with the shared index as hero and entity documents as children. Alternates with an [operations center view](mockups/vectors-option-c.html) for monitoring.
+- **[Configuration](mockups/config-option-b.html)** — Settings page with left nav and collapsible sections covering Pipeline, Vector DB, Full-Text Indexes, Embedding Models, and Thresholds.
+- **[Duplicate Detection](mockups/dupes-option-b.html)** — Enhanced Kanban with inline record previews, entity filtering, and paging for large sets. Click-through to side-by-side merge panel.
+- **[Search Results Detail](mockups/results-detail-option-b.html)** — Full page with breadcrumb, score breakdown, and related items sidebar. Supports side-by-side mode toggle (blended with [panel preview](mockups/results-detail-option-a.html)).
+
 ## Why This Matters
 
 This isn't incremental improvement — it's a new category of capability for MemberJunction. The combination of structured data search, semantic vector search, automated content tagging, and AI-guided configuration means organizations can make their entire data landscape searchable and interconnected without manual effort. The client-side tool architecture opens the door for agents that don't just answer questions but actively help users accomplish complex tasks by driving the UI. And because everything is built on MJ's metadata-driven foundation, it works across any entity, any content source, and any deployment.
