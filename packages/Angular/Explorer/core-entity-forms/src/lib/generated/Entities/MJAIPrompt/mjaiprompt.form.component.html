@@ -120,7 +120,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AssistantPrefill"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -283,6 +283,14 @@
             [ShowLabel]="true"
             FieldName="EffortLevel"
             Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RequireSpecificModels"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
