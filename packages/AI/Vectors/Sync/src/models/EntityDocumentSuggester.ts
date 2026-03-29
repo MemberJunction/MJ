@@ -124,7 +124,6 @@ export class EntityDocumentSuggester {
                 const sampleFields = relatedEntityInfo
                     ? relatedEntityInfo.Fields
                         .filter(f => !f.IsPrimaryKey && f.Type !== 'datetimeoffset')
-                        .slice(0, 10)
                         .map(f => f.Name)
                     : [];
                 return {

@@ -39,33 +39,37 @@ vi.mock('@memberjunction/core', () => {
   };
 });
 
-vi.mock('@memberjunction/global', () => ({
-  RegisterClass: vi.fn(() => (target: Function) => target),
-  MJGlobal: {
-    Instance: {
-      ClassFactory: {
-        CreateInstance: vi.fn().mockReturnValue({
-          ChatCompletion: vi.fn().mockResolvedValue({
-            data: {
-              choices: [
-                {
-                  message: {
-                    content: JSON.stringify({
-                      title: 'Test Title',
-                      description: 'Test Description',
-                      keywords: ['tag1', 'tag2'],
-                      isValidContent: true,
-                    }),
+vi.mock('@memberjunction/global', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/global')>();
+  return {
+    ...actual,
+    RegisterClass: vi.fn(() => (target: Function) => target),
+    MJGlobal: {
+      Instance: {
+        ClassFactory: {
+          CreateInstance: vi.fn().mockReturnValue({
+            ChatCompletion: vi.fn().mockResolvedValue({
+              data: {
+                choices: [
+                  {
+                    message: {
+                      content: JSON.stringify({
+                        title: 'Test Title',
+                        description: 'Test Description',
+                        keywords: ['tag1', 'tag2'],
+                        isValidContent: true,
+                      }),
+                    },
                   },
-                },
-              ],
-            },
+                ],
+              },
+            }),
           }),
-        }),
+        },
       },
     },
-  },
-}));
+  };
+});
 
 vi.mock('@memberjunction/ai', () => ({
   BaseLLM: vi.fn(),

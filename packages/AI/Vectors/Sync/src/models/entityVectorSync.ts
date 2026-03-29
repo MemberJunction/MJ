@@ -114,45 +114,11 @@ export class EntityVectorSyncer extends VectorBase {
     delayTimeMS: number,
     batchSize?: number
   ): AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData> {
-    const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
     return new AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData>({
       batchSize: batchSize || 50,
       concurrencyLimit: 2,
-      processBatch: async (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> => {
-        TemplateEngineServer.Instance.SetupNunjucks();
-        const processedTexts: string[] = [];
-
-        for (const entityData of batch) {
-          const validationResult = this.validateTemplateInput(template, entityData);
-          if (!validationResult.Success) {
-            LogError(`Validation error for record`, undefined, validationResult.Errors.map(e => e.Message).join('\n'));
-            continue;
-          }
-
-          const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, templateContent, entityData, true);
-          if (result.Success) {
-            processedTexts.push(result.Output);
-          } else {
-            LogError(`Error rendering template`, undefined, result.Message);
-          }
-        }
-
-        const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: processedTexts, model: null });
-        await delay(delayTimeMS);
-
-        return embeddings.vectors.map((vector: number[], index: number) => ({
-          ID: index,
-          Vector: vector,
-          EntityData: batch[index],
-          __mj_recordID: String(batch[index].__mj_recordID),
-          __mj_compositeKey: String(batch[index].__mj_compositeKey ?? ''),
-          EntityDocument: batch[index].__mj_entityDocument as Record<string, unknown>,
-          VectorID: String(batch[index].VectorID ?? ''),
-          VectorIndexID: String(batch[index].VectorIndexID ?? ''),
-          TemplateContent: templateContent.TemplateText,
-        }));
-      },
+      processBatch: (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> =>
+        this.renderAndEmbedBatch(batch, template, templateContent, embedding, delayTimeMS),
     });
   }
 
@@ -168,35 +134,89 @@ export class EntityVectorSyncer extends VectorBase {
     delayTimeMS: number,
     batchSize?: number
   ): AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData> {
-    const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
     return new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
       batchSize: batchSize || 50,
       concurrencyLimit: 2,
-      processBatch: async (batch: EmbeddingData[]): Promise<EmbeddingData[]> => {
-        const vectorRecords: VectorRecord[] = batch.map((embeddingItem: EmbeddingData) => {
-          const guid: string = crypto.randomUUID();
-          embeddingItem.VectorID = guid;
-          return {
-            id: guid,
-            values: embeddingItem.Vector,
-            metadata: {
-              RecordID: String(embeddingItem.__mj_compositeKey ?? ''),
-              Entity: entityDocument.Entity,
-              TemplateID: templateContent.ID,
-            }
-          };
-        });
-
-        const response: BaseResponse = await vectorDB.createRecords(vectorRecords);
-        if (!response.success) {
-          LogError('Unable to save records to vector database', undefined, response.message);
-        }
-
-        await delay(delayTimeMS);
-        return batch;
-      },
+      processBatch: (batch: EmbeddingData[]): Promise<EmbeddingData[]> =>
+        this.upsertBatchToVectorDB(batch, entityDocument, templateContent, vectorDB, delayTimeMS),
     });
+  }
+
+  /**
+   * Renders templates for a batch of entity records and generates embeddings for the rendered text.
+   */
+  private async renderAndEmbedBatch(
+    batch: Record<string, unknown>[],
+    template: MJTemplateEntityExtended,
+    templateContent: MJTemplateContentEntity,
+    embedding: BaseEmbeddings,
+    delayTimeMS: number
+  ): Promise<EmbeddingData[]> {
+    TemplateEngineServer.Instance.SetupNunjucks();
+    const processedTexts: string[] = [];
+
+    for (const entityData of batch) {
+      const validationResult = this.validateTemplateInput(template, entityData);
+      if (!validationResult.Success) {
+        LogError(`Validation error for record`, undefined, validationResult.Errors.map(e => e.Message).join('\n'));
+        continue;
+      }
+
+      const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, templateContent, entityData, true);
+      if (result.Success) {
+        processedTexts.push(result.Output);
+      } else {
+        LogError(`Error rendering template`, undefined, result.Message);
+      }
+    }
+
+    const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: processedTexts, model: null });
+    await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
+
+    return embeddings.vectors.map((vector: number[], index: number) => ({
+      ID: index,
+      Vector: vector,
+      EntityData: batch[index],
+      __mj_recordID: String(batch[index].__mj_recordID),
+      __mj_compositeKey: String(batch[index].__mj_compositeKey ?? ''),
+      EntityDocument: batch[index].__mj_entityDocument as Record<string, unknown>,
+      VectorID: String(batch[index].VectorID ?? ''),
+      VectorIndexID: String(batch[index].VectorIndexID ?? ''),
+      TemplateContent: templateContent.TemplateText,
+    }));
+  }
+
+  /**
+   * Upserts a batch of embedding data as vector records into the vector database.
+   */
+  private async upsertBatchToVectorDB(
+    batch: EmbeddingData[],
+    entityDocument: MJEntityDocumentEntity,
+    templateContent: MJTemplateContentEntity,
+    vectorDB: VectorDBBase,
+    delayTimeMS: number
+  ): Promise<EmbeddingData[]> {
+    const vectorRecords: VectorRecord[] = batch.map((embeddingItem: EmbeddingData) => {
+      const guid: string = crypto.randomUUID();
+      embeddingItem.VectorID = guid;
+      return {
+        id: guid,
+        values: embeddingItem.Vector,
+        metadata: {
+          RecordID: String(embeddingItem.__mj_compositeKey ?? ''),
+          Entity: entityDocument.Entity,
+          TemplateID: templateContent.ID,
+        }
+      };
+    });
+
+    const response: BaseResponse = await vectorDB.createRecords(vectorRecords);
+    if (!response.success) {
+      LogError('Unable to save records to vector database', undefined, response.message);
+    }
+
+    await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
+    return batch;
   }
 
   /**

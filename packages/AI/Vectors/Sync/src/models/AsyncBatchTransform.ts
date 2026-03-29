@@ -39,6 +39,7 @@ export class AsyncBatchTransform<
   private _buffer: TRecord[] = [];
   private _queue: Array<() => Promise<void>> = [];
   private _running = 0;
+  private _drainResolve: (() => void) | null = null;
 
   constructor(options: AsyncBatchTransformOptions<TRecord, TContext, TResult>) {
     super({ objectMode: true });
@@ -56,6 +57,10 @@ export class AsyncBatchTransform<
         task().finally(() => {
           this._running--;
           this._next();
+          if (this._running === 0 && this._queue.length === 0 && this._drainResolve) {
+            this._drainResolve();
+            this._drainResolve = null;
+          }
         });
       }
     }
@@ -64,6 +69,16 @@ export class AsyncBatchTransform<
   private _enqueue(task: () => Promise<void>): void {
     this._queue.push(task);
     this._next();
+  }
+
+  /** Returns a Promise that resolves when all queued tasks have completed */
+  private _waitForDrain(): Promise<void> {
+    if (this._running === 0 && this._queue.length === 0) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      this._drainResolve = resolve;
+    });
   }
 
   override _transform(chunk: TRecord, _encoding: BufferEncoding, callback: TransformCallback): void {
@@ -81,15 +96,7 @@ export class AsyncBatchTransform<
       this._enqueue(() => this._processBatchAsync(remaining));
     }
 
-    // Wait for all queued tasks to finish
-    const waitForDrain = (): void => {
-      if (this._running === 0 && this._queue.length === 0) {
-        callback();
-      } else {
-        setTimeout(waitForDrain, 50);
-      }
-    };
-    waitForDrain();
+    this._waitForDrain().then(() => callback()).catch(callback);
   }
 
   private async _processBatchAsync(batch: TRecord[]): Promise<void> {

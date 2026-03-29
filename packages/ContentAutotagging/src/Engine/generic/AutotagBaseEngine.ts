@@ -1,5 +1,5 @@
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core'
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global'
+import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global'
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity,
     MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity,
@@ -23,14 +23,13 @@ import { TextChunker, ChunkTextParams } from '@memberjunction/ai-vectors'
  * Core engine for content autotagging. Uses AIEngine via composition (not inheritance)
  * to access AI model configuration, then delegates to LLM for text analysis and tagging.
  */
-export class AutotagBaseEngine {
-    private static _instance: AutotagBaseEngine | null = null;
+export class AutotagBaseEngine extends BaseSingleton<AutotagBaseEngine> {
+    public constructor() {
+        super();
+    }
 
     public static get Instance(): AutotagBaseEngine {
-        if (!AutotagBaseEngine._instance) {
-            AutotagBaseEngine._instance = new AutotagBaseEngine();
-        }
-        return AutotagBaseEngine._instance;
+        return AutotagBaseEngine.getInstance<AutotagBaseEngine>();
     }
 
     /**

@@ -10,7 +10,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import {
     ResourceData,
     MJDuplicateRunEntity,
@@ -372,7 +372,10 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
     }
 
-    /** Update the ApprovalStatus of all matches within a group and re-sort */
+    /** Update the ApprovalStatus of all matches within a group and re-sort.
+     *  Since this.Matches already contains entity_object instances, we update and save them directly
+     *  instead of loading each one individually from the database.
+     */
     private async updateGroupApprovalStatus(
         group: DuplicateGroup,
         status: 'Approved' | 'Rejected'
@@ -381,23 +384,13 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
             for (const match of group.Matches) {
-                const entity = await md.GetEntityObject<MJDuplicateRunDetailMatchEntity>(
-                    'MJ: Duplicate Run Detail Matches'
-                );
-                const loaded = await entity.Load(match.ID);
-                if (loaded) {
-                    entity.ApprovalStatus = status;
-                    await entity.Save();
-                }
+                match.ApprovalStatus = status;
+                await match.Save();
             }
 
             // Update the local group state
             group.ApprovalStatus = status;
-            for (const match of group.Matches) {
-                match.ApprovalStatus = status;
-            }
             this.applyFilters();
         } catch (error) {
             console.error(`Error updating match approval status to ${status}:`, error);
