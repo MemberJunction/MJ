@@ -180,29 +180,23 @@
       }
     </div>
 
-    <!-- Message Footer: ratings for all completed AI messages + delete for conversation owner -->
-    @if (!isEditing && (
-      (isAIMessage && messageStatus === 'Complete') ||
-      isConversationOwner
-    )) {
+    <!-- Message Footer: only rendered on the last message.
+         Non-last messages have no footer — pin/delete/rating live in the gear panel. -->
+    @if (!isEditing && isLastMessage && (isConversationOwner || (isAIMessage && messageStatus === 'Complete'))) {
       <div class="message-footer">
         @if (isConversationOwner) {
-          <div class="inline-actions">
-            <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete this message and all messages below it">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
+          <button class="action-bar-btn danger inline-delete" (click)="onDeleteClick()" title="Delete this message and all messages below it">
+            <i class="fas fa-trash"></i>
+          </button>
         }
         @if (isAIMessage && messageStatus === 'Complete') {
           <div class="ai-message-actions">
-            @if (isLastMessage) {
-              <!-- Thumbs visible inline only on the latest AI message, left of pin -->
-              <mj-conversation-message-rating
-                [conversationDetailId]="message.ID"
-                [currentUser]="currentUser"
-                [ratingsData]="ratings">
-              </mj-conversation-message-rating>
-            }
+            <!-- Thumbs visible inline only on the latest AI message, left of pin -->
+            <mj-conversation-message-rating
+              [conversationDetailId]="message.ID"
+              [currentUser]="currentUser"
+              [ratingsData]="ratings">
+            </mj-conversation-message-rating>
             <button
               class="action-bar-btn pin-btn"
               [class.pinned]="message.IsPinned"
@@ -278,18 +272,40 @@
             </div>
           }
 
-          <!-- Rating in gear panel for non-last AI messages -->
-          @if (!isLastMessage && messageStatus === 'Complete') {
-            <div class="agent-panel-ratings">
-              <div class="agent-details-header">
-                <i class="fas fa-thumbs-up"></i>
-                <span>Rate this response</span>
-              </div>
-              <mj-conversation-message-rating
-                [conversationDetailId]="message.ID"
-                [currentUser]="currentUser"
-                [ratingsData]="ratings">
-              </mj-conversation-message-rating>
+          <!-- Delete + Rating + Pin in gear panel for non-last messages — mirrors last-message footer layout -->
+          @if (!isLastMessage) {
+            <div class="agent-panel-actions">
+              @if (isConversationOwner) {
+                <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete this message and all messages below it">
+                  <i class="fas fa-trash"></i>
+                </button>
+              }
+              @if (messageStatus === 'Complete') {
+                <div class="ai-message-actions">
+                  <mj-conversation-message-rating
+                    [conversationDetailId]="message.ID"
+                    [currentUser]="currentUser"
+                    [ratingsData]="ratings">
+                  </mj-conversation-message-rating>
+                  <button
+                    class="action-bar-btn pin-btn"
+                    [class.pinned]="message.IsPinned"
+                    (click)="PinMessage()"
+                    [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
+                    type="button">
+                    <i class="fas fa-thumbtack"></i>
+                  </button>
+                </div>
+              } @else {
+                <button
+                  class="action-bar-btn pin-btn"
+                  [class.pinned]="message.IsPinned"
+                  (click)="PinMessage()"
+                  [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
+                  type="button">
+                  <i class="fas fa-thumbtack"></i>
+                </button>
+              }
             </div>
           }
 
