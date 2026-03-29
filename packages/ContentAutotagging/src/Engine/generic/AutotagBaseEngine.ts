@@ -1,5 +1,5 @@
-import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core'
-import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global'
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core'
+import { MJGlobal, UUIDsEqual, RegisterClass } from '@memberjunction/global'
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity,
     MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity,
@@ -20,16 +20,64 @@ import { AIEngine } from '@memberjunction/aiengine'
 import { TextChunker, ChunkTextParams } from '@memberjunction/ai-vectors'
 
 /**
- * Core engine for content autotagging. Uses AIEngine via composition (not inheritance)
- * to access AI model configuration, then delegates to LLM for text analysis and tagging.
+ * Core engine for content autotagging. Extends BaseEngine to cache content metadata
+ * (types, source types, file types, attributes) at startup. Uses AIEngine via composition
+ * for AI model access, then delegates to LLM for text analysis and tagging.
  */
-export class AutotagBaseEngine extends BaseSingleton<AutotagBaseEngine> {
-    public constructor() {
-        super();
+@RegisterClass(BaseEngine, 'AutotagBaseEngine')
+export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
+    public static get Instance(): AutotagBaseEngine {
+        return super.getInstance<AutotagBaseEngine>();
     }
 
-    public static get Instance(): AutotagBaseEngine {
-        return AutotagBaseEngine.getInstance<AutotagBaseEngine>();
+    // Cached metadata — loaded by BaseEngine.Config() via property configs
+    private _ContentTypes: MJContentTypeEntity[] = [];
+    private _ContentSourceTypes: MJContentSourceTypeEntity[] = [];
+    private _ContentFileTypes: MJContentFileTypeEntity[] = [];
+    private _ContentTypeAttributes: MJContentTypeAttributeEntity[] = [];
+    private _ContentSourceTypeParams: MJContentSourceTypeParamEntity[] = [];
+
+    /** All content types, cached at startup */
+    public get ContentTypes(): MJContentTypeEntity[] { return this._ContentTypes; }
+    /** All content source types, cached at startup */
+    public get ContentSourceTypes(): MJContentSourceTypeEntity[] { return this._ContentSourceTypes; }
+    /** All content file types, cached at startup */
+    public get ContentFileTypes(): MJContentFileTypeEntity[] { return this._ContentFileTypes; }
+    /** All content type attributes, cached at startup */
+    public get ContentTypeAttributes(): MJContentTypeAttributeEntity[] { return this._ContentTypeAttributes; }
+    /** All content source type params, cached at startup */
+    public get ContentSourceTypeParams(): MJContentSourceTypeParamEntity[] { return this._ContentSourceTypeParams; }
+
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<unknown> {
+        const configs: Partial<BaseEnginePropertyConfig>[] = [
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content Types',
+                PropertyName: '_ContentTypes',
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content Source Types',
+                PropertyName: '_ContentSourceTypes',
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content File Types',
+                PropertyName: '_ContentFileTypes',
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content Type Attributes',
+                PropertyName: '_ContentTypeAttributes',
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content Source Type Params',
+                PropertyName: '_ContentSourceTypeParams',
+            },
+        ];
+        await this.Load(configs, provider, forceRefresh, contextUser);
+        return this;
     }
 
     /**
@@ -70,7 +118,7 @@ export class AutotagBaseEngine extends BaseSingleton<AutotagBaseEngine> {
         processingParams.contentFileTypeID = contentItem.ContentFileTypeID;
         processingParams.contentTypeID = contentItem.ContentTypeID;
 
-        const { modelID, minTags, maxTags } = await this.getContentItemParams(processingParams.contentTypeID, contextUser);
+        const { modelID, minTags, maxTags } = this.GetContentItemParams(processingParams.contentTypeID);
         processingParams.modelID = modelID;
         processingParams.minTags = minTags;
         processingParams.maxTags = maxTags;
@@ -145,9 +193,9 @@ export class AutotagBaseEngine extends BaseSingleton<AutotagBaseEngine> {
     }
 
     public async getLLMPrompts(params: ContentItemProcessParams, chunk: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<{ systemPrompt: string; userPrompt: string }> {
-        const contentType = await this.getContentTypeName(params.contentTypeID, contextUser);
-        const contentSourceType = await this.getContentSourceTypeName(params.contentSourceTypeID, contextUser);
-        const additionalContentTypePrompts = await this.getAdditionalContentTypePrompt(params.contentTypeID, contextUser);
+        const contentType = this.GetContentTypeName(params.contentTypeID);
+        const contentSourceType = this.GetContentSourceTypeName(params.contentSourceTypeID);
+        const additionalContentTypePrompts = this.GetAdditionalContentTypePrompt(params.contentTypeID);
 
         const systemPrompt = `You are a highly skilled text analysis assistant. You have decades of experience and pride yourself on your attention to detail and ability to capture both accurate information, as well as tone and subtext.
         Your task is to accurately extract key information from a provided piece of text based on a series of prompts. You are provided with text that should be a ${contentType}, that has been extracted from a ${contentSourceType}.
@@ -315,19 +363,12 @@ export class AutotagBaseEngine extends BaseSingleton<AutotagBaseEngine> {
         throw new Error(`No content sources found for content source type with ID '${contentSourceTypeID}'`);
     }
 
-    public async setSubclassContentSourceType(subclass: string, contextUser: UserInfo): Promise<string> {
-        const rv = new RunView();
-        const results = await rv.RunView<MJContentSourceTypeEntity>({
-            EntityName: 'MJ: Content Source Types',
-            ExtraFilter: `Name='${subclass}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (results.Success && results.Results.length) {
-            return results.Results[0].ID;
+    public SetSubclassContentSourceType(subclass: string): string {
+        const sourceType = this._ContentSourceTypes.find(st => st.Name === subclass);
+        if (!sourceType) {
+            throw new Error(`Content Source Type with name '${subclass}' not found in cached metadata`);
         }
-
-        throw new Error(`Subclass with name ${subclass} not found`);
+        return sourceType.ID;
     }
 
     public async getContentSourceParams(contentSource: MJContentSourceEntity, contextUser: UserInfo): Promise<Map<string, ContentSourceTypeParamValue>> {
@@ -342,7 +383,7 @@ export class AutotagBaseEngine extends BaseSingleton<AutotagBaseEngine> {
 
         if (results.Success && results.Results.length) {
             for (const contentSourceParam of results.Results) {
-                const params: ContentSourceTypeParams = await this.getDefaultContentSourceTypeParams(contentSourceParam.ContentSourceTypeParamID, contextUser);
+                const params: ContentSourceTypeParams = this.GetDefaultContentSourceTypeParams(contentSourceParam.ContentSourceTypeParamID);
                 params.contentSourceID = contentSource.ID;
 
                 if (contentSourceParam.Value) {
@@ -357,24 +398,17 @@ export class AutotagBaseEngine extends BaseSingleton<AutotagBaseEngine> {
         return contentSourceParams;
     }
 
-    public async getDefaultContentSourceTypeParams(contentSourceTypeParamID: string, contextUser: UserInfo): Promise<ContentSourceTypeParams> {
-        const rv = new RunView();
-        const results = await rv.RunView<MJContentSourceTypeParamEntity>({
-            EntityName: 'MJ: Content Source Type Params',
-            ExtraFilter: `ID='${contentSourceTypeParamID}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (results.Success && results.Results.length) {
-            const result = results.Results[0];
-            const params = new ContentSourceTypeParams();
-            params.name = result.Name;
-            params.type = result.Type.toLowerCase();
-            params.value = this.castValueAsCorrectType(result.DefaultValue ?? '', params.type);
-            return params;
+    public GetDefaultContentSourceTypeParams(contentSourceTypeParamID: string): ContentSourceTypeParams {
+        const result = this._ContentSourceTypeParams.find(p => UUIDsEqual(p.ID, contentSourceTypeParamID));
+        if (!result) {
+            throw new Error(`Content Source Type Param with ID '${contentSourceTypeParamID}' not found in cached metadata`);
         }
 
-        throw new Error(`Content Source Type Param with ID '${contentSourceTypeParamID}' not found`);
+        const params = new ContentSourceTypeParams();
+        params.name = result.Name;
+        params.type = result.Type.toLowerCase();
+        params.value = this.castValueAsCorrectType(result.DefaultValue ?? '', params.type);
+        return params;
     }
 
     public castValueAsCorrectType(value: string, type: string): ContentSourceTypeParamValue {
@@ -434,95 +468,55 @@ export class AutotagBaseEngine extends BaseSingleton<AutotagBaseEngine> {
         throw new Error(`Failed to retrieve last run date for content source with ID ${contentSourceID}`);
     }
 
-    public async getContentItemParams(contentTypeID: string, contextUser: UserInfo): Promise<{ modelID: string; minTags: number; maxTags: number }> {
-        const rv = new RunView();
-        const results = await rv.RunView<MJContentTypeEntity>({
-            EntityName: 'MJ: Content Types',
-            ExtraFilter: `ID='${contentTypeID}'`,
-            ResultType: 'entity_object',
-        }, contextUser);
-
-        if (results.Success && results.Results.length) {
-            const contentType = results.Results[0];
-            return {
-                modelID: contentType.AIModelID,
-                minTags: contentType.MinTags,
-                maxTags: contentType.MaxTags
-            };
+    public GetContentItemParams(contentTypeID: string): { modelID: string; minTags: number; maxTags: number } {
+        const contentType = this._ContentTypes.find(ct => UUIDsEqual(ct.ID, contentTypeID));
+        if (!contentType) {
+            throw new Error(`Content Type with ID ${contentTypeID} not found in cached metadata`);
         }
-
-        throw new Error(`Content Type with ID ${contentTypeID} not found`);
+        return {
+            modelID: contentType.AIModelID,
+            minTags: contentType.MinTags,
+            maxTags: contentType.MaxTags
+        };
     }
 
-    public async getContentSourceTypeName(contentSourceTypeID: string, contextUser: UserInfo): Promise<string> {
-        const rv = new RunView();
-        const result = await rv.RunView<MJContentSourceTypeEntity>({
-            EntityName: 'MJ: Content Source Types',
-            ResultType: 'entity_object',
-            ExtraFilter: `ID='${contentSourceTypeID}'`
-        }, contextUser);
-
-        if (result.Success && result.Results.length) {
-            return result.Results[0].Name;
+    public GetContentSourceTypeName(contentSourceTypeID: string): string {
+        const sourceType = this._ContentSourceTypes.find(st => UUIDsEqual(st.ID, contentSourceTypeID));
+        if (!sourceType) {
+            throw new Error(`Content Source Type with ID ${contentSourceTypeID} not found in cached metadata`);
         }
-
-        throw new Error(`Content Source Type with ID ${contentSourceTypeID} not found`);
+        return sourceType.Name;
     }
 
-    public async getContentTypeName(contentTypeID: string, contextUser: UserInfo): Promise<string> {
-        const rv = new RunView();
-        const result = await rv.RunView<MJContentTypeEntity>({
-            EntityName: 'MJ: Content Types',
-            ResultType: 'entity_object',
-            ExtraFilter: `ID='${contentTypeID}'`
-        }, contextUser);
-
-        if (result.Success && result.Results.length) {
-            return result.Results[0].Name;
+    public GetContentTypeName(contentTypeID: string): string {
+        const contentType = this._ContentTypes.find(ct => UUIDsEqual(ct.ID, contentTypeID));
+        if (!contentType) {
+            throw new Error(`Content Type with ID ${contentTypeID} not found in cached metadata`);
         }
-
-        throw new Error(`Content Type with ID ${contentTypeID} not found`);
+        return contentType.Name;
     }
 
-    public async getContentFileTypeName(contentFileTypeID: string, contextUser: UserInfo): Promise<string> {
-        const rv = new RunView();
-        const result = await rv.RunView<MJContentFileTypeEntity>({
-            EntityName: 'MJ: Content File Types',
-            ResultType: 'entity_object',
-            ExtraFilter: `ID='${contentFileTypeID}'`
-        }, contextUser);
-
-        if (result.Success && result.Results.length) {
-            return result.Results[0].Name;
+    public GetContentFileTypeName(contentFileTypeID: string): string {
+        const fileType = this._ContentFileTypes.find(ft => UUIDsEqual(ft.ID, contentFileTypeID));
+        if (!fileType) {
+            throw new Error(`Content File Type with ID ${contentFileTypeID} not found in cached metadata`);
         }
-
-        throw new Error(`Content File Type with ID ${contentFileTypeID} not found`);
+        return fileType.Name;
     }
 
-    public async getAdditionalContentTypePrompt(contentTypeID: string, contextUser: UserInfo): Promise<string> {
-        const rv = new RunView();
-        const results = await rv.RunView<MJContentTypeAttributeEntity>({
-            EntityName: 'MJ: Content Type Attributes',
-            ExtraFilter: `ContentTypeID='${contentTypeID}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
+    public GetAdditionalContentTypePrompt(contentTypeID: string): string {
+        const attrs = this._ContentTypeAttributes.filter(a => UUIDsEqual(a.ContentTypeID, contentTypeID));
+        if (attrs.length === 0) return '';
 
-        if (results.Success && results.Results.length) {
-            return results.Results.map(attr =>
-                `${attr.Prompt}. The data must be included in the above described JSON file in this key-value format:     { "${attr.Name}": (value of ${attr.Name} here)}`
-            ).join('\n');
-        }
-
-        return '';
+        return attrs.map(attr =>
+            `${attr.Prompt}. The data must be included in the above described JSON file in this key-value format:     { "${attr.Name}": (value of ${attr.Name} here)}`
+        ).join('\n');
     }
 
-    public async getContentItemDescription(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<string> {
-        const [contentTypeName, fileTypeName, sourceTypeName] = await Promise.all([
-            this.getContentTypeName(contentSourceParams.ContentTypeID, contextUser),
-            this.getContentFileTypeName(contentSourceParams.ContentFileTypeID, contextUser),
-            this.getContentSourceTypeName(contentSourceParams.ContentSourceTypeID, contextUser)
-        ]);
-
+    public GetContentItemDescription(contentSourceParams: ContentSourceParams): string {
+        const contentTypeName = this.GetContentTypeName(contentSourceParams.ContentTypeID);
+        const fileTypeName = this.GetContentFileTypeName(contentSourceParams.ContentFileTypeID);
+        const sourceTypeName = this.GetContentSourceTypeName(contentSourceParams.ContentSourceTypeID);
         return `${contentTypeName} in ${fileTypeName} format obtained from a ${sourceTypeName} source`;
     }
 

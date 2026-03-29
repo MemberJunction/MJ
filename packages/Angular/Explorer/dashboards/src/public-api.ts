@@ -26,7 +26,8 @@ export {
   PerformanceHeatmapComponent,
   AgentRequestsResourceComponent,
   AutotaggingPipelineResourceComponent,
-  VectorManagementResourceComponent
+  VectorManagementResourceComponent,
+  DuplicateDetectionResourceComponent
 } from './AI/index';
 
 // Export Actions components as resources (BaseResourceComponent-based)

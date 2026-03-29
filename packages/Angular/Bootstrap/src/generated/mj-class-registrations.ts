@@ -402,7 +402,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (59 classes)
+// @memberjunction/ng-dashboards (62 classes)
 import {
     APIKeysResourceComponent,
     ActionExplorerComponent,
@@ -410,6 +410,7 @@ import {
     ActivityComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
+    AutotaggingPipelineResourceComponent,
     CodeManagementComponent,
     CommunicationDashboardComponent,
     CommunicationLogsResourceComponent,
@@ -428,6 +429,7 @@ import {
     DashboardBrowserResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
+    DuplicateDetectionResourceComponent,
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
     ExecutionMonitoringComponent,
@@ -459,6 +461,7 @@ import {
     TestingExplorerResourceComponent,
     TestingReviewResourceComponent,
     TestingRunsResourceComponent,
+    VectorManagementResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryGraphResourceComponent,
     VersionHistoryLabelsResourceComponent,
@@ -855,6 +858,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ActivityComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
+    AutotaggingPipelineResourceComponent,
     CodeManagementComponent,
     CommunicationDashboardComponent,
     CommunicationLogsResourceComponent,
@@ -873,6 +877,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     DashboardBrowserResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
+    DuplicateDetectionResourceComponent,
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
     ExecutionMonitoringComponent,
@@ -904,6 +909,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     TestingExplorerResourceComponent,
     TestingReviewResourceComponent,
     TestingRunsResourceComponent,
+    VectorManagementResourceComponent,
     VersionHistoryDiffResourceComponent,
     VersionHistoryGraphResourceComponent,
     VersionHistoryLabelsResourceComponent,
@@ -929,7 +935,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 425;
+export const CLASS_REGISTRATIONS_COUNT = 428;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

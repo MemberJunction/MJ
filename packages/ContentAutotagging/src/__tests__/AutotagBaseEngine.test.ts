@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock all external dependencies
-vi.mock('@memberjunction/core', () => {
+// Mock all external dependencies, preserving BaseEngine and related classes
+vi.mock('@memberjunction/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/core')>();
   class MockMetadata {
     GetEntityObject = vi.fn().mockResolvedValue({
       NewRecord: vi.fn(),
@@ -31,9 +32,9 @@ vi.mock('@memberjunction/core', () => {
     });
   }
   return {
+    ...actual,
     Metadata: MockMetadata,
     RunView: MockRunView,
-    UserInfo: vi.fn(),
     LogStatus: vi.fn(),
     LogError: vi.fn(),
   };
