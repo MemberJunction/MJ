@@ -407,25 +407,30 @@
     border-color: var(--mj-brand-primary-hover);
 }
 
-/* --- Suggest Dialog Overlay --- */
-.suggest-overlay {
+/* --- Slide-in Panel Overlay --- */
+.slide-panel-overlay {
     position: fixed;
     inset: 0;
     background: var(--mj-bg-overlay);
-    display: flex;
-    align-items: center;
-    justify-content: center;
     z-index: 1000;
 }
 
-.suggest-dialog {
-    background: var(--mj-bg-surface);
-    border-radius: 12px;
-    width: 560px;
+.slide-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    width: 480px;
     max-width: 90vw;
-    max-height: 80vh;
+    background: var(--mj-bg-surface);
+    box-shadow: -4px 0 24px color-mix(in srgb, var(--mj-text-primary) 12%, transparent);
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     overflow-y: auto;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.slide-panel.open {
+    transform: translateX(0);
 }
 
 .suggest-dialog-header {
@@ -519,6 +524,23 @@
 
 .suggest-submit-btn:hover:not(:disabled) {
     background: var(--mj-brand-primary-hover);
+}
+
+.suggestion-error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
+    border: 1px solid var(--mj-status-error-border);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.suggestion-error i {
+    flex-shrink: 0;
 }
 
 .suggest-submit-btn:disabled {
@@ -644,4 +666,74 @@
 
 .suggest-close-action:hover {
     background: var(--mj-bg-surface-hover);
+}
+
+/* --- Suggest Input --- */
+.suggest-input {
+    padding: 8px 12px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    font-size: 13px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.suggest-input:focus {
+    outline: none;
+    border-color: var(--mj-border-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+/* --- Try Again Button (secondary style) --- */
+.suggest-try-again-btn {
+    background: var(--mj-bg-surface);
+    color: var(--mj-brand-primary);
+    border: 1px solid var(--mj-brand-primary);
+}
+
+.suggest-try-again-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+}
+
+/* --- Save Spinner --- */
+.save-spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 0;
+}
+
+/* ================================================================
+   Responsive — Vector Management
+   ================================================================ */
+
+@media (max-width: 768px) {
+    .panel-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .panel-actions {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 600px) {
+    .slide-panel {
+        width: 100vw;
+        max-width: 100vw;
+    }
+}
+
+@media (max-width: 480px) {
+    .vector-dashboard {
+        padding: 12px;
+    }
+
+    .suggest-btn .suggest-btn-text {
+        display: none;
+    }
 }

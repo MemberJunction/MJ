@@ -9,7 +9,7 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
+import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import {
     MJEntityDocumentEntity,
@@ -18,9 +18,12 @@ import {
     MJEntityRecordDocumentEntity,
     MJAIModelEntity
 } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { KPICardData } from '../widgets/kpi-card.component';
+import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 
 /** Flattened row for the entity sync table */
 interface EntitySyncRow {
@@ -83,6 +86,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public SuggestUseCase = 'duplicate detection';
     public SuggestionResult: DocumentSuggestionResult | null = null;
     public AvailableEntityNames: string[] = [];
+    public SaveDocumentName = '';
+    public SuggestionError = '';
+    public IsSavingDocument = false;
 
     // --- Raw entity data (private) ---
     private entityDocuments: MJEntityDocumentEntity[] = [];
@@ -187,10 +193,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     }
 
     /**
-     * Runs the AI suggestion by building a local schema analysis.
-     * Generates a suggested template based on entity metadata available client-side.
-     * In a full deployment, this would call the server-side EntityDocumentSuggester
-     * via a GraphQL mutation for AI-powered analysis.
+     * Runs the AI suggestion by calling the server-side "Entity Document Suggestion"
+     * AI prompt via GraphQL. The LLM analyzes the entity schema and generates
+     * natural language Nunjucks templates optimized for embedding quality.
      */
     public async RunSuggestion(): Promise<void> {
         if (!this.SuggestEntityName || this.IsSuggesting) {
@@ -198,14 +203,60 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         }
 
         this.IsSuggesting = true;
+        this.SuggestionError = '';
         this.cdr.detectChanges();
 
         try {
-            this.SuggestionResult = this.buildLocalSuggestion(this.SuggestEntityName);
+            const result = await this.callSuggestionPrompt(this.SuggestEntityName, this.SuggestUseCase);
+            if (result) {
+                this.SuggestionResult = result;
+                this.SaveDocumentName = `${this.SuggestEntityName} - ${this.SuggestUseCase}`;
+            }
         } catch (error) {
-            console.error('[VectorManagement] Error generating suggestion:', error);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[VectorManagement] Error generating suggestion:', msg);
+            this.SuggestionError = `Failed to generate suggestion: ${msg}`;
         } finally {
             this.IsSuggesting = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Saves the current suggestion as an Entity Document record */
+    public async SaveAsEntityDocument(): Promise<void> {
+        if (this.IsSavingDocument || !this.SuggestionResult) {
+            return;
+        }
+
+        this.IsSavingDocument = true;
+        this.cdr.detectChanges();
+
+        try {
+            const md = new Metadata();
+            const entityDoc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
+            entityDoc.Name = this.SaveDocumentName;
+
+            const matchingEntity = md.Entities.find(e => e.Name === this.SuggestEntityName);
+            if (matchingEntity) {
+                entityDoc.EntityID = matchingEntity.ID;
+            }
+
+            entityDoc.Status = 'Active';
+
+            const saved = await entityDoc.Save();
+            if (saved) {
+                await this.LoadData();
+                setTimeout(() => {
+                    this.CloseSuggestDialog();
+                    this.cdr.detectChanges();
+                }, 1500);
+            } else {
+                console.error('[VectorManagement] Failed to save entity document');
+            }
+        } catch (error) {
+            console.error('[VectorManagement] Error saving entity document:', error);
+        } finally {
+            this.IsSavingDocument = false;
             this.cdr.detectChanges();
         }
     }
@@ -470,55 +521,93 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     }
 
     /**
-     * Build a local suggestion based on entity metadata (no AI call).
-     * Analyzes fields to select the most relevant ones for the use case
-     * and generates a Nunjucks template using the new flat convention.
+     * Calls the "Entity Document Suggestion" AI prompt via GraphQL to generate
+     * a natural language template optimized for vector embeddings.
      */
-    private buildLocalSuggestion(entityName: string): DocumentSuggestionResult {
+    private async callSuggestionPrompt(entityName: string, useCase: string): Promise<DocumentSuggestionResult | null> {
         const md = new Metadata();
         const entity = md.Entities.find(e => e.Name === entityName);
         if (!entity) {
-            throw new Error(`Entity "${entityName}" not found`);
+            throw new Error(`Entity "${entityName}" not found in metadata`);
         }
 
-        const selectedFields = this.selectRelevantFields(entity);
-        const templateParts = selectedFields.map(f => `{{${f}}}`);
-        const template = templateParts.join(' ');
+        const prompt = this.findSuggestionPrompt();
+        const provider = Metadata.Provider as GraphQLDataProvider;
+        if (!provider) {
+            throw new Error('GraphQL provider not available');
+        }
 
-        const relationships = entity.RelatedEntities
-            .filter(r => r.Type === 'Many to One')
-            .slice(0, 5)
-            .map(r => ({
-                name: r.RelatedEntity,
-                fields: ['Name'].filter(() => true)
-            }));
+        const aiClient = new GraphQLAIClient(provider);
+        const data = this.buildPromptData(entity, useCase);
 
-        return {
-            template,
-            selectedFields,
-            selectedRelationships: relationships,
-            potentialMatchThreshold: 0.70,
-            absoluteMatchThreshold: 0.95,
-            reasoning: `Selected ${selectedFields.length} text/name fields from ${entity.Name} that are most useful for ${this.SuggestUseCase}. Excluded IDs, timestamps, and auto-generated fields.`
-        };
+        const result = await aiClient.RunAIPrompt({
+            promptId: prompt.ID,
+            data,
+        });
+
+        if (!result.success) {
+            throw new Error(result.error || 'AI prompt execution failed');
+        }
+
+        const parsed = result.parsedResult as DocumentSuggestionResult;
+        if (!parsed?.template) {
+            throw new Error('AI returned no template in response');
+        }
+
+        return parsed;
     }
 
-    /** Select the most relevant fields for similarity matching */
-    private selectRelevantFields(entity: { Fields: { Name: string; Type: string; IsPrimaryKey: boolean; IsUnique: boolean; AutoIncrement: boolean }[] }): string[] {
-        return entity.Fields
-            .filter(f =>
-                !f.IsPrimaryKey &&
-                !f.IsUnique &&
-                !f.AutoIncrement &&
-                !f.Name.startsWith('__mj_') &&
-                f.Type !== 'datetimeoffset' &&
-                f.Type !== 'datetime' &&
-                f.Type !== 'uniqueidentifier' &&
-                f.Type !== 'bit' &&
-                f.Type !== 'image' &&
-                f.Type !== 'varbinary'
-            )
-            .map(f => f.Name);
+    /** Find the Entity Document Suggestion prompt from AIEngineBase */
+    private findSuggestionPrompt(): MJAIPromptEntityExtended {
+        const prompt = AIEngineBase.Instance.Prompts.find(
+            (p: MJAIPromptEntityExtended) => p.Name === 'Entity Document Suggestion'
+        );
+        if (!prompt) {
+            throw new Error(
+                'AI Prompt "Entity Document Suggestion" not found. ' +
+                'Run "npx mj sync push --dir=metadata --include=prompts" to install it.'
+            );
+        }
+        return prompt;
+    }
+
+    /** Build the data payload for the suggestion prompt */
+    private buildPromptData(entity: EntityInfo, useCase: string): Record<string, unknown> {
+        const fields = entity.Fields.map(f => ({
+            Name: f.Name,
+            Type: f.Type,
+            IsPrimaryKey: f.IsPrimaryKey,
+            IsUnique: f.IsUnique,
+            MaxLength: f.MaxLength,
+            AllowsNull: f.AllowsNull,
+            Description: f.Description || '',
+        }));
+
+        const md = new Metadata();
+        const relationships = entity.RelatedEntities
+            .filter(r => r.Type === 'One to Many' || r.Type === 'Many to One')
+            .slice(0, 20)
+            .map(r => {
+                const relatedEntity = md.Entities.find(e => e.Name === r.RelatedEntity);
+                const relFields = relatedEntity
+                    ? relatedEntity.Fields
+                        .filter(f => !f.IsPrimaryKey && f.Type !== 'datetimeoffset')
+                        .map(f => f.Name)
+                    : [];
+                return {
+                    Name: r.RelatedEntityJoinField || r.RelatedEntity,
+                    RelatedEntity: r.RelatedEntity,
+                    Fields: relFields,
+                    ForeignKeyField: r.RelatedEntityJoinField || '',
+                };
+            });
+
+        return {
+            EntityName: entity.Name,
+            FieldsJSON: JSON.stringify(fields, null, 2),
+            RelationshipsJSON: JSON.stringify(relationships, null, 2),
+            UseCase: useCase,
+        };
     }
 }
 

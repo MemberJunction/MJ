@@ -461,6 +461,52 @@
     background: color-mix(in srgb, var(--mj-status-error) 20%, var(--mj-bg-surface));
 }
 
+/* ---- Responsive ---- */
+
+@media (max-width: 768px) {
+    .kanban-board {
+        flex-direction: column;
+    }
+
+    .kanban-column {
+        min-width: auto;
+        max-height: 400px;
+    }
+}
+
+@media (max-width: 480px) {
+    .kpi-strip {
+        flex-direction: column;
+    }
+
+    .filter-bar {
+        flex-wrap: wrap;
+    }
+
+    .filter-group {
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+    }
+
+    .filter-select {
+        min-width: auto;
+        width: 100%;
+    }
+
+    .filter-input {
+        width: 100%;
+    }
+
+    .card-actions {
+        flex-direction: column;
+    }
+
+    .action-btn {
+        width: 100%;
+    }
+}
+
 /* ---- Saving Overlay ---- */
 
 .saving-overlay {

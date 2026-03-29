@@ -23,7 +23,7 @@
           <div class="panel-actions">
             <button class="suggest-btn" (click)="OpenSuggestDialog()" title="Use AI to suggest an Entity Document template">
               <i class="fa-solid fa-wand-magic-sparkles"></i>
-              Suggest Document
+              <span class="suggest-btn-text">Suggest Document</span>
             </button>
             <button class="refresh-btn" (click)="LoadData()" title="Refresh data">
               <i class="fa-solid fa-arrows-rotate"></i>
@@ -140,10 +140,10 @@
     </div>
   </div>
 
-  <!-- Suggest Document Dialog -->
+  <!-- Suggest Document Slide-in Panel -->
   @if (ShowSuggestDialog) {
-    <div class="suggest-overlay" (click)="CloseSuggestDialog()">
-      <div class="suggest-dialog" (click)="$event.stopPropagation()">
+    <div class="slide-panel-overlay" (click)="CloseSuggestDialog()">
+      <div class="slide-panel" [class.open]="ShowSuggestDialog" (click)="$event.stopPropagation()">
         <div class="suggest-dialog-header">
           <h3 class="suggest-dialog-title">
             <i class="fa-solid fa-wand-magic-sparkles"></i>
@@ -177,11 +177,17 @@
                       [disabled]="IsSuggesting || !SuggestEntityName"
                       (click)="RunSuggestion()">
                 @if (IsSuggesting) {
-                  <i class="fa-solid fa-spinner fa-spin"></i> Generating...
+                  <i class="fa-solid fa-spinner fa-spin"></i> Generating with AI...
                 } @else {
-                  <i class="fa-solid fa-bolt"></i> Generate Template
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Template
                 }
               </button>
+              @if (SuggestionError) {
+                <div class="suggestion-error">
+                  <i class="fa-solid fa-circle-exclamation"></i>
+                  {{ SuggestionError }}
+                </div>
+              }
             </div>
           } @else {
             <div class="suggest-result">
@@ -222,13 +228,28 @@
                 <h4 class="result-heading">Reasoning</h4>
                 <p class="result-reasoning">{{ SuggestionResult.reasoning }}</p>
               </div>
+              <div class="result-section">
+                <div class="suggest-field">
+                  <label class="suggest-label">Document Name</label>
+                  <input class="suggest-input" type="text" [(ngModel)]="SaveDocumentName" />
+                </div>
+              </div>
               <div class="result-actions">
-                <button class="suggest-submit-btn" (click)="ClearSuggestion()">
-                  <i class="fa-solid fa-rotate"></i> Try Again
-                </button>
-                <button class="suggest-close-action" (click)="CloseSuggestDialog()">
-                  Close
-                </button>
+                @if (IsSavingDocument) {
+                  <div class="save-spinner">
+                    <mj-loading text="Saving..." size="small"></mj-loading>
+                  </div>
+                } @else {
+                  <button class="suggest-submit-btn" (click)="SaveAsEntityDocument()">
+                    <i class="fa-solid fa-floppy-disk"></i> Save as Entity Document
+                  </button>
+                  <button class="suggest-submit-btn suggest-try-again-btn" (click)="ClearSuggestion()">
+                    <i class="fa-solid fa-rotate"></i> Try Again
+                  </button>
+                  <button class="suggest-close-action" (click)="CloseSuggestDialog()">
+                    Close
+                  </button>
+                }
               </div>
             </div>
           }

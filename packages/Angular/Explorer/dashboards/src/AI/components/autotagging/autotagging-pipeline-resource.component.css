@@ -544,3 +544,19 @@
         padding: 10px 12px;
     }
 }
+
+@media (max-width: 480px) {
+    .kpi-strip {
+        grid-template-columns: 1fr;
+    }
+
+    .pipeline-stage {
+        min-width: 70px;
+    }
+
+    .header-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+}
