@@ -10,7 +10,7 @@ import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityPa
 import { EntityDocumentCache } from './EntityDocumentCache';
 import { PagedRecords } from './PagedRecords';
 import { AsyncBatchTransform } from './AsyncBatchTransform';
-import { PassThrough, Transform } from 'node:stream';
+import { PassThrough } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
@@ -87,9 +87,14 @@ export class EntityVectorSyncer extends VectorBase {
       entityDocument, templateContent, obj.vectorDB, delayTimeMS, params.UpsertBatchCount
     );
 
-    const erdUpserter = new Transform({objectMode: true, transform: (chunk: EmbeddingData, _encoding: BufferEncoding, callback) => {
-      this.UpsertEntityRecordDocumentRecords(chunk, super.CurrentUser).then(() => callback(null)).catch(callback);
-    }});
+    const erdUpserter = new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
+      batchSize: 10,
+      concurrencyLimit: 2,
+      processBatch: async (batch: EmbeddingData[]): Promise<EmbeddingData[]> => {
+        await Promise.all(batch.map(item => this.UpsertEntityRecordDocumentRecords(item, super.CurrentUser)));
+        return batch;
+      },
+    });
 
     this.startDataPaging(dataStream, params, md, entity, template, vectorIndexEntity, pageSize);
 
@@ -153,7 +158,7 @@ export class EntityVectorSyncer extends VectorBase {
     delayTimeMS: number
   ): Promise<EmbeddingData[]> {
     TemplateEngineServer.Instance.SetupNunjucks();
-    const processedTexts: string[] = [];
+    const validEntries: { text: string; record: Record<string, unknown> }[] = [];
 
     for (const entityData of batch) {
       const validationResult = this.validateTemplateInput(template, entityData);
@@ -164,24 +169,28 @@ export class EntityVectorSyncer extends VectorBase {
 
       const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, templateContent, entityData, true);
       if (result.Success) {
-        processedTexts.push(result.Output);
+        validEntries.push({ text: result.Output, record: entityData });
       } else {
         LogError(`Error rendering template`, undefined, result.Message);
       }
     }
 
-    const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: processedTexts, model: null });
+    if (validEntries.length === 0) {
+      return [];
+    }
+
+    const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: validEntries.map(e => e.text), model: null });
     await new Promise<void>((resolve) => setTimeout(resolve, delayTimeMS));
 
     return embeddings.vectors.map((vector: number[], index: number) => ({
       ID: index,
       Vector: vector,
-      EntityData: batch[index],
-      __mj_recordID: String(batch[index].__mj_recordID),
-      __mj_compositeKey: String(batch[index].__mj_compositeKey ?? ''),
-      EntityDocument: batch[index].__mj_entityDocument as Record<string, unknown>,
-      VectorID: String(batch[index].VectorID ?? ''),
-      VectorIndexID: String(batch[index].VectorIndexID ?? ''),
+      EntityData: validEntries[index].record,
+      __mj_recordID: String(validEntries[index].record.__mj_recordID),
+      __mj_compositeKey: String(validEntries[index].record.__mj_compositeKey ?? ''),
+      EntityDocument: validEntries[index].record.__mj_entityDocument as Record<string, unknown>,
+      VectorID: String(validEntries[index].record.VectorID ?? ''),
+      VectorIndexID: String(validEntries[index].record.VectorIndexID ?? ''),
       TemplateContent: templateContent.TemplateText,
     }));
   }
@@ -306,7 +315,10 @@ export class EntityVectorSyncer extends VectorBase {
       dataStream.endStream();
     };
 
-    getData();
+    getData().catch((error) => {
+      LogError('Error during data paging', undefined, error);
+      dataStream.endStream();
+    });
   }
 
   /**
@@ -326,7 +338,7 @@ export class EntityVectorSyncer extends VectorBase {
     if (!entity) throw new Error(`Entity with ID ${EntityID} not found.`);
 
     const EDTemplate: string = entity.Fields.map((ef) => {
-      return `${ef.Name}: \$\{${ef.Name}\}`;
+      return `${ef.Name}: {{${ef.Name}}}`;
     }).join(' ');
 
     const rv: RunView = new RunView();

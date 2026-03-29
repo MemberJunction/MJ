@@ -116,11 +116,12 @@ export class EntityDocumentSuggester {
 
     /** Build relationship descriptors from entity metadata */
     private buildRelationshipDescriptors(entity: EntityInfo): RelationshipDescriptor[] {
+        const md = new Metadata();
         return entity.RelatedEntities
             .filter(r => r.Type === 'One to Many' || r.Type === 'Many to One')
             .slice(0, 20) // Limit to prevent oversized prompts
             .map(r => {
-                const relatedEntityInfo = new Metadata().Entities.find(e => e.Name === r.RelatedEntity);
+                const relatedEntityInfo = md.Entities.find(e => e.Name === r.RelatedEntity);
                 const sampleFields = relatedEntityInfo
                     ? relatedEntityInfo.Fields
                         .filter(f => !f.IsPrimaryKey && f.Type !== 'datetimeoffset')

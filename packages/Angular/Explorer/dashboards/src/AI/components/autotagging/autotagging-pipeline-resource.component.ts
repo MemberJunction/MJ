@@ -6,7 +6,7 @@
  * and source configuration status.
  */
 
-import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
@@ -82,9 +82,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     private contentSourceTypes: Record<string, unknown>[] = [];
     private contentSourcesRaw: Record<string, unknown>[] = [];
 
-    constructor(private cdr: ChangeDetectorRef) {
-        super();
-    }
+    private cdr = inject(ChangeDetectorRef);
 
     async ngAfterViewInit(): Promise<void> {
         await this.LoadData();
