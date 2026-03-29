@@ -50,10 +50,16 @@
         <span class="scroll-to-bottom fas fa-arrow-down" (click)="ScrollMessagesToBottom()"></span>
     }
 
+    @if (ShowWaitingIndicator) {
+        <div class="typing-indicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <span class="typing-text">Thinking...</span>
+        </div>
+    }
+
     <div class = "chat-input-area">
-        @if (ShowWaitingIndicator) {
-            <mj-loading [showText]="false" size="small" class="loader"></mj-loading>
-        }
         <div class="text-area-wrapper">
             <textarea #theInput 
                         [(ngModel)]="currentMessage" 

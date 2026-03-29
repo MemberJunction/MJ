@@ -2,6 +2,7 @@ import { BaseRequestParams, BaseResponse, CreateIndexParams,
         EditIndexParams, IndexList, UpdateOptions,
         VectorRecord } from "./record";
 import { HybridQueryOptions, QueryOptions } from './query.types';
+import { SharedIndexFilterOptions, VectorMetadataFilter } from './MetadataFilter';
 
 export abstract class VectorDBBase {
     private _apiKey: string;
@@ -52,5 +53,41 @@ export abstract class VectorDBBase {
     public HybridQuery(params: HybridQueryOptions): BaseResponse | Promise<BaseResponse> {
         // Default: fall back to pure vector search, ignoring keyword params
         return this.queryIndex({ vector: params.vector, topK: params.topK, includeMetadata: params.includeMetadata, includeValues: params.includeValues, filter: params.filter });
+    }
+
+    /**
+     * Query the vector index with metadata filtering using SharedIndexFilterOptions.
+     *
+     * Default implementation converts the filter options to a native filter object
+     * and delegates to queryIndex. Providers can override BuildMetadataFilter()
+     * for custom filter syntax.
+     *
+     * @param params - Standard query options with an additional metadataFilter field
+     * @returns The query response from the vector database
+     */
+    public MetadataFilteredQuery(
+        params: QueryOptions & { metadataFilter: SharedIndexFilterOptions }
+    ): BaseResponse | Promise<BaseResponse> {
+        const nativeFilter = this.BuildMetadataFilter(params.metadataFilter);
+        const queryParams: QueryOptions = {
+            ...params,
+            filter: nativeFilter ?? params.filter,
+        };
+        // Remove the metadataFilter before passing to queryIndex
+        delete (queryParams as Record<string, unknown>)['metadataFilter'];
+        return this.queryIndex(queryParams);
+    }
+
+    /**
+     * Convert SharedIndexFilterOptions to a provider-native filter object.
+     *
+     * Override this method in provider subclasses to produce provider-specific
+     * filter syntax (e.g., Pinecone, Weaviate, Qdrant, etc.).
+     *
+     * @param options - The high-level filter options
+     * @returns A native filter object, or undefined if no filters
+     */
+    public BuildMetadataFilter(options: SharedIndexFilterOptions): object | undefined {
+        return VectorMetadataFilter.FromOptions(options);
     }
 }

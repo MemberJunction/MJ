@@ -1,0 +1,77 @@
+@if (IsLoading) {
+    <div class="results-loading">
+        <mj-loading text="Searching..." size="medium"></mj-loading>
+    </div>
+} @else if (ResultGroups.length === 0 && TotalCount === 0) {
+    <div class="results-empty">
+        <i class="fa-solid fa-search results-empty-icon"></i>
+        <p class="results-empty-text">No results to display</p>
+    </div>
+} @else {
+    <!-- Results summary -->
+    <div class="results-summary">
+        <span>{{ TotalCount }} results</span>
+        @if (ElapsedMs > 0) {
+            <span class="results-summary-time"> in {{ FormatTime(ElapsedMs) }}</span>
+        }
+    </div>
+
+    <!-- Grouped results -->
+    @for (group of ResultGroups; track group.SourceType) {
+        <div class="results-group">
+            <div class="results-group-header" (click)="ToggleGroup(group.SourceType)">
+                @if (ShowSourceIcons) {
+                    <i [class]="group.Icon + ' results-group-icon'"></i>
+                }
+                <span class="results-group-label">{{ group.Label }}</span>
+                <span class="results-group-count">({{ group.TotalCount }})</span>
+                <i class="fa-solid results-group-chevron"
+                   [class.fa-chevron-down]="!IsGroupExpanded(group.SourceType)"
+                   [class.fa-chevron-up]="IsGroupExpanded(group.SourceType)"></i>
+            </div>
+
+            @for (result of GetVisibleResults(group); track result.ID) {
+                <div class="result-card" (click)="OnResultClick(result, $event)">
+                    <div class="result-card-left">
+                        @if (ShowSourceIcons) {
+                            <div class="result-card-icon">
+                                <i [class]="result.SourceIcon"></i>
+                            </div>
+                        }
+                    </div>
+                    <div class="result-card-body">
+                        <div class="result-card-title">{{ result.Title }}</div>
+                        <div class="result-card-entity">{{ result.EntityName }}</div>
+                        <div class="result-card-snippet">{{ result.Snippet }}</div>
+                        @if (ShowTags && result.Tags.length > 0) {
+                            <div class="result-card-tags">
+                                @for (tag of result.Tags; track tag; let ti = $index) {
+                                    @if (ti < 4) {
+                                        <span class="result-card-tag">{{ tag }}</span>
+                                    }
+                                }
+                                @if (result.Tags.length > 4) {
+                                    <span class="result-card-tag result-card-tag-more">+{{ result.Tags.length - 4 }}</span>
+                                }
+                            </div>
+                        }
+                    </div>
+                    @if (ShowScores) {
+                        <div class="result-card-score">
+                            <div class="score-circle">
+                                <span class="score-value">{{ FormatScore(result.Score) }}</span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (HasMoreResults(group)) {
+                <button class="results-show-more" (click)="ToggleGroup(group.SourceType)">
+                    <i class="fa-solid fa-chevron-down"></i>
+                    Show {{ GetHiddenCount(group) }} more results
+                </button>
+            }
+        </div>
+    }
+}

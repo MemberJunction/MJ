@@ -1,0 +1,197 @@
+@if (IsLoading) {
+    <div class="config-loading">
+        <mj-loading text="Loading configuration..." size="medium"></mj-loading>
+    </div>
+} @else {
+    <div class="config-layout">
+        <!-- Left Navigation -->
+        <nav class="config-nav">
+            <div class="config-nav-header">
+                <i class="fa-solid fa-cogs"></i>
+                <span>Configuration</span>
+            </div>
+            @for (section of Sections; track section.ID) {
+                <button
+                    class="config-nav-item"
+                    [class.config-nav-item-active]="ActiveSection === section.ID"
+                    (click)="SelectSection(section.ID)"
+                >
+                    <i [class]="section.Icon"></i>
+                    <span>{{ section.Label }}</span>
+                </button>
+            }
+        </nav>
+
+        <!-- Content Area -->
+        <div class="config-content">
+            <!-- Pipeline Settings -->
+            @if (ActiveSection === 'pipeline') {
+                <div class="config-section">
+                    <h2 class="config-section-title">Pipeline Settings</h2>
+                    <p class="config-section-desc">Configure how the Knowledge Pipeline processes incoming content.</p>
+
+                    <div class="config-group">
+                        <label class="config-toggle-row">
+                            <div class="config-toggle-info">
+                                <span class="config-label">Auto-tag on Ingest</span>
+                                <span class="config-hint">Automatically run autotagging when new content is ingested</span>
+                            </div>
+                            <input type="checkbox" [(ngModel)]="PipelineSettings.AutotagOnIngest" (change)="OnSettingChanged()" class="config-checkbox" />
+                        </label>
+
+                        <label class="config-toggle-row">
+                            <div class="config-toggle-info">
+                                <span class="config-label">Vectorize on Ingest</span>
+                                <span class="config-hint">Automatically create embeddings for new content</span>
+                            </div>
+                            <input type="checkbox" [(ngModel)]="PipelineSettings.VectorizeOnIngest" (change)="OnSettingChanged()" class="config-checkbox" />
+                        </label>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Default Batch Size</span>
+                                <span class="config-hint">Number of items processed per batch</span>
+                            </div>
+                            <input type="number" [(ngModel)]="PipelineSettings.DefaultBatchSize" (input)="OnSettingChanged()" class="config-input config-input-number" min="10" max="1000" />
+                        </div>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Max Concurrent Jobs</span>
+                                <span class="config-hint">Maximum number of pipeline jobs running at once</span>
+                            </div>
+                            <input type="number" [(ngModel)]="PipelineSettings.MaxConcurrentJobs" (input)="OnSettingChanged()" class="config-input config-input-number" min="1" max="10" />
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Vector Database Settings -->
+            @if (ActiveSection === 'vectordb') {
+                <div class="config-section">
+                    <h2 class="config-section-title">Vector Database</h2>
+                    <p class="config-section-desc">Manage the shared vector index and database connection.</p>
+
+                    <div class="config-group">
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Provider</span>
+                                <span class="config-hint">The vector database provider</span>
+                            </div>
+                            <span class="config-value-display">{{ VectorDBSettings.Provider }}</span>
+                        </div>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Shared Index Name</span>
+                                <span class="config-hint">Name of the shared knowledge index</span>
+                            </div>
+                            <span class="config-value-display">{{ VectorDBSettings.IndexName }}</span>
+                        </div>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Dimensions</span>
+                                <span class="config-hint">Embedding vector dimensions</span>
+                            </div>
+                            <span class="config-value-display">{{ VectorDBSettings.Dimensions }}</span>
+                        </div>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Distance Metric</span>
+                                <span class="config-hint">Similarity metric used for vector search</span>
+                            </div>
+                            <span class="config-value-display">{{ VectorDBSettings.Metric }}</span>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Full-Text Indexes -->
+            @if (ActiveSection === 'fulltext') {
+                <div class="config-section">
+                    <h2 class="config-section-title">Full-Text Indexes</h2>
+                    <p class="config-section-desc">Manage SQL full-text search catalogs and indexes for entity fields.</p>
+
+                    <div class="config-placeholder">
+                        <i class="fa-solid fa-text-width config-placeholder-icon"></i>
+                        <p>Full-text index management will be available after the KnowledgeHubFullTextIndex migration is applied.</p>
+                    </div>
+                </div>
+            }
+
+            <!-- Embedding Models -->
+            @if (ActiveSection === 'embedding') {
+                <div class="config-section">
+                    <h2 class="config-section-title">Embedding Models</h2>
+                    <p class="config-section-desc">Configure which AI models are used for generating embeddings.</p>
+
+                    <div class="config-placeholder">
+                        <i class="fa-solid fa-microchip config-placeholder-icon"></i>
+                        <p>Embedding model configuration is managed through the AI Models dashboard. Navigate to AI Dashboard > Models to configure.</p>
+                    </div>
+                </div>
+            }
+
+            <!-- Thresholds -->
+            @if (ActiveSection === 'thresholds') {
+                <div class="config-section">
+                    <h2 class="config-section-title">Scoring Thresholds</h2>
+                    <p class="config-section-desc">Set the scoring thresholds used by search, duplicate detection, and autotagging.</p>
+
+                    <div class="config-group">
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Duplicate Absolute Match</span>
+                                <span class="config-hint">Score above which duplicates are auto-confirmed ({{ FormatThreshold(ThresholdSettings.DuplicateAbsolute) }})</span>
+                            </div>
+                            <input type="range" [(ngModel)]="ThresholdSettings.DuplicateAbsolute" (input)="OnSettingChanged()" class="config-slider" min="0.5" max="1" step="0.01" />
+                        </div>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Duplicate Potential Match</span>
+                                <span class="config-hint">Score above which duplicates are flagged for review ({{ FormatThreshold(ThresholdSettings.DuplicatePotential) }})</span>
+                            </div>
+                            <input type="range" [(ngModel)]="ThresholdSettings.DuplicatePotential" (input)="OnSettingChanged()" class="config-slider" min="0.3" max="1" step="0.01" />
+                        </div>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Search Relevance</span>
+                                <span class="config-hint">Minimum score for search results ({{ FormatThreshold(ThresholdSettings.SearchRelevance) }})</span>
+                            </div>
+                            <input type="range" [(ngModel)]="ThresholdSettings.SearchRelevance" (input)="OnSettingChanged()" class="config-slider" min="0" max="1" step="0.01" />
+                        </div>
+
+                        <div class="config-field-row">
+                            <div class="config-field-info">
+                                <span class="config-label">Autotag Confidence</span>
+                                <span class="config-hint">Minimum confidence for accepting auto-generated tags ({{ FormatThreshold(ThresholdSettings.AutotagConfidence) }})</span>
+                            </div>
+                            <input type="range" [(ngModel)]="ThresholdSettings.AutotagConfidence" (input)="OnSettingChanged()" class="config-slider" min="0.3" max="1" step="0.01" />
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- Save Bar -->
+            @if (HasUnsavedChanges) {
+                <div class="config-save-bar">
+                    <span class="config-save-text">You have unsaved changes</span>
+                    <button class="config-save-btn" (click)="SaveConfiguration()" [disabled]="IsSaving">
+                        @if (IsSaving) {
+                            <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+                        } @else {
+                            <i class="fa-solid fa-save"></i> Save Changes
+                        }
+                    </button>
+                    <button class="config-reset-btn" (click)="ResetConfiguration()" [disabled]="IsSaving">
+                        Reset
+                    </button>
+                </div>
+            }
+        </div>
+    </div>
+}

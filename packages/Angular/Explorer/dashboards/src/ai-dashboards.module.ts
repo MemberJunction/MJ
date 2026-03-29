@@ -17,6 +17,7 @@ import { AgentRequestsModule } from '@memberjunction/ng-agent-requests';
 import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
+import { SearchModule } from '@memberjunction/ng-search';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -38,6 +39,17 @@ import { AutotaggingPipelineResourceComponent } from './AI/components/autotaggin
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
+
+// Knowledge Hub components
+import {
+  KnowledgeSearchResourceComponent,
+  LoadKnowledgeSearchResource
+} from './KnowledgeHub/components/search/knowledge-search-resource.component';
+import {
+  KnowledgeConfigResourceComponent,
+  LoadKnowledgeConfigResource
+} from './KnowledgeHub/components/config/knowledge-config-resource.component';
+import { SearchResultDetailComponent } from './KnowledgeHub/components/results-detail/search-result-detail.component';
 
 /**
  * AIDashboardsModule — AI feature area: models, prompts, agents,
@@ -61,7 +73,10 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     AgentRequestsResourceComponent,
     AutotaggingPipelineResourceComponent,
     DuplicateDetectionResourceComponent,
-    VectorManagementResourceComponent
+    VectorManagementResourceComponent,
+    KnowledgeSearchResourceComponent,
+    KnowledgeConfigResourceComponent,
+    SearchResultDetailComponent
   ],
   imports: [
     CommonModule,
@@ -84,7 +99,8 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     AgentRequestsModule,
     NgTreesModule,
     SharedDashboardWidgetsModule,
-    SharedPipesModule
+    SharedPipesModule,
+    SearchModule
   ],
   providers: [
     AIInstrumentationService
@@ -101,6 +117,9 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     AutotaggingPipelineResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
+    KnowledgeSearchResourceComponent,
+    KnowledgeConfigResourceComponent,
+    SearchResultDetailComponent,
     SharedDashboardWidgetsModule
   ]
 })

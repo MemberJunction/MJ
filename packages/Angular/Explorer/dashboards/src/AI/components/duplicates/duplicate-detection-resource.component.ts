@@ -7,7 +7,7 @@
  * MJ: Duplicate Run Detail Matches entities.
  */
 
-import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
@@ -82,6 +82,91 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
     // Available entity names from loaded runs
     public EntityNames: string[] = [];
+
+    /** Whether this component is embedded inside the Knowledge Hub shell */
+    @Input() EmbeddedMode = false;
+
+    /** View mode: 'kanban' (card board) or 'table' (paged grid) */
+    public DisplayMode: 'kanban' | 'table' = 'kanban';
+
+    /** Page size for table view */
+    public PageSize = 50;
+
+    /** Current page (0-based) */
+    public CurrentPage = 0;
+
+    /** Selected entity filter */
+    public SelectedEntityFilter = '';
+
+    /** Currently selected group for merge panel */
+    public SelectedMergeGroup: DuplicateGroup | null = null;
+
+    /** Whether the merge panel is visible */
+    public ShowMergePanel = false;
+
+    /** Auto-switch to table mode when groups exceed threshold */
+    private readonly kanbanThreshold = 50;
+
+    /** Toggle display mode */
+    public ToggleDisplayMode(): void {
+        this.DisplayMode = this.DisplayMode === 'kanban' ? 'table' : 'kanban';
+        this.CurrentPage = 0;
+        this.cdr.detectChanges();
+    }
+
+    /** Filter by entity name */
+    public FilterByEntity(entityName: string): void {
+        this.SelectedEntityFilter = entityName;
+        this.Filters.EntityName = entityName;
+        this.autoSelectDisplayMode();
+        this.cdr.detectChanges();
+    }
+
+    /** Get paged groups for table view */
+    public GetPagedGroups(): DuplicateGroup[] {
+        const start = this.CurrentPage * this.PageSize;
+        return this.AllGroups.slice(start, start + this.PageSize);
+    }
+
+    /** Get total page count */
+    public get TotalPages(): number {
+        return Math.ceil(this.AllGroups.length / this.PageSize);
+    }
+
+    /** Navigate to next page */
+    public NextPage(): void {
+        if (this.CurrentPage < this.TotalPages - 1) {
+            this.CurrentPage++;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Navigate to previous page */
+    public PrevPage(): void {
+        if (this.CurrentPage > 0) {
+            this.CurrentPage--;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Open the merge panel for a duplicate group */
+    public OpenMergePanel(group: DuplicateGroup): void {
+        this.SelectedMergeGroup = group;
+        this.ShowMergePanel = true;
+        this.cdr.detectChanges();
+    }
+
+    /** Close the merge panel */
+    public CloseMergePanel(): void {
+        this.SelectedMergeGroup = null;
+        this.ShowMergePanel = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Auto-select display mode based on group count */
+    private autoSelectDisplayMode(): void {
+        this.DisplayMode = this.AllGroups.length > this.kanbanThreshold ? 'table' : 'kanban';
+    }
 
     // KPI values
     public get TotalGroupCount(): number {

@@ -11,6 +11,39 @@
     min-height: 400px;
 }
 
+/* --- View Mode Toggle --- */
+.view-mode-toggle {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0 24px 0;
+    margin-bottom: -12px;
+}
+
+.view-mode-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.85rem;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.view-mode-btn:hover {
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface-hover);
+}
+
+.view-mode-btn-active {
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+}
+
 /* --- Dashboard container --- */
 .vector-dashboard {
     display: flex;

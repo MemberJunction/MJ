@@ -9,20 +9,27 @@
 | Sub-Phase | Description | Status |
 |-----------|-------------|--------|
 | 1.0  | UX Mockups (HTML prototypes) | Skipped (UX) |
-| 1.1  | Knowledge Hub App Shell | Partial (metadata only) |
+| 1.1  | Knowledge Hub App Shell | Done (metadata + search/config/vectors/dupes/autotagging tabs) |
 | 1.2  | Shared Index Architecture | Partial (types + filter, no migration) |
 | 1.3  | Knowledge Pipeline | Done |
 | 1.4  | Unified Search API | Done |
 | 1.5  | Full-Text Index Management | Not Started |
 | 1.6  | MJ Agent Client SDK | Done |
 | 1.7  | Angular Agent Client Adapter | Done |
-| 1.8  | mj-chat Modernization | Skipped (UX) |
-| 1.9  | mj-chat-agents-overlay | Skipped (UX) |
-| 1.10 | Conversation Continuity | Not Started |
+| 1.8  | mj-chat Modernization | Done (typing indicator, code blocks, mobile-first, animations) |
+| 1.9  | mj-chat-agents-overlay | Done (floating bubble, expand/collapse, auto-hide on conversations route) |
+| 1.10 | Conversation Continuity | Done (ConversationBridgeService with shared state + deep links) |
 | 1.11 | Knowledge Agent | Partial (metadata + prompt, no server impl) |
-| 1.12 | Knowledge Hub Search UX | Skipped (UX) |
-| 1.13 | MJ Explorer Global Search Enhancement | Skipped (UX) |
+| 1.12 | Knowledge Hub Search UX | Done (ng-search overlay + Knowledge Search dashboard) |
+| 1.13 | MJ Explorer Global Search Enhancement | Done (Cmd+K palette extended with Knowledge Hub search) |
 | 1.14 | Advanced Features (document only) | Not Started |
+| --   | ng-search widget (reusable) | Done (SearchOverlay, SearchResults, SearchFilter components) |
+| --   | Record Merge Panel | Done (side-by-side field comparison, field-by-field selection) |
+| --   | Configuration Dashboard | Done (Pipeline, VectorDB, FTS, Embedding, Thresholds sections) |
+| --   | Search Results Detail View | Done (full page + side panel, score breakdown viz) |
+| --   | Vector Management Enhancements | Done (index/operations view toggle, EmbeddedMode) |
+| --   | Duplicate Detection Enhancements | Done (entity filter, table/kanban toggle, paging, merge panel) |
+| --   | Unit Tests | Done (57 tests across 8 test files, all passing) |
 
 ---
 

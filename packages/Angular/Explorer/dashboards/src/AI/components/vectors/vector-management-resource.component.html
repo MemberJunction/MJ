@@ -4,6 +4,18 @@
   </div>
 } @else {
   <div class="vector-dashboard">
+    <!-- View Mode Toggle -->
+    @if (!EmbeddedMode) {
+      <div class="view-mode-toggle">
+        <button class="view-mode-btn" [class.view-mode-btn-active]="ViewMode === 'index'" (click)="ViewMode = 'index'">
+          <i class="fa-solid fa-cubes"></i> Index View
+        </button>
+        <button class="view-mode-btn" [class.view-mode-btn-active]="ViewMode === 'operations'" (click)="ViewMode = 'operations'">
+          <i class="fa-solid fa-gauge-high"></i> Operations
+        </button>
+      </div>
+    }
+
     <!-- KPI Cards Row -->
     <div class="kpi-row">
       @for (card of KPICards; track card.title) {

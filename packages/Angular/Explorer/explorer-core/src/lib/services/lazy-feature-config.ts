@@ -68,6 +68,8 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'VectorManagementResource':       loadAI,
   'DuplicateDetectionResource':     loadAI,
   'AutotaggingPipelineResource':    loadAI,
+  'KnowledgeSearchResource':        loadAI,
+  'KnowledgeConfigResource':        loadAI,
 
   // ── Actions Dashboard (BaseResourceComponent types) ──
   'ActionsOverviewResource':  loadActions,

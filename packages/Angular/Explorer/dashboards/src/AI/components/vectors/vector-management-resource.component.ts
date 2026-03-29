@@ -7,7 +7,7 @@
  * and storage usage.
  */
 
-import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
@@ -61,6 +61,19 @@ interface DocumentSuggestionResult {
 export class VectorManagementResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
     private destroy$ = new Subject<void>();
+
+    /** View mode: 'index' = Option A (shared index as hero, entity docs as children),
+     *  'operations' = Option C (operations monitoring with real-time sync status) */
+    public ViewMode: 'index' | 'operations' = 'index';
+
+    /** Whether this component is embedded inside the Knowledge Hub shell */
+    @Input() EmbeddedMode = false;
+
+    /** Toggle between view modes */
+    public ToggleViewMode(): void {
+        this.ViewMode = this.ViewMode === 'index' ? 'operations' : 'index';
+        this.cdr.detectChanges();
+    }
 
     // --- Loading state ---
     public IsLoading = true;
