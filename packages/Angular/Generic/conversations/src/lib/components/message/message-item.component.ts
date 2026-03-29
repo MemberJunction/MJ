@@ -67,7 +67,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
   @Input() public attachments: MessageAttachment[] = []; // Attachments for this message
 
-  @Output() public pinClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public retryClicked = new EventEmitter<MJConversationDetailEntity>();
@@ -78,6 +77,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
+  @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId on Shift+Click
+  @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -166,6 +167,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       clearInterval(this._elapsedTimeInterval);
       this._elapsedTimeInterval = null;
     }
+  }
+
+  /**
+   * Handles clicks on the message bubble.
+   * Shift+Click on any AI message emits a diagnosticRequested event so the parent
+   * can dump live streaming state to the browser console — useful for debugging
+   * stuck or forever-spinning conversations without any code changes.
+   */
+  public onMessageBubbleClick(event: MouseEvent): void {
+    if (!event.shiftKey || !this.isAIMessage) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.diagnosticRequested.emit(this.message.ID);
   }
 
   /**
@@ -651,7 +665,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return this.agentRunDuration;
     }
 
-    // For completed or failed messages, show final generation time
+    // For completed/failed messages with an agent run, use agentRun timestamps.
+    // These are set when the run finishes and never change, so pin/edit saves on the
+    // message entity cannot corrupt the displayed duration.
+    if (this.agentRun?.__mj_CreatedAt && this.agentRun?.__mj_UpdatedAt) {
+      return this.agentRunDuration;
+    }
+
+    // No agent run — fall back to message entity timestamps
     return this.formattedGenerationTime;
   }
 
@@ -711,12 +732,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return false;
     }
     return this.message.OriginalMessageChanged === true;
-  }
-
-  public onPinClick(): void {
-    if (!this.isProcessing) {
-      this.pinClicked.emit(this.message);
-    }
   }
 
   public onEditClick(): void {
@@ -791,6 +806,26 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public onDeleteClick(): void {
     if (!this.isProcessing) {
       this.deleteClicked.emit(this.message);
+    }
+  }
+
+  public async PinMessage(): Promise<void> {
+    // Optimistic update — toggle immediately so the UI responds at once
+    const previousValue = this.message.IsPinned;
+    this.message.IsPinned = !previousValue;
+    this.cdRef.detectChanges();
+
+    const saved = await this.message.Save();
+    if (!saved) {
+      // Revert on failure
+      this.message.IsPinned = previousValue;
+      this.cdRef.detectChanges();
+      console.error('Failed to save pin state for message', this.message.ID);
+    } else {
+      // Notify parent so it can patch the conversation cache in-place.
+      // Without this, navigating away and back rebuilds entities from stale cache data,
+      // causing the pin state to appear lost until the next full page reload.
+      this.messagePinToggled.emit(this.message);
     }
   }
 

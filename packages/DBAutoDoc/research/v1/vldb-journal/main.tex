@@ -1,5 +1,5 @@
-% DBAutoDoc — The VLDB Journal (Springer Nature) Format
-% Template: sn-jnl (Springer Nature journal class)
+% DBAutoDoc — The VLDB Journal (svjour3 template)
+% Template: VLDB Journal LaTeX Template (svjour3.cls)
 %
 % To compile:
 %   pdflatex main
@@ -7,37 +7,51 @@
 %   pdflatex main
 %   pdflatex main
 
-\documentclass[pdflatex,sn-basic]{sn-jnl}
+\RequirePackage{fix-cm}
+\documentclass[twocolumn]{svjour3}
+\smartqed
+\journalname{The VLDB Journal}
 
-% Additional packages
+% Packages
+\usepackage{microtype}
 \usepackage{amsmath}
 \usepackage{booktabs}
 \usepackage{algorithm}
 \usepackage{algpseudocode}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{url}
 
 \begin{document}
 
-\title[DBAutoDoc]{DBAutoDoc: Automated Discovery and Documentation of Undocumented Database Schemas via Statistical Analysis and Iterative LLM Refinement}
+\title{DBAutoDoc: Automated Discovery and Documentation of Undocumented Database Schemas via Statistical Analysis and Iterative LLM Refinement}
 
-\author*[1]{\fnm{Amith} \sur{Nagarajan}}\email{amith@bluecypress.io}
+\author{Amith Nagarajan \and Thomas Altman}
 
-\author[2]{\fnm{Thomas} \sur{Altman}}\email{thomas@tasio.co}
+\institute{
+  A.\ Nagarajan \at
+  Blue Cypress, New Orleans, LA, USA \\
+  \email{amith@bluecypress.io}
+  \and
+  T.\ Altman \at
+  Tasio Labs (a Blue Cypress company), Tuscaloosa, AL, USA \\
+  \email{thomas@tasio.co}
+}
 
-\affil*[1]{\orgname{Blue Cypress}, \orgaddress{\city{New Orleans}, \state{LA}, \country{USA}}}
+\date{Received: date / Accepted: date}
 
-\affil[2]{\orgname{Tasio Labs (a Blue Cypress company)}, \orgaddress{\city{Tuscaloosa}, \state{AL}, \country{USA}}}
+\maketitle
 
-\abstract{The vast majority of production database systems in enterprise environments lack adequate documentation. Declared primary keys are absent, foreign key constraints have been dropped for performance, column names are cryptic abbreviations, and no entity-relationship diagrams exist. We present DBAutoDoc, a system that automates the discovery and documentation of undocumented relational database schemas by combining statistical data analysis with iterative large language model (LLM) refinement.
+\begin{abstract}
+The vast majority of production database systems in enterprise environments lack adequate documentation. Declared primary keys are absent, foreign key constraints have been dropped for performance, column names are cryptic abbreviations, and no entity-relationship diagrams exist. We present DBAutoDoc, a system that automates the discovery and documentation of undocumented relational database schemas by combining statistical data analysis with iterative large language model (LLM) refinement.
 
 DBAutoDoc's central insight is that schema understanding is fundamentally an iterative, graph-structured problem. Drawing structural inspiration from backpropagation in neural networks, DBAutoDoc propagates semantic corrections through schema dependency graphs across multiple refinement iterations until descriptions converge. This propagation is discrete and semantic rather than mathematical, but the structural analogy is precise: early iterations produce rough descriptions akin to random initialization, and successive passes sharpen the global picture as context flows through the graph.
 
 The system makes four concrete contributions: (1)~an iterative context-propagation algorithm that refines table and column descriptions by re-analyzing each schema object in light of its neighbors' most recent descriptions; (2)~a tiered statistical pipeline for primary key and foreign key discovery with a bidirectional feedback loop between LLM-generated semantic context and statistical candidate scoring; (3)~a dual-layer human knowledge injection mechanism that distinguishes verified ground truth from exploratory seed context; and (4)~a multi-criterion convergence detector that combines description stability windows, per-column confidence thresholds, and semantic change magnitude.
 
-On a suite of benchmark databases, DBAutoDoc achieved overall weighted scores of 96.1\% across two model families (Gemini and Anthropic) using a composite metric that weights key discovery accuracy (FK~F1 at 35\%, PK~F1 at 30\%) more heavily than description coverage (table descriptions at 20\%, column descriptions at 15\%). Ablation analysis demonstrates that the deterministic pipeline contributes a 23-point F1 improvement over LLM-only FK detection, confirming that the system's contribution is substantial and independent of LLM pre-training knowledge. The system reached convergence in 2~iterations on average at a cost of approximately \$0.70 per 100~tables---a reduction of more than 99.5\% relative to manual expert documentation. DBAutoDoc is released as open-source software with all evaluation configurations and prompt templates included for full reproducibility.}
-
-\keywords{Database documentation, Schema discovery, Primary key detection, Foreign key detection, Large language models, Iterative refinement, Data profiling}
-
-\maketitle
+On a suite of benchmark databases, DBAutoDoc achieved overall weighted scores of 96.1\% across two model families (Gemini and Anthropic) using a composite metric that weights key discovery accuracy (FK~F1 at 35\%, PK~F1 at 30\%) more heavily than description coverage (table descriptions at 20\%, column descriptions at 15\%). Ablation analysis demonstrates that the deterministic pipeline contributes a 23-point F1 improvement over LLM-only FK detection, confirming that the system's contribution is substantial and independent of LLM pre-training knowledge. The system reached convergence in 2~iterations on average at a cost of approximately \$0.70 per 100~tables---a reduction of more than 99.5\% relative to manual expert documentation. DBAutoDoc is released as open-source software with all evaluation configurations and prompt templates included for full reproducibility.
+\keywords{Database documentation \and Schema discovery \and Primary key detection \and Foreign key detection \and Large language models \and Iterative refinement \and Data profiling}
+\end{abstract}
 
 %% ============================================================
 %% 1. INTRODUCTION
@@ -473,9 +487,10 @@ Northwind's lower score is partly attributable to evaluation artifacts (the \tex
 
 \subsubsection{Foreign Key Detection}
 
-\begin{table}[htbp]
+\begin{table*}[htbp]
 \caption{Foreign Key Detection Results}
 \label{tab:fk}
+\centering
 \begin{tabular}{lrrrrr}
 \toprule
 \textbf{Database} & \textbf{True} & \textbf{Det.} & \textbf{Prec.} & \textbf{Rec.} & \textbf{F1} \\
@@ -485,13 +500,14 @@ Chinook & 11 & 11 & 95.2\% & 95.2\% & 95.2\% \\
 Northwind & 13 & 12 & 75.0\% & 75.0\% & 75.0\% \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 \subsubsection{Cross-Model Comparison}
 
-\begin{table}[htbp]
+\begin{table*}[htbp]
 \caption{Cross-Model Comparison on AdventureWorks2022}
 \label{tab:crossmodel}
+\centering
 \begin{tabular}{lrrr}
 \toprule
 \textbf{Metric} & \textbf{Gemini} & \textbf{GPT} & \textbf{Claude} \\
@@ -504,7 +520,7 @@ Column Desc Cov. & 99\% & 96\% & 100\% \\
 Tokens Used & 3.2M & 952K & 471K \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 \textbf{Key findings.} (1)~Context window matters: GPT-5.4-mini's 272K limit caused 15 FK misses vs.\ 1 for Gemini (1M) and 4 for Sonnet/Opus (680K). (2)~The deterministic foundation provides a floor regardless of LLM choice. (3)~Gemini and Anthropic achieve near-parity at 96.1\%. (4)~Sonnet/Opus used 7$\times$ fewer tokens than Gemini while achieving equivalent quality.
 
@@ -535,9 +551,10 @@ LousyDB & 20 & 97.6\% & --* & 100\% & 100\% & -- & 214K \\
 
 We frame the pipeline's development iterations as an ablation study, isolating the contribution of each architectural component to FK detection on AdventureWorks2022.
 
-\begin{table}[htbp]
+\begin{table*}[htbp]
 \caption{FK Detection Ablation on AdventureWorks2022}
 \label{tab:ablation}
+\centering
 \begin{tabular}{lrrl}
 \toprule
 \textbf{Configuration} & \textbf{Correct} & \textbf{FK F1} & \textbf{Measures} \\
@@ -549,7 +566,7 @@ Stats + LLM (no gates) & 90/91 & 71.7\% & Combined recall \\
 Full pipeline & 90/91 & 94.2\% & +Pruning \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 \textbf{Key insight.} The LLM contributes most of the \emph{recall} (finding correct FKs), while the deterministic pipeline contributes most of the \emph{precision} (removing false positives). Neither alone achieves the full pipeline's 94.2\% F1. The deterministic gates account for a \textbf{23-point F1 improvement} over LLM-only detection (71.7\% to 94.2\%), demonstrating that the pipeline's contribution is substantial and independent of the LLM's pre-training knowledge.
 
@@ -587,9 +604,10 @@ Across all benchmark databases, DBAutoDoc converges within 2~iterations at media
 
 \textbf{Scaling comparison:}
 
-\begin{table}[htbp]
+\begin{table*}[htbp]
 \caption{Enterprise Scaling Comparison}
 \label{tab:enterprise}
+\centering
 \begin{tabular}{lrr}
 \toprule
 \textbf{Metric} & \textbf{OrgA (36 tbl)} & \textbf{OrgB (125 tbl)} \\
@@ -601,7 +619,7 @@ Tokens consumed & 1.1M & 3.3M \\
 Estimated cost & $\sim$\$0.20 & $\sim$\$0.50 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 Cost scaled roughly linearly with table count, confirming economic viability on larger schemas.
 
@@ -807,9 +825,10 @@ where pos is the column's zero-indexed ordinal position. The aggressive discount
 
 \section{Per-Run Benchmark History}
 
-\begin{table}[htbp]
+\begin{table*}[htbp]
 \caption{Key Milestone Runs (AdventureWorks2022)}
 \label{tab:history}
+\centering
 \begin{tabular}{lrrrp{3cm}}
 \toprule
 \textbf{Run} & \textbf{FK} & \textbf{FK F1} & \textbf{PK F1} & \textbf{Notes} \\
@@ -820,16 +839,17 @@ where pos is the column's zero-indexed ordinal position. The aggressive discount
 015 & 90/91 & 94.2\% & 95.0\% & Full pipeline \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 
 \section{Prompt Templates}\label{app:prompts}
 
 DBAutoDoc uses 13 prompt templates, all version-controlled in the open-source repository. Table~\ref{tab:prompts} summarizes the key templates.
 
-\begin{table}[htbp]
+\begin{table*}[htbp]
 \caption{Prompt Template Summary}
 \label{tab:prompts}
+\centering
 \begin{tabular}{llp{3.5cm}}
 \toprule
 \textbf{Template} & \textbf{Scope} & \textbf{Purpose} \\
@@ -848,7 +868,7 @@ query-fix & Per-query & SQL correction \\
 query-refinement & Per-query & Result adjustment \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 All templates are available in the \href{https://github.com/MemberJunction/MJ/tree/next/packages/DBAutoDoc/src/prompts}{DBAutoDoc prompts directory} on GitHub.
 
@@ -856,7 +876,8 @@ All templates are available in the \href{https://github.com/MemberJunction/MJ/tr
 %% ============================================================
 %% REFERENCES
 %% ============================================================
-%% sn-basic bibliography style is set by the documentclass option
+\clearpage
+\bibliographystyle{spbasic}
 \bibliography{references}
 
 \end{document}
