@@ -4346,17 +4346,15 @@ The context is now within limits. Please retry your request with the recovered c
             lines.push(`**Error:** ${result.agentRun.ErrorMessage}`);
         }
 
-        // Payload — the actual result data the parent agent cares about
+        // Payload — the actual result data the parent agent cares about.
+        // Not truncated by default — the expiration/compaction lifecycle handles
+        // context window management. Truncating here permanently discards data
+        // before the LLM ever sees it.
         if (result.payload != null) {
             const payloadStr = typeof result.payload === 'string'
                 ? result.payload
                 : JSON.stringify(result.payload);
-            // For very large payloads, truncate to keep context manageable
-            if (payloadStr.length > 4000) {
-                lines.push(`**Payload** (truncated):\n${payloadStr.substring(0, 4000)}…`);
-            } else {
-                lines.push(`**Payload:**\n${payloadStr}`);
-            }
+            lines.push(`**Payload:**\n${payloadStr}`);
         }
 
         return lines.join('\n');
@@ -4366,14 +4364,19 @@ The context is now within limits. Please retry your request with the recovered c
      * Formats a single output parameter value for inclusion in action result
      * markdown.  Scalars are shown inline with backtick formatting; objects and
      * arrays use compact (single-line) JSON to avoid the indentation overhead
-     * of pretty-printed JSON.  Very long values are truncated.
+     * of pretty-printed JSON.
+     *
+     * By default, values are **not truncated** — the expiration/compaction lifecycle
+     * handles context window management. Truncating at formatting time permanently
+     * discards data before the LLM ever sees it. Pass an explicit maxLength only
+     * when you have a specific reason to limit output size.
      *
      * @param value - The parameter value (any type)
-     * @param maxLength - Maximum character length before truncation (default 500)
+     * @param maxLength - Maximum character length before truncation (0 = no limit, default 0)
      * @returns Formatted string
      * @private
      */
-    private formatParamValueForResult(value: unknown, maxLength: number = 500): string {
+    private formatParamValueForResult(value: unknown, maxLength: number = 0): string {
         if (value === null || value === undefined) {
             return '`null`';
         }
@@ -4390,7 +4393,7 @@ The context is now within limits. Please retry your request with the recovered c
             stringValue = JSON.stringify(value);
         }
 
-        if (stringValue.length > maxLength) {
+        if (maxLength > 0 && stringValue.length > maxLength) {
             return `${stringValue.substring(0, maxLength)}…`;
         }
 
@@ -7867,7 +7870,7 @@ The context is now within limits. Please retry your request with the recovered c
                 const text = typeof iterResult === 'string'
                     ? iterResult
                     : JSON.stringify(iterResult);
-                lines.push(text.length > 2000 ? `${text.substring(0, 2000)}…` : text);
+                lines.push(text);
             }
             // null/undefined priorStepResult: iteration produced no output — skip silently
         }
