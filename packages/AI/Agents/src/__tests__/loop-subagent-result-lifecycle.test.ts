@@ -52,7 +52,7 @@ function formatLoopResultsAsMarkdown(results: BaseAgentNextStep[], errors: unkno
             const text = typeof iterResult === 'string'
                 ? iterResult
                 : JSON.stringify(iterResult);
-            lines.push(text.length > 2000 ? `${text.substring(0, 2000)}…` : text);
+            lines.push(text);
         }
     }
 
@@ -252,11 +252,7 @@ function formatSubAgentResultAsMarkdown(subAgentName: string, result: SubAgentRe
         const payloadStr = typeof result.payload === 'string'
             ? result.payload
             : JSON.stringify(result.payload);
-        if (payloadStr.length > 4000) {
-            lines.push(`**Payload** (truncated):\n${payloadStr.substring(0, 4000)}…`);
-        } else {
-            lines.push(`**Payload:**\n${payloadStr}`);
-        }
+        lines.push(`**Payload:**\n${payloadStr}`);
     }
 
     return lines.join('\n');
@@ -428,33 +424,24 @@ describe('Loop and Sub-Agent Result Lifecycle', () => {
                 expect(md).toContain('"count":42');
             });
 
-            it('should truncate very long string results at 2000 chars', () => {
-                const longText = 'x'.repeat(2500);
+            it('should NOT truncate long string results (lifecycle handles context)', () => {
+                const longText = 'x'.repeat(5000);
                 const results = [createIterationResult(longText)];
                 const md = formatLoopResultsAsMarkdown(results, []);
 
-                expect(md).toContain('x'.repeat(2000));
-                expect(md).toContain('…');
-                expect(md).not.toContain('x'.repeat(2001));
+                // Full text preserved — expiration/compaction lifecycle manages context window
+                expect(md).toContain('x'.repeat(5000));
+                expect(md).not.toContain('…');
             });
 
-            it('should truncate very long object results at 2000 chars', () => {
-                const bigObj = { data: 'y'.repeat(2500) };
+            it('should NOT truncate long object results (lifecycle handles context)', () => {
+                const bigObj = { data: 'y'.repeat(5000) };
                 const results = [createIterationResult(bigObj)];
                 const md = formatLoopResultsAsMarkdown(results, []);
 
-                // JSON.stringify will be > 2000, so it should be truncated
+                // Full JSON preserved
                 const jsonStr = JSON.stringify(bigObj);
-                expect(jsonStr.length).toBeGreaterThan(2000);
-                expect(md).toContain('…');
-            });
-
-            it('should NOT truncate results at exactly 2000 chars', () => {
-                const exactText = 'z'.repeat(2000);
-                const results = [createIterationResult(exactText)];
-                const md = formatLoopResultsAsMarkdown(results, []);
-
-                expect(md).toContain('z'.repeat(2000));
+                expect(md).toContain(jsonStr);
                 expect(md).not.toContain('…');
             });
         });
@@ -1281,7 +1268,7 @@ describe('Loop and Sub-Agent Result Lifecycle', () => {
             expect(md).toContain('"records"');
         });
 
-        it('should truncate very large payloads', () => {
+        it('should NOT truncate large payloads (lifecycle handles context)', () => {
             const bigPayload = 'x'.repeat(5000);
             const md = formatSubAgentResultAsMarkdown('BigAgent', {
                 success: true,
@@ -1289,8 +1276,9 @@ describe('Loop and Sub-Agent Result Lifecycle', () => {
                 payload: bigPayload
             });
 
-            expect(md).toContain('(truncated)');
-            expect(md.length).toBeLessThan(5500);
+            // Full payload preserved — expiration/compaction lifecycle manages context window
+            expect(md).toContain('x'.repeat(5000));
+            expect(md).not.toContain('(truncated)');
         });
 
         it('should default status to Completed when agentRun has no Status', () => {
