@@ -1063,17 +1063,10 @@
   color: var(--mj-text-muted);
 }
 
-.inline-actions {
+/* Delete button — always visible on the last message, no hover required */
+.inline-delete {
   display: flex;
-  gap: 4px;
   align-items: center;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-/* Show delete button only when hovering the message row */
-.message-item:hover .inline-actions {
-  opacity: 1;
 }
 
 .message-item.pinned {
@@ -1105,11 +1098,14 @@
   background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-surface));
 }
 
-/* Rating section inside gear panel for non-last AI messages */
-.agent-panel-ratings {
-  padding: 12px 0 0;
-  border-top: 1px solid var(--mj-border-subtle);
+/* Delete + Rating + Pin in gear panel for non-last messages — mirrors .message-footer layout */
+.agent-panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 0;
   margin-top: 8px;
+  border-top: 1px solid var(--mj-border-subtle);
 }
 
 /* Agent details section wrapper */
