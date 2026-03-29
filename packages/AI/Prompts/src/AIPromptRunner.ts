@@ -92,7 +92,7 @@ interface ModelVendorCandidate {
   effortLevel?: number;
   isPreferredVendor: boolean;
   priority: number; // Higher is better
-  source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank';
+  source: 'explicit' | 'prompt-model' | 'model-type' | 'power-rank' | 'power-match-fallback';
 }
 
 
@@ -1561,6 +1561,8 @@ export class AIPromptRunner {
         selectionReason = `Selected based on model type filtering`;
       } else if (selected.source === 'power-rank') {
         selectionReason = `Selected by power rank (${selected.model.PowerRank || 0})`;
+      } else if (selected.source === 'power-match-fallback') {
+        selectionReason = `Fallback: selected ${selected.model.Name} (PowerRank ${selected.model.PowerRank || 0}) as closest match to configured models' power level`;
       }
 
       if (selected.isPreferredVendor) {
@@ -1703,7 +1705,22 @@ export class AIPromptRunner {
     // Build candidates maintaining order
     const candidates = this.buildCandidatesFromPromptModels(sortedPromptModels);
 
-    // Strategy='Specific' requires explicit configuration
+    // If RequireSpecificModels is true (or no candidates at all), enforce strict behavior
+    if (candidates.length === 0 && prompt.RequireSpecificModels) {
+      const configInfo = configurationId ? ` with configuration "${configurationId}"` : '';
+      throw new Error(
+        `SelectionStrategy is 'Specific' but no valid AIPromptModel candidates found for prompt "${prompt.Name}"${configInfo}. ` +
+        `Please configure AIPromptModel records for this prompt.`
+      );
+    }
+
+    // When RequireSpecificModels is false, append power-matched fallback candidates
+    // so that if none of the specific models have valid credentials, the system
+    // gracefully falls back to other available models at a similar power level.
+    if (!prompt.RequireSpecificModels) {
+      this.appendPowerMatchedFallbackCandidates(candidates, prompt, sortedPromptModels, verbose);
+    }
+
     if (candidates.length === 0) {
       const configInfo = configurationId ? ` with configuration "${configurationId}"` : '';
       throw new Error(
@@ -1717,6 +1734,101 @@ export class AIPromptRunner {
     }
 
     return candidates;
+  }
+
+  /**
+   * Appends fallback candidates from the global model pool, sorted by proximity to the
+   * average power rank of the originally configured models. This ensures that when
+   * specific models lack credentials, the fallback uses models of similar capability
+   * rather than defaulting to the most or least powerful available model.
+   *
+   * Fallback candidates are given lower priority than any specific candidate so
+   * configured models are always preferred when their credentials are available.
+   */
+  private appendPowerMatchedFallbackCandidates(
+    candidates: ModelVendorCandidate[],
+    prompt: MJAIPromptEntityExtended,
+    configuredPromptModels: MJAIPromptModelEntity[],
+    verbose?: boolean
+  ): void {
+    // Compute target power rank from the configured models
+    const targetPowerRank = this.computeTargetPowerRank(configuredPromptModels);
+
+    // Get all active models matching the prompt's model type, excluding already-present models
+    const existingModelIds = new Set(candidates.map(c => c.model.ID));
+    const fallbackPool = AIEngine.Instance.Models.filter(
+      m => m.IsActive &&
+           !existingModelIds.has(m.ID) &&
+           (!prompt.AIModelTypeID || UUIDsEqual(m.AIModelTypeID, prompt.AIModelTypeID))
+    );
+
+    if (fallbackPool.length === 0) return;
+
+    // Sort by proximity to the target power rank
+    const sorted = this.sortByPowerProximity(fallbackPool, targetPowerRank);
+
+    // Assign priorities below the lowest specific candidate
+    const lowestSpecificPriority = candidates.length > 0
+      ? Math.min(...candidates.map(c => c.priority))
+      : 1000;
+    const fallbackBasePriority = lowestSpecificPriority - 100;
+
+    sorted.forEach((model, index) => {
+      const modelCandidates = this.createCandidatesForModel(
+        model,
+        fallbackBasePriority - index * 10,
+        'power-match-fallback'
+      );
+      candidates.push(...modelCandidates);
+    });
+
+    if (verbose && sorted.length > 0) {
+      LogStatus(
+        `Appended ${sorted.length} power-matched fallback models (target PowerRank: ${targetPowerRank}) ` +
+        `for prompt "${prompt.Name}" since RequireSpecificModels is false`
+      );
+    }
+  }
+
+  /**
+   * Computes the target power rank from configured AIPromptModel records.
+   * Uses the weighted average (by priority) of the configured models' power ranks,
+   * so higher-priority models have more influence on the target.
+   * Falls back to simple average if priorities are all zero.
+   */
+  private computeTargetPowerRank(promptModels: MJAIPromptModelEntity[]): number {
+    if (promptModels.length === 0) return 0;
+
+    const modelsWithPower = promptModels
+      .map(pm => {
+        const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, pm.ModelID));
+        return { powerRank: model?.PowerRank ?? 0, priority: pm.Priority || 1 };
+      });
+
+    const totalWeight = modelsWithPower.reduce((sum, m) => sum + m.priority, 0);
+    if (totalWeight === 0) {
+      // All priorities are 0, use simple average
+      return Math.round(modelsWithPower.reduce((sum, m) => sum + m.powerRank, 0) / modelsWithPower.length);
+    }
+
+    const weightedSum = modelsWithPower.reduce((sum, m) => sum + m.powerRank * m.priority, 0);
+    return Math.round(weightedSum / totalWeight);
+  }
+
+  /**
+   * Sorts models by proximity to a target power rank (closest first).
+   * When two models are equidistant, the higher-powered one is preferred.
+   */
+  private sortByPowerProximity(
+    models: MJAIModelEntityExtended[],
+    targetPowerRank: number
+  ): MJAIModelEntityExtended[] {
+    return [...models].sort((a, b) => {
+      const distA = Math.abs((a.PowerRank ?? 0) - targetPowerRank);
+      const distB = Math.abs((b.PowerRank ?? 0) - targetPowerRank);
+      if (distA !== distB) return distA - distB; // Closer to target first
+      return (b.PowerRank ?? 0) - (a.PowerRank ?? 0); // Tie-break: higher power first
+    });
   }
 
   /**
