@@ -1,8 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnDestroy, ChangeDetectorRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Metadata } from '@memberjunction/core';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
+import { marked } from 'marked';
 
 /**
  * Flattened tree item for rendering the component hierarchy
@@ -52,6 +54,13 @@ export class ComponentFeedbackPanelComponent implements OnDestroy {
   private containerClickHandler: ((e: MouseEvent) => void) | null = null;
 
   private cdr = inject(ChangeDetectorRef);
+  private sanitizer = inject(DomSanitizer);
+
+  /** Renders a markdown string as sanitized HTML */
+  RenderMarkdown(text: string): SafeHtml {
+    const html = marked.parse(text, { async: false }) as string;
+    return this.sanitizer.bypassSecurityTrustHtml(html);
+  }
 
   // --- Tree Methods ---
 
@@ -104,14 +113,14 @@ export class ComponentFeedbackPanelComponent implements OnDestroy {
     return `${depth * 20}px`;
   }
 
-  // --- Star Rating ---
+  // --- Star Rating (supports half-star increments) ---
 
-  SetRating(stars: number): void {
-    this.StarRating = stars;
+  SetRating(value: number): void {
+    this.StarRating = value;
   }
 
-  SetHoverRating(stars: number): void {
-    this.HoverRating = stars;
+  SetHoverRating(value: number): void {
+    this.HoverRating = value;
   }
 
   ClearHoverRating(): void {
@@ -120,6 +129,14 @@ export class ComponentFeedbackPanelComponent implements OnDestroy {
 
   GetDisplayRating(): number {
     return this.HoverRating || this.StarRating;
+  }
+
+  /** Returns 'full' | 'half' | 'empty' for the given 1-based star index */
+  GetStarState(index: number): 'full' | 'half' | 'empty' {
+    const rating = this.GetDisplayRating();
+    if (index <= rating) return 'full';
+    if (index - 0.5 <= rating) return 'half';
+    return 'empty';
   }
 
   IsStarFilled(index: number): boolean {
