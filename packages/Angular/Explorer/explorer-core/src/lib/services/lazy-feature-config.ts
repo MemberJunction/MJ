@@ -59,11 +59,15 @@ const loadSettings = featureLoader(() => import(
  */
 export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   // ── AI Dashboard (BaseResourceComponent types) ──
-  'AIModelsResource':       loadAI,
-  'AIPromptsResource':      loadAI,
-  'AIAgentsResource':       loadAI,
-  'AIMonitorResource':      loadAI,
-  'AIConfigResource':       loadAI,
+  'AIModelsResource':               loadAI,
+  'AIPromptsResource':              loadAI,
+  'AIAgentsResource':               loadAI,
+  'AIMonitorResource':              loadAI,
+  'AIConfigResource':               loadAI,
+  'AIAgentRequestsResource':        loadAI,
+  'VectorManagementResource':       loadAI,
+  'DuplicateDetectionResource':     loadAI,
+  'AutotaggingPipelineResource':    loadAI,
 
   // ── Actions Dashboard (BaseResourceComponent types) ──
   'ActionsOverviewResource':  loadActions,

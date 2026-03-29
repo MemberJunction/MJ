@@ -535,50 +535,73 @@ The prompt analyzes entity schemas (fields, types, relationships) and outputs:
 
 ---
 
-## Phase 14: Full-Stack Playwright Testing (PARTIAL)
+## Phase 14: Full-Stack Playwright Testing (COMPLETED)
 
 **Date**: 2026-03-29
+**Container**: 32GB RAM Docker workbench (upgraded from 7.8GB)
 
 ### Environment
 - MJAPI: port 4000, connected to MJ_Workbench on sql-claude:1433
-- MJExplorer: port 4201, Auth0 authentication (bluecypress-dev.us.auth0.com)
+- MJExplorer: port 4201, Angular dev server with Vite HMR
+- Authentication: Auth0 (bluecypress-dev.us.auth0.com)
 - Browser: Chromium (headless) via playwright-cli
+- Test user: da-robot-tester@bluecypress.io
+
+### Infrastructure Fix
+Added lazy-loading registry entries for new dashboard components in `lazy-feature-config.ts`:
+- `VectorManagementResource` → loadAI chunk
+- `DuplicateDetectionResource` → loadAI chunk
+- `AutotaggingPipelineResource` → loadAI chunk
+- `AIAgentRequestsResource` → loadAI chunk
+
+Without these entries, the `LazyModuleRegistry` couldn't find the resource components at runtime, producing "Unable to find resource registration for driver class" errors.
 
 ### Results
 | Step | Status | Details |
 |------|--------|---------|
-| MJAPI startup | **PASS** | Server ready at http://localhost:4000/, 7.9s startup, 348 entities loaded |
-| MJExplorer startup | **PASS** | Application bundle generated in 3.2s, dev server on port 4201 |
-| Login page renders | **PASS** | Welcome Back page with Login button displayed correctly |
-| Auth0 redirect | **PASS** | Clicking Login redirects to bluecypress-dev.us.auth0.com |
-| Auth0 authentication | **PASS** | Email + password form fills correctly, Continue submits successfully |
-| Auth0 callback | **PASS** | Redirects back to localhost:4201 after successful authentication |
-| App header renders | **PASS** | Navigation, Search, Notifications elements visible |
-| Workspace loading | **BLOCKED** | MJAPI killed by OOM (exit code 137) during workspace metadata load |
-| Dashboard navigation | **BLOCKED** | Requires running MJAPI — container memory insufficient (7.8GB total) |
-| Component interaction | **BLOCKED** | Same OOM constraint |
+| MJAPI startup | **PASS** | Server ready at http://localhost:4000/, 8.0s startup, 348 entities loaded |
+| MJExplorer startup | **PASS** | Application bundle generated in 3.8s, dev server on port 4201 |
+| Login page renders | **PASS** | Welcome Back page with Login button |
+| Auth0 redirect | **PASS** | Redirects to bluecypress-dev.us.auth0.com |
+| Auth0 authentication | **PASS** | Email + password submitted successfully |
+| Auth0 callback | **PASS** | Redirects back with auth code, workspace loads |
+| Home page renders | **PASS** | "Good afternoon, da-robot-tester@bluecypress.io", 8 app cards visible |
+| AI app assignment | **PASS** | Added AI app to user via SQL, added Vectors/Duplicates/Autotagging nav items |
+| AI Monitor dashboard | **PASS** | KPIs: 3 executions, 66.7% success rate, 2.74s avg response, charts render |
+| AI Monitor time range | **PASS** | Changing to "Last 7 Days": 4 executions, 75% success rate, charts update |
+| **Vector Management** | **PASS** | Entity Sync Status, Suggest Document button, DB Health (Healthy), Embedding Model, Coverage (0%) |
+| **Duplicate Detection** | **PASS** | 10 total groups, Kanban columns (Pending/Approved/Rejected), real MEMBERS data with scores (72%-87%) |
+| **Duplicate Approve** | **PASS** | Clicking Approve moves card from Pending→Approved, KPIs update (9P/1A/0R) |
+| **Duplicate Reject** | **PASS** | Clicking Reject moves card from Pending→Rejected, KPIs update (8P/1A/1R) |
+| **Duplicate Filter** | **PASS** | Setting Min Score=0.8 filters to 3 items (84%, 84%, 87%), Clear Filters button appears |
+| **Autotagging Pipeline** | **PASS** | KPIs (0 processed, 0 tags, 0 errors), pipeline stages (Ingest→Extract→Chunk→Tag→Vectorize all Idle) |
+| **Suggest Document** | **PASS** | Opens dialog with entity dropdown (all 350+ entities), Use Case selector, Generate Template button |
+| **AI Template Generation** | **PASS** | LLM generates template with 21 fields for Members entity, Potential Match 70%, Absolute Match 95%, reasoning text |
+| Refresh buttons | **PASS** | All dashboard Refresh buttons reload data correctly |
+| Tab navigation | **PASS** | All 10 AI app tabs navigate correctly: Monitor, Prompts, Agents, Agent Requests, Models, Configuration, MCP, Vectors, Duplicates, Autotagging |
 
-### Root Cause
-Running MJAPI (Node.js server with database connections) + MJExplorer (Angular dev server with Vite) + Chromium (browser for Playwright) simultaneously exceeds the Docker container's memory limit. Each process individually succeeds, but the combined memory footprint causes the Linux OOM killer to terminate processes (SIGKILL/exit code 137).
-
-### Mitigation
-- All Angular dashboard components compile cleanly with `ngc` (verified)
-- Component structure validated through code review and build verification
-- Full-stack testing requires a container with ≥16GB RAM, or running the browser test against a pre-built production bundle (less memory than dev server)
+### Key Observations
+1. **Real data throughout**: All dashboards display live data from the MJ_Workbench database (not mocks)
+2. **AI integration works end-to-end**: The Suggest Document feature calls a real LLM (OpenAI) and produces a meaningful entity document template
+3. **Database mutations work**: Approve/Reject actions update DuplicateRunDetailMatch records in real-time
+4. **Filtering is reactive**: Score filter immediately updates the KPI cards and Kanban columns
+5. **No JavaScript errors**: The only console errors are CORS on gravatar images (cosmetic) and WebSocket retry during MJAPI restart (transient)
 
 ---
 
 ## Conclusion
 
-PR #2212 is **fully complete** with all planned work items delivered:
+PR #2212 is **fully complete** with all planned work items delivered and **fully validated end-to-end**:
 
 1. **Worker Thread Fix** — Replaced `worker_threads` with main-thread `AsyncBatchTransform`, solving the ClassFactory registration gap that prevented vectorization in worker contexts
 2. **Type Safety** — Eliminated all `any` types in modernized code; fixed `.Get()`/`.Set()` usage in Sync package; typed legacy Core interfaces
 3. **ContentAutotagging Modernization** — Stopped extending AIEngine, replaced `GetEntityObject<any>` with typed entities, integrated TextChunker, added JSON parse error handling, batched saves
 4. **Angular UI Components** — Three production-quality dashboard components (Duplicate Detection Kanban, Vector Management Dashboard, Autotagging Pipeline Monitor) using MJ design tokens and conventions
 5. **Template Convention Change** — Flattened main entity fields to top-level template variables (`{{FieldName}}` instead of `{{Entity.FieldName}}`), related entities use relationship name prefix
-6. **AI Document Suggestion** — Metadata-driven AI prompt + server-side `EntityDocumentSuggester` engine + "Suggest Document" button in Vector Management dashboard
-7. **Full-Stack Testing** — Auth0 login flow verified end-to-end; workspace loading blocked by OOM in memory-constrained Docker container
-8. **151 unit tests** pass across all packages
-9. **10/10 E2E tests** pass with real AI services
-10. **All packages compile** cleanly with zero errors
+6. **AI Document Suggestion** — Metadata-driven AI prompt + server-side `EntityDocumentSuggester` engine + "Suggest Document" button in Vector Management dashboard — verified with real LLM calls producing meaningful templates
+7. **Full-Stack Playwright Testing** — Complete end-to-end validation: Auth0 login, all 3 dashboards rendering with live DB data, Approve/Reject mutations, score filtering, AI template generation, tab navigation across all 10 AI app sections
+8. **Lazy Loading Fix** — Added `VectorManagementResource`, `DuplicateDetectionResource`, `AutotaggingPipelineResource`, and `AIAgentRequestsResource` to `LAZY_FEATURE_CONFIG` in `lazy-feature-config.ts` so ESBuild lazy chunks load correctly at runtime
+9. **151 unit tests** pass across all packages
+10. **10/10 E2E tests** pass with real AI services (OpenAI + Pinecone)
+11. **All packages compile** cleanly with zero errors
+12. **20+ Playwright interaction tests** pass against live MJAPI + MJExplorer
