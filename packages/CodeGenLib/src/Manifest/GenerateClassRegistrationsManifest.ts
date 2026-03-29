@@ -1072,7 +1072,17 @@ function sortObjectKeys(obj: Record<string, string>): Record<string, string> {
  * so their `@RegisterClass` decorators execute as side effects.
  */
 function collectReachableClassNames(entryDtsPath: string): Set<string> {
-    const classNames = new Set<string>();
+    const result = collectReachableClasses(entryDtsPath);
+    return new Set(result.keys());
+}
+
+/**
+ * Extended version that also tracks which .d.ts file each class was found in.
+ * Returns Map<className, dtsFilePath> for disambiguation when the same class
+ * name appears in multiple subpaths.
+ */
+function collectReachableClasses(entryDtsPath: string): Map<string, string> {
+    const classToFile = new Map<string, string>();
     const visited = new Set<string>();
 
     function processFile(filePath: string): void {
@@ -1094,7 +1104,7 @@ function collectReachableClassNames(entryDtsPath: string): Set<string> {
             // export declare class ClassName ...
             const declareClassMatch = trimmed.match(/^export\s+declare\s+class\s+(\w+)/);
             if (declareClassMatch) {
-                classNames.add(declareClassMatch[1]);
+                classToFile.set(declareClassMatch[1], filePath);
                 continue;
             }
 
@@ -1106,7 +1116,7 @@ function collectReachableClassNames(entryDtsPath: string): Set<string> {
                     const parts = name.trim().split(/\s+as\s+/);
                     const exportedName = parts.length > 1 ? parts[1].trim() : parts[0].trim();
                     if (exportedName && /^\w+$/.test(exportedName)) {
-                        classNames.add(exportedName);
+                        classToFile.set(exportedName, filePath);
                     }
                 }
                 const fromMatch = trimmed.match(/from\s+['"]([^'"]+)['"]/);
@@ -1145,7 +1155,7 @@ function collectReachableClassNames(entryDtsPath: string): Set<string> {
     }
 
     processFile(entryDtsPath);
-    return classNames;
+    return classToFile;
 }
 
 /**
@@ -1158,8 +1168,32 @@ function collectReachableClassNames(entryDtsPath: string): Set<string> {
  * @returns Map of subpath name (e.g., './ai-dashboards.module') to Set of reachable class names.
  *          The main entry (`.`) is excluded from the map.
  */
+/**
+ * Detailed subpath resolution result that includes .d.ts file paths for disambiguation.
+ */
+export interface SubpathExportInfo {
+    /** Class names reachable from this subpath */
+    classNames: Set<string>;
+    /** Map of className → .d.ts file where it was declared */
+    classToFile: Map<string, string>;
+}
+
 export function resolveSubpathExports(packageDir: string): Map<string, Set<string>> {
+    const detailed = resolveSubpathExportsDetailed(packageDir);
     const result = new Map<string, Set<string>>();
+    for (const [subpath, info] of detailed.entries()) {
+        result.set(subpath, info.classNames);
+    }
+    return result;
+}
+
+/**
+ * Detailed version that also returns the .d.ts file path where each class was found.
+ * Used by the lazy config generator to disambiguate classes with the same name
+ * that appear in different subpath modules.
+ */
+function resolveSubpathExportsDetailed(packageDir: string): Map<string, SubpathExportInfo> {
+    const result = new Map<string, SubpathExportInfo>();
 
     const pkgPath = path.join(packageDir, 'package.json');
     if (!fs.existsSync(pkgPath)) return result;
@@ -1185,9 +1219,12 @@ export function resolveSubpathExports(packageDir: string): Map<string, Set<strin
         const dtsPath = path.resolve(packageDir, typesField);
         if (!fs.existsSync(dtsPath)) continue;
 
-        const reachableNames = collectReachableClassNames(dtsPath);
-        if (reachableNames.size > 0) {
-            result.set(subpath, reachableNames);
+        const classToFile = collectReachableClasses(dtsPath);
+        if (classToFile.size > 0) {
+            result.set(subpath, {
+                classNames: new Set(classToFile.keys()),
+                classToFile
+            });
         }
     }
 
@@ -1383,10 +1420,10 @@ function groupClassesIntoChunks(
     lazyPackages: Map<string, string>,
     log: (msg: string) => void
 ): LazyChunk[] {
-    // Build subpath export maps for packages that have them
-    const packageSubpaths = new Map<string, Map<string, Set<string>>>();
+    // Build detailed subpath export maps (including .d.ts file paths for disambiguation)
+    const packageSubpaths = new Map<string, Map<string, SubpathExportInfo>>();
     for (const [depName, depDir] of lazyPackages.entries()) {
-        const subpaths = resolveSubpathExports(depDir);
+        const subpaths = resolveSubpathExportsDetailed(depDir);
         if (subpaths.size > 0) {
             packageSubpaths.set(depName, subpaths);
         }
@@ -1407,7 +1444,9 @@ function groupClassesIntoChunks(
 
         if (subpaths) {
             // Package has subpath exports — find which one contains this class
-            const foundSubpath = findClassSubpath(cls.className, subpaths);
+            // Use file path matching to disambiguate classes with the same name
+            const packageDir = lazyPackages.get(cls.packageName)!;
+            const foundSubpath = findClassSubpathByFile(cls, subpaths, packageDir);
             if (!foundSubpath) {
                 log(`  Warning: ${cls.key} (${cls.className}) not found in any subpath of ${cls.packageName}, skipping`);
                 continue;
@@ -1455,13 +1494,47 @@ function groupClassesIntoChunks(
 }
 
 /**
- * Finds which subpath export contains a given class name.
+ * Finds which subpath export contains a given class, using the source file path
+ * to disambiguate when multiple subpaths export classes with the same name.
+ *
+ * Converts the class's source `.ts` path to the expected `.d.ts` path (src/ → dist/)
+ * and checks which subpath's .d.ts tree includes that file.
  */
-function findClassSubpath(className: string, subpaths: Map<string, Set<string>>): string | undefined {
-    for (const [subpath, exportedNames] of subpaths.entries()) {
-        if (exportedNames.has(className)) return subpath;
+function findClassSubpathByFile(
+    cls: RegisteredClassInfo,
+    subpaths: Map<string, SubpathExportInfo>,
+    packageDir: string
+): string | undefined {
+    // Collect all subpaths that contain a class with this name
+    const candidates: string[] = [];
+    for (const [subpath, info] of subpaths.entries()) {
+        if (info.classNames.has(cls.className)) {
+            candidates.push(subpath);
+        }
     }
-    return undefined;
+
+    if (candidates.length === 0) return undefined;
+    if (candidates.length === 1) return candidates[0];
+
+    // Multiple subpaths have this class name — disambiguate using file path.
+    // Convert cls.filePath (src/Actions/components/foo.ts) to expected .d.ts
+    // (dist/Actions/components/foo.d.ts) and check which subpath's tree matches.
+    const relativeSource = path.relative(packageDir, cls.filePath);
+    const expectedDts = relativeSource
+        .replace(/^src\//, 'dist/')
+        .replace(/\.ts$/, '.d.ts');
+    const expectedDtsAbsolute = path.resolve(packageDir, expectedDts);
+
+    for (const subpath of candidates) {
+        const info = subpaths.get(subpath)!;
+        const dtsFile = info.classToFile.get(cls.className);
+        if (dtsFile && path.resolve(dtsFile) === expectedDtsAbsolute) {
+            return subpath;
+        }
+    }
+
+    // Fallback: return first candidate (shouldn't happen with correct .d.ts mapping)
+    return candidates[0];
 }
 
 /**

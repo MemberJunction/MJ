@@ -13,10 +13,10 @@ function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {
   return () => importFn().then(() => {});
 }
 
-// --- @memberjunction/ng-dashboards → ./actions-dashboards.module (6 keys) ---
+// --- @memberjunction/ng-dashboards → ./actions-dashboards.module (7 keys) ---
 const loadActionsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/actions-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (7 keys) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (6 keys) ---
 const loadAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/ai-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (6 keys) ---
@@ -64,6 +64,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'ActionExplorerResource': loadActionsDashboardsModule,
   'ActionsCodeResource': loadActionsDashboardsModule,
   'ActionsEntitiesResource': loadActionsDashboardsModule,
+  'ActionsMonitorResource': loadActionsDashboardsModule,
   'ActionsOverviewResource': loadActionsDashboardsModule,
   'ActionsScheduleResource': loadActionsDashboardsModule,
   'ActionsSecurityResource': loadActionsDashboardsModule,
@@ -75,7 +76,6 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'AIModelsResource': loadAiDashboardsModule,
   'AIMonitorResource': loadAiDashboardsModule,
   'AIPromptsResource': loadAiDashboardsModule,
-  'ActionsMonitorResource': loadAiDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
   'CommunicationDashboard': loadCommunicationDashboardsModule,
