@@ -1,23 +1,19 @@
-import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
-import { VectorDBBase } from '@memberjunction/ai-vectordb';
+import { BaseEmbeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
+import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
-import { BaseEntity, EntityField, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
-import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJTemplateContentEntity,
+import { BaseEntity, EntityField, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo, ValidationResult } from '@memberjunction/core';
+import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse } from '../generic/vectorSync.types';
-import { BatchWorker } from './BatchWorker';
 import { EntityDocumentCache } from './EntityDocumentCache';
 import { PagedRecords } from './PagedRecords';
-import { resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { AsyncBatchTransform } from './AsyncBatchTransform';
 import { PassThrough, Transform } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
+import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 
 /**
  * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 
@@ -51,7 +47,7 @@ export class EntityVectorSyncer extends VectorBase {
     const startTime: number = new Date().getTime();
     super.CurrentUser = contextUser;
     await TemplateEngineServer.Instance.Config(false, contextUser);
-    
+
     const entityDocument: MJEntityDocumentEntity = await this.GetEntityDocument(params.entityDocumentID);
     const vectorIndexEntity: MJVectorIndexEntity = await this.GetOrCreateVectorIndex(entityDocument);
     const obj: VectorEmeddingData = await this.GetVectorDatabaseAndEmbeddingClassByEntityDocumentID(params.entityDocumentID);
@@ -77,102 +73,209 @@ export class EntityVectorSyncer extends VectorBase {
       throw new Error('Templates used by Entity Documents should only have one associated Template Content record.');
     }
 
-    //If this function doesnt throw an error, then the template is valid
-    const validTemplate: boolean = this.ValidateTemplateContextParamAlignment(template);
+    this.ValidateTemplateContextParamAlignment(template);
 
     const pageSize: number = params.listBatchCount || 50;
     const dataStream = new PagedRecords();
-    
-    let templateObj: {} = {
-      ...template.GetAll(),
-      Params: template.Params.map((p) => p.To())
-    }; 
+    const templateContent = template.Content[0];
 
-    const workerContext = { 
-      executionId: Date.now(), 
-      entity, 
-      entityDocument: entityDocument.To(),
-      template: templateObj,
-      templateContent: template.Content[0].To(),
-      vectorDBClassKey: obj.vectorDBClassKey,
-      vectorDBAPIKey: obj.vectorDBAPIKey,
-      embeddingDriverClass: obj.embeddingDriverClass,
-      embeddingAPIKey: obj.embeddingAPIKey,
-      delayTimeMS
-    };
+    const vectorCreator = this.createVectorCreator(
+      template, templateContent, obj.embedding, delayTimeMS, params.VectorizeBatchCount
+    );
 
-    //Handles vectorizing the records 
-    const VectorCreator = new BatchWorker({
-      workerFile: resolve(__dirname, 'workers/VectorizeTemplates.js'),
-      batchSize: params.VectorizeBatchCount || 50,
-      concurrencyLimit: 2,
-      contextUser: super.CurrentUser,
-      workerContext,
-    });
+    const vectorUpserter = this.createVectorUpserter(
+      entityDocument, templateContent, obj.vectorDB, delayTimeMS, params.UpsertBatchCount
+    );
 
-    VectorCreator.on('error', (err) => {      
-      LogError('Error in VectorCreator worker', null, err);    
-    });
-
-    //Handles upserting the vectors into the vector database
-    const VectorUpserter = new BatchWorker({ 
-      workerFile: resolve(__dirname, 'workers/UpsertVectors.js'), 
-      batchSize: params.UpsertBatchCount || 50,
-      contextUser: super.CurrentUser, 
-      workerContext
-    });
-
-    VectorUpserter.on('error', (err) => {      
-      LogError('Error in VectorUpserter worker', null, err);    
-    });
-
-    //short for entity record document upserter
-    // handles upserting entity record document records
-    const ERCUpserter = new Transform({objectMode: true, transform: (chunk, encoding, callback) => {
-      this.UpsertEntityRecordDocumentRecords(chunk as EmbeddingData, super.CurrentUser).then(() => callback(null)).catch(callback);
+    const erdUpserter = new Transform({objectMode: true, transform: (chunk: EmbeddingData, _encoding: BufferEncoding, callback) => {
+      this.UpsertEntityRecordDocumentRecords(chunk, super.CurrentUser).then(() => callback(null)).catch(callback);
     }});
 
-    const getData = async (): Promise<void> => {
-      let pageNumber =  0;
+    this.startDataPaging(dataStream, params, md, entity, template, vectorIndexEntity, pageSize);
 
-      if(params.StartingOffset){
+    LogStatus('Starting pipeline');
+    await pipeline(dataStream, vectorCreator, vectorUpserter, erdUpserter, new PassThrough({ objectMode: true }));
+
+    const elapsedSeconds: number = (new Date().getTime() - startTime) / 1000;
+    LogStatus(`Finished vectorizing ${entityDocument.Entity} entity in ${elapsedSeconds} seconds (${(elapsedSeconds / 60).toFixed(1)} minutes)`);
+
+    return { success: true, status: 'Complete', errorMessage: '' };
+  }
+
+  /**
+   * Creates an AsyncBatchTransform that renders templates and generates embeddings
+   * in the main thread. This replaces the worker_threads-based VectorizeTemplates
+   * worker, which couldn't access ClassFactory registrations in its isolated V8 context.
+   */
+  private createVectorCreator(
+    template: MJTemplateEntityExtended,
+    templateContent: MJTemplateContentEntity,
+    embedding: BaseEmbeddings,
+    delayTimeMS: number,
+    batchSize?: number
+  ): AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData> {
+    const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+    return new AsyncBatchTransform<Record<string, unknown>, undefined, EmbeddingData>({
+      batchSize: batchSize || 50,
+      concurrencyLimit: 2,
+      processBatch: async (batch: Record<string, unknown>[]): Promise<EmbeddingData[]> => {
+        TemplateEngineServer.Instance.SetupNunjucks();
+        const processedTexts: string[] = [];
+
+        for (const entityData of batch) {
+          const validationResult = this.validateTemplateInput(template, entityData);
+          if (!validationResult.Success) {
+            LogError(`Validation error for record`, undefined, validationResult.Errors.map(e => e.Message).join('\n'));
+            continue;
+          }
+
+          const result: TemplateRenderResult = await TemplateEngineServer.Instance.RenderTemplate(template, templateContent, entityData, true);
+          if (result.Success) {
+            processedTexts.push(result.Output);
+          } else {
+            LogError(`Error rendering template`, undefined, result.Message);
+          }
+        }
+
+        const embeddings: EmbedTextsResult = await embedding.EmbedTexts({ texts: processedTexts, model: null });
+        await delay(delayTimeMS);
+
+        return embeddings.vectors.map((vector: number[], index: number) => ({
+          ID: index,
+          Vector: vector,
+          EntityData: batch[index],
+          __mj_recordID: String(batch[index].__mj_recordID),
+          __mj_compositeKey: String(batch[index].__mj_compositeKey ?? ''),
+          EntityDocument: batch[index].__mj_entityDocument as Record<string, unknown>,
+          VectorID: String(batch[index].VectorID ?? ''),
+          VectorIndexID: String(batch[index].VectorIndexID ?? ''),
+          TemplateContent: templateContent.TemplateText,
+        }));
+      },
+    });
+  }
+
+  /**
+   * Creates an AsyncBatchTransform that upserts vectors to the vector database
+   * in the main thread. This replaces the worker_threads-based UpsertVectors
+   * worker for the same ClassFactory reasons.
+   */
+  private createVectorUpserter(
+    entityDocument: MJEntityDocumentEntity,
+    templateContent: MJTemplateContentEntity,
+    vectorDB: VectorDBBase,
+    delayTimeMS: number,
+    batchSize?: number
+  ): AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData> {
+    const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+    return new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
+      batchSize: batchSize || 50,
+      concurrencyLimit: 2,
+      processBatch: async (batch: EmbeddingData[]): Promise<EmbeddingData[]> => {
+        const vectorRecords: VectorRecord[] = batch.map((embeddingItem: EmbeddingData) => {
+          const guid: string = crypto.randomUUID();
+          embeddingItem.VectorID = guid;
+          return {
+            id: guid,
+            values: embeddingItem.Vector,
+            metadata: {
+              RecordID: String(embeddingItem.__mj_compositeKey ?? ''),
+              Entity: entityDocument.Entity,
+              TemplateID: templateContent.ID,
+            }
+          };
+        });
+
+        const response: BaseResponse = await vectorDB.createRecords(vectorRecords);
+        if (!response.success) {
+          LogError('Unable to save records to vector database', undefined, response.message);
+        }
+
+        await delay(delayTimeMS);
+        return batch;
+      },
+    });
+  }
+
+  /**
+   * Validates template input data against template parameter definitions
+   */
+  private validateTemplateInput(template: MJTemplateEntityExtended, data: Record<string, unknown>): ValidationResult {
+    const result = new ValidationResult();
+    const params = template.Params;
+
+    if (!params) {
+      result.Errors.push({ Source: '', Message: 'Params property not found on the template.', Value: '', Type: 'Failure' });
+    }
+
+    params?.forEach((p) => {
+      if (p.IsRequired) {
+        const val = data[p.Name];
+        if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
+          result.Errors.push({ Source: p.Name, Message: `Parameter ${p.Name} is required.`, Value: val, Type: 'Failure' });
+        }
+      }
+    });
+
+    result.Success = !result.Errors.some(e => e.Type === 'Failure');
+    return result;
+  }
+
+  /**
+   * Starts the async data paging loop that feeds records into the stream pipeline.
+   */
+  private startDataPaging(
+    dataStream: PagedRecords,
+    params: VectorizeEntityParams,
+    md: Metadata,
+    entity: EntityInfo,
+    template: MJTemplateEntityExtended,
+    vectorIndexEntity: MJVectorIndexEntity,
+    pageSize: number
+  ): void {
+    const getData = async (): Promise<void> => {
+      let pageNumber = 0;
+
+      if (params.StartingOffset) {
         pageNumber = params.StartingOffset * pageSize;
         LogStatus(`Starting at offset ${params.StartingOffset} (skipping first ${pageNumber} records)`);
       }
 
       let hasMore = true;
       while (hasMore) {
-        let pageRecordRequest: PageRecordsParams = {
+        const pageRecordRequest: PageRecordsParams = {
           EntityID: params.entityID,
           PageNumber: pageNumber,
           PageSize: pageSize,
           ResultType: 'simple',
         };
 
-        if(params.listID){
+        if (params.listID) {
           const coreSchema: string = md.ConfigData.MJCoreSchemaName;
           pageRecordRequest.Filter = this.buildListFilter(entity, coreSchema, params.listID);
         }
 
         const recordsPage: unknown[] = await super.PageRecordsByEntityID<unknown>(pageRecordRequest);
         const relatedData: TemplateParamData[] = await this.GetRelatedTemplateDataForBatch(entity, recordsPage, template);
-        const items: Record<string, any>[] = [];
+        const items: Record<string, unknown>[] = [];
 
         LogStatus(`Fetched page ${pageNumber + 1} with ${recordsPage.length} records to process`);
-        
-        for(const record of recordsPage){
-          const templateData: { [key: string]: unknown } = await this.GetTemplateData(entity, record, template, relatedData);
-          //we need a reference to this record's ID for the upsert worker
-          templateData.__mj_recordID = record[entity.FirstPrimaryKey.Name];
-          templateData.__mj_compositeKey = entity.PrimaryKeys.map((key) => `${key.Name}|${record[key.Name]}`).join("||");
-          //we also need a reference to the vector index's ID
+
+        for (const record of recordsPage) {
+          const typedRecord = record as Record<string, unknown>;
+          const templateData: Record<string, unknown> = await this.GetTemplateData(entity, typedRecord, template, relatedData);
+          templateData.__mj_recordID = typedRecord[entity.FirstPrimaryKey.Name];
+          templateData.__mj_compositeKey = entity.PrimaryKeys.map((key) => `${key.Name}|${typedRecord[key.Name]}`).join('||');
           templateData.VectorIndexID = vectorIndexEntity.ID;
           templateData.TemplateContent = template.Content[0].TemplateText;
+          templateData.__mj_entityDocument = params.entityDocumentID;
           items.push(templateData);
         }
 
         dataStream.addPage(items);
-        if(recordsPage.length < pageSize) {
+        if (recordsPage.length < pageSize) {
           hasMore = false;
           break;
         }
@@ -183,20 +286,7 @@ export class EntityVectorSyncer extends VectorBase {
       dataStream.endStream();
     };
 
-    // page data asynchrounously and add to the data stream
     getData();
-
-    LogStatus('Starting pipeline');
-    await pipeline(dataStream, VectorCreator, VectorUpserter, ERCUpserter, new PassThrough({ objectMode: true }));
-
-    const endTime: number = new Date().getTime();
-
-    //convert ms to seconds
-    const elapsedSeconds: number = (endTime - startTime) / 1000;
-    const elapsedMinutes: number = elapsedSeconds / 60;
-
-    LogStatus(`Finished vectorizing ${entityDocument.Entity} entity in ${elapsedSeconds} seconds (${elapsedMinutes} minutes)`);
-    return null;
   }
 
   /**
@@ -383,9 +473,6 @@ export class EntityVectorSyncer extends VectorBase {
       vectorIndexEntity.VectorDatabaseID = entityDocument.VectorDatabaseID;
       vectorIndexEntity.EmbeddingModelID = entityDocument.AIModelID;
       vectorIndexEntity.Name = `Vector Index for entityDocument ${entityDocument.EntityID}`;
-      vectorIndexEntity.Set('EntityRecordUpdatedAt', new Date());
-      vectorIndexEntity.Set('EntityDocumentID', entityDocument.ID);
-      //not a very descriptive description, but the view has the name of the vectorDB and embedding model used
       vectorIndexEntity.Description = `Vector Index that uses the Vector database ${entityDocument.VectorDatabaseID} and ${entityDocument.AIModelID} as the embedding model`;
       const saveResult = await super.SaveEntity(vectorIndexEntity);
       if (saveResult) {
@@ -494,36 +581,35 @@ export class EntityVectorSyncer extends VectorBase {
     return runViewResult.Results;
   }
 
-  protected async GetTemplateData(entity: EntityInfo, record: unknown, template: MJTemplateEntityExtended, relatedData: TemplateParamData[]): Promise<{ [key: string]: any }> {
-    const templateData: { [key: string]: unknown } = {};
-    for(const param of template.Params){
-      if(templateData[param.Name]){
+  protected async GetTemplateData(entity: EntityInfo, record: Record<string, unknown>, template: MJTemplateEntityExtended, relatedData: TemplateParamData[]): Promise<Record<string, unknown>> {
+    const templateData: Record<string, unknown> = {};
+    for (const param of template.Params) {
+      if (templateData[param.Name]) {
         continue;
       }
 
-      switch(param.Type){
+      switch (param.Type) {
         case 'Record':
-          // this one is simple, we create a property by the provided name, and set the value to the record we are currently processing
           templateData[param.Name] = record;
           break;
-        case 'Entity':
-          // here we need to grab the related data from another entity and filter it down for the record we are current processing so it only shows the related data
-          // the metadata in the param tells us what we need to know
+        case 'Entity': {
           const paramData: TemplateParamData | undefined = relatedData.find((rd: TemplateParamData) => rd.ParamName === param.Name);
-          if(!paramData){
+          if (!paramData) {
             LogError(`No related data found for param ${param.Name} in template ${template.ID}`);
             break;
           }
-
-          // now filter down the data in d to just this record and set the value of the context data to the filtered data
-          templateData[param.Name] = paramData.Data.filter((rdfr: BaseEntity) => rdfr[param.LinkedParameterField] === record[entity.FirstPrimaryKey.Name]);
+          const pkValue = record[entity.FirstPrimaryKey.Name];
+          templateData[param.Name] = paramData.Data.filter((rdfr: unknown) => {
+            const typedRdfr = rdfr as Record<string, unknown>;
+            return typedRdfr[param.LinkedParameterField] === pkValue;
+          });
           break;
-          case "Array":
-          case "Scalar":
-          case "Object":
-              // do nothing here, as we don't directly support these param types
-              LogError(`Unsupported parameter type ${param.Type} for parameter ${param.Name} in template ${template.ID}`);
-              break;
+        }
+        case 'Array':
+        case 'Scalar':
+        case 'Object':
+          LogError(`Unsupported parameter type ${param.Type} for parameter ${param.Name} in template ${template.ID}`);
+          break;
       }
     }
     return templateData;
@@ -532,32 +618,30 @@ export class EntityVectorSyncer extends VectorBase {
   protected async GetRelatedTemplateDataForBatch(entity: EntityInfo, records: unknown[], template: MJTemplateEntityExtended): Promise<TemplateParamData[]> {
     const relatedData: TemplateParamData[] = [];
 
-    for(const templateParam of template.Params){
-      if(templateParam.Type !== 'Entity'){
+    for (const templateParam of template.Params) {
+      if (templateParam.Type !== 'Entity') {
         continue;
       }
 
       const relatedEntity = templateParam.Entity;
       const relatedField = templateParam.LinkedParameterField;
-
-      // construct a filter for the related field so that we constrain the results to just the set of records linked to our recipients
-      const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : "";
-      const filter = `${relatedField} in (${records.map((record: unknown) => `${quotes}${record[entity.FirstPrimaryKey.Name]}${quotes}`).join(',')})`;
+      const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+      const pkName = entity.FirstPrimaryKey.Name;
+      const filter = `${relatedField} in (${records.map((record: unknown) => {
+        const typedRecord = record as Record<string, unknown>;
+        return `${quotes}${typedRecord[pkName]}${quotes}`;
+      }).join(',')})`;
       const finalFilter = templateParam.ExtraFilter ? `(${filter}) AND (${templateParam.ExtraFilter})` : filter;
 
-      const result = await super.RunView.RunView<unknown>({
-          EntityName: relatedEntity,
-          ExtraFilter: finalFilter,
-          ResultType: 'simple'
+      const result = await super.RunView.RunView<Record<string, unknown>>({
+        EntityName: relatedEntity,
+        ExtraFilter: finalFilter,
+        ResultType: 'simple'
       }, super.CurrentUser);
 
       if (result && result.Success) {
-        const data: TemplateParamData = { ParamName: '', Data: [] };
-        data.ParamName = templateParam.Name,
-        data.Data = result.Results;
-        relatedData.push(data);
-      }
-      else {
+        relatedData.push({ ParamName: templateParam.Name, Data: result.Results });
+      } else {
         LogError(`Error getting related data for entity ${relatedEntity} with filter ${finalFilter}`, undefined, result.ErrorMessage);
       }
     }
@@ -565,59 +649,63 @@ export class EntityVectorSyncer extends VectorBase {
     return relatedData;
   }
 
-  // Rather than having this logic inside the EntityRecordDocumentWorker class, it's placed here instead
-  //so that the logic behind vectorizing entities isnt spread out across so many files
+  /**
+   * Creates or updates an Entity Record Document record linking a source record to its vector embedding.
+   */
   protected async UpsertEntityRecordDocumentRecords(embeddingData: EmbeddingData, contextUser: UserInfo): Promise<void> {
-    let md: Metadata = super.Metadata;
-    let rv: RunView = super.RunView;
+    const md: Metadata = super.Metadata;
+    const rv: RunView = super.RunView;
 
-    let vectorIndex: MJVectorIndexEntity = await md.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes', contextUser);
-    let vectorIndexID: string = embeddingData.VectorIndexID.toString();
-    let loadResult = await vectorIndex.Load(vectorIndexID);
-    if(!loadResult){
-      LogError(`Vector Index with ID ${embeddingData.VectorIndexID} not found`);
+    const vectorIndexID: string = String(embeddingData.VectorIndexID);
+    const vectorIndex: MJVectorIndexEntity = await md.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes', contextUser);
+    const loadResult = await vectorIndex.Load(vectorIndexID);
+    if (!loadResult) {
+      LogError(`Vector Index with ID ${vectorIndexID} not found`);
       return;
     }
 
-    let entityDocument: Record<string, unknown> = embeddingData.EntityDocument;
-    let entityID: unknown = entityDocument.EntityID;
+    const entityDocument: Record<string, unknown> = embeddingData.EntityDocument;
+    const entityID: string = String(entityDocument.EntityID);
+    const recordID: string = String(embeddingData.__mj_recordID);
+    const entityDocumentID: string = String(entityDocument.ID);
 
-    let existingRecords: BaseEntity[] = [];
-    const runViewResult: RunViewResult<BaseEntity> = await rv.RunView<BaseEntity>({
+    const runViewResult: RunViewResult<MJEntityRecordDocumentEntity> = await rv.RunView<MJEntityRecordDocumentEntity>({
       EntityName: 'MJ: Entity Record Documents',
-      ExtraFilter: `EntityID = '${entityID}' AND EntityDocumentID = '${entityDocument.ID}' AND RecordID in ('${embeddingData.__mj_recordID}')`,
+      ExtraFilter: `EntityID = '${entityID}' AND EntityDocumentID = '${entityDocumentID}' AND RecordID in ('${recordID}')`,
       ResultType: 'entity_object'
     }, contextUser);
-    
-    if(runViewResult.Success){
+
+    let existingRecords: MJEntityRecordDocumentEntity[] = [];
+    if (runViewResult.Success) {
       existingRecords = runViewResult.Results;
-    }
-    else {
-      LogError(`Error getting existing Entity Record Documents`, undefined, runViewResult.ErrorMessage);
+    } else {
+      LogError('Error getting existing Entity Record Documents', undefined, runViewResult.ErrorMessage);
     }
 
-    let erdEntity: BaseEntity | undefined = existingRecords.find((er: BaseEntity) => er.Get("RecordID").toString() === embeddingData.__mj_recordID.toString());
-    if(!erdEntity){
-      erdEntity = await md.GetEntityObject<BaseEntity>('MJ: Entity Record Documents', contextUser);
+    let erdEntity: MJEntityRecordDocumentEntity | undefined = existingRecords.find(
+      (er: MJEntityRecordDocumentEntity) => er.RecordID === recordID
+    );
+
+    if (!erdEntity) {
+      erdEntity = await md.GetEntityObject<MJEntityRecordDocumentEntity>('MJ: Entity Record Documents', contextUser);
       erdEntity.NewRecord();
     }
 
-    erdEntity.Set("EntityID", entityID.toString());
-    erdEntity.Set("RecordID", embeddingData.__mj_recordID.toString());
-    erdEntity.Set("DocumentText", embeddingData.TemplateContent);
-    erdEntity.Set("VectorID", embeddingData.VectorID.toString());
-    erdEntity.Set("VectorJSON", JSON.stringify(embeddingData.Vector));
-    erdEntity.Set("VectorIndexID", embeddingData.VectorIndexID.toString());
-    erdEntity.Set("EntityRecordUpdatedAt", new Date());
-    erdEntity.Set("EntityDocumentID", embeddingData.EntityDocument.ID.toString());
+    erdEntity.EntityID = entityID;
+    erdEntity.RecordID = recordID;
+    erdEntity.DocumentText = embeddingData.TemplateContent ?? null;
+    erdEntity.VectorID = embeddingData.VectorID != null ? String(embeddingData.VectorID) : null;
+    erdEntity.VectorJSON = JSON.stringify(embeddingData.Vector);
+    erdEntity.VectorIndexID = vectorIndexID;
+    erdEntity.EntityRecordUpdatedAt = new Date();
+    erdEntity.EntityDocumentID = entityDocumentID;
     erdEntity.ContextCurrentUser = contextUser;
-    
-    let erdEntitySaveResult: boolean = await erdEntity.Save();
-    if(!erdEntitySaveResult){
+
+    const erdEntitySaveResult: boolean = await erdEntity.Save();
+    if (!erdEntitySaveResult) {
       LogError('Error saving Entity Record Document Entity', undefined, erdEntity.LatestResult);
-    }
-    else{
-      LogStatus("Upserting Entity Record Documents: Complete");
+    } else {
+      LogStatus('Upserting Entity Record Documents: Complete');
     }
   }
 

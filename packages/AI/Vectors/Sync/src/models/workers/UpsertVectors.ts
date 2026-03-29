@@ -10,7 +10,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export async function UpsertVectorRecords() {
   const { batch, context } = workerData as WorkerData<ArchiveWorkerContext>;
 
-  const embeddingsBatch: EmbeddingData[] = batch as any;
+  const embeddingsBatch: EmbeddingData[] = batch as EmbeddingData[];
   if(!embeddingsBatch){
     throw new Error('Embeddings are required for the ArchiveWorker');
   }

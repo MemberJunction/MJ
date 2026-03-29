@@ -72,3 +72,37 @@ Validate the full vector duplicate detection pipeline end-to-end using the Assoc
 - All status transitions work correctly
 - Error paths set 'Failed' status appropriately
 - No `any` types, no `.Get()`/`.Set()` usage in the codebase
+
+
+---
+
+## Work Item 7: AI-Powered Entity Document Suggestion
+
+### AI Prompt for Entity Document Generation
+Create a metadata-driven AI prompt using the `@memberjunction/ai-prompts` package (stored in DB, not hardcoded) that:
+- Takes an entity schema as input (fields, types, relationships, FK paths)
+- Analyzes field names, types, and cardinality to suggest which fields matter for the use case (dupe detection, search, etc.)
+- Traverses related entities via foreign keys and suggests related fields to include
+- Outputs a ready-to-use Nunjucks template following the NEW convention (see below)
+- Suggests similarity thresholds based on entity type and data patterns
+
+Wire this into the Entity Document setup UX — a "Suggest Document" button in the dashboard components that calls the AI prompt, lets user review/tweak, then saves.
+
+Use the `AIPromptRunner` from `@memberjunction/ai-prompts` directly (not via Actions — see CLAUDE.md Actions Design Philosophy).
+
+### Template Convention Change (IMPORTANT)
+**OLD convention**: `{{Entity.FirstName}} {{Entity.LastName}} works at {{Entity.Organization}}`
+**NEW convention**: `{{FirstName}} {{LastName}} works at {{Organization.Name}}`
+
+Rules:
+- Main entity fields are TOP-LEVEL variables (no `Entity.` prefix)
+- Related entities use their RELATIONSHIP NAME as object prefix (e.g., `{{Organization.Name}}`, `{{Chapter.Region}}`)
+- This is cleaner, less boilerplate, more readable
+
+This requires changes to:
+- `EntityDocumentTemplateParser` — how the rendering context is built (flatten main entity fields to root, nest related entities under relationship name)
+- `GenerateTemplateTexts()` in the dupe detector — must match new context shape
+- Vectorization pipeline template rendering — same context change
+- Any existing Entity Document templates in the DB — migrate to new convention
+- The AI prompt output format — generate templates using new convention
+

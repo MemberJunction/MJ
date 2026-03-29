@@ -1,0 +1,380 @@
+/* ================================================================
+   Vector Management Dashboard
+   All colors use MJ design tokens from _tokens.scss
+   ================================================================ */
+
+/* --- Loading state --- */
+.vector-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+}
+
+/* --- Dashboard container --- */
+.vector-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 24px;
+    background: var(--mj-bg-page);
+    min-height: 100%;
+}
+
+/* --- KPI cards row --- */
+.kpi-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+@media (max-width: 1200px) {
+    .kpi-row {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .kpi-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* --- Main content: table + sidebar --- */
+.content-area {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 24px;
+    align-items: start;
+}
+
+@media (max-width: 1024px) {
+    .content-area {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* --- Sync table panel --- */
+.sync-table-panel {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.panel-title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-title i {
+    color: var(--mj-brand-primary);
+    font-size: 14px;
+}
+
+.refresh-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.refresh-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+    border-color: var(--mj-border-strong);
+}
+
+/* --- Empty state --- */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    color: var(--mj-text-muted);
+}
+
+.empty-state i {
+    font-size: 36px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.empty-state p {
+    margin: 0;
+    font-size: 14px;
+}
+
+/* --- Table --- */
+.table-wrapper {
+    overflow-x: auto;
+}
+
+.sync-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.sync-table th {
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--mj-text-muted);
+    background: var(--mj-bg-surface-card);
+    border-bottom: 1px solid var(--mj-border-default);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.sync-table td {
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--mj-text-primary);
+    border-bottom: 1px solid var(--mj-border-subtle);
+    vertical-align: middle;
+}
+
+.sync-table tbody tr:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.sync-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.entity-name {
+    font-weight: 600;
+}
+
+.document-name {
+    color: var(--mj-text-secondary);
+}
+
+.vector-count {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.last-synced {
+    color: var(--mj-text-secondary);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+/* --- Status badges --- */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.status-synced {
+    background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface));
+    color: var(--mj-status-success-text, var(--mj-status-success));
+}
+
+.status-syncing {
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+}
+
+.status-error {
+    background: color-mix(in srgb, var(--mj-status-error) 12%, var(--mj-bg-surface));
+    color: var(--mj-status-error-text, var(--mj-status-error));
+}
+
+.status-pending {
+    background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));
+    color: var(--mj-status-warning-text, var(--mj-status-warning));
+}
+
+/* --- Sync button --- */
+.sync-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border: 1px solid var(--mj-brand-primary);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--mj-brand-primary);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.sync-btn:hover:not(:disabled) {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+}
+
+.sync-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ================================================================
+   Sidebar
+   ================================================================ */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.sidebar-card {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    padding: 16px 20px;
+}
+
+.sidebar-title {
+    margin: 0 0 14px 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sidebar-title i {
+    color: var(--mj-brand-primary);
+    font-size: 13px;
+}
+
+/* --- Vector DB Health --- */
+.health-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.health-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.health-healthy {
+    background: var(--mj-status-success);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--mj-status-success) 50%, transparent);
+}
+
+.health-degraded {
+    background: var(--mj-status-warning);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--mj-status-warning) 50%, transparent);
+}
+
+.health-offline {
+    background: var(--mj-status-error);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--mj-status-error) 50%, transparent);
+}
+
+.health-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.health-status {
+    font-size: 12px;
+    color: var(--mj-text-muted);
+    padding-left: 18px;
+}
+
+/* --- Model Info --- */
+.model-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.info-label {
+    font-size: 12px;
+    color: var(--mj-text-muted);
+}
+
+.info-value {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+/* --- Storage / Coverage Gauge --- */
+.gauge-container {
+    margin-bottom: 8px;
+}
+
+.gauge-bar {
+    height: 8px;
+    border-radius: 4px;
+    background: var(--mj-bg-surface-sunken);
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.gauge-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: var(--mj-brand-primary);
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 2px;
+}
+
+.gauge-label {
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+}
+
+.storage-detail {
+    font-size: 12px;
+    color: var(--mj-text-muted);
+}

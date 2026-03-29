@@ -34,6 +34,9 @@ import { PromptVersionControlComponent } from './AI/components/prompts/prompt-ve
 import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execution-widget.component';
 import { PerformanceHeatmapComponent } from './AI/components/charts/performance-heatmap.component';
 import { AgentRequestsResourceComponent } from './AI/components/requests/agent-requests-resource.component';
+import { AutotaggingPipelineResourceComponent } from './AI/components/autotagging/autotagging-pipeline-resource.component';
+import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
+import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
 
 /**
@@ -55,7 +58,10 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     PromptVersionControlComponent,
     LiveExecutionWidgetComponent,
     PerformanceHeatmapComponent,
-    AgentRequestsResourceComponent
+    AgentRequestsResourceComponent,
+    AutotaggingPipelineResourceComponent,
+    DuplicateDetectionResourceComponent,
+    VectorManagementResourceComponent
   ],
   imports: [
     CommonModule,
@@ -92,6 +98,9 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     LiveExecutionWidgetComponent,
     PerformanceHeatmapComponent,
     AgentRequestsResourceComponent,
+    AutotaggingPipelineResourceComponent,
+    DuplicateDetectionResourceComponent,
+    VectorManagementResourceComponent,
     SharedDashboardWidgetsModule
   ]
 })

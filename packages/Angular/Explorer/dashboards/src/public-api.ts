@@ -24,7 +24,9 @@ export {
   LiveExecutionWidgetComponent,
   TimeSeriesChartComponent,
   PerformanceHeatmapComponent,
-  AgentRequestsResourceComponent
+  AgentRequestsResourceComponent,
+  AutotaggingPipelineResourceComponent,
+  VectorManagementResourceComponent
 } from './AI/index';
 
 // Export Actions components as resources (BaseResourceComponent-based)

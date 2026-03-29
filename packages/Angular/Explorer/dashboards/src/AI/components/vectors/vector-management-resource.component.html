@@ -1,0 +1,136 @@
+@if (IsLoading) {
+  <div class="vector-loading">
+    <mj-loading text="Loading vector management data..."></mj-loading>
+  </div>
+} @else {
+  <div class="vector-dashboard">
+    <!-- KPI Cards Row -->
+    <div class="kpi-row">
+      @for (card of KPICards; track card.title) {
+        <app-kpi-card [data]="card"></app-kpi-card>
+      }
+    </div>
+
+    <!-- Main Content Area: Table + Sidebar -->
+    <div class="content-area">
+      <!-- Entity Sync Table -->
+      <div class="sync-table-panel">
+        <div class="panel-header">
+          <h3 class="panel-title">
+            <i class="fa-solid fa-table-list"></i>
+            Entity Sync Status
+          </h3>
+          <button class="refresh-btn" (click)="LoadData()" title="Refresh data">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            Refresh
+          </button>
+        </div>
+
+        @if (SyncRows.length === 0) {
+          <div class="empty-state">
+            <i class="fa-solid fa-folder-open"></i>
+            <p>No entity documents configured for vectorization.</p>
+          </div>
+        } @else {
+          <div class="table-wrapper">
+            <table class="sync-table">
+              <thead>
+                <tr>
+                  <th>Entity</th>
+                  <th>Document</th>
+                  <th class="text-right">Vectors</th>
+                  <th>Last Synced</th>
+                  <th>Status</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of SyncRows; track row.EntityDocumentID) {
+                  <tr>
+                    <td class="entity-name">{{ row.EntityName }}</td>
+                    <td class="document-name">{{ row.DocumentName }}</td>
+                    <td class="text-right vector-count">{{ row.VectorCount | number }}</td>
+                    <td class="last-synced">{{ FormatDate(row.LastSynced) }}</td>
+                    <td>
+                      <span class="status-badge" [class]="GetStatusClass(row.Status)">
+                        <i [class]="GetStatusIcon(row.Status)"></i>
+                        {{ row.Status }}
+                      </span>
+                    </td>
+                    <td class="text-center">
+                      <button
+                        class="sync-btn"
+                        [disabled]="SyncingIds.has(row.EntityDocumentID)"
+                        (click)="SyncEntity(row.EntityDocumentID)"
+                        title="Sync now">
+                        @if (SyncingIds.has(row.EntityDocumentID)) {
+                          <i class="fa-solid fa-spinner fa-spin"></i>
+                        } @else {
+                          <i class="fa-solid fa-play"></i>
+                        }
+                        Sync
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      <!-- Sidebar Panels -->
+      <div class="sidebar">
+        <!-- Vector DB Health -->
+        <div class="sidebar-card">
+          <h4 class="sidebar-title">
+            <i class="fa-solid fa-heart-pulse"></i>
+            Vector DB Health
+          </h4>
+          <div class="health-row">
+            <span class="health-dot" [class]="DBHealthClass"></span>
+            <span class="health-label">{{ VectorDBName }}</span>
+          </div>
+          <div class="health-status">{{ VectorDBStatus }}</div>
+        </div>
+
+        <!-- Embedding Model Info -->
+        <div class="sidebar-card">
+          <h4 class="sidebar-title">
+            <i class="fa-solid fa-microchip"></i>
+            Embedding Model
+          </h4>
+          <div class="model-info">
+            <div class="info-row">
+              <span class="info-label">Model</span>
+              <span class="info-value">{{ EmbeddingModel.Name }}</span>
+            </div>
+            @if (EmbeddingModel.Dimensions != null) {
+              <div class="info-row">
+                <span class="info-label">Dimensions</span>
+                <span class="info-value">{{ EmbeddingModel.Dimensions | number }}</span>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Storage Usage -->
+        <div class="sidebar-card">
+          <h4 class="sidebar-title">
+            <i class="fa-solid fa-hard-drive"></i>
+            Vectorization Coverage
+          </h4>
+          <div class="gauge-container">
+            <div class="gauge-bar">
+              <div class="gauge-fill" [style.width.%]="StorageUsagePercent"></div>
+            </div>
+            <div class="gauge-label">{{ StorageLabel }} of records vectorized</div>
+          </div>
+          <div class="storage-detail">
+            {{ TotalVectors | number }} vectors stored
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+}
