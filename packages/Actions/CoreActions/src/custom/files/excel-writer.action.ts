@@ -96,7 +96,6 @@ export class ExcelWriterAction extends BaseFileHandlerAction {
                 };
             }
 
-            const outputFileId = this.getParamValue(params, 'outputfileid');
             const fileName = this.getParamValue(params, 'filename') || 'workbook.xlsx';
             const author = this.getParamValue(params, 'author');
             const title = this.getParamValue(params, 'title');
@@ -151,38 +150,36 @@ export class ExcelWriterAction extends BaseFileHandlerAction {
             // Convert to Buffer for storage/output
             const buffer = Buffer.from(result.data);
 
-            // Save to storage if requested
-            if (outputFileId) {
-                try {
-                    const fileId = await this.saveToMJStorage(
-                        buffer,
-                        fileName,
-                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                        params
-                    );
+            // Always attempt to save to MJStorage
+            try {
+                const fileId = await this.saveToMJStorage(
+                    buffer,
+                    fileName,
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    params
+                );
 
                     // Add output parameters
                     params.Params.push({ Name: 'FileOutput', Type: 'Output', Value: { fileName, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', sizeBytes: buffer.length, fileId } });
 
-                    return {
-                        Success: true,
-                        ResultCode: "SUCCESS_SAVED",
-                        Message: JSON.stringify({
-                            message: "Excel file generated and saved successfully",
-                            fileId: fileId,
-                            fileName: fileName,
-                            sheets: result.sheetCount,
-                            totalRows: result.rowCount,
-                            sizeBytes: result.sizeBytes
-                        }, null, 2)
-                    };
-                } catch (error) {
-                    // If save fails, still return the Excel data
-                    console.error('Failed to save to storage:', error);
-                }
+                return {
+                    Success: true,
+                    ResultCode: "SUCCESS_SAVED",
+                    Message: JSON.stringify({
+                        message: "Excel file generated and saved successfully",
+                        fileId: fileId,
+                        fileName: fileName,
+                        sheets: result.sheetCount,
+                        totalRows: result.rowCount,
+                        sizeBytes: result.sizeBytes
+                    }, null, 2)
+                };
+            } catch (error) {
+                // If save fails, fall back to returning base64
+                console.error('Failed to save to storage, returning base64:', error);
             }
 
-            // Return as base64
+            // Fallback: return as base64
             const base64Data = buffer.toString('base64');
 
             // Add output parameters

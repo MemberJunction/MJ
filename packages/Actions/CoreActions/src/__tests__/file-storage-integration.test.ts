@@ -19,7 +19,10 @@ import type { RunActionParams } from '@memberjunction/actions-base';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const GRAPHQL_URL = 'http://localhost:4000/graphql';
+const GRAPHQL_URL = process.env.MJAPI_URL
+    ? `${process.env.MJAPI_URL}/graphql`
+    : 'http://localhost:4000/graphql';
+const HAS_SERVER = !!process.env.MJAPI_URL;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -36,7 +39,7 @@ function makeParams(pairs: Record<string, unknown>, contextUser: UserInfo): RunA
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('File Storage Integration', () => {
+describe.skipIf(!HAS_SERVER)('File Storage Integration', () => {
     let contextUser: UserInfo;
 
     beforeAll(async () => {

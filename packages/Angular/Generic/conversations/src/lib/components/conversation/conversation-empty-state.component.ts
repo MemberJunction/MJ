@@ -13,6 +13,10 @@ export class ConversationEmptyStateComponent {
   @Input() currentUser!: UserInfo;
   @Input() disabled: boolean = false;
   @Input() showSidebarToggle: boolean = false;
+  @Input() enableAttachments: boolean = false;
+  @Input() maxAttachments: number = 10;
+  @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024;
+  @Input() acceptedFileTypes: string = 'image/*';
 
   @ViewChild(MessageInputComponent) private messageInput?: MessageInputComponent;
 

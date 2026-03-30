@@ -80,7 +80,6 @@ export class WordGeneratorAction extends BaseFileHandlerAction {
         try {
             const contentType = (this.getParamValue(params, 'contenttype') || 'structured').toLowerCase();
             const fileName = this.getParamValue(params, 'filename') || 'document.docx';
-            const outputFileId = this.getParamValue(params, 'outputfileid');
             const options = this.buildOptions(params);
 
             const sections = await this.resolveSections(params, contentType);
@@ -90,11 +89,8 @@ export class WordGeneratorAction extends BaseFileHandlerAction {
 
             const docxBuffer = await this.generateDocx(sections, options);
 
-            if (outputFileId) {
-                return await this.saveAndReturn(docxBuffer, fileName, params);
-            }
-
-            return this.returnAsBase64(docxBuffer, fileName, params);
+            // Always attempt to save to MJStorage, fall back to base64 on failure
+            return await this.saveAndReturn(docxBuffer, fileName, params);
 
         } catch (error) {
             return {

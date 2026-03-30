@@ -43,7 +43,6 @@ export class PDFGeneratorAction extends BaseFileHandlerAction {
         try {
             const content = this.getParamValue(params, 'content');
             const contentType = (this.getParamValue(params, 'contenttype') || 'html').toLowerCase();
-            const outputFileId = this.getParamValue(params, 'outputfileid');
             const fileName = this.getParamValue(params, 'filename') || 'document.pdf';
 
             if (!content) {
@@ -59,11 +58,8 @@ export class PDFGeneratorAction extends BaseFileHandlerAction {
 
             const pdfBuffer = await this.generatePDF(htmlContent, options);
 
-            if (outputFileId) {
-                return await this.saveAndReturn(pdfBuffer, fileName, params);
-            }
-
-            return this.returnAsBase64(pdfBuffer, fileName, params);
+            // Always attempt to save to MJStorage, fall back to base64 on failure
+            return await this.saveAndReturn(pdfBuffer, fileName, params);
 
         } catch (error) {
             return {
