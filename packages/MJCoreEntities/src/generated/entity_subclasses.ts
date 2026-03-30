@@ -22900,12 +22900,12 @@ export const MJVectorIndexSchema = z.object({
         * * SQL Data Type: nvarchar(MAX)`),
     VectorDatabaseID: z.string().describe(`
         * * Field Name: VectorDatabaseID
-        * * Display Name: Vector Database ID
+        * * Display Name: Vector Database
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Vector Databases (vwVectorDatabases.ID)`),
     EmbeddingModelID: z.string().describe(`
         * * Field Name: EmbeddingModelID
-        * * Display Name: Embedding Model ID
+        * * Display Name: Embedding Model
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -22918,13 +22918,33 @@ export const MJVectorIndexSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ExternalID: z.string().nullable().describe(`
+        * * Field Name: ExternalID
+        * * Display Name: External ID
+        * * SQL Data Type: nvarchar(500)
+        * * Description: The provider's native identifier for this index. For Pinecone this is the index name; for other providers it may be a separate UUID or identifier. Used for syncing operations between MJ metadata and the remote vector database.`),
+    Dimensions: z.number().nullable().describe(`
+        * * Field Name: Dimensions
+        * * Display Name: Dimensions
+        * * SQL Data Type: int
+        * * Description: The number of dimensions for vectors stored in this index. Determined by the embedding model (e.g., 1536 for text-embedding-3-small, 768 for all-mpnet-base-v2). Set automatically when the index is created via the vector database provider.`),
+    Metric: z.string().nullable().describe(`
+        * * Field Name: Metric
+        * * Display Name: Distance Metric
+        * * SQL Data Type: nvarchar(50)
+        * * Description: The distance metric used for similarity calculations in this index. Common values: cosine (default, measures angular similarity), euclidean (L2 distance), dotproduct (inner product). Must match what the vector database provider was configured with.`),
+    ProviderConfig: z.string().nullable().describe(`
+        * * Field Name: ProviderConfig
+        * * Display Name: Provider Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object containing provider-specific configuration for this index. For Pinecone serverless: {"cloud":"aws","region":"us-east-1"}. For pod-based: {"environment":"us-east1-gcp","podType":"p1.x1","replicas":1}. Stored as a flexible JSON bag to support any provider without schema changes.`),
     VectorDatabase: z.string().describe(`
         * * Field Name: VectorDatabase
-        * * Display Name: Vector Database
+        * * Display Name: Vector Database Name
         * * SQL Data Type: nvarchar(100)`),
     EmbeddingModel: z.string().describe(`
         * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model
+        * * Display Name: Embedding Model Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -83383,7 +83403,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
 
     /**
     * * Field Name: VectorDatabaseID
-    * * Display Name: Vector Database ID
+    * * Display Name: Vector Database
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Vector Databases (vwVectorDatabases.ID)
     */
@@ -83396,7 +83416,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
 
     /**
     * * Field Name: EmbeddingModelID
-    * * Display Name: Embedding Model ID
+    * * Display Name: Embedding Model
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
     */
@@ -83428,8 +83448,60 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
     }
 
     /**
+    * * Field Name: ExternalID
+    * * Display Name: External ID
+    * * SQL Data Type: nvarchar(500)
+    * * Description: The provider's native identifier for this index. For Pinecone this is the index name; for other providers it may be a separate UUID or identifier. Used for syncing operations between MJ metadata and the remote vector database.
+    */
+    get ExternalID(): string | null {
+        return this.Get('ExternalID');
+    }
+    set ExternalID(value: string | null) {
+        this.Set('ExternalID', value);
+    }
+
+    /**
+    * * Field Name: Dimensions
+    * * Display Name: Dimensions
+    * * SQL Data Type: int
+    * * Description: The number of dimensions for vectors stored in this index. Determined by the embedding model (e.g., 1536 for text-embedding-3-small, 768 for all-mpnet-base-v2). Set automatically when the index is created via the vector database provider.
+    */
+    get Dimensions(): number | null {
+        return this.Get('Dimensions');
+    }
+    set Dimensions(value: number | null) {
+        this.Set('Dimensions', value);
+    }
+
+    /**
+    * * Field Name: Metric
+    * * Display Name: Distance Metric
+    * * SQL Data Type: nvarchar(50)
+    * * Description: The distance metric used for similarity calculations in this index. Common values: cosine (default, measures angular similarity), euclidean (L2 distance), dotproduct (inner product). Must match what the vector database provider was configured with.
+    */
+    get Metric(): string | null {
+        return this.Get('Metric');
+    }
+    set Metric(value: string | null) {
+        this.Set('Metric', value);
+    }
+
+    /**
+    * * Field Name: ProviderConfig
+    * * Display Name: Provider Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object containing provider-specific configuration for this index. For Pinecone serverless: {"cloud":"aws","region":"us-east-1"}. For pod-based: {"environment":"us-east1-gcp","podType":"p1.x1","replicas":1}. Stored as a flexible JSON bag to support any provider without schema changes.
+    */
+    get ProviderConfig(): string | null {
+        return this.Get('ProviderConfig');
+    }
+    set ProviderConfig(value: string | null) {
+        this.Set('ProviderConfig', value);
+    }
+
+    /**
     * * Field Name: VectorDatabase
-    * * Display Name: Vector Database
+    * * Display Name: Vector Database Name
     * * SQL Data Type: nvarchar(100)
     */
     get VectorDatabase(): string {
@@ -83438,7 +83510,7 @@ export class MJVectorIndexEntity extends BaseEntity<MJVectorIndexEntityType> {
 
     /**
     * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model
+    * * Display Name: Embedding Model Name
     * * SQL Data Type: nvarchar(50)
     */
     get EmbeddingModel(): string {

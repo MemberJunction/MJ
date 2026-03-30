@@ -68143,6 +68143,20 @@ export class MJVectorIndex_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `The provider's native identifier for this index. For Pinecone this is the index name; for other providers it may be a separate UUID or identifier. Used for syncing operations between MJ metadata and the remote vector database.`}) 
+    @MaxLength(500)
+    ExternalID?: string;
+        
+    @Field(() => Int, {nullable: true, description: `The number of dimensions for vectors stored in this index. Determined by the embedding model (e.g., 1536 for text-embedding-3-small, 768 for all-mpnet-base-v2). Set automatically when the index is created via the vector database provider.`}) 
+    Dimensions?: number;
+        
+    @Field({nullable: true, description: `The distance metric used for similarity calculations in this index. Common values: cosine (default, measures angular similarity), euclidean (L2 distance), dotproduct (inner product). Must match what the vector database provider was configured with.`}) 
+    @MaxLength(50)
+    Metric?: string;
+        
+    @Field({nullable: true, description: `JSON object containing provider-specific configuration for this index. For Pinecone serverless: {"cloud":"aws","region":"us-east-1"}. For pod-based: {"environment":"us-east1-gcp","podType":"p1.x1","replicas":1}. Stored as a flexible JSON bag to support any provider without schema changes.`}) 
+    ProviderConfig?: string;
+        
     @Field() 
     @MaxLength(100)
     VectorDatabase: string;
@@ -68178,6 +68192,18 @@ export class CreateMJVectorIndexInput {
 
     @Field({ nullable: true })
     EmbeddingModelID?: string;
+
+    @Field({ nullable: true })
+    ExternalID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Dimensions: number | null;
+
+    @Field({ nullable: true })
+    Metric: string | null;
+
+    @Field({ nullable: true })
+    ProviderConfig: string | null;
 }
     
 
@@ -68200,6 +68226,18 @@ export class UpdateMJVectorIndexInput {
 
     @Field({ nullable: true })
     EmbeddingModelID?: string;
+
+    @Field({ nullable: true })
+    ExternalID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Dimensions?: number | null;
+
+    @Field({ nullable: true })
+    Metric?: string | null;
+
+    @Field({ nullable: true })
+    ProviderConfig?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
