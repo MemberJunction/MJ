@@ -636,7 +636,7 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
   }
 
   OnViewRunningTest(run: TestRunSummary): void {
-    this.testingDialogService.OpenTestPanel(run.testId);
+    this.testingDialogService.OpenTestMonitor(run.testId);
   }
 
   GetActiveRunProgress(testId: string): number {
@@ -644,7 +644,10 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
   }
 
   GetActiveRunStep(testId: string): string {
-    return this.activeRunsMap.get(testId)?.CurrentStep ?? '';
+    const step = this.activeRunsMap.get(testId)?.CurrentStep ?? '';
+    // Hide raw internal step identifiers (e.g. "driver_log", "loading_test")
+    if (step.includes('_')) return '';
+    return step;
   }
 
   OnOpenRun(run: TestRunSummary): void {

@@ -204,6 +204,11 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     this.cdr.markForCheck();
   }
 
+  public OnViewRunningTestFromTab(testId: string): void {
+    this.testingDialogService.OpenTestPanel(testId);
+    this.cdr.detectChanges();
+  }
+
   private updateNavigationSelection(): void {
     this.navigationConfig.forEach((item, index) => {
       item.selected = this.navigationItems[index] === this.activeTab;

@@ -6,6 +6,7 @@ import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graph
 import { MJTestEntity, MJTestSuiteEntity, MJTestSuiteTestEntity, MJTestTypeEntity } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { TestingExecutionService, TestExecutionResult } from '../services/testing-execution.service';
 
 interface SuiteTestItem {
   testId: string;
@@ -550,10 +551,14 @@ interface ProgressUpdate {
             </div>
 
             <div class="progress-container">
-              <div class="progress-bar">
-                <div class="progress-fill" [style.width.%]="progress"></div>
+              <div class="progress-bar" [class.indeterminate]="progress < 0">
+                @if (progress >= 0) {
+                  <div class="progress-fill" [style.width.%]="progress"></div>
+                }
               </div>
-              <div class="progress-text">{{ progress }}%</div>
+              @if (progress >= 0) {
+                <div class="progress-text">{{ progress }}%</div>
+              }
             </div>
 
             <div class="progress-steps">
@@ -1122,6 +1127,17 @@ interface ProgressUpdate {
       background: var(--mj-brand-primary);
       border-radius: 4px;
       transition: width 0.3s ease;
+    }
+
+    .progress-bar.indeterminate {
+      background: linear-gradient(90deg, var(--mj-border-default) 25%, var(--mj-brand-primary) 50%, var(--mj-border-default) 75%);
+      background-size: 200% 100%;
+      animation: indeterminate-progress 1.5s ease-in-out infinite;
+    }
+
+    @keyframes indeterminate-progress {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
     }
 
     .progress-text {
@@ -1958,7 +1974,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   private engine!: TestEngineBase;
 
   // Selection state
-  @Input() runMode: 'test' | 'suite' = 'test';
+  @Input() runMode: 'test' | 'suite' | 'monitor' = 'test';
   searchText = '';
   @Input() selectedTestId: string | null = null;
   @Input() selectedSuiteId: string | null = null;
@@ -2020,7 +2036,8 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   @Output() PanelClose = new EventEmitter<void>();
 
   constructor(
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private executionService: TestingExecutionService
   ) {
     // Get GraphQLDataProvider from Metadata.Provider (it's already configured in the Angular app)
     const dataProvider = Metadata.Provider as GraphQLDataProvider;
@@ -2040,8 +2057,30 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     this.allTests = this.engine.Tests.filter(t => t.Status === 'Active');
     this.allSuites = this.engine.TestSuites.filter(s => s.Status === 'Active');
 
+    // Monitor mode: show running state for a test executing on the server
+    if (this.runMode === 'monitor' && this.selectedTestId) {
+      // Try to reconnect to an active run tracked by the execution service
+      if (this.reconnectToActiveRun(this.selectedTestId)) {
+        this.cdr.markForCheck();
+        return;
+      }
+
+      // No active run in the execution service (started externally or from a previous session).
+      // Show a server-monitoring view.
+      const test = this.allTests.find(t => UUIDsEqual(t.ID, this.selectedTestId));
+      this.enterServerMonitoringMode(test?.Name ?? 'Test');
+      this.cdr.markForCheck();
+      return;
+    }
+
     // Check if we have a pre-selected test or suite
     if (this.selectedTestId) {
+      // Check if this test has an active run we can reconnect to
+      if (this.reconnectToActiveRun(this.selectedTestId)) {
+        this.cdr.markForCheck();
+        return;
+      }
+
       this.isPreselected = true;
       this.runMode = 'test';
       const test = this.allTests.find(t => UUIDsEqual(t.ID, this.selectedTestId));
@@ -2051,6 +2090,12 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
         this.loadVariablesForTest(test);
       }
     } else if (this.selectedSuiteId) {
+      // Check if this suite has an active run we can reconnect to
+      if (this.reconnectToActiveRun(this.selectedSuiteId)) {
+        this.cdr.markForCheck();
+        return;
+      }
+
       this.isPreselected = true;
       this.runMode = 'suite';
       const suite = this.allSuites.find(s => UUIDsEqual(s.ID, this.selectedSuiteId));
@@ -2323,12 +2368,16 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
       const test = this.allTests.find(t => UUIDsEqual(t.ID, this.selectedTestId));
       this.executionTitle = test ? test.Name : 'Running Test...';
       this.executionStatus = 'Running';
+      // Register with execution service so other components can reconnect
+      this.executionService.RegisterRun(this.selectedTestId!, this.executionTitle);
       this.addLogEntry(`Starting test: ${test?.Name}`, 'info');
       await this.executeTest();
     } else {
       const suite = this.allSuites.find(s => UUIDsEqual(s.ID, this.selectedSuiteId));
       this.executionTitle = suite ? suite.Name : 'Running Suite...';
       this.executionStatus = 'Running';
+      // Register with execution service so other components can reconnect
+      this.executionService.RegisterRun(this.selectedSuiteId!, this.executionTitle);
       this.addLogEntry(`Starting suite: ${suite?.Name}`, 'info');
       await this.executeSuite();
     }
@@ -2337,12 +2386,13 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   }
 
   private async executeTest(): Promise<void> {
+    const testId = this.selectedTestId!;
     try {
       // Collect variable values for execution
       const variables = this.getVariablesForExecution();
 
       const result = await this.testingClient.RunTest({
-        testId: this.selectedTestId!,
+        testId,
         verbose: this.verbose,
         tags: this.tags.length > 0 ? this.tags : undefined,
         variables,
@@ -2356,6 +2406,9 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
           // Add log entry for this progress update
           this.addLogEntry(progress.message, 'info');
 
+          // Push to execution service for cross-component visibility
+          this.executionService.UpdateRunProgress(testId, this.progress, progress.currentStep, progress.message);
+
           // Trigger change detection
           this.cdr.markForCheck();
         }
@@ -2368,10 +2421,20 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
       this.executionStatus = result.success ? 'Completed' : 'Failed';
       this.completeAllSteps();
 
+      // Map RunTestResult to TestExecutionResult for the execution service
+      const execResult: TestExecutionResult = {
+        success: result.success,
+        errorMessage: result.errorMessage,
+        executionTimeMs: result.executionTimeMs ?? 0,
+        result: result.result ? result.result as TestExecutionResult['result'] : undefined
+      };
+
       if (result.success) {
         this.addLogEntry('Test completed successfully', 'success');
+        this.executionService.CompleteRun(testId, 'completed', execResult);
       } else {
         this.addLogEntry(`Test failed: ${result.errorMessage}`, 'error');
+        this.executionService.CompleteRun(testId, 'failed', execResult);
       }
 
     } catch (error) {
@@ -2383,6 +2446,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
         errorMessage: (error as Error).message
       };
       this.addLogEntry(`Error: ${(error as Error).message}`, 'error');
+      this.executionService.CompleteRun(testId, 'failed', this.result);
     } finally {
       this.isRunning = false;
       this.cdr.markForCheck();
@@ -2390,6 +2454,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   }
 
   private async executeSuite(): Promise<void> {
+    const suiteId = this.selectedSuiteId!;
     try {
       // Build selective execution parameters
       const selectedTestIds = this.getSelectedTestIds();
@@ -2398,7 +2463,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
       const variables = this.getVariablesForExecution();
 
       const result = await this.testingClient.RunTestSuite({
-        suiteId: this.selectedSuiteId!,
+        suiteId,
         verbose: this.verbose,
         parallel: this.parallel,
         tags: this.tags.length > 0 ? this.tags : undefined,
@@ -2416,6 +2481,9 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
           // Add log entry for this progress update
           this.addLogEntry(progress.message, 'info');
 
+          // Push to execution service for cross-component visibility
+          this.executionService.UpdateRunProgress(suiteId, this.progress, progress.currentStep, progress.message);
+
           // Trigger change detection
           this.cdr.markForCheck();
         }
@@ -2428,10 +2496,20 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
       this.executionStatus = result.success ? 'Completed' : 'Failed';
       this.completeAllSteps();
 
+      // Map RunTestResult to TestExecutionResult for the execution service
+      const execResult: TestExecutionResult = {
+        success: result.success,
+        errorMessage: result.errorMessage,
+        executionTimeMs: result.executionTimeMs ?? 0,
+        result: result.result ? result.result as TestExecutionResult['result'] : undefined
+      };
+
       if (result.success) {
         this.addLogEntry('Suite completed successfully', 'success');
+        this.executionService.CompleteRun(suiteId, 'completed', execResult);
       } else {
         this.addLogEntry(`Suite failed: ${result.errorMessage}`, 'error');
+        this.executionService.CompleteRun(suiteId, 'failed', execResult);
       }
 
     } catch (error) {
@@ -2443,6 +2521,11 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
         errorMessage: (error as Error).message
       };
       this.addLogEntry(`Error: ${(error as Error).message}`, 'error');
+      this.executionService.CompleteRun(suiteId, 'failed', {
+        success: false,
+        errorMessage: (error as Error).message,
+        executionTimeMs: 0
+      });
     } finally {
       this.isRunning = false;
       this.cdr.markForCheck();
@@ -2496,6 +2579,22 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Enter a monitoring view for a test that's running on the server but wasn't
+   * started from this client session (no active run in the execution service).
+   */
+  private enterServerMonitoringMode(testName: string): void {
+    this.isRunning = true;
+    this.hasCompleted = false;
+    this.hasError = false;
+    this.progress = -1; // indeterminate
+    this.executionTitle = testName;
+    this.executionStatus = 'Running on server';
+    this.executionLog = [];
+    this.addLogEntry('This test is running on the server. Detailed progress is not available for externally started runs.', 'info');
+    this.addLogEntry('Close this panel and check the dashboard for results when the test completes.', 'info');
+  }
+
   private resetProgressSteps(): void {
     this.progressSteps.forEach(step => {
       step.active = false;
@@ -2522,6 +2621,68 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     if (this.executionLog.length > 100) {
       this.executionLog = this.executionLog.slice(-100);
     }
+
+    // Push to execution service for cross-component visibility
+    const runId = this.selectedTestId ?? this.selectedSuiteId;
+    if (runId && this.isRunning) {
+      this.executionService.AddRunLog(runId, message, type);
+    }
+  }
+
+  /**
+   * Check if there's an active run for this test/suite in the execution service.
+   * If so, restore the running UI state and subscribe to live updates.
+   */
+  private reconnectToActiveRun(id: string): boolean {
+    const activeRun = this.executionService.GetActiveRun(id);
+    if (!activeRun || activeRun.Status !== 'running') {
+      return false;
+    }
+
+    // Restore execution UI state from the active run
+    this.isRunning = true;
+    this.hasCompleted = false;
+    this.hasError = false;
+    this.progress = activeRun.Progress;
+    this.executionTitle = activeRun.TestName;
+    this.executionStatus = 'Running';
+    this.executionLog = activeRun.LogEntries.map(e => ({
+      timestamp: e.timestamp,
+      message: e.message,
+      type: e.type
+    }));
+    this.updateProgressStep(activeRun.CurrentStep);
+
+    // Subscribe to live updates from the execution service
+    this.executionService.ActiveRuns$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(runs => {
+      const run = runs.find(r => r.TestId === id);
+      if (!run) return;
+
+      this.progress = run.Progress;
+      this.updateProgressStep(run.CurrentStep);
+
+      // Sync log entries from the service
+      this.executionLog = run.LogEntries.map(e => ({
+        timestamp: e.timestamp,
+        message: e.message,
+        type: e.type
+      }));
+
+      if (run.Status === 'completed' || run.Status === 'failed') {
+        this.isRunning = false;
+        this.hasCompleted = true;
+        this.hasError = run.Status === 'failed';
+        this.executionStatus = run.Status === 'completed' ? 'Completed' : 'Failed';
+        this.result = run.Result ?? null;
+        this.completeAllSteps();
+      }
+
+      this.cdr.markForCheck();
+    });
+
+    return true;
   }
 
   resetDialog(): void {

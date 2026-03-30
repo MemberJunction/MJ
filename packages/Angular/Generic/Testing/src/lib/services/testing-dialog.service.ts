@@ -4,7 +4,7 @@ import { Subject } from 'rxjs';
 export interface TestDialogOptions {
   testId?: string;
   suiteId?: string;
-  mode?: 'test' | 'suite';
+  mode?: 'test' | 'suite' | 'monitor';
 }
 
 @Injectable({
@@ -32,6 +32,11 @@ export class TestingDialogService {
 
   OpenTestPanel(testId: string): void {
     this.OpenAsPanel({ testId, mode: 'test' });
+  }
+
+  /** Open the panel in monitor mode to view a running test's progress */
+  OpenTestMonitor(testId: string): void {
+    this.OpenAsPanel({ testId, mode: 'monitor' });
   }
 
   OpenSuitePanel(suiteId: string): void {

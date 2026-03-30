@@ -68,7 +68,7 @@
   @if (testingDialogService.IsPanelOpen) {
     <mj-slide-panel
       Mode="slide"
-      Title="Run Test"
+      [Title]="testingDialogService.PanelOptions?.testId ? 'Test Execution' : 'Run Test'"
       [Resizable]="true"
       (Closed)="OnPanelClosed()">
       <app-test-run-dialog

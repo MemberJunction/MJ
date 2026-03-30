@@ -31,6 +31,12 @@ export interface TestExecutionResult {
   errorMessage?: string;
 }
 
+export interface RunLogEntry {
+  timestamp: Date;
+  message: string;
+  type: 'info' | 'success' | 'error';
+}
+
 export interface ActiveRun {
   TestId: string;
   TestName: string;
@@ -40,6 +46,7 @@ export interface ActiveRun {
   Message: string;
   StartedAt: Date;
   Result?: TestExecutionResult;
+  LogEntries: RunLogEntry[];
 }
 
 @Injectable({
@@ -162,22 +169,61 @@ export class TestingExecutionService {
       Progress: 0,
       CurrentStep: 'starting',
       Message: 'Starting execution...',
-      StartedAt: new Date()
+      StartedAt: new Date(),
+      LogEntries: [{ timestamp: new Date(), message: 'Starting execution...', type: 'info' }]
     });
     this._activeRuns$.next(runs);
   }
 
   private updateRun(testId: string, percentage: number, step: string, message: string): void {
-    const runs = this._activeRuns$.value.map(r =>
-      r.TestId === testId ? { ...r, Progress: percentage >= 0 ? percentage : r.Progress, CurrentStep: step, Message: message } : r
-    );
+    const runs = this._activeRuns$.value.map(r => {
+      if (r.TestId !== testId) return r;
+      const logEntries = [...r.LogEntries, { timestamp: new Date(), message, type: 'info' as const }];
+      return { ...r, Progress: percentage >= 0 ? percentage : r.Progress, CurrentStep: step, Message: message, LogEntries: logEntries.slice(-100) };
+    });
     this._activeRuns$.next(runs);
   }
 
   private completeRun(testId: string, status: 'completed' | 'failed', result?: TestExecutionResult): void {
-    const runs = this._activeRuns$.value.map(r =>
-      r.TestId === testId ? { ...r, Status: status as ActiveRun['Status'], Progress: 100, CurrentStep: 'complete', Result: result } : r
-    );
+    const runs = this._activeRuns$.value.map(r => {
+      if (r.TestId !== testId) return r;
+      const msg = status === 'completed' ? 'Execution complete' : 'Execution failed';
+      const type = status === 'completed' ? 'success' as const : 'error' as const;
+      const logEntries = [...r.LogEntries, { timestamp: new Date(), message: msg, type }];
+      return { ...r, Status: status as ActiveRun['Status'], Progress: 100, CurrentStep: 'complete', Result: result, LogEntries: logEntries.slice(-100) };
+    });
     this._activeRuns$.next(runs);
+  }
+
+  // ── Public tracking API (used by test-run-dialog to register its executions) ──
+
+  /** Get the current active run for a given test ID, or null if none */
+  GetActiveRun(testId: string): ActiveRun | null {
+    return this._activeRuns$.value.find(r => r.TestId === testId) ?? null;
+  }
+
+  /** Register a new active run (called by dialog when starting execution) */
+  RegisterRun(testId: string, testName: string): void {
+    this.trackRun(testId, testName);
+  }
+
+  /** Update progress for an externally-managed run */
+  UpdateRunProgress(testId: string, percentage: number, step: string, message: string): void {
+    this.updateRun(testId, percentage, step, message);
+  }
+
+  /** Add a log entry to an active run */
+  AddRunLog(testId: string, message: string, type: 'info' | 'success' | 'error'): void {
+    const runs = this._activeRuns$.value.map(r => {
+      if (r.TestId !== testId) return r;
+      const logEntries = [...r.LogEntries, { timestamp: new Date(), message, type }];
+      return { ...r, LogEntries: logEntries.slice(-100) };
+    });
+    this._activeRuns$.next(runs);
+  }
+
+  /** Mark an externally-managed run as complete */
+  CompleteRun(testId: string, status: 'completed' | 'failed', result?: TestExecutionResult): void {
+    this.completeRun(testId, status, result);
   }
 }
