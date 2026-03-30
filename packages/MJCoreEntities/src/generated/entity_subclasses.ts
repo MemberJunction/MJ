@@ -7083,6 +7083,16 @@ export const MJArtifactTypeSchema = z.object({
         * * Display Name: Icon
         * * SQL Data Type: nvarchar(255)
         * * Description: Font Awesome icon class name for displaying this artifact type in the UI (e.g., fa-file-code, fa-chart-line)`),
+    ContentCategory: z.union([z.literal('File'), z.literal('Text')]).describe(`
+        * * Field Name: ContentCategory
+        * * Display Name: Content Category
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * File
+    *   * Text
+        * * Description: Classifies whether this artifact type stores text content ('Text', the default for all existing types) or a binary file in MJStorage ('File'). Used by AgentRunner and viewer components to route file-based artifacts correctly.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -7225,7 +7235,7 @@ export const MJArtifactVersionSchema = z.object({
         * * Default Value: newsequentialid()`),
     ArtifactID: z.string().describe(`
         * * Field Name: ArtifactID
-        * * Display Name: Artifact ID
+        * * Display Name: Artifact
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)`),
     VersionNumber: z.number().describe(`
@@ -7250,7 +7260,7 @@ export const MJArtifactVersionSchema = z.object({
         * * Description: User comments specific to this version`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -7278,6 +7288,37 @@ export const MJArtifactVersionSchema = z.object({
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Description of this artifact version. Can differ from Artifact.Description as it may evolve with versions.`),
+    FileID: z.string().nullable().describe(`
+        * * Field Name: FileID
+        * * Display Name: File
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+        * * Description: Foreign key to the MJ: Files entity. When ContentMode is 'File', this references the binary file stored in MJStorage. NULL when ContentMode is 'Text'.`),
+    ContentMode: z.union([z.literal('File'), z.literal('Text')]).describe(`
+        * * Field Name: ContentMode
+        * * Display Name: Content Mode
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: Text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * File
+    *   * Text
+        * * Description: Determines how artifact content is stored. 'Text' (default) means the Content column holds the data. 'File' means FileID references a binary file in MJStorage and Content is unused.`),
+    MimeType: z.string().nullable().describe(`
+        * * Field Name: MimeType
+        * * Display Name: MIME Type
+        * * SQL Data Type: nvarchar(200)
+        * * Description: MIME type of the stored file (e.g. application/pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`),
+    FileName: z.string().nullable().describe(`
+        * * Field Name: FileName
+        * * Display Name: File Name
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Original filename of the stored file (e.g. report.pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`),
+    ContentSizeBytes: z.number().nullable().describe(`
+        * * Field Name: ContentSizeBytes
+        * * Display Name: Content Size Bytes
+        * * SQL Data Type: bigint
+        * * Description: Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is 'File'.`),
     Artifact: z.string().describe(`
         * * Field Name: Artifact
         * * Display Name: Artifact
@@ -7286,6 +7327,10 @@ export const MJArtifactVersionSchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    File: z.string().nullable().describe(`
+        * * Field Name: File
+        * * Display Name: File
+        * * SQL Data Type: nvarchar(500)`),
 });
 
 export type MJArtifactVersionEntityType = z.infer<typeof MJArtifactVersionSchema>;
@@ -42478,6 +42523,24 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
     }
 
     /**
+    * * Field Name: ContentCategory
+    * * Display Name: Content Category
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * File
+    *   * Text
+    * * Description: Classifies whether this artifact type stores text content ('Text', the default for all existing types) or a binary file in MJStorage ('File'). Used by AgentRunner and viewer components to route file-based artifacts correctly.
+    */
+    get ContentCategory(): 'File' | 'Text' {
+        return this.Get('ContentCategory');
+    }
+    set ContentCategory(value: 'File' | 'Text') {
+        this.Set('ContentCategory', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(100)
@@ -42832,7 +42895,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: ArtifactID
-    * * Display Name: Artifact ID
+    * * Display Name: Artifact
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
     */
@@ -42897,7 +42960,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -42968,6 +43031,77 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     }
 
     /**
+    * * Field Name: FileID
+    * * Display Name: File
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
+    * * Description: Foreign key to the MJ: Files entity. When ContentMode is 'File', this references the binary file stored in MJStorage. NULL when ContentMode is 'Text'.
+    */
+    get FileID(): string | null {
+        return this.Get('FileID');
+    }
+    set FileID(value: string | null) {
+        this.Set('FileID', value);
+    }
+
+    /**
+    * * Field Name: ContentMode
+    * * Display Name: Content Mode
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: Text
+    * * Value List Type: List
+    * * Possible Values 
+    *   * File
+    *   * Text
+    * * Description: Determines how artifact content is stored. 'Text' (default) means the Content column holds the data. 'File' means FileID references a binary file in MJStorage and Content is unused.
+    */
+    get ContentMode(): 'File' | 'Text' {
+        return this.Get('ContentMode');
+    }
+    set ContentMode(value: 'File' | 'Text') {
+        this.Set('ContentMode', value);
+    }
+
+    /**
+    * * Field Name: MimeType
+    * * Display Name: MIME Type
+    * * SQL Data Type: nvarchar(200)
+    * * Description: MIME type of the stored file (e.g. application/pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.
+    */
+    get MimeType(): string | null {
+        return this.Get('MimeType');
+    }
+    set MimeType(value: string | null) {
+        this.Set('MimeType', value);
+    }
+
+    /**
+    * * Field Name: FileName
+    * * Display Name: File Name
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Original filename of the stored file (e.g. report.pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.
+    */
+    get FileName(): string | null {
+        return this.Get('FileName');
+    }
+    set FileName(value: string | null) {
+        this.Set('FileName', value);
+    }
+
+    /**
+    * * Field Name: ContentSizeBytes
+    * * Display Name: Content Size Bytes
+    * * SQL Data Type: bigint
+    * * Description: Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is 'File'.
+    */
+    get ContentSizeBytes(): number | null {
+        return this.Get('ContentSizeBytes');
+    }
+    set ContentSizeBytes(value: number | null) {
+        this.Set('ContentSizeBytes', value);
+    }
+
+    /**
     * * Field Name: Artifact
     * * Display Name: Artifact
     * * SQL Data Type: nvarchar(255)
@@ -42983,6 +43117,15 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     */
     get User(): string {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: File
+    * * Display Name: File
+    * * SQL Data Type: nvarchar(500)
+    */
+    get File(): string | null {
+        return this.Get('File');
     }
 }
 

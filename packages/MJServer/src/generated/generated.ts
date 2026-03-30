@@ -18962,6 +18962,10 @@ export class MJArtifactType_ {
     @MaxLength(255)
     Icon?: string;
         
+    @Field({description: `Classifies whether this artifact type stores text content ('Text', the default for all existing types) or a binary file in MJStorage ('File'). Used by AgentRunner and viewer components to route file-based artifacts correctly.`}) 
+    @MaxLength(10)
+    ContentCategory: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
@@ -19018,6 +19022,9 @@ export class CreateMJArtifactTypeInput {
 
     @Field({ nullable: true })
     Icon: string | null;
+
+    @Field({ nullable: true })
+    ContentCategory?: string;
 }
     
 
@@ -19052,6 +19059,9 @@ export class UpdateMJArtifactTypeInput {
 
     @Field({ nullable: true })
     Icon?: string | null;
+
+    @Field({ nullable: true })
+    ContentCategory?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -19589,6 +19599,25 @@ export class MJArtifactVersion_ {
     @Field({nullable: true, description: `Description of this artifact version. Can differ from Artifact.Description as it may evolve with versions.`}) 
     Description?: string;
         
+    @Field({nullable: true, description: `Foreign key to the MJ: Files entity. When ContentMode is 'File', this references the binary file stored in MJStorage. NULL when ContentMode is 'Text'.`}) 
+    @MaxLength(36)
+    FileID?: string;
+        
+    @Field({description: `Determines how artifact content is stored. 'Text' (default) means the Content column holds the data. 'File' means FileID references a binary file in MJStorage and Content is unused.`}) 
+    @MaxLength(10)
+    ContentMode: string;
+        
+    @Field({nullable: true, description: `MIME type of the stored file (e.g. application/pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`}) 
+    @MaxLength(200)
+    MimeType?: string;
+        
+    @Field({nullable: true, description: `Original filename of the stored file (e.g. report.pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`}) 
+    @MaxLength(500)
+    FileName?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is 'File'.`}) 
+    ContentSizeBytes?: number;
+        
     @Field() 
     @MaxLength(255)
     Artifact: string;
@@ -19596,6 +19625,10 @@ export class MJArtifactVersion_ {
     @Field() 
     @MaxLength(100)
     User: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    File?: string;
         
     @Field(() => [MJArtifactVersionAttribute_])
     MJArtifactVersionAttributes_ArtifactVersionIDArray: MJArtifactVersionAttribute_[]; // Link to MJArtifactVersionAttributes
@@ -19645,6 +19678,21 @@ export class CreateMJArtifactVersionInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field({ nullable: true })
+    FileID: string | null;
+
+    @Field({ nullable: true })
+    ContentMode?: string;
+
+    @Field({ nullable: true })
+    MimeType: string | null;
+
+    @Field({ nullable: true })
+    FileName: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ContentSizeBytes: number | null;
 }
     
 
@@ -19682,6 +19730,21 @@ export class UpdateMJArtifactVersionInput {
 
     @Field({ nullable: true })
     Description?: string | null;
+
+    @Field({ nullable: true })
+    FileID?: string | null;
+
+    @Field({ nullable: true })
+    ContentMode?: string;
+
+    @Field({ nullable: true })
+    MimeType?: string | null;
+
+    @Field({ nullable: true })
+    FileName?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    ContentSizeBytes?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -43012,6 +43075,9 @@ export class MJFile_ {
     @Field(() => [MJAIAgentRunMedia_])
     MJAIAgentRunMedias_FileIDArray: MJAIAgentRunMedia_[]; // Link to MJAIAgentRunMedias
     
+    @Field(() => [MJArtifactVersion_])
+    MJArtifactVersions_FileIDArray: MJArtifactVersion_[]; // Link to MJArtifactVersions
+    
 }
 
 //****************************************************************************
@@ -43172,6 +43238,16 @@ export class MJFileResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentRunMedias')} WHERE ${provider.QuoteIdentifier('FileID')}='${mjfile_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Run Medias', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Run Medias', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJArtifactVersion_])
+    async MJArtifactVersions_FileIDArray(@Root() mjfile_: MJFile_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Artifact Versions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwArtifactVersions')} WHERE ${provider.QuoteIdentifier('FileID')}='${mjfile_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Artifact Versions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
