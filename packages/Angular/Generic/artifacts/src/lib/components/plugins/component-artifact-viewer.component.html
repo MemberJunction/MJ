@@ -46,15 +46,7 @@
     }
   </div>
 
-  <!-- Feedback toggle button -->
-  @if (resolvedComponentSpec) {
-    <button class="feedback-toggle-btn" (click)="ToggleFeedbackPanel()"
-            title="Rate this component">
-      <i class="fa-solid fa-comment-dots"></i>
-    </button>
-  }
-
-  <!-- Feedback overlay panel -->
+  <!-- Feedback overlay panel (invoked from header button via AskUserForFeedback) -->
   @if (ShowFeedbackPanel && resolvedComponentSpec) {
     <mj-component-feedback-panel
       [ComponentSpec]="resolvedComponentSpec"
