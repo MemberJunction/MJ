@@ -1307,3 +1307,23 @@ Comprehensive UI regression tests executed via Playwright in Docker workbench. E
 - [ ] **R-12.4** Loading states use <mj-loading> component
 - [ ] **R-12.5** All buttons follow MJ convention (action left, cancel right)
 
+
+---
+
+## Follow-Up: MJ Storage Provider Search Integration
+
+**Context**: MJ Storage supports multiple cloud storage providers (Azure Blob, AWS S3, Box, Google Drive, etc.). Some providers like Box have sophisticated built-in AI search capabilities (Box AI Search, Box Skills for auto-classification). 
+
+**Opportunity**: The Unified Search API should optionally incorporate provider-native search results from MJ Storage providers that support it. For providers with strong AI search (Box, Google Drive with Gemini), we could:
+1. Query the provider's native search API alongside our vector + FTS search
+2. Fuse results via RRF (same pattern as vector + FTS fusion)
+3. Avoid redundant autotagging of content that the provider already classifies — if the user has Box with AI features, don't re-process content Box already tagged
+
+**Considerations**:
+- AutoTagger should detect if the content source is backed by a storage provider with AI capabilities and skip redundant processing
+- Storage provider search results should include source attribution so users know the result came from Box/Google/etc.
+- This requires the `@memberjunction/storage` provider interface to expose an optional `Search()` method
+- Not all providers will support this — graceful fallback to our own vector search when provider search is unavailable
+
+**Priority**: Follow-up after Knowledge Hub v1 is stable. Add as Phase 1.15 when ready to implement.
+
