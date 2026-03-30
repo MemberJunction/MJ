@@ -135,27 +135,30 @@ describe('ExcelWriterAction', () => {
     });
 });
 
-// Minimal hand-crafted PDF with extractable text — no network needed
-const MINIMAL_PDF_BASE64 = Buffer.from(
-    '%PDF-1.4\n' +
-    '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n' +
-    '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n' +
-    '3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Contents 4 0 R' +
-    '/Resources<</Font<</F1 5 0 R>>>>>>endobj\n' +
-    '4 0 obj<</Length 44>>stream\nBT /F1 12 Tf 100 700 Td (Hello World) Tj ET\nendstream\nendobj\n' +
-    '5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n' +
-    'xref\n0 6\n0000000000 65535 f\n0000000009 00000 n\n0000000058 00000 n\n' +
-    '0000000115 00000 n\n0000000266 00000 n\n0000000360 00000 n\n' +
-    'trailer<</Size 6/Root 1 0 R>>\nstartxref\n441\n%%EOF'
-).toString('base64');
-
 // ── PDF Extractor ─────────────────────────────────────────────────────────────
 
 describe('PDFExtractorAction', () => {
+    // Generate a real PDF via PDFGeneratorAction for round-trip testing
+    let generatedPdfBase64: string;
+
     it('extracts text from a base64 PDF', async () => {
+        // First generate a real PDF
+        const generator = new PDFGeneratorAction();
+        const genParams = makeParams({
+            Content: '<h1>Hello World</h1><p>This is a test document for extraction.</p>',
+            ContentType: 'html',
+            FileName: 'test.pdf',
+        });
+        const genResult = await runAction(generator, genParams) as { Success: boolean };
+        expect(genResult.Success).toBe(true);
+
+        generatedPdfBase64 = getOutputParam(genParams, 'PDFData') as string;
+        expect(generatedPdfBase64).toBeTruthy();
+
+        // Now extract text from it
         const extractor = new PDFExtractorAction();
         const extractParams = makeParams({
-            PDFData: MINIMAL_PDF_BASE64,
+            PDFData: generatedPdfBase64,
             ExtractType: 'text',
         });
 
@@ -165,18 +168,30 @@ describe('PDFExtractorAction', () => {
         const extractedText = getOutputParam(extractParams, 'ExtractedText') as string;
         expect(extractedText).toBeTruthy();
         expect(extractedText).toContain('Hello World');
-    }, 10_000);
+    }, 15_000);
 
     it('extracts metadata from a base64 PDF', async () => {
+        // Use the PDF generated in the previous test, or generate a fresh one
+        if (!generatedPdfBase64) {
+            const generator = new PDFGeneratorAction();
+            const genParams = makeParams({
+                Content: '<p>Metadata test</p>',
+                ContentType: 'html',
+                FileName: 'meta-test.pdf',
+            });
+            await runAction(generator, genParams);
+            generatedPdfBase64 = getOutputParam(genParams, 'PDFData') as string;
+        }
+
         const extractor = new PDFExtractorAction();
         const extractParams = makeParams({
-            PDFData: MINIMAL_PDF_BASE64,
+            PDFData: generatedPdfBase64,
             ExtractType: 'metadata',
         });
 
         const result = await runAction(extractor, extractParams) as { Success: boolean };
         expect(result.Success).toBe(true);
-    }, 10_000);
+    }, 15_000);
 
     it('fails when no input is provided', async () => {
         const extractor = new PDFExtractorAction();
@@ -184,5 +199,17 @@ describe('PDFExtractorAction', () => {
 
         const result = await runAction(extractor, params) as { Success: boolean };
         expect(result.Success).toBe(false);
+    });
+
+    it('returns EXTRACTION_FAILED for invalid PDF data', async () => {
+        const extractor = new PDFExtractorAction();
+        const params = makeParams({
+            PDFData: Buffer.from('not a real pdf').toString('base64'),
+            ExtractType: 'text',
+        });
+
+        const result = await runAction(extractor, params) as { Success: boolean; ResultCode?: string };
+        expect(result.Success).toBe(false);
+        expect(result.ResultCode).toBe('EXTRACTION_FAILED');
     });
 });

@@ -21,6 +21,7 @@ import {
     createBase64DataUrl
 } from '@memberjunction/ai';
 import { UUIDsEqual } from '@memberjunction/global';
+import { FileContentExtractor } from './file-content-extractor';
 
 /**
  * Utility class for parsing and formatting special content in conversation messages
@@ -305,12 +306,12 @@ export class ConversationUtility {
    * @param users - Optional users for mention resolution
    * @returns ChatMessageContent ready for AI provider
    */
-  public static BuildChatMessageContent(
+  public static async BuildChatMessageContent(
     messageText: string,
     attachmentData: AttachmentData[],
     agents?: AgentInfo[],
     users?: UserInfo[]
-  ): ChatMessageContent {
+  ): Promise<ChatMessageContent> {
     // If no attachments, return processed text
     if (!attachmentData || attachmentData.length === 0) {
       return this.ToAgentContext(messageText, agents, users);
@@ -328,8 +329,20 @@ export class ConversationUtility {
       });
     }
 
-    // Add attachment content blocks
+    // Add attachment content blocks, with text extraction for documents
     for (const att of attachmentData) {
+      // For document attachments, extract text content for LLM context
+      if (att.type === 'Document' && FileContentExtractor.IsSupported(att.mimeType)) {
+        const extractedText = await FileContentExtractor.Extract(att.content, att.mimeType, att.fileName);
+        if (extractedText) {
+          blocks.push({
+            type: 'text',
+            content: extractedText
+          });
+        }
+      }
+
+      // Always include the original content block (file_url, image_url, etc.)
       const block = this.attachmentToContentBlock(att);
       if (block) {
         blocks.push(block);

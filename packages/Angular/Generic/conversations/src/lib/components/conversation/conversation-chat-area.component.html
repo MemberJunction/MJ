@@ -70,6 +70,10 @@
           [currentUser]="currentUser"
           [disabled]="isProcessing"
           [showSidebarToggle]="showSidebarToggle"
+          [enableAttachments]="enableAttachments"
+          [maxAttachments]="maxAttachments"
+          [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+          [acceptedFileTypes]="acceptedFileTypes"
           (sidebarToggleClicked)="sidebarToggleClicked.emit()"
           (messageSent)="onEmptyStateMessageSent($event)">
         </mj-conversation-empty-state>

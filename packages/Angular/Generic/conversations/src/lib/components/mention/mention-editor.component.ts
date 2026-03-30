@@ -1108,6 +1108,10 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     const acceptedTypes = this.acceptedFileTypes.split(',').map(t => t.trim());
 
     for (const accepted of acceptedTypes) {
+      // Handle universal wildcard */* anywhere in the list
+      if (accepted === '*/*') {
+        return true;
+      }
       // Handle wildcard MIME types like "image/*"
       if (accepted.endsWith('/*')) {
         const category = accepted.slice(0, -2);
@@ -1211,7 +1215,8 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   public openFilePicker(): void {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = this.acceptedFileTypes;
+    // If */* is in the list, accept all files (some browsers don't handle */* correctly)
+    input.accept = this.acceptedFileTypes.includes('*/*') ? '' : this.acceptedFileTypes;
     input.multiple = true;
     input.onchange = (e) => this.onFileSelected(e);
     input.click();

@@ -5,7 +5,7 @@ import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJAIA
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ChatMessage } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
@@ -1279,11 +1279,11 @@ export class RunAIAgentResolver extends ResolverBase {
                 }));
 
             // Build message content (with or without attachments)
-            let content: string | ReturnType<typeof ConversationUtility.BuildChatMessageContent>;
+            let content: ChatMessageContent;
 
             if (validAttachments.length > 0) {
                 // Use ConversationUtility to build multimodal content blocks
-                content = ConversationUtility.BuildChatMessageContent(
+                content = await ConversationUtility.BuildChatMessageContent(
                     detail.Message || '',
                     validAttachments
                 );
