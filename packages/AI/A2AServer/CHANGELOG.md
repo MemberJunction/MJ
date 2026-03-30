@@ -1,5 +1,86 @@
 # Change Log - @memberjunction/a2aserver
 
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+- Updated dependencies [b29716c]
+- Updated dependencies [76cd2bc]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-agents@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/server@5.21.0
+  - @memberjunction/server-bootstrap-lite@5.21.0
+  - @memberjunction/sqlserver-dataprovider@5.21.0
+  - @memberjunction/aiengine@5.21.0
+  - @memberjunction/api-keys@5.21.0
+  - @memberjunction/encryption@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/ai@5.21.0
+  - @memberjunction/config@5.21.0
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [7ab01a8]
+- Updated dependencies [2298f8a]
+  - @memberjunction/ai-agents@5.20.0
+  - @memberjunction/core@5.20.0
+  - @memberjunction/server@5.20.0
+  - @memberjunction/sqlserver-dataprovider@5.20.0
+  - @memberjunction/server-bootstrap-lite@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/api-keys@5.20.0
+  - @memberjunction/encryption@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/config@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- Updated dependencies [f9001de]
+  - @memberjunction/ai-agents@5.19.0
+  - @memberjunction/server@5.19.0
+  - @memberjunction/server-bootstrap-lite@5.19.0
+  - @memberjunction/ai@5.19.0
+  - @memberjunction/ai-core-plus@5.19.0
+  - @memberjunction/aiengine@5.19.0
+  - @memberjunction/api-keys@5.19.0
+  - @memberjunction/config@5.19.0
+  - @memberjunction/encryption@5.19.0
+  - @memberjunction/core@5.19.0
+  - @memberjunction/core-entities@5.19.0
+  - @memberjunction/global@5.19.0
+  - @memberjunction/sqlserver-dataprovider@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [322dac6]
+- Updated dependencies [5f91957]
+- Updated dependencies [ee4bf94]
+  - @memberjunction/ai-agents@5.18.0
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/server@5.18.0
+  - @memberjunction/server-bootstrap-lite@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/sqlserver-dataprovider@5.18.0
+  - @memberjunction/ai@5.18.0
+  - @memberjunction/api-keys@5.18.0
+  - @memberjunction/config@5.18.0
+  - @memberjunction/encryption@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

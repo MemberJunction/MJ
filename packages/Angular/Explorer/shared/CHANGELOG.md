@@ -1,5 +1,67 @@
 # Change Log - @memberjunction/ng-shared
 
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-engine-base@5.21.0
+  - @memberjunction/ng-base-application@5.21.0
+  - @memberjunction/ng-base-types@5.21.0
+  - @memberjunction/ng-notifications@5.21.0
+  - @memberjunction/ng-shared-generic@5.21.0
+  - @memberjunction/entity-communications-base@5.21.0
+  - @memberjunction/graphql-dataprovider@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ai-engine-base@5.20.0
+  - @memberjunction/ng-base-application@5.20.0
+  - @memberjunction/ng-base-types@5.20.0
+  - @memberjunction/ng-notifications@5.20.0
+  - @memberjunction/ng-shared-generic@5.20.0
+  - @memberjunction/entity-communications-base@5.20.0
+  - @memberjunction/graphql-dataprovider@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.19.0
+- @memberjunction/ng-base-application@5.19.0
+- @memberjunction/ng-base-types@5.19.0
+- @memberjunction/ng-notifications@5.19.0
+- @memberjunction/ng-shared-generic@5.19.0
+- @memberjunction/entity-communications-base@5.19.0
+- @memberjunction/graphql-dataprovider@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.18.0
+- @memberjunction/graphql-dataprovider@5.18.0
+- @memberjunction/ng-notifications@5.18.0
+- @memberjunction/ng-base-application@5.18.0
+- @memberjunction/ng-base-types@5.18.0
+- @memberjunction/ng-shared-generic@5.18.0
+- @memberjunction/entity-communications-base@5.18.0
+- @memberjunction/core@5.18.0
+- @memberjunction/core-entities@5.18.0
+- @memberjunction/global@5.18.0
+
 ## 5.17.0
 
 ### Patch Changes

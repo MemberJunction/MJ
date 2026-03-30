@@ -62,7 +62,7 @@
 module.exports = {
   serverExtensions: [
     {
-      Enabled: true,
+      Enabled: false, // Set to true after configuring SLACK_BOT_TOKEN and MJ_BOT_CONTEXT_USER_EMAIL
       DriverClass: 'SlackMessagingExtension',
       RootPath: '/webhook/slack',
       Settings: {
@@ -77,7 +77,7 @@ module.exports = {
       }
     },
     {
-      Enabled: true,
+      Enabled: false, // Set to true after configuring MICROSOFT_APP_ID/PASSWORD and MJ_BOT_CONTEXT_USER_EMAIL
       DriverClass: 'TeamsMessagingExtension',
       RootPath: '/webhook/teams',
       Settings: {

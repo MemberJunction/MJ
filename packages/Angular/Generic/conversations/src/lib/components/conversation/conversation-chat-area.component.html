@@ -23,14 +23,14 @@
             <span>Test</span>
           </button>
         }
-        <mj-active-agent-indicator
-          [conversationId]="conversation.ID"
-          [currentUser]="currentUser"
-          (togglePanel)="onToggleAgentPanel()"
-          (agentSelected)="onAgentSelected($event)">
-        </mj-active-agent-indicator>
       </div>
       <div class="chat-actions chat-actions-buttons">
+        @if (pinnedMessages.length > 0) {
+          <button class="pin-chip" [class.active]="showPinsPanel" (click)="showPinsPanel = !showPinsPanel" title="View pinned messages">
+            <i class="fas fa-thumbtack"></i>
+            <span class="pin-chip-count">{{ pinnedMessages.length }}</span>
+          </button>
+        }
         @if (artifactCountDisplay > 0) {
           <button class="artifact-indicator" (click)="viewArtifacts()" title="View artifacts">
             <i class="fas fa-cube"></i>
@@ -54,12 +54,6 @@
           <i class="fas fa-share-nodes"></i>
           <span class="btn-label">Share</span>
         </button>
-        <mj-active-agent-indicator
-          [conversationId]="conversation.ID"
-          [currentUser]="currentUser"
-          (togglePanel)="onToggleAgentPanel()"
-          (agentSelected)="onAgentSelected($event)">
-        </mj-active-agent-indicator>
       </div>
     </div>
   }
@@ -106,13 +100,16 @@
               [attachmentsMap]="attachmentsByDetailId"
               (replyInThread)="onReplyInThread($event)"
               (viewThread)="onViewThread($event)"
+              (deleteMessage)="onDeleteMessage($event)"
               (retryMessage)="onRetryMessage($event)"
               (testFeedbackMessage)="onTestFeedbackMessage($event)"
               (artifactClicked)="onArtifactClicked($event)"
               (messageEdited)="onMessageEdited($event)"
               (openEntityRecord)="onOpenEntityRecord($event)"
               (suggestedResponseSelected)="onSuggestedResponseSelected($event)"
-              (attachmentClicked)="onAttachmentClicked($event)">
+              (attachmentClicked)="onAttachmentClicked($event)"
+              (diagnosticRequested)="onDiagnosticRequested($event)"
+              (messagePinToggled)="onMessagePinToggled($event)">
             </mj-conversation-message-list>
 
             <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
@@ -209,6 +206,16 @@
       (saved)="onArtifactShared()"
       (cancelled)="onArtifactShareModalClose()">
     </mj-artifact-share-modal>
+
+    <!-- Pinned Messages Panel (overlay) -->
+    @if (showPinsPanel) {
+      <mj-pinned-messages-panel
+        [pinnedMessages]="pinnedMessages"
+        (closed)="showPinsPanel = false"
+        (jumpRequested)="onJumpToMessage($event)"
+        (unpinRequested)="onUnpinFromPanel($event)">
+      </mj-pinned-messages-panel>
+    }
   </div>
 </div>
 

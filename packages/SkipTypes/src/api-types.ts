@@ -19,6 +19,7 @@ import type { SkipQueryInfo, SkipQueryCatalogEntry } from './query-types';
 import type { SkipAPIRequestAPIKey } from './auth-types';
 import type { SkipAPIArtifact } from './artifact-types';
 import type { SkipAPIAgentNote, SkipAPIAgentNoteType } from './agent-types';
+import type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
 /**
  * Describes the different request phases that are used to communicate with the Skip API Server
@@ -228,6 +229,13 @@ export class SkipAPIRequest {
      * the caller's execution tracking and Skip's execution tracking.
      */
     externalReferenceID?: string;
+
+    /**
+     * The database platform used by the calling MJ environment. This tells Skip which SQL dialect
+     * to use when generating queries (e.g., SQL Server vs PostgreSQL syntax differences).
+     * If not provided, Skip should default to 'sqlserver' for backward compatibility.
+     */
+    databasePlatform?: DatabasePlatform;
 }
 
 /**

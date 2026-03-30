@@ -218,6 +218,37 @@ export const COND_GUARD_THEN_USE = `SELECT * FROM t
 WHERE Region = {{ Region | sqlString }}
 {% endif %}`;
 
+/**
+ * Conditional where the if/elif conditions reference a variable that is NEVER
+ * used in a {{ }} template expression. The variable drives control flow only.
+ * Expected: GroupingLevel is extracted as an optional string parameter even
+ * though it has no template expression usage.
+ */
+export const COND_CONTROL_FLOW_ONLY_PARAM = `SELECT
+  {% if GroupingLevel == 'Year' %}
+    CAST(YEAR([CloseDate]) AS VARCHAR(4))
+  {% elif GroupingLevel == 'Quarter' %}
+    CONCAT(CAST(YEAR([CloseDate]) AS VARCHAR(4)), '-Q', DATEPART(QUARTER, [CloseDate]))
+  {% else %}
+    FORMAT([CloseDate], 'yyyy-MM')
+  {% endif %} AS [TimeBucket],
+  COUNT([ID]) AS [DealCount],
+  SUM(ISNULL([Value], 0)) AS [TotalValue]
+FROM [crm].[vwDeals]
+WHERE [IsDeleted] = 0
+  AND [CloseDate] IS NOT NULL
+  {% if StartDate %} AND [CloseDate] >= {{ StartDate | sqlDate }}{% endif %}
+  {% if EndDate %} AND [CloseDate] <= {{ EndDate | sqlDate }}{% endif %}
+GROUP BY
+  {% if GroupingLevel == 'Year' %}
+    CAST(YEAR([CloseDate]) AS VARCHAR(4))
+  {% elif GroupingLevel == 'Quarter' %}
+    CONCAT(CAST(YEAR([CloseDate]) AS VARCHAR(4)), '-Q', DATEPART(QUARTER, [CloseDate]))
+  {% else %}
+    FORMAT([CloseDate], 'yyyy-MM')
+  {% endif %}
+ORDER BY [TimeBucket]`;
+
 // ═══════════════════════════════════════════════════════════════
 // Composition Token Edge Cases
 // ═══════════════════════════════════════════════════════════════

@@ -65,6 +65,11 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     public validationAttempts: any[] = [];
     public validationSummary: any = null;
 
+    // Full-screen overlay state
+    public FullScreenContent: string | null = null;
+    public FullScreenLanguage = 'json';
+    public FullScreenTitle = '';
+
     // Field injections
     private testHarnessWindowService = inject(TestHarnessWindowService);
     private viewContainerRef = inject(ViewContainerRef);
@@ -485,6 +490,18 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         }
     }
     
+    public openFullScreen(content: string, language: string, title: string): void {
+        this.FullScreenContent = content;
+        this.FullScreenLanguage = language;
+        this.FullScreenTitle = title;
+        this.cdr.detectChanges();
+    }
+
+    public closeFullScreen(): void {
+        this.FullScreenContent = null;
+        this.cdr.detectChanges();
+    }
+
     private loadValidationData() {
         const parseOptions: ParseJSONOptions = {
             extractInlineJson: true,
