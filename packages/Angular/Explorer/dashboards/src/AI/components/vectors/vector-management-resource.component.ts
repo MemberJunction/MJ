@@ -16,7 +16,9 @@ import {
     MJVectorDatabaseEntity,
     MJVectorIndexEntity,
     MJEntityRecordDocumentEntity,
-    MJAIModelEntity
+    MJAIModelEntity,
+    MJTemplateEntity,
+    MJTemplateContentEntity
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -93,6 +95,94 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public StorageUsagePercent = 0;
     public TotalVectors = 0;
 
+    // --- Edit Entity Document Panel ---
+    public ShowEditPanel = false;
+    public IsEditSaving = false;
+    public IsEditDeleting = false;
+    public EditDocID = '';
+    public EditDocName = '';
+    public EditDocEntityName = '';
+    public EditDocVectorDBID = '';
+    public EditDocAIModelID = '';
+    public EditDocStatus = '';
+
+    /** Open the edit panel for an entity document */
+    public OpenEditPanel(entityDocumentId: string): void {
+        const doc = this.entityDocuments.find(d => d.ID === entityDocumentId);
+        if (!doc) return;
+        this.EditDocID = doc.ID;
+        this.EditDocName = doc.Name;
+        this.EditDocEntityName = doc.Entity || '';
+        this.EditDocVectorDBID = doc.VectorDatabaseID;
+        this.EditDocAIModelID = doc.AIModelID;
+        this.EditDocStatus = doc.Status;
+        this.ShowEditPanel = true;
+        this.cdr.detectChanges();
+    }
+
+    public CloseEditPanel(): void {
+        this.ShowEditPanel = false;
+        this.cdr.detectChanges();
+    }
+
+    public async SaveEditedDocument(): Promise<void> {
+        this.IsEditSaving = true;
+        this.cdr.detectChanges();
+        try {
+            const md = new Metadata();
+            const doc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
+            const loaded = await doc.Load(this.EditDocID);
+            if (!loaded) throw new Error('Could not load entity document');
+
+            doc.Name = this.EditDocName;
+            doc.VectorDatabaseID = this.EditDocVectorDBID;
+            doc.AIModelID = this.EditDocAIModelID;
+            doc.Status = this.EditDocStatus as 'Active' | 'Inactive';
+
+            const saved = await doc.Save();
+            if (saved) {
+                MJNotificationService.Instance.CreateSimpleNotification('Entity document updated', 'success', 2500);
+                this.ShowEditPanel = false;
+                await this.LoadData();
+            } else {
+                const msg = doc.LatestResult?.CompleteMessage || 'Unknown error';
+                MJNotificationService.Instance.CreateSimpleNotification(`Save failed: ${msg}`, 'error', 5000);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
+        } finally {
+            this.IsEditSaving = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    public async DeleteEntityDocument(): Promise<void> {
+        this.IsEditDeleting = true;
+        this.cdr.detectChanges();
+        try {
+            const md = new Metadata();
+            const doc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
+            const loaded = await doc.Load(this.EditDocID);
+            if (!loaded) throw new Error('Could not load entity document');
+
+            const deleted = await doc.Delete();
+            if (deleted) {
+                MJNotificationService.Instance.CreateSimpleNotification('Entity document deleted', 'success', 2500);
+                this.ShowEditPanel = false;
+                await this.LoadData();
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification('Delete failed', 'error', 3000);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
+        } finally {
+            this.IsEditDeleting = false;
+            this.cdr.detectChanges();
+        }
+    }
+
     // --- Suggest Document Dialog ---
     public ShowSuggestDialog = false;
     public IsSuggesting = false;
@@ -103,6 +193,24 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public SuggestionError = '';
     public IsSavingDocument = false;
     public EditableTemplate = '';
+
+    /** Prerequisites check — are vector DB and embedding model configured? */
+    public HasVectorDB = false;
+    public HasEmbeddingModel = false;
+    public get PrerequisitesMet(): boolean {
+        return this.HasVectorDB && this.HasEmbeddingModel;
+    }
+
+    /** Available embedding models for selection in save form */
+    public AvailableEmbeddingModels: { ID: string; Name: string }[] = [];
+    /** Selected embedding model ID for the new entity document */
+    public SelectedEmbeddingModelID = '';
+    /** Selected vector database ID for the new entity document */
+    public SelectedVectorDBID = '';
+    /** Available vector indexes for selection */
+    public AvailableVectorIndexes: { ID: string; Name: string; VectorDatabaseID: string; EmbeddingModelID: string }[] = [];
+    /** Selected vector index ID — if user picks an existing one */
+    public SelectedVectorIndexID = '';
 
     /** Grouped entity list for the suggestion panel — schemas as groups, entities as items */
     public EntityGroups: { SchemaName: string; Entities: { Name: string; ID: string }[] }[] = [];
@@ -115,7 +223,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     // --- Raw entity data (private) ---
     private entityDocuments: MJEntityDocumentEntity[] = [];
-    private vectorDatabases: MJVectorDatabaseEntity[] = [];
+    protected vectorDatabases: MJVectorDatabaseEntity[] = [];
     private vectorIndexes: MJVectorIndexEntity[] = [];
     private recordDocuments: MJEntityRecordDocumentEntity[] = [];
     private aiModels: MJAIModelEntity[] = [];
@@ -160,6 +268,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             this.buildSyncRows();
             this.buildKPICards();
             this.buildSidebarData();
+            this.checkPrerequisites();
         } catch (error) {
             console.error('[VectorManagement] Error loading data:', error);
         } finally {
@@ -168,7 +277,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    /** Trigger vectorization for a specific entity document */
+    /** Trigger vectorization for a specific entity document via GraphQL */
     public async SyncEntity(entityDocumentId: string): Promise<void> {
         if (this.SyncingIds.has(entityDocumentId)) {
             return;
@@ -179,12 +288,47 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.cdr.detectChanges();
 
         try {
-            // The actual sync operation would be triggered via the server-side
-            // vectorization pipeline. For now we simulate a refresh after a short delay
-            // to pick up any changes from the backend.
+            const doc = this.entityDocuments.find(d => d.ID === entityDocumentId);
+            if (!doc) {
+                throw new Error('Entity document not found');
+            }
+
+            const provider = Metadata.Provider as GraphQLDataProvider;
+            if (!provider) {
+                throw new Error('GraphQL provider not available');
+            }
+
+            const aiClient = new GraphQLAIClient(provider);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Starting vectorization for ${doc.Entity}...`,
+                'info', 3000
+            );
+
+            const result = await aiClient.VectorizeEntity({
+                entityDocumentID: entityDocumentId,
+                entityID: doc.EntityID,
+                batchSize: 50
+            });
+
+            if (result.Success) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Vectorization complete for ${doc.Entity}`,
+                    'success', 3000
+                );
+                this.updateRowStatus(entityDocumentId, 'Synced');
+            } else {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Vectorization failed: ${result.ErrorMessage || 'Unknown error'}`,
+                    'error', 5000
+                );
+                this.updateRowStatus(entityDocumentId, 'Error');
+            }
+
             await this.LoadData();
         } catch (error) {
-            console.error(`[VectorManagement] Error syncing entity document ${entityDocumentId}:`, error);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error(`[VectorManagement] Error syncing entity document ${entityDocumentId}:`, msg);
+            MJNotificationService.Instance.CreateSimpleNotification(`Sync error: ${msg}`, 'error', 5000);
             this.updateRowStatus(entityDocumentId, 'Error');
         } finally {
             this.SyncingIds.delete(entityDocumentId);
@@ -431,7 +575,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 ResultType: 'simple'
             },
             {
-                EntityName: 'AI Models',
+                EntityName: 'MJ: AI Models',
                 ExtraFilter: '',
                 ResultType: 'entity_object'
             }
@@ -595,12 +739,55 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.StorageUsagePercent = total > 0 ? Math.round((vectorized / total) * 100) : 0;
     }
 
+    /** Check if vector DB and embedding model are configured, populate selection lists */
+    private checkPrerequisites(): void {
+        this.HasVectorDB = this.vectorDatabases.length > 0;
+        const allEmbeddings = this.aiModels.filter(m =>
+            m.AIModelType?.toLowerCase().includes('embedding') || m.Name?.toLowerCase().includes('embedding')
+        );
+        this.HasEmbeddingModel = allEmbeddings.length > 0;
+        this.AvailableEmbeddingModels = allEmbeddings.map(m => ({ ID: m.ID, Name: m.Name }));
+
+        // Default selections — first available, no hardcoded preference
+        if (this.HasVectorDB && !this.SelectedVectorDBID) {
+            this.SelectedVectorDBID = this.vectorDatabases[0].ID;
+        }
+        if (this.HasEmbeddingModel && !this.SelectedEmbeddingModelID) {
+            this.SelectedEmbeddingModelID = allEmbeddings[0].ID;
+        }
+
+        // Build vector index list
+        this.AvailableVectorIndexes = this.vectorIndexes.map(vi => ({
+            ID: vi.ID,
+            Name: vi.Name,
+            VectorDatabaseID: vi.VectorDatabaseID,
+            EmbeddingModelID: vi.EmbeddingModelID
+        }));
+        // Pre-select first index if available
+        if (this.AvailableVectorIndexes.length > 0 && !this.SelectedVectorIndexID) {
+            this.SelectedVectorIndexID = this.AvailableVectorIndexes[0].ID;
+        }
+    }
+
+    /** Find the best embedding model from loaded AI models */
+    private findEmbeddingModel(): MJAIModelEntity | undefined {
+        return this.aiModels.find(m =>
+            m.AIModelType?.toLowerCase().includes('embedding') || m.Name?.toLowerCase().includes('embedding')
+        );
+    }
+
     /**
      * Populate required foreign key fields on an Entity Document before saving.
-     * Uses the first available vector DB and an embedding AI model from loaded data.
-     * Creates a lookup for the 'Record Duplicate' entity document type.
+     * Throws if prerequisites are not met.
      */
     private async populateEntityDocumentFKs(entityDoc: MJEntityDocumentEntity): Promise<void> {
+        if (!this.PrerequisitesMet) {
+            const missing: string[] = [];
+            if (!this.HasVectorDB) missing.push('Vector Database');
+            if (!this.HasEmbeddingModel) missing.push('Embedding Model');
+            throw new Error(`Prerequisites not configured: ${missing.join(', ')}. Go to the Configuration tab to set these up.`);
+        }
+
         // TypeID — look up 'Record Duplicate' entity document type
         const rv = new RunView();
         const typeResult = await rv.RunView<{ ID: string }>({
@@ -611,25 +798,77 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         });
         if (typeResult.Success && typeResult.Results.length > 0) {
             entityDoc.TypeID = typeResult.Results[0].ID;
+        } else {
+            throw new Error('Entity Document Type "Record Duplicate" not found in database');
         }
 
-        // VectorDatabaseID — use first available from loaded data
-        if (this.vectorDatabases.length > 0) {
-            entityDoc.VectorDatabaseID = this.vectorDatabases[0].ID;
+        // If a vector index is selected, use its DB + model so the syncer finds it
+        // instead of auto-creating a new one
+        if (this.SelectedVectorIndexID) {
+            const idx = this.AvailableVectorIndexes.find(i => i.ID === this.SelectedVectorIndexID);
+            if (idx) {
+                entityDoc.VectorDatabaseID = idx.VectorDatabaseID;
+                entityDoc.AIModelID = idx.EmbeddingModelID;
+            } else {
+                entityDoc.VectorDatabaseID = this.SelectedVectorDBID || this.vectorDatabases[0].ID;
+                entityDoc.AIModelID = this.SelectedEmbeddingModelID || this.findEmbeddingModel()!.ID;
+            }
+        } else {
+            entityDoc.VectorDatabaseID = this.SelectedVectorDBID || this.vectorDatabases[0].ID;
+            entityDoc.AIModelID = this.SelectedEmbeddingModelID || this.findEmbeddingModel()!.ID;
         }
 
-        // AIModelID — find first embedding model from loaded AI models
-        const embeddingModel = this.aiModels.find(m =>
-            m.AIModelType === 'Embedding' || m.Name?.toLowerCase().includes('embedding')
-        );
-        if (embeddingModel) {
-            entityDoc.AIModelID = embeddingModel.ID;
-        } else if (this.aiModels.length > 0) {
-            entityDoc.AIModelID = this.aiModels[0].ID;
+        // TemplateID — create a Template record with the generated template content
+        await this.createTemplateForDocument(entityDoc);
+    }
+
+    /** Create a Template + TemplateContent record for the entity document */
+    private async createTemplateForDocument(entityDoc: MJEntityDocumentEntity): Promise<void> {
+        const md = new Metadata();
+        const templateText = this.EditableTemplate || this.SuggestionResult?.template || '';
+        if (!templateText) {
+            throw new Error('No template content to save');
         }
 
-        // TemplateID — for now leave null, the server-side EntityVectorSyncer
-        // will create one if needed via CreateTemplateForEntityDocument
+        // Create Template record
+        const template = await md.GetEntityObject<MJTemplateEntity>('MJ: Templates');
+        template.NewRecord();
+        template.Name = `Template for ${this.SaveDocumentName}`;
+        template.Description = `Auto-generated template for entity document: ${this.SaveDocumentName}`;
+        template.UserID = md.CurrentUser.ID;
+        template.IsActive = true;
+        const templateSaved = await template.Save();
+        if (!templateSaved) {
+            throw new Error(`Failed to create template: ${template.LatestResult?.CompleteMessage || 'unknown error'}`);
+        }
+
+        entityDoc.TemplateID = template.ID;
+
+        // Find 'Text' content type
+        const contentTypeResult = await new RunView().RunView<{ ID: string }>({
+            EntityName: 'MJ: Template Content Types',
+            ExtraFilter: "Name = 'Text'",
+            ResultType: 'simple',
+            Fields: ['ID']
+        });
+        if (!contentTypeResult.Success || contentTypeResult.Results.length === 0) {
+            throw new Error('Template Content Type "Text" not found');
+        }
+
+        // Create TemplateContent record with the template text
+        // Server-side MJTemplateContentEntityServer hook auto-creates Scalar params
+        // for each {{FieldName}} — GetTemplateData() handles them via the flat convention.
+        const content = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
+        content.NewRecord();
+        content.TemplateID = template.ID;
+        content.TypeID = contentTypeResult.Results[0].ID;
+        content.TemplateText = templateText;
+        content.Priority = 1;
+        content.IsActive = true;
+        const contentSaved = await content.Save();
+        if (!contentSaved) {
+            throw new Error(`Failed to create template content: ${content.LatestResult?.CompleteMessage || 'unknown error'}`);
+        }
     }
 
     /** Build grouped entity list from metadata, grouped by SchemaName */

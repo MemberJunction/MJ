@@ -75,7 +75,7 @@
                         {{ row.Status }}
                       </span>
                     </td>
-                    <td class="text-center">
+                    <td class="text-center actions-cell">
                       <button
                         class="sync-btn"
                         [disabled]="SyncingIds.has(row.EntityDocumentID)"
@@ -87,6 +87,12 @@
                           <i class="fa-solid fa-play"></i>
                         }
                         Sync
+                      </button>
+                      <button
+                        class="edit-btn"
+                        (click)="OpenEditPanel(row.EntityDocumentID)"
+                        title="Edit entity document">
+                        <i class="fa-solid fa-pen"></i>
                       </button>
                     </td>
                   </tr>
@@ -151,6 +157,73 @@
       </div>
     </div>
   </div>
+
+  <!-- Edit Entity Document Slide-in Panel -->
+  @if (ShowEditPanel) {
+    <div class="slide-panel-overlay" (click)="CloseEditPanel()">
+      <div class="slide-panel open" (click)="$event.stopPropagation()">
+        <div class="suggest-dialog-header">
+          <h3 class="suggest-dialog-title">
+            <i class="fa-solid fa-pen"></i>
+            Edit Entity Document
+          </h3>
+          <button class="suggest-close-btn" (click)="CloseEditPanel()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="suggest-dialog-body">
+          <div class="suggest-form">
+            <div class="suggest-field">
+              <label class="suggest-label">Entity</label>
+              <span class="edit-readonly-value">{{ EditDocEntityName }}</span>
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Document Name</label>
+              <input class="suggest-input" type="text" [(ngModel)]="EditDocName" />
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Embedding Model</label>
+              <select class="suggest-select" [(ngModel)]="EditDocAIModelID">
+                @for (model of AvailableEmbeddingModels; track model.ID) {
+                  <option [value]="model.ID">{{ model.Name }}</option>
+                }
+              </select>
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Vector Database</label>
+              <select class="suggest-select" [(ngModel)]="EditDocVectorDBID">
+                @for (db of vectorDatabases; track db.ID) {
+                  <option [value]="db.ID">{{ db.Name }}</option>
+                }
+              </select>
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Status</label>
+              <select class="suggest-select" [(ngModel)]="EditDocStatus">
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="result-actions" style="margin-top: 1rem">
+              @if (IsEditSaving || IsEditDeleting) {
+                <mj-loading text="Saving..." size="small"></mj-loading>
+              } @else {
+                <button class="suggest-submit-btn" (click)="SaveEditedDocument()">
+                  <i class="fa-solid fa-save"></i> Save Changes
+                </button>
+                <button class="edit-delete-btn" (click)="DeleteEntityDocument()">
+                  <i class="fa-solid fa-trash-can"></i> Delete
+                </button>
+                <button class="suggest-close-action" (click)="CloseEditPanel()">
+                  Cancel
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
 
   <!-- Suggest Document Slide-in Panel -->
   @if (ShowSuggestDialog) {
@@ -309,6 +382,22 @@
                 <div class="suggest-field">
                   <label class="suggest-label">Document Name</label>
                   <input class="suggest-input" type="text" [(ngModel)]="SaveDocumentName" />
+                </div>
+                <div class="suggest-field" style="margin-top: 0.75rem">
+                  <label class="suggest-label">Embedding Model</label>
+                  <select class="suggest-select" [(ngModel)]="SelectedEmbeddingModelID">
+                    @for (model of AvailableEmbeddingModels; track model.ID) {
+                      <option [value]="model.ID">{{ model.Name }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="suggest-field" style="margin-top: 0.75rem">
+                  <label class="suggest-label">Vector Database</label>
+                  <select class="suggest-select" [(ngModel)]="SelectedVectorDBID">
+                    @for (db of vectorDatabases; track db.ID) {
+                      <option [value]="db.ID">{{ db.Name }}</option>
+                    }
+                  </select>
                 </div>
               </div>
               <div class="result-actions">

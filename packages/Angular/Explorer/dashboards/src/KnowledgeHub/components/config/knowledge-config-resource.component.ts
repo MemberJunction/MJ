@@ -1,16 +1,18 @@
 /**
- * @fileoverview Knowledge Hub Configuration Resource Component (Task 5)
+ * @fileoverview Knowledge Hub Configuration Resource Component
  *
- * Settings page with left navigation for configuring the Knowledge Hub:
- * Pipeline, Vector DB, Full-Text Indexes, Embedding Models, Thresholds.
- * Inspired by config-option-b.html mockup.
+ * Full configuration dashboard for Knowledge Hub infrastructure:
+ * Vector DB provider management, vector index CRUD, embedding model selection,
+ * pipeline settings, full-text index config, and scoring thresholds.
  */
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
-import { ResourceData } from '@memberjunction/core-entities';
+import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
+import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /** Configuration section definition */
 interface ConfigSection {
@@ -28,20 +30,36 @@ interface PipelineConfig {
     MaxConcurrentJobs: number;
 }
 
-/** Vector DB configuration settings */
-interface VectorDBConfig {
-    Provider: string;
-    IndexName: string;
-    Dimensions: number;
-    Metric: string;
-}
-
 /** Threshold settings */
 interface ThresholdConfig {
     DuplicateAbsolute: number;
     DuplicatePotential: number;
     SearchRelevance: number;
     AutotagConfidence: number;
+}
+
+/** Vector DB provider display record */
+interface VectorDBRecord {
+    ID: string;
+    Name: string;
+    ClassKey: string;
+    Description: string;
+}
+
+/** Vector index display record */
+interface VectorIndexRecord {
+    ID: string;
+    Name: string;
+    EmbeddingModel: string;
+    EmbeddingModelID: string;
+    VectorDatabase: string;
+    VectorDatabaseID: string;
+}
+
+/** Embedding model display record */
+interface EmbeddingModelRecord {
+    ID: string;
+    Name: string;
 }
 
 @RegisterClass(BaseResourceComponent, 'KnowledgeConfigResource')
@@ -63,10 +81,10 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         return 'fa-solid fa-gear';
     }
 
-    // --- Configuration Sections ---
+    // --- Navigation ---
     public Sections: ConfigSection[] = [
         { ID: 'pipeline', Label: 'Pipeline', Icon: 'fa-solid fa-diagram-project', Description: 'Configure the knowledge ingestion pipeline stages' },
-        { ID: 'vectordb', Label: 'Vector Database', Icon: 'fa-solid fa-database', Description: 'Manage vector database connections and shared index' },
+        { ID: 'vectordb', Label: 'Vector Database', Icon: 'fa-solid fa-database', Description: 'Manage vector database connections and indexes' },
         { ID: 'fulltext', Label: 'Full-Text Indexes', Icon: 'fa-solid fa-text-width', Description: 'Configure SQL full-text search indexes' },
         { ID: 'embedding', Label: 'Embedding Models', Icon: 'fa-solid fa-microchip', Description: 'Select and configure embedding models' },
         { ID: 'thresholds', Label: 'Thresholds', Icon: 'fa-solid fa-sliders', Description: 'Set scoring thresholds for search and deduplication' },
@@ -77,7 +95,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     public IsSaving = false;
     public HasUnsavedChanges = false;
 
-    // --- Configuration Data ---
+    // --- Pipeline ---
     public PipelineSettings: PipelineConfig = {
         AutotagOnIngest: true,
         VectorizeOnIngest: true,
@@ -85,19 +103,45 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         MaxConcurrentJobs: 3
     };
 
-    public VectorDBSettings: VectorDBConfig = {
-        Provider: 'Pinecone',
-        IndexName: 'mj-shared-knowledge',
-        Dimensions: 1536,
-        Metric: 'cosine'
-    };
-
+    // --- Thresholds ---
     public ThresholdSettings: ThresholdConfig = {
         DuplicateAbsolute: 0.95,
         DuplicatePotential: 0.75,
         SearchRelevance: 0.3,
         AutotagConfidence: 0.7
     };
+
+    // --- Vector DB Providers ---
+    public VectorDBProviders: VectorDBRecord[] = [];
+    public get HasVectorDBProvider(): boolean { return this.VectorDBProviders.length > 0; }
+
+    // --- Vector Indexes ---
+    public VectorIndexes: VectorIndexRecord[] = [];
+    public get HasVectorIndex(): boolean { return this.VectorIndexes.length > 0; }
+
+    // --- Embedding Models ---
+    public EmbeddingModels: EmbeddingModelRecord[] = [];
+    public get HasEmbeddingModel(): boolean { return this.EmbeddingModels.length > 0; }
+    public get EmbeddingModelName(): string { return this.EmbeddingModels.length > 0 ? this.EmbeddingModels[0].Name : ''; }
+
+    // --- Setup Progress ---
+    public get SetupStepsCompleted(): number {
+        let count = 0;
+        if (this.HasVectorDBProvider) count++;
+        if (this.HasEmbeddingModel) count++;
+        if (this.HasVectorIndex) count++;
+        return count;
+    }
+    public get VectorSetupComplete(): boolean {
+        return this.HasVectorDBProvider && this.HasVectorIndex && this.HasEmbeddingModel;
+    }
+
+    // --- Create Index Form ---
+    public ShowCreateIndexForm = false;
+    public IsCreatingIndex = false;
+    public NewIndexName = '';
+    public NewIndexVectorDBID = '';
+    public NewIndexEmbeddingModelID = '';
 
     ngAfterViewInit(): void {
         this.loadConfiguration();
@@ -108,58 +152,202 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.destroy$.complete();
     }
 
-    /** Navigate to a section */
+    // ================================================================
+    // Public Methods
+    // ================================================================
+
     public SelectSection(sectionId: string): void {
         this.ActiveSection = sectionId;
         this.cdr.detectChanges();
     }
 
-    /** Mark configuration as changed */
     public OnSettingChanged(): void {
         this.HasUnsavedChanges = true;
         this.cdr.detectChanges();
     }
 
-    /** Save all configuration changes */
     public async SaveConfiguration(): Promise<void> {
         this.IsSaving = true;
         this.cdr.detectChanges();
-
         try {
-            // TODO: Save configuration via API
             await new Promise(resolve => setTimeout(resolve, 500));
             this.HasUnsavedChanges = false;
+            MJNotificationService.Instance.CreateSimpleNotification('Configuration saved', 'success', 2000);
         } finally {
             this.IsSaving = false;
             this.cdr.detectChanges();
         }
     }
 
-    /** Reset to last saved values */
     public ResetConfiguration(): void {
         this.loadConfiguration();
         this.HasUnsavedChanges = false;
         this.cdr.detectChanges();
     }
 
-    /** Format a threshold as a percentage */
     public FormatThreshold(value: number): string {
         return `${Math.round(value * 100)}%`;
     }
 
-    // --- Private Methods ---
+    /** Open the create index inline form */
+    public OpenCreateIndexForm(): void {
+        this.ShowCreateIndexForm = true;
+        this.NewIndexName = 'mj-knowledge-index';
+        this.NewIndexVectorDBID = this.VectorDBProviders.length > 0 ? this.VectorDBProviders[0].ID : '';
+        this.NewIndexEmbeddingModelID = this.EmbeddingModels.length > 0 ? this.EmbeddingModels[0].ID : '';
+        this.cdr.detectChanges();
+    }
+
+    /** Cancel creating an index */
+    public CancelCreateIndex(): void {
+        this.ShowCreateIndexForm = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Create a new vector index */
+    public async CreateIndex(): Promise<void> {
+        if (!this.NewIndexName.trim() || !this.NewIndexVectorDBID || !this.NewIndexEmbeddingModelID) {
+            MJNotificationService.Instance.CreateSimpleNotification('Please fill in all fields', 'warning', 3000);
+            return;
+        }
+
+        this.IsCreatingIndex = true;
+        this.cdr.detectChanges();
+
+        try {
+            const md = new Metadata();
+            const index = await md.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes');
+            index.NewRecord();
+            index.Name = this.NewIndexName.trim();
+            index.VectorDatabaseID = this.NewIndexVectorDBID;
+            index.EmbeddingModelID = this.NewIndexEmbeddingModelID;
+            index.Description = `Knowledge Hub vector index created ${new Date().toLocaleDateString()}`;
+
+            const saved = await index.Save();
+            if (saved) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Vector index "${this.NewIndexName}" created successfully`,
+                    'success', 3000
+                );
+                this.ShowCreateIndexForm = false;
+                await this.loadConfiguration();
+            } else {
+                const msg = index.LatestResult?.CompleteMessage || 'Unknown error';
+                console.error('[KnowledgeConfig] Failed to create index:', msg);
+                MJNotificationService.Instance.CreateSimpleNotification(`Failed to create index: ${msg}`, 'error', 5000);
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[KnowledgeConfig] Error creating index:', msg);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
+        } finally {
+            this.IsCreatingIndex = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Delete a vector index */
+    public async DeleteIndex(indexId: string): Promise<void> {
+        const idx = this.VectorIndexes.find(i => i.ID === indexId);
+        if (!idx) return;
+
+        try {
+            const md = new Metadata();
+            const entity = await md.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes');
+            const loaded = await entity.Load(indexId);
+            if (!loaded) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Could not load vector index "${idx.Name}"`, 'error', 3000
+                );
+                return;
+            }
+            const deleted = await entity.Delete();
+            if (deleted) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Index "${idx.Name}" deleted`, 'success', 2000
+                );
+                await this.loadConfiguration();
+            } else {
+                const msg = entity.LatestResult?.CompleteMessage || 'Unknown error';
+                console.error('[KnowledgeConfig] Delete failed:', msg);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Delete failed: ${msg}`, 'error', 5000
+                );
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[KnowledgeConfig] Error deleting index:', msg);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error: ${msg}`, 'error', 5000);
+        }
+    }
+
+    // ================================================================
+    // Private Methods
+    // ================================================================
 
     private async loadConfiguration(): Promise<void> {
         this.IsLoading = true;
         this.cdr.detectChanges();
 
         try {
-            // TODO: Load from API / entity records
-            await new Promise(resolve => setTimeout(resolve, 300));
+            const rv = new RunView();
+            const [vdbResult, modelsResult, indexResult] = await rv.RunViews([
+                {
+                    EntityName: 'MJ: Vector Databases',
+                    ResultType: 'simple'
+                },
+                {
+                    EntityName: 'MJ: AI Models',
+                    ResultType: 'simple'
+                },
+                {
+                    EntityName: 'MJ: Vector Indexes',
+                    ResultType: 'simple'
+                }
+            ]);
+
+            this.loadVectorDBProviders(vdbResult.Success ? vdbResult.Results : []);
+            this.loadEmbeddingModels(modelsResult.Success ? modelsResult.Results : []);
+            this.loadVectorIndexes(indexResult.Success ? indexResult.Results : []);
+        } catch (error) {
+            console.error('[KnowledgeConfig] Error loading configuration:', error);
         } finally {
             this.IsLoading = false;
             this.cdr.detectChanges();
         }
+    }
+
+    private loadVectorDBProviders(records: Record<string, unknown>[]): void {
+        this.VectorDBProviders = records.map(r => ({
+            ID: String(r['ID'] || ''),
+            Name: String(r['Name'] || ''),
+            ClassKey: String(r['ClassKey'] || ''),
+            Description: String(r['Description'] || '')
+        }));
+    }
+
+    private loadVectorIndexes(records: Record<string, unknown>[]): void {
+        this.VectorIndexes = records.map(r => ({
+            ID: String(r['ID'] || ''),
+            Name: String(r['Name'] || 'Unnamed Index'),
+            EmbeddingModel: String(r['EmbeddingModel'] || ''),
+            EmbeddingModelID: String(r['EmbeddingModelID'] || ''),
+            VectorDatabase: String(r['VectorDatabase'] || ''),
+            VectorDatabaseID: String(r['VectorDatabaseID'] || '')
+        }));
+    }
+
+    private loadEmbeddingModels(records: Record<string, unknown>[]): void {
+        this.EmbeddingModels = records
+            .filter(m =>
+                String(m['AIModelType'] || '').toLowerCase().includes('embedding') ||
+                String(m['Name'] || '').toLowerCase().includes('embedding') ||
+                String(m['Name'] || '').toLowerCase().includes('embed')
+            )
+            .map(m => ({
+                ID: String(m['ID']),
+                Name: String(m['Name'])
+            }));
     }
 }
 

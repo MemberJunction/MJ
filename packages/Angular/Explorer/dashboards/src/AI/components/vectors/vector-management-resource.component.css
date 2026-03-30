@@ -226,6 +226,62 @@
     white-space: nowrap;
 }
 
+/* --- Action buttons in table --- */
+
+.actions-cell {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+}
+
+.edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--mj-text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.edit-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+    border-color: var(--mj-border-strong);
+}
+
+.edit-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid var(--mj-status-error-border);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+    color: var(--mj-status-error-text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.edit-delete-btn:hover {
+    background: color-mix(in srgb, var(--mj-status-error) 20%, var(--mj-bg-surface));
+}
+
+.edit-readonly-value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--mj-text-primary);
+    padding: 8px 0;
+}
+
 /* --- Status badges --- */
 .status-badge {
     display: inline-flex;

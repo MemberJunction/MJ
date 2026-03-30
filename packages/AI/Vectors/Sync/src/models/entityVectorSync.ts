@@ -96,7 +96,7 @@ export class EntityVectorSyncer extends VectorBase {
       },
     });
 
-    this.startDataPaging(dataStream, params, md, entity, template, vectorIndexEntity, pageSize);
+    this.startDataPaging(dataStream, params, md, entity, template, vectorIndexEntity, entityDocument, pageSize);
 
     LogStatus('Starting pipeline');
     await pipeline(dataStream, vectorCreator, vectorUpserter, erdUpserter, new PassThrough({ objectMode: true }));
@@ -241,6 +241,14 @@ export class EntityVectorSyncer extends VectorBase {
 
     params?.forEach((p) => {
       if (p.IsRequired) {
+        // For Record type params, fields are spread to root level (flat convention)
+        // so check that data has any keys, not a specific key matching the param name
+        if (p.Type === 'Record') {
+          if (Object.keys(data).length === 0) {
+            result.Errors.push({ Source: p.Name, Message: `Parameter ${p.Name} is required.`, Value: undefined, Type: 'Failure' });
+          }
+          return;
+        }
         const val = data[p.Name];
         if (val === undefined || val === null || (typeof val === 'string' && val.trim() === '')) {
           result.Errors.push({ Source: p.Name, Message: `Parameter ${p.Name} is required.`, Value: val, Type: 'Failure' });
@@ -262,6 +270,7 @@ export class EntityVectorSyncer extends VectorBase {
     entity: EntityInfo,
     template: MJTemplateEntityExtended,
     vectorIndexEntity: MJVectorIndexEntity,
+    entityDocument: MJEntityDocumentEntity,
     pageSize: number
   ): void {
     const getData = async (): Promise<void> => {
@@ -299,7 +308,7 @@ export class EntityVectorSyncer extends VectorBase {
           templateData.__mj_compositeKey = entity.PrimaryKeys.map((key) => `${key.Name}|${typedRecord[key.Name]}`).join('||');
           templateData.VectorIndexID = vectorIndexEntity.ID;
           templateData.TemplateContent = template.Content[0].TemplateText;
-          templateData.__mj_entityDocument = params.entityDocumentID;
+          templateData.__mj_entityDocument = { ID: entityDocument.ID, EntityID: entityDocument.EntityID, Name: entityDocument.Name };
           items.push(templateData);
         }
 
@@ -639,8 +648,11 @@ export class EntityVectorSyncer extends VectorBase {
           });
           break;
         }
-        case 'Array':
         case 'Scalar':
+          // Flat convention: entity fields are top-level, so pull directly from record
+          templateData[param.Name] = record[param.Name] ?? '';
+          break;
+        case 'Array':
         case 'Object':
           LogError(`Unsupported parameter type ${param.Type} for parameter ${param.Name} in template ${template.ID}`);
           break;
