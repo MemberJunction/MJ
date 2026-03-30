@@ -58,12 +58,43 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'AdditionalBaseViews';
 GO
 
--- ============================================================================
--- Sync metadata so CodeGen discovers the new columns
--- ============================================================================
 
-EXEC [${flyway:defaultSchema}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='sys,staging'
-EXEC [${flyway:defaultSchema}].spUpdateSchemaInfoFromDatabase @ExcludedSchemaNames='sys,staging'
-EXEC [${flyway:defaultSchema}].spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'
-EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging'
+
+
+-- ============================================================================
+-- Phase 3: Seed JSONType metadata for Entity.AdditionalBaseViews
+-- ============================================================================
+-- After CodeGen creates EntityField records for the new columns above,
+-- this sets JSONType metadata on AdditionalBaseViews to make it the first
+-- consumer of the JSONType system. A subsequent CodeGen run then generates
+-- typed getter/setter using this metadata.
+-- This is idempotent — safe to run multiple times.
+
+IF EXISTS (
+    SELECT 1
+    FROM ${flyway:defaultSchema}.EntityField ef
+    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
+    WHERE e.Name = 'MJ: Entities'
+      AND ef.Name = 'AdditionalBaseViews'
+)
+BEGIN
+    UPDATE ef
+    SET
+        ef.JSONType = 'IAdditionalBaseView',
+        ef.JSONTypeIsArray = 1,
+        ef.JSONTypeDefinition = 'export interface IAdditionalBaseView {
+    /** Name of the database view (e.g., "vwEntitiesWithPermissions") */
+    Name: string;
+    /** Human-readable description of what this view provides */
+    Description?: string | null;
+    /** Database schema containing the view. Defaults to entity''s SchemaName if omitted. */
+    SchemaName?: string | null;
+    /** If true, RunView/search operations can consider this view */
+    UserSearchable?: boolean;
+}'
+    FROM ${flyway:defaultSchema}.EntityField ef
+    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
+    WHERE e.Name = 'MJ: Entities'
+      AND ef.Name = 'AdditionalBaseViews';
+END
 GO

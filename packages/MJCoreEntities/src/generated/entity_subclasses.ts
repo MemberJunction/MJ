@@ -2603,7 +2603,7 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: nvarchar(255)`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
-        * * Display Name: Parent Step
+        * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -5809,7 +5809,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: When true, the agent context must match for a cache hit. When false, agent-specific and non-agent results can be used interchangeably.`),
     CacheMustMatchConfig: z.boolean().describe(`
         * * Field Name: CacheMustMatchConfig
-        * * Display Name: Cache Must Match Configuration
+        * * Display Name: Cache Must Match Config
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.`),
@@ -5910,7 +5910,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Maximum number of failover attempts before giving up`),
     FailoverDelaySeconds: z.number().nullable().describe(`
         * * Field Name: FailoverDelaySeconds
-        * * Display Name: Failover Delay (seconds)
+        * * Display Name: Failover Delay (Seconds)
         * * SQL Data Type: int
         * * Default Value: 5
         * * Description: Initial delay in seconds between failover attempts`),
@@ -5965,6 +5965,12 @@ export const MJAIPromptSchema = z.object({
     *   * None
     *   * SystemInstruction
         * * Description: Controls behavior when the selected provider does not support native assistant prefill. Ignore = silently skip prefill, SystemInstruction = inject a system message instructing the model to start its response with the prefill text (uses fallback text from AI Model Vendor or AI Model Type), None = no fallback (prefill only works with supported providers).`),
+    RequireSpecificModels: z.boolean().describe(`
+        * * Field Name: RequireSpecificModels
+        * * Display Name: Require Specific Models
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template Text
@@ -8611,7 +8617,7 @@ export const MJCompanyIntegrationRunSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)`),
     RunByUserID: z.string().describe(`
         * * Field Name: RunByUserID
-        * * Display Name: Run By User ID
+        * * Display Name: Run By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     StartedAt: z.date().nullable().describe(`
@@ -8660,15 +8666,13 @@ export const MJCompanyIntegrationRunSchema = z.object({
         * * Description: Optional error log information for the integration run.`),
     ConfigData: z.string().nullable().describe(`
         * * Field Name: ConfigData
-        * * Display Name: Configuration Data
+        * * Display Name: Config Data
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional configuration data in JSON format for the request that started the integration run for audit purposes.`),
     ScheduledJobRunID: z.string().nullable().describe(`
         * * Field Name: ScheduledJobRunID
-        * * Display Name: Scheduled Job Run
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
-        * * Description: Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.`),
+        * * Display Name: Scheduled Job Run ID
+        * * SQL Data Type: uniqueidentifier`),
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
@@ -8806,7 +8810,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Description: The company's identifier in the external system, used for API calls.`),
     IsExternalSystemReadOnly: z.boolean().describe(`
         * * Field Name: IsExternalSystemReadOnly
-        * * Display Name: Is Read Only
+        * * Display Name: External System Read Only
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if data can only be read from the external system, not written back.`),
@@ -8917,17 +8921,15 @@ export const MJCompanyIntegrationSchema = z.object({
         * * Description: When the lock should be considered stale and eligible for cleanup`),
     ScheduledJobID: z.string().nullable().describe(`
         * * Field Name: ScheduledJobID
-        * * Display Name: Scheduled Job
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
-        * * Description: Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.`),
+        * * Display Name: Scheduled Job ID
+        * * SQL Data Type: uniqueidentifier`),
     Company: z.string().describe(`
         * * Field Name: Company
-        * * Display Name: Company Name
+        * * Display Name: Company
         * * SQL Data Type: nvarchar(50)`),
     Integration: z.string().describe(`
         * * Field Name: Integration
-        * * Display Name: Integration Name
+        * * Display Name: Integration
         * * SQL Data Type: nvarchar(100)`),
     DriverClassName: z.string().nullable().describe(`
         * * Field Name: DriverClassName
@@ -8939,7 +8941,7 @@ export const MJCompanyIntegrationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
-        * * Display Name: Last Run
+        * * Display Name: Last Run ID
         * * SQL Data Type: uniqueidentifier`),
     LastRunStartedAt: z.date().nullable().describe(`
         * * Field Name: LastRunStartedAt
@@ -10121,7 +10123,7 @@ export const MJConversationDetailArtifactSchema = z.object({
         * * Default Value: getutcdate()`),
     ConversationDetail: z.string().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Summary
+        * * Display Name: Conversation Detail
         * * SQL Data Type: nvarchar(MAX)`),
     ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
@@ -10602,7 +10604,7 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
-        * * Display Name: Test Run Name
+        * * Display Name: Test Run
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -11935,7 +11937,7 @@ export const MJEmployeeCompanyIntegrationSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee Name
+        * * Display Name: Employee
         * * SQL Data Type: nvarchar(81)`),
     CompanyIntegration: z.string().describe(`
         * * Field Name: CompanyIntegration
@@ -11976,7 +11978,7 @@ export const MJEmployeeRoleSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee Name
+        * * Display Name: Employee
         * * SQL Data Type: nvarchar(81)`),
     Role: z.string().describe(`
         * * Field Name: Role
@@ -12017,7 +12019,7 @@ export const MJEmployeeSkillSchema = z.object({
         * * Default Value: getutcdate()`),
     Employee: z.string().nullable().describe(`
         * * Field Name: Employee
-        * * Display Name: Employee Name
+        * * Display Name: Employee
         * * SQL Data Type: nvarchar(81)`),
     Skill: z.string().describe(`
         * * Field Name: Skill
@@ -12686,16 +12688,20 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When false (default), child types are disjoint - a record can only be one child type at a time. When true, a record can simultaneously exist as multiple child types (e.g., a Person can be both a Member and a Volunteer).`),
+    AdditionalBaseViews: z.any().nullable().describe(`
+        * * Field Name: AdditionalBaseViews
+        * * Display Name: Additional Base Views
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: IAdditionalBaseView[]
+        * * Description: JSON array of additional database view registrations for this entity beyond the default BaseView. Each entry specifies a view name, optional description, optional schema, and whether it is user-searchable.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`),
+        * * SQL Data Type: nvarchar(MAX)`),
     ClassName: z.string().nullable().describe(`
         * * Field Name: ClassName
         * * Display Name: Class Name
-        * * SQL Data Type: nvarchar(MAX)
-        * * Description: Schema-based programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(GetClassNameSchemaPrefix(SchemaName) + BaseTable + NameSuffix). The prefix is derived from SchemaName (guaranteed unique by SQL Server), not from EntityNamePrefix. For the core __mj schema, the prefix is "MJ"; for all other schemas it is the alphanumeric-sanitized schema name. This prevents cross-schema collisions and aligns with GraphQL type naming in getGraphQLTypeNameBase().`),
+        * * SQL Data Type: nvarchar(MAX)`),
     BaseTableCodeName: z.string().nullable().describe(`
         * * Field Name: BaseTableCodeName
         * * Display Name: Base Table Code Name
@@ -12763,11 +12769,11 @@ export const MJEntityActionFilterSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Entity Action Name
+        * * Display Name: Entity Action
         * * SQL Data Type: nvarchar(425)`),
     ActionFilter: z.string().describe(`
         * * Field Name: ActionFilter
-        * * Display Name: Action Filter Name
+        * * Display Name: Action Filter
         * * SQL Data Type: nvarchar(MAX)`),
 });
 
@@ -12854,7 +12860,7 @@ export const MJEntityActionInvocationSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityAction: z.string().describe(`
         * * Field Name: EntityAction
-        * * Display Name: Entity Action Name
+        * * Display Name: Entity Action
         * * SQL Data Type: nvarchar(425)`),
     InvocationType: z.string().describe(`
         * * Field Name: InvocationType
@@ -13122,7 +13128,7 @@ export const MJEntityCommunicationFieldSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityCommunicationMessageType: z.string().describe(`
         * * Field Name: EntityCommunicationMessageType
-        * * Display Name: Message Type Name
+        * * Display Name: Entity Communication Message Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -13813,6 +13819,22 @@ export const MJEntityFieldSchema = z.object({
         * * Display Name: Related Entity Join Fields
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`),
+    JSONType: z.string().nullable().describe(`
+        * * Field Name: JSONType
+        * * Display Name: JSON Type
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits strongly-typed getter/setter using this type instead of the default string getter/setter.`),
+    JSONTypeIsArray: z.boolean().describe(`
+        * * Field Name: JSONTypeIsArray
+        * * Display Name: JSON Type Is Array
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: If true, the field holds a JSON array of JSONType items. The getter returns JSONType[] | null and the setter accepts JSONType[] | null.`),
+    JSONTypeDefinition: z.string().nullable().describe(`
+        * * Field Name: JSONTypeDefinition
+        * * Display Name: JSON Type Definition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -16146,7 +16168,7 @@ export const MJMCPServerConnectionToolSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: Tool Name
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -16589,7 +16611,7 @@ export const MJMCPToolExecutionLogSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     MCPServerTool: z.string().nullable().describe(`
         * * Field Name: MCPServerTool
-        * * Display Name: Tool
+        * * Display Name: MCP Server Tool
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
@@ -18867,7 +18889,7 @@ export const MJRecordMergeDeletionLogSchema = z.object({
         * * Default Value: getutcdate()`),
     RecordMergeLog: z.string().describe(`
         * * Field Name: RecordMergeLog
-        * * Display Name: Merge Log Summary
+        * * Display Name: Record Merge Log
         * * SQL Data Type: nvarchar(450)`),
 });
 
@@ -19296,7 +19318,7 @@ export const MJReportSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Name
+        * * Display Name: Conversation Detail
         * * SQL Data Type: nvarchar(MAX)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
@@ -20565,7 +20587,7 @@ export const MJTaskSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     ConversationDetail: z.string().nullable().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail Name
+        * * Display Name: Conversation Detail
         * * SQL Data Type: nvarchar(MAX)`),
     User: z.string().nullable().describe(`
         * * Field Name: User
@@ -20848,7 +20870,7 @@ export const MJTemplateParamSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     TemplateContent: z.string().nullable().describe(`
         * * Field Name: TemplateContent
-        * * Display Name: Template Content Name
+        * * Display Name: Template Content
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -30356,7 +30378,7 @@ detailed information about what validation rules failed.
 
     /**
     * * Field Name: Parent
-    * * Display Name: Parent Step
+    * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
     */
     get Parent(): string | null {
@@ -39297,7 +39319,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: CacheMustMatchConfig
-    * * Display Name: Cache Must Match Configuration
+    * * Display Name: Cache Must Match Config
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.
@@ -39518,7 +39540,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: FailoverDelaySeconds
-    * * Display Name: Failover Delay (seconds)
+    * * Display Name: Failover Delay (Seconds)
     * * SQL Data Type: int
     * * Default Value: 5
     * * Description: Initial delay in seconds between failover attempts
@@ -39619,6 +39641,20 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
     set PrefillFallbackMode(value: 'Ignore' | 'None' | 'SystemInstruction') {
         this.Set('PrefillFallbackMode', value);
+    }
+
+    /**
+    * * Field Name: RequireSpecificModels
+    * * Display Name: Require Specific Models
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.
+    */
+    get RequireSpecificModels(): boolean {
+        return this.Get('RequireSpecificModels');
+    }
+    set RequireSpecificModels(value: boolean) {
+        this.Set('RequireSpecificModels', value);
     }
 
     /**
@@ -46343,7 +46379,7 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
 
     /**
     * * Field Name: RunByUserID
-    * * Display Name: Run By User ID
+    * * Display Name: Run By User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -46458,7 +46494,7 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
 
     /**
     * * Field Name: ConfigData
-    * * Display Name: Configuration Data
+    * * Display Name: Config Data
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional configuration data in JSON format for the request that started the integration run for audit purposes.
     */
@@ -46471,10 +46507,8 @@ export class MJCompanyIntegrationRunEntity extends BaseEntity<MJCompanyIntegrati
 
     /**
     * * Field Name: ScheduledJobRunID
-    * * Display Name: Scheduled Job Run
+    * * Display Name: Scheduled Job Run ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
-    * * Description: Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.
     */
     get ScheduledJobRunID(): string | null {
         return this.Get('ScheduledJobRunID');
@@ -46826,7 +46860,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: IsExternalSystemReadOnly
-    * * Display Name: Is Read Only
+    * * Display Name: External System Read Only
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if data can only be read from the external system, not written back.
@@ -47091,10 +47125,8 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: ScheduledJobID
-    * * Display Name: Scheduled Job
+    * * Display Name: Scheduled Job ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
-    * * Description: Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.
     */
     get ScheduledJobID(): string | null {
         return this.Get('ScheduledJobID');
@@ -47105,7 +47137,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: Company
-    * * Display Name: Company Name
+    * * Display Name: Company
     * * SQL Data Type: nvarchar(50)
     */
     get Company(): string {
@@ -47114,7 +47146,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: Integration
-    * * Display Name: Integration Name
+    * * Display Name: Integration
     * * SQL Data Type: nvarchar(100)
     */
     get Integration(): string {
@@ -47141,7 +47173,7 @@ export class MJCompanyIntegrationEntity extends BaseEntity<MJCompanyIntegrationE
 
     /**
     * * Field Name: LastRunID
-    * * Display Name: Last Run
+    * * Display Name: Last Run ID
     * * SQL Data Type: uniqueidentifier
     */
     get LastRunID(): string | null {
@@ -50271,7 +50303,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Summary
+    * * Display Name: Conversation Detail
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string {
@@ -51620,7 +51652,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: TestRun
-    * * Display Name: Test Run Name
+    * * Display Name: Test Run
     * * SQL Data Type: nvarchar(255)
     */
     get TestRun(): string | null {
@@ -55002,7 +55034,7 @@ export class MJEmployeeCompanyIntegrationEntity extends BaseEntity<MJEmployeeCom
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee Name
+    * * Display Name: Employee
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -55111,7 +55143,7 @@ export class MJEmployeeRoleEntity extends BaseEntity<MJEmployeeRoleEntityType> {
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee Name
+    * * Display Name: Employee
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -55220,7 +55252,7 @@ export class MJEmployeeSkillEntity extends BaseEntity<MJEmployeeSkillEntityType>
 
     /**
     * * Field Name: Employee
-    * * Display Name: Employee Name
+    * * Display Name: Employee
     * * SQL Data Type: nvarchar(81)
     */
     get Employee(): string | null {
@@ -56020,6 +56052,17 @@ export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType>
     }
 }
 
+
+export interface IAdditionalBaseView {
+    /** Name of the database view (e.g., "vwEntitiesWithPermissions") */
+    Name: string;
+    /** Human-readable description of what this view provides */
+    Description?: string | null;
+    /** Database schema containing the view. Defaults to entity's SchemaName if omitted. */
+    SchemaName?: string | null;
+    /** If true, RunView/search operations can consider this view */
+    UserSearchable?: boolean;
+}
 
 /**
  * MJ: Entities - strongly typed entity sub-class
@@ -56875,10 +56918,23 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
 
     /**
+    * * Field Name: AdditionalBaseViews
+    * * Display Name: Additional Base Views
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: IAdditionalBaseView[]
+    * * Description: JSON array of additional database view registrations for this entity beyond the default BaseView. Each entry specifies a view name, optional description, optional schema, and whether it is user-searchable.
+    */
+    get AdditionalBaseViews(): IAdditionalBaseView[] | null {
+        return this.Get('AdditionalBaseViews') ? JSON.parse(this.Get('AdditionalBaseViews')) : null;
+    }
+    set AdditionalBaseViews(value: IAdditionalBaseView[] | null) {
+        this.Set('AdditionalBaseViews', value ? JSON.stringify(value) : null);
+    }
+
+    /**
     * * Field Name: CodeName
     * * Display Name: Code Name
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.
     */
     get CodeName(): string | null {
         return this.Get('CodeName');
@@ -56888,7 +56944,6 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     * * Field Name: ClassName
     * * Display Name: Class Name
     * * SQL Data Type: nvarchar(MAX)
-    * * Description: Schema-based programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(GetClassNameSchemaPrefix(SchemaName) + BaseTable + NameSuffix). The prefix is derived from SchemaName (guaranteed unique by SQL Server), not from EntityNamePrefix. For the core __mj schema, the prefix is "MJ"; for all other schemas it is the alphanumeric-sanitized schema name. This prevents cross-schema collisions and aligns with GraphQL type naming in getGraphQLTypeNameBase().
     */
     get ClassName(): string | null {
         return this.Get('ClassName');
@@ -57055,7 +57110,7 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Entity Action Name
+    * * Display Name: Entity Action
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -57064,7 +57119,7 @@ export class MJEntityActionFilterEntity extends BaseEntity<MJEntityActionFilterE
 
     /**
     * * Field Name: ActionFilter
-    * * Display Name: Action Filter Name
+    * * Display Name: Action Filter
     * * SQL Data Type: nvarchar(MAX)
     */
     get ActionFilter(): string {
@@ -57288,7 +57343,7 @@ export class MJEntityActionInvocationEntity extends BaseEntity<MJEntityActionInv
 
     /**
     * * Field Name: EntityAction
-    * * Display Name: Entity Action Name
+    * * Display Name: Entity Action
     * * SQL Data Type: nvarchar(425)
     */
     get EntityAction(): string {
@@ -57959,7 +58014,7 @@ export class MJEntityCommunicationFieldEntity extends BaseEntity<MJEntityCommuni
 
     /**
     * * Field Name: EntityCommunicationMessageType
-    * * Display Name: Message Type Name
+    * * Display Name: Entity Communication Message Type
     * * SQL Data Type: nvarchar(100)
     */
     get EntityCommunicationMessageType(): string {
@@ -59647,6 +59702,46 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     }
     set RelatedEntityJoinFields(value: string | null) {
         this.Set('RelatedEntityJoinFields', value);
+    }
+
+    /**
+    * * Field Name: JSONType
+    * * Display Name: JSON Type
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits strongly-typed getter/setter using this type instead of the default string getter/setter.
+    */
+    get JSONType(): string | null {
+        return this.Get('JSONType');
+    }
+    set JSONType(value: string | null) {
+        this.Set('JSONType', value);
+    }
+
+    /**
+    * * Field Name: JSONTypeIsArray
+    * * Display Name: JSON Type Is Array
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: If true, the field holds a JSON array of JSONType items. The getter returns JSONType[] | null and the setter accepts JSONType[] | null.
+    */
+    get JSONTypeIsArray(): boolean {
+        return this.Get('JSONTypeIsArray');
+    }
+    set JSONTypeIsArray(value: boolean) {
+        this.Set('JSONTypeIsArray', value);
+    }
+
+    /**
+    * * Field Name: JSONTypeDefinition
+    * * Display Name: JSON Type Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.
+    */
+    get JSONTypeDefinition(): string | null {
+        return this.Get('JSONTypeDefinition');
+    }
+    set JSONTypeDefinition(value: string | null) {
+        this.Set('JSONTypeDefinition', value);
     }
 
     /**
@@ -65620,7 +65715,7 @@ export class MJMCPServerConnectionToolEntity extends BaseEntity<MJMCPServerConne
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: Tool Name
+    * * Display Name: MCP Server Tool
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -66768,7 +66863,7 @@ export class MJMCPToolExecutionLogEntity extends BaseEntity<MJMCPToolExecutionLo
 
     /**
     * * Field Name: MCPServerTool
-    * * Display Name: Tool
+    * * Display Name: MCP Server Tool
     * * SQL Data Type: nvarchar(255)
     */
     get MCPServerTool(): string | null {
@@ -72715,7 +72810,7 @@ export class MJRecordMergeDeletionLogEntity extends BaseEntity<MJRecordMergeDele
 
     /**
     * * Field Name: RecordMergeLog
-    * * Display Name: Merge Log Summary
+    * * Display Name: Record Merge Log
     * * SQL Data Type: nvarchar(450)
     */
     get RecordMergeLog(): string {
@@ -73877,7 +73972,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Name
+    * * Display Name: Conversation Detail
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string | null {
@@ -77318,7 +77413,7 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
 
     /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail Name
+    * * Display Name: Conversation Detail
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string | null {
@@ -78024,7 +78119,7 @@ export class MJTemplateParamEntity extends BaseEntity<MJTemplateParamEntityType>
 
     /**
     * * Field Name: TemplateContent
-    * * Display Name: Template Content Name
+    * * Display Name: Template Content
     * * SQL Data Type: nvarchar(255)
     */
     get TemplateContent(): string | null {

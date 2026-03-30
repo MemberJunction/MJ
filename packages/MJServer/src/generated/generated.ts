@@ -15040,6 +15040,9 @@ export class MJAIPrompt_ {
     @MaxLength(20)
     PrefillFallbackMode: string;
         
+    @Field(() => Boolean, {description: `Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.`}) 
+    RequireSpecificModels: boolean;
+        
     @Field() 
     @MaxLength(255)
     Template: string;
@@ -15265,6 +15268,9 @@ export class CreateMJAIPromptInput {
 
     @Field({ nullable: true })
     PrefillFallbackMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    RequireSpecificModels?: boolean;
 }
     
 
@@ -15425,6 +15431,9 @@ export class UpdateMJAIPromptInput {
 
     @Field({ nullable: true })
     PrefillFallbackMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    RequireSpecificModels?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -23943,7 +23952,7 @@ export class MJCompanyIntegrationRun_ {
     @Field({nullable: true, description: `Optional configuration data in JSON format for the request that started the integration run for audit purposes.`}) 
     ConfigData?: string;
         
-    @Field({nullable: true, description: `Links to the scheduled job run that triggered this integration sync. NULL for manually-triggered syncs.`}) 
+    @Field({nullable: true}) 
     @MaxLength(36)
     ScheduledJobRunID?: string;
         
@@ -24462,7 +24471,7 @@ export class MJCompanyIntegration_ {
     @Field({nullable: true, description: `When the lock should be considered stale and eligible for cleanup`}) 
     LockExpiresAt?: Date;
         
-    @Field({nullable: true, description: `Associates this company integration with a scheduled job for automatic sync execution. NULL if no schedule is configured.`}) 
+    @Field({nullable: true}) 
     @MaxLength(36)
     ScheduledJobID?: string;
         
@@ -35605,10 +35614,13 @@ export class MJEntity_ {
     @Field(() => Boolean, {description: `When false (default), child types are disjoint - a record can only be one child type at a time. When true, a record can simultaneously exist as multiple child types (e.g., a Person can be both a Member and a Volunteer).`}) 
     AllowMultipleSubtypes: boolean;
         
-    @Field({nullable: true, description: `Schema-based programmatic code name derived from the entity Name. Uses GetClassNameSchemaPrefix(SchemaName) as the prefix, then strips EntityNamePrefix from the Name and removes spaces. For "__mj" schema with entity "MJ: AI Models", this produces "MJAIModels". For entities in other schemas, the sanitized schema name is prepended. Used in GraphQL type generation and internal code references.`}) 
+    @Field({nullable: true, description: `JSON array of additional database view registrations for this entity beyond the default BaseView. Each entry specifies a view name, optional description, optional schema, and whether it is user-searchable.`}) 
+    AdditionalBaseViews?: string;
+        
+    @Field({nullable: true}) 
     CodeName?: string;
         
-    @Field({nullable: true, description: `Schema-based programmatic class name used for TypeScript entity classes, Zod schemas, and Angular form components. Computed as GetProgrammaticName(GetClassNameSchemaPrefix(SchemaName) + BaseTable + NameSuffix). The prefix is derived from SchemaName (guaranteed unique by SQL Server), not from EntityNamePrefix. For the core __mj schema, the prefix is "MJ"; for all other schemas it is the alphanumeric-sanitized schema name. This prevents cross-schema collisions and aligns with GraphQL type naming in getGraphQLTypeNameBase().`}) 
+    @Field({nullable: true}) 
     ClassName?: string;
         
     @Field({nullable: true}) 
@@ -35953,6 +35965,9 @@ export class CreateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowMultipleSubtypes?: boolean;
+
+    @Field({ nullable: true })
+    AdditionalBaseViews: string | null;
 }
     
 
@@ -36122,6 +36137,9 @@ export class UpdateMJEntityInput {
 
     @Field(() => Boolean, { nullable: true })
     AllowMultipleSubtypes?: boolean;
+
+    @Field({ nullable: true })
+    AdditionalBaseViews?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -39388,6 +39406,16 @@ export class MJEntityField_ {
     @Field({nullable: true, description: `JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`}) 
     RelatedEntityJoinFields?: string;
         
+    @Field({nullable: true, description: `The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits strongly-typed getter/setter using this type instead of the default string getter/setter.`}) 
+    @MaxLength(255)
+    JSONType?: string;
+        
+    @Field(() => Boolean, {description: `If true, the field holds a JSON array of JSONType items. The getter returns JSONType[] | null and the setter accepts JSONType[] | null.`}) 
+    JSONTypeIsArray: boolean;
+        
+    @Field({nullable: true, description: `Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`}) 
+    JSONTypeDefinition?: string;
+        
     @Field({nullable: true}) 
     FieldCodeName?: string;
         
@@ -39573,6 +39601,15 @@ export class CreateMJEntityFieldInput {
 
     @Field({ nullable: true })
     RelatedEntityJoinFields: string | null;
+
+    @Field({ nullable: true })
+    JSONType: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    JSONTypeIsArray?: boolean;
+
+    @Field({ nullable: true })
+    JSONTypeDefinition: string | null;
 }
     
 
@@ -39709,6 +39746,15 @@ export class UpdateMJEntityFieldInput {
 
     @Field({ nullable: true })
     RelatedEntityJoinFields?: string | null;
+
+    @Field({ nullable: true })
+    JSONType?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    JSONTypeIsArray?: boolean;
+
+    @Field({ nullable: true })
+    JSONTypeDefinition?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -46769,14 +46815,14 @@ export class MJMCPServerConnection_ {
     @Field(() => [MJMCPToolExecutionLog_])
     MJMCPToolExecutionLogs_MCPServerConnectionIDArray: MJMCPToolExecutionLog_[]; // Link to MJMCPToolExecutionLogs
     
+    @Field(() => [MJOAuthAuthorizationState_])
+    MJOAuthAuthorizationStates_MCPServerConnectionIDArray: MJOAuthAuthorizationState_[]; // Link to MJOAuthAuthorizationStates
+    
     @Field(() => [MJOAuthClientRegistration_])
     MJOAuthClientRegistrations_MCPServerConnectionIDArray: MJOAuthClientRegistration_[]; // Link to MJOAuthClientRegistrations
     
     @Field(() => [MJOAuthToken_])
     MJOAuthTokens_MCPServerConnectionIDArray: MJOAuthToken_[]; // Link to MJOAuthTokens
-    
-    @Field(() => [MJOAuthAuthorizationState_])
-    MJOAuthAuthorizationStates_MCPServerConnectionIDArray: MJOAuthAuthorizationState_[]; // Link to MJOAuthAuthorizationStates
     
     @Field(() => [MJMCPServerConnectionPermission_])
     MJMCPServerConnectionPermissions_MCPServerConnectionIDArray: MJMCPServerConnectionPermission_[]; // Link to MJMCPServerConnectionPermissions
@@ -46978,6 +47024,16 @@ export class MJMCPServerConnectionResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJOAuthAuthorizationState_])
+    async MJOAuthAuthorizationStates_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: O Auth Authorization States', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwOAuthAuthorizationStates')} WHERE ${provider.QuoteIdentifier('MCPServerConnectionID')}='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Authorization States', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Authorization States', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJOAuthClientRegistration_])
     async MJOAuthClientRegistrations_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: O Auth Client Registrations', userPayload);
@@ -46995,16 +47051,6 @@ export class MJMCPServerConnectionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwOAuthTokens')} WHERE ${provider.QuoteIdentifier('MCPServerConnectionID')}='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Tokens', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Tokens', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJOAuthAuthorizationState_])
-    async MJOAuthAuthorizationStates_MCPServerConnectionIDArray(@Root() mjmcpserverconnection_: MJMCPServerConnection_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: O Auth Authorization States', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwOAuthAuthorizationStates')} WHERE ${provider.QuoteIdentifier('MCPServerConnectionID')}='${mjmcpserverconnection_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: O Auth Authorization States', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: O Auth Authorization States', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -57769,9 +57815,6 @@ export class MJScheduledJobRun_ {
     @Field(() => [MJAIAgentRun_])
     MJAIAgentRuns_ScheduledJobRunIDArray: MJAIAgentRun_[]; // Link to MJAIAgentRuns
     
-    @Field(() => [MJCompanyIntegrationRun_])
-    MJCompanyIntegrationRuns_ScheduledJobRunIDArray: MJCompanyIntegrationRun_[]; // Link to MJCompanyIntegrationRuns
-    
 }
 
 //****************************************************************************
@@ -57914,16 +57957,6 @@ export class MJScheduledJobRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentRuns')} WHERE ${provider.QuoteIdentifier('ScheduledJobRunID')}='${mjscheduledjobrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJCompanyIntegrationRun_])
-    async MJCompanyIntegrationRuns_ScheduledJobRunIDArray(@Root() mjscheduledjobrun_: MJScheduledJobRun_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Company Integration Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrationRuns')} WHERE ${provider.QuoteIdentifier('ScheduledJobRunID')}='${mjscheduledjobrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integration Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integration Runs', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -58267,9 +58300,6 @@ export class MJScheduledJob_ {
     @Field(() => [MJScheduledJobRun_])
     MJScheduledJobRuns_ScheduledJobIDArray: MJScheduledJobRun_[]; // Link to MJScheduledJobRuns
     
-    @Field(() => [MJCompanyIntegration_])
-    MJCompanyIntegrations_ScheduledJobIDArray: MJCompanyIntegration_[]; // Link to MJCompanyIntegrations
-    
 }
 
 //****************************************************************************
@@ -58508,16 +58538,6 @@ export class MJScheduledJobResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwScheduledJobRuns')} WHERE ${provider.QuoteIdentifier('ScheduledJobID')}='${mjscheduledjob_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Job Runs', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJCompanyIntegration_])
-    async MJCompanyIntegrations_ScheduledJobIDArray(@Root() mjscheduledjob_: MJScheduledJob_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Company Integrations', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrations')} WHERE ${provider.QuoteIdentifier('ScheduledJobID')}='${mjscheduledjob_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integrations', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integrations', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -66797,11 +66817,11 @@ export class MJUser_ {
     @Field(() => [MJOAuthAuthorizationState_])
     MJOAuthAuthorizationStates_UserIDArray: MJOAuthAuthorizationState_[]; // Link to MJOAuthAuthorizationStates
     
-    @Field(() => [MJOpenApp_])
-    MJOpenApps_InstalledByUserIDArray: MJOpenApp_[]; // Link to MJOpenApps
-    
     @Field(() => [MJOpenAppInstallHistory_])
     MJOpenAppInstallHistories_ExecutedByUserIDArray: MJOpenAppInstallHistory_[]; // Link to MJOpenAppInstallHistories
+    
+    @Field(() => [MJOpenApp_])
+    MJOpenApps_InstalledByUserIDArray: MJOpenApp_[]; // Link to MJOpenApps
     
     @Field(() => [MJResourcePermission_])
     MJResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to MJResourcePermissions
@@ -67621,16 +67641,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJOpenApp_])
-    async MJOpenApps_InstalledByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Open Apps', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwOpenApps')} WHERE ${provider.QuoteIdentifier('InstalledByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open Apps', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open Apps', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJOpenAppInstallHistory_])
     async MJOpenAppInstallHistories_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Open App Install Histories', userPayload);
@@ -67638,6 +67648,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwOpenAppInstallHistories')} WHERE ${provider.QuoteIdentifier('ExecutedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open App Install Histories', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open App Install Histories', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJOpenApp_])
+    async MJOpenApps_InstalledByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Open Apps', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwOpenApps')} WHERE ${provider.QuoteIdentifier('InstalledByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Open Apps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Open Apps', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

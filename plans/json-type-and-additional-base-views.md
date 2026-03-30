@@ -48,13 +48,12 @@ export interface IAdditionalBaseView {
     Name: string;
     Description?: string | null;
     SchemaName?: string | null;
-    WhereClause?: string | null;
     UserSearchable?: boolean;
 }
 
 // ---- In the entity class ----
 @RegisterClass(BaseEntity, 'Entities')
-export class EntityEntity extends BaseEntity<EntityEntityType> {
+export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     // ... other fields ...
 
     /**
@@ -164,7 +163,7 @@ AlternateViewName?: string;
 
 #### Task 1.1: Create Migration for EntityField JSONType Columns
 
-**File**: `migrations/v2/V{timestamp}__v2.x_JSONType_EntityField_columns.sql`
+**File**: `migrations/v5/V202603291535__v5.21.x__JSONType_and_AdditionalBaseViews.sql`
 
 Add three columns to `__mj.EntityField`:
 
@@ -225,7 +224,7 @@ WHERE e.Name = 'MJ: Entities'
 **Implementation:** Created as `scripts/seed-jsontype-metadata.sql` — a post-CodeGen seed script. This cannot be a Flyway migration (it would run before CodeGen creates the EntityField record) or an mj-sync file (mj-sync needs a primaryKey UUID to update existing records, but CodeGen generates the UUID). The script is idempotent and uses the natural key (EntityName + FieldName) to find the record.
 
 **Deployment sequence:**
-1. Apply migration V202603122100 (adds columns to EntityField and Entity)
+1. Apply migration V202603252318 (adds columns to EntityField and Entity)
 2. Run CodeGen (creates EntityField records for the new columns)
 3. Run `scripts/seed-jsontype-metadata.sql` (sets JSONType metadata on AdditionalBaseViews)
 4. Run CodeGen again (generates typed getter/setter in entity_subclasses.ts)
@@ -565,7 +564,7 @@ Test cases:
 Run tests for all modified packages:
 - `cd packages/MJCore && npm run test`
 - `cd packages/CodeGenLib && npm run test`
-- `cd packages/SQLServerDataProvider && npm run test`
+- `cd packages/GenericDatabaseProvider && npm run test`
 
 Fix any broken tests.
 
@@ -612,11 +611,11 @@ This can be done via unit tests (Task 5.1) rather than a full CodeGen run.
 
 | File | Change |
 |------|--------|
-| `migrations/v2/V{timestamp}__v2.x_JSONType_and_AdditionalBaseViews.sql` | **NEW** — Add 3 columns to EntityField, 1 column to Entity |
+| `migrations/v5/V202603291535__v5.21.x__JSONType_and_AdditionalBaseViews.sql` | **NEW** — Add 3 columns to EntityField, 1 column to Entity |
 | `packages/MJCore/src/generic/entityInfo.ts` | Add `JSONType`, `JSONTypeIsArray`, `JSONTypeDefinition` to EntityFieldInfo; add `AdditionalBaseViews` raw property + `IAdditionalBaseView` interface + typed accessor + helpers to EntityInfo |
 | `packages/MJCore/src/views/runView.ts` | Add `AlternateViewName` to `RunViewParams`; update `Equals()` method |
 | `packages/MJCore/src/generic/providerBase.ts` | Add validation for `AlternateViewName` in `PreRunView()` |
-| `packages/SQLServerDataProvider/src/SQLServerDataProvider.ts` | Use alternate view name/schema in SQL query construction in `InternalRunView()` |
+| `packages/GenericDatabaseProvider/src/GenericDatabaseProvider.ts` | Use alternate view name/schema in SQL query construction in `InternalRunView()` |
 | `packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts` | Emit JSONTypeDefinition blocks above classes; generate typed getter/setter for JSONType fields; update Zod schema generation |
 | `packages/CodeGenLib/src/__tests__/entity_subclasses_codegen.test.ts` | **NEW or modified** — Unit tests for JSONType emission |
 
@@ -634,8 +633,8 @@ This can be done via unit tests (Task 5.1) rather than a full CodeGen run.
 8. Build CodeGenLib
 9. RunViewParams: Add AlternateViewName + update Equals()
 10. ProviderBase: Add AlternateViewName validation in PreRunView()
-11. SQLServerDataProvider: Use alternate view in query construction
-12. Build SQLServerDataProvider
+11. GenericDatabaseProvider: Use alternate view in query construction
+12. Build GenericDatabaseProvider
 13. Unit tests for all changes
 14. Seed AdditionalBaseViews JSONType metadata (migration or mj-sync)
 15. Integration validation

@@ -17,6 +17,7 @@ export class MJRecommendationFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'recommendationCore', sectionName: 'Recommendation Core', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJRecommendationItems', sectionName: 'Recommendation Items', isExpanded: false }
         ]);

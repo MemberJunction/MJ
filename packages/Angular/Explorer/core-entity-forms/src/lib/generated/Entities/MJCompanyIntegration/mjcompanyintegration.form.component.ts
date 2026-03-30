@@ -21,6 +21,7 @@ export class MJCompanyIntegrationFormComponent extends BaseFormComponent {
             { sectionKey: 'externalSystemMapping', sectionName: 'External System Mapping', isExpanded: false },
             { sectionKey: 'syncScheduling', sectionName: 'Sync Scheduling', isExpanded: false },
             { sectionKey: 'runHistoryMonitoring', sectionName: 'Run History & Monitoring', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJLists', sectionName: 'Lists', isExpanded: false },
             { sectionKey: 'mJEmployeeCompanyIntegrations', sectionName: 'Employee Company Integrations', isExpanded: false },

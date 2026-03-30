@@ -18,6 +18,7 @@ export class MJDuplicateRunDetailFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'runIdentification', sectionName: 'Run Identification', isExpanded: true },
             { sectionKey: 'processingOutcomes', sectionName: 'Processing Outcomes', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJDuplicateRunDetailMatches', sectionName: 'Duplicate Run Detail Matches', isExpanded: false }
         ]);
