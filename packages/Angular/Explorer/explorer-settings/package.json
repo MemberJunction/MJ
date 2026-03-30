@@ -4,6 +4,16 @@
   "description": "MemberJunction: Reusable Angular components for the settings section of the MJ Explorer App",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/public-api.d.ts",
+      "default": "./dist/public-api.js"
+    },
+    "./settings.module": {
+      "types": "./dist/lib/module.d.ts",
+      "default": "./dist/lib/module.js"
+    }
+  },
   "files": [
     "/dist"
   ],

@@ -118,19 +118,12 @@ export interface GenerateManifestOptions {
      * The config maps @RegisterClass keys to dynamic import() loaders based on
      * each package's subpath exports in package.json.
      *
-     * Only classes whose base class is in `lazyBaseClasses` are included.
-     * Only packages matching `excludePackages` are scanned for lazy classes
-     * (packages in the eager manifest don't need lazy loading).
+     * Includes all @RegisterClass classes with a key that are in packages
+     * matching `excludePackages` AND have subpath exports defined in their
+     * package.json. The subpath exports field is the package's declarative
+     * marker that it supports lazy chunk loading.
      */
     lazyConfigPath?: string;
-
-    /**
-     * Base class names that indicate a class should be lazy-loaded.
-     * Only used when `lazyConfigPath` is set.
-     *
-     * @example ['BaseResourceComponent', 'BaseDashboard']
-     */
-    lazyBaseClasses?: string[];
 }
 
 /**
@@ -1269,7 +1262,6 @@ function resolveHostPackage(filePath: string, depTree: Map<string, string>): str
 
 function buildLazyChunks(
     excludePackages: string[],
-    lazyBaseClasses: string[],
     fullDepTree: Map<string, string>,
     excludePatterns: string[],
     scanDist: boolean,
@@ -1277,34 +1269,37 @@ function buildLazyChunks(
     hostPackageName?: string
 ): { chunks: LazyChunk[]; errors: string[] } {
     const errors: string[] = [];
-    const lazyBaseSet = new Set(lazyBaseClasses);
 
-    // Find packages excluded from the eager manifest — these are lazy candidates
+    // Find excluded packages that have subpath exports — these are lazy-loadable.
+    // The subpath exports field in package.json is the package's declarative marker
+    // that it supports lazy chunk loading.
     const lazyPackages = new Map<string, string>();
     for (const [depName, depDir] of fullDepTree.entries()) {
-        if (isPackageExcluded(depName, excludePackages)) {
-            // Never include the package that hosts the lazy config file (would cause self-import)
-            if (hostPackageName && depName === hostPackageName) {
-                log(`Lazy config: skipping ${depName} (hosts the lazy config file)`);
-                continue;
-            }
-            lazyPackages.set(depName, depDir);
+        if (!isPackageExcluded(depName, excludePackages)) continue;
+
+        // Never include the package that hosts the lazy config file (would cause self-import)
+        if (hostPackageName && depName === hostPackageName) {
+            log(`Lazy config: skipping ${depName} (hosts the lazy config file)`);
+            continue;
         }
+
+        // Only include packages with subpath exports
+        if (!hasSubpathExports(depDir)) continue;
+
+        lazyPackages.set(depName, depDir);
     }
 
-    log(`Lazy config: ${lazyPackages.size} excluded packages to scan`);
+    log(`Lazy config: ${lazyPackages.size} excluded packages with subpath exports`);
 
     // Scan lazy packages for @RegisterClass decorators
     const lazyClasses = scanPackagesForDecorators(lazyPackages, excludePatterns, scanDist, errors);
     log(`Lazy config: ${lazyClasses.length} total @RegisterClass decorators found`);
 
-    // Filter to classes with lazy base classes and a key
-    const filtered = lazyClasses.filter(c =>
-        c.baseClassName && lazyBaseSet.has(c.baseClassName) && c.key
-    );
-    log(`Lazy config: ${filtered.length} classes match lazy base classes`);
+    // Filter to classes with a key (the lazy config maps keys to loaders)
+    const filtered = lazyClasses.filter(c => c.key);
+    log(`Lazy config: ${filtered.length} classes have keys`);
 
-    // Resolve subpath exports for each package and group classes into chunks
+    // Group classes into chunks by subpath export
     return { chunks: groupClassesIntoChunks(filtered, lazyPackages, log), errors };
 }
 
@@ -1678,8 +1673,7 @@ export async function generateClassRegistrationsManifest(
         excludePackages = [],
         syncDependencies = true,
         scanDist = false,
-        lazyConfigPath,
-        lazyBaseClasses
+        lazyConfigPath
     } = options;
 
     const errors: string[] = [];
@@ -1787,10 +1781,9 @@ export async function generateClassRegistrationsManifest(
 
     // Lazy config generation
     let lazyConfigChanged = false;
-    if (lazyConfigPath && lazyBaseClasses && lazyBaseClasses.length > 0 && excludePackages.length > 0) {
+    if (lazyConfigPath && excludePackages.length > 0) {
         log('');
         log('--- Lazy Config Generation ---');
-        log(`Lazy base classes: ${lazyBaseClasses.join(', ')}`);
 
         try {
             // Walk full dep tree (no excludes) to find packages excluded from the eager manifest
@@ -1803,7 +1796,7 @@ export async function generateClassRegistrationsManifest(
             }
 
             const { chunks, errors: lazyErrors } = buildLazyChunks(
-                excludePackages, lazyBaseClasses, fullDepTree,
+                excludePackages, fullDepTree,
                 excludePatterns, scanDist, log, hostPackageName
             );
             errors.push(...lazyErrors);

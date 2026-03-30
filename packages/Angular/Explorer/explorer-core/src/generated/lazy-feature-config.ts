@@ -49,11 +49,14 @@ const loadSchedulingDashboardsModule = featureLoader(() => import('@memberjuncti
 // --- @memberjunction/ng-dashboards → ./testing-dashboards.module (6 keys) ---
 const loadTestingDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/testing-dashboards.module'));
 
-// --- @memberjunction/ng-explorer-settings → . (5 keys) ---
-const loadNgExplorerSettings = featureLoader(() => import('@memberjunction/ng-explorer-settings'));
+// --- @memberjunction/ng-explorer-settings → ./settings.module (6 keys) ---
+const loadSettingsModule = featureLoader(() => import('@memberjunction/ng-explorer-settings/settings.module'));
 
-// --- @memberjunction/ng-file-storage → . (1 keys) ---
-const loadNgFileStorage = featureLoader(() => import('@memberjunction/ng-file-storage'));
+// --- @memberjunction/ng-file-storage → ./file-storage.module (1 keys) ---
+const loadFileStorageModule = featureLoader(() => import('@memberjunction/ng-file-storage/file-storage.module'));
+
+// --- @memberjunction/ng-react → . (1 keys) ---
+const loadNgReact = featureLoader(() => import('@memberjunction/ng-react'));
 
 /**
  * Complete mapping of resource type strings to lazy-loading functions.
@@ -144,16 +147,20 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'TestingReviewResource': loadTestingDashboardsModule,
   'TestingRunsResource': loadTestingDashboardsModule,
 
-  // @memberjunction/ng-explorer-settings → .
-  'ApplicationManagement': loadNgExplorerSettings,
-  'EntityPermissions': loadNgExplorerSettings,
-  'RoleManagement': loadNgExplorerSettings,
-  'SqlLogging': loadNgExplorerSettings,
-  'UserManagement': loadNgExplorerSettings,
+  // @memberjunction/ng-explorer-settings → ./settings.module
+  'ApplicationManagement': loadSettingsModule,
+  'EntityPermissions': loadSettingsModule,
+  'RoleManagement': loadSettingsModule,
+  'Settings': loadSettingsModule,
+  'SqlLogging': loadSettingsModule,
+  'UserManagement': loadSettingsModule,
 
-  // @memberjunction/ng-file-storage → .
-  'FileBrowserResource': loadNgFileStorage,
+  // @memberjunction/ng-file-storage → ./file-storage.module
+  'FileBrowserResource': loadFileStorageModule,
+
+  // @memberjunction/ng-react → .
+  'RuntimeUtilities': loadNgReact,
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 66;
+export const LAZY_FEATURE_CONFIG_COUNT = 68;
