@@ -307,7 +307,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
 
   async runSuite() {
     if (this.record?.ID) {
-      this.testingDialogService.OpenSuiteDialog(this.record.ID, this.viewContainerRef);
+      this.testingDialogService.OpenSuitePanel(this.record.ID);
     }
   }
 

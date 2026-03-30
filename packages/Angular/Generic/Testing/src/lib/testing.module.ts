@@ -2,13 +2,9 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
-// Kendo UI modules
+// Kendo UI modules (only used by TestFeedbackDialogComponent - remove when migrated)
 import { DialogModule } from '@progress/kendo-angular-dialog';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { LayoutModule } from '@progress/kendo-angular-layout';
 
 // MemberJunction Modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -24,11 +20,6 @@ import { EvaluationBadgeComponent } from './components/widgets/evaluation-badge.
 import { EvaluationModeToggleComponent } from './components/widgets/evaluation-mode-toggle.component';
 import { ReviewStatusIndicatorComponent } from './components/widgets/review-status-indicator.component';
 import { ExecutionContextComponent } from './components/widgets/execution-context.component';
-
-// Services
-import { TestingDialogService } from './services/testing-dialog.service';
-import { TestingExecutionService } from './services/testing-execution.service';
-import { EvaluationPreferencesService } from './services/evaluation-preferences.service';
 
 @NgModule({
   declarations: [
@@ -49,10 +40,6 @@ import { EvaluationPreferencesService } from './services/evaluation-preferences.
     ReactiveFormsModule,
     DialogModule,
     ButtonsModule,
-    InputsModule,
-    DropDownsModule,
-    IndicatorsModule,
-    LayoutModule,
     ContainerDirectivesModule
   ],
   exports: [
@@ -68,9 +55,8 @@ import { EvaluationPreferencesService } from './services/evaluation-preferences.
     ExecutionContextComponent
   ],
   providers: [
-    TestingDialogService,
-    TestingExecutionService,
-    EvaluationPreferencesService
+    // TestingDialogService, TestingExecutionService, and EvaluationPreferencesService
+    // use providedIn: 'root' — do NOT re-provide here or it creates duplicate instances
   ]
 })
 export class TestingModule { }

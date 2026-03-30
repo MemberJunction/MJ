@@ -6,6 +6,16 @@
   }
 
   @if (!isLoading) {
+    <!-- Active Runs Banner -->
+    @if (ActiveRuns.length > 0) {
+      <div class="active-runs-banner">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        <span class="active-runs-count">{{ ActiveRuns.length }} test{{ ActiveRuns.length === 1 ? '' : 's' }} running</span>
+        <span class="active-runs-detail">{{ ActiveRuns[0].TestName }} &mdash; {{ ActiveRuns[0].Progress }}%</span>
+        <button class="active-runs-view-btn" (click)="OnViewActiveRun(ActiveRuns[0])">View</button>
+      </div>
+    }
+
     <div class="dashboard-content-wrapper">
       <div class="testing-dashboard-nav">
         @for (navItem of navigationConfig; track $index) {
@@ -52,5 +62,22 @@
         }
       </div>
     </div>
+  }
+
+  <!-- Slide Panel for Test Execution -->
+  @if (testingDialogService.IsPanelOpen) {
+    <mj-slide-panel
+      Mode="slide"
+      Title="Run Test"
+      [Resizable]="true"
+      (Closed)="OnPanelClosed()">
+      <app-test-run-dialog
+        [PanelMode]="true"
+        [selectedTestId]="testingDialogService.PanelOptions?.testId ?? null"
+        [selectedSuiteId]="testingDialogService.PanelOptions?.suiteId ?? null"
+        [runMode]="testingDialogService.PanelOptions?.mode ?? 'test'"
+        (PanelClose)="OnPanelClosed()">
+      </app-test-run-dialog>
+    </mj-slide-panel>
   }
 </div>

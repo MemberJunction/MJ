@@ -1,5 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, Input, Output, EventEmitter } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { TestEngineBase, TestVariableDefinition, TestTypeVariablesSchema, TestVariablesConfig } from '@memberjunction/testing-engine-base';
@@ -579,6 +578,13 @@ interface ProgressUpdate {
               }
             </div>
 
+            @if (isRunning && PanelMode) {
+              <div class="safe-to-close-banner">
+                <i class="fa-solid fa-info-circle"></i>
+                <span>Tests run on the server. You can close this panel &mdash; your test will keep running. Check the dashboard for updates.</span>
+              </div>
+            }
+
             @if (executionLog.length > 0) {
               <div class="execution-log">
                 <div class="log-header">
@@ -651,6 +657,9 @@ interface ProgressUpdate {
               Run Another
             </button>
           } @else {
+            @if (PanelMode) {
+              <button class="action-btn cancel-btn" (click)="onClose()">Close</button>
+            }
             <button class="action-btn run-btn" [disabled]="true">
               <i class="fa-solid fa-spinner fa-spin"></i>
               Running...
@@ -1186,6 +1195,25 @@ interface ProgressUpdate {
     .step-message {
       font-size: 12px;
       color: var(--mj-text-secondary);
+    }
+
+    .safe-to-close-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.4;
+      background: var(--mj-status-info-bg);
+      color: var(--mj-status-info-text);
+      border: 1px solid var(--mj-status-info-border);
+    }
+
+    .safe-to-close-banner i {
+      margin-top: 2px;
+      flex-shrink: 0;
     }
 
     .execution-log {
@@ -1805,6 +1833,123 @@ interface ProgressUpdate {
     .variable-input-field::placeholder {
       color: var(--mj-text-disabled);
     }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 768px) {
+      .preselected-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+      }
+
+      .options-compact {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .dialog-actions {
+        padding: 12px 16px;
+      }
+
+      .action-btn {
+        flex: 1;
+        justify-content: center;
+        min-height: 44px;
+      }
+
+      .mode-tabs {
+        flex-direction: column;
+      }
+
+      .mode-tab {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .selection-mode {
+        padding: 10px;
+      }
+
+      .selection-panel {
+        padding: 10px;
+      }
+
+      .execution-mode {
+        padding: 10px;
+      }
+
+      .result-details {
+        grid-template-columns: 1fr;
+      }
+
+      .progress-steps {
+        gap: 6px;
+      }
+
+      .step-content {
+        min-width: 0;
+      }
+
+      .step-label {
+        font-size: 12px;
+      }
+
+      .range-inputs {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .range-separator {
+        transform: rotate(90deg);
+        align-self: center;
+      }
+
+      .variable-row {
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .variable-input {
+        width: 100%;
+      }
+
+      .variable-select,
+      .variable-input-field {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .dialog-scroll-content {
+        padding: 8px;
+      }
+
+      .dialog-actions {
+        padding: 10px 12px;
+        gap: 8px;
+      }
+
+      .tags-container {
+        gap: 6px;
+      }
+
+      .tag-input-row {
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .tag-add-btn {
+        align-self: flex-start;
+      }
+
+      .execution-log .log-content {
+        font-size: 11px;
+      }
+
+      .log-time {
+        display: none;
+      }
+    }
   `]
 })
 export class TestRunDialogComponent implements OnInit, OnDestroy {
@@ -1813,10 +1958,10 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   private engine!: TestEngineBase;
 
   // Selection state
-  runMode: 'test' | 'suite' = 'test';
+  @Input() runMode: 'test' | 'suite' = 'test';
   searchText = '';
-  selectedTestId: string | null = null;
-  selectedSuiteId: string | null = null;
+  @Input() selectedTestId: string | null = null;
+  @Input() selectedSuiteId: string | null = null;
   verbose = true;
   parallel = false;
 
@@ -1871,8 +2016,10 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
     return 'Run Test';
   }
 
+  @Input() PanelMode = false;
+  @Output() PanelClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: DialogRef,
     private cdr: ChangeDetectorRef
   ) {
     // Get GraphQLDataProvider from Metadata.Provider (it's already configured in the Angular app)
@@ -2397,9 +2544,7 @@ export class TestRunDialogComponent implements OnInit, OnDestroy {
   }
 
   onClose(): void {
-    if (!this.isRunning) {
-      this.dialogRef.close();
-    }
+    this.PanelClose.emit();
   }
 
   // Tag management methods
