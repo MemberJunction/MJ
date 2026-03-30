@@ -44,6 +44,7 @@ import {
     ActionChange,
     ActionChangeScope,
     MediaOutput,
+    FileOutputRef,
     SecondaryScopeConfig,
     SecondaryScopeValue,
     AgentResponseForm,
@@ -347,6 +348,36 @@ export class BaseAgent {
      * @private
      */
     private static readonly LARGE_BINARY_THRESHOLD = 10000;
+
+    /**
+     * Inspects a set of action output params for a `FileOutput` structured param and returns
+     * a FileOutputRef if one is found. Returns null if the action did not produce a file.
+     *
+     * @param outputParams - The output parameters from an action result
+     * @private
+     * @since 5.22.0
+     */
+    private detectFileOutput(outputParams: ActionParam[]): FileOutputRef | null {
+        const raw = outputParams.find(p => p.Name?.toLowerCase() === 'fileoutput')?.Value;
+        if (!raw) return null;
+
+        const fo = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, unknown>;
+        const fileName = fo['fileName'] as string | undefined;
+        const mimeType = fo['mimeType'] as string | undefined;
+        if (!fileName || !mimeType) return null;
+
+        const fileData = fo['fileData'] as string | undefined;
+        const fileId = fo['fileId'] as string | undefined;
+        if (!fileData && !fileId) return null;
+
+        return {
+            fileName,
+            mimeType,
+            fileData,
+            fileId,
+            sizeBytes: fo['sizeBytes'] as number | undefined
+        };
+    }
 
     /**
      * Intercepts large media content in action results and replaces with placeholder references.
@@ -658,6 +689,15 @@ export class BaseAgent {
      * @since 3.1.0
      */
     private _mediaOutputs: MediaOutput[] = [];
+
+    /**
+     * Accumulated file outputs (PDF, Excel, Word, etc.) produced by file-generation actions.
+     * Detected from the FileOutput output param after each action executes.
+     * Returned in ExecuteAgentResult.fileOutputs for processing by AgentRunner into MJ: Artifacts.
+     * @private
+     * @since 5.22.0
+     */
+    private _fileOutputs: FileOutputRef[] = [];
 
 
     /**
@@ -5961,6 +6001,12 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
+            // Merge sub-agent's file outputs into parent's array for unified artifact creation.
+            if (subAgentResult.fileOutputs?.length) {
+                this._fileOutputs.push(...subAgentResult.fileOutputs);
+                this.logStatus(`📄 Collected ${subAgentResult.fileOutputs.length} file output(s) from sub-agent '${subAgentRequest.name}'`, true);
+            }
+
             // Determine if we should terminate after sub-agent
             const shouldTerminate = subAgentRequest.terminateAfter;
             
@@ -6285,6 +6331,12 @@ The context is now within limits. Please retry your request with the recovered c
                 if (refCount > 0) {
                     this.logStatus(`📦 Collected ${refCount} media reference(s) from related sub-agent '${subAgentRequest.name}'`, true);
                 }
+            }
+
+            // Merge sub-agent's file outputs into parent's array for unified artifact creation.
+            if (subAgentResult.fileOutputs?.length) {
+                this._fileOutputs.push(...subAgentResult.fileOutputs);
+                this.logStatus(`📄 Collected ${subAgentResult.fileOutputs.length} file output(s) from related sub-agent '${subAgentRequest.name}'`, true);
             }
 
             let mergedPayload = previousDecision.newPayload; // Start with parent's payload
@@ -6894,6 +6946,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // This prevents context overflow from base64 data (~700K tokens per 1024x1024 image)
                 // Pass actionEntity for generic ValueType=MediaOutput detection from metadata
                 const sanitizedParams = this.interceptLargeBinaryContent(outputParams, result.actionEntity);
+
+                // Collect file outputs (PDF, Excel, Word, etc.) for post-run artifact processing
+                const fileOutput = this.detectFileOutput(outputParams);
+                if (fileOutput) this._fileOutputs.push(fileOutput);
 
                 return {
                     actionName: result.action.name,
@@ -8351,6 +8407,7 @@ The context is now within limits. Please retry your request with the recovered c
                 ? this._injectedMemory
                 : undefined,
             mediaOutputs: this._mediaOutputs.length > 0 ? this._mediaOutputs : undefined,
+            fileOutputs: this._fileOutputs.length > 0 ? this._fileOutputs : undefined,
             feedbackRequestId: this._feedbackRequestId || undefined
         };
     }

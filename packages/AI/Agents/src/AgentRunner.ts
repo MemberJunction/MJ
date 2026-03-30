@@ -13,9 +13,32 @@
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, MJFileEntity, ArtifactMetadataEngine, FileStorageEngine } from '@memberjunction/core-entities';
+import { initializeDriverWithAccountCredentials } from '@memberjunction/storage';
+
+// ── Types used only by the historical reprocessing path ──────────────────────
+
+/** Typed shape of a single action output parameter stored in step OutputData */
+interface ActionOutputParam {
+    Name: string;
+    Type: string;
+    Value: unknown;
+}
+
+/** Typed shape of the OutputData JSON written by base-agent for action steps */
+interface ActionStepOutputData {
+    actionResult?: {
+        parameters?: ActionOutputParam[];
+    };
+}
+
+/** Minimal read-only shape loaded from MJ: AI Agent Run Steps for reprocessing */
+interface ActionStepSummary {
+    ID: string;
+    OutputData: string | null;
+}
 
 /**
  * AgentRunner provides a thin wrapper for executing AI agents.
@@ -387,6 +410,15 @@ export class AgentRunner {
                     agentResult,
                     agentResponseDetailId!,
                     options.sourceArtifactId,
+                    contextUser
+                );
+            }
+
+            // Step 6b: Process file artifacts produced by file-generation actions (PDF, Excel, Word, etc.)
+            if (agentResult.success && agentResponseDetailId && agentResult.fileOutputs?.length) {
+                await this.ProcessFileArtifacts(
+                    agentResult.fileOutputs,
+                    agentResponseDetailId,
                     contextUser
                 );
             }
@@ -1021,6 +1053,237 @@ export class AgentRunner {
             LogError(`Error in CreateConversationMediaAttachments: ${(error as Error).message}`);
             return attachmentIds;
         }
+    }
+
+    // ── File artifact processing ───────────────────────────────────────────────
+
+    /**
+     * Creates MJ: Artifact records for file outputs collected during agent execution.
+     * Reads directly from `ExecuteAgentResult.fileOutputs` — no DB query needed.
+     *
+     * Called automatically by RunAgentInConversation after the agent completes.
+     *
+     * @param fileOutputs - File outputs collected by BaseAgent during action execution
+     * @param conversationDetailId - The conversation detail to link artifacts to
+     * @param contextUser - User context for DB operations
+     */
+    public async ProcessFileArtifacts(
+        fileOutputs: FileOutputRef[],
+        conversationDetailId: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        if (fileOutputs.length === 0) return;
+
+        // Hoist engine configs before parallel processing
+        await Promise.all([
+            ArtifactMetadataEngine.Instance.Config(false, contextUser),
+            FileStorageEngine.Instance.Config(false, contextUser),
+        ]);
+
+        await Promise.all(
+            fileOutputs.map(fo => this.processFileOutput(fo, conversationDetailId, contextUser))
+        );
+    }
+
+    /**
+     * Re-processes file artifacts from a historical agent run by querying its persisted
+     * action step OutputData. Use this to recover artifacts for runs that completed before
+     * ProcessFileArtifacts was introduced, or for debugging.
+     *
+     * @param agentRunId - The agent run whose action steps to inspect
+     * @param conversationDetailId - The conversation detail to link artifacts to
+     * @param contextUser - User context for DB operations
+     */
+    public async reprocessRunFileArtifacts(
+        agentRunId: string,
+        conversationDetailId: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const steps = await this.loadActionStepsForRun(agentRunId, contextUser);
+        if (steps.length === 0) return;
+
+        const fileOutputs = steps
+            .map(step => this.parseStepFileOutput(step))
+            .filter((fo): fo is FileOutputRef => fo !== null);
+
+        await this.ProcessFileArtifacts(fileOutputs, conversationDetailId, contextUser);
+    }
+
+    /** Loads all completed action steps for a given agent run (read-only, narrow fields). */
+    private async loadActionStepsForRun(agentRunId: string, contextUser: UserInfo): Promise<ActionStepSummary[]> {
+        const rv = new RunView();
+        const result = await rv.RunView<ActionStepSummary>({
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID='${agentRunId}' AND StepType='Actions' AND Status='Completed'`,
+            Fields: ['ID', 'OutputData'],
+            ResultType: 'simple'
+        }, contextUser);
+        return result.Success ? (result.Results ?? []) : [];
+    }
+
+    /**
+     * Parses persisted OutputData JSON from an action step and extracts file output metadata.
+     * Used only by the historical reprocessing path — live runs use BaseAgent's detectFileOutput.
+     */
+    private parseStepFileOutput(step: ActionStepSummary): FileOutputRef | null {
+        if (!step.OutputData) return null;
+
+        let outputData: ActionStepOutputData;
+        try {
+            outputData = JSON.parse(step.OutputData) as ActionStepOutputData;
+        } catch {
+            return null;
+        }
+
+        const params = outputData.actionResult?.parameters;
+        if (!params) return null;
+
+        const raw = params.find(p => p.Name?.toLowerCase() === 'fileoutput')?.Value;
+        if (!raw) return null;
+
+        const fo = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, unknown>;
+        const fileName = fo['fileName'] as string | undefined;
+        const mimeType = fo['mimeType'] as string | undefined;
+        if (!fileName || !mimeType) return null;
+
+        const fileData = fo['fileData'] as string | undefined;
+        const fileId = fo['fileId'] as string | undefined;
+        if (!fileData && !fileId) return null;
+
+        return { fileName, mimeType, fileData, fileId, sizeBytes: fo['sizeBytes'] as number | undefined };
+    }
+
+    /** Uploads or resolves a single file output and creates the artifact records. */
+    private async processFileOutput(
+        fo: FileOutputRef,
+        conversationDetailId: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        try {
+            // fo.fileData! is safe: both detectFileOutput and parseStepFileOutput guarantee
+            // that at least one of fileData/fileId is truthy before returning a FileOutputRef,
+            // so if fileId is falsy here, fileData must be defined.
+            const fileId = fo.fileId ?? await this.uploadBase64ToStorage(
+                fo.fileData!,
+                fo.fileName,
+                fo.mimeType,
+                contextUser
+            );
+
+            await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser);
+        } catch (error) {
+            LogError(`ProcessFileArtifacts: failed for "${fo.fileName}": ${(error as Error).message}`);
+        }
+    }
+
+    /**
+     * Uploads base64-encoded file content to MJStorage and creates an MJ: Files record.
+     * Returns the new MJ: Files record ID.
+     */
+    private async uploadBase64ToStorage(
+        base64Data: string,
+        fileName: string,
+        mimeType: string,
+        contextUser: UserInfo
+    ): Promise<string> {
+        const accounts = FileStorageEngine.Instance.AccountsWithProviders;
+        if (accounts.length === 0) {
+            throw new Error('No file storage accounts configured. Cannot upload file artifact.');
+        }
+
+        const { account, provider } = accounts.find(a => a.provider.IsActive !== false) ?? accounts[0];
+        const driver = await initializeDriverWithAccountCredentials({
+            accountEntity: account,
+            providerEntity: provider,
+            contextUser
+        });
+
+        const buffer = Buffer.from(base64Data, 'base64');
+        const storagePath = `artifacts/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}/${fileName}`;
+        const uploaded = await driver.PutObject(storagePath, buffer, mimeType);
+        if (!uploaded) {
+            throw new Error(`PutObject returned false for path: ${storagePath}`);
+        }
+
+        const md = new Metadata();
+        const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
+        fileEntity.Name = fileName;
+        fileEntity.ContentType = mimeType;
+        fileEntity.ProviderID = provider.ID;
+        fileEntity.ProviderKey = storagePath;
+        fileEntity.Status = 'Uploaded';
+
+        if (!(await fileEntity.Save())) {
+            throw new Error('Failed to save MJ: Files record after upload');
+        }
+
+        return fileEntity.ID;
+    }
+
+    /**
+     * Creates MJ: Artifact, MJ: Artifact Version (ContentMode='File'), and
+     * MJ: Conversation Detail Artifacts records for a single file output.
+     */
+    private async createFileArtifact(
+        fileId: string,
+        mimeType: string,
+        fileName: string,
+        sizeBytes: number | undefined,
+        conversationDetailId: string,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = new Metadata();
+
+        // Resolve the artifact type by MIME type; fall back to the built-in JSON type
+        const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+        const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mimeType);
+        if (!artifactType) {
+            LogStatus(`ProcessFileArtifacts: no ArtifactType found for MIME ${mimeType}, using JSON fallback`);
+        }
+        const artifactTypeId = artifactType?.ID ?? JSON_ARTIFACT_TYPE_ID;
+
+        // Create the artifact header
+        const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
+        artifact.Name = fileName;
+        artifact.TypeID = artifactTypeId;
+        artifact.UserID = contextUser.ID;
+        artifact.Visibility = 'Always';
+
+        if (!(await artifact.Save())) {
+            throw new Error(`Failed to save artifact for file: ${fileName}`);
+        }
+
+        // Create the artifact version referencing the stored file
+        const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', contextUser);
+        version.ArtifactID = artifact.ID;
+        version.VersionNumber = 1;
+        version.ContentMode = 'File';
+        version.FileID = fileId;
+        version.MimeType = mimeType;
+        version.FileName = fileName;
+        version.UserID = contextUser.ID;
+        if (sizeBytes !== undefined) {
+            version.ContentSizeBytes = sizeBytes;
+        }
+
+        if (!(await version.Save())) {
+            throw new Error(`Failed to save artifact version for file: ${fileName}`);
+        }
+
+        // Link the artifact version to the conversation detail
+        const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
+            'MJ: Conversation Detail Artifacts',
+            contextUser
+        );
+        junction.ConversationDetailID = conversationDetailId;
+        junction.ArtifactVersionID = version.ID;
+        junction.Direction = 'Output';
+
+        if (!(await junction.Save())) {
+            throw new Error(`Failed to link file artifact to conversation detail: ${conversationDetailId}`);
+        }
+
+        LogStatus(`Created file artifact: ${fileName} (${mimeType}) → artifact ${artifact.ID}, version ${version.ID}`);
     }
 
     /**

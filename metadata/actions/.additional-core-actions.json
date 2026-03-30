@@ -962,35 +962,37 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "PDFData",
+            "Name": "FileOutput",
             "Type": "Output",
-            "ValueType": "Scalar",
+            "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Base64 encoded PDF data"
+            "Description": "Structured file output: { fileName, mimeType, sizeBytes, fileData? (base64 when inline), fileId? (MJ File ID when saved to storage) }",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "FEB667FB-3E5E-4761-9BC0-711A94021C4A"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:52.167Z",
-            "checksum": "ad37ec8076b8afd478f062ae528f70b42f961cef78a6a288d75b63a347adb192"
+            "lastModified": "2026-03-30T20:02:33.488Z",
+            "checksum": "ba9c29029b948193028e32e52b236d78bf5c4e831aa87caf8e1404a9b447d28c"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "FileID",
+            "Name": "GeneratedFileID",
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "MJ Storage file ID if saved"
+            "Description": "UUID of the MJ File record created when OutputFileID is provided",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "C4171D0A-8F6A-492E-A640-4354C87AEEA7"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:52.168Z",
-            "checksum": "c2a37f84aee1f8d9f13d30fa892c0d253caaf066d716b8957ae00b118cf1414a"
+            "lastModified": "2026-03-30T20:02:33.507Z",
+            "checksum": "61accf51d0d9521bdebfad5b27d181bb13bba6bc8e2e750f2109cecebaaf45ce"
           }
         }
       ],
@@ -1495,35 +1497,37 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "ExcelData",
+            "Name": "FileOutput",
             "Type": "Output",
-            "ValueType": "Scalar",
+            "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Base64 encoded Excel data"
+            "Description": "Structured file output: { fileName, mimeType, sizeBytes, fileData? (base64 when inline), fileId? (MJ File ID when saved to storage) }",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "ECE60CF1-35A8-4788-9E73-0F324355BBC5"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:52.439Z",
-            "checksum": "322d7d1db3064aee3639a84a43afd6b6c11a91153f24105482508e7bb8b7a8d7"
+            "lastModified": "2026-03-30T20:02:33.622Z",
+            "checksum": "ba9c29029b948193028e32e52b236d78bf5c4e831aa87caf8e1404a9b447d28c"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "FileID",
+            "Name": "GeneratedFileID",
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "MJ Storage file ID if saved"
+            "Description": "UUID of the MJ File record created when OutputFileID is provided",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "4F504724-4A29-4DDD-AFA8-C9269A1AAABB"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:52.440Z",
-            "checksum": "c2a37f84aee1f8d9f13d30fa892c0d253caaf066d716b8957ae00b118cf1414a"
+            "lastModified": "2026-03-30T20:02:33.635Z",
+            "checksum": "61accf51d0d9521bdebfad5b27d181bb13bba6bc8e2e750f2109cecebaaf45ce"
           }
         }
       ],
@@ -5806,19 +5810,19 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "DocxData",
+            "Name": "FileOutput",
             "Type": "Output",
-            "ValueType": "Scalar",
+            "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Base64-encoded DOCX file content (populated when OutputFileID is not provided)",
+            "Description": "Structured file output: { fileName, mimeType, sizeBytes, fileData? (base64 when inline), fileId? (MJ File ID when saved to storage) }",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "713208D7-6326-422C-9B36-003752106197"
           },
           "sync": {
-            "lastModified": "2026-03-27T05:11:40.925Z",
-            "checksum": "d4d50d17a0a46ec643076b27ff609678735863cad90045376910d928bee604c6"
+            "lastModified": "2026-03-30T20:02:36.018Z",
+            "checksum": "ba9c29029b948193028e32e52b236d78bf5c4e831aa87caf8e1404a9b447d28c"
           }
         },
         {
@@ -5828,15 +5832,15 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "UUID of the MJ File record created/updated when OutputFileID is provided",
+            "Description": "UUID of the MJ File record created when OutputFileID is provided",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "73D2ADD9-0165-48E7-A237-08FD825D7306"
           },
           "sync": {
-            "lastModified": "2026-03-27T05:11:40.935Z",
-            "checksum": "7a8b9d44d2c8209528e7edde9fcd9f04fe01f13638633a0390c7dc6d528fa233"
+            "lastModified": "2026-03-30T20:02:36.031Z",
+            "checksum": "61accf51d0d9521bdebfad5b27d181bb13bba6bc8e2e750f2109cecebaaf45ce"
           }
         }
       ]

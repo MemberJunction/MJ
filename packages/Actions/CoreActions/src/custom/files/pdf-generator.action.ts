@@ -97,7 +97,7 @@ export class PDFGeneratorAction extends BaseFileHandlerAction {
     ): Promise<ActionResultSimple> {
         try {
             const fileId = await this.saveToMJStorage(pdfBuffer, fileName, 'application/pdf', params);
-            params.Params.push({ Name: 'GeneratedFileID', Type: 'Output', Value: fileId });
+            params.Params.push({ Name: 'FileOutput', Type: 'Output', Value: { fileName, mimeType: 'application/pdf', sizeBytes: pdfBuffer.length, fileId } });
             return {
                 Success: true,
                 ResultCode: "SUCCESS_SAVED",
@@ -111,7 +111,7 @@ export class PDFGeneratorAction extends BaseFileHandlerAction {
 
     private returnAsBase64(pdfBuffer: Buffer, fileName: string, params: RunActionParams): ActionResultSimple {
         const base64Data = pdfBuffer.toString('base64');
-        params.Params.push({ Name: 'PDFData', Type: 'Output', Value: base64Data });
+        params.Params.push({ Name: 'FileOutput', Type: 'Output', Value: { fileName, mimeType: 'application/pdf', sizeBytes: pdfBuffer.length, fileData: base64Data } });
         return {
             Success: true,
             ResultCode: "SUCCESS",

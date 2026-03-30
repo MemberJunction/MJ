@@ -219,6 +219,28 @@ export interface MediaOutput {
     description?: string;
 }
 
+/**
+ * A lightweight reference to a file produced by an agent action (PDF, Excel, Word, etc.).
+ * Collected during execution and processed by AgentRunner into MJ: Artifacts after the run.
+ *
+ * Distinct from MediaOutput (images/audio/video embedded in the LLM conversation).
+ * FileOutputRef represents document files that are archived as versioned artifacts —
+ * they are never injected into the LLM context.
+ *
+ * @since 5.22.0
+ */
+export interface FileOutputRef {
+    /** Original filename (e.g. "report.xlsx") */
+    fileName: string;
+    /** MIME type (e.g. "application/pdf") */
+    mimeType: string;
+    /** Base64-encoded file content — present when the action returned the file inline */
+    fileData?: string;
+    /** MJ: Files record ID — present when the action already saved the file to MJStorage */
+    fileId?: string;
+    /** File size in bytes */
+    sizeBytes?: number;
+}
 
 /**
  * Represents a single action to be executed.
@@ -459,6 +481,19 @@ export type ExecuteAgentResult<P = any> = {
      * @since 3.1.0
      */
     mediaOutputs?: MediaOutput[];
+
+    /**
+     * File outputs (PDF, Excel, Word, etc.) produced by file-generation actions during this run.
+     * Collected by BaseAgent during action execution and processed by AgentRunner into
+     * MJ: Artifacts (ContentMode='File') after the run completes.
+     *
+     * Unlike mediaOutputs (which are injected into the LLM conversation as multimodal content),
+     * file outputs are archived as versioned artifacts and never sent to the LLM.
+     * Sub-agents bubble their fileOutputs up to the parent for unified artifact creation.
+     *
+     * @since 5.22.0
+     */
+    fileOutputs?: FileOutputRef[];
 
     /**
      * When a Chat step fires, BaseAgent creates a persistent AIAgentRequest row and

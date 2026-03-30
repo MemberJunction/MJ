@@ -161,12 +161,8 @@ export class ExcelWriterAction extends BaseFileHandlerAction {
                         params
                     );
 
-                    // Add output parameter
-                    params.Params.push({
-                        Name: 'GeneratedFileID',
-                        Type: 'Output',
-                        Value: fileId
-                    });
+                    // Add output parameters
+                    params.Params.push({ Name: 'FileOutput', Type: 'Output', Value: { fileName, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', sizeBytes: buffer.length, fileId } });
 
                     return {
                         Success: true,
@@ -189,12 +185,8 @@ export class ExcelWriterAction extends BaseFileHandlerAction {
             // Return as base64
             const base64Data = buffer.toString('base64');
 
-            // Add output parameter
-            params.Params.push({
-                Name: 'ExcelData',
-                Type: 'Output',
-                Value: base64Data
-            });
+            // Add output parameters
+            params.Params.push({ Name: 'FileOutput', Type: 'Output', Value: { fileName, mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', sizeBytes: buffer.length, fileData: base64Data } });
 
             return {
                 Success: true,

@@ -346,7 +346,7 @@ export class WordGeneratorAction extends BaseFileHandlerAction {
         try {
             const fileId = await this.saveToMJStorage(buffer, fileName,
                 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', params);
-            params.Params.push({ Name: 'GeneratedFileID', Type: 'Output', Value: fileId });
+            params.Params.push({ Name: 'FileOutput', Type: 'Output', Value: { fileName, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', sizeBytes: buffer.length, fileId } });
             return {
                 Success: true, ResultCode: "SUCCESS_SAVED",
                 Message: JSON.stringify({ message: "Word document generated and saved", fileId, fileName, sizeBytes: buffer.length }, null, 2)
@@ -359,7 +359,7 @@ export class WordGeneratorAction extends BaseFileHandlerAction {
 
     private returnAsBase64(buffer: Buffer, fileName: string, params: RunActionParams): ActionResultSimple {
         const base64Data = buffer.toString('base64');
-        params.Params.push({ Name: 'DocxData', Type: 'Output', Value: base64Data });
+        params.Params.push({ Name: 'FileOutput', Type: 'Output', Value: { fileName, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', sizeBytes: buffer.length, fileData: base64Data } });
         return {
             Success: true, ResultCode: "SUCCESS",
             Message: JSON.stringify({ message: "Word document generated", fileName, sizeBytes: buffer.length, base64Length: base64Data.length }, null, 2)
