@@ -304,7 +304,7 @@ export class ConversationAgentService {
 
       if (attachments && attachments.length > 0) {
         // Use BuildChatMessageContent to create proper content blocks for multimodal
-        content = ConversationUtility.BuildChatMessageContent(messageText, attachments);
+        content = await ConversationUtility.BuildChatMessageContent(messageText, attachments);
 
         // Append artifacts to text content if present
         if (artifacts && artifacts.length > 0) {
