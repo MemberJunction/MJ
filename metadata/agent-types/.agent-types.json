@@ -88,6 +88,11 @@
             "default": true,
             "description": "Include current payload state in the prompt. The payload is the agent's working memory that persists across iterations. Disable for agents that don't use the payload pattern or work purely from conversation context. Can save significant tokens for agents with large payloads."
           },
+          "includeDateTimeInPrompt": {
+            "type": "boolean",
+            "default": true,
+            "description": "Include current date, time, and day of week in the prompt. Provides the LLM with accurate temporal context so it doesn't hallucinate dates or claim it doesn't know the current time. Disable for agents where temporal context is irrelevant."
+          },
           "maxSubAgentsInPrompt": {
             "type": "integer",
             "default": -1,

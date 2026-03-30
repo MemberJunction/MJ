@@ -217,6 +217,15 @@ export interface LoopAgentTypePromptParams {
     includePayloadInPrompt?: boolean;
 
     /**
+     * Include current date, time, and day of week in the prompt.
+     * Provides the LLM with accurate temporal context so it doesn't hallucinate
+     * dates or claim it doesn't know the current time.
+     * Disable for agents where temporal context is irrelevant.
+     * @default true
+     */
+    includeDateTimeInPrompt?: boolean;
+
+    /**
      * Include scratchpad documentation and current scratchpad state in the prompt.
      * The scratchpad is private working memory for notes and task tracking.
      * Disable for agents that don't need internal task management or reasoning notes.
@@ -267,6 +276,7 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeMessageExpansionDocs: true,
     includeVariableRefsDocs: true,
     includePayloadInPrompt: true,
+    includeDateTimeInPrompt: true,
     includeScratchpadDocs: true,
     scratchpadMaxTasks: 50,
     maxSubAgentsInPrompt: -1,
