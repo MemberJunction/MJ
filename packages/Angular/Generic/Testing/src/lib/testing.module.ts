@@ -2,10 +2,6 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
-// Kendo UI modules (only used by TestFeedbackDialogComponent - remove when migrated)
-import { DialogModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-
 // MemberJunction Modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 
@@ -38,8 +34,6 @@ import { ExecutionContextComponent } from './components/widgets/execution-contex
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    DialogModule,
-    ButtonsModule,
     ContainerDirectivesModule
   ],
   exports: [
