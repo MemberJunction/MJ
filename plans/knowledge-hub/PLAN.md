@@ -1194,3 +1194,116 @@ Every new package includes a `vitest.config.ts` and `src/__tests__/` directory. 
 - [ ] Configure full-text indexes for key entities
 - [ ] Push Knowledge Agent metadata
 - [ ] Regenerate class manifests: `npm run mj:manifest`
+
+---
+
+## Regression Test Suite
+
+Comprehensive UI regression tests executed via Playwright in Docker workbench. Each test has a numbered ID for tracking.
+
+### Prerequisites
+- [ ] **R-0.1** Docker workbench running with 32GB RAM
+- [ ] **R-0.2** Clone/pull branch `claude/modernize-vector-dupe-detection-clAbF`
+- [ ] **R-0.3** `npm install` + `npm run build` (all 176 packages)
+- [ ] **R-0.4** Database bootstrap: `mj migrate` + AssociationDB install
+- [ ] **R-0.5** `mj sync push` for applications, agents, prompts metadata
+- [ ] **R-0.6** Start MJAPI (port 4000) and MJExplorer (port 4200)
+- [ ] **R-0.7** Clear browser data (IndexedDB, localStorage, cookies) for clean start
+- [ ] **R-0.8** Auth0 login with da-robot-tester credentials
+
+### Test Group 1: Knowledge Hub App Shell
+- [ ] **R-1.1** Knowledge Hub app appears in app menu
+- [ ] **R-1.2** Clicking Knowledge Hub loads the app with tab navigation
+- [ ] **R-1.3** All 5 tabs render: Search, Vectors, Duplicates, Autotagging, Configuration
+- [ ] **R-1.4** Tab switching works without errors
+- [ ] **R-1.5** App icon and description are correct
+
+### Test Group 2: Search Dashboard (default tab)
+- [ ] **R-2.1** Search bar renders centered on load
+- [ ] **R-2.2** Typing in search bar shows search state
+- [ ] **R-2.3** "Ask Knowledge Agent" CTA visible
+- [ ] **R-2.4** Recent searches section visible (empty initially)
+- [ ] **R-2.5** Mobile responsive: search bar stacks on narrow viewport
+
+### Test Group 3: Vector Management Dashboard
+- [ ] **R-3.1** KPI cards render with real data (Total Vectors, Entities Synced, Last Sync, Vector Indexes)
+- [ ] **R-3.2** Entity Sync Status table shows entity documents
+- [ ] **R-3.3** Sidebar panels render (Vector DB Health, Embedding Model, Coverage)
+- [ ] **R-3.4** View mode toggle works (Index View ↔ Operations)
+- [ ] **R-3.5** Refresh button reloads data
+- [ ] **R-3.6** "Suggest Document" button opens slide-in panel
+
+### Test Group 4: Entity Document Suggestion (Slide-in)
+- [ ] **R-4.1** Slide-in panel opens from right edge
+- [ ] **R-4.2** Entity picker shows grouped entities by schema
+- [ ] **R-4.3** Entity picker search filters entities correctly
+- [ ] **R-4.4** Selecting an entity populates the field
+- [ ] **R-4.5** Use case button group toggles correctly (Duplicate Detection, Search, Classification)
+- [ ] **R-4.6** "Generate Template" calls AI and shows results
+- [ ] **R-4.7** Generated template appears in code editor (markdown mode, editable)
+- [ ] **R-4.8** Selected fields, related entities, thresholds, reasoning all display
+- [ ] **R-4.9** Document Name field is pre-filled
+- [ ] **R-4.10** "Save as Entity Document" creates record and shows success toast
+- [ ] **R-4.11** "Try Again" clears result and shows form again
+- [ ] **R-4.12** Close button dismisses panel
+- [ ] **R-4.13** Error state displays properly when AI call fails
+
+### Test Group 5: Duplicate Detection Dashboard
+- [ ] **R-5.1** KPI strip shows counts (Total, Pending, Approved, Rejected)
+- [ ] **R-5.2** Kanban board renders with three columns
+- [ ] **R-5.3** Entity filter dropdown filters by entity
+- [ ] **R-5.4** Min/Max score filters work
+- [ ] **R-5.5** Approve button moves card to Approved column and updates KPIs
+- [ ] **R-5.6** Reject button moves card to Rejected column and updates KPIs
+- [ ] **R-5.7** Clear Filters button resets all filters
+- [ ] **R-5.8** Auto-switches to table view when >50 items (if applicable)
+- [ ] **R-5.9** Paging works in table view (if applicable)
+
+### Test Group 6: Autotagging Pipeline Dashboard
+- [ ] **R-6.1** KPI metrics render (Active Sources, Items Processed, Tags Generated, Errors)
+- [ ] **R-6.2** Pipeline stages visualization shows (Ingest, Extract, Chunk, Tag, Vectorize)
+- [ ] **R-6.3** Recent Processing feed renders
+- [ ] **R-6.4** Content Sources panel renders
+- [ ] **R-6.5** Refresh button reloads data
+
+### Test Group 7: Configuration Dashboard
+- [ ] **R-7.1** Left navigation renders with 5 sections
+- [ ] **R-7.2** Clicking sections scrolls to corresponding content
+- [ ] **R-7.3** Toggle switches and inputs are interactive
+- [ ] **R-7.4** Save bar appears when changes are made
+
+### Test Group 8: Floating Chat Overlay
+- [ ] **R-8.1** Chat bubble appears bottom-right on all pages
+- [ ] **R-8.2** Clicking bubble expands to chat panel
+- [ ] **R-8.3** Chat panel shows input area and send button
+- [ ] **R-8.4** Minimizing returns to bubble state
+- [ ] **R-8.5** Chat bubble persists across navigation (switch apps)
+- [ ] **R-8.6** Chat bubble auto-hides when in Conversations workspace
+- [ ] **R-8.7** "Open in workspace" button navigates to full Conversations
+
+### Test Group 9: mj-chat (Kendo removed)
+- [ ] **R-9.1** Chat buttons render with custom styling (no Kendo)
+- [ ] **R-9.2** Clear chat dialog works (custom dialog, not Kendo)
+- [ ] **R-9.3** Send button enables/disables correctly
+- [ ] **R-9.4** Typing indicator animation works
+- [ ] **R-9.5** Messages have slide-in animation
+
+### Test Group 10: Entity Document Setup & Vectorization E2E
+- [ ] **R-10.1** Create Entity Document for "AI Prompts" via suggestion panel
+- [ ] **R-10.2** Create Entity Document for "AI Models" via suggestion panel
+- [ ] **R-10.3** Verify entity documents appear in sync table
+- [ ] **R-10.4** Trigger vectorization (if supported via UI)
+- [ ] **R-10.5** Verify vector counts update after vectorization
+
+### Test Group 11: Global Search (Cmd+K)
+- [ ] **R-11.1** Cmd+K opens search overlay in MJ Explorer
+- [ ] **R-11.2** "Search Knowledge Hub" action item appears when typing
+- [ ] **R-11.3** Search overlay has keyboard navigation
+
+### Test Group 12: Cross-cutting
+- [ ] **R-12.1** No JavaScript console errors on any dashboard
+- [ ] **R-12.2** All design tokens applied (no hardcoded colors visible)
+- [ ] **R-12.3** Mobile responsive: all dashboards usable at 768px width
+- [ ] **R-12.4** Loading states use <mj-loading> component
+- [ ] **R-12.5** All buttons follow MJ convention (action left, cancel right)
+
