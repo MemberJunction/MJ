@@ -288,10 +288,11 @@ export interface TestFeedbackDialogResult {
     .rating-numbers {
       display: flex;
       gap: 6px;
+      justify-content: space-between;
     }
 
     .rating-button {
-      width: 40px;
+      flex: 1;
       height: 40px;
       border: 2px solid var(--mj-border-default);
       border-radius: 8px;
