@@ -466,6 +466,12 @@ You have a private scratchpad for internal working memory. Use it to organize yo
 **Token efficiency:** Your scratchpad is injected into every turn — keep it lean. Use notes for key reasoning and decisions, not verbose logs. Task notes should be succinct. Everything here costs tokens on every subsequent turn.
 {% endif %}
 
+{% if __agentTypePromptParams.includeDateTimeInPrompt != false %}
+## Current Date/Time
+- **Date**: {{ _CURRENT_DATE }} ({{ _CURRENT_DAY_OF_WEEK }})
+- **Time**: {{ _CURRENT_TIME }}
+{% endif %}
+
 # Agent Definition
 Your name is {{ agentName }}
 
