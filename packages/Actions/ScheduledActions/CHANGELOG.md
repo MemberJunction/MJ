@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/scheduled-actions
 
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/core-entities-server@5.21.0
+  - @memberjunction/sqlserver-dataprovider@5.21.0
+  - @memberjunction/core-actions@5.21.0
+  - @memberjunction/actions-base@5.21.0
+  - @memberjunction/actions@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/global@5.21.0
+
 ## 5.20.0
 
 ### Patch Changes

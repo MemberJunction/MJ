@@ -1,5 +1,14 @@
 # @memberjunction/ai-vectors-memory
 
+## 5.21.0
+
+### Patch Changes
+
+- c7dfb20: no migration/metadata changes (yet)
+- Updated dependencies [c7dfb20]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/global@5.21.0
+
 ## 5.20.0
 
 ### Patch Changes

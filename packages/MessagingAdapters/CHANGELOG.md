@@ -1,5 +1,22 @@
 # @memberjunction/messaging-adapters
 
+## 5.21.0
+
+### Patch Changes
+
+- 1bf67de: Default messaging extensions to Enabled: false and improve initialization error message
+- Updated dependencies [c7dfb20]
+- Updated dependencies [b29716c]
+- Updated dependencies [76cd2bc]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-agents@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/sqlserver-dataprovider@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/server-extensions-core@5.21.0
+  - @memberjunction/ai@5.21.0
+  - @memberjunction/global@5.21.0
+
 ## 5.20.0
 
 ### Patch Changes
