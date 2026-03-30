@@ -2,9 +2,13 @@
  * @fileoverview Floating Chat Overlay Component (Option B)
  *
  * A floating bubble in the bottom-right that expands to a chat panel.
- * Uses mj-chat internally and ConversationDataService for persistence.
- * Auto-minimizes when the full Conversations workspace is active.
+ * Uses mj-chat internally for rendering.
+ * Auto-minimizes when IsHidden input is set to true (controlled by parent).
  * Supports notification badges, agent context awareness, and smooth animations.
+ *
+ * NOTE: This is a Generic component — it does NOT import Router or any
+ * Explorer-specific services. Route-based visibility is controlled by the
+ * parent (e.g., MJExplorerAppComponent) via the IsHidden input.
  */
 
 import {
@@ -17,9 +21,7 @@ import {
     ChangeDetectorRef,
     inject
 } from '@angular/core';
-import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
-import { filter, takeUntil } from 'rxjs/operators';
 import { ChatMessage } from '@memberjunction/ng-chat';
 
 /** State of the overlay */
@@ -33,7 +35,6 @@ export type OverlayState = 'minimized' | 'expanded' | 'hidden';
 })
 export class ChatOverlayComponent implements OnInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
-    private router = inject(Router);
     private destroy$ = new Subject<void>();
 
     // --- Inputs ---
@@ -56,8 +57,25 @@ export class ChatOverlayComponent implements OnInit, OnDestroy {
         return this._ConversationId;
     }
 
-    /** Route patterns that should hide the overlay (regex) */
-    @Input() HideOnRoutes: string[] = ['/conversations'];
+    /**
+     * Whether the overlay should be hidden. Controlled by the parent component
+     * based on the current route (e.g., hide when in full Conversations workspace).
+     * Generic components do not use Router — the parent passes this value.
+     */
+    private _IsHidden = false;
+
+    @Input()
+    set IsHidden(value: boolean) {
+        const prev = this._IsHidden;
+        this._IsHidden = value;
+        if (value && !prev && this.State === 'expanded') {
+            this.Minimize();
+        }
+        this.cdr.detectChanges();
+    }
+    get IsHidden(): boolean {
+        return this._IsHidden;
+    }
 
     /** Chat messages */
     @Input() Messages: ChatMessage[] = [];
@@ -82,11 +100,9 @@ export class ChatOverlayComponent implements OnInit, OnDestroy {
 
     public State: OverlayState = 'minimized';
     public UnreadCount = 0;
-    public IsRouteHidden = false;
 
     ngOnInit(): void {
-        this.subscribeToRouteChanges();
-        this.checkCurrentRoute();
+        // No route subscription — visibility controlled via IsHidden input
     }
 
     ngOnDestroy(): void {
@@ -135,29 +151,5 @@ export class ChatOverlayComponent implements OnInit, OnDestroy {
             this.UnreadCount++;
             this.cdr.detectChanges();
         }
-    }
-
-    // --- Private Methods ---
-
-    private subscribeToRouteChanges(): void {
-        this.router.events
-            .pipe(
-                filter(event => event instanceof NavigationEnd),
-                takeUntil(this.destroy$)
-            )
-            .subscribe(() => this.checkCurrentRoute());
-    }
-
-    private checkCurrentRoute(): void {
-        const url = this.router.url;
-        this.IsRouteHidden = this.HideOnRoutes.some(pattern => {
-            const regex = new RegExp(pattern);
-            return regex.test(url);
-        });
-
-        if (this.IsRouteHidden && this.State === 'expanded') {
-            this.Minimize();
-        }
-        this.cdr.detectChanges();
     }
 }

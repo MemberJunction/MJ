@@ -1,4 +1,4 @@
-@if (!IsRouteHidden) {
+@if (!IsHidden) {
     <!-- Floating Bubble (minimized state) -->
     @if (State === 'minimized') {
         <div class="chat-bubble" (click)="Toggle()" title="Open Chat">

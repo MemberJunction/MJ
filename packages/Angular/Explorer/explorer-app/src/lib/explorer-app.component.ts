@@ -10,9 +10,9 @@
 
 import { Component, OnInit, OnDestroy, Inject, ViewEncapsulation } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
-import { Router } from '@angular/router';
+import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
-import { take, takeUntil } from 'rxjs/operators';
+import { filter, take, takeUntil } from 'rxjs/operators';
 import { LogError, SetProductionStatus } from '@memberjunction/core';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
@@ -39,6 +39,8 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
   public isOAuthCallback = false;
   /** Tracks whether the login page is in dark mode */
   public IsDarkMode = false;
+  /** True when the current route is the full Conversations/Chat workspace — hides the chat overlay */
+  public isChatRoute = false;
 
   private destroy$ = new Subject<void>();
 
@@ -178,6 +180,17 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     // Check if this is the OAuth callback route - used for conditional rendering in template
     // Note: We still run setupAuth() to restore the user's session
     this.isOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
+
+    // Track route changes to hide chat overlay on Conversations workspace
+    this.router.events
+      .pipe(
+        filter(event => event instanceof NavigationEnd),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((event) => {
+        const url = (event as NavigationEnd).urlAfterRedirects || (event as NavigationEnd).url;
+        this.isChatRoute = url.includes('/chat') || url.includes('/conversations');
+      });
 
     // Apply saved or OS-preferred theme for the login page
     this.applyLoginTheme();

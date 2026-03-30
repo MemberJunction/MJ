@@ -303,6 +303,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         try {
             const md = new Metadata();
             const entityDoc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
+            entityDoc.NewRecord();
             entityDoc.Name = this.SaveDocumentName;
 
             const matchingEntity = md.Entities.find(e => e.Name === this.SuggestEntityName);
@@ -311,6 +312,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             }
 
             entityDoc.Status = 'Active';
+
+            // Populate required FK fields from existing data
+            await this.populateEntityDocumentFKs(entityDoc);
 
             const saved = await entityDoc.Save();
             if (saved) {
@@ -589,6 +593,43 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         const total = this.recordDocuments.length;
         const vectorized = this.recordDocuments.filter(rd => rd.VectorID != null).length;
         this.StorageUsagePercent = total > 0 ? Math.round((vectorized / total) * 100) : 0;
+    }
+
+    /**
+     * Populate required foreign key fields on an Entity Document before saving.
+     * Uses the first available vector DB and an embedding AI model from loaded data.
+     * Creates a lookup for the 'Record Duplicate' entity document type.
+     */
+    private async populateEntityDocumentFKs(entityDoc: MJEntityDocumentEntity): Promise<void> {
+        // TypeID — look up 'Record Duplicate' entity document type
+        const rv = new RunView();
+        const typeResult = await rv.RunView<{ ID: string }>({
+            EntityName: 'MJ: Entity Document Types',
+            ExtraFilter: "Name = 'Record Duplicate'",
+            ResultType: 'simple',
+            Fields: ['ID']
+        });
+        if (typeResult.Success && typeResult.Results.length > 0) {
+            entityDoc.TypeID = typeResult.Results[0].ID;
+        }
+
+        // VectorDatabaseID — use first available from loaded data
+        if (this.vectorDatabases.length > 0) {
+            entityDoc.VectorDatabaseID = this.vectorDatabases[0].ID;
+        }
+
+        // AIModelID — find first embedding model from loaded AI models
+        const embeddingModel = this.aiModels.find(m =>
+            m.AIModelType === 'Embedding' || m.Name?.toLowerCase().includes('embedding')
+        );
+        if (embeddingModel) {
+            entityDoc.AIModelID = embeddingModel.ID;
+        } else if (this.aiModels.length > 0) {
+            entityDoc.AIModelID = this.aiModels[0].ID;
+        }
+
+        // TemplateID — for now leave null, the server-side EntityVectorSyncer
+        // will create one if needed via CreateTemplateForEntityDocument
     }
 
     /** Build grouped entity list from metadata, grouped by SchemaName */
