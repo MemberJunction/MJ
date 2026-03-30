@@ -4,7 +4,7 @@
 > **Created**: 2026-03-27
 > **Builds on**: `plans/unified-data-snapshots-component-events-plan.md` (PR #2237), `plans/visualization-layer-design.md` (PR #2215)
 > **Related**: `plans/file-artifact-io-plan.md` (file-based artifact I/O)
-> **Scope**: `@memberjunction/interactive-component-types`, `@memberjunction/ng-artifacts`, `@memberjunction/ng-react`, agent integration, future visualization foundation
+> **Scope**: `@memberjunction/core`, `@memberjunction/interactive-component-types`, `@memberjunction/ng-artifacts`, `@memberjunction/ng-react`, agent integration, future visualization foundation
 
 ## Table of Contents
 
@@ -15,15 +15,13 @@
 5. [Component Event System](#5-component-event-system)
 6. [Artifact-Level State Snapshots](#6-artifact-level-state-snapshots)
 7. [Multi-Table Viewer UX](#7-multi-table-viewer-ux)
-8. [Agent-Component Dialog Bridge](#8-agent-component-dialog-bridge)
+8. [Document Tools: Agent Artifact Access](#8-document-tools-agent-artifact-access)
 9. [Interactive Component Data Contract](#9-interactive-component-data-contract)
 10. [Relationship to File Artifact I/O](#10-relationship-to-file-artifact-io)
-11. [Future: Visualization Foundation Layer](#11-future-visualization-foundation-layer)
-12. [Future: External Consumption & MCP](#12-future-external-consumption--mcp)
-13. [Cross-Cutting Concerns](#13-cross-cutting-concerns)
-14. [File Inventory](#14-file-inventory)
-15. [Implementation Order & Dependencies](#15-implementation-order--dependencies)
-16. [Open Items & Future Considerations](#16-open-items--future-considerations)
+11. [Cross-Cutting Concerns](#11-cross-cutting-concerns)
+12. [File Inventory](#12-file-inventory)
+13. [Implementation Order & Dependencies](#13-implementation-order--dependencies)
+14. [Open Items & Future Considerations](#14-open-items--future-considerations)
 
 ---
 
@@ -37,11 +35,12 @@ MemberJunction's interactive component system and artifact viewer system both pr
 | **Multi-table data** | `DataArtifactSpec` supports one table (one `rows[]`, one `columns[]`). Dashboards and multi-query results can't be represented as a single artifact. | Expand to a `tables[]` array of named datasets, with per-table metadata, while keeping full backward compatibility with the single-table format. |
 | **Agent visibility into live components** | Agents cannot see what a user is looking at. If a user is viewing a filtered, sorted, paged grid — the agent has no access to that state. | Add `GetCurrentStateSnapshot()` to every artifact viewer plugin, returning a structured `DataSnapshot` that captures the live data, visual state, computations, and interpretation. |
 
-An additional capability completes the picture:
+Two additional capabilities complete the picture:
 
 | Capability | Gap Today | Solution |
 |---|---|---|
-| **Component event subscription** | Interactive components have declarative event metadata but no runtime subscription mechanism. Containers can't react to or cancel component actions. | Add a `ComponentEventBus` with `on`/`off`/`emit`, Before/After event pairs, and cancellation support. |
+| **Component event notification** | Interactive components have declarative event metadata but no runtime notification mechanism. Containers can't react to or cancel component actions. | Add `NotifyEvent` to the existing `ComponentCallbacks` interface, with base interfaces for cancelable and after-event args. Components call `callbacks.NotifyEvent()` — containers handle routing. |
+| **Agent artifact access** | Agents have no way to explore artifact content. Dumping large artifacts into prompt context doesn't scale. | Add **Document Tools** as a 5th agent primitive (alongside actions, subagents, scratchpad, client tools). Agents see an artifact manifest and use type-specific tools to sip content on demand. |
 
 ### Design Philosophy
 
@@ -69,16 +68,16 @@ This is one body of work, not a multi-month phased rollout. The sections below a
 
 ```
 Core Type System & Utilities (foundation)
-    ├──▶ Component Event System (types + runtime)
-    ├──▶ Artifact-Level State Snapshots (base class method)
+    ├──▶ Component Event System (NotifyEvent on ComponentCallbacks)
+    ├──▶ Artifact-Level State Snapshots (abstract method on viewers)
     ├──▶ Multi-Table Viewer UX (Angular)
-    └──▶ Interactive Component Data Contract (React runtime)
+    ├──▶ Interactive Component Data Contract (get/setDataState on React runtime)
+    └──▶ Document Tools (5th agent primitive — artifact manifest + exploration tools)
               │
-              ▼
-         Agent-Component Dialog Bridge (integration, depends on snapshots + contract)
+              └──▶ depends on: Scratchpad pattern, input artifact infrastructure (shared w/ file I/O)
 ```
 
-All sections after the core types can proceed in parallel.
+All sections after the core types can proceed in parallel. Document Tools depends on the shared input artifact infrastructure being co-built with the file I/O team.
 
 ---
 
@@ -215,8 +214,12 @@ Level 3: DataSnapshot (what is the full picture?)
 DataSnapshot = {
     tables: DataTable[],
     title, plan, interpretation,
-    computations: DataComputation[],
-    visualState: DataVisualState
+    drillPath, activeTab, searchText, custom
+}
+
+DataTable (per-table state) = {
+    name, columns, rows, metadata,
+    computations, sorting, activeFilters, selectedRows, pageNumber
 }
 ```
 
@@ -302,7 +305,34 @@ The boundary: **stateful capture** (left side — reading live component state) 
 
 ### 4.1 Column Descriptors
 
-#### 4.1.1 New File: `packages/InteractiveComponents/src/column-descriptors.ts`
+#### 4.1.1 SQLBaseType Union Type
+
+Define the universe of recognized SQL base types in MJCore. This provides compile-time validation — typos like `'integr'` are caught by TypeScript. The SQLDialect package handles platform-specific mapping (e.g., `'uniqueidentifier'` → `'uuid'` for PostgreSQL).
+
+```typescript
+/**
+ * The canonical set of SQL base types MJ recognizes.
+ * Used for column typing, formatting decisions, and alignment.
+ * Platform-specific mappings live in the SQLDialect package.
+ */
+export type SQLBaseType =
+    | 'int' | 'bigint' | 'smallint' | 'tinyint'
+    | 'decimal' | 'numeric' | 'float' | 'real' | 'money' | 'smallmoney'
+    | 'nvarchar' | 'varchar' | 'char' | 'nchar' | 'text' | 'ntext'
+    | 'bit'
+    | 'uniqueidentifier'
+    | 'datetime' | 'datetime2' | 'datetimeoffset' | 'date' | 'time' | 'smalldatetime'
+    | 'varbinary' | 'binary' | 'image'
+    | 'xml' | 'json'
+    | 'geography' | 'geometry'
+    | 'sql_variant';
+```
+
+> **Note:** `EntityFieldInfo.Type` remains `string` for now to avoid downstream breakage. New code uses `SQLBaseType`; eventual migration of `EntityFieldInfo` is tracked separately.
+
+#### 4.1.2 New File: `packages/MJCore/src/generic/column-descriptors.ts`
+
+Types are **classes** with **static factory methods** for construction/conversion (per MJ convention — grouped, discoverable via IntelliSense).
 
 ```typescript
 // ─── LEVEL 1: UNIVERSAL COLUMN ───
@@ -310,41 +340,18 @@ The boundary: **stateful capture** (left side — reading live component state) 
 /**
  * Base column descriptor. The minimum information needed to describe
  * a column of data: what it's called, what type it is, how to display it.
- *
- * This is the atom of the type system. Every higher-level type composes these.
  */
-export interface ColumnDescriptor {
-    /**
-     * Field name in the row data.
-     * This is the key used to access the value: row[field].
-     * Examples: "Revenue", "CustomerName", "ID"
-     */
+export class ColumnDescriptor {
+    /** Field name in the row data — the key used to access the value: row[field] */
     field: string;
 
-    /**
-     * Human-readable display name for headers, labels, and tooltips.
-     * Defaults to `field` if not specified.
-     */
+    /** Human-readable display name for headers, labels, and tooltips */
     displayName?: string;
 
-    /**
-     * SQL base type — the source of truth for formatting in MJ.
-     *
-     * MJ is SQL-first: grid formatting, alignment, entity linking,
-     * and value display all switch on SQL types. Using SQL types
-     * (not JS types) preserves the distinction between money formatting,
-     * integer formatting, date formatting, etc.
-     *
-     * Examples: 'int', 'bigint', 'nvarchar', 'varchar', 'money',
-     * 'decimal', 'float', 'bit', 'uniqueidentifier', 'datetime',
-     * 'datetimeoffset', 'date', 'time', 'varbinary'
-     */
-    sqlBaseType?: string;
+    /** SQL base type — source of truth for formatting in MJ */
+    sqlBaseType?: SQLBaseType;
 
-    /**
-     * Full SQL type with precision/scale.
-     * Examples: 'decimal(18,2)', 'nvarchar(255)', 'varchar(max)'
-     */
+    /** Full SQL type with precision/scale: 'decimal(18,2)', 'nvarchar(255)' */
     sqlFullType?: string;
 
     /** Column width in pixels (hint for renderers) */
@@ -352,231 +359,128 @@ export interface ColumnDescriptor {
 
     /** Human-readable description of what this column represents */
     description?: string;
+
+    constructor(field: string) {
+        this.field = field;
+    }
 }
 
 // ─── LEVEL 2: MJ COLUMN WITH ENTITY LINEAGE ───
 
 /**
  * Column descriptor with MemberJunction entity lineage.
- *
- * Entity lineage is a core MJ capability: when a column called "CustomerID"
- * appears in query results, MJ knows it came from the Customers.ID field.
- * This enables:
- * - Entity linking in grids (click an ID → navigate to that record)
- * - Schema-aware formatting (using entity field metadata)
- * - Agent understanding ("this Revenue column comes from Invoices.Amount")
- * - Data lineage tracing through joins and computed expressions
+ * Enables entity linking, schema-aware formatting, and agent understanding
+ * of where data originates.
  */
-export interface MJColumnDescriptor extends ColumnDescriptor {
-    /**
-     * MJ entity name this column originates from.
-     * Examples: "Customers", "Invoices", "AI Models"
-     */
+export class MJColumnDescriptor extends ColumnDescriptor {
+    /** MJ entity name this column originates from (e.g., "Customers") */
     sourceEntity?: string;
 
-    /**
-     * Field name in that entity.
-     * Examples: "ID", "FirstName", "Amount"
-     */
+    /** Field name in that entity (e.g., "ID", "FirstName") */
     sourceFieldName?: string;
 
-    /**
-     * True for calculated expressions: CASE, ROUND, CONCAT, COALESCE, etc.
-     * These columns don't map directly to a single entity field.
-     */
+    /** True for calculated expressions: CASE, ROUND, CONCAT, etc. */
     isComputed?: boolean;
 
-    /**
-     * True for aggregate functions: SUM, COUNT, AVG, MIN, MAX, etc.
-     * These columns summarize multiple rows into one value.
-     */
+    /** True for aggregate functions: SUM, COUNT, AVG, etc. */
     isSummary?: boolean;
+
+    /** Create from a base ColumnDescriptor + entity lineage */
+    static FromColumnDescriptor(
+        col: ColumnDescriptor,
+        entityName: string,
+        sourceFieldName?: string
+    ): MJColumnDescriptor {
+        const result = new MJColumnDescriptor(col.field);
+        Object.assign(result, col);
+        result.sourceEntity = entityName;
+        result.sourceFieldName = sourceFieldName ?? col.field;
+        return result;
+    }
+
+    /** Create from a SimpleQueryFieldInfo (bridges legacy component data requirements) */
+    static FromSimpleQueryField(field: {
+        name: string;
+        type?: string;
+        sourceEntity?: string;
+        sourceFieldName?: string;
+        isSummary?: boolean;
+        description?: string;
+    }): MJColumnDescriptor {
+        const result = new MJColumnDescriptor(field.name);
+        result.sqlBaseType = field.type as SQLBaseType;
+        result.sourceEntity = field.sourceEntity;
+        result.sourceFieldName = field.sourceFieldName;
+        result.isSummary = field.isSummary;
+        result.description = field.description;
+        return result;
+    }
 }
 
 // ─── LEVEL 3: GRID COLUMN WITH DISPLAY FLAGS ───
 
 /**
  * Column descriptor with full display configuration for grid/table rendering.
- *
- * Most consumers don't need this level of detail — it's specific to
- * the interactive grid renderer. Agents, exporters, and component specs
- * use ColumnDescriptor or MJColumnDescriptor instead.
+ * Most consumers don't need this — it's specific to the grid renderer.
  */
-export interface GridColumnDescriptor extends MJColumnDescriptor {
-    /** Whether the column is visible in the grid */
-    visible: boolean;
-
-    /** Whether the user can sort by this column */
-    sortable: boolean;
-
-    /** Whether the user can drag-resize this column */
-    resizable: boolean;
-
-    /** Whether the user can drag-reorder this column */
-    reorderable: boolean;
-
-    /** Display order (0-based) */
-    order: number;
-
-    /** Text alignment */
+export class GridColumnDescriptor extends MJColumnDescriptor {
+    visible: boolean = true;
+    sortable: boolean = true;
+    resizable: boolean = true;
+    reorderable: boolean = true;
+    order: number = 0;
     align?: 'left' | 'center' | 'right';
-
-    /**
-     * Whether this column contains a clickable entity link.
-     * When true, clicking a value navigates to the entity record
-     * identified by targetEntityName and the cell value.
-     */
-    isEntityLink: boolean;
-
-    /** Entity to navigate to when the link is clicked */
-    targetEntityName?: string;
-
-    /** Entity ID for the target entity (for icon lookup, etc.) */
-    targetEntityId?: string;
-
-    /** Icon class for the target entity */
-    targetEntityIcon?: string;
-
-    /** Whether this field is part of the primary key */
-    isPrimaryKey?: boolean;
-
-    /** Whether this field is a foreign key */
-    isForeignKey?: boolean;
-
-    /** Pin column to left or right side of the grid */
     pinned?: 'left' | 'right' | null;
-
-    /** Minimum width for resizing */
     minWidth?: number;
-
-    /** Maximum width for resizing */
     maxWidth?: number;
-
-    /** Flex grow factor for auto-sizing */
     flex?: number;
-}
-```
 
-#### 4.1.2 Column Conversion Functions
+    /** Create from an MJColumnDescriptor with sensible display defaults */
+    static FromMJColumn(col: MJColumnDescriptor, order: number): GridColumnDescriptor {
+        const result = new GridColumnDescriptor(col.field);
+        Object.assign(result, col);
+        result.order = order;
+        return result;
+    }
 
-```typescript
-// ─── CONVERSION FUNCTIONS ───
-
-/**
- * Add MJ entity lineage to a base column descriptor.
- *
- * @param col - Base column
- * @param entityName - MJ entity name (e.g., "Customers")
- * @param sourceFieldName - Field name in that entity (defaults to col.field)
- * @returns MJColumnDescriptor with lineage populated
- */
-export function withEntityLineage(
-    col: ColumnDescriptor,
-    entityName: string,
-    sourceFieldName?: string
-): MJColumnDescriptor {
-    return {
-        ...col,
-        sourceEntity: entityName,
-        sourceFieldName: sourceFieldName ?? col.field
-    };
-}
-
-/**
- * Promote an MJColumnDescriptor to a GridColumnDescriptor with sensible defaults.
- *
- * @param col - Column with entity lineage
- * @param order - Display order index
- * @returns GridColumnDescriptor with default display flags
- */
-export function withGridDefaults(
-    col: MJColumnDescriptor,
-    order: number
-): GridColumnDescriptor {
-    return {
-        ...col,
-        visible: true,
-        sortable: true,
-        resizable: true,
-        reorderable: true,
-        order,
-        isEntityLink: !!col.sourceEntity &&
-            (col.field.endsWith('ID') || col.field === 'ID'),
-        targetEntityName: col.sourceEntity ?? undefined,
-        isPrimaryKey: col.field === 'ID',
-        isForeignKey: !!col.sourceEntity && col.field.endsWith('ID') && col.field !== 'ID'
-    };
-}
-
-/**
- * Strip grid-specific display flags, returning just the data-level column info.
- * Useful when preparing data for agents or export — they don't need display flags.
- *
- * @param col - Full grid column
- * @returns MJColumnDescriptor with only data-level fields
- */
-export function stripGridFlags(col: GridColumnDescriptor): MJColumnDescriptor {
-    return {
-        field: col.field,
-        displayName: col.displayName,
-        sqlBaseType: col.sqlBaseType,
-        sqlFullType: col.sqlFullType,
-        width: col.width,
-        description: col.description,
-        sourceEntity: col.sourceEntity,
-        sourceFieldName: col.sourceFieldName,
-        isComputed: col.isComputed,
-        isSummary: col.isSummary
-    };
-}
-
-/**
- * Build an MJColumnDescriptor from a SimpleQueryFieldInfo.
- * Bridges the existing component data requirements system to the new type system.
- */
-export function fromSimpleQueryField(field: {
-    name: string;
-    type?: string;
-    sourceEntity?: string;
-    sourceFieldName?: string;
-    isSummary?: boolean;
-    description?: string;
-}): MJColumnDescriptor {
-    return {
-        field: field.name,
-        sqlBaseType: field.type,
-        sourceEntity: field.sourceEntity,
-        sourceFieldName: field.sourceFieldName,
-        isSummary: field.isSummary,
-        description: field.description
-    };
+    /** Strip grid flags, returning just the data-level column info */
+    ToMJColumn(): MJColumnDescriptor {
+        const result = new MJColumnDescriptor(this.field);
+        result.displayName = this.displayName;
+        result.sqlBaseType = this.sqlBaseType;
+        result.sqlFullType = this.sqlFullType;
+        result.width = this.width;
+        result.description = this.description;
+        result.sourceEntity = this.sourceEntity;
+        result.sourceFieldName = this.sourceFieldName;
+        result.isComputed = this.isComputed;
+        result.isSummary = this.isSummary;
+        return result;
+    }
 }
 ```
 
 ### 4.2 DataTable
 
-#### 4.2.1 New File: `packages/InteractiveComponents/src/data-table.ts`
+#### 4.2.1 New File: `packages/MJCore/src/generic/data-table.ts`
 
 ```typescript
 import { MJColumnDescriptor } from './column-descriptors';
 
 /**
- * A single named dataset: columns + rows + provenance.
+ * A single named dataset: columns + rows + provenance + per-table state.
  *
  * This is the standard unit of tabular data in MemberJunction.
- * It is self-describing: given just this object, a consumer knows
- * what the data is, where it came from, and how to interpret each column.
+ * Self-describing: given just this object, a consumer knows what the
+ * data is, where it came from, and how to interpret each column.
  *
- * Usage contexts:
- * - A query result: one table with SQL metadata
- * - A panel in a dashboard: one table with its dataset
- * - An entity view: one table with entity metadata
- * - A computed aggregation: one table with computation description
+ * Per-table state (sorting, filters, computations, paging, selection)
+ * lives here — not on DataSnapshot — because each table in a multi-table
+ * snapshot has its own independent state.
  *
- * Rows are flat `Record<string, unknown>[]` — the same shape that
- * RunView, RunQuery, and every MJ data path produces.
+ * Rows are flat `Record<string, unknown>[]` — same shape as RunView/RunQuery.
  */
-export interface DataTable {
+export class DataTable {
     /**
      * Unique name for this table within a collection.
      * Used as tab labels, reference keys for computations,
@@ -600,8 +504,9 @@ export interface DataTable {
      * - 'view': From a MJ entity view (RunView)
      * - 'computed': Derived client-side (aggregation, pivot, transform)
      * - 'static': Inline data with no live source (e.g., manual input)
+     * - 'other': Source doesn't fit the above categories
      */
-    source?: 'query' | 'view' | 'computed' | 'static';
+    source?: 'query' | 'view' | 'computed' | 'static' | 'other';
 
     /**
      * Column definitions with type information and entity lineage.
@@ -635,128 +540,54 @@ export interface DataTableMetadata {
     /** Extra WHERE filter applied (if source is 'view') */
     extraFilter?: string;
 
-    /** Query ID in MJ (if from a stored query) */
-    queryId?: string;
+    /** Query name in MJ (if from a stored query) */
+    queryName?: string;
+
+    /** Query category path in MJ (if from a stored query) */
+    queryCategoryPath?: string;
 
     /** Query parameters used */
     parameters?: Record<string, string | number | boolean>;
 
-    /**
-     * Number of rows in THIS result page.
-     * When the data is paged, this is the page size (e.g., 100).
-     */
+    /** Number of rows in the `rows[]` array (this page of results) */
     rowCount?: number;
 
+    /** Starting row index in the full result set (0-based). Indicates which page this is. */
+    startRowIndex?: number;
+
+    /** Page size used for this result set */
+    pageSize?: number;
+
     /**
-     * Total rows available in the source (the full dataset size).
-     * When paged, this is the count before paging (e.g., 50,000).
-     * Tells consumers: "there are 50,000 rows but you're seeing 100."
+     * Total rows available from the query/view (not the entire table —
+     * the result set size before paging). Tells consumers: "the query
+     * matched 50,000 rows but you're seeing rows 200-299."
      */
     totalAvailableRows?: number;
 
     /** Time to execute the query/view in milliseconds */
     executionTimeMs?: number;
 
-    /** When this data was fetched — ISO 8601 string for JSON serialization */
-    fetchedAt?: string;
+    /** When this data was fetched (UTC) */
+    fetchedAt?: Date;
 
     /** For computed tables: how the data was derived */
     computationDescription?: string;
 }
-```
 
-### 4.3 DataSnapshot
+// ─── PER-TABLE STATE (moved here from DataVisualState — each table has its own) ───
 
-#### 4.3.1 New File: `packages/InteractiveComponents/src/data-snapshot.ts`
+    /** Pre-computed aggregations for this table's data */
+    computations?: DataComputation[];
 
-```typescript
-import { MJColumnDescriptor } from './column-descriptors';
-import { DataTable, DataTableMetadata } from './data-table';
+    /** Current sort state applied to this table */
+    sorting?: Array<{ field: string; direction: 'asc' | 'desc' }>;
 
-/**
- * A named, pre-computed aggregation or metric.
- *
- * Components that perform calculations (sums, averages, counts, custom KPIs)
- * expose them here so agents don't need to recalculate from raw rows.
- * Formatted values give agents and UIs a ready-to-display string.
- */
-export interface DataComputation {
-    /** Display name: "Total Revenue", "Average Order Value", "Customer Count" */
-    name: string;
+    /** Active filters on this table (uses existing filter types from ng-filter-builder, extracted to core) */
+    activeFilters?: CompositeFilterDescriptor;
 
-    /** Type of aggregation performed */
-    type: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'median' | 'distinct_count' | 'custom';
-
-    /** Source field name this computation operates on (if applicable) */
-    field?: string;
-
-    /** Which table this computation references (if multi-table) */
-    table?: string;
-
-    /** The computed value */
-    value: number | string | boolean;
-
-    /** Human-formatted display value: "$1,234,567.89", "+12.3%", "1,247 customers" */
-    formattedValue?: string;
-
-    /** Human/AI-readable explanation of what this computation represents */
-    description?: string;
-}
-
-/**
- * A single active filter applied to the data.
- */
-export interface DataFilter {
-    /** Field being filtered */
-    field: string;
-
-    /** Which table (if multi-table) */
-    table?: string;
-
-    /** Filter operator */
-    operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte'
-        | 'contains' | 'startsWith' | 'endsWith'
-        | 'in' | 'notIn' | 'isNull' | 'isNotNull'
-        | 'between' | 'custom';
-
-    /** Filter value(s) */
-    value: string | number | boolean | Array<string | number>;
-
-    /** Human-readable description: "Region = West", "Revenue > $10,000" */
-    displayText?: string;
-}
-
-/**
- * Captures the current visual/interaction state of the component.
- *
- * This tells an agent not just WHAT data exists, but what the user
- * is LOOKING AT right now: what's filtered, what's sorted, what's
- * selected, how far they've drilled down, what page they're on.
- */
-export interface DataVisualState {
-    /** Currently active filters applied by the user */
-    activeFilters?: DataFilter[];
-
-    /** Current sort state */
-    sorting?: Array<{
-        field: string;
-        table?: string;
-        direction: 'asc' | 'desc';
-    }>;
-
-    /** Currently selected rows */
-    selectedRows?: Array<{
-        table?: string;
-        rowIndex: number;
-        rowKey?: string;
-        rowData?: Record<string, unknown>;
-    }>;
-
-    /** Drill-down breadcrumb path: ["All Regions", "West", "California"] */
-    drillPath?: string[];
-
-    /** Which tab/view/section is currently active */
-    activeTab?: string;
+    /** Currently selected rows in this table */
+    selectedRows?: Array<{ rowIndex: number; rowKey?: string; rowData?: Record<string, unknown> }>;
 
     /** Current page number (1-based) */
     pageNumber?: number;
@@ -764,125 +595,162 @@ export interface DataVisualState {
     /** Current page size */
     pageSize?: number;
 
-    /** Search/filter text entered by user */
-    searchText?: string;
+    /** Create from a single-table DataSnapshot (legacy format) */
+    static FromLegacySpec(spec: {
+        source?: string; columns?: MJColumnDescriptor[]; rows?: Record<string, unknown>[];
+        metadata?: DataTableMetadata; entityName?: string; extraFilter?: string;
+        queryName?: string; queryCategoryPath?: string; parameters?: Record<string, string | number | boolean>;
+    }, defaultName: string = 'results'): DataTable {
+        const table = new DataTable();
+        table.name = defaultName;
+        table.source = spec.source as DataTable['source'];
+        table.columns = spec.columns ?? [];
+        table.rows = spec.rows ?? [];
+        table.metadata = spec.metadata ? {
+            ...spec.metadata,
+            entityName: spec.entityName,
+            extraFilter: spec.extraFilter,
+            queryName: spec.queryName,
+            queryCategoryPath: spec.queryCategoryPath,
+            parameters: spec.parameters
+        } : undefined;
+        return table;
+    }
+}
+```
 
-    /** Component-specific visual state not covered above */
-    custom?: Record<string, unknown>;
+> **Filter types:** `CompositeFilterDescriptor` and `FilterDescriptor` are extracted from `@memberjunction/ng-filter-builder` into `@memberjunction/core` so they're available to both the UI filter builder and the data layer. These support recursive AND/OR grouping — not flat filter lists. See the existing `FilterDescriptor`, `CompositeFilterDescriptor`, `FilterOperator` types in `packages/Angular/Generic/filter-builder/src/lib/types/`.
+
+### 4.3 DataSnapshot
+
+#### 4.3.1 New File: `packages/MJCore/src/generic/data-snapshot.ts`
+
+```typescript
+import { MJColumnDescriptor } from './column-descriptors';
+import { DataTable, DataTableMetadata } from './data-table';
+
+/**
+ * A named, pre-computed aggregation or metric.
+ */
+export interface DataComputation {
+    /** Display name: "Total Revenue", "Average Order Value" */
+    name: string;
+    /** Type of aggregation */
+    type: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'median' | 'distinct_count' | 'custom';
+    /** Source field this computation operates on */
+    field?: string;
+    /** The computed value */
+    value: number | string | boolean;
+    /** Human-formatted display value: "$1,234,567.89" */
+    formattedValue?: string;
+    /** Explanation of what this computation represents */
+    description?: string;
 }
 
 /**
- * A point-in-time snapshot of one or more datasets with full context.
+ * A point-in-time snapshot of one or more datasets with context.
  *
  * This is the **universal data exchange format** between components,
- * artifact viewers, agents, and persistence. It captures not just
- * what data exists, but what it means and what the user is doing with it.
+ * artifact viewers, agents, and persistence.
  *
- * **Three modes of use:**
+ * Per-table state (sorting, filters, computations, paging, selection)
+ * lives on each DataTable — not here. DataSnapshot holds only
+ * component-level state that spans all tables.
  *
- * 1. **Single-table (backward compatible):** Root-level `source`, `columns`,
- *    `rows`, and `metadata` fields describe one table. `tables` is absent.
- *    This matches the original DataArtifactSpec format.
- *
- * 2. **Multi-table:** `tables[]` contains named datasets. Root-level
- *    data fields are ignored. Computations and visual state may reference
- *    specific tables by name.
- *
- * 3. **Context-only:** `tables` is empty or absent, but `interpretation`,
- *    `computations`, or `visualState` carry useful information (e.g., for
- *    non-tabular components like diagrams or settings panels).
- *
- * **Consumers should always normalize to tables first** using
- * `normalizeToTables()`. After normalization, the root-level fields
- * can be ignored — all data is in the tables array.
+ * **Consumers should always call `ToTables()` to get a normalized
+ * DataTable array** — this handles both multi-table and legacy
+ * single-table formats.
  */
-export interface DataSnapshot {
-    // ─── MULTI-TABLE FIELDS ───
+export class DataSnapshot {
+    // ─── TABLES ───
 
-    /**
-     * Named datasets. When present, root-level `source`/`columns`/`rows`/
-     * `metadata` are ignored. Single-table snapshots may omit this and
-     * use root-level fields instead.
-     */
+    /** Named datasets — the core payload */
     tables?: DataTable[];
 
     // ─── BACKWARD-COMPATIBLE SINGLE-TABLE FIELDS ───
-    // Used when `tables` is not present (original single-table format).
-    // Ignored when `tables` IS present.
+    // @deprecated — used only when `tables` is absent (legacy format).
+    // New code should always use `tables`. These exist so existing
+    // artifact JSON (from Query Builder) doesn't need migration.
 
-    /** Data source type (single-table mode only) */
-    source?: 'query' | 'view';
+    /** @deprecated */ source?: 'query' | 'view';
+    /** @deprecated */ queryName?: string;
+    /** @deprecated */ queryCategoryPath?: string;
+    /** @deprecated */ parameters?: Record<string, string | number | boolean>;
+    /** @deprecated */ entityName?: string;
+    /** @deprecated */ extraFilter?: string;
+    /** @deprecated */ columns?: MJColumnDescriptor[];
+    /** @deprecated */ rows?: Record<string, unknown>[];
+    /** @deprecated */ metadata?: DataTableMetadata;
 
-    /** Query ID (single-table mode only) */
-    queryId?: string;
+    // ─── SHARED CONTEXT ───
 
-    /** Query parameters (single-table mode only) */
-    parameters?: Record<string, string | number | boolean>;
-
-    /** Entity name for view source (single-table mode only) */
-    entityName?: string;
-
-    /** Extra WHERE filter for view source (single-table mode only) */
-    extraFilter?: string;
-
-    /** Column definitions (single-table mode only) */
-    columns?: MJColumnDescriptor[];
-
-    /** Row data (single-table mode only) */
-    rows?: Record<string, unknown>[];
-
-    /** Query metadata (single-table mode only) */
-    metadata?: DataTableMetadata;
-
-    // ─── SHARED CONTEXT (applies in both modes) ───
-
-    /** Display title for the snapshot */
+    /** Display title */
     title?: string;
 
-    /**
-     * How the data was obtained — markdown, may include Mermaid diagrams.
-     * Describes the approach/methodology. Shown in a "Plan" tab in the viewer.
-     */
+    /** How the data was obtained (markdown, may include Mermaid diagrams) */
     plan?: string;
 
-    /**
-     * What the data MEANS — patterns, insights, key takeaways.
-     *
-     * Unlike `plan` (which describes how data was obtained), `interpretation`
-     * describes what the data shows. When an interactive component populates
-     * this, it provides the component's own analysis. An agent can use it
-     * as a starting point for deeper investigation.
-     *
-     * Example: "Q4 West region revenue totals $4.5M (+12.3% YoY).
-     * Top customer Acme Corp represents 15% of total. November showed
-     * a spike driven by enterprise renewals."
-     */
+    /** What the data MEANS — patterns, insights, key takeaways */
     interpretation?: string;
 
-    /**
-     * Pre-computed aggregations and KPIs.
-     * Components that perform calculations expose them here so agents
-     * don't need to recalculate from raw rows.
-     */
+    /** Cross-table computations (rare — most computations live on individual DataTables) */
     computations?: DataComputation[];
 
-    /**
-     * Current visual/interaction state — what the user is looking at.
-     * Includes filters, sort, selections, drill path, paging, search.
-     */
-    visualState?: DataVisualState;
+    // ─── COMPONENT-LEVEL STATE (spans all tables) ───
 
-    // ─── QUERY SAVE TRACKING (viewer-specific, preserved for compatibility) ───
+    /** Drill-down breadcrumb path: ["All Regions", "West", "California"] */
+    drillPath?: string[];
 
-    /** ID of saved query (set after user saves from artifact) */
+    /** Which tab/view/section is currently active */
+    activeTab?: string;
+
+    /** Search/filter text entered by user (component-wide) */
+    searchText?: string;
+
+    /** Component-specific state not covered above */
+    custom?: Record<string, unknown>;
+
+    // ─── QUERY SAVE TRACKING ───
+
     savedQueryId?: string;
-
-    /** Name of saved query (for display) */
     savedQueryName?: string;
-
-    /** Version number this query was saved/updated from */
     savedAtVersionNumber?: number;
+
+    // ─── FACTORY METHODS ───
+
+    /** Normalize to tables array. Handles legacy single-table format. */
+    ToTables(defaultTableName: string = 'results'): DataTable[] {
+        if (this.tables && this.tables.length > 0) return this.tables;
+        if (this.rows || this.columns || this.metadata?.sql) {
+            return [DataTable.FromLegacySpec(this, defaultTableName)];
+        }
+        return [];
+    }
+
+    /** Check whether this snapshot has multiple tables */
+    get IsMultiTable(): boolean {
+        return !!(this.tables && this.tables.length > 1);
+    }
+
+    /** Create from a single DataTable */
+    static FromTable(table: DataTable, title?: string): DataSnapshot {
+        const snap = new DataSnapshot();
+        snap.tables = [table];
+        snap.title = title;
+        return snap;
+    }
+
+    /** Create from multiple DataTables */
+    static FromTables(tables: DataTable[], title?: string): DataSnapshot {
+        const snap = new DataSnapshot();
+        snap.tables = tables;
+        snap.title = title;
+        return snap;
+    }
 }
+
+/** Backward compatibility alias */
+export type DataArtifactSpec = DataSnapshot;
 
 /**
  * Backward compatibility alias.
@@ -910,7 +778,7 @@ In the same file (`data-snapshot.ts`):
  * @param defaultTableName - Name for the implicit table when converting from single-table
  * @returns Array of DataTable objects
  */
-export function normalizeToTables(
+export function NormalizeToTables(
     snap: DataSnapshot,
     defaultTableName: string = 'results'
 ): DataTable[] {
@@ -930,7 +798,8 @@ export function normalizeToTables(
                 sql: snap.metadata.sql,
                 entityName: snap.entityName,
                 extraFilter: snap.extraFilter,
-                queryId: snap.queryId,
+                queryName: snap.queryName,
+                queryCategoryPath: snap.queryCategoryPath,
                 parameters: snap.parameters,
                 rowCount: snap.metadata.rowCount,
                 totalAvailableRows: snap.metadata.totalAvailableRows,
@@ -946,15 +815,15 @@ export function normalizeToTables(
 /**
  * Check whether a DataSnapshot has multiple tables.
  */
-export function isMultiTable(snap: DataSnapshot): boolean {
+export function IsMultiTable(snap: DataSnapshot): boolean {
     return !!(snap.tables && snap.tables.length > 1);
 }
 
 /**
  * Get the total row count across all tables in a snapshot.
  */
-export function totalRowCount(snap: DataSnapshot): number {
-    return normalizeToTables(snap).reduce(
+export function TotalRowCount(snap: DataSnapshot): number {
+    return NormalizeToTables(snap).reduce(
         (sum, table) => sum + (table.metadata?.rowCount ?? table.rows.length),
         0
     );
@@ -964,8 +833,8 @@ export function totalRowCount(snap: DataSnapshot): number {
  * Get the total available row count across all tables
  * (the full dataset size, not just the current page).
  */
-export function totalAvailableRowCount(snap: DataSnapshot): number {
-    return normalizeToTables(snap).reduce(
+export function TotalAvailableRowCount(snap: DataSnapshot): number {
+    return NormalizeToTables(snap).reduce(
         (sum, table) => sum + (
             table.metadata?.totalAvailableRows ??
             table.metadata?.rowCount ??
@@ -978,13 +847,16 @@ export function totalAvailableRowCount(snap: DataSnapshot): number {
 
 ### 4.5 Package Location & Exports
 
-All new types go in the existing `@memberjunction/interactive-component-types` package (`packages/InteractiveComponents/`). This package already contains `ComponentObject`, `ComponentSpec`, `ComponentEvent`, data requirements, and runtime types — it's the natural home for shared data contracts.
+The foundational data types go in `@memberjunction/core` (`packages/MJCore/`). These are framework-level constructs used by server-side code, agents, export utilities, and any package that deals with tabular data — not just interactive components.
 
-Add to `packages/InteractiveComponents/src/index.ts`:
+The component-specific types (event system, `ComponentObject` updates) stay in `@memberjunction/interactive-component-types` (`packages/InteractiveComponents/`), which imports from `@memberjunction/core`.
+
+Add to `packages/MJCore/src/index.ts`:
 ```typescript
-export * from './column-descriptors';
-export * from './data-table';
-export * from './data-snapshot';
+export * from './generic/column-descriptors';
+export * from './generic/data-table';
+export * from './generic/data-snapshot';
+export * from './generic/data-transforms';
 ```
 
 ### 4.6 Backward Compatibility
@@ -997,878 +869,133 @@ export * from './data-snapshot';
 
 ### 4.7 Unit Tests
 
-Add `packages/InteractiveComponents/src/__tests__/core-types.test.ts`:
+Add `packages/MJCore/src/__tests__/core-types.test.ts`:
 
-- `normalizeToTables()` with single-table spec returns one table
-- `normalizeToTables()` with multi-table spec returns tables array unchanged
-- `normalizeToTables()` with empty spec returns empty array
-- `normalizeToTables()` preserves metadata fields during single→multi conversion
-- `isMultiTable()` returns correct boolean for various inputs
-- `totalRowCount()` sums across multiple tables
-- `totalAvailableRowCount()` uses totalAvailableRows when present
-- `withEntityLineage()` correctly populates sourceEntity/sourceFieldName
-- `withGridDefaults()` sets sensible defaults for all grid flags
-- `stripGridFlags()` removes grid-only properties
-- `fromSimpleQueryField()` correctly converts from legacy type
+- `NormalizeToTables()` with single-table spec returns one table
+- `NormalizeToTables()` with multi-table spec returns tables array unchanged
+- `NormalizeToTables()` with empty spec returns empty array
+- `NormalizeToTables()` preserves metadata fields during single→multi conversion
+- `IsMultiTable()` returns correct boolean for various inputs
+- `TotalRowCount()` sums across multiple tables
+- `TotalAvailableRowCount()` uses totalAvailableRows when present
+- `WithEntityLineage()` correctly populates sourceEntity/sourceFieldName
+- `WithGridDefaults()` sets sensible defaults for all grid flags
+- `StripGridFlags()` removes grid-only properties
+- `FromSimpleQueryField()` correctly converts from legacy type
 - Backward compatibility: existing single-table DataArtifactSpec shape is valid DataSnapshot
 - Type compatibility: MJColumnDescriptor is assignable to ColumnDescriptor
 
 ---
 
-### 4.8 Utility Functions: `packages/InteractiveComponents/src/data-transforms.ts`
+### 4.8 Transform Utilities (Deferred)
 
-The core types ship with a set of utility functions for common operations on `DataSnapshot` and `DataTable` objects. These are straightforward helpers — not a separate architectural layer. They're shipped alongside the types because the multi-table viewer, snapshot methods, and agent bridge all need them.
+Composable transform functions (`Pipe`, `MapTables`, `TruncateRows`, `SelectColumns`, `FilterTables`, `FormatSnapshotForAgent`, etc.) are a natural extension of the core types. However, there are no immediate consumers that require them — building them now would be speculative bloat. They will be designed and built when concrete consumers emerge (agent context formatting, export, snapshot comparison, etc.). The static factory methods on the classes (Comment 5 pattern) cover the construction/conversion needs for now.
 
-#### 4.8.1 Pipeline Utility
-
-```typescript
-/**
- * Compose multiple transforms into a single function.
- * Each transform takes a DataSnapshot and returns a DataSnapshot.
- * They execute left-to-right (first function runs first).
- *
- * @example
- * const prepareForAgent = pipe(
- *     truncateRows(1000),
- *     stripVisualState,
- *     withInterpretation('West region revenue analysis')
- * );
- * const agentSnapshot = prepareForAgent(rawSnapshot);
- */
-export function pipe(
-    ...transforms: Array<(snap: DataSnapshot) => DataSnapshot>
-): (snap: DataSnapshot) => DataSnapshot {
-    return (snap: DataSnapshot) =>
-        transforms.reduce((acc, fn) => fn(acc), snap);
-}
-```
-
-#### 4.8.2 The `mapTables` Transform
-
-This is the core building block. It applies a function to every table in a snapshot while preserving the snapshot's context (title, computations, visual state, interpretation).
-
-```typescript
-/**
- * Apply a transform to every table in a snapshot.
- *
- * Normalizes to tables[] first (handling single-table snapshots),
- * applies the function to each table, and returns a new snapshot
- * with the transformed tables. All non-table context is preserved.
- *
- * This is the standard way to write table-level transforms:
- * define a function that transforms one DataTable, then lift it
- * to operate on a whole snapshot via mapTables.
- *
- * @param fn - Transform function applied to each table
- * @returns A function that transforms a DataSnapshot
- *
- * @example
- * // Truncate every table to 100 rows
- * const capped = mapTables((table) => ({
- *     ...table,
- *     rows: table.rows.slice(0, 100)
- * }))(snapshot);
- */
-export function mapTables(
-    fn: (table: DataTable, index: number) => DataTable
-): (snap: DataSnapshot) => DataSnapshot {
-    return (snap: DataSnapshot): DataSnapshot => ({
-        ...snap,
-        tables: normalizeToTables(snap).map(fn),
-        // Clear root-level single-table fields since we've normalized
-        source: undefined,
-        columns: undefined,
-        rows: undefined,
-        metadata: undefined,
-        entityName: undefined,
-        extraFilter: undefined,
-        queryId: undefined,
-        parameters: undefined
-    });
-}
-```
-
-#### 4.8.3 Row Operations
-
-```typescript
-/**
- * Truncate each table's rows to a maximum count.
- * Updates rowCount and totalAvailableRows in metadata accordingly.
- *
- * Use this when preparing snapshots for agent consumption —
- * LLMs don't need (and can't process) 50,000 rows.
- *
- * @param maxRows - Maximum rows to keep per table
- *
- * @example
- * const agentReady = truncateRows(1000)(snapshot);
- */
-export function truncateRows(
-    maxRows: number
-): (snap: DataSnapshot) => DataSnapshot {
-    return mapTables((table) => {
-        if (table.rows.length <= maxRows) return table;
-        return {
-            ...table,
-            rows: table.rows.slice(0, maxRows),
-            metadata: {
-                ...table.metadata,
-                rowCount: maxRows,
-                totalAvailableRows:
-                    table.metadata?.totalAvailableRows ??
-                    table.metadata?.rowCount ??
-                    table.rows.length
-            }
-        };
-    });
-}
-
-/**
- * Sort rows within each table by a field.
- *
- * @param field - Field name to sort by
- * @param direction - 'asc' or 'desc'
- */
-export function sortTableRows(
-    field: string,
-    direction: 'asc' | 'desc' = 'asc'
-): (snap: DataSnapshot) => DataSnapshot {
-    return mapTables((table) => ({
-        ...table,
-        rows: [...table.rows].sort((a, b) => {
-            const va = a[field];
-            const vb = b[field];
-            if (va == null && vb == null) return 0;
-            if (va == null) return 1;
-            if (vb == null) return -1;
-            const cmp = va < vb ? -1 : va > vb ? 1 : 0;
-            return direction === 'asc' ? cmp : -cmp;
-        })
-    }));
-}
-```
-
-#### 4.8.4 Column Operations
-
-```typescript
-/**
- * Keep only specific columns in each table.
- * Removes columns from both column definitions and row data.
- *
- * @param fields - Field names to keep
- */
-export function selectColumns(
-    fields: string[]
-): (snap: DataSnapshot) => DataSnapshot {
-    const fieldSet = new Set(fields);
-    return mapTables((table) => ({
-        ...table,
-        columns: table.columns.filter(c => fieldSet.has(c.field)),
-        rows: table.rows.map(row =>
-            Object.fromEntries(
-                Object.entries(row).filter(([key]) => fieldSet.has(key))
-            )
-        )
-    }));
-}
-
-/**
- * Remove specific columns from each table.
- *
- * @param fields - Field names to remove
- */
-export function excludeColumns(
-    fields: string[]
-): (snap: DataSnapshot) => DataSnapshot {
-    const fieldSet = new Set(fields);
-    return mapTables((table) => ({
-        ...table,
-        columns: table.columns.filter(c => !fieldSet.has(c.field)),
-        rows: table.rows.map(row =>
-            Object.fromEntries(
-                Object.entries(row).filter(([key]) => !fieldSet.has(key))
-            )
-        )
-    }));
-}
-
-/**
- * Strip MJ entity lineage from columns, leaving only base column info.
- * Useful when exporting data outside of MJ context.
- */
-export function stripEntityLineage(
-    snap: DataSnapshot
-): DataSnapshot {
-    return mapTables((table) => ({
-        ...table,
-        columns: table.columns.map(col => ({
-            field: col.field,
-            displayName: col.displayName,
-            sqlBaseType: col.sqlBaseType,
-            sqlFullType: col.sqlFullType,
-            width: col.width,
-            description: col.description
-        }))
-    }))(snap);
-}
-```
-
-#### 4.8.5 Table-Level Operations
-
-```typescript
-/**
- * Keep only tables that match a predicate.
- *
- * @param predicate - Function that returns true for tables to keep
- *
- * @example
- * // Keep only tables with data
- * const nonEmpty = filterTables(t => t.rows.length > 0)(snapshot);
- *
- * // Keep only a specific table
- * const revenue = filterTables(t => t.name === 'monthly_revenue')(snapshot);
- */
-export function filterTables(
-    predicate: (table: DataTable) => boolean
-): (snap: DataSnapshot) => DataSnapshot {
-    return (snap: DataSnapshot): DataSnapshot => ({
-        ...snap,
-        tables: normalizeToTables(snap).filter(predicate),
-        source: undefined,
-        columns: undefined,
-        rows: undefined,
-        metadata: undefined
-    });
-}
-
-/**
- * Get a single table from a snapshot by name.
- * Returns the table or undefined if not found.
- */
-export function getTable(
-    snap: DataSnapshot,
-    tableName: string
-): DataTable | undefined {
-    return normalizeToTables(snap).find(t => t.name === tableName);
-}
-```
-
-#### 4.8.6 Context Operations
-
-```typescript
-/**
- * Add or replace the interpretation text on a snapshot.
- *
- * @param text - Markdown interpretation of what the data shows
- */
-export function withInterpretation(
-    text: string
-): (snap: DataSnapshot) => DataSnapshot {
-    return (snap) => ({ ...snap, interpretation: text });
-}
-
-/**
- * Add a computation to a snapshot.
- *
- * @param comp - The computation to add
- */
-export function addComputation(
-    comp: DataComputation
-): (snap: DataSnapshot) => DataSnapshot {
-    return (snap) => ({
-        ...snap,
-        computations: [...(snap.computations ?? []), comp]
-    });
-}
-
-/**
- * Replace all computations on a snapshot.
- */
-export function withComputations(
-    comps: DataComputation[]
-): (snap: DataSnapshot) => DataSnapshot {
-    return (snap) => ({ ...snap, computations: comps });
-}
-
-/**
- * Remove visual state from a snapshot.
- * Useful when persisting snapshots where visual state isn't relevant
- * (e.g., saving for comparison rather than for restoring UI state).
- */
-export function stripVisualState(
-    snap: DataSnapshot
-): DataSnapshot {
-    const { visualState, ...rest } = snap;
-    return rest;
-}
-
-/**
- * Add or replace visual state on a snapshot.
- */
-export function withVisualState(
-    state: DataVisualState
-): (snap: DataSnapshot) => DataSnapshot {
-    return (snap) => ({ ...snap, visualState: state });
-}
-
-/**
- * Add or replace the title on a snapshot.
- */
-export function withTitle(
-    title: string
-): (snap: DataSnapshot) => DataSnapshot {
-    return (snap) => ({ ...snap, title });
-}
-
-/**
- * Add a timestamp to the snapshot metadata.
- * Stamps each table's fetchedAt field with the current ISO timestamp.
- */
-export function withTimestamp(
-    snap: DataSnapshot
-): DataSnapshot {
-    const now = new Date().toISOString();
-    return mapTables((table) => ({
-        ...table,
-        metadata: { ...table.metadata, fetchedAt: now }
-    }))(snap);
-}
-```
-
-#### 4.8.7 Output Formatters
-
-```typescript
-/**
- * Format a DataSnapshot as a markdown + JSON string for agent consumption.
- *
- * Produces a concise summary (table counts, key metrics, active filters)
- * followed by the full JSON payload. This gives the LLM both a quick
- * overview and the raw data to analyze.
- */
-export function formatSnapshotForAgent(snap: DataSnapshot): string {
-    const tables = normalizeToTables(snap);
-    const parts: string[] = [];
-
-    // Header
-    parts.push(`## Data Snapshot: ${snap.title ?? 'Untitled'}`);
-    parts.push('');
-
-    // Table summary
-    if (tables.length > 0) {
-        parts.push(`**Tables:** ${tables.length}`);
-        for (const table of tables) {
-            const rowCount = table.metadata?.rowCount ?? table.rows.length;
-            const colCount = table.columns.length;
-            parts.push(`- **${table.name}**: ${rowCount} rows, ${colCount} columns`);
-            if (table.description) {
-                parts.push(`  ${table.description}`);
-            }
-        }
-        parts.push('');
-    }
-
-    // Computations summary
-    if (snap.computations && snap.computations.length > 0) {
-        parts.push('**Key Metrics:**');
-        for (const comp of snap.computations) {
-            parts.push(`- ${comp.name}: ${comp.formattedValue ?? comp.value}`);
-        }
-        parts.push('');
-    }
-
-    // Visual state summary
-    if (snap.visualState) {
-        const vs = snap.visualState;
-        if (vs.activeFilters && vs.activeFilters.length > 0) {
-            parts.push(`**Active Filters:** ${vs.activeFilters.map(f =>
-                f.displayText ?? `${f.field} ${f.operator} ${f.value}`
-            ).join(', ')}`);
-        }
-        if (vs.drillPath && vs.drillPath.length > 0) {
-            parts.push(`**Drill Path:** ${vs.drillPath.join(' → ')}`);
-        }
-        if (vs.searchText) {
-            parts.push(`**Search:** "${vs.searchText}"`);
-        }
-        if (vs.sorting && vs.sorting.length > 0) {
-            parts.push(`**Sort:** ${vs.sorting.map(s =>
-                `${s.field} ${s.direction}`
-            ).join(', ')}`);
-        }
-        parts.push('');
-    }
-
-    // Interpretation
-    if (snap.interpretation) {
-        parts.push('**Component Analysis:**');
-        parts.push(snap.interpretation);
-        parts.push('');
-    }
-
-    // Full JSON
-    parts.push('**Full Data (JSON):**');
-    parts.push('```json');
-    parts.push(JSON.stringify(snap, null, 2));
-    parts.push('```');
-
-    return parts.join('\n');
-}
-
-/**
- * Extract flat dataset objects from a snapshot.
- * Strips all MJ-specific context, returning just name/columns/rows/count.
- * Useful for export, external system integration, or generic data consumers.
- */
-export function toFlatDataSets(snap: DataSnapshot): Array<{
-    name: string;
-    columns: ColumnDescriptor[];
-    rows: Record<string, unknown>[];
-    totalRowCount: number;
-}> {
-    return normalizeToTables(snap).map(table => ({
-        name: table.name,
-        columns: table.columns.map(c => ({
-            field: c.field,
-            displayName: c.displayName,
-            sqlBaseType: c.sqlBaseType,
-            sqlFullType: c.sqlFullType,
-            width: c.width,
-            description: c.description
-        })),
-        rows: table.rows,
-        totalRowCount: table.metadata?.totalAvailableRows ?? table.rows.length
-    }));
-}
-```
-
-### 4.9 Pipeline Examples
-
-These illustrate how the transforms compose for real use cases:
-
-```typescript
-import { pipe, truncateRows, stripVisualState, withInterpretation,
-         filterTables, selectColumns, formatSnapshotForAgent,
-         toFlatDataSets, withTimestamp } from '@memberjunction/interactive-component-types';
-
-// ── Use case: Agent analysis (John asks "what patterns do you see?") ──
-const prepareForAgent = pipe(
-    truncateRows(1000),
-    withTimestamp,
-    withInterpretation('Data snapshot from active view. Analyze for patterns and insights.')
-);
-// Usage:
-// const snapshot = viewer.GetCurrentStateSnapshot();
-// const context = formatSnapshotForAgent(prepareForAgent(snapshot));
-// → inject context into agent conversation
-
-
-// ── Use case: Export dashboard to flat data ──
-const prepareForExport = pipe(
-    filterTables(t => t.rows.length > 0),
-    stripVisualState
-);
-// Usage:
-// const flatSets = toFlatDataSets(prepareForExport(snapshot));
-// → convert each flatSet to CSV
-
-
-// ── Use case: Save snapshot for later comparison ──
-const prepareForPersistence = pipe(
-    truncateRows(5000),
-    stripVisualState,
-    withTimestamp
-);
-// Usage:
-// const json = JSON.stringify(prepareForPersistence(snapshot));
-// → save as artifact version
-
-
-// ── Use case: Focused analysis on one table ──
-const focusOnRevenue = pipe(
-    filterTables(t => t.name === 'monthly_revenue'),
-    selectColumns(['Month', 'Revenue', 'Growth']),
-    truncateRows(500)
-);
-```
-
-Add to `packages/InteractiveComponents/src/index.ts`:
-```typescript
-export * from './data-transforms';
-```
-
----
 
 ## 5. Component Event System
 
 ### 5.1 Overview
 
-Add a runtime event subscription system to `ComponentObject` in `@memberjunction/interactive-component-types`. This enables consumers (Angular containers, agents, dashboards) to subscribe to component events and optionally cancel or modify default behavior.
+Add runtime event notification to interactive components by extending the existing `ComponentCallbacks` interface with a `NotifyEvent` method. Components call `callbacks.NotifyEvent()` to notify their container of events. Containers handle routing — no separate event bus class needed.
 
-The existing `ComponentEvent` metadata in `ComponentSpec` already declares what events a component CAN emit. This section adds the **runtime layer** that makes those declarations actionable.
+The existing `ComponentEvent` metadata in `ComponentSpec` already declares what events a component CAN emit. This section adds the runtime mechanism.
 
 ### 5.2 Design Principles
 
-1. **Before/After pattern**: Mirrors the proven pattern from MJ's Angular generic components (grids, trees, timelines)
-2. **Cancelable before events**: Before events carry a `cancel` flag; setting it to `true` prevents the default behavior
-3. **Modifiable before events**: Before events can carry `modifiedValue` fields so consumers can intercept AND alter behavior without canceling
-4. **Informational after events**: After events carry success/error/metrics — they cannot be canceled
-5. **Framework-agnostic**: Types work in React, Angular, or vanilla JS
-6. **Typed event args**: Each standard event has a strongly-typed args interface, but the bus is generic to support custom events
+1. **Use existing plumbing**: `ComponentCallbacks` is already passed to every React component. Add `NotifyEvent` there — don't create a parallel system.
+2. **Before/After pattern**: Before events carry a `cancel` flag; setting `true` prevents default behavior. After events report success/error/metrics.
+3. **Component doesn't care who listens**: Component always calls `callbacks.NotifyEvent()`. If the container doesn't care, it simply doesn't handle it.
+4. **Sync cancellation via mutation**: Container sets `args.cancel = true` synchronously. Component checks after `await` resolves.
+5. **Per-component event shapes**: Each component defines its own event properties. Only base interfaces (`BaseEventArgs`, `CancelableEventArgs`, `AfterEventArgs`) are shared types.
 
-### 5.3 New File: `packages/InteractiveComponents/src/component-events.ts`
+### 5.3 Base Event Interfaces
+
+Only three shared interfaces in `packages/InteractiveComponents/src/component-events.ts`. Each component defines its own event properties on top of these — no shared per-event-type interfaces.
 
 ```typescript
-// ─── BASE EVENT ARGS ───
-
-/**
- * Base interface for all component event arguments.
- */
+/** Base for all component event arguments */
 export interface BaseEventArgs {
-    /** When the event occurred */
     timestamp: Date;
-
-    /** Optional reference to the component that raised the event */
     sourceComponentName?: string;
 }
 
-/**
- * Base interface for Before events that support cancellation.
- */
+/** Base for Before events that support cancellation */
 export interface CancelableEventArgs extends BaseEventArgs {
-    /**
-     * Set to true to prevent the component from executing its default behavior.
-     * Only meaningful for "before" events.
-     */
     cancel: boolean;
-
-    /** Optional reason for cancellation (for debugging/logging) */
     cancelReason?: string;
 }
 
-/**
- * Base interface for After events that report on completed operations.
- * Informational only — cannot be canceled.
- */
+/** Base for After events that report on completed operations */
 export interface AfterEventArgs extends BaseEventArgs {
-    /** Whether the operation succeeded */
     success: boolean;
-
-    /** Error message if the operation failed */
     errorMessage?: string;
-
-    /** Duration of the operation in milliseconds */
     durationMs?: number;
-}
-
-// ─── STANDARD BEFORE EVENT ARGS ───
-
-/** Before a data load/refresh operation */
-export interface BeforeDataLoadEventArgs extends CancelableEventArgs {
-    /** Parameters that will be used for loading */
-    loadParams: Record<string, unknown>;
-
-    /** Set this to override the load parameters */
-    modifiedLoadParams?: Record<string, unknown>;
-}
-
-/** Before a filter is applied */
-export interface BeforeFilterChangeEventArgs extends CancelableEventArgs {
-    /** The filter being applied */
-    filter: { field: string; operator: string; value: unknown };
-
-    /** Previous filter state */
-    previousFilters: Array<{ field: string; operator: string; value: unknown }>;
-
-    /** Set this to apply a different filter instead */
-    modifiedFilter?: { field: string; operator: string; value: unknown };
-}
-
-/** Before a row/item selection change */
-export interface BeforeSelectionChangeEventArgs extends CancelableEventArgs {
-    /** Items being selected */
-    selectedItems: Array<{
-        rowIndex: number;
-        rowKey?: string;
-        rowData?: Record<string, unknown>;
-    }>;
-
-    /** Whether this is additive (Ctrl+click) or replacing */
-    isAdditive: boolean;
-
-    /** Current selection before this change */
-    currentSelection: Array<{ rowIndex: number; rowKey?: string }>;
-}
-
-/** Before a row/item click is processed */
-export interface BeforeItemClickEventArgs extends CancelableEventArgs {
-    /** The clicked item's data */
-    item: Record<string, unknown>;
-
-    /** Row/item index */
-    itemIndex: number;
-
-    /** Which column was clicked (if applicable) */
-    column?: string;
-}
-
-/** Before a drill-down navigation */
-export interface BeforeDrillDownEventArgs extends CancelableEventArgs {
-    /** Current drill path before this navigation */
-    currentPath: string[];
-
-    /** The segment being drilled into */
-    target: string;
-
-    /** The full new path that would result */
-    newPath: string[];
-}
-
-// ─── STANDARD AFTER EVENT ARGS ───
-
-/** After data finishes loading */
-export interface AfterDataLoadEventArgs extends AfterEventArgs {
-    /** Number of rows/records loaded */
-    recordCount: number;
-
-    /** Total available records (if paged) */
-    totalAvailableRecords?: number;
-
-    /** Which table(s) were loaded */
-    tableNames?: string[];
-}
-
-/** After a filter is applied */
-export interface AfterFilterChangeEventArgs extends AfterEventArgs {
-    /** The filter that was applied */
-    filter: { field: string; operator: string; value: unknown };
-
-    /** Resulting record count after filtering */
-    resultingRecordCount: number;
-}
-
-/** After selection changes */
-export interface AfterSelectionChangeEventArgs extends AfterEventArgs {
-    /** New selection state */
-    newSelection: Array<{
-        rowIndex: number;
-        rowKey?: string;
-        rowData?: Record<string, unknown>;
-    }>;
-
-    /** Previous selection state */
-    previousSelection: Array<{ rowIndex: number; rowKey?: string }>;
-}
-
-/** After a row/item click */
-export interface AfterItemClickEventArgs extends AfterEventArgs {
-    /** The clicked item's data */
-    item: Record<string, unknown>;
-
-    /** Row/item index */
-    itemIndex: number;
-
-    /** Which column was clicked */
-    column?: string;
-}
-
-/** After a drill-down navigation */
-export interface AfterDrillDownEventArgs extends AfterEventArgs {
-    /** New drill path */
-    newPath: string[];
-
-    /** Previous path */
-    previousPath: string[];
-
-    /** Number of records in the drilled-down view */
-    resultingRecordCount?: number;
-}
-
-/**
- * Emitted when the component's data state changes significantly.
- * Not cancelable — notification that the snapshot has changed.
- */
-export interface DataStateChangedEventArgs extends BaseEventArgs {
-    /** What triggered the change */
-    reason: 'dataLoad' | 'filter' | 'sort' | 'selection'
-        | 'drillDown' | 'refresh' | 'userAction' | 'external';
-
-    /** Brief description of what changed */
-    changeDescription?: string;
-
-    /** Whether a new snapshot should be captured */
-    snapshotRecommended: boolean;
-}
-
-// ─── EVENT BUS TYPES ───
-
-/** Function signature for event handlers */
-export type EventHandler<T extends BaseEventArgs = BaseEventArgs> = (args: T) => void;
-
-/** Function to unsubscribe from an event */
-export type Unsubscribe = () => void;
-
-/** Well-known event names that components can emit */
-export type StandardEventName =
-    | 'beforeDataLoad' | 'afterDataLoad'
-    | 'beforeFilterChange' | 'afterFilterChange'
-    | 'beforeSelectionChange' | 'afterSelectionChange'
-    | 'beforeItemClick' | 'afterItemClick'
-    | 'beforeDrillDown' | 'afterDrillDown'
-    | 'dataStateChanged';
-
-/** Maps standard event names to their argument types */
-export interface StandardEventMap {
-    beforeDataLoad: BeforeDataLoadEventArgs;
-    afterDataLoad: AfterDataLoadEventArgs;
-    beforeFilterChange: BeforeFilterChangeEventArgs;
-    afterFilterChange: AfterFilterChangeEventArgs;
-    beforeSelectionChange: BeforeSelectionChangeEventArgs;
-    afterSelectionChange: AfterSelectionChangeEventArgs;
-    beforeItemClick: BeforeItemClickEventArgs;
-    afterItemClick: AfterItemClickEventArgs;
-    beforeDrillDown: BeforeDrillDownEventArgs;
-    afterDrillDown: AfterDrillDownEventArgs;
-    dataStateChanged: DataStateChangedEventArgs;
-}
-
-/**
- * Event bus interface for component event subscription.
- */
-export interface ComponentEventBus {
-    /**
-     * Subscribe to a named event. Returns an unsubscribe function.
-     *
-     * @example
-     * const unsub = events.on('beforeFilterChange', (args) => {
-     *     if (args.filter.field === 'status') {
-     *         args.cancel = true;
-     *     }
-     * });
-     * // Later: unsub();
-     */
-    on<K extends keyof StandardEventMap>(
-        event: K,
-        handler: EventHandler<StandardEventMap[K]>
-    ): Unsubscribe;
-    on(event: string, handler: EventHandler): Unsubscribe;
-
-    /** Unsubscribe a specific handler from an event */
-    off(event: string, handler: EventHandler): void;
-
-    /**
-     * Emit an event. Returns the args after all handlers have processed.
-     * For cancelable events, check args.cancel after calling emit.
-     */
-    emit<K extends keyof StandardEventMap>(
-        event: K,
-        args: StandardEventMap[K]
-    ): StandardEventMap[K];
-    emit(event: string, args: BaseEventArgs): BaseEventArgs;
 }
 ```
 
-### 5.4 New File: `packages/InteractiveComponents/src/component-event-bus.ts`
+### 5.4 NotifyEvent on ComponentCallbacks
+
+Add to the existing `ComponentCallbacks` interface in `runtime-types.ts`:
 
 ```typescript
-import {
-    BaseEventArgs, CancelableEventArgs,
-    EventHandler, Unsubscribe, ComponentEventBus
-} from './component-events';
-
-/**
- * Default implementation of ComponentEventBus.
- *
- * Handlers fire in registration order. For cancelable events,
- * if a handler sets `cancel = true`, remaining handlers are skipped.
- */
-export class DefaultComponentEventBus implements ComponentEventBus {
-    private handlers: Map<string, Set<EventHandler>> = new Map();
-
-    on(event: string, handler: EventHandler): Unsubscribe {
-        if (!this.handlers.has(event)) {
-            this.handlers.set(event, new Set());
-        }
-        this.handlers.get(event)!.add(handler);
-
-        return () => this.off(event, handler);
-    }
-
-    off(event: string, handler: EventHandler): void {
-        this.handlers.get(event)?.delete(handler);
-    }
-
-    emit(event: string, args: BaseEventArgs): BaseEventArgs {
-        const eventHandlers = this.handlers.get(event);
-        if (eventHandlers) {
-            for (const handler of eventHandlers) {
-                handler(args);
-                // If a cancelable event was canceled, stop processing
-                if ('cancel' in args && (args as CancelableEventArgs).cancel) {
-                    break;
-                }
-            }
-        }
-        return args;
-    }
+interface ComponentCallbacks {
+    OpenEntityRecord: (entityName: string, key: CompositeKey) => void;
+    CreateSimpleNotification: (message: string, style: string, hideAfter?: number) => void;
+    RegisterMethod: (methodName: string, handler: Function) => void;
 
     /**
-     * Remove all handlers for all events.
-     * Call this when the component is being destroyed.
+     * Notify the container of a component event.
+     * For cancelable events, the container can set args.cancel = true
+     * before the await resolves.
      */
-    clear(): void {
-        this.handlers.clear();
-    }
-
-    /**
-     * Check whether any handlers are registered for an event.
-     */
-    hasHandlers(event: string): boolean {
-        const handlers = this.handlers.get(event);
-        return !!handlers && handlers.size > 0;
-    }
+    NotifyEvent: (eventName: string, args: BaseEventArgs) => Promise<void>;
 }
+```
+
+**How it works:**
+
+React component emits an event:
+```typescript
+const args = { timestamp: new Date(), cancel: false, filter: newFilter };
+await callbacks.NotifyEvent('beforeFilterChange', args);
+if (args.cancel) return; // container blocked this
+// proceed with filter change
+```
+
+Angular bridge (`MJReactComponent`) wires `NotifyEvent` to emit on the existing `componentEvent` EventEmitter:
+```typescript
+NotifyEvent: async (eventName: string, args: BaseEventArgs) => {
+    this.componentEvent.emit({ type: eventName, payload: args });
+}
+```
+
+Parent Angular component subscribes via the existing template binding:
+```html
+<mj-react-component (componentEvent)="OnComponentEvent()">
 ```
 
 ### 5.5 Update ComponentSpec Events Metadata
 
-In `packages/InteractiveComponents/src/component-props-events.ts`, enhance `ComponentEvent`:
+In `component-props-events.ts`, enhance `ComponentEvent`:
 
 ```typescript
 export interface ComponentEvent {
     name: string;
     description: string;
     parameters?: ComponentEventParameter[];
-
     /** Whether this is a cancelable "before" event */
     cancelable?: boolean;
-
     /** The paired "after" event name (if this is a "before" event) */
     pairedEvent?: string;
 }
 ```
 
-### 5.6 Export from Package
+### 5.6 Unit Tests
 
-Add to `packages/InteractiveComponents/src/index.ts`:
-```typescript
-export * from './component-events';
-export * from './component-event-bus';
-```
-
-### 5.7 Unit Tests
-
-Add `packages/InteractiveComponents/src/__tests__/component-events.test.ts`:
-
-- `on()` registers handler that fires on `emit()`
-- `off()` removes handler so it no longer fires
-- Unsubscribe function from `on()` removes the handler
-- Multiple handlers on same event fire in registration order
-- Cancelable events: setting `cancel = true` stops remaining handlers
-- Non-cancelable events (no `cancel` property): all handlers fire regardless
-- Emitting event with no registered handlers returns args unchanged
-- `clear()` removes all handlers for all events
-- `hasHandlers()` returns correct boolean
-- Custom (non-standard) event names work with string signatures
+- `NotifyEvent` callback fires when component calls it
+- Cancelable events: setting `cancel = true` prevents component default behavior
+- After events: `success` and `durationMs` are populated
+- Container ignoring events (no handler) doesn't break the component
 
 ---
 
@@ -1883,7 +1010,7 @@ Add `GetCurrentStateSnapshot()` to `BaseArtifactViewerPluginComponent` so that A
 In `packages/Angular/Generic/artifacts/src/lib/components/base-artifact-viewer.component.ts`:
 
 ```typescript
-import { DataSnapshot } from '@memberjunction/interactive-component-types';
+import { DataSnapshot } from '@memberjunction/core';
 
 export abstract class BaseArtifactViewerPluginComponent implements IArtifactViewerComponent {
     // ... existing code ...
@@ -1891,31 +1018,16 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
     /**
      * Returns a point-in-time snapshot of this artifact's current state.
      *
-     * Override in subclasses to provide richer, type-specific snapshots.
-     * The snapshot can be:
-     * - Passed to an agent as conversation context (ephemeral)
-     * - Saved as an artifact version for persistence
-     * - Used for comparison or audit purposes
+     * Abstract — every viewer plugin MUST implement this with a semantically
+     * appropriate result for its content type. No lazy default implementation.
      *
-     * @returns JSON-serializable snapshot, or null if unavailable
+     * Always returns DataSnapshot (not Record<string, unknown>) — we defined
+     * a standard type, use it. Non-tabular viewers return DataSnapshot with
+     * empty tables[] and context in interpretation/custom fields.
+     *
+     * @returns Structured snapshot, or null if unavailable
      */
-    public GetCurrentStateSnapshot(): DataSnapshot | Record<string, unknown> | null {
-        // Default: try to parse content as JSON
-        const content = this.parseJsonContent();
-        if (content) {
-            return content as Record<string, unknown>;
-        }
-        // For non-JSON content, return a text wrapper
-        const rawContent = this.getRawContent();
-        if (rawContent) {
-            return {
-                title: this.getDisplayTitle(),
-                interpretation: `Raw content (${rawContent.length} characters)`,
-                tables: []
-            };
-        }
-        return null;
-    }
+    public abstract GetCurrentStateSnapshot(): DataSnapshot | null;
 
     /**
      * Get the raw string content of this artifact.
@@ -1926,10 +1038,10 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
     }
 
     /**
-     * Get a display-friendly title for this artifact.
+     * Get the title for this artifact, or null if unavailable.
      */
-    protected getDisplayTitle(): string {
-        return this.artifactVersion?.ArtifactName ?? 'Untitled';
+    protected getDisplayTitle(): string | null {
+        return this.artifactVersion?.ArtifactName ?? null;
     }
 }
 ```
@@ -1976,26 +1088,17 @@ In `component-artifact-viewer.component.ts`:
 ```typescript
 /**
  * Returns a DataSnapshot from the running React component's
- * getCurrentDataState(), or falls back to component spec metadata.
+ * getCurrentDataState(). Returns null if the component
+ * doesn't implement it.
  */
-public override GetCurrentStateSnapshot(): DataSnapshot | Record<string, unknown> | null {
-    // Try structured data from the running React component
+public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    // Get structured data from the running React component
     const reactState = this.reactComponent?.componentObject?.getCurrentDataState?.();
     if (reactState) {
         return reactState as DataSnapshot;
     }
 
-    // Fall back to component spec metadata
-    const spec = this.resolvedComponentSpec;
-    if (spec) {
-        return {
-            title: spec.title || spec.name,
-            interpretation: spec.description,
-            tables: [],
-            computations: [],
-            visualState: undefined
-        };
-    }
+    return null;
 
     return null;
 }
@@ -2126,17 +1229,17 @@ public get ActiveTable(): DataTable | null {
 
 #### Initialization Changes
 
-In `ngOnInit()`, use `normalizeToTables()` to resolve all tables:
+In `ngOnInit()`, use `NormalizeToTables()` to resolve all tables:
 
 ```typescript
-import { normalizeToTables } from '@memberjunction/interactive-component-types';
+import { normalizeToTables } from '@memberjunction/core';
 
 async ngOnInit(): Promise<void> {
     this.spec = this.parseJsonContent<DataSnapshot>();
     if (!this.spec) { /* error handling */ return; }
 
     // Resolve to tables array (handles both single and multi-table)
-    this.ResolvedTables = normalizeToTables(this.spec, this.spec.title || 'Results');
+    this.ResolvedTables = NormalizeToTables(this.spec, this.spec.title || 'Results');
 
     if (this.ResolvedTables.length === 0) {
         // Plan-only or empty — existing behavior
@@ -2238,7 +1341,9 @@ private async LoadTableData(tableIndex: number): Promise<void> {
                 );
             }
         } else if (table.rows && table.rows.length > 0) {
-            // Inline data
+            // Inline data — also the path used for rehydrating from a
+            // previously saved snapshot (future: setDataState loads a
+            // prior DataSnapshot and the viewer renders its inline rows)
             this.tableDataCache.set(tableIndex, table.rows);
             this.GridData = table.rows;
             this.liveRowCount = table.rows.length;
@@ -2467,107 +1572,233 @@ public override GetAdditionalTabs(): ArtifactViewerTab[] {
 
 ### 8.7 Migration: Remove Local Interfaces
 
-Remove the local `DataArtifactSpec` and `DataArtifactColumn` interfaces from `data-artifact-viewer.component.ts`. Import from `@memberjunction/interactive-component-types` instead:
+Remove the local `DataArtifactSpec` and `DataArtifactColumn` interfaces from `data-artifact-viewer.component.ts`. Import from `@memberjunction/core` instead:
 
 ```typescript
 import {
     DataSnapshot, DataArtifactSpec, DataTable, MJColumnDescriptor,
     normalizeToTables, isMultiTable
-} from '@memberjunction/interactive-component-types';
+} from '@memberjunction/core';
 ```
 
 ---
 
-## 8. Agent-Component Dialog Bridge
+## 8. Document Tools: Agent Artifact Access
 
-### 9.1 Overview
+### 8.1 Overview
 
-Enable agents to consume component data snapshots. Connects the snapshot mechanism (Phase 4) to the agent conversation system. Two modes now, one future.
+Add **Document Tools** as a 5th agent primitive in the MJ agent architecture, alongside actions, subagents, scratchpad, and client tools. Document Tools give agents the ability to explore input artifacts on demand rather than having full artifact content dumped into context.
 
-### 9.2 Mode A: Ephemeral Snapshot Handoff
+This is modeled after the Scratchpad pattern (`packages/AI/Agents/src/ScratchpadManager.ts`): the agent sees a manifest of available artifacts injected into its prompt each turn, then uses type-specific tools to request the specific content it needs.
 
-The simplest mode — UI captures a snapshot and injects it into the agent conversation as structured context. No new infrastructure beyond Phases 1 and 4.
+### 8.2 Current Agent Primitives
 
-**Flow:**
-1. User clicks "Analyze" while viewing an artifact (or asks agent a question about the data)
-2. UI calls `viewerPanel.GetCurrentStateSnapshot()` → gets `DataSnapshot`
-3. UI uses the composable transforms to prepare the snapshot:
-   ```typescript
-   const prepared = pipe(
-       truncateRows(1000),
-       withTimestamp
-   )(snapshot);
-   const context = formatSnapshotForAgent(prepared);
-   ```
-4. UI injects the formatted context into the agent conversation
-5. Agent processes the structured data and responds with insights
-6. No persistent record — snapshot lives only in the conversation turn
+| Primitive | Purpose | How It Works |
+|---|---|---|
+| **Actions** | Execute business logic (web search, DB query, etc.) | Agent calls tool → execution → result as message → next LLM turn |
+| **Subagents** | Delegate to specialized agents | Agent spawns child run → result returned |
+| **Scratchpad** | Private working memory (notes + task list) | First-class response field, processed inline, zero turn cost |
+| **Client Tools** | Interactive UI control (open dialog, switch view) | Agent sends command → UI executes → may pause for user input |
+| **Document Tools** | Explore input artifacts | **NEW** — Agent sees manifest → calls type-specific tools → sips content |
 
-**Implementation:**
+### 8.3 How Document Tools Work
 
-In `ArtifactViewerPanelComponent`:
+**Step 1 — Artifact Manifest Injection:**
+
+When an agent run starts with input artifacts, the system injects a manifest into the system prompt (same pattern as Scratchpad):
+
+```
+You have the following input artifacts available:
+
+[artifact-1] Data Snapshot: "Sales Dashboard Q4" (3 tables)
+  - monthly_revenue: 12 rows, 5 columns (Month, Revenue, Growth, Region, Category)
+  - top_customers: 847 rows, 8 columns (Name, Revenue, Region, ...)
+  - product_mix: 25 rows, 4 columns (Product, Units, Revenue, Margin)
+
+[artifact-2] PDF: "Q4 Board Report" (47 pages, 2.3 MB)
+
+[artifact-3] Excel: "Budget Forecast.xlsx" (3 sheets: Summary, Detail, Assumptions)
+
+Use the document tools below to explore artifact content as needed.
+Do not request entire large artifacts — request specific slices.
+For small artifacts (< 50 rows or < 2 pages), you may request the full content.
+```
+
+**Step 2 — Agent Calls Document Tools:**
+
+The agent decides what it needs and calls tools:
+
+```json
+{ "name": "doc_get_rows", "input": { "artifactId": "artifact-1", "table": "top_customers", "start": 0, "count": 10 } }
+```
+
+**Step 3 — Tool Handler Executes Locally:**
+
+The tool handler runs on the server against the in-memory artifact content. Only the requested slice is returned as a tool result to the LLM. The full artifact data never leaves the server unless the agent specifically requests it.
+
+**Step 4 — Agent Iterates:**
+
+The agent can make multiple tool calls across turns to explore the artifact, just like it calls actions. It builds understanding incrementally.
+
+### 8.4 Type-Specific Document Tools
+
+Each artifact type provides its own set of tools. The system auto-injects the appropriate tools based on the input artifact types.
+
+**Data Snapshot tools:**
+
+| Tool | Input | Returns |
+|---|---|---|
+| `doc_get_tables` | `artifactId` | Table names, row counts, column schemas |
+| `doc_get_schema` | `artifactId, table` | Column names, types, descriptions |
+| `doc_get_rows` | `artifactId, table, start, count` | Rows as JSON array |
+| `doc_search_rows` | `artifactId, table, field, operator, value` | Matching rows |
+| `doc_aggregate` | `artifactId, table, field, operation` | Computed value (sum, avg, count, etc.) |
+| `doc_get_full` | `artifactId` | Full artifact content (for small artifacts only) |
+
+**PDF tools:**
+
+| Tool | Input | Returns |
+|---|---|---|
+| `doc_get_page_count` | `artifactId` | Number of pages |
+| `doc_get_text` | `artifactId, startPage, endPage` | Extracted text for page range |
+| `doc_search_text` | `artifactId, query` | Matching text passages with page numbers |
+
+**Excel tools:**
+
+| Tool | Input | Returns |
+|---|---|---|
+| `doc_get_sheets` | `artifactId` | Sheet names and dimensions |
+| `doc_get_sheet_data` | `artifactId, sheet, range?` | Cell data (optional A1-notation range) |
+| `doc_search_cells` | `artifactId, query` | Matching cells with sheet/cell references |
+
+**Generic tools (all types):**
+
+| Tool | Input | Returns |
+|---|---|---|
+| `doc_get_size` | `artifactId` | Size in bytes/rows/pages (type-dependent) |
+| `doc_get_content` | `artifactId` | Full content (for small artifacts) |
+
+### 8.5 Implementation: ArtifactAccessManager
+
+Following the `ScratchpadManager` pattern, create an `ArtifactAccessManager` that:
+
+1. Is instantiated once per agent run
+2. Holds references to all input artifacts for that run
+3. Generates the manifest string for prompt injection
+4. Provides methods that tool handlers call to access artifact content
+5. Tracks which artifacts/slices were accessed (for audit/training data)
 
 ```typescript
-@Output() AnalyzeRequested = new EventEmitter<{
-    snapshot: DataSnapshot | Record<string, unknown>;
-    contextMessage: string;
-    artifactId?: string;
-    artifactVersionId?: string;
-}>();
+// Conceptual — in packages/AI/Agents/src/
+class ArtifactAccessManager {
+    private artifacts: Map<string, ArtifactAccessEntry>;
 
-public OnAnalyzeWithAgent(): void {
-    const snapshot = this.GetCurrentStateSnapshot();
-    if (!snapshot) return;
+    /** Called at agent run start with all input artifacts */
+    Initialize(inputArtifacts: InputArtifact[]): void;
 
-    // Use composable transforms to prepare for agent
-    const prepared = 'tables' in snapshot || 'rows' in snapshot
-        ? pipe(truncateRows(1000), withTimestamp)(snapshot as DataSnapshot)
-        : snapshot;
+    /** Generate manifest for prompt injection */
+    ToManifestString(): string;
 
-    const contextMessage = 'tables' in prepared || 'rows' in prepared
-        ? formatSnapshotForAgent(prepared as DataSnapshot)
-        : JSON.stringify(prepared, null, 2);
+    /** Tool handler methods */
+    GetTables(artifactId: string): TableSummary[];
+    GetSchema(artifactId: string, table: string): MJColumnDescriptor[];
+    GetRows(artifactId: string, table: string, start: number, count: number): Record<string, unknown>[];
+    SearchRows(artifactId: string, table: string, field: string, op: string, value: unknown): Record<string, unknown>[];
+    Aggregate(artifactId: string, table: string, field: string, operation: string): number | string;
+    GetFullContent(artifactId: string): DataSnapshot | string | null;
+    GetSize(artifactId: string): ArtifactSizeInfo;
 
-    this.AnalyzeRequested.emit({
-        snapshot: prepared,
-        contextMessage,
-        artifactId: this.artifactVersion?.ArtifactID,
-        artifactVersionId: this.artifactVersion?.ID
-    });
+    /** Audit */
+    GetAccessLog(): ArtifactAccessLogEntry[];
+    ToJSON(): object;  // Snapshot for step InputData/OutputData
+
+    HasArtifacts(): boolean;
+    Clear(): void;
 }
 ```
 
-In `artifact-viewer-panel.component.html`:
+### 8.6 Integration Into Agent Execution Loop
 
-```html
-<button class="btn-icon"
-    title="Analyze with AI agent"
-    (click)="OnAnalyzeWithAgent()"
-    [disabled]="!HasActivePlugin">
-    <i class="fas fa-brain"></i> Analyze
-</button>
+Following the Scratchpad integration pattern in `base-agent.ts`:
+
+**Initialization** (top of `Execute()`):
+```typescript
+this._artifactAccessManager.Clear();
+this._artifactAccessManager.Initialize(inputArtifacts);
 ```
 
-### 9.3 Mode B: Persistent Artifact
+**Prompt injection** (template variable preparation):
+```typescript
+if (this._artifactAccessManager.HasArtifacts()) {
+    promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactAccessManager.ToManifestString();
+    promptParams.data['_ARTIFACT_TOOLS_DOCS'] = this._artifactAccessManager.GetToolDocumentation();
+}
+```
 
-The snapshot is saved as an artifact version, linked to the conversation, and passed to the agent as a formal artifact input.
+**Tool registration** (auto-injected based on input artifact types):
+```typescript
+// If any input artifacts are Data Snapshots, inject data tools
+// If any are PDFs, inject PDF tools
+// If any are Excel, inject Excel tools
+// Generic tools (get_size, get_content) always available
+```
 
-**Flow:**
-1. User triggers "Save Snapshot" or "Analyze (persistent)"
+**Persistence** (step InputData/OutputData):
+```typescript
+// Include artifact access log in step data for audit/training
+...(this._artifactAccessManager.HasArtifacts() && {
+    artifactAccess: this._artifactAccessManager.ToJSON()
+})
+```
+
+### 8.7 AI Model Metadata for File Support
+
+Some LLM providers natively accept files (Claude reads PDFs, Gemini accepts multiple file types). When available, native file support may be preferable to the tool-based approach for small files. New metadata tracks this:
+
+**AI Model level:**
+- `SupportsFileInput: boolean` — does this model accept file content blocks?
+- `SupportedFileTypes: string` — comma-separated MIME types (e.g., `application/pdf,image/*`)
+- `MaxFileSize: number` — maximum file size in bytes per file
+- `MaxFilesPerRequest: number` — maximum number of files per request
+
+**AI Model Vendor level** (same model, different provider may differ):
+- Override fields for `SupportsFileInput`, `SupportedFileTypes`, `MaxFileSize`, `MaxFilesPerRequest`
+
+**AI Prompt Model level:**
+- `UseNativeFileInput: boolean` — override to force or prevent native file upload for this specific prompt/model combination
+
+**Runtime override via ExecuteAgentParams:**
+- File management behavior overridable per agent run (highest priority)
+
+**BaseLLM additions:**
+- Abstract method `UploadFile(data: Buffer, mimeType: string, fileName: string): Promise<string>` — returns provider file ID
+- Abstract method `SupportsNativeFileInput(): boolean`
+
+**Decision logic:** If the model supports native file input for this file type AND the file is under the size limit, use native upload. Otherwise, fall back to document tools for exploration.
+
+### 8.8 The "Analyze" Button Flow (Revised)
+
+With document tools and the input artifact system, the "Analyze" flow becomes:
+
+1. User clicks "Analyze" on an artifact viewer
 2. UI calls `GetCurrentStateSnapshot()` → gets `DataSnapshot`
-3. UI prepares and saves via composable transforms
-4. UI creates a new `MJ: Artifact Version` with the snapshot JSON
-5. UI creates `MJ: Conversation Detail Artifact` linking the version to the conversation
-6. Agent receives the artifact as part of conversation context
+3. UI creates a new artifact version containing the snapshot JSON
+4. Artifact appears as an **attachment** on the user's draft message (shared input artifact UI — co-built with file I/O team)
+5. User types their question and sends
+6. AgentRunner starts the run, passes input artifacts to `ArtifactAccessManager`
+7. Agent sees the manifest in its prompt, uses document tools to explore the data
+8. Agent responds with insights
 
-**New Artifact Type Metadata:**
+The snapshot is a first-class artifact, not inline text. The agent explores it via tools, not by reading a giant JSON blob in context.
+
+### 8.9 Data Snapshot Artifact Type
 
 Create `metadata/artifact-types/.data-snapshot-artifact-type.json`:
 ```json
 {
     "fields": {
         "Name": "Data Snapshot",
-        "Description": "Point-in-time snapshot of a component or artifact's data state. Contains structured multi-table data with computations, visual state, and optional interpretation.",
+        "Description": "Point-in-time snapshot of a component or artifact's data state. Contains structured multi-table data with optional computations and interpretation.",
         "ContentType": "application/vnd.mj.data-snapshot",
         "DriverClass": "DataArtifactViewerPlugin",
         "Icon": "fa-solid fa-camera"
@@ -2575,14 +1806,16 @@ Create `metadata/artifact-types/.data-snapshot-artifact-type.json`:
 }
 ```
 
-This reuses the `DataArtifactViewerPlugin` driver class since the content format is `DataSnapshot` — the same viewer handles both data artifacts and snapshots.
+### 8.10 MJStorage Backing for Large Snapshots
 
-### 9.4 Mode C: Live Dialog (Future, Not In Scope)
+For small data snapshots (a few hundred rows), storing JSON inline in the `Content` column of `ArtifactVersion` is fine. For large snapshots (thousands of rows, multiple large tables), the row data can be backed by MJStorage:
 
-Agent subscribes to component events and invokes methods in real-time. Requires the event system from Phase 3 plus a WebSocket/streaming channel between agent and component. Documented here as the natural next step — prerequisites:
-- Phase 3 (event system) must be complete
-- Agent framework must support long-running subscriptions
-- WebSocket channel between agent and UI must exist
+- **Metadata stays inline** — title, table names, column schemas, computations, interpretation. This is lightweight and needed for the manifest without a storage hop.
+- **Row data goes to MJStorage** — the actual `rows[]` arrays are stored as JSON files in MJStorage (S3, Azure Blob, etc.)
+- **First N rows stay inline** — keep the first ~30 rows per table inline for immediate rendering without a storage round-trip.
+- **`ArtifactVersion.FileID`** — references the MJStorage file containing the full row data. This uses the same `FileID` / `ContentMode` infrastructure the file I/O team is building.
+
+The `ArtifactAccessManager` handles transparently loading row data from either inline content or MJStorage when document tools request it.
 
 ---
 
@@ -2598,7 +1831,7 @@ In `packages/InteractiveComponents/src/runtime-types.ts`:
 
 ```typescript
 import { DataSnapshot } from './data-snapshot';
-import { ComponentEventBus } from './component-events';
+import { BaseEventArgs } from './component-events';
 
 export interface ComponentObject {
     component: Function;
@@ -2639,23 +1872,12 @@ export interface ComponentObject {
      */
     setDataState?: (snapshot: DataSnapshot) => boolean;
 
-    /**
-     * Gets the history of data state changes in the component.
-     * Returns an array of timestamped snapshots.
-     *
-     * Useful for understanding how the user interacted with the component
-     * over time (what they filtered, drilled into, selected).
-     */
-    getDataStateHistory?: () => Array<{ timestamp: Date; state: DataSnapshot }>;
+    // Note: Data state history is tracked via artifact versions, not
+    // a method on ComponentObject. The artifact versioning system already
+    // provides point-in-time snapshots with timestamps.
 
-    /**
-     * Event bus for subscribing to component events.
-     * Consumers can listen for before/after events, cancel default behavior,
-     * and receive notifications of state changes.
-     *
-     * Undefined if the component does not support events.
-     */
-    events?: ComponentEventBus;
+    // Note: Component events use the existing ComponentCallbacks.NotifyEvent()
+    // pattern rather than a separate event bus. See Section 5.
 
     // ... existing methods unchanged ...
     validate?: () => boolean | { valid: boolean; errors?: string[] };
@@ -2687,7 +1909,7 @@ getCurrentDataState: () => ({
                   isSummary: true }
             ],
             rows: monthlyData,
-            metadata: { rowCount: monthlyData.length, queryId: "revenue-query" }
+            metadata: { rowCount: monthlyData.length, queryName: "Revenue by Month", queryCategoryPath: "Sales/Reports" }
         },
         {
             name: "top_customers",
@@ -2746,7 +1968,7 @@ getCurrentDataState: () => ({
 In `packages/Angular/Generic/react/src/lib/components/mj-react-component.component.ts`:
 
 ```typescript
-import { DataSnapshot } from '@memberjunction/interactive-component-types';
+import { DataSnapshot } from '@memberjunction/core';
 
 /**
  * Get the current data state from the running React component.
@@ -2755,158 +1977,66 @@ import { DataSnapshot } from '@memberjunction/interactive-component-types';
 public GetCurrentDataState(): DataSnapshot | undefined {
     return this.componentObject?.getCurrentDataState?.();
 }
+
+/**
+ * Set the data state on the running React component from a previously
+ * captured snapshot. Used for rehydrating with historical data.
+ * Returns true if the component accepted the state.
+ */
+public SetDataState(snapshot: DataSnapshot): boolean {
+    return this.componentObject?.setDataState?.(snapshot) ?? false;
+}
 ```
-
-### 9.5 Backward Compatibility
-
-Components that currently return arbitrary objects from `getCurrentDataState()` will continue to work at the JavaScript level — TypeScript allows returning a more specific type where `any` was expected. The consuming infrastructure (snapshot methods, agent bridge) now has a structured contract to rely on, with the `Record<string, unknown>` fallback in `GetCurrentStateSnapshot()` handling non-conforming components gracefully.
 
 ---
 
 ## 10. Relationship to File Artifact I/O
 
-A parallel effort (branch `file-artifact-io-plan`) is building file-based artifact I/O — PDF generation/extraction, Excel read/write, Word document generation. That work and this plan are **complementary with near-zero collision**.
+A parallel effort (branch `file-artifact-io-plan`) is building file-based artifact I/O — PDF generation/extraction, Excel read/write, Word document generation. While the feature sets are different (files vs data snapshots), **the infrastructure for input artifacts is shared and must be co-built**.
 
-### 10.1 Where the Work Touches
+### 10.1 Shared Infrastructure (Must Co-Build)
 
-| Area | File Artifact I/O | This Plan | Collision? |
-|---|---|---|---|
-| `ArtifactVersion` entity | Adds `FileID`, `MimeType`, `FileName` columns | No changes | None |
-| `ArtifactType` entity | Adds PDF/Excel/Word type records | Adds "Data Snapshot" type record | None — different records |
-| `BaseArtifactViewerPluginComponent` | Doesn't modify | Adds `GetCurrentStateSnapshot()` | None — new file viewers inherit the method |
-| Artifact viewer plugins | Creates NEW plugins (PDF, Excel, Word) | Modifies EXISTING plugins (data, component, JSON) | None — different files |
-| Agent actions | PDF Generator, Excel Writer, etc. | No new actions | None |
+Both this plan and the file I/O plan need the same input artifact plumbing. Neither can ship the full user-facing experience without it:
 
-### 10.2 Complementary Integration Points
+| Shared Piece | What It Is | Needed By |
+|---|---|---|
+| `ConversationDetailArtifact` `Direction='Input'` | DB linkage: artifact attached as input to a message | Both — files and snapshots attach the same way |
+| Message attachment UI | Show/manage attachments on draft and sent messages | Both — users need to see what's attached |
+| AgentRunner input artifact processing | At run start, gather input artifacts from the message | Both — agents receive inputs regardless of type |
+| Agent input type metadata | Declarative: "this agent accepts PDF, Excel, Data Snapshot" | Both — agents declare what they consume |
 
-**File viewers get snapshot capability for free.** When the PDF, Excel, and Word viewer plugins are built, they inherit `GetCurrentStateSnapshot()` from the base class. An Excel viewer could override it to return a `DataSnapshot` where each sheet becomes a `DataTable` — then agents can analyze spreadsheet data the same way they analyze query results.
+### 10.2 What Doesn't Overlap
 
-**Excel writer can consume DataSnapshot.** When a user says "export this dashboard to Excel," the flow is: capture `DataSnapshot` → pass each `DataTable` to the Excel writer action → each table becomes a sheet. The types align naturally.
+| Area | File I/O (theirs) | Data Layer (ours) |
+|---|---|---|
+| Storage model | `ContentMode='File'`, `FileID` referencing MJStorage | `ContentMode='Text'`, JSON in `Content` column |
+| DB migration | Adds `FileID`, `MimeType`, `ContentMode` to ArtifactVersion | No DB changes needed |
+| Actions | PDF Generator, Excel Writer, Word Generator, PDF Extractor | No new actions |
+| Viewer plugins | New: PDF, Excel, Word viewers | Modified: data viewer (multi-table), component viewer (snapshot) |
+| Content extraction | `FileContentExtractor` (PDF→text, Excel→text for agent context) | Not needed — DataSnapshot is already structured JSON |
 
-**"Attach Artifact" pairs with the agent bridge.** File-artifact-io builds UI for attaching artifacts to conversations (input side). This plan's Section 8 builds the snapshot → agent context bridge (output side). Same pipeline, different directions.
+### 10.3 Complementary Integration Points
 
-### 10.3 Coordination Needed
+**File viewers inherit snapshot capability.** New PDF/Excel/Word viewer plugins inherit `GetCurrentStateSnapshot()` from the base class. An Excel viewer could return a `DataSnapshot` with each sheet as a `DataTable`.
 
-When file viewer plugins are built, they should implement `GetCurrentStateSnapshot()` overrides:
-- **Excel viewer**: Return `DataSnapshot` with each sheet as a `DataTable`
-- **PDF viewer**: Return `{ contentType: 'pdf', pageCount, title, extractedText }`
-- **Word viewer**: Return `{ contentType: 'docx', sections, title }`
+**Excel writer can consume DataSnapshot.** "Export this dashboard to Excel" → capture snapshot → pass each `DataTable` to Excel writer → each table becomes a sheet.
 
----
+### 10.4 Recommended Coordination
 
-## 11. Future: Visualization Foundation Layer
-
-This section documents the longer-term architectural direction for MJ's artifact and visualization system. These capabilities build on the data layer defined above but are not part of the immediate implementation.
-
-### 11.1 Artifact Type Formalization
-
-MJ already has artifact type metadata in the database and a plugin-based viewer system. The next step is formalizing this with in-code interfaces:
-
-```typescript
-/**
- * Core artifact descriptor — a platform-agnostic blueprint
- * for a visualization or structured output.
- */
-interface IArtifact {
-    ID: string;
-    ArtifactType: string;
-    Title: string;
-    Description?: string;
-    Config: Record<string, unknown>;
-    Data?: IArtifactData;
-
-    /** Whether this artifact's data can be extracted as tabular DataTables */
-    get SupportsDataTable(): boolean;
-
-    /** Extract the artifact's data as DataTable(s) */
-    ToDataTables(): DataTable[];
-}
-```
-
-Note: `ToDataTables()` returns `DataTable[]` (this plan's type), not a separate `IDataSet`. The `DataTable` IS the standard tabular interchange format.
-
-### 11.2 Renderer Registry
-
-Formalize the existing plugin matching system with explicit priority:
-
-```typescript
-interface IArtifactRenderer {
-    SupportedTypes: string[];
-    Priority: number;
-    CanRender(artifact: IArtifact): boolean;
-    Render(artifact: IArtifact, container: unknown, options?: IRenderOptions): void;
-}
-
-class ArtifactRendererRegistry {
-    /** Higher priority renderers are preferred */
-    static Register(renderer: IArtifactRenderer): void;
-
-    /** Returns highest-priority renderer that can handle the artifact */
-    static GetRenderer(artifact: IArtifact): IArtifactRenderer | undefined;
-}
-```
-
-This enables commercial products to register enhanced renderers at higher priority that automatically win over base MJ renderers — without modifying any MJ code.
-
-### 11.3 Package Structure (Future)
-
-| Package | Contents |
-|---|---|
-| `@memberjunction/artifacts-core` | `IArtifact`, `IArtifactData`, `BaseArtifact`, registries |
-| `@memberjunction/artifacts-types` | Built-in types: `ChartArtifact`, `TableArtifact`, `KPIArtifact`, `DashboardArtifact` |
-| `@memberjunction/artifacts-renderers-angular` | Base Angular renderers for each type |
-
-These packages import `DataTable` and `DataSnapshot` from `@memberjunction/interactive-component-types` — they don't redefine tabular data types.
-
-### 11.4 Relationship to Existing Artifact System
-
-The existing artifact system (database metadata + viewer plugins) continues to work unchanged. The registries formalize the matching logic that currently lives in database lookups and `canHandle()` methods. Migration is incremental — existing plugins can be wrapped to implement `IArtifactRenderer` without changing their internal logic.
+The shared infrastructure (Section 10.1) should be designed and built jointly. See the review notes document for a detailed dependency breakdown and recommended build order.
 
 ---
 
-## 12. Future: External Consumption & MCP
-
-### 12.1 The Generic Layer
-
-The `ColumnDescriptor` base type (Section 4.1) is deliberately free of MJ-specific fields — no entity lineage, no MJ metadata. This is intentional: it's the layer that could be exposed to external consumers.
-
-When MJ exposes artifact data state via MCP (Model Context Protocol), the `DataSnapshot` format works as-is. External agents receive:
-- Named tables with typed columns and flat rows
-- Computations with formatted values
-- Visual state describing what the user sees
-- Interpretation text
-
-None of this requires understanding MJ entities, RunView, or the class factory system. An external agent (Claude, GPT, a custom integration) can reason over the JSON structure without any MJ knowledge.
-
-### 12.2 MCP Integration Path
-
-The natural MCP integration is an MCP resource or tool that returns the current `DataSnapshot` for a given artifact or component:
-
-```
-Tool: get_artifact_data_state
-Input: { artifactId: "..." }
-Output: DataSnapshot JSON
-```
-
-This builds directly on `GetCurrentStateSnapshot()` (Section 6) — the MCP server calls the same method and returns the result. No additional transformation needed because `DataSnapshot` is already JSON-serializable and self-describing.
-
-### 12.3 Non-MJ Agents
-
-Amith's vision includes scenarios where non-MJ agents consume data state — e.g., a Slack bot, a Teams integration, or an external automation. The `DataSnapshot` format is designed to support this: it's standard JSON, it's self-describing (column types, table descriptions, computation labels), and it doesn't require MJ libraries to parse.
-
-The `MJColumnDescriptor` fields (`sourceEntity`, `sourceFieldName`) are optional. External consumers ignore them. MJ-aware consumers use them for entity linking and schema understanding.
-
----
-
-## 13. Cross-Cutting Concerns
+## 11. Cross-Cutting Concerns
 
 ### 12.1 Package Dependencies
 
 | Package | New Dependencies | Why |
 |---|---|---|
-| `@memberjunction/interactive-component-types` | None (new types + functions only) | All new types, transforms, and event system |
-| `@memberjunction/ng-artifacts` | Already depends on `interactive-component-types` | Needs new type imports for snapshots |
-| `@memberjunction/ng-react` | Already depends on `interactive-component-types` | No new dependency needed |
+| `@memberjunction/core` | None (new types + functions only) | Column descriptors, DataTable, DataSnapshot, transforms |
+| `@memberjunction/interactive-component-types` | Already depends on `@memberjunction/core` | Base event interfaces, NotifyEvent on ComponentCallbacks, ComponentObject updates |
+| `@memberjunction/ng-artifacts` | Already depends on `core` | Needs new type imports for snapshots |
+| `@memberjunction/ng-react` | Already depends on `core` and `interactive-component-types` | No new dependency needed |
 | `@memberjunction/ng-query-viewer` | None | Uses `QueryGridColumnConfig` which maps to `GridColumnDescriptor` |
 
 ### 12.2 Versioning
@@ -2919,7 +2049,8 @@ All changes are additive. No breaking changes to existing interfaces:
 
 ### 12.3 Build Order
 
-1. `@memberjunction/interactive-component-types` (types, transforms, event bus)
+1. `@memberjunction/core` (data types — classes with static factory methods)
+2. `@memberjunction/interactive-component-types` (base event interfaces, NotifyEvent, ComponentObject updates)
 2. `@memberjunction/ng-artifacts` (viewer changes, snapshot method)
 3. `@memberjunction/ng-react` (bridge update)
 4. Consumer code (conversation panel, agent integration)
@@ -2936,10 +2067,9 @@ All changes are additive. No breaking changes to existing interfaces:
 
 ### 12.5 Performance Considerations
 
-- **Snapshot serialization**: `JSON.stringify()` on large datasets could be slow. Use `truncateRows()` from the transform toolkit before serializing for agent consumption. Default recommendation: 1,000 rows for LLM context.
-- **Multi-table lazy loading**: Only load data for the active table tab. Other tabs load on first click (already designed this way in Phase 5).
-- **Event bus**: `DefaultComponentEventBus` uses `Map<string, Set<Function>>`. For high-frequency events, components can implement a custom bus with debouncing.
-- **Transform immutability**: All transforms create new objects (spread operator). For very large datasets, consider a mutable fast-path transform that operates in-place, clearly documented as such.
+- **Large snapshot storage**: For snapshots with many rows, back row data via MJStorage rather than inline JSON. Keep metadata + first ~30 rows inline for immediate rendering. See Section 8.10.
+- **Multi-table lazy loading**: Only load data for the active table tab. Other tabs load on first click.
+- **Document tools token efficiency**: Agents sip content via tools instead of receiving full artifact content in context. Manifest injection is lightweight (names, schemas, row counts — not rows).
 
 ### 12.6 Security Considerations
 
@@ -2961,90 +2091,83 @@ All changes are additive. No breaking changes to existing interfaces:
 
 ---
 
-## 14. File Inventory
+## 12. File Inventory
 
 ### New Files
 
-| File | Phase | Purpose |
+| File | Section | Purpose |
 |---|---|---|
-| `packages/InteractiveComponents/src/column-descriptors.ts` | 1 | Three-level column type hierarchy + conversion functions |
-| `packages/InteractiveComponents/src/data-table.ts` | 1 | `DataTable` and `DataTableMetadata` interfaces |
-| `packages/InteractiveComponents/src/data-snapshot.ts` | 1 | `DataSnapshot`, `DataComputation`, `DataVisualState`, `DataFilter`, normalization helpers |
-| `packages/InteractiveComponents/src/data-transforms.ts` | 2 | Composable transform functions, pipeline utility, output formatters |
-| `packages/InteractiveComponents/src/component-events.ts` | 3 | Event arg interfaces, `ComponentEventBus` interface, standard event map |
-| `packages/InteractiveComponents/src/component-event-bus.ts` | 3 | `DefaultComponentEventBus` implementation |
-| `packages/InteractiveComponents/src/__tests__/core-types.test.ts` | 1 | Unit tests for types and normalization |
-| `packages/InteractiveComponents/src/__tests__/data-transforms.test.ts` | 2 | Unit tests for all transform functions |
-| `packages/InteractiveComponents/src/__tests__/component-events.test.ts` | 3 | Unit tests for event bus |
-| `metadata/artifact-types/.data-snapshot-artifact-type.json` | 6 | Data Snapshot artifact type metadata |
+| `packages/MJCore/src/generic/column-descriptors.ts` | 4 | Column descriptor classes with static factory methods |
+| `packages/MJCore/src/generic/data-table.ts` | 4 | `DataTable` class |
+| `packages/MJCore/src/generic/data-snapshot.ts` | 4 | `DataSnapshot` class with normalization, `DataComputation` |
+| `packages/InteractiveComponents/src/component-events.ts` | 5 | Base event interfaces (`BaseEventArgs`, `CancelableEventArgs`, `AfterEventArgs`) |
+| `packages/AI/Agents/src/ArtifactAccessManager.ts` | 8 | Document tools manager (Scratchpad pattern) |
+| `packages/MJCore/src/__tests__/core-types.test.ts` | 4 | Unit tests for types and normalization |
+| `metadata/artifact-types/.data-snapshot-artifact-type.json` | 8 | Data Snapshot artifact type metadata |
 
 ### Modified Files
 
-| File | Phase | Changes |
+| File | Section | Changes |
 |---|---|---|
-| `packages/InteractiveComponents/src/index.ts` | 1, 2, 3 | Add exports for new modules |
-| `packages/InteractiveComponents/src/runtime-types.ts` | 3, 7 | Update `ComponentObject` with typed `getCurrentDataState()`, add `events` |
-| `packages/InteractiveComponents/src/component-props-events.ts` | 3 | Add `cancelable` and `pairedEvent` to `ComponentEvent` |
-| `packages/Angular/Generic/artifacts/.../base-artifact-viewer.component.ts` | 4 | Add `GetCurrentStateSnapshot()` base method |
-| `packages/Angular/Generic/artifacts/.../data-artifact-viewer.component.ts` | 1, 4, 5 | Remove local interfaces, import shared types, add multi-table UX, add snapshot override |
-| `packages/Angular/Generic/artifacts/.../data-artifact-viewer.component.html` | 5 | Add table tab strip, computations bar |
-| `packages/Angular/Generic/artifacts/.../data-artifact-viewer.component.css` | 5 | Add table tab and computation styles |
-| `packages/Angular/Generic/artifacts/.../component-artifact-viewer.component.ts` | 4 | Add snapshot override delegating to React component |
-| `packages/Angular/Generic/artifacts/.../artifact-viewer-panel.component.ts` | 4, 6 | Add `GetCurrentStateSnapshot()` passthrough, add "Analyze" action |
-| `packages/Angular/Generic/artifacts/.../artifact-viewer-panel.component.html` | 6 | Add "Analyze" button to toolbar |
-| `packages/Angular/Generic/react/.../mj-react-component.component.ts` | 7 | Add `GetCurrentDataState()` public method |
+| `packages/MJCore/src/index.ts` | 4 | Add exports for data types |
+| `packages/InteractiveComponents/src/runtime-types.ts` | 5, 9 | Add `NotifyEvent` to `ComponentCallbacks`, update `ComponentObject` with `get/setDataState` |
+| `packages/InteractiveComponents/src/component-props-events.ts` | 5 | Add `cancelable` and `pairedEvent` to `ComponentEvent` |
+| `packages/Angular/Generic/artifacts/.../base-artifact-viewer.component.ts` | 6 | Add abstract `GetCurrentStateSnapshot()` |
+| `packages/Angular/Generic/artifacts/.../data-artifact-viewer.component.ts` | 6, 7 | Import from core, add multi-table UX, add snapshot override |
+| `packages/Angular/Generic/artifacts/.../component-artifact-viewer.component.ts` | 6 | Add snapshot override delegating to React component |
+| `packages/Angular/Generic/artifacts/.../artifact-viewer-panel.component.ts` | 6, 8 | Add `GetCurrentStateSnapshot()` passthrough, add "Analyze" action |
+| `packages/Angular/Generic/react/.../mj-react-component.component.ts` | 9 | Add `GetCurrentDataState()` and `SetDataState()` |
+| `packages/AI/Agents/src/base-agent.ts` | 8 | Integrate ArtifactAccessManager (prompt injection, tool registration) |
 
 ---
 
-## 15. Implementation Order & Dependencies
+## 13. Implementation Order & Dependencies
 
 ```
-1. Core Type System & Utilities             ← FOUNDATION (do first)
+1. Core Type System (classes in MJCore)     ← FOUNDATION (do first)
    │  column-descriptors.ts
    │  data-table.ts
    │  data-snapshot.ts
-   │  data-transforms.ts (utility functions)
    │  index.ts exports
    │  unit tests
    │
-   ├──▶ Component Event System                    (parallel after core types)
-   │         component-events.ts
-   │         component-event-bus.ts
-   │         runtime-types.ts update (events)
-   │         unit tests
+   ├──▶ Component Event System                    (parallel)
+   │         Base event interfaces (BaseEventArgs, CancelableEventArgs, AfterEventArgs)
+   │         NotifyEvent on ComponentCallbacks
+   │         cancelable/pairedEvent on ComponentEvent metadata
    │
-   ├──▶ Artifact-Level State Snapshots            (parallel after core types)
-   │         base-artifact-viewer update
-   │         per-viewer overrides
-   │         artifact-viewer-panel update
+   ├──▶ Artifact-Level State Snapshots            (parallel)
+   │         Abstract GetCurrentStateSnapshot() on base viewer
+   │         Per-viewer overrides (data, component, JSON, code)
    │
-   ├──▶ Multi-Table Viewer UX                     (parallel after core types)
-   │         data-artifact-viewer (ts/html/css)
-   │         migration: remove local interfaces
+   ├──▶ Multi-Table Viewer UX                     (parallel)
+   │         data-artifact-viewer multi-table support
+   │         Migration: remove local interfaces, import from core
    │
-   └──▶ Interactive Component Data Contract       (parallel after core types)
-              runtime-types.ts update (get/setDataState)
-              mj-react-component update
-              │
-              ▼
-         Agent-Component Dialog Bridge             (after snapshots + contract)
-              artifact-viewer-panel analyze action
-              data-snapshot artifact type metadata
+   ├──▶ Interactive Component Data Contract       (parallel)
+   │         get/setDataState on ComponentObject
+   │         GetCurrentDataState/SetDataState on MJReactComponent bridge
+   │
+   └──▶ Document Tools (5th agent primitive)      (parallel, co-build w/ file I/O)
+              ArtifactAccessManager (Scratchpad pattern)
+              Artifact manifest prompt injection
+              Type-specific exploration tools
+              AI Model metadata for file support
+              "Analyze" button → input artifact → agent run
+              Data Snapshot artifact type metadata
 ```
-
-**Estimated scope:** ~2,600 lines of new/modified code + ~500 lines of unit tests
 
 ---
 
-## 16. Open Items & Future Considerations
+## 14. Open Items & Future Considerations
 
-### 16.1 Open Design Questions
+### 14.1 Open Design Questions
 
 1. **Snapshot size limits.** When a component has 100K rows, should `getCurrentDataState()` return all of them? Recommendation: return the full dataset in the snapshot, but provide schema + sample rows + exploration tools to agents rather than dumping all rows into conversation context. The snapshot itself is the source of truth; how it's consumed is consumer-specific.
 
-2. **Agent data exploration tools.** Rather than truncating snapshots for agent consumption, the more scalable approach is to provide agents with tools to explore the data on demand — JSONPath-style search, row pagination, field aggregation. This keeps the snapshot complete while giving agents efficient access. Design this when the agent bridge is implemented.
+2. **Document tools vs native file upload.** When a model natively supports file input (Claude reads PDFs, Gemini accepts multiple types), when do we use native upload vs document tools? Recommendation: native upload for small files where the model supports the type, document tools for large files or unsupported types. The decision logic is in Section 8.7.
 
-3. **Column naming: `displayName` vs `headerName`.** The new type uses `displayName` (more general). The existing `DataArtifactColumn` uses `headerName` (grid-specific). The migration is a simple rename in the data viewer, but component specs and agent output may reference either. Recommendation: support both during a transition period via a normalization function.
+3. **Column naming:** `displayName` is the canonical field name. `DataArtifactColumn.headerName` is replaced outright — no transition period. The only current consumer is Query Builder, so verify that old saved queries with `headerName` in their artifact JSON still render correctly (handle in the viewer's deserialization).
 
 4. **QueryGridColumnConfig migration.** Should `QueryGridColumnConfig` eventually extend `GridColumnDescriptor`, or should conversion functions bridge the two? Recommendation: conversion functions first (non-breaking), with eventual migration to extend when the query viewer is next refactored.
 
@@ -3054,12 +2177,11 @@ All changes are additive. No breaking changes to existing interfaces:
 
 7. **AI-generated component compliance.** When this architecture is in place, AI code-generation agents that produce interactive components need to be updated so their generated components support `getCurrentDataState()` (and eventually `setDataState()`). The contract is defined here; updating the generation agents is a separate workstream.
 
-### 16.2 Future Capabilities (Not In Scope)
+### 14.2 Future Capabilities (Not In Scope)
 
 | Capability | Description | Prerequisites |
 |---|---|---|
 | **Component State Rehydration** | `setDataState()` implementation — load historical snapshots back into live components, browse artifact versions | Component contract (Section 9), artifact versioning |
-| **Agent Data Exploration Tools** | JSONPath/search/aggregate tools for agents to explore large snapshots without context bloat | Agent bridge (Section 8), agent tool registration |
 | **Live Agent Dialog** | Agent subscribes to component events in real-time, can invoke methods | Event system (Section 5), WebSocket infrastructure |
 | **Snapshot Comparison** | Diff two snapshots to highlight changes | Core types (Section 4) |
 | **Agent-Initiated Filtering** | Agent applies filters to running components via actions | Event system, component contract, new MJ Actions |
@@ -3067,7 +2189,7 @@ All changes are additive. No breaking changes to existing interfaces:
 | **Snapshot Scheduling** | Automatically capture snapshots at intervals for trend analysis | Agent bridge (Section 8), scheduling infrastructure |
 | **Agent-Initiated Component Creation** | Agent produces a new DataSnapshot as a suggested "next view" that can be rendered directly | Core types, multi-table viewer |
 
-### 16.3 Relationship to Existing Plans
+### 14.3 Relationship to Existing Plans
 
 - **Query Builder Agent Plan** (`plans/complete/query-builder-agent-plan.md`): This plan extends the Data artifact type created there. The multi-table expansion and snapshot system are additive.
 - **Component Artifact Viewer Improvements** (`plans/complete/3-component-artifact-viewer-improvements.md`): The snapshot system adds a new capability without modifying the existing rendering pipeline.
