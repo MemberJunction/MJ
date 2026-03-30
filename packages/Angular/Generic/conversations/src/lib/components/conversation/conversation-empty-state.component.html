@@ -55,7 +55,10 @@
         [disabled]="disabled"
         [currentUser]="currentUser"
         [emptyStateMode]="true"
-        [enableAttachments]="true"
+        [enableAttachments]="enableAttachments"
+        [maxAttachments]="maxAttachments"
+        [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+        [acceptedFileTypes]="acceptedFileTypes"
         (emptyStateSubmit)="onEmptyStateSubmit($event)">
       </mj-message-input>
     </div>
