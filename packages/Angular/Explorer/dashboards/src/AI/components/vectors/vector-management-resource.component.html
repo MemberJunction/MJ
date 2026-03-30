@@ -170,20 +170,77 @@
             <div class="suggest-form">
               <div class="suggest-field">
                 <label class="suggest-label">Entity</label>
-                <select class="suggest-select" [(ngModel)]="SuggestEntityName">
-                  <option value="">Select an entity...</option>
-                  @for (name of AvailableEntityNames; track name) {
-                    <option [value]="name">{{ name }}</option>
+                <div class="entity-picker">
+                  <button class="entity-picker-trigger" (click)="ToggleEntityPicker()">
+                    @if (SuggestEntityName) {
+                      <i class="fa-solid fa-table"></i>
+                      <span class="entity-picker-value">{{ SuggestEntityName }}</span>
+                    } @else {
+                      <i class="fa-solid fa-search"></i>
+                      <span class="entity-picker-placeholder">Search and select an entity...</span>
+                    }
+                    <i class="fa-solid fa-chevron-down entity-picker-arrow"></i>
+                  </button>
+                  @if (ShowEntityPicker) {
+                    <div class="entity-picker-dropdown">
+                      <div class="entity-picker-search">
+                        <i class="fa-solid fa-search"></i>
+                        <input type="text"
+                               class="entity-picker-search-input"
+                               placeholder="Filter entities..."
+                               [(ngModel)]="EntitySearchText"
+                               (input)="FilterEntities()"
+                               autofocus />
+                      </div>
+                      <div class="entity-picker-list">
+                        @for (group of FilteredEntityGroups; track group.SchemaName) {
+                          <div class="entity-picker-group">
+                            <div class="entity-picker-group-header">
+                              <i class="fa-solid fa-database"></i>
+                              {{ group.SchemaName }}
+                            </div>
+                            @for (entity of group.Entities; track entity.ID) {
+                              <button class="entity-picker-item"
+                                      [class.entity-picker-item-selected]="entity.Name === SuggestEntityName"
+                                      (click)="SelectEntity(entity.Name)">
+                                <i class="fa-solid fa-table"></i>
+                                {{ entity.Name }}
+                              </button>
+                            }
+                          </div>
+                        }
+                        @if (FilteredEntityGroups.length === 0) {
+                          <div class="entity-picker-empty">
+                            No entities matching "{{ EntitySearchText }}"
+                          </div>
+                        }
+                      </div>
+                    </div>
                   }
-                </select>
+                </div>
               </div>
               <div class="suggest-field">
                 <label class="suggest-label">Use Case</label>
-                <select class="suggest-select" [(ngModel)]="SuggestUseCase">
-                  <option value="duplicate detection">Duplicate Detection</option>
-                  <option value="search">Search</option>
-                  <option value="classification">Classification</option>
-                </select>
+                <div class="use-case-options">
+                  <button class="use-case-btn"
+                          [class.use-case-btn-active]="SuggestUseCase === 'duplicate detection'"
+                          (click)="SuggestUseCase = 'duplicate detection'">
+                    <i class="fa-solid fa-clone"></i>
+                    Duplicate Detection
+                  </button>
+                  <button class="use-case-btn"
+                          [class.use-case-btn-active]="SuggestUseCase === 'search'"
+                          (click)="SuggestUseCase = 'search'">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    Search
+                  </button>
+                  <button class="use-case-btn"
+                          [class.use-case-btn-active]="SuggestUseCase === 'classification'"
+                          (click)="SuggestUseCase = 'classification'">
+                    <i class="fa-solid fa-tags"></i>
+                    Classification
+                  </button>
+                </div>
               </div>
               <button class="suggest-submit-btn"
                       [disabled]="IsSuggesting || !SuggestEntityName"
@@ -205,7 +262,15 @@
             <div class="suggest-result">
               <div class="result-section">
                 <h4 class="result-heading">Suggested Template</h4>
-                <pre class="result-template">{{ SuggestionResult.template }}</pre>
+                <div class="template-editor-wrapper">
+                  <mj-code-editor
+                    [value]="EditableTemplate"
+                    language="markdown"
+                    [readonly]="false"
+                    [lineWrapping]="true"
+                    (change)="OnTemplateChange($event)">
+                  </mj-code-editor>
+                </div>
               </div>
               <div class="result-section">
                 <h4 class="result-heading">Selected Fields</h4>

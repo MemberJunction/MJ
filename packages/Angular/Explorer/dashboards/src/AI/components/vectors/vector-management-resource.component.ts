@@ -24,6 +24,7 @@ import { KPICardData } from '../widgets/kpi-card.component';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /** Flattened row for the entity sync table */
 interface EntitySyncRow {
@@ -98,10 +99,19 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public SuggestEntityName = '';
     public SuggestUseCase = 'duplicate detection';
     public SuggestionResult: DocumentSuggestionResult | null = null;
-    public AvailableEntityNames: string[] = [];
     public SaveDocumentName = '';
     public SuggestionError = '';
     public IsSavingDocument = false;
+    public EditableTemplate = '';
+
+    /** Grouped entity list for the suggestion panel — schemas as groups, entities as items */
+    public EntityGroups: { SchemaName: string; Entities: { Name: string; ID: string }[] }[] = [];
+    /** Filtered entity groups based on search input */
+    public FilteredEntityGroups: { SchemaName: string; Entities: { Name: string; ID: string }[] }[] = [];
+    /** Search text for filtering entities */
+    public EntitySearchText = '';
+    /** Whether the entity picker dropdown is open */
+    public ShowEntityPicker = false;
 
     // --- Raw entity data (private) ---
     private entityDocuments: MJEntityDocumentEntity[] = [];
@@ -184,12 +194,57 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Opens the AI suggestion dialog */
     public OpenSuggestDialog(): void {
-        this.loadAvailableEntityNames();
         this.SuggestionResult = null;
         this.SuggestEntityName = '';
         this.SuggestUseCase = 'duplicate detection';
+        this.EditableTemplate = '';
+        this.SuggestionError = '';
+        this.EntitySearchText = '';
+        this.ShowEntityPicker = false;
+        this.loadEntityGroups();
         this.ShowSuggestDialog = true;
         this.cdr.detectChanges();
+    }
+
+    /** Select an entity from the grouped picker */
+    public SelectEntity(entityName: string): void {
+        this.SuggestEntityName = entityName;
+        this.ShowEntityPicker = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Filter entities by search text */
+    public FilterEntities(): void {
+        const query = this.EntitySearchText.toLowerCase().trim();
+        if (!query) {
+            this.FilteredEntityGroups = this.EntityGroups;
+        } else {
+            this.FilteredEntityGroups = this.EntityGroups
+                .map(group => ({
+                    SchemaName: group.SchemaName,
+                    Entities: group.Entities.filter(e => e.Name.toLowerCase().includes(query))
+                }))
+                .filter(group => group.Entities.length > 0);
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** Toggle entity picker visibility */
+    public ToggleEntityPicker(): void {
+        this.ShowEntityPicker = !this.ShowEntityPicker;
+        if (this.ShowEntityPicker) {
+            this.FilteredEntityGroups = this.EntityGroups;
+            this.EntitySearchText = '';
+        }
+        this.cdr.detectChanges();
+    }
+
+    /** Handle template edits from code editor */
+    public OnTemplateChange(newValue: string): void {
+        this.EditableTemplate = newValue;
+        if (this.SuggestionResult) {
+            this.SuggestionResult.template = newValue;
+        }
     }
 
     /** Closes the suggestion dialog */
@@ -223,6 +278,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             const result = await this.callSuggestionPrompt(this.SuggestEntityName, this.SuggestUseCase);
             if (result) {
                 this.SuggestionResult = result;
+                this.EditableTemplate = result.template;
                 this.SaveDocumentName = `${this.SuggestEntityName} - ${this.SuggestUseCase}`;
             }
         } catch (error) {
@@ -258,16 +314,33 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
             const saved = await entityDoc.Save();
             if (saved) {
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Entity Document "${this.SaveDocumentName}" created successfully`,
+                    'success',
+                    3000
+                );
                 await this.LoadData();
                 setTimeout(() => {
                     this.CloseSuggestDialog();
                     this.cdr.detectChanges();
                 }, 1500);
             } else {
-                console.error('[VectorManagement] Failed to save entity document');
+                const errorMsg = entityDoc.LatestResult?.CompleteMessage || 'Unknown error saving entity document';
+                console.error('[VectorManagement] Failed to save entity document:', errorMsg);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to save: ${errorMsg}`,
+                    'error',
+                    5000
+                );
             }
         } catch (error) {
-            console.error('[VectorManagement] Error saving entity document:', error);
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[VectorManagement] Error saving entity document:', msg);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Error: ${msg}`,
+                'error',
+                5000
+            );
         } finally {
             this.IsSavingDocument = false;
             this.cdr.detectChanges();
@@ -518,19 +591,36 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.StorageUsagePercent = total > 0 ? Math.round((vectorized / total) * 100) : 0;
     }
 
+    /** Build grouped entity list from metadata, grouped by SchemaName */
+    private loadEntityGroups(): void {
+        const md = new Metadata();
+        const groupMap = new Map<string, { Name: string; ID: string }[]>();
+
+        for (const entity of md.Entities) {
+            const schema = entity.SchemaName || '__default';
+            const existing = groupMap.get(schema);
+            if (existing) {
+                existing.push({ Name: entity.Name, ID: entity.ID });
+            } else {
+                groupMap.set(schema, [{ Name: entity.Name, ID: entity.ID }]);
+            }
+        }
+
+        this.EntityGroups = Array.from(groupMap.entries())
+            .map(([schemaName, entities]) => ({
+                SchemaName: schemaName,
+                Entities: entities.sort((a, b) => a.Name.localeCompare(b.Name))
+            }))
+            .sort((a, b) => a.SchemaName.localeCompare(b.SchemaName));
+
+        this.FilteredEntityGroups = this.EntityGroups;
+    }
+
     private updateRowStatus(entityDocumentId: string, status: EntitySyncRow['Status']): void {
         const row = this.SyncRows.find(r => r.EntityDocumentID === entityDocumentId);
         if (row) {
             row.Status = status;
         }
-    }
-
-    /** Load all entity names from metadata for the suggestion dialog */
-    private loadAvailableEntityNames(): void {
-        const md = new Metadata();
-        this.AvailableEntityNames = md.Entities
-            .map(e => e.Name)
-            .sort();
     }
 
     /**
