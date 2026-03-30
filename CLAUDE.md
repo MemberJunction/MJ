@@ -171,6 +171,13 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - User preferences and local caching
   - Layout patterns, permission checking, and more
 
+- **[Lazy Loading Guide](guides/LAZY_LOADING_GUIDE.md)**: How MJExplorer's code-split lazy loading works:
+  - Adding new dashboard components (zero config — just `@RegisterClass` + feature module)
+  - Making a package lazy-loadable (add subpath exports to `package.json`)
+  - Adding new feature modules with subpath exports
+  - How the auto-generated lazy config is produced by `mj codegen manifest --lazy-config`
+  - Troubleshooting lazy loading issues
+
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---
