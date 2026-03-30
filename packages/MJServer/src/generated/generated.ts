@@ -15040,6 +15040,9 @@ export class MJAIPrompt_ {
     @MaxLength(20)
     PrefillFallbackMode: string;
         
+    @Field(() => Boolean, {description: `Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.`}) 
+    RequireSpecificModels: boolean;
+        
     @Field() 
     @MaxLength(255)
     Template: string;
@@ -15265,6 +15268,9 @@ export class CreateMJAIPromptInput {
 
     @Field({ nullable: true })
     PrefillFallbackMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    RequireSpecificModels?: boolean;
 }
     
 
@@ -15425,6 +15431,9 @@ export class UpdateMJAIPromptInput {
 
     @Field({ nullable: true })
     PrefillFallbackMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    RequireSpecificModels?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

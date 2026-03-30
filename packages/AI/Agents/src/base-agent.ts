@@ -683,6 +683,18 @@ export class BaseAgent {
     private _effectiveActions: MJActionEntityExtended[] = [];
 
     /**
+     * Counts only prompt (LLM) executions, NOT all agent steps.
+     * Used for message expiration age calculations so that `expirationTurns`
+     * semantically means "number of LLM calls" rather than "number of steps"
+     * (which includes actions, loops, sub-agents, etc.).
+     *
+     * Without this, a ForEach loop over 100 items would bump the step counter
+     * by 100, causing messages to expire far too early even though only one
+     * prompt execution occurred after them.
+     */
+    private _promptTurnCount: number = 0;
+
+    /**
      * Execution limits for dynamically added actions.
      * Maps action IDs to their MaxExecutionsPerRun limit.
      * Populated during gatherPromptTemplateData() when actionChanges include actionLimits.
@@ -1240,8 +1252,10 @@ export class BaseAgent {
                 throw new Error('Cancelled during execution');
             }
 
-            // Prune and compact expired messages before executing the next step
-            await this.pruneAndCompactExpiredMessages(params, stepCount);
+            // Prune and compact expired messages before executing the next step.
+            // Uses _promptTurnCount (not stepCount) so expiration is measured in prompt
+            // executions, not all steps (which include actions, loops, sub-agents, etc.)
+            await this.pruneAndCompactExpiredMessages(params, this._promptTurnCount);
 
             // Execute the current step based on previous decision or initial prompt
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
@@ -3437,14 +3451,14 @@ export class BaseAgent {
             };
         }
 
-        // Get current step count for age calculations
-        const currentStepCount = this._agentRun?.Steps?.length || 0;
+        // Use prompt turn count for age calculations (not step count)
+        const currentPromptTurn = this._promptTurnCount;
 
         // Try multiple recovery strategies in order
         const strategies = [
-            () => this.recoveryStrategy_RemoveOldestActionResults(params, tokensToSave, currentStepCount, 5),
-            () => this.recoveryStrategy_CompactOldActionResults(params, tokensToSave, currentStepCount, 3),
-            () => this.recoveryStrategy_RemoveOldestActionResults(params, tokensToSave, currentStepCount, 2),
+            () => this.recoveryStrategy_RemoveOldestActionResults(params, tokensToSave, currentPromptTurn, 5),
+            () => this.recoveryStrategy_CompactOldActionResults(params, tokensToSave, currentPromptTurn, 3),
+            () => this.recoveryStrategy_RemoveOldestActionResults(params, tokensToSave, currentPromptTurn, 2),
             () => this.recoveryStrategy_CompactAllActionResults(params, tokensToSave),
             () => Promise.resolve(this.recoveryStrategy_TrimLastUserMessage(params, tokensToSave))
         ];
@@ -4332,17 +4346,15 @@ The context is now within limits. Please retry your request with the recovered c
             lines.push(`**Error:** ${result.agentRun.ErrorMessage}`);
         }
 
-        // Payload — the actual result data the parent agent cares about
+        // Payload — the actual result data the parent agent cares about.
+        // Not truncated by default — the expiration/compaction lifecycle handles
+        // context window management. Truncating here permanently discards data
+        // before the LLM ever sees it.
         if (result.payload != null) {
             const payloadStr = typeof result.payload === 'string'
                 ? result.payload
                 : JSON.stringify(result.payload);
-            // For very large payloads, truncate to keep context manageable
-            if (payloadStr.length > 4000) {
-                lines.push(`**Payload** (truncated):\n${payloadStr.substring(0, 4000)}…`);
-            } else {
-                lines.push(`**Payload:**\n${payloadStr}`);
-            }
+            lines.push(`**Payload:**\n${payloadStr}`);
         }
 
         return lines.join('\n');
@@ -4352,14 +4364,19 @@ The context is now within limits. Please retry your request with the recovered c
      * Formats a single output parameter value for inclusion in action result
      * markdown.  Scalars are shown inline with backtick formatting; objects and
      * arrays use compact (single-line) JSON to avoid the indentation overhead
-     * of pretty-printed JSON.  Very long values are truncated.
+     * of pretty-printed JSON.
+     *
+     * By default, values are **not truncated** — the expiration/compaction lifecycle
+     * handles context window management. Truncating at formatting time permanently
+     * discards data before the LLM ever sees it. Pass an explicit maxLength only
+     * when you have a specific reason to limit output size.
      *
      * @param value - The parameter value (any type)
-     * @param maxLength - Maximum character length before truncation (default 500)
+     * @param maxLength - Maximum character length before truncation (0 = no limit, default 0)
      * @returns Formatted string
      * @private
      */
-    private formatParamValueForResult(value: unknown, maxLength: number = 500): string {
+    private formatParamValueForResult(value: unknown, maxLength: number = 0): string {
         if (value === null || value === undefined) {
             return '`null`';
         }
@@ -4376,7 +4393,7 @@ The context is now within limits. Please retry your request with the recovered c
             stringValue = JSON.stringify(value);
         }
 
-        if (stringValue.length > maxLength) {
+        if (maxLength > 0 && stringValue.length > maxLength) {
             return `${stringValue.substring(0, maxLength)}…`;
         }
 
@@ -4621,6 +4638,9 @@ The context is now within limits. Please retry your request with the recovered c
             }
         }
         
+        // Reset prompt turn counter for this execution
+        this._promptTurnCount = 0;
+
         // Create MJAIAgentRunEntity
         this._agentRun = await this._metadata.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
         this._agentRun.AgentID = params.agent.ID;
@@ -5089,8 +5109,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // Check if this is a message expansion request
                 if (previousDecision.messageIndex !== undefined) {
                     // Handle message expansion before retrying
-                    const currentStepCount = this._agentRun?.Steps?.length || 0;
-                    this.executeExpandMessageStep(previousDecision, params, currentStepCount);
+                    this.executeExpandMessageStep(previousDecision, params, this._promptTurnCount);
                 }
                 return await this.executePromptStep(params, config, previousDecision, stepCount);
             case 'Sub-Agent':
@@ -5344,12 +5363,12 @@ The context is now within limits. Please retry your request with the recovered c
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
 
-            // Remove temporary messages before processing prompt results
-            // This includes loop results and sub-agent completion messages
-            params.conversationMessages = params.conversationMessages.filter(m => {
-                const metadata = (m as any).metadata;
-                return !metadata?._loopResults && !metadata?._subAgentResult;
-            });
+            // Increment prompt-specific turn counter (used for expiration age calculations)
+            this._promptTurnCount++;
+
+            // Loop and sub-agent results now use the standard expiration/compaction lifecycle
+            // (messageType: 'loop-result' / 'sub-agent-result') instead of being deleted after
+            // one prompt turn. The processMessageExpiration() method handles their lifecycle.
 
             // Update step entity with AIPromptRun ID if available
             if (promptResult.promptRun?.ID) {
@@ -5989,34 +6008,37 @@ The context is now within limits. Please retry your request with the recovered c
                 return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
             }
             
-            // Build a clean summary of sub-agent result
-            const subAgentSummary = {
-                agentName: params.agent.Name,
+            // Add user message with the sub-agent results using markdown format
+            // and expiration metadata so it persists across multiple prompt turns
+            const resultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
+
+            const subAgentMetadata: AgentChatMessageMetadata = {
+                turnAdded: this._promptTurnCount,
+                messageType: 'sub-agent-result',
                 subAgentName: subAgentRequest.name,
                 subAgentId: subAgentEntity.ID,
-                success: subAgentResult.success,
-                finalStep: subAgentResult.agentRun?.FinalStep,
-                errorMessage: subAgentResult.agentRun?.ErrorMessage || null
-                // do NOT include payload here as this goes to the LLM and
-                // we don't need that there, too many tokens and LLM already gets
-                // payload the normal way
+                // Default: keep sub-agent results for 3 turns then remove
+                expirationTurns: 3,
+                expirationMode: 'Remove'
             };
-            
-            // Add user message with the sub-agent results
-            const resultMessage = subAgentResult.success
-                ? `Sub-agent completed successfully:\n${JSON.stringify(subAgentSummary, null, 2)}`
-                : `Sub-agent failed:\n${JSON.stringify(subAgentSummary, null, 2)}`;
+
+            // Apply global override if configured
+            if (params.messageExpirationOverride) {
+                const override = params.messageExpirationOverride;
+                if (override.expirationTurns != null) {
+                    subAgentMetadata.expirationTurns = override.expirationTurns;
+                    subAgentMetadata.expirationMode = override.expirationMode || 'Remove';
+                    subAgentMetadata.compactMode = override.compactMode;
+                    subAgentMetadata.compactLength = override.compactLength;
+                    subAgentMetadata.compactPromptId = override.compactPromptId;
+                }
+            }
 
             params.conversationMessages.push({
                 role: 'user',
                 content: resultMessage,
-                metadata: {
-                    _temporary: true,
-                    _subAgentResult: true,
-                    subAgentName: subAgentRequest.name,
-                    subAgentId: subAgentEntity.ID
-                }
-            });
+                metadata: subAgentMetadata
+            } as AgentChatMessage);
 
             // Set PayloadAtEnd with the merged payload
             if (stepEntity) {
@@ -6354,19 +6376,35 @@ The context is now within limits. Please retry your request with the recovered c
                 return await this.validateChatNextStep(params, chatStep, mergedPayload, this._agentRun!, stepEntity!);
             }
 
-            // Add sub-agent result to conversation as user message
-            const subAgentSummary = {
-                agentName: params.agent.Name,
+            // Add sub-agent result to conversation as user message using markdown format
+            // and expiration metadata so it persists across multiple prompt turns
+            const relatedResultMessage = this.formatSubAgentResultAsMarkdown(subAgentRequest.name, subAgentResult);
+
+            const relatedMetadata: AgentChatMessageMetadata = {
+                turnAdded: this._promptTurnCount,
+                messageType: 'sub-agent-result',
                 subAgentName: subAgentRequest.name,
-                success: subAgentResult.success,
-                payload: subAgentResult.payload,
-                errorMessage: subAgentResult.agentRun?.ErrorMessage
+                subAgentId: subAgentEntity.ID,
+                expirationTurns: 3,
+                expirationMode: 'Remove'
             };
+
+            if (params.messageExpirationOverride) {
+                const override = params.messageExpirationOverride;
+                if (override.expirationTurns != null) {
+                    relatedMetadata.expirationTurns = override.expirationTurns;
+                    relatedMetadata.expirationMode = override.expirationMode || 'Remove';
+                    relatedMetadata.compactMode = override.compactMode;
+                    relatedMetadata.compactLength = override.compactLength;
+                    relatedMetadata.compactPromptId = override.compactPromptId;
+                }
+            }
 
             params.conversationMessages.push({
                 role: 'user',
-                content: `Related sub-agent "${subAgentRequest.name}" completed:\n${JSON.stringify(subAgentSummary, null, 2)}`
-            });
+                content: relatedResultMessage,
+                metadata: relatedMetadata
+            } as AgentChatMessage);
 
             // Update the agent run's current payload
             if (this._agentRun) {
@@ -6906,9 +6944,8 @@ The context is now within limits. Please retry your request with the recovered c
 
                 // Only add metadata if we have expiration settings
                 if (minExpirationTurns !== null && expirationMode !== 'None') {
-                    const currentStepCount = this._agentRun?.Steps?.length || 0;
                     metadata = {
-                        turnAdded: currentStepCount,
+                        turnAdded: this._promptTurnCount,
                         messageType: 'action-result',
                         expirationTurns: minExpirationTurns,
                         expirationMode: expirationMode,
@@ -7719,6 +7756,11 @@ The context is now within limits. Please retry your request with the recovered c
             } else if (forEach.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: forEach.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
                 result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId, item);
+                // Attach formatted summary as priorStepResult so formatLoopResultsAsMarkdown can render it
+                result.priorStepResult = this.formatSubAgentResultAsMarkdown(
+                    forEach.subAgent.name,
+                    result as unknown as ExecuteAgentResult
+                );
             } else {
                 throw new Error('ForEach missing action/subAgent');
             }
@@ -7754,7 +7796,7 @@ The context is now within limits. Please retry your request with the recovered c
                                       loopResults);
 
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
-            this.injectLoopResultsMessage('ForEach', forEach.collectionPath, loopResults.results, loopResults.errors, params);
+            this.injectLoopResultsMessage('ForEach', forEach.collectionPath, loopResults.results, loopResults.errors, params, forEach.action?.name);
         }
 
         return {
@@ -7767,25 +7809,147 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Helper: Inject loop results as temporary message
+     * Helper: Inject loop results into conversation with expiration/compaction metadata.
+     * Uses the same lifecycle as non-loop action results so results persist for N turns
+     * rather than being deleted after a single prompt turn.
      */
     private injectLoopResultsMessage(
         loopType: 'ForEach' | 'While',
         collectionOrCondition: string,
         results: BaseAgentNextStep[],
-        errors: any[],
-        params: ExecuteAgentParams
+        errors: unknown[],
+        params: ExecuteAgentParams,
+        actionName?: string
     ) {
-        // grab the priorStepResult from within each result item and put that into a new array
-        const extractedResults = results.map(r => r.priorStepResult);
         const label = loopType === 'ForEach' ? 'Collection' : 'Condition';
+        const content = `## Loop Completed\n**Type:** ${loopType}\n**${label}:** ${collectionOrCondition}\n` +
+                     `**Processed:** ${results.length}, **Errors:** ${errors.length}\n\n` +
+                     this.formatLoopResultsAsMarkdown(results, errors);
+
+        // Resolve expiration metadata from the loop's action config (most-restrictive-wins)
+        const metadata = this.resolveLoopExpirationMetadata(params, actionName);
+
         params.conversationMessages.push({
             role: 'user',
-            content: `## Loop Completed\n**Type:** ${loopType}\n**${label}:** ${collectionOrCondition}\n` +
-                     `**Processed:** ${results.length}, **Errors:** ${errors.length}\n\n` +
-                     `**Results:**\n\`\`\`json\n${JSON.stringify(extractedResults, null, 2)}\n\`\`\``,
-            metadata: { _temporary: true, _loopResults: true }
-        } as any);
+            content,
+            metadata
+        } as AgentChatMessage);
+    }
+
+    /**
+     * Formats loop iteration results as markdown. Handles two distinct result shapes
+     * depending on whether the loop body executed actions or sub-agents:
+     *
+     * - **Action iterations**: `priorStepResult` is an `ActionResultSummary[]`, set by
+     *   `executeActionsStep()` (line ~7003). These are formatted via `formatActionResultsAsMarkdown()`.
+     *
+     * - **Sub-agent iterations**: `priorStepResult` is a **pre-formatted markdown string**,
+     *   set by the loop handlers (`executeSingleForEachIteration` / `executeSingleWhileIteration`)
+     *   which call `formatSubAgentResultAsMarkdown()` and assign the result to `priorStepResult`.
+     *   Since the markdown is already rendered upstream, this method simply includes it as-is.
+     *
+     * This two-path design means sub-agent formatting happens at assignment time (in the loop
+     * handler), while action formatting happens at render time (here). Both produce the same
+     * markdown style used by non-loop results, ensuring consistency across the codebase.
+     */
+    private formatLoopResultsAsMarkdown(results: BaseAgentNextStep[], errors: unknown[]): string {
+        const lines: string[] = [];
+
+        for (let i = 0; i < results.length; i++) {
+            const iterResult = results[i].priorStepResult;
+
+            // Action iterations: priorStepResult is ActionResultSummary[] — format via shared helper
+            if (Array.isArray(iterResult)) {
+                lines.push(`### Iteration ${i + 1}`);
+                lines.push(this.formatActionResultsAsMarkdown(iterResult));
+            } else if (iterResult != null) {
+                // Sub-agent iterations: priorStepResult is already a markdown string from
+                // formatSubAgentResultAsMarkdown() called in the loop handler. Non-string
+                // results (edge cases) are JSON-stringified as a fallback.
+                lines.push(`### Iteration ${i + 1}`);
+                const text = typeof iterResult === 'string'
+                    ? iterResult
+                    : JSON.stringify(iterResult);
+                lines.push(text);
+            }
+            // null/undefined priorStepResult: iteration produced no output — skip silently
+        }
+
+        if (errors.length > 0) {
+            lines.push(`### Errors`);
+            for (const err of errors) {
+                const errMsg = typeof err === 'string' ? err : (err as Record<string, unknown>)?.message || JSON.stringify(err);
+                lines.push(`• ✗ ${errMsg}`);
+            }
+        }
+
+        return lines.join('\n');
+    }
+
+    /**
+     * Resolves expiration/compaction metadata for loop result messages by looking up
+     * the loop's action config. Uses the same most-restrictive-wins logic as
+     * non-loop action result metadata resolution.
+     */
+    private resolveLoopExpirationMetadata(
+        params: ExecuteAgentParams,
+        actionName?: string
+    ): AgentChatMessageMetadata {
+        const baseMetadata: AgentChatMessageMetadata = {
+            turnAdded: this._promptTurnCount,
+            messageType: 'loop-result'
+        };
+
+        // Check for global override first
+        if (params.messageExpirationOverride) {
+            const override = params.messageExpirationOverride;
+            if (override.expirationTurns != null && override.expirationMode !== 'None') {
+                return {
+                    ...baseMetadata,
+                    expirationTurns: override.expirationTurns,
+                    expirationMode: override.expirationMode || 'Remove',
+                    compactMode: override.compactMode,
+                    compactLength: override.compactLength,
+                    compactPromptId: override.compactPromptId
+                };
+            }
+        }
+
+        // Look up the loop's action config for expiration settings
+        if (actionName) {
+            const agentActions = AIEngine.Instance.AgentActions.filter(
+                aa => UUIDsEqual(aa.AgentID, params.agent.ID)
+            );
+            const effectiveActions = this._effectiveActions.length > 0
+                ? this._effectiveActions
+                : ActionEngineServer.Instance.Actions.filter(a =>
+                    agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID))
+                );
+            const matchedAction = effectiveActions.find(
+                a => a.Name.trim().toLowerCase() === actionName.trim().toLowerCase()
+            );
+
+            if (matchedAction) {
+                const agentAction = agentActions.find(aa => UUIDsEqual(aa.ActionID, matchedAction.ID));
+                if (agentAction?.ResultExpirationTurns != null && agentAction.ResultExpirationMode !== 'None') {
+                    return {
+                        ...baseMetadata,
+                        expirationTurns: agentAction.ResultExpirationTurns,
+                        expirationMode: agentAction.ResultExpirationMode as 'Remove' | 'Compact',
+                        compactMode: agentAction.CompactMode as 'First N Chars' | 'AI Summary' | undefined,
+                        compactLength: agentAction.CompactLength ?? undefined,
+                        compactPromptId: agentAction.CompactPromptID ?? undefined
+                    };
+                }
+            }
+        }
+
+        // Default: keep for 3 turns then remove (safe fallback so results don't vanish after 1 turn)
+        return {
+            ...baseMetadata,
+            expirationTurns: 3,
+            expirationMode: 'Remove'
+        };
     }
 
     /**
@@ -7986,6 +8150,11 @@ The context is now within limits. Please retry your request with the recovered c
             } else if (whileOp.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: whileOp.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
                 result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId, attemptContext);
+                // Attach formatted summary as priorStepResult so formatLoopResultsAsMarkdown can render it
+                result.priorStepResult = this.formatSubAgentResultAsMarkdown(
+                    whileOp.subAgent.name,
+                    result as unknown as ExecuteAgentResult
+                );
             } else {
                 throw new Error('While missing action/subAgent');
             }
@@ -8021,7 +8190,7 @@ The context is now within limits. Please retry your request with the recovered c
                                       loopResults);
 
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
-            this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params);
+            this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params, whileOp.action?.name);
         }
 
         return {

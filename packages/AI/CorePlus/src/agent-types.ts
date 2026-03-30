@@ -1151,8 +1151,12 @@ export type AgentChatMessageMetadata = {
     canExpand?: boolean;
     /** Whether this message has expired */
     isExpired?: boolean;
-    /** Type of message (for logging/debugging) */
-    messageType?: 'action-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+    /** Type of message (for lifecycle management and logging) */
+    messageType?: 'action-result' | 'loop-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+    /** Name of the sub-agent (only for sub-agent-result messages) */
+    subAgentName?: string;
+    /** ID of the sub-agent (only for sub-agent-result messages) */
+    subAgentId?: string;
 }
 
 /**
