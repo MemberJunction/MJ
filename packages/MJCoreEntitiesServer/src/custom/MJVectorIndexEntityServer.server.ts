@@ -1,0 +1,140 @@
+import { BaseEntity, LogError, LogStatus, Metadata, RunView } from "@memberjunction/core";
+import { RegisterClass, MJGlobal } from "@memberjunction/global";
+import { MJVectorIndexEntity, MJVectorDatabaseEntity } from "@memberjunction/core-entities";
+import { VectorDBBase, CreateIndexParams, IndexModelMetricEnum } from "@memberjunction/ai-vectordb";
+import { GetAIAPIKey } from "@memberjunction/ai";
+
+/**
+ * Server-side VectorIndex entity that syncs with the vector database provider.
+ * On create: calls vectorDB.createIndex() to provision the index in the provider (e.g., Pinecone).
+ * On delete: calls vectorDB.deleteIndex() to remove the index from the provider.
+ */
+@RegisterClass(BaseEntity, 'MJ: Vector Indexes')
+export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
+    /**
+     * After saving, if this is a new record, create the index in the provider.
+     */
+    public override async Save(): Promise<boolean> {
+        const isNew = this.IsSaved === false;
+        const saveResult = await super.Save();
+
+        if (saveResult && isNew) {
+            this.createIndexInProvider().catch((error) => {
+                LogError(`Failed to create index "${this.Name}" in vector DB provider`, undefined, error);
+            });
+        }
+
+        return saveResult;
+    }
+
+    /**
+     * Before deleting, remove the index from the provider.
+     */
+    public override async Delete(): Promise<boolean> {
+        // Try to delete from provider first — if it fails, still delete the metadata record
+        await this.deleteIndexFromProvider().catch((error) => {
+            LogError(`Failed to delete index "${this.Name}" from vector DB provider (proceeding with metadata delete)`, undefined, error);
+        });
+
+        return super.Delete();
+    }
+
+    /**
+     * Create the index in the vector database provider.
+     */
+    private async createIndexInProvider(): Promise<void> {
+        const vectorDB = await this.getVectorDBInstance();
+        if (!vectorDB) {
+            LogError(`Cannot create index: no VectorDB instance for database ${this.VectorDatabaseID}`);
+            return;
+        }
+
+        const params: CreateIndexParams = {
+            id: this.Name,
+            dimension: this.resolveDimensions(),
+            metric: 'cosine' as IndexModelMetricEnum,
+            additionalParams: {
+                serverless: {
+                    cloud: 'aws',
+                    region: 'us-east-1'
+                }
+            }
+        };
+
+        LogStatus(`Creating index "${this.Name}" in vector DB provider...`);
+        const result = await vectorDB.createIndex(params);
+        if (result.success) {
+            LogStatus(`Index "${this.Name}" created successfully in provider`);
+        } else {
+            LogError(`Provider returned error creating index "${this.Name}": ${result.message}`);
+        }
+    }
+
+    /**
+     * Delete the index from the vector database provider.
+     */
+    private async deleteIndexFromProvider(): Promise<void> {
+        const vectorDB = await this.getVectorDBInstance();
+        if (!vectorDB) {
+            LogError(`Cannot delete index: no VectorDB instance for database ${this.VectorDatabaseID}`);
+            return;
+        }
+
+        LogStatus(`Deleting index "${this.Name}" from vector DB provider...`);
+        const result = await vectorDB.deleteIndex({ id: this.Name });
+        if (result.success) {
+            LogStatus(`Index "${this.Name}" deleted from provider`);
+        } else {
+            LogError(`Provider returned error deleting index "${this.Name}": ${result.message}`);
+        }
+    }
+
+    /**
+     * Instantiate the VectorDB provider class using ClassFactory.
+     * Looks up the VectorDatabase record to get the ClassKey for provider instantiation.
+     */
+    private async getVectorDBInstance(): Promise<VectorDBBase | null> {
+        if (!this.VectorDatabaseID) {
+            return null;
+        }
+
+        const rv = new RunView();
+        const result = await rv.RunView<MJVectorDatabaseEntity>({
+            EntityName: 'MJ: Vector Databases',
+            ExtraFilter: `ID='${this.VectorDatabaseID}'`,
+            ResultType: 'entity_object'
+        }, this.ContextCurrentUser);
+
+        if (!result.Success || result.Results.length === 0) {
+            LogError(`VectorDatabase with ID ${this.VectorDatabaseID} not found`);
+            return null;
+        }
+
+        const vectorDB = result.Results[0];
+        const classKey = vectorDB.ClassKey;
+        if (!classKey) {
+            LogError(`VectorDatabase "${vectorDB.Name}" has no ClassKey configured`);
+            return null;
+        }
+
+        const apiKey = GetAIAPIKey(classKey);
+        if (!apiKey) {
+            LogError(`No API key found for vector DB provider "${classKey}"`);
+            return null;
+        }
+
+        return MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(
+            VectorDBBase, classKey, apiKey
+        );
+    }
+
+    /**
+     * Resolve embedding dimensions from the associated AI model.
+     * Default to 1536 (OpenAI text-embedding-3-small) if not determinable.
+     */
+    private resolveDimensions(): number {
+        // TODO: Look up the embedding model's dimension count from metadata
+        // For now, default to 1536 which covers most common embedding models
+        return 1536;
+    }
+}
