@@ -71,7 +71,7 @@
             </div>
 
             @if (SelectedSpec.description) {
-              <div class="component-description" [innerHTML]="RenderMarkdown(SelectedSpec.description)"></div>
+              <mj-markdown [data]="SelectedSpec.description" class="component-description"></mj-markdown>
             }
 
             <!-- Star Rating (half-star support) -->

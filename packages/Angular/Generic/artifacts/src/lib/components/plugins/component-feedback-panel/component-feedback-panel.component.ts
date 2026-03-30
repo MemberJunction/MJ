@@ -1,10 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnDestroy, ChangeDetectorRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { Metadata } from '@memberjunction/core';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { marked } from 'marked';
+import { MarkdownModule } from '@memberjunction/ng-markdown';
 
 /**
  * Flattened tree item for rendering the component hierarchy
@@ -23,7 +22,7 @@ interface TreeItem {
 @Component({
   selector: 'mj-component-feedback-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MarkdownModule],
   templateUrl: './component-feedback-panel.component.html',
   styleUrls: ['./component-feedback-panel.component.css']
 })
@@ -54,13 +53,6 @@ export class ComponentFeedbackPanelComponent implements OnDestroy {
   private containerClickHandler: ((e: MouseEvent) => void) | null = null;
 
   private cdr = inject(ChangeDetectorRef);
-  private sanitizer = inject(DomSanitizer);
-
-  /** Renders a markdown string as sanitized HTML */
-  RenderMarkdown(text: string): SafeHtml {
-    const html = marked.parse(text, { async: false }) as string;
-    return this.sanitizer.bypassSecurityTrustHtml(html);
-  }
 
   // --- Tree Methods ---
 
