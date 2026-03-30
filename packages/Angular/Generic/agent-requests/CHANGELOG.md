@@ -1,5 +1,19 @@
 # @memberjunction/ng-agent-requests
 
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+- Updated dependencies [76cd2bc]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/ng-notifications@5.21.0
+  - @memberjunction/ng-shared-generic@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/ng-forms@5.21.0
+  - @memberjunction/global@5.21.0
+
 ## 5.20.0
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # @memberjunction/ng-base-forms
 
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ng-base-types@5.21.0
+  - @memberjunction/ng-entity-viewer@5.21.0
+  - @memberjunction/ng-list-management@5.21.0
+  - @memberjunction/ng-record-changes@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/global@5.21.0
+
 ## 5.20.0
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-provider-bundle@5.21.0
+  - @memberjunction/sqlserver-dataprovider@5.21.0
+  - @memberjunction/aiengine@5.21.0
+  - @memberjunction/communication-types@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/ai@5.21.0
+  - @memberjunction/global@5.21.0
+
 ## 5.20.0
 
 ### Patch Changes

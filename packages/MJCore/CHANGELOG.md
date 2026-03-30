@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 5.21.0
+
+### Patch Changes
+
+- c7dfb20: no migration/metadata changes (yet)
+  - @memberjunction/global@5.21.0
+
 ## 5.20.0
 
 ### Minor Changes
