@@ -4,7 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { InputsModule, TextBoxModule, TextAreaModule, NumericTextBoxModule, SwitchModule, CheckBoxModule } from '@progress/kendo-angular-inputs';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { ButtonsModule, ButtonModule, SplitButtonModule } from '@progress/kendo-angular-buttons';
-import { MjButtonDirective, MjAccordionPanelComponent, MjDropdownComponent, MjComboboxComponent, MjSwitchComponent, MjDialogComponent, MjDialogTitlebarComponent, MjDialogActionsComponent, MjNumericInputComponent } from '@memberjunction/ng-ui-components';
+import { MjButtonDirective, MjAccordionPanelComponent, MjAccordionTitleDirective, MjDropdownComponent, MjComboboxComponent, MjSwitchComponent, MjDialogComponent, MjDialogTitlebarComponent, MjDialogActionsComponent, MjNumericInputComponent, MjWindowComponent, MjWindowTitlebarComponent, MjProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { DropDownsModule, ComboBoxModule, DropDownTreesModule, DropDownListModule } from '@progress/kendo-angular-dropdowns';
 import { LayoutModule, ExpansionPanelModule, TabStripModule, SplitterModule, PanelBarModule } from '@progress/kendo-angular-layout';
 import { AngularSplitModule } from 'angular-split';
@@ -139,6 +139,7 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         SplitButtonModule,
         MjButtonDirective,
         MjAccordionPanelComponent,
+        MjAccordionTitleDirective,
         MjDropdownComponent,
         MjComboboxComponent,
         MjSwitchComponent,
@@ -146,6 +147,9 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         MjDialogTitlebarComponent,
         MjDialogActionsComponent,
         MjNumericInputComponent,
+        MjWindowComponent,
+        MjWindowTitlebarComponent,
+        MjProgressBarComponent,
         DateInputsModule,
         LinkDirectivesModule,
         JoinGridModule,

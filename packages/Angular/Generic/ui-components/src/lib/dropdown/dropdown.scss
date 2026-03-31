@@ -2,7 +2,7 @@
  * MJ Dropdown Styles
  */
 
-.mj-dropdown-host { display: inline-block; width: 100%; }
+.mj-dropdown-host { display: block; width: 100%; }
 
 .mj-dropdown {
   display: flex;
@@ -37,6 +37,8 @@
 .mj-dropdown-backdrop { background: transparent; }
 
 .mj-dropdown-panel {
+  width: 100%;
+  box-sizing: border-box;
   background: var(--mj-bg-surface-elevated);
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-sm);

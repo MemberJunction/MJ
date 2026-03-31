@@ -1,11 +1,48 @@
-import { Component, Input, Output, EventEmitter, HostBinding } from '@angular/core';
+import { Component, Input, Output, EventEmitter, HostBinding, ContentChild, TemplateRef, Directive } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+
+/**
+ * Directive to mark a template as the accordion panel title.
+ * Supports rich HTML content (icons, badges, dynamic text).
+ *
+ * @example
+ * ```html
+ * <mj-accordion-panel [Expanded]="true">
+ *   <ng-template mjAccordionTitle>
+ *     <i class="fa-solid fa-code"></i> Template Editor
+ *     <span class="badge">3</span>
+ *   </ng-template>
+ *   <p>Panel content here</p>
+ * </mj-accordion-panel>
+ * ```
+ */
+@Directive({
+  selector: '[mjAccordionTitle]',
+  standalone: true
+})
+export class MjAccordionTitleDirective {
+  constructor(public templateRef: TemplateRef<unknown>) {}
+}
 
 /**
  * mj-accordion-panel — Collapsible panel. Replaces `<kendo-panelbar-item>` and `<kendo-expansionpanel>`.
  *
+ * Supports two title modes:
+ * - Simple string: `[Title]="'Details'"` — plain text title
+ * - Rich template: `<ng-template mjAccordionTitle>` — HTML with icons, badges, etc.
+ *
  * @example
  * ```html
+ * <!-- Simple string title -->
  * <mj-accordion-panel Title="Details" [Expanded]="true">
+ *   <p>Panel content here</p>
+ * </mj-accordion-panel>
+ *
+ * <!-- Rich HTML title -->
+ * <mj-accordion-panel [Expanded]="true">
+ *   <ng-template mjAccordionTitle>
+ *     <i class="fa-solid fa-code"></i> Template Editor
+ *   </ng-template>
  *   <p>Panel content here</p>
  * </mj-accordion-panel>
  * ```
@@ -13,13 +50,20 @@ import { Component, Input, Output, EventEmitter, HostBinding } from '@angular/co
 @Component({
   selector: 'mj-accordion-panel',
   standalone: true,
+  imports: [MjAccordionTitleDirective, NgTemplateOutlet],
   template: `
     <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded" [class.mj-accordion-panel--disabled]="Disabled">
       <button class="mj-accordion-header" type="button"
         [attr.aria-expanded]="Expanded"
         [disabled]="Disabled"
         (click)="Toggle()">
-        <span class="mj-accordion-title">{{ Title }}</span>
+        <span class="mj-accordion-title">
+          @if (titleTemplate) {
+            <ng-container [ngTemplateOutlet]="titleTemplate.templateRef"></ng-container>
+          } @else {
+            {{ Title }}
+          }
+        </span>
         <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
       </button>
       @if (Expanded) {
@@ -35,6 +79,7 @@ export class MjAccordionPanelComponent {
   @Input() Expanded = false;
   @Input() Disabled = false;
   @Output() ExpandedChange = new EventEmitter<boolean>();
+  @ContentChild(MjAccordionTitleDirective) titleTemplate: MjAccordionTitleDirective | null = null;
   @HostBinding('class.mj-accordion-panel-host') readonly hostClass = true;
 
   Toggle(): void {
