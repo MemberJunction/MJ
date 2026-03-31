@@ -17,8 +17,7 @@ import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
-import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
-import { DialogService } from '@progress/kendo-angular-dialog';
+import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -246,6 +245,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     return this.messages.filter(m => m.IsPinned).reverse();
   }
 
+  // Test feedback dialog state
+  public showTestFeedbackDialog: boolean = false;
+  public testFeedbackDialogData: TestFeedbackDialogData | null = null;
+
   // Image viewer state
   public showImageViewer: boolean = false;
   public selectedImageUrl: string = '';
@@ -281,7 +284,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     private cdr: ChangeDetectorRef,
     private mentionAutocompleteService: MentionAutocompleteService,
     private artifactPermissionService: ArtifactPermissionService,
-    private dialogService: DialogService,
     private attachmentService: ConversationAttachmentService,
     private streamingService: ConversationStreamingService,
     private confirmDialog: ConversationsDialogService
@@ -2174,31 +2176,19 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       return;
     }
 
-    const dialogData: TestFeedbackDialogData = {
+    this.testFeedbackDialogData = {
       testRunId: message.TestRunID,
       conversationDetailId: message.ID,
       currentUser: this.currentUser
     };
+    this.showTestFeedbackDialog = true;
+  }
 
-    const dialogRef = this.dialogService.open({
-      content: TestFeedbackDialogComponent,
-      title: 'Provide Test Feedback',
-      width: 600,
-      minHeight: 500
-    });
-
-    const dialogInstance = dialogRef.content.instance as TestFeedbackDialogComponent;
-    dialogInstance.data = dialogData;
-
-    dialogRef.result.subscribe((result) => {
-      if (result && typeof result === 'object' && 'success' in result) {
-        const feedbackResult = result as {success: boolean; feedbackId?: string};
-        if (feedbackResult.success) {
-          console.log('Test feedback saved successfully:', feedbackResult.feedbackId);
-          // TODO: Optionally show success notification
-        }
-      }
-    });
+  onTestFeedbackDialogClosed(result: TestFeedbackDialogResult): void {
+    this.showTestFeedbackDialog = false;
+    if (result.success) {
+      console.log('Test feedback saved successfully:', result.feedbackId);
+    }
   }
 
   onTaskClicked(task: MJTaskEntity): void {

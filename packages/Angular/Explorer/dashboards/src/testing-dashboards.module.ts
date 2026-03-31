@@ -9,6 +9,7 @@ import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { TabStripModule } from '@progress/kendo-angular-layout';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { TestingModule } from '@memberjunction/ng-testing';
+import { VersionsModule } from '@memberjunction/ng-versions';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
@@ -65,6 +66,7 @@ import { TestingInstrumentationService } from './Testing/services/testing-instru
     TabStripModule,
     ContainerDirectivesModule,
     TestingModule,
+    VersionsModule,
     SharedGenericModule,
     SharedDashboardWidgetsModule,
     SharedPipesModule

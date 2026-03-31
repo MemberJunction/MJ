@@ -148,6 +148,30 @@
   margin-left: auto;
 }
 
+.feedback-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--mj-text-disabled);
+  padding: 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.feedback-btn:hover {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-brand-primary);
+}
+
+.feedback-btn i {
+  font-size: 14px;
+}
+
 .save-to-collection-btn {
   background: none;
   border: none;

@@ -645,6 +645,23 @@ interface TestRunStatRow {
         </div>
       }
     </div>
+
+    <!-- Slide Panel for Test Execution -->
+    @if (testingDialogService.IsPanelOpen) {
+      <mj-slide-panel
+        Mode="slide"
+        Title="Run Test"
+        [Resizable]="true"
+        (Closed)="OnPanelClosed()">
+        <app-test-run-dialog
+          [PanelMode]="true"
+          [selectedTestId]="testingDialogService.PanelOptions?.testId ?? null"
+          [selectedSuiteId]="testingDialogService.PanelOptions?.suiteId ?? null"
+          [runMode]="testingDialogService.PanelOptions?.mode ?? 'test'"
+          (PanelClose)="OnPanelClosed()">
+        </app-test-run-dialog>
+      </mj-slide-panel>
+    }
   `,
   styles: [`
     /* ==========================================
@@ -1896,7 +1913,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
   constructor(
     private cdr: ChangeDetectorRef,
     private viewContainerRef: ViewContainerRef,
-    private testingDialogService: TestingDialogService,
+    public testingDialogService: TestingDialogService,
     public instrumentationService: TestingInstrumentationService
   ) {}
 
@@ -1921,6 +1938,12 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
     }
 
     this.subscribeToStateChanges();
+
+    this.testingDialogService.PanelStateChanged$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.cdr.detectChanges();
+    });
   }
 
   ngOnDestroy(): void {
@@ -2001,11 +2024,16 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
   }
 
   RunTest(testId: string): void {
-    this.testingDialogService.OpenTestDialog(testId, this.viewContainerRef);
+    this.testingDialogService.OpenTestPanel(testId);
   }
 
   RunSuite(suiteId: string): void {
-    this.testingDialogService.OpenSuiteDialog(suiteId, this.viewContainerRef);
+    this.testingDialogService.OpenSuitePanel(suiteId);
+  }
+
+  OnPanelClosed(): void {
+    this.testingDialogService.ClosePanel();
+    this.cdr.detectChanges();
   }
 
   EditItem(entityName: string, id: string): void {
