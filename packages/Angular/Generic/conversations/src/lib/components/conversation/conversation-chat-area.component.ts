@@ -2306,7 +2306,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     fileName: string | null; sizeBytes: number;
   }): void {
     const activeInput = this.messageInputComponents?.find(
-      (input: MessageInputComponent) => !input.disabled
+      (input: MessageInputComponent) => input.conversationId === this.conversationId
     );
     if (activeInput?.inputBox) {
       activeInput.inputBox.AddArtifactAttachment({

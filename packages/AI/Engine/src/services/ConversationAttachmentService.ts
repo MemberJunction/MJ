@@ -15,6 +15,7 @@
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJFileStorageProviderEntity,
+    MJFileStorageAccountEntity,
     MJFileEntity,
     MJAIAgentEntity,
     MJAIModelEntity,
@@ -22,7 +23,7 @@ import {
     MJAIModalityEntity
 } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
-import { FileStorageBase } from '@memberjunction/storage';
+import { FileStorageBase, initializeDriverWithAccountCredentials } from '@memberjunction/storage';
 import {
     ConversationUtility,
     AttachmentType,
@@ -321,10 +322,30 @@ export class ConversationAttachmentService {
                 return null;
             }
 
-            const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
-                FileStorageBase,
-                provider.ServerDriverKey
-            );
+            // Find the FileStorageAccount that links to this provider
+            const rv = new RunView();
+            const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
+                EntityName: 'MJ: File Storage Accounts',
+                ExtraFilter: `ProviderID = '${file.ProviderID}'`,
+                MaxRows: 1,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            let driver: FileStorageBase;
+            if (accountResult.Success && accountResult.Results.length > 0) {
+                // Initialize driver with account credentials (handles OAuth token refresh)
+                driver = await initializeDriverWithAccountCredentials({
+                    accountEntity: accountResult.Results[0],
+                    providerEntity: provider,
+                    contextUser
+                });
+            } else {
+                // Fallback: create driver without account credentials (env vars only)
+                driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
+                    FileStorageBase,
+                    provider.ServerDriverKey
+                );
+            }
 
             const objectKey = file.ProviderKey || file.Name;
             return await driver.GetObject({ fullPath: objectKey });
