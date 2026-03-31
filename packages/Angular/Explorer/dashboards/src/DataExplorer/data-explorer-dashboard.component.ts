@@ -2779,24 +2779,29 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     const applications = this.metadata.Applications;
-    const entityIdToApp = new Map<string, ApplicationInfo>();
+    const entityIdToApps = new Map<string, ApplicationInfo[]>();
     const groupMap = new Map<string, AppEntityGroup>();
 
-    // Build entity -> first application mapping
+    // Build entity -> applications mapping (an entity can belong to multiple apps)
     for (const app of applications) {
       for (const appEntity of app.ApplicationEntities) {
-        if (!entityIdToApp.has(appEntity.EntityID)) {
-          entityIdToApp.set(appEntity.EntityID, app);
+        const apps = entityIdToApps.get(appEntity.EntityID);
+        if (apps) {
+          apps.push(app);
+        } else {
+          entityIdToApps.set(appEntity.EntityID, [app]);
         }
       }
     }
 
-    // Assign each visible entity to its group
+    // Assign each visible entity to all of its application groups
     const ungroupedEntities: EntityInfo[] = [];
     for (const entity of this.entities) {
-      const app = entityIdToApp.get(entity.ID);
-      if (app) {
-        this.addEntityToGroup(groupMap, app, entity);
+      const apps = entityIdToApps.get(entity.ID);
+      if (apps) {
+        for (const app of apps) {
+          this.addEntityToGroup(groupMap, app, entity);
+        }
       } else {
         ungroupedEntities.push(entity);
       }
