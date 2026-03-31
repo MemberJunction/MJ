@@ -2,9 +2,10 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
-// Kendo (Grid, ListBox remain — migrated in Phase 2.3)
+import { AgGridModule } from 'ag-grid-angular';
+
+// Kendo (ListBox remains — migrated in Phase 2.3)
 import { ListBoxModule } from '@progress/kendo-angular-listbox';
-import { GridModule } from '@progress/kendo-angular-grid';
 
 // MJ UI Components
 import { MjButtonDirective, MjDialogComponent, MjDialogActionsComponent } from '@memberjunction/ng-ui-components';
@@ -21,7 +22,7 @@ import { FindRecordDialogComponent } from './lib/dialog.component';
   imports: [
     CommonModule,
     FormsModule,
-    GridModule,
+    AgGridModule,
     ContainerDirectivesModule,
     MjButtonDirective,
     MjDialogComponent,

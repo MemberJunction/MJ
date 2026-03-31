@@ -11,7 +11,7 @@ import { StartupValidationService } from './lib/services/startup-validation.serv
 import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
 import { DialogsModule } from '@progress/kendo-angular-dialog';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
+import { ExportServiceModule } from '@memberjunction/ng-export-service';
 import { ExcelModule, GridModule, PDFModule } from '@progress/kendo-angular-grid';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { InputsModule } from '@progress/kendo-angular-inputs';
@@ -19,7 +19,7 @@ import { LabelModule } from '@progress/kendo-angular-label';
 import { LayoutModule, TabStripModule, CardModule, AvatarModule } from '@progress/kendo-angular-layout';
 import { ListViewModule } from '@progress/kendo-angular-listview';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
-import { ProgressBarModule } from "@progress/kendo-angular-progressbar";
+import { MjProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
@@ -109,7 +109,7 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     RouterModule,
     GridModule,
     DialogsModule,
-    ExcelExportModule,
+    ExportServiceModule,
     IndicatorsModule,
     ButtonsModule,
     TabStripModule,
@@ -135,7 +135,7 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     RecordSelectorModule,
     ResourcePermissionsModule,
     GenericDialogModule,
-    ProgressBarModule,
+    MjProgressBarComponent,
     DateInputsModule,
     DragDropModule,
     CardModule,
