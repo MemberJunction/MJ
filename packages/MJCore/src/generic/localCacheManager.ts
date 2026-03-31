@@ -978,15 +978,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const connection = connectionPrefix || '';
         const aggHash = this.generateAggregateHash(params.Aggregates);
 
+        const altView = params.AlternateViewName?.trim() || '_';
+
         // Build human-readable fingerprint with pipe separators
-        // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash[|Connection]
+        // Format: Entity|Filter|OrderBy|MaxRows|StartRow|AggHash|AltView[|Connection]
         const parts = [
             entity,
             filter || '_',           // Use underscore for empty filter
             orderBy || '_',          // Use underscore for empty orderBy
             maxRows.toString(),
             startRow.toString(),
-            aggHash                  // Aggregate hash (or '_' for no aggregates)
+            aggHash,                 // Aggregate hash (or '_' for no aggregates)
+            altView                  // Alternate view name (or '_' for default)
         ];
 
         // Only include connection if provided
