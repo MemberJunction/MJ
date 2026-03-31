@@ -601,9 +601,9 @@ This can be done via unit tests (Task 5.1) rather than a full CodeGen run.
 - Emit clear errors if the definition contains syntax errors
 - Low priority since compilation catches these immediately
 
-### Future Phase D: UI and Search Consumers for AdditionalBaseViews
-- UI components to expose view selection where multiple views exist
-- Search infrastructure to consider UserSearchable additional views
+### Future Phase D: UI and Search Consumers for AdditionalBaseViews (IMPLEMENTED)
+- ~~UI components to expose view selection where multiple views exist~~ **Done** — "Data Sources" section added to ViewSelector panel in Data Explorer
+- Search infrastructure to consider UserSearchable additional views (future)
 
 ---
 
@@ -618,6 +618,13 @@ This can be done via unit tests (Task 5.1) rather than a full CodeGen run.
 | `packages/GenericDatabaseProvider/src/GenericDatabaseProvider.ts` | Use alternate view name/schema in SQL query construction in `InternalRunView()` |
 | `packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts` | Emit JSONTypeDefinition blocks above classes; generate typed getter/setter for JSONType fields; update Zod schema generation |
 | `packages/CodeGenLib/src/__tests__/entity_subclasses_codegen.test.ts` | **NEW or modified** — Unit tests for JSONType emission |
+| `packages/MJCore/src/generic/localCacheManager.ts` | Include `AlternateViewName` in RunView cache fingerprint |
+| `packages/MJServer/src/generic/RunViewResolver.ts` | Add `AlternateViewName` field to all 4 GraphQL input types |
+| `packages/MJServer/src/types.ts` | Add `alternateViewName` to `RunViewGenericParams` |
+| `packages/MJServer/src/generic/ResolverBase.ts` | Map `AlternateViewName` through all resolver methods |
+| `packages/Angular/Explorer/dashboards/src/DataExplorer/components/view-selector/` | **NEW** — "Data Sources" section in ViewSelector panel with base view selection |
+| `packages/Angular/Explorer/dashboards/src/DataExplorer/data-explorer-dashboard.component.*` | Wire base view selection to entity-viewer via `alternateViewName` input |
+| `packages/Angular/Generic/entity-viewer/src/lib/entity-viewer/entity-viewer.component.ts` | **NEW** `alternateViewName` input, pass through to RunView |
 
 ---
 

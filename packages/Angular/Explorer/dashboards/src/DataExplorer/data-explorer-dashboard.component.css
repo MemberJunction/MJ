@@ -1192,3 +1192,22 @@
     font-size: 14px;
   }
 }
+
+/* Active Base View Indicator */
+.active-base-view-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
+  color: var(--mj-status-info);
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid color-mix(in srgb, var(--mj-status-info) 25%, transparent);
+}
+
+.active-base-view-indicator i {
+  font-size: 10px;
+}

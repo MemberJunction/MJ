@@ -6879,10 +6879,11 @@ export const MJApplicationSchema = z.object({
         * * Display Name: Color
         * * SQL Data Type: nvarchar(20)
         * * Description: Hex color code for visual theming (e.g., #4caf50)`),
-    DefaultNavItems: z.string().nullable().describe(`
+    DefaultNavItems: z.any().nullable().describe(`
         * * Field Name: DefaultNavItems
         * * Display Name: Default Nav Items
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: IDefaultNavItem[]
         * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()`),
     ClassName: z.string().nullable().describe(`
         * * Field Name: ClassName
@@ -10694,10 +10695,11 @@ export const MJCredentialTypeSchema = z.object({
     *   * Integration
     *   * Storage
         * * Description: High-level category: AI, Communication, Storage, Authentication, Database, or Integration.`),
-    FieldSchema: z.string().describe(`
+    FieldSchema: z.any().describe(`
         * * Field Name: FieldSchema
         * * Display Name: Field Schema
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: IJSONSchemaDefinition
         * * Description: JSON Schema defining the required fields for this credential type. Includes field names, types, validation rules, and UI hints.`),
     IconClass: z.string().nullable().describe(`
         * * Field Name: IconClass
@@ -16322,20 +16324,22 @@ export const MJMCPServerToolSchema = z.object({
         * * Field Name: ToolDescription
         * * Display Name: Tool Description
         * * SQL Data Type: nvarchar(MAX)`),
-    InputSchema: z.string().describe(`
+    InputSchema: z.any().describe(`
         * * Field Name: InputSchema
         * * Display Name: Input Schema
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: IJSONSchemaDefinition
         * * Description: JSON Schema for tool input parameters`),
     OutputSchema: z.string().nullable().describe(`
         * * Field Name: OutputSchema
         * * Display Name: Output Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON Schema for tool output (if provided)`),
-    Annotations: z.string().nullable().describe(`
+    Annotations: z.any().nullable().describe(`
         * * Field Name: Annotations
         * * Display Name: Annotations
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: IMCPToolAnnotations
         * * Description: JSON with tool hints (readOnlyHint, destructiveHint, etc.)`),
     Status: z.string().describe(`
         * * Field Name: Status
@@ -41858,6 +41862,21 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
 }
 
 
+export interface IDefaultNavItem {
+    /** Display label for the navigation item */
+    Label: string;
+    /** Font Awesome icon class (e.g., "fa-solid fa-database") */
+    Icon: string;
+    /** Type of resource: "Dashboards", "Custom", etc. */
+    ResourceType: string;
+    /** For Dashboard resources, the ID of the dashboard record */
+    RecordID?: string | null;
+    /** For Custom resources, the registered driver class name */
+    DriverClass?: string | null;
+    /** Whether this is the default tab when the app opens */
+    isDefault?: boolean;
+}
+
 /**
  * MJ: Applications - strongly typed entity sub-class
  * * Schema: __mj
@@ -42002,13 +42021,14 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     * * Field Name: DefaultNavItems
     * * Display Name: Default Nav Items
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: IDefaultNavItem[]
     * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()
     */
-    get DefaultNavItems(): string | null {
-        return this.Get('DefaultNavItems');
+    get DefaultNavItems(): IDefaultNavItem[] | null {
+        return this.Get('DefaultNavItems') ? JSON.parse(this.Get('DefaultNavItems')) : null;
     }
-    set DefaultNavItems(value: string | null) {
-        this.Set('DefaultNavItems', value);
+    set DefaultNavItems(value: IDefaultNavItem[] | null) {
+        this.Set('DefaultNavItems', value ? JSON.stringify(value) : null);
     }
 
     /**
@@ -51797,6 +51817,34 @@ export class MJCredentialCategoryEntity extends BaseEntity<MJCredentialCategoryE
 }
 
 
+export interface IJSONSchemaProperty {
+    /** JSON Schema type (string, number, boolean, object, array) */
+    type: string;
+    /** Human-readable title for the field */
+    title?: string;
+    /** Description of what this field is for */
+    description?: string;
+    /** Whether this field contains sensitive data */
+    isSecret?: boolean;
+    /** Display order in the UI */
+    order?: number;
+    /** Default value for the field */
+    default?: string | number | boolean | null;
+    /** Enum of allowed values */
+    enum?: string[];
+}
+
+export interface IJSONSchemaDefinition {
+    /** JSON Schema version identifier */
+    $schema?: string;
+    /** Root type (typically "object") */
+    type: string;
+    /** Property definitions keyed by field name */
+    properties: Record<string, IJSONSchemaProperty>;
+    /** Array of required property names */
+    required?: string[];
+}
+
 /**
  * MJ: Credential Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -51891,13 +51939,14 @@ export class MJCredentialTypeEntity extends BaseEntity<MJCredentialTypeEntityTyp
     * * Field Name: FieldSchema
     * * Display Name: Field Schema
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: IJSONSchemaDefinition
     * * Description: JSON Schema defining the required fields for this credential type. Includes field names, types, validation rules, and UI hints.
     */
-    get FieldSchema(): string {
-        return this.Get('FieldSchema');
+    get FieldSchema(): IJSONSchemaDefinition {
+        return this.Get('FieldSchema') ? JSON.parse(this.Get('FieldSchema')) : null;
     }
-    set FieldSchema(value: string) {
-        this.Set('FieldSchema', value);
+    set FieldSchema(value: IJSONSchemaDefinition) {
+        this.Set('FieldSchema', value ? JSON.stringify(value) : null);
     }
 
     /**
@@ -66028,6 +66077,17 @@ export class MJMCPServerConnectionEntity extends BaseEntity<MJMCPServerConnectio
 }
 
 
+export interface IMCPToolAnnotations {
+    /** If true, the tool does not modify any state */
+    readOnlyHint?: boolean;
+    /** If true, the tool may perform destructive operations */
+    destructiveHint?: boolean;
+    /** If true, the tool interacts with the real world (not just internal data) */
+    openWorldHint?: boolean;
+    /** If true, the tool may take a long time to complete */
+    longRunningHint?: boolean;
+}
+
 /**
  * MJ: MCP Server Tools - strongly typed entity sub-class
  * * Schema: __mj
@@ -66125,13 +66185,14 @@ export class MJMCPServerToolEntity extends BaseEntity<MJMCPServerToolEntityType>
     * * Field Name: InputSchema
     * * Display Name: Input Schema
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: IJSONSchemaDefinition
     * * Description: JSON Schema for tool input parameters
     */
-    get InputSchema(): string {
-        return this.Get('InputSchema');
+    get InputSchema(): IJSONSchemaDefinition {
+        return this.Get('InputSchema') ? JSON.parse(this.Get('InputSchema')) : null;
     }
-    set InputSchema(value: string) {
-        this.Set('InputSchema', value);
+    set InputSchema(value: IJSONSchemaDefinition) {
+        this.Set('InputSchema', value ? JSON.stringify(value) : null);
     }
 
     /**
@@ -66151,13 +66212,14 @@ export class MJMCPServerToolEntity extends BaseEntity<MJMCPServerToolEntityType>
     * * Field Name: Annotations
     * * Display Name: Annotations
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: IMCPToolAnnotations
     * * Description: JSON with tool hints (readOnlyHint, destructiveHint, etc.)
     */
-    get Annotations(): string | null {
-        return this.Get('Annotations');
+    get Annotations(): IMCPToolAnnotations | null {
+        return this.Get('Annotations') ? JSON.parse(this.Get('Annotations')) : null;
     }
-    set Annotations(value: string | null) {
-        this.Set('Annotations', value);
+    set Annotations(value: IMCPToolAnnotations | null) {
+        this.Set('Annotations', value ? JSON.stringify(value) : null);
     }
 
     /**

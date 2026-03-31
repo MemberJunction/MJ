@@ -93,6 +93,25 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
 
   /** Whether a deferred reload has been queued via deferReload() */
   private _reloadDeferred = false;
+  private _alternateViewName: string | null = null;
+
+  /**
+   * Optional alternate database view name to query instead of the entity's default BaseView.
+   * Must be registered in the entity's AdditionalBaseViews metadata.
+   */
+  @Input()
+  get alternateViewName(): string | null {
+    return this._alternateViewName;
+  }
+  set alternateViewName(value: string | null) {
+    if (value !== this._alternateViewName) {
+      this._alternateViewName = value;
+      if (this._initialized && this._entity) {
+        this.resetPaginationState();
+        this.deferReload();
+      }
+    }
+  }
 
   /**
    * The entity to display records for
@@ -669,7 +688,8 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
       this._lastGridParamsViewEntity = this.viewEntity ?? null;
       this._cachedGridParams = {
         EntityName: entity.Name,
-        ViewEntity: this.viewEntity || undefined
+        ViewEntity: this.viewEntity || undefined,
+        AlternateViewName: this._alternateViewName || undefined
       };
     }
 
@@ -1082,8 +1102,10 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
       // The view's WhereClause is the "business filter" - UserSearchString is additive
       const extraFilter = this.viewEntity?.WhereClause || undefined;
 
+      console.log('[EntityViewer] RunView with AlternateViewName:', this._alternateViewName);
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entity.Name,
+        AlternateViewName: this._alternateViewName || undefined,
         ResultType: 'simple',
         Fields: computeFieldsList(entity, this.gridState),
         MaxRows: config.pageSize,

@@ -98,3 +98,135 @@ BEGIN
       AND ef.Name = 'AdditionalBaseViews';
 END
 GO
+
+-- DefaultNavItems on Applications
+IF EXISTS (
+    SELECT 1
+    FROM ${flyway:defaultSchema}.EntityField ef
+    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
+    WHERE e.Name = 'MJ: Applications'
+      AND ef.Name = 'DefaultNavItems'
+)
+BEGIN
+    UPDATE ef
+    SET
+        ef.JSONType = 'IDefaultNavItem',
+        ef.JSONTypeIsArray = 1,
+        ef.JSONTypeDefinition = 'export interface IDefaultNavItem {
+    /** Display label for the navigation item */
+    Label: string;
+    /** Font Awesome icon class (e.g., "fa-solid fa-database") */
+    Icon: string;
+    /** Type of resource: "Dashboards", "Custom", etc. */
+    ResourceType: string;
+    /** For Dashboard resources, the ID of the dashboard record */
+    RecordID?: string | null;
+    /** For Custom resources, the registered driver class name */
+    DriverClass?: string | null;
+    /** Whether this is the default tab when the app opens */
+    isDefault?: boolean;
+}'
+    FROM ${flyway:defaultSchema}.EntityField ef
+    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
+    WHERE e.Name = 'MJ: Applications'
+      AND ef.Name = 'DefaultNavItems';
+END
+GO
+
+-- FieldSchema on Credential Types (JSON Schema standard)
+IF EXISTS (
+    SELECT 1
+    FROM ${flyway:defaultSchema}.EntityField ef
+    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
+    WHERE e.Name = 'MJ: Credential Types'
+      AND ef.Name = 'FieldSchema'
+)
+BEGIN
+    UPDATE ef
+    SET
+        ef.JSONType = 'IJSONSchemaDefinition',
+        ef.JSONTypeIsArray = 0,
+        ef.JSONTypeDefinition = 'export interface IJSONSchemaProperty {
+    /** JSON Schema type (string, number, boolean, object, array) */
+    type: string;
+    /** Human-readable title for the field */
+    title?: string;
+    /** Description of what this field is for */
+    description?: string;
+    /** Whether this field contains sensitive data */
+    isSecret?: boolean;
+    /** Display order in the UI */
+    order?: number;
+    /** Default value for the field */
+    default?: string | number | boolean | null;
+    /** Enum of allowed values */
+    enum?: string[];
+}
+
+export interface IJSONSchemaDefinition {
+    /** JSON Schema version identifier */
+    $schema?: string;
+    /** Root type (typically "object") */
+    type: string;
+    /** Property definitions keyed by field name */
+    properties: Record<string, IJSONSchemaProperty>;
+    /** Array of required property names */
+    required?: string[];
+}'
+    FROM ${flyway:defaultSchema}.EntityField ef
+    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
+    WHERE e.Name = 'MJ: Credential Types'
+      AND ef.Name = 'FieldSchema';
+END
+GO
+
+-- InputSchema on MCP Server Tools (reuses IJSONSchemaDefinition, no definition needed)
+IF EXISTS (
+    SELECT 1
+    FROM ${flyway:defaultSchema}.EntityField ef
+    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
+    WHERE e.Name = 'MJ: MCP Server Tools'
+      AND ef.Name = 'InputSchema'
+)
+BEGIN
+    UPDATE ef
+    SET
+        ef.JSONType = 'IJSONSchemaDefinition',
+        ef.JSONTypeIsArray = 0,
+        ef.JSONTypeDefinition = NULL
+    FROM ${flyway:defaultSchema}.EntityField ef
+    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
+    WHERE e.Name = 'MJ: MCP Server Tools'
+      AND ef.Name = 'InputSchema';
+END
+GO
+
+-- Annotations on MCP Server Tools (MCP spec tool hints)
+IF EXISTS (
+    SELECT 1
+    FROM ${flyway:defaultSchema}.EntityField ef
+    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
+    WHERE e.Name = 'MJ: MCP Server Tools'
+      AND ef.Name = 'Annotations'
+)
+BEGIN
+    UPDATE ef
+    SET
+        ef.JSONType = 'IMCPToolAnnotations',
+        ef.JSONTypeIsArray = 0,
+        ef.JSONTypeDefinition = 'export interface IMCPToolAnnotations {
+    /** If true, the tool does not modify any state */
+    readOnlyHint?: boolean;
+    /** If true, the tool may perform destructive operations */
+    destructiveHint?: boolean;
+    /** If true, the tool interacts with the real world (not just internal data) */
+    openWorldHint?: boolean;
+    /** If true, the tool may take a long time to complete */
+    longRunningHint?: boolean;
+}'
+    FROM ${flyway:defaultSchema}.EntityField ef
+    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
+    WHERE e.Name = 'MJ: MCP Server Tools'
+      AND ef.Name = 'Annotations';
+END
+GO
