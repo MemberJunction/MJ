@@ -350,15 +350,18 @@ import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
-// @memberjunction/ng-artifacts (7 classes)
+// @memberjunction/ng-artifacts (10 classes)
 import {
     CodeArtifactViewerComponent,
     ComponentArtifactViewerComponent,
     DataArtifactViewerComponent,
+    DocxArtifactViewerComponent,
     HtmlArtifactViewerComponent,
     JsonArtifactViewerComponent,
     MarkdownArtifactViewerComponent,
+    PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
+    XlsxArtifactViewerComponent,
 } from '@memberjunction/ng-artifacts';
 
 // @memberjunction/ng-auth-services (3 classes)
@@ -743,10 +746,13 @@ export const CLASS_REGISTRATIONS: any[] = [
     CodeArtifactViewerComponent,
     ComponentArtifactViewerComponent,
     DataArtifactViewerComponent,
+    DocxArtifactViewerComponent,
     HtmlArtifactViewerComponent,
     JsonArtifactViewerComponent,
     MarkdownArtifactViewerComponent,
+    PdfArtifactViewerComponent,
     SvgArtifactViewerComponent,
+    XlsxArtifactViewerComponent,
     MJAuth0Provider,
     MJMSALProvider,
     MJOktaProvider,
@@ -791,7 +797,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 360;
+export const CLASS_REGISTRATIONS_COUNT = 363;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
