@@ -5809,7 +5809,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: When true, the agent context must match for a cache hit. When false, agent-specific and non-agent results can be used interchangeably.`),
     CacheMustMatchConfig: z.boolean().describe(`
         * * Field Name: CacheMustMatchConfig
-        * * Display Name: Cache Must Match Configuration
+        * * Display Name: Cache Must Match Config
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.`),
@@ -5910,7 +5910,7 @@ export const MJAIPromptSchema = z.object({
         * * Description: Maximum number of failover attempts before giving up`),
     FailoverDelaySeconds: z.number().nullable().describe(`
         * * Field Name: FailoverDelaySeconds
-        * * Display Name: Failover Delay (seconds)
+        * * Display Name: Failover Delay (Seconds)
         * * SQL Data Type: int
         * * Default Value: 5
         * * Description: Initial delay in seconds between failover attempts`),
@@ -5965,6 +5965,12 @@ export const MJAIPromptSchema = z.object({
     *   * None
     *   * SystemInstruction
         * * Description: Controls behavior when the selected provider does not support native assistant prefill. Ignore = silently skip prefill, SystemInstruction = inject a system message instructing the model to start its response with the prefill text (uses fallback text from AI Model Vendor or AI Model Type), None = no fallback (prefill only works with supported providers).`),
+    RequireSpecificModels: z.boolean().describe(`
+        * * Field Name: RequireSpecificModels
+        * * Display Name: Require Specific Models
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.`),
     Template: z.string().describe(`
         * * Field Name: Template
         * * Display Name: Template Text
@@ -39297,7 +39303,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: CacheMustMatchConfig
-    * * Display Name: Cache Must Match Configuration
+    * * Display Name: Cache Must Match Config
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: When true, the configuration must match for a cache hit. When false, results from any configuration can be used.
@@ -39518,7 +39524,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
 
     /**
     * * Field Name: FailoverDelaySeconds
-    * * Display Name: Failover Delay (seconds)
+    * * Display Name: Failover Delay (Seconds)
     * * SQL Data Type: int
     * * Default Value: 5
     * * Description: Initial delay in seconds between failover attempts
@@ -39619,6 +39625,20 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
     set PrefillFallbackMode(value: 'Ignore' | 'None' | 'SystemInstruction') {
         this.Set('PrefillFallbackMode', value);
+    }
+
+    /**
+    * * Field Name: RequireSpecificModels
+    * * Display Name: Require Specific Models
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.
+    */
+    get RequireSpecificModels(): boolean {
+        return this.Get('RequireSpecificModels');
+    }
+    set RequireSpecificModels(value: boolean) {
+        this.Set('RequireSpecificModels', value);
     }
 
     /**

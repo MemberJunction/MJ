@@ -208,6 +208,12 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.while = response.nextStep.while;
                     }
                     break;
+                case 'Retry':
+                    // Message expansion: agent wants to see full content of a compacted message
+                    retVal.step = 'Retry';
+                    retVal.messageIndex = response.nextStep.messageIndex;
+                    retVal.expandReason = response.nextStep.reason;
+                    break;
                 default:
                     retVal.step = 'Retry';
                     retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
@@ -294,7 +300,7 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['actions', 'sub-agent', 'chat', 'foreach', 'while'];
+            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while'];
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 

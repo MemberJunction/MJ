@@ -1,5 +1,57 @@
 # @memberjunction/core-entities-server
 
+## 5.21.0
+
+### Patch Changes
+
+- c7dfb20: no migration/metadata changes (yet)
+- Updated dependencies [c7dfb20]
+- Updated dependencies [76cd2bc]
+- Updated dependencies [845c980]
+  - @memberjunction/ai-vector-dupe@5.21.0
+  - @memberjunction/ai-vectors-memory@5.21.0
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/ai-prompts@5.21.0
+  - @memberjunction/ai-provider-bundle@5.21.0
+  - @memberjunction/sqlserver-dataprovider@5.21.0
+  - @memberjunction/aiengine@5.21.0
+  - @memberjunction/ai-engine-base@5.21.0
+  - @memberjunction/actions-base@5.21.0
+  - @memberjunction/doc-utils@5.21.0
+  - @memberjunction/generic-database-provider@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/skip-types@5.21.0
+  - @memberjunction/ai@5.21.0
+  - @memberjunction/global@5.21.0
+  - @memberjunction/sql-converter@5.21.0
+  - @memberjunction/sql-parser@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- Updated dependencies [cc954e1]
+- Updated dependencies [2298f8a]
+  - @memberjunction/generic-database-provider@5.20.0
+  - @memberjunction/core@5.20.0
+  - @memberjunction/sqlserver-dataprovider@5.20.0
+  - @memberjunction/ai-engine-base@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/ai-prompts@5.20.0
+  - @memberjunction/ai-vector-dupe@5.20.0
+  - @memberjunction/ai-vectors-memory@5.20.0
+  - @memberjunction/actions-base@5.20.0
+  - @memberjunction/doc-utils@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/skip-types@5.20.0
+  - @memberjunction/ai-provider-bundle@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/global@5.20.0
+  - @memberjunction/sql-converter@5.20.0
+  - @memberjunction/sql-parser@5.20.0
+
 ## 5.19.0
 
 ### Patch Changes

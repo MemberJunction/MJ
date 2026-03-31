@@ -444,7 +444,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
 
   async runTest() {
     if (this.record?.ID) {
-      this.testingDialogService.OpenTestDialog(this.record.ID, this.viewContainerRef);
+      this.testingDialogService.OpenTestPanel(this.record.ID);
     }
   }
 
