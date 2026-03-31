@@ -7,6 +7,7 @@ import { ButtonsModule, ButtonModule, SplitButtonModule } from '@progress/kendo-
 import { MjButtonDirective, MjAccordionPanelComponent, MjDropdownComponent, MjComboboxComponent, MjSwitchComponent, MjDialogComponent, MjDialogTitlebarComponent, MjDialogActionsComponent, MjNumericInputComponent } from '@memberjunction/ng-ui-components';
 import { DropDownsModule, ComboBoxModule, DropDownTreesModule, DropDownListModule } from '@progress/kendo-angular-dropdowns';
 import { LayoutModule, ExpansionPanelModule, TabStripModule, SplitterModule, PanelBarModule } from '@progress/kendo-angular-layout';
+import { AngularSplitModule } from 'angular-split';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
@@ -165,7 +166,8 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         AgentsModule,
         EntityViewerModule,
         MarkdownModule,
-        NgTreesModule
+        NgTreesModule,
+        AngularSplitModule
     ],
     exports: [
         MJEntityFormComponentExtended,
