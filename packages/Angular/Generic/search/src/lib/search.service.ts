@@ -7,6 +7,7 @@
 
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Subject } from 'rxjs';
+import { Metadata } from '@memberjunction/core';
 import {
     SearchRequest,
     SearchResponse,
@@ -56,16 +57,14 @@ export class SearchService {
     private readonly maxRecentSearches = 20;
 
     /**
-     * Execute a search request. Currently returns mock data;
-     * will be connected to GraphQL UnifiedSearchService.
+     * Execute a search request via the SearchKnowledge GraphQL mutation.
      */
     public async ExecuteSearch(request: SearchRequest): Promise<SearchResponse> {
         this.IsSearching$.next(true);
         const startTime = Date.now();
 
         try {
-            // TODO: Replace with actual GraphQL call to UnifiedSearchService
-            const response = await this.executeMockSearch(request);
+            const response = await this.executeGraphQLSearch(request);
             response.ElapsedMs = Date.now() - startTime;
 
             this.SearchResults$.next(response);
@@ -210,26 +209,127 @@ export class SearchService {
     }
 
     /**
-     * Mock search implementation. Will be replaced by GraphQL calls.
+     * Execute search via the SearchKnowledge GraphQL mutation.
      */
-    private async executeMockSearch(request: SearchRequest): Promise<SearchResponse> {
-        // Simulate network latency
-        await new Promise(resolve => setTimeout(resolve, 150));
-
+    private async executeGraphQLSearch(request: SearchRequest): Promise<SearchResponse> {
         if (!request.Query.trim()) {
             return this.createEmptyResponse();
         }
 
-        // Return empty results for now -- the real implementation
-        // will call the GraphQL UnifiedSearchService
+        const provider = Metadata.Provider as { ExecuteGQL?: (query: string, variables: Record<string, unknown>) => Promise<Record<string, unknown>> };
+        if (!provider?.ExecuteGQL) {
+            return this.createEmptyResponse('GraphQL provider not available');
+        }
+
+        const mutation = `
+            mutation SearchKnowledge($query: String!, $maxResults: Float, $filters: SearchFiltersInput) {
+                SearchKnowledge(query: $query, maxResults: $maxResults, filters: $filters) {
+                    Success
+                    TotalCount
+                    ElapsedMs
+                    ErrorMessage
+                    SourceCounts {
+                        Vector
+                        FullText
+                        Entity
+                    }
+                    Results {
+                        ID
+                        EntityName
+                        RecordID
+                        SourceType
+                        Title
+                        Snippet
+                        Score
+                        ScoreBreakdown {
+                            Vector
+                            FullText
+                            Entity
+                        }
+                        Tags
+                        MatchedAt
+                    }
+                }
+            }
+        `;
+
+        const filtersInput = this.buildFiltersInput(request);
+        const variables: Record<string, unknown> = {
+            query: request.Query,
+            maxResults: request.MaxResults || 20,
+            filters: filtersInput,
+        };
+
+        const gqlResult = await provider.ExecuteGQL(mutation, variables);
+        const data = (gqlResult as Record<string, unknown>)['SearchKnowledge'] as {
+            Success: boolean;
+            Results: Array<{
+                ID: string; EntityName: string; RecordID: string; SourceType: string;
+                Title: string; Snippet: string; Score: number;
+                ScoreBreakdown: { Vector?: number; FullText?: number; Entity?: number };
+                Tags: string[]; MatchedAt: string;
+            }>;
+            TotalCount: number;
+            ElapsedMs: number;
+            SourceCounts: { Vector: number; FullText: number; Entity: number };
+            ErrorMessage?: string;
+        };
+
+        if (!data?.Success) {
+            return this.createEmptyResponse(data?.ErrorMessage ?? 'Search failed');
+        }
+
+        const results: SearchResultItem[] = (data.Results ?? []).map(r => ({
+            ID: r.ID,
+            Title: r.Title,
+            Snippet: r.Snippet,
+            EntityName: r.EntityName,
+            RecordID: r.RecordID,
+            SourceType: (r.SourceType as SearchResultItem['SourceType']) || 'entity',
+            Score: r.Score,
+            ScoreBreakdown: r.ScoreBreakdown ?? {},
+            Tags: r.Tags ?? [],
+            SourceIcon: SOURCE_TYPE_ICONS[r.SourceType] ?? 'fa-solid fa-database',
+            MatchedAt: new Date(r.MatchedAt),
+        }));
+
+        const groups = this.GroupResults(results);
+        const filters = this.BuildFilters(results);
+
         return {
             Success: true,
-            Results: [],
-            Groups: [],
-            Filters: [],
-            TotalCount: 0,
-            ElapsedMs: 0,
-            SourceCounts: { Vector: 0, FullText: 0, Entity: 0 }
+            Results: results,
+            Groups: groups,
+            Filters: filters,
+            TotalCount: data.TotalCount,
+            ElapsedMs: data.ElapsedMs,
+            SourceCounts: data.SourceCounts,
         };
+    }
+
+    /** Build the GraphQL filters input from active filter selections */
+    private buildFiltersInput(request: SearchRequest): { EntityNames?: string[]; SourceTypes?: string[]; Tags?: string[] } | null {
+        if (!request.ActiveFilters || Object.keys(request.ActiveFilters).length === 0) {
+            return null;
+        }
+
+        const result: { EntityNames?: string[]; SourceTypes?: string[]; Tags?: string[] } = {};
+
+        const entityFilters = request.ActiveFilters['Entity'];
+        if (entityFilters?.length) {
+            result.EntityNames = entityFilters;
+        }
+
+        const sourceFilters = request.ActiveFilters['Source Type'];
+        if (sourceFilters?.length) {
+            result.SourceTypes = sourceFilters;
+        }
+
+        const tagFilters = request.ActiveFilters['Tags'];
+        if (tagFilters?.length) {
+            result.Tags = tagFilters;
+        }
+
+        return Object.keys(result).length > 0 ? result : null;
     }
 }

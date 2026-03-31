@@ -1327,3 +1327,25 @@ Comprehensive UI regression tests executed via Playwright in Docker workbench. E
 
 **Priority**: Follow-up after Knowledge Hub v1 is stable. Add as Phase 1.15 when ready to implement.
 
+
+---
+
+## Follow-Up: Cross-Entity Similarity Clustering
+
+**Concept**: Given a record in Entity A, find semantically similar records across ALL other entities (or specific selected entities) and content/documents in the shared vector index. Visualize as a cluster/network graph showing relationships by similarity score.
+
+**Use Cases**:
+- "Show me everything related to this customer" — finds similar contacts, related organizations, relevant documents, matching support tickets, all by vector similarity
+- "What entities have records similar to this AI Model?" — cross-entity discovery
+- "Cluster all records above 0.7 similarity" — discover hidden relationships
+- Surface related content (PDFs, web pages, tagged items) alongside entity records
+
+**UX**: 3 HTML mockup prototypes needed (to be created after current phase):
+- Option A: Network/force-directed graph visualization — nodes are records, edges are similarity scores, color by entity type
+- Option B: Radial/sunburst layout — selected record at center, related items radiating outward by score, grouped by entity type in concentric rings  
+- Option C: List-based with entity grouping — "Related Items" panel showing grouped results with expandable entity sections, similarity bars, and quick-view previews
+
+This could become a standalone "Related Items" widget embeddable in any entity form — not just in Knowledge Hub.
+
+**Priority**: Phase 1.14 (Advanced Features). Build after Knowledge Hub v1 is stable.
+

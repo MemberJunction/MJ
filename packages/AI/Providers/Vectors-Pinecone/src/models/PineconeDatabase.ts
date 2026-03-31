@@ -125,7 +125,9 @@ export class PineconeDatabase extends VectorDBBase {
 
     public async queryIndex(params: QueryOptions): Promise<BaseResponse> {
         try{
-            let index: Index = this.getIndex().data;
+            // Use index name from params.id if available (for multi-index support)
+            const indexId = 'id' in params ? (params as { id: string }).id : undefined;
+            let index: Index = this.getIndex(indexId ? { id: indexId } : undefined).data;
             let result: QueryResponse = await index.query(params);
             return this.wrapSuccessResponse(result);
         }
