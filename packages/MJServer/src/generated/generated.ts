@@ -38789,6 +38789,9 @@ export class MJEntityDocument_ {
     @MaxLength(36)
     VectorIndexID?: string;
         
+    @Field({nullable: true, description: `JSON configuration settings for this entity document. Controls vector metadata field inclusion (which fields get stored in the vector index for search result display), large field truncation limits, and future settings like sync scheduling and threshold overrides. NULL means use system defaults.`}) 
+    Configuration?: string;
+        
     @Field() 
     @MaxLength(100)
     Type: string;
@@ -38861,6 +38864,9 @@ export class CreateMJEntityDocumentInput {
 
     @Field({ nullable: true })
     VectorIndexID: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
 }
     
 
@@ -38901,6 +38907,9 @@ export class UpdateMJEntityDocumentInput {
 
     @Field({ nullable: true })
     VectorIndexID?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -67953,6 +67962,9 @@ export class MJVectorDatabase_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON configuration settings for this vector database provider. Stores provider-specific connection settings like custom host URLs, authentication configuration, timeouts, retry policies, and batch size limits. NULL means use defaults from environment variables or provider defaults.`}) 
+    Configuration?: string;
+        
     @Field(() => [MJVectorIndex_])
     MJVectorIndexes_VectorDatabaseIDArray: MJVectorIndex_[]; // Link to MJVectorIndexes
     
@@ -67980,6 +67992,9 @@ export class CreateMJVectorDatabaseInput {
 
     @Field({ nullable: true })
     ClassKey: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
 }
     
 
@@ -68002,6 +68017,9 @@ export class UpdateMJVectorDatabaseInput {
 
     @Field({ nullable: true })
     ClassKey?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
