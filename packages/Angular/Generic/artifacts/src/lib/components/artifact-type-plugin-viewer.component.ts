@@ -142,6 +142,22 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
     return this.componentRef?.instance as BaseArtifactViewerPluginComponent || null;
   }
 
+  /**
+   * Whether the loaded plugin supports user feedback.
+   * Pass-through to the plugin instance for use by the parent panel wrapper.
+   */
+  public get SupportsFeedback(): boolean {
+    return this.pluginInstance?.SupportsFeedback ?? false;
+  }
+
+  /**
+   * Ask the loaded plugin to show its feedback UX.
+   * Pass-through to the plugin instance, called from the parent panel header.
+   */
+  public AskUserForFeedback(): void {
+    this.pluginInstance?.AskUserForFeedback();
+  }
+
   async ngOnInit(): Promise<void> {
     await this.loadViewer();
   }

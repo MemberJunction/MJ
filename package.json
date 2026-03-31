@@ -52,7 +52,7 @@
     "mj:manifest:server-bootstrap": "mj codegen manifest --appDir ./packages/ServerBootstrap --output ./packages/ServerBootstrap/src/generated/mj-class-registrations.ts",
     "mj:manifest:ng-bootstrap": "mj codegen manifest --appDir ./packages/Angular/Bootstrap --output ./packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts",
     "mj:manifest:api": "mj codegen manifest --exclude-packages @memberjunction --appDir ./packages/MJAPI --output ./packages/MJAPI/src/generated/class-registrations-manifest.ts",
-    "mj:manifest:explorer": "mj codegen manifest --exclude-packages @memberjunction --appDir ./packages/MJExplorer --output ./packages/MJExplorer/src/app/generated/class-registrations-manifest.ts",
+    "mj:manifest:explorer": "mj codegen manifest --exclude-packages @memberjunction --appDir ./packages/MJExplorer --output ./packages/MJExplorer/src/app/generated/class-registrations-manifest.ts --lazy-config ./packages/Angular/Explorer/explorer-core/src/generated/lazy-feature-config.ts",
     "mj:manifest:a2a-server": "mj codegen manifest --exclude-packages @memberjunction --appDir ./packages/AI/A2AServer --output ./packages/AI/A2AServer/src/generated/class-registrations-manifest.ts",
     "mj:manifest:mcp-server": "mj codegen manifest --exclude-packages @memberjunction --appDir ./packages/AI/MCPServer --output ./packages/AI/MCPServer/src/generated/class-registrations-manifest.ts",
     "mj:manifest:codegen-api": "mj codegen manifest --exclude-packages @memberjunction --appDir ./packages/MJCodeGenAPI --output ./packages/MJCodeGenAPI/src/generated/class-registrations-manifest.ts",
