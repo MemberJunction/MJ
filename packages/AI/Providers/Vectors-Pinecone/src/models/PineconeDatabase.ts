@@ -147,9 +147,9 @@ export class PineconeDatabase extends VectorDBBase {
         }
     }
 
-    public async createRecords(records: VectorRecord[]): Promise<BaseResponse> {
+    public async createRecords(records: VectorRecord[], indexName?: string): Promise<BaseResponse> {
         try{
-            const index: Index = await this.getIndex().data;
+            const index: Index = await this.getIndex(indexName ? { id: indexName } : undefined).data;
             let result = await index.upsert(records);
             return this.wrapSuccessResponse(result);
         }

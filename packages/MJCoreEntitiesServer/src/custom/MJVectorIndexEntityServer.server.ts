@@ -65,6 +65,7 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
         const result = await vectorDB.createIndex(params);
         if (result.success) {
             LogStatus(`Index "${this.Name}" created successfully in provider`);
+            await this.saveProviderMetadata(result.data, params);
         } else {
             LogError(`Provider returned error creating index "${this.Name}": ${result.message}`);
         }
@@ -136,5 +137,42 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
         // TODO: Look up the embedding model's dimension count from metadata
         // For now, default to 1536 which covers most common embedding models
         return 1536;
+    }
+
+    /**
+     * After provider creates the index, save the returned metadata back to our record.
+     * Stores ExternalID, Dimensions, Metric, and full provider config as JSON.
+     */
+    private async saveProviderMetadata(
+        providerResult: Record<string, unknown> | undefined,
+        params: CreateIndexParams
+    ): Promise<void> {
+        try {
+            // Save what we know from our params + whatever the provider returned
+            this.ExternalID = this.Name; // For Pinecone, name IS the external ID
+            this.Dimensions = params.dimension;
+            this.Metric = params.metric;
+
+            // Store full provider response + our spec as JSON config
+            const config: Record<string, unknown> = {};
+            if (params.additionalParams) {
+                config['spec'] = params.additionalParams;
+            }
+            if (providerResult && typeof providerResult === 'object') {
+                // Extract useful provider metadata (host, status, etc.)
+                if ('host' in providerResult) config['host'] = providerResult['host'];
+                if ('status' in providerResult) config['status'] = providerResult['status'];
+            }
+            this.ProviderConfig = JSON.stringify(config);
+
+            const saved = await super.Save();
+            if (saved) {
+                LogStatus(`Saved provider metadata for index "${this.Name}"`);
+            } else {
+                LogError(`Failed to save provider metadata for index "${this.Name}": ${this.LatestResult?.CompleteMessage}`);
+            }
+        } catch (error) {
+            LogError(`Error saving provider metadata for index "${this.Name}"`, undefined, error);
+        }
     }
 }

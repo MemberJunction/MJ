@@ -198,6 +198,21 @@
               </select>
             </div>
             <div class="suggest-field">
+              <label class="suggest-label">Vector Index</label>
+              @if (EditFilteredIndexes.length > 0) {
+                <select class="suggest-select" [(ngModel)]="EditDocVectorIndexID">
+                  <option value="">Auto (create/find matching index)</option>
+                  @for (idx of EditFilteredIndexes; track idx.ID) {
+                    <option [value]="idx.ID">{{ idx.Name }}</option>
+                  }
+                </select>
+              } @else {
+                <span class="edit-readonly-value" style="font-size: 13px; color: var(--mj-text-muted);">
+                  No indexes for this database — one will be created automatically on sync
+                </span>
+              }
+            </div>
+            <div class="suggest-field">
               <label class="suggest-label">Status</label>
               <select class="suggest-select" [(ngModel)]="EditDocStatus">
                 <option value="Active">Active</option>
@@ -398,6 +413,21 @@
                       <option [value]="db.ID">{{ db.Name }}</option>
                     }
                   </select>
+                </div>
+                <div class="suggest-field" style="margin-top: 0.75rem">
+                  <label class="suggest-label">Vector Index</label>
+                  @if (FilteredIndexesForSelectedDB.length > 0) {
+                    <select class="suggest-select" [(ngModel)]="SelectedVectorIndexID">
+                      <option value="">Auto (create/find matching index)</option>
+                      @for (idx of FilteredIndexesForSelectedDB; track idx.ID) {
+                        <option [value]="idx.ID">{{ idx.Name }}</option>
+                      }
+                    </select>
+                  } @else {
+                    <span class="edit-readonly-value" style="font-size: 13px; color: var(--mj-text-muted);">
+                      No indexes yet — create one in Configuration > Vector Database, or one will be created on sync
+                    </span>
+                  }
                 </div>
               </div>
               <div class="result-actions">

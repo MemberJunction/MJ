@@ -104,6 +104,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public EditDocEntityName = '';
     public EditDocVectorDBID = '';
     public EditDocAIModelID = '';
+    public EditDocVectorIndexID = '';
     public EditDocStatus = '';
 
     /** Open the edit panel for an entity document */
@@ -115,6 +116,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.EditDocEntityName = doc.Entity || '';
         this.EditDocVectorDBID = doc.VectorDatabaseID;
         this.EditDocAIModelID = doc.AIModelID;
+        this.EditDocVectorIndexID = doc.VectorIndexID || '';
         this.EditDocStatus = doc.Status;
         this.ShowEditPanel = true;
         this.cdr.detectChanges();
@@ -137,6 +139,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             doc.Name = this.EditDocName;
             doc.VectorDatabaseID = this.EditDocVectorDBID;
             doc.AIModelID = this.EditDocAIModelID;
+            doc.VectorIndexID = this.EditDocVectorIndexID || null;
             doc.Status = this.EditDocStatus as 'Active' | 'Inactive';
 
             const saved = await doc.Save();
@@ -211,6 +214,19 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     public AvailableVectorIndexes: { ID: string; Name: string; VectorDatabaseID: string; EmbeddingModelID: string }[] = [];
     /** Selected vector index ID — if user picks an existing one */
     public SelectedVectorIndexID = '';
+
+    /** Indexes filtered by the currently selected vector DB (for create/edit forms) */
+    public get FilteredIndexesForSelectedDB(): { ID: string; Name: string; VectorDatabaseID: string; EmbeddingModelID: string }[] {
+        const dbId = this.SelectedVectorDBID || this.EditDocVectorDBID;
+        if (!dbId) return this.AvailableVectorIndexes;
+        return this.AvailableVectorIndexes.filter(i => i.VectorDatabaseID === dbId);
+    }
+
+    /** Indexes filtered by the edit panel's selected vector DB */
+    public get EditFilteredIndexes(): { ID: string; Name: string; VectorDatabaseID: string; EmbeddingModelID: string }[] {
+        if (!this.EditDocVectorDBID) return this.AvailableVectorIndexes;
+        return this.AvailableVectorIndexes.filter(i => i.VectorDatabaseID === this.EditDocVectorDBID);
+    }
 
     /** Grouped entity list for the suggestion panel — schemas as groups, entities as items */
     public EntityGroups: { SchemaName: string; Entities: { Name: string; ID: string }[] }[] = [];
@@ -809,6 +825,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             if (idx) {
                 entityDoc.VectorDatabaseID = idx.VectorDatabaseID;
                 entityDoc.AIModelID = idx.EmbeddingModelID;
+                entityDoc.VectorIndexID = idx.ID;
             } else {
                 entityDoc.VectorDatabaseID = this.SelectedVectorDBID || this.vectorDatabases[0].ID;
                 entityDoc.AIModelID = this.SelectedEmbeddingModelID || this.findEmbeddingModel()!.ID;

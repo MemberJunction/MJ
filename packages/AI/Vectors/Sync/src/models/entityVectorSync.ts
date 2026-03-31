@@ -84,7 +84,7 @@ export class EntityVectorSyncer extends VectorBase {
     );
 
     const vectorUpserter = this.createVectorUpserter(
-      entityDocument, templateContent, obj.vectorDB, delayTimeMS, params.UpsertBatchCount
+      entityDocument, templateContent, obj.vectorDB, vectorIndexEntity.Name, delayTimeMS, params.UpsertBatchCount
     );
 
     const erdUpserter = new AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData>({
@@ -136,6 +136,7 @@ export class EntityVectorSyncer extends VectorBase {
     entityDocument: MJEntityDocumentEntity,
     templateContent: MJTemplateContentEntity,
     vectorDB: VectorDBBase,
+    indexName: string,
     delayTimeMS: number,
     batchSize?: number
   ): AsyncBatchTransform<EmbeddingData, undefined, EmbeddingData> {
@@ -143,7 +144,7 @@ export class EntityVectorSyncer extends VectorBase {
       batchSize: batchSize || 50,
       concurrencyLimit: 2,
       processBatch: (batch: EmbeddingData[]): Promise<EmbeddingData[]> =>
-        this.upsertBatchToVectorDB(batch, entityDocument, templateContent, vectorDB, delayTimeMS),
+        this.upsertBatchToVectorDB(batch, entityDocument, templateContent, vectorDB, indexName, delayTimeMS),
     });
   }
 
@@ -203,6 +204,7 @@ export class EntityVectorSyncer extends VectorBase {
     entityDocument: MJEntityDocumentEntity,
     templateContent: MJTemplateContentEntity,
     vectorDB: VectorDBBase,
+    indexName: string,
     delayTimeMS: number
   ): Promise<EmbeddingData[]> {
     const vectorRecords: VectorRecord[] = batch.map((embeddingItem: EmbeddingData) => {
@@ -219,7 +221,7 @@ export class EntityVectorSyncer extends VectorBase {
       };
     });
 
-    const response: BaseResponse = await vectorDB.createRecords(vectorRecords);
+    const response: BaseResponse = await vectorDB.createRecords(vectorRecords, indexName);
     if (!response.success) {
       LogError('Unable to save records to vector database', undefined, response.message);
     }
