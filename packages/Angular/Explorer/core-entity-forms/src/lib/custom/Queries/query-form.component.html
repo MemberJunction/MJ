@@ -12,11 +12,10 @@
             <div class="query-name-section">
               <i class="fa-solid fa-database query-title-icon"></i>
               @if (EditMode) {
-                <kendo-textbox [(ngModel)]="record.Name"
+                <input class="mj-input query-name-input"
+                  [(ngModel)]="record.Name"
                   name="queryName"
-                  placeholder="Enter query name..."
-                  class="query-name-input">
-                </kendo-textbox>
+                  placeholder="Enter query name..." />
               } @else {
                 <h4 class="query-name-display">{{ record.Name || 'Untitled Query' }}</h4>
               }
@@ -25,9 +24,8 @@
             <!-- Right: Action Buttons -->
             <div class="query-header-actions">
               @if (record.ID) {
-                <button kendoButton
-                  [themeColor]="'primary'"
-                  [size]="'large'"
+                <button mjButton
+                  variant="primary"
                   [disabled]="EditMode || !record.SQL || record.SQL.trim().length === 0"
                   (click)="runQuery()"
                   title="Run Query"
@@ -44,16 +42,16 @@
             <div class="query-meta-item">
               <label class="meta-label">Category</label>
               @if (EditMode) {
-                <kendo-dropdownlist
+                <mj-dropdown
                   [(ngModel)]="record.CategoryID"
                   name="categoryId"
-                  [data]="categoryOptions"
-                  textField="text"
-                  valueField="value"
-                  [valuePrimitive]="true"
-                  placeholder="Select category..."
+                  [Data]="categoryOptions"
+                  TextField="text"
+                  ValueField="value"
+                  [ValuePrimitive]="true"
+                  Placeholder="Select category..."
                   class="meta-dropdown">
-                </kendo-dropdownlist>
+                </mj-dropdown>
               } @else {
                 <span class="meta-value">{{ categoryPathDisplay || 'Uncategorized' }}</span>
               }
@@ -63,15 +61,15 @@
             <div class="query-meta-item">
               <label class="meta-label">Status</label>
               @if (EditMode) {
-                <kendo-dropdownlist
+                <mj-dropdown
                   [(ngModel)]="record.Status"
                   name="status"
-                  [data]="statusOptions"
-                  textField="text"
-                  valueField="value"
-                  [valuePrimitive]="true"
+                  [Data]="statusOptions"
+                  TextField="text"
+                  ValueField="value"
+                  [ValuePrimitive]="true"
                   class="meta-dropdown status-dropdown">
-                </kendo-dropdownlist>
+                </mj-dropdown>
               } @else {
                 <span class="status-pill"
                   [style.background]="getStatusBadgeColor()">
@@ -86,12 +84,12 @@
           @if (EditMode || record.Description) {
             <div class="query-description-row">
               @if (EditMode) {
-                <kendo-textarea [(ngModel)]="record.Description"
+                <textarea class="mj-input query-description-input"
+                  [(ngModel)]="record.Description"
                   name="description"
-                  [rows]="2"
-                  placeholder="Enter query description..."
-                  class="query-description-input">
-                </kendo-textarea>
+                  rows="2"
+                  placeholder="Enter query description...">
+                </textarea>
               } @else {
                 <p class="query-description-text">{{ record.Description }}</p>
               }
@@ -115,33 +113,23 @@
       <div class="query-content">
 
         <!-- SQL Query Panel -->
-        <kendo-expansionpanel
-          [(expanded)]="sqlPanelExpanded"
+        <mj-accordion-panel
+          [(Expanded)]="sqlPanelExpanded"
+          [Title]="'SQL' + (record.SQL ? ' — Defined' : '')"
           class="query-panel">
-          <ng-template kendoExpansionPanelTitleDirective>
-            <span class="panel-title-row">
-              <span class="panel-title">
-                <i class="fa-solid fa-code panel-icon sql-icon"></i>
-                SQL
-                @if (record.SQL) {
-                  <span class="panel-badge defined">
-                    <i class="fa-solid fa-check"></i> Defined
-                  </span>
-                }
-              </span>
-              <button type="button"
-                kendoButton
-                fillMode="flat"
-                size="small"
-                (click)="toggleFiltersHelp(); $event.stopPropagation()"
-                title="Show/hide SQL filters help"
-                class="filters-help-btn">
-                <i class="fa-solid fa-question-circle"></i>
-                <span>Filters Help</span>
-                <i class="fa-solid" [ngClass]="showFiltersHelp ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-              </button>
-            </span>
-          </ng-template>
+
+          <div class="sql-panel-toolbar" style="display: flex; justify-content: flex-end; padding: 4px 0 8px;">
+            <button type="button"
+              mjButton
+              variant="flat"
+              (click)="toggleFiltersHelp()"
+              title="Show/hide SQL filters help"
+              class="filters-help-btn">
+              <i class="fa-solid fa-question-circle"></i>
+              <span>Filters Help</span>
+              <i class="fa-solid" [ngClass]="showFiltersHelp ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
+            </button>
+          </div>
 
           <div class="sql-panel-content">
             <!-- Code Editor -->
@@ -173,33 +161,23 @@
               </div>
             }
           </div>
-        </kendo-expansionpanel>
+        </mj-accordion-panel>
 
         <!-- Technical Description Panel -->
         @if (record.TechnicalDescription || EditMode) {
-          <kendo-expansionpanel
-            [(expanded)]="technicalDescriptionPanelExpanded"
+          <mj-accordion-panel
+            [(Expanded)]="technicalDescriptionPanelExpanded"
+            [Title]="'Technical Description' + (record.TechnicalDescription ? ' — Documented' : '')"
             class="query-panel">
-            <ng-template kendoExpansionPanelTitleDirective>
-              <span class="panel-title">
-                <i class="fa-solid fa-book panel-icon"></i>
-                Technical Description
-                @if (record.TechnicalDescription) {
-                  <span class="panel-badge defined">
-                    <i class="fa-solid fa-check"></i> Documented
-                  </span>
-                }
-              </span>
-            </ng-template>
 
             <div class="panel-body">
               @if (EditMode) {
-                <kendo-textarea [(ngModel)]="record.TechnicalDescription"
+                <textarea class="mj-input technical-description-textarea"
+                  [(ngModel)]="record.TechnicalDescription"
                   name="technicalDescription"
-                  [rows]="8"
-                  placeholder="Technical documentation of the query logic, performance considerations, and parameter usage. Supports markdown and mermaid diagrams."
-                  class="technical-description-textarea">
-                </kendo-textarea>
+                  rows="8"
+                  placeholder="Technical documentation of the query logic, performance considerations, and parameter usage. Supports markdown and mermaid diagrams.">
+                </textarea>
                 @if (record.TechnicalDescription) {
                   <div class="technical-description-preview">
                     <div class="preview-label">
@@ -226,23 +204,15 @@
                 </div>
               }
             </div>
-          </kendo-expansionpanel>
+          </mj-accordion-panel>
         }
 
         <!-- Parameters Panel -->
         @if (record.IsSaved) {
-          <kendo-expansionpanel
-            [(expanded)]="parametersPanelExpanded"
+          <mj-accordion-panel
+            [(Expanded)]="parametersPanelExpanded"
+            [Title]="'Parameters' + (queryParameters.length > 0 ? ' (' + queryParameters.length + ')' : '')"
             class="query-panel">
-            <ng-template kendoExpansionPanelTitleDirective>
-              <span class="panel-title">
-                <i class="fa-solid fa-sliders panel-icon"></i>
-                Parameters
-                @if (queryParameters.length > 0) {
-                  <span class="panel-badge count">{{ queryParameters.length }}</span>
-                }
-              </span>
-            </ng-template>
 
             <div class="panel-body">
               @if (isLoadingParameters) {
@@ -317,23 +287,15 @@
                 }
               }
             </div>
-          </kendo-expansionpanel>
+          </mj-accordion-panel>
         }
 
         <!-- Query Fields Panel -->
         @if (record.IsSaved) {
-          <kendo-expansionpanel
-            [(expanded)]="fieldsPanelExpanded"
+          <mj-accordion-panel
+            [(Expanded)]="fieldsPanelExpanded"
+            [Title]="'Fields' + (queryFields.length > 0 ? ' (' + queryFields.length + ')' : '')"
             class="query-panel">
-            <ng-template kendoExpansionPanelTitleDirective>
-              <span class="panel-title">
-                <i class="fa-solid fa-table panel-icon"></i>
-                Fields
-                @if (queryFields.length > 0) {
-                  <span class="panel-badge count">{{ queryFields.length }}</span>
-                }
-              </span>
-            </ng-template>
 
             <div class="panel-body">
               @if (isLoadingFields) {
@@ -400,21 +362,15 @@
                 }
               }
             </div>
-          </kendo-expansionpanel>
+          </mj-accordion-panel>
         }
 
         <!-- Dependent Queries Panel -->
         @if (record.IsSaved && DependentQueries.length > 0) {
-          <kendo-expansionpanel
-            [(expanded)]="dependentsPanelExpanded"
+          <mj-accordion-panel
+            [(Expanded)]="dependentsPanelExpanded"
+            [Title]="'Dependent Queries (' + DependentQueries.length + ')'"
             class="query-panel">
-            <ng-template kendoExpansionPanelTitleDirective>
-              <span class="panel-title">
-                <i class="fa-solid fa-arrow-left panel-icon dependents-icon"></i>
-                Dependent Queries
-                <span class="panel-badge count">{{ DependentQueries.length }}</span>
-              </span>
-            </ng-template>
 
             <div class="panel-body">
               <div class="dependents-description">
@@ -454,23 +410,15 @@
                 }
               </div>
             </div>
-          </kendo-expansionpanel>
+          </mj-accordion-panel>
         }
 
         <!-- Query Entities Panel -->
         @if (record.IsSaved) {
-          <kendo-expansionpanel
-            [(expanded)]="entitiesPanelExpanded"
+          <mj-accordion-panel
+            [(Expanded)]="entitiesPanelExpanded"
+            [Title]="'Entities' + (queryEntities.length > 0 ? ' (' + queryEntities.length + ')' : '')"
             class="query-panel">
-            <ng-template kendoExpansionPanelTitleDirective>
-              <span class="panel-title">
-                <i class="fa-solid fa-database panel-icon"></i>
-                Entities
-                @if (queryEntities.length > 0) {
-                  <span class="panel-badge count">{{ queryEntities.length }}</span>
-                }
-              </span>
-            </ng-template>
 
             <div class="panel-body">
               @if (isLoadingEntities) {
@@ -509,16 +457,16 @@
                           </div>
                           @if (EditMode) {
                             <div class="entity-dropdown-wrapper">
-                              <kendo-dropdownlist
+                              <mj-dropdown
                                 [(ngModel)]="entity.EntityID"
                                 [name]="'entity_' + entity.ID"
-                                [data]="getEntityOptions()"
-                                textField="text"
-                                valueField="id"
-                                [valuePrimitive]="true"
-                                placeholder="Select entity..."
+                                [Data]="getEntityOptions()"
+                                TextField="text"
+                                ValueField="id"
+                                [ValuePrimitive]="true"
+                                Placeholder="Select entity..."
                                 class="entity-dropdown">
-                              </kendo-dropdownlist>
+                              </mj-dropdown>
                             </div>
                           }
                         </div>
@@ -544,19 +492,14 @@
                 }
               }
             </div>
-          </kendo-expansionpanel>
+          </mj-accordion-panel>
         }
 
         <!-- Details Panel -->
-        <kendo-expansionpanel
-          [(expanded)]="detailsPanelExpanded"
+        <mj-accordion-panel
+          [(Expanded)]="detailsPanelExpanded"
+          Title="Details"
           class="query-panel">
-          <ng-template kendoExpansionPanelTitleDirective>
-            <span class="panel-title">
-              <i class="fa-solid fa-info-circle panel-icon"></i>
-              Details
-            </span>
-          </ng-template>
 
           <div class="panel-body">
             <div class="details-grid">
@@ -566,7 +509,7 @@
                   <i class="fa-solid fa-file-code"></i> Template Usage
                 </label>
                 @if (EditMode) {
-                  <kendo-switch [(ngModel)]="record.UsesTemplate" name="usesTemplate"></kendo-switch>
+                  <mj-switch [(ngModel)]="record.UsesTemplate" name="usesTemplate"></mj-switch>
                 } @else {
                   <div class="detail-value">
                     @if (record.UsesTemplate) {
@@ -605,19 +548,14 @@
               }
             </div>
           </div>
-        </kendo-expansionpanel>
+        </mj-accordion-panel>
 
         <!-- Permissions Panel -->
         @if (record.IsSaved) {
-          <kendo-expansionpanel
-            [(expanded)]="permissionsPanelExpanded"
+          <mj-accordion-panel
+            [(Expanded)]="permissionsPanelExpanded"
+            Title="Permissions"
             class="query-panel">
-            <ng-template kendoExpansionPanelTitleDirective>
-              <span class="panel-title">
-                <i class="fa-solid fa-shield-alt panel-icon"></i>
-                Permissions
-              </span>
-            </ng-template>
 
             <div class="panel-body">
               @if (isLoadingPermissions) {
@@ -660,7 +598,7 @@
                 }
               }
             </div>
-          </kendo-expansionpanel>
+          </mj-accordion-panel>
         }
 
       </div>
