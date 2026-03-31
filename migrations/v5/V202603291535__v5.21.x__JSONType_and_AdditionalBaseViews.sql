@@ -133,73 +133,9 @@ BEGIN
 END
 GO
 
--- FieldSchema on Credential Types (JSON Schema standard)
-IF EXISTS (
-    SELECT 1
-    FROM ${flyway:defaultSchema}.EntityField ef
-    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
-    WHERE e.Name = 'MJ: Credential Types'
-      AND ef.Name = 'FieldSchema'
-)
-BEGIN
-    UPDATE ef
-    SET
-        ef.JSONType = 'IJSONSchemaDefinition',
-        ef.JSONTypeIsArray = 0,
-        ef.JSONTypeDefinition = 'export interface IJSONSchemaProperty {
-    /** JSON Schema type (string, number, boolean, object, array) */
-    type: string;
-    /** Human-readable title for the field */
-    title?: string;
-    /** Description of what this field is for */
-    description?: string;
-    /** Whether this field contains sensitive data */
-    isSecret?: boolean;
-    /** Display order in the UI */
-    order?: number;
-    /** Default value for the field */
-    default?: string | number | boolean | null;
-    /** Enum of allowed values */
-    enum?: string[];
-}
-
-export interface IJSONSchemaDefinition {
-    /** JSON Schema version identifier */
-    $schema?: string;
-    /** Root type (typically "object") */
-    type: string;
-    /** Property definitions keyed by field name */
-    properties: Record<string, IJSONSchemaProperty>;
-    /** Array of required property names */
-    required?: string[];
-}'
-    FROM ${flyway:defaultSchema}.EntityField ef
-    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
-    WHERE e.Name = 'MJ: Credential Types'
-      AND ef.Name = 'FieldSchema';
-END
-GO
-
--- InputSchema on MCP Server Tools (reuses IJSONSchemaDefinition, no definition needed)
-IF EXISTS (
-    SELECT 1
-    FROM ${flyway:defaultSchema}.EntityField ef
-    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
-    WHERE e.Name = 'MJ: MCP Server Tools'
-      AND ef.Name = 'InputSchema'
-)
-BEGIN
-    UPDATE ef
-    SET
-        ef.JSONType = 'IJSONSchemaDefinition',
-        ef.JSONTypeIsArray = 0,
-        ef.JSONTypeDefinition = NULL
-    FROM ${flyway:defaultSchema}.EntityField ef
-    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
-    WHERE e.Name = 'MJ: MCP Server Tools'
-      AND ef.Name = 'InputSchema';
-END
-GO
+-- NOTE: FieldSchema (Credential Types) and InputSchema (MCP Server Tools) were considered
+-- for JSONType but reverted — existing consumers (CredentialEngine, MCPClientManager) pass
+-- these values to functions expecting string. Migrating those consumers is future work.
 
 -- Annotations on MCP Server Tools (MCP spec tool hints)
 IF EXISTS (

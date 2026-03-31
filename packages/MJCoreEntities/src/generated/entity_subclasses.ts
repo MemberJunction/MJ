@@ -10695,11 +10695,10 @@ export const MJCredentialTypeSchema = z.object({
     *   * Integration
     *   * Storage
         * * Description: High-level category: AI, Communication, Storage, Authentication, Database, or Integration.`),
-    FieldSchema: z.any().describe(`
+    FieldSchema: z.string().describe(`
         * * Field Name: FieldSchema
         * * Display Name: Field Schema
         * * SQL Data Type: nvarchar(MAX)
-        * * JSON Type: IJSONSchemaDefinition
         * * Description: JSON Schema defining the required fields for this credential type. Includes field names, types, validation rules, and UI hints.`),
     IconClass: z.string().nullable().describe(`
         * * Field Name: IconClass
@@ -16324,11 +16323,10 @@ export const MJMCPServerToolSchema = z.object({
         * * Field Name: ToolDescription
         * * Display Name: Tool Description
         * * SQL Data Type: nvarchar(MAX)`),
-    InputSchema: z.any().describe(`
+    InputSchema: z.string().describe(`
         * * Field Name: InputSchema
         * * Display Name: Input Schema
         * * SQL Data Type: nvarchar(MAX)
-        * * JSON Type: IJSONSchemaDefinition
         * * Description: JSON Schema for tool input parameters`),
     OutputSchema: z.string().nullable().describe(`
         * * Field Name: OutputSchema
@@ -51817,34 +51815,6 @@ export class MJCredentialCategoryEntity extends BaseEntity<MJCredentialCategoryE
 }
 
 
-export interface IJSONSchemaProperty {
-    /** JSON Schema type (string, number, boolean, object, array) */
-    type: string;
-    /** Human-readable title for the field */
-    title?: string;
-    /** Description of what this field is for */
-    description?: string;
-    /** Whether this field contains sensitive data */
-    isSecret?: boolean;
-    /** Display order in the UI */
-    order?: number;
-    /** Default value for the field */
-    default?: string | number | boolean | null;
-    /** Enum of allowed values */
-    enum?: string[];
-}
-
-export interface IJSONSchemaDefinition {
-    /** JSON Schema version identifier */
-    $schema?: string;
-    /** Root type (typically "object") */
-    type: string;
-    /** Property definitions keyed by field name */
-    properties: Record<string, IJSONSchemaProperty>;
-    /** Array of required property names */
-    required?: string[];
-}
-
 /**
  * MJ: Credential Types - strongly typed entity sub-class
  * * Schema: __mj
@@ -51939,14 +51909,13 @@ export class MJCredentialTypeEntity extends BaseEntity<MJCredentialTypeEntityTyp
     * * Field Name: FieldSchema
     * * Display Name: Field Schema
     * * SQL Data Type: nvarchar(MAX)
-    * * JSON Type: IJSONSchemaDefinition
     * * Description: JSON Schema defining the required fields for this credential type. Includes field names, types, validation rules, and UI hints.
     */
-    get FieldSchema(): IJSONSchemaDefinition {
-        return this.Get('FieldSchema') ? JSON.parse(this.Get('FieldSchema')) : null;
+    get FieldSchema(): string {
+        return this.Get('FieldSchema');
     }
-    set FieldSchema(value: IJSONSchemaDefinition) {
-        this.Set('FieldSchema', value ? JSON.stringify(value) : null);
+    set FieldSchema(value: string) {
+        this.Set('FieldSchema', value);
     }
 
     /**
@@ -66185,14 +66154,13 @@ export class MJMCPServerToolEntity extends BaseEntity<MJMCPServerToolEntityType>
     * * Field Name: InputSchema
     * * Display Name: Input Schema
     * * SQL Data Type: nvarchar(MAX)
-    * * JSON Type: IJSONSchemaDefinition
     * * Description: JSON Schema for tool input parameters
     */
-    get InputSchema(): IJSONSchemaDefinition {
-        return this.Get('InputSchema') ? JSON.parse(this.Get('InputSchema')) : null;
+    get InputSchema(): string {
+        return this.Get('InputSchema');
     }
-    set InputSchema(value: IJSONSchemaDefinition) {
-        this.Set('InputSchema', value ? JSON.stringify(value) : null);
+    set InputSchema(value: string) {
+        this.Set('InputSchema', value);
     }
 
     /**
