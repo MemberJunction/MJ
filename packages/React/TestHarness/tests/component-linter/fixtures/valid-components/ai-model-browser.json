@@ -1,4 +1,0 @@
-{
-  "$ref": "metadata/components/spec/ai-model-browser.spec.json",
-  "description": "Valid component demonstrating AI model browser with filtering and details"
-}

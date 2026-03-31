@@ -17,8 +17,8 @@ import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
-import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
-import { DialogService } from '@progress/kendo-angular-dialog';
+import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
+import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ConversationStreamingService } from '../../services/conversation-streaming.service';
@@ -237,6 +237,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   // LocalStorage key
   private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
 
+  // Pinned messages panel state
+  public showPinsPanel: boolean = false;
+
+  /** All currently pinned messages in the active conversation, newest pin first */
+  get pinnedMessages(): MJConversationDetailEntity[] {
+    return this.messages.filter(m => m.IsPinned).reverse();
+  }
+
+  // Test feedback dialog state
+  public showTestFeedbackDialog: boolean = false;
+  public testFeedbackDialogData: TestFeedbackDialogData | null = null;
+
   // Image viewer state
   public showImageViewer: boolean = false;
   public selectedImageUrl: string = '';
@@ -263,9 +275,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     private cdr: ChangeDetectorRef,
     private mentionAutocompleteService: MentionAutocompleteService,
     private artifactPermissionService: ArtifactPermissionService,
-    private dialogService: DialogService,
     private attachmentService: ConversationAttachmentService,
-    private streamingService: ConversationStreamingService
+    private streamingService: ConversationStreamingService,
+    private confirmDialog: ConversationsDialogService
   ) {}
 
   async ngOnInit() {
@@ -823,6 +835,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   async onMessageSent(message: MJConversationDetailEntity): Promise<void> {
+    // Guard: ignore events from hidden message-input instances belonging to other conversations.
+    // Multiple inputs are kept alive in the DOM cache (one per visited conversation) and all
+    // emit events to this single parent. Without this check, a background agent's response
+    // for conversation A would pollute conversation B's message list.
+    if (!UUIDsEqual(message.ConversationID, this.conversationId)) {
+      // Invalidate that conversation's cache so fresh data loads when the user switches back
+      if (message.ConversationID) {
+        this.invalidateConversationCache(message.ConversationID);
+      }
+      return;
+    }
+
     // Clear pending message if it was sent - notify parent via output
     if (this.pendingMessage) {
       this.pendingMessageConsumed.emit();
@@ -856,6 +880,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Load attachments for the new message (if any were saved with it)
       // This ensures attachments are displayed immediately after sending
       await this.loadAttachmentsForMessage(message.ID);
+
+      // CRITICAL: If this is a new In-Progress AI message, add it to inProgressMessageIds
+      // immediately so message-input registers a PubSub streaming callback for it.
+      // buildMessagesFromCache handles the nav-away/nav-back reconnection case;
+      // this handles the active-session case where the agent just started.
+      // Without this, inProgressMessageIds stays [] and the completion event is never received.
+      if (message.Status === 'In-Progress' && message.ID && !this.inProgressMessageIds.includes(message.ID)) {
+        this.inProgressMessageIds = [...this.inProgressMessageIds, message.ID];
+      }
     }
 
     // Scroll to bottom when new message is sent
@@ -1130,6 +1163,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   async onAgentResponse(event: {message: MJConversationDetailEntity, agentResult: any}): Promise<void> {
+    // Guard: ignore agent responses from background inputs for other conversations.
+    // See onMessageSent() for the full explanation.
+    if (!UUIDsEqual(event.message.ConversationID, this.conversationId)) {
+      if (event.message.ConversationID) {
+        this.invalidateConversationCache(event.message.ConversationID);
+      }
+      return;
+    }
+
     // Add the agent's response message to the conversation
     this.messages = [...this.messages, event.message];
 
@@ -1612,6 +1654,57 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Just ensure the UI reflects the changes
   }
 
+  onMessagePinToggled(message: MJConversationDetailEntity): void {
+    // Patch the raw cache entry in-place so that nav-away/back (which rebuilds entities
+    // via LoadFromData from the cache) preserves the new pin state.
+    const cachedData = this.conversationDataCache.get(this.conversationId!);
+    if (cachedData) {
+      const row = cachedData.find(r => UUIDsEqual(r.ID, message.ID));
+      if (row) {
+        row.IsPinned = message.IsPinned;
+      }
+    }
+    // Auto-close the panel when the last pin is removed
+    if (this.showPinsPanel && this.pinnedMessages.length === 0) {
+      setTimeout(() => { this.showPinsPanel = false; this.cdr.detectChanges(); }, 600);
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Scrolls the message list to the target message and plays the beacon animation.
+   * Called when the user clicks "Jump to message" in the pins panel.
+   */
+  onJumpToMessage(messageId: string): void {
+    const el = this.scrollContainer?.nativeElement?.querySelector(`[data-message-id="${messageId}"]`);
+    if (!el) return;
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // Add beacon animation after scroll settles
+    setTimeout(() => {
+      el.classList.add('pin-beacon');
+      setTimeout(() => el.classList.remove('pin-beacon'), 1500);
+    }, 350);
+  }
+
+  /**
+   * Unpins a message from the pins panel — saves to DB and patches the cache.
+   */
+  async onUnpinFromPanel(message: MJConversationDetailEntity): Promise<void> {
+    const previous = message.IsPinned;
+    message.IsPinned = false;
+    this.cdr.detectChanges();
+    try {
+      await message.Save();
+      this.onMessagePinToggled(message);
+    } catch (err) {
+      console.error('Failed to unpin message from panel:', err);
+      message.IsPinned = previous;
+      this.cdr.detectChanges();
+    }
+  }
+
   /**
    * Handle suggested response selection from user
    * Sends the selected response as a new user message WITHOUT modifying the visible input
@@ -1633,6 +1726,59 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     } else {
       console.error('MessageInputComponent not available and not in a valid state to create conversation');
     }
+  }
+
+  async onDeleteMessage(message: MJConversationDetailEntity): Promise<void> {
+    if (!UUIDsEqual(this.conversation?.UserID, this.currentUser?.ID)) return;
+
+    // Find this message and all messages after it sorted by creation time
+    const sortedMessages = [...this.messages].sort((a, b) =>
+      new Date(a.__mj_CreatedAt!).getTime() - new Date(b.__mj_CreatedAt!).getTime()
+    );
+    const targetIndex = sortedMessages.findIndex(m => UUIDsEqual(m.ID, message.ID));
+    if (targetIndex === -1) return;
+
+    const toHide = sortedMessages.slice(targetIndex);
+    const count = toHide.length;
+
+    const confirmed = await this.confirmDialog.confirm({
+      title: 'Delete Messages',
+      message: count === 1
+        ? 'Delete this message? This cannot be undone.'
+        : `Delete this message and the ${count - 1} message${count - 1 === 1 ? '' : 's'} after it? This cannot be undone.`,
+      okText: 'Delete',
+      cancelText: 'Cancel'
+    });
+    if (!confirmed) return;
+
+    // Load all entities in parallel, then delete in parallel.
+    // entity.Delete() calls spDeleteConversationDetail which handles all FK children:
+    // hard-deletes junction tables (Artifact/Attachment/Rating), nullifies FKs on AI* records.
+    const md = new Metadata();
+    const loadResults = await Promise.all(
+      toHide.map(async msg => {
+        const entity = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
+        const loaded = await entity.Load(msg.ID);
+        return loaded ? entity : null;
+      })
+    );
+    const entities = loadResults.filter((e): e is MJConversationDetailEntity => e !== null);
+    if (entities.length === 0) return;
+
+    // Sequential deletes — parallel fires concurrent server-side transactions which race on
+    // SQLServerDataProvider's singleton _transactionDepth counter and fail with SAVE TRANSACTION errors.
+    for (const e of entities) {
+      const ok = await e.Delete();
+      if (!ok) {
+        const last = e.ResultHistory[e.ResultHistory.length - 1];
+        console.error(`Failed to delete ConversationDetail ${e.ID}: ${last?.Message ?? 'unknown error'}`, last?.Error ?? '');
+      }
+    }
+
+    const hideIds = new Set(toHide.map(m => m.ID));
+    this.messages = this.messages.filter(m => !hideIds.has(m.ID));
+    this.invalidateConversationCache(this.conversationId!);
+    this.cdr.detectChanges();
   }
 
   onRetryMessage(message: MJConversationDetailEntity): void {
@@ -1984,37 +2130,56 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     });
   }
 
+  /**
+   * Handles Shift+Click on an AI message bubble.
+   * Dumps a live snapshot of in-memory streaming and agent-run state to the browser
+   * console so engineers can debug stuck/forever-spinning conversations without
+   * needing to add any temporary code.
+   *
+   * Usage: Hold Shift and click any AI message bubble. Open DevTools Console to see the dump.
+   */
+  onDiagnosticRequested(messageId: string): void {
+    const streaming = this.streamingService.getDiagnosticSnapshot(messageId);
+    const agentRun = this.agentRunsByDetailId.get(messageId);
+    const isInProgress = this.inProgressMessageIds.includes(messageId);
+
+    console.group(`%c[MJ Diagnostic Dump] Message ${messageId}`, 'color: #0076b6; font-weight: bold');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('ConversationID:', this.conversationId);
+    console.log('isInProgress (UI):', isInProgress);
+    console.log('All inProgressMessageIds:', [...this.inProgressMessageIds]);
+    console.log('Streaming connection:', streaming.connectionStatus);
+    console.log('Streaming callbacks registered:', streaming.callbackCount);
+    if (streaming.recentCompletion) {
+      console.log('Recent completion (not yet processed):', streaming.recentCompletion);
+    }
+    if (agentRun) {
+      console.log('Agent run:', { id: agentRun.ID, status: agentRun.Status, name: agentRun.Agent });
+    } else {
+      console.log('Agent run: none loaded for this message');
+    }
+    console.groupEnd();
+  }
+
   onTestFeedbackMessage(message: MJConversationDetailEntity): void {
     if (!message.TestRunID) {
       console.error('Cannot provide test feedback: message has no TestRunID');
       return;
     }
 
-    const dialogData: TestFeedbackDialogData = {
+    this.testFeedbackDialogData = {
       testRunId: message.TestRunID,
       conversationDetailId: message.ID,
       currentUser: this.currentUser
     };
+    this.showTestFeedbackDialog = true;
+  }
 
-    const dialogRef = this.dialogService.open({
-      content: TestFeedbackDialogComponent,
-      title: 'Provide Test Feedback',
-      width: 600,
-      minHeight: 500
-    });
-
-    const dialogInstance = dialogRef.content.instance as TestFeedbackDialogComponent;
-    dialogInstance.data = dialogData;
-
-    dialogRef.result.subscribe((result) => {
-      if (result && typeof result === 'object' && 'success' in result) {
-        const feedbackResult = result as {success: boolean; feedbackId?: string};
-        if (feedbackResult.success) {
-          console.log('Test feedback saved successfully:', feedbackResult.feedbackId);
-          // TODO: Optionally show success notification
-        }
-      }
-    });
+  onTestFeedbackDialogClosed(result: TestFeedbackDialogResult): void {
+    this.showTestFeedbackDialog = false;
+    if (result.success) {
+      console.log('Test feedback saved successfully:', result.feedbackId);
+    }
   }
 
   onTaskClicked(task: MJTaskEntity): void {

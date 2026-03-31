@@ -15,6 +15,7 @@ import { ChatMessage } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
+import { AgentScratchpad } from './agent-scratchpad';
 import { AIAPIKey } from '@memberjunction/ai';
 import { AgentResponseForm } from './response-forms';
 import { ActionableCommand, AutomaticCommand } from './ui-commands';
@@ -372,6 +373,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     forEach?: ForEachOperation;
     /** While operation details when step is 'While' (v2.112+) */
     while?: WhileOperation;
+    /**
+     * Scratchpad changes from the agent's response.
+     * Processed inline (zero turn cost) alongside payload changes.
+     * @since 2.46.0
+     */
+    scratchpad?: AgentScratchpad;
     /**
      * Media outputs to promote to the agent's final outputs.
      * When set, these media items will be added to the agent's mediaOutputs collection
@@ -1091,11 +1098,11 @@ export type AgentContextData = {
     parentAgentName?: string | null;
     /** Number of sub-agents available to this agent */
     subAgentCount: number;
-    /** JSON stringified array of MJAIAgentEntityExtended objects representing sub-agents */
+    /** Markdown formatted list of sub-agent names and descriptions */
     subAgentDetails: string;
     /** Number of actions available to this agent */
     actionCount: number;
-    /** JSON stringified array of MJActionEntity objects representing available actions */
+    /** Markdown formatted details of available actions (name, params, result codes) */
     actionDetails: string;
 }
 
@@ -1144,8 +1151,12 @@ export type AgentChatMessageMetadata = {
     canExpand?: boolean;
     /** Whether this message has expired */
     isExpired?: boolean;
-    /** Type of message (for logging/debugging) */
-    messageType?: 'action-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+    /** Type of message (for lifecycle management and logging) */
+    messageType?: 'action-result' | 'loop-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+    /** Name of the sub-agent (only for sub-agent-result messages) */
+    subAgentName?: string;
+    /** ID of the sub-agent (only for sub-agent-result messages) */
+    subAgentId?: string;
 }
 
 /**

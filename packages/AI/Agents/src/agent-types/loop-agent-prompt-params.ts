@@ -63,6 +63,13 @@ export interface ResponseTypeInclusionRules {
      * @default true
      */
     while?: boolean;
+
+    /**
+     * Include scratchpad field in the response interface.
+     * Auto-aligns with includeScratchpadDocs unless explicitly set.
+     * @default true
+     */
+    scratchpad?: boolean;
 }
 
 /**
@@ -74,7 +81,8 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     responseForms: true,
     commands: true,
     forEach: true,
-    while: true
+    while: true,
+    scratchpad: true
 };
 
 /**
@@ -208,6 +216,30 @@ export interface LoopAgentTypePromptParams {
      */
     includePayloadInPrompt?: boolean;
 
+    /**
+     * Include current date, time, and day of week in the prompt.
+     * Provides the LLM with accurate temporal context so it doesn't hallucinate
+     * dates or claim it doesn't know the current time.
+     * Disable for agents where temporal context is irrelevant.
+     * @default true
+     */
+    includeDateTimeInPrompt?: boolean;
+
+    /**
+     * Include scratchpad documentation and current scratchpad state in the prompt.
+     * The scratchpad is private working memory for notes and task tracking.
+     * Disable for agents that don't need internal task management or reasoning notes.
+     * @default true
+     */
+    includeScratchpadDocs?: boolean;
+
+    /**
+     * Maximum number of tasks allowed in the scratchpad task list.
+     * When exceeded, completed tasks are auto-pruned oldest first.
+     * @default 50
+     */
+    scratchpadMaxTasks?: number;
+
     // === Content Limiting ===
 
     /**
@@ -244,6 +276,9 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeMessageExpansionDocs: true,
     includeVariableRefsDocs: true,
     includePayloadInPrompt: true,
+    includeDateTimeInPrompt: true,
+    includeScratchpadDocs: true,
+    scratchpadMaxTasks: 50,
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1
 };

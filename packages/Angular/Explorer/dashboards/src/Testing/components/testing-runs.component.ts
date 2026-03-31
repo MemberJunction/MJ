@@ -471,6 +471,7 @@ interface FilteredStats {
 
     .filter-chips {
       display: flex;
+      flex-wrap: wrap;
       gap: 6px;
     }
 
@@ -1098,6 +1099,25 @@ interface FilteredStats {
         max-width: 100vw;
       }
     }
+
+    @media (max-width: 480px) {
+      .table-header, .table-row {
+        grid-template-columns: 1fr 80px 60px;
+      }
+
+      .col-score, .col-duration {
+        display: none;
+      }
+
+      .chip {
+        min-height: 44px;
+        padding: 8px 14px;
+      }
+
+      .table-row {
+        min-height: 44px;
+      }
+    }
   `]
 })
 export class TestingRunsComponent implements OnInit, OnDestroy {
@@ -1207,7 +1227,9 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
   }
 
   StartNewTest(): void {
-    this.testingDialogService.OpenTestRunDialog({ viewContainerRef: this.viewContainerRef });
+    console.log('[TestingRuns] StartNewTest called, service IsPanelOpen before:', this.testingDialogService.IsPanelOpen);
+    this.testingDialogService.OpenAsPanel();
+    console.log('[TestingRuns] After OpenAsPanel, IsPanelOpen:', this.testingDialogService.IsPanelOpen);
   }
 
   SelectRun(run: TestRunWithFeedbackSummary): void {
@@ -1228,7 +1250,7 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
 
   RerunTest(run: TestRunWithFeedbackSummary): void {
     if (!run.testId) return;
-    this.testingDialogService.OpenTestDialog(run.testId, this.viewContainerRef);
+    this.testingDialogService.OpenTestPanel(run.testId);
   }
 
   async SubmitFeedback(): Promise<void> {
