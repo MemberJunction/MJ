@@ -16333,11 +16333,10 @@ export const MJMCPServerToolSchema = z.object({
         * * Display Name: Output Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON Schema for tool output (if provided)`),
-    Annotations: z.any().nullable().describe(`
+    Annotations: z.string().nullable().describe(`
         * * Field Name: Annotations
         * * Display Name: Annotations
         * * SQL Data Type: nvarchar(MAX)
-        * * JSON Type: IMCPToolAnnotations
         * * Description: JSON with tool hints (readOnlyHint, destructiveHint, etc.)`),
     Status: z.string().describe(`
         * * Field Name: Status
@@ -66046,17 +66045,6 @@ export class MJMCPServerConnectionEntity extends BaseEntity<MJMCPServerConnectio
 }
 
 
-export interface IMCPToolAnnotations {
-    /** If true, the tool does not modify any state */
-    readOnlyHint?: boolean;
-    /** If true, the tool may perform destructive operations */
-    destructiveHint?: boolean;
-    /** If true, the tool interacts with the real world (not just internal data) */
-    openWorldHint?: boolean;
-    /** If true, the tool may take a long time to complete */
-    longRunningHint?: boolean;
-}
-
 /**
  * MJ: MCP Server Tools - strongly typed entity sub-class
  * * Schema: __mj
@@ -66180,14 +66168,13 @@ export class MJMCPServerToolEntity extends BaseEntity<MJMCPServerToolEntityType>
     * * Field Name: Annotations
     * * Display Name: Annotations
     * * SQL Data Type: nvarchar(MAX)
-    * * JSON Type: IMCPToolAnnotations
     * * Description: JSON with tool hints (readOnlyHint, destructiveHint, etc.)
     */
-    get Annotations(): IMCPToolAnnotations | null {
-        return this.Get('Annotations') ? JSON.parse(this.Get('Annotations')) : null;
+    get Annotations(): string | null {
+        return this.Get('Annotations');
     }
-    set Annotations(value: IMCPToolAnnotations | null) {
-        this.Set('Annotations', value ? JSON.stringify(value) : null);
+    set Annotations(value: string | null) {
+        this.Set('Annotations', value);
     }
 
     /**

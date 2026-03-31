@@ -133,36 +133,7 @@ BEGIN
 END
 GO
 
--- NOTE: FieldSchema (Credential Types) and InputSchema (MCP Server Tools) were considered
--- for JSONType but reverted — existing consumers (CredentialEngine, MCPClientManager) pass
--- these values to functions expecting string. Migrating those consumers is future work.
-
--- Annotations on MCP Server Tools (MCP spec tool hints)
-IF EXISTS (
-    SELECT 1
-    FROM ${flyway:defaultSchema}.EntityField ef
-    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
-    WHERE e.Name = 'MJ: MCP Server Tools'
-      AND ef.Name = 'Annotations'
-)
-BEGIN
-    UPDATE ef
-    SET
-        ef.JSONType = 'IMCPToolAnnotations',
-        ef.JSONTypeIsArray = 0,
-        ef.JSONTypeDefinition = 'export interface IMCPToolAnnotations {
-    /** If true, the tool does not modify any state */
-    readOnlyHint?: boolean;
-    /** If true, the tool may perform destructive operations */
-    destructiveHint?: boolean;
-    /** If true, the tool interacts with the real world (not just internal data) */
-    openWorldHint?: boolean;
-    /** If true, the tool may take a long time to complete */
-    longRunningHint?: boolean;
-}'
-    FROM ${flyway:defaultSchema}.EntityField ef
-    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
-    WHERE e.Name = 'MJ: MCP Server Tools'
-      AND ef.Name = 'Annotations';
-END
-GO
+-- NOTE: FieldSchema (Credential Types), InputSchema (MCP Server Tools), and Annotations
+-- (MCP Server Tools) were considered for JSONType but reverted — existing consumers
+-- (CredentialEngine, MCPClientManager) assign strings to these fields. Migrating those
+-- consumers to use typed objects is future work.
