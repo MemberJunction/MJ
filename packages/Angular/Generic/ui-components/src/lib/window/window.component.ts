@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, HostListener, OnDestroy, ElementRef, Renderer2, ChangeDetectorRef, NgZone } from '@angular/core';
+import { Component, Input, Output, EventEmitter, HostListener, OnDestroy, ElementRef, ChangeDetectorRef, NgZone, inject } from '@angular/core';
 
 /**
  * mj-window — Floating window panel. Replaces `<kendo-window>`.
@@ -167,12 +167,9 @@ export class MjWindowComponent implements OnDestroy {
   private boundOnMouseMove: ((e: MouseEvent) => void) | null = null;
   private boundOnMouseUp: ((e: MouseEvent) => void) | null = null;
 
-  constructor(
-    private elementRef: ElementRef,
-    private renderer: Renderer2,
-    private cdr: ChangeDetectorRef,
-    private ngZone: NgZone
-  ) {}
+  private elementRef = inject(ElementRef);
+  private cdr = inject(ChangeDetectorRef);
+  private ngZone = inject(NgZone);
 
   get hasExplicitPosition(): boolean {
     return this.currentTop != null && this.currentLeft != null;
@@ -191,13 +188,11 @@ export class MjWindowComponent implements OnDestroy {
   }
 
   get resolvedTop(): string {
-    if (this.currentTop != null) return `${this.currentTop}px`;
-    return '50%';
+    return this.currentTop != null ? `${this.currentTop}px` : '50%';
   }
 
   get resolvedLeft(): string {
-    if (this.currentLeft != null) return `${this.currentLeft}px`;
-    return '50%';
+    return this.currentLeft != null ? `${this.currentLeft}px` : '50%';
   }
 
   @HostListener('document:keydown.escape')

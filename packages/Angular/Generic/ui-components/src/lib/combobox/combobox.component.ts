@@ -58,13 +58,23 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
         class="mj-input mj-combobox-input"
         type="text"
         [placeholder]="Placeholder"
-        [value]="inputText"
+        [value]="InputText"
         [disabled]="IsDisabled"
         (input)="OnInput($event)"
         (focus)="OnFocus()"
         (keydown)="OnKeyDown($event)"
         (blur)="OnInputBlur()"
         autocomplete="off" />
+      @if (InputText && !IsDisabled) {
+        <button
+          class="mj-combobox-clear"
+          type="button"
+          tabindex="-1"
+          (mousedown)="OnClear($event)"
+          aria-label="Clear">
+          <i class="fa-solid fa-times"></i>
+        </button>
+      }
       <button
         class="mj-combobox-toggle"
         type="button"
@@ -94,8 +104,8 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
             role="option"
             [attr.aria-selected]="IsItemSelected(item)"
             (mousedown)="SelectItem(item, $event)">
-            @if (itemTemplate) {
-              <ng-container *ngTemplateOutlet="itemTemplate; context: { $implicit: item }"></ng-container>
+            @if (ItemTemplate) {
+              <ng-container *ngTemplateOutlet="ItemTemplate; context: { $implicit: item }"></ng-container>
             } @else {
               {{ GetItemText(item) }}
             }
@@ -114,7 +124,16 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
   }]
 })
 export class MjComboboxComponent implements ControlValueAccessor, OnDestroy {
-  @Input() Data: Record<string, unknown>[] | string[] | readonly unknown[] | null = [];
+  @Input()
+  set Data(value: Record<string, unknown>[] | string[] | readonly unknown[] | null) {
+    this._data = value;
+    // Re-resolve display text when data arrives after writeValue
+    if (this.SelectedValue != null && !this.InputText) {
+      this.InputText = this.getDisplayText();
+    }
+  }
+  get Data(): Record<string, unknown>[] | string[] | readonly unknown[] | null { return this._data; }
+  private _data: Record<string, unknown>[] | string[] | readonly unknown[] | null = [];
   @Input() TextField = '';
   @Input() ValueField = '';
   @Input() Filterable = true;
@@ -126,7 +145,7 @@ export class MjComboboxComponent implements ControlValueAccessor, OnDestroy {
   @Output() ValueChange = new EventEmitter<unknown>();
   @Output() FilterChange = new EventEmitter<string>();
 
-  @ContentChild('mjComboboxItem') itemTemplate: TemplateRef<{ $implicit: unknown }> | null = null;
+  @ContentChild('mjComboboxItem') ItemTemplate: TemplateRef<{ $implicit: unknown }> | null = null;
 
   @ViewChild('trigger') private triggerEl!: ElementRef<HTMLElement>;
   @ViewChild('comboInput') ComboInput!: ElementRef<HTMLInputElement>;
@@ -140,7 +159,7 @@ export class MjComboboxComponent implements ControlValueAccessor, OnDestroy {
   HighlightedIndex = -1;
   SelectedValue: unknown = null;
   TriggerWidth = 0;
-  inputText = '';
+  InputText = '';
 
   Positions: ConnectedPosition[] = [
     { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top' },
@@ -153,15 +172,15 @@ export class MjComboboxComponent implements ControlValueAccessor, OnDestroy {
 
   get FilteredItems(): unknown[] {
     const data = (this.Data ?? []) as unknown[];
-    if (!this.Filterable || !this.inputText) return data;
-    const search = this.inputText.toLowerCase();
+    if (!this.Filterable || !this.InputText) return data;
+    const search = this.InputText.toLowerCase();
     return data.filter(item => this.GetItemText(item).toLowerCase().includes(search));
   }
 
   OnInput(event: Event): void {
-    this.inputText = (event.target as HTMLInputElement).value;
+    this.InputText = (event.target as HTMLInputElement).value;
     this.HighlightedIndex = 0;
-    this.FilterChange.emit(this.inputText);
+    this.FilterChange.emit(this.InputText);
     if (!this.IsOpen) this.Open();
     this.cdr.detectChanges();
   }
@@ -173,6 +192,18 @@ export class MjComboboxComponent implements ControlValueAccessor, OnDestroy {
   OnToggleMouseDown(event: Event): void {
     event.preventDefault(); // Prevent blur on the input
     this.Toggle();
+  }
+
+  OnClear(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.isBlurring = false;
+    this.InputText = '';
+    this.SelectedValue = null;
+    this.onChange(null);
+    this.ValueChange.emit(null);
+    this.Close();
+    this.cdr.detectChanges();
   }
 
   OnInputBlur(): void {
@@ -213,7 +244,7 @@ export class MjComboboxComponent implements ControlValueAccessor, OnDestroy {
 
     const value = this.ValuePrimitive && this.ValueField ? this.GetItemValue(item) : item;
     this.SelectedValue = value;
-    this.inputText = this.GetItemText(item);
+    this.InputText = this.GetItemText(item);
     this.onChange(value);
     this.ValueChange.emit(value);
     this.Close();
@@ -222,7 +253,7 @@ export class MjComboboxComponent implements ControlValueAccessor, OnDestroy {
 
   /** Commit the current input text as a value (for AllowCustom or matching item) */
   private CommitValue(): void {
-    if (!this.inputText.trim()) {
+    if (!this.InputText.trim()) {
       // Empty input — clear the value
       if (this.SelectedValue != null) {
         this.SelectedValue = null;
@@ -234,23 +265,23 @@ export class MjComboboxComponent implements ControlValueAccessor, OnDestroy {
 
     // Try to find a matching item
     const data = (this.Data ?? []) as unknown[];
-    const match = data.find(item => this.GetItemText(item).toLowerCase() === this.inputText.toLowerCase());
+    const match = data.find(item => this.GetItemText(item).toLowerCase() === this.InputText.toLowerCase());
     if (match) {
       const value = this.ValuePrimitive && this.ValueField ? this.GetItemValue(match) : match;
       if (value !== this.SelectedValue) {
         this.SelectedValue = value;
-        this.inputText = this.GetItemText(match);
+        this.InputText = this.GetItemText(match);
         this.onChange(value);
         this.ValueChange.emit(value);
       }
     } else if (this.AllowCustom) {
       // No match but custom values allowed — emit the typed text
-      this.SelectedValue = this.inputText;
-      this.onChange(this.inputText);
-      this.ValueChange.emit(this.inputText);
+      this.SelectedValue = this.InputText;
+      this.onChange(this.InputText);
+      this.ValueChange.emit(this.InputText);
     } else {
       // No match and no custom — revert to previous display
-      this.inputText = this.getDisplayText();
+      this.InputText = this.getDisplayText();
     }
   }
 
@@ -285,7 +316,7 @@ export class MjComboboxComponent implements ControlValueAccessor, OnDestroy {
         break;
       case 'Escape':
         event.preventDefault();
-        this.inputText = this.getDisplayText();
+        this.InputText = this.getDisplayText();
         this.Close();
         break;
     }
@@ -308,7 +339,7 @@ export class MjComboboxComponent implements ControlValueAccessor, OnDestroy {
 
   writeValue(value: unknown): void {
     this.SelectedValue = value;
-    this.inputText = this.getDisplayText();
+    this.InputText = this.getDisplayText();
   }
 
   registerOnChange(fn: (value: unknown) => void): void { this.onChange = fn; }

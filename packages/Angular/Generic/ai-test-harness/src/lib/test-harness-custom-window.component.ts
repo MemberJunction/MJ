@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, ViewChild, OnDestroy, AfterViewInit, Renderer2, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, ViewChild, OnDestroy, AfterViewInit, ChangeDetectorRef, inject } from '@angular/core';
 import { MjWindowComponent } from '@memberjunction/ng-ui-components';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { Metadata } from '@memberjunction/core';
@@ -25,47 +25,47 @@ export interface CustomWindowData {
     template: `
         <mj-window
             #mjWindow
-            [Visible]="windowVisible"
+            [Visible]="WindowVisible"
             [Title]="''"
-            [Width]="width"
-            [Height]="height"
-            [Top]="windowTop"
-            [Left]="windowLeft"
-            [MinWidth]="isMinimized ? 400 : 800"
-            [MinHeight]="isMinimized ? 60 : 600"
+            [Width]="Width"
+            [Height]="Height"
+            [Top]="WindowTop"
+            [Left]="WindowLeft"
+            [MinWidth]="IsMinimized ? 400 : 800"
+            [MinHeight]="IsMinimized ? 60 : 600"
             [Draggable]="true"
-            [Resizable]="!isMinimized"
-            [State]="windowState"
-            (Close)="onClose()"
-            (StateChange)="onStateChange($event)"
-            (Resize)="onWindowResize()">
+            [Resizable]="!IsMinimized"
+            [State]="WindowState"
+            (Close)="OnClose()"
+            (StateChange)="OnStateChange($event)"
+            (Resize)="OnWindowResize()">
 
             <mj-window-titlebar>
                 <div class="window-title">
-                    @if (mode === 'agent' && agent?.LogoURL) {
-                        <img [src]="agent?.LogoURL" class="title-logo" alt="Agent logo" />
-                    } @else if (mode === 'agent') {
+                    @if (Mode === 'agent' && Agent?.LogoURL) {
+                        <img [src]="Agent?.LogoURL" class="title-logo" alt="Agent logo" />
+                    } @else if (Mode === 'agent') {
                         <i class="fa-solid fa-robot title-icon"></i>
                     } @else {
                         <i class="fa-solid fa-comment-dots title-icon"></i>
                     }
-                    <span>{{ windowTitle }}</span>
+                    <span>{{ WindowTitle }}</span>
                 </div>
                 <div class="window-actions">
                     <button
-                        (click)="minimize()"
+                        (click)="Minimize()"
                         title="Minimize"
                         class="window-action-btn">
                         <i class="fa-solid fa-window-minimize"></i>
                     </button>
                     <button
-                        (click)="toggleMaximize()"
-                        [title]="isMaximized ? 'Restore' : 'Maximize'"
+                        (click)="ToggleMaximize()"
+                        [title]="IsMaximized ? 'Restore' : 'Maximize'"
                         class="window-action-btn">
-                        <i class="fa-solid" [class.fa-window-maximize]="!isMaximized" [class.fa-window-restore]="isMaximized"></i>
+                        <i class="fa-solid" [class.fa-window-maximize]="!IsMaximized" [class.fa-window-restore]="IsMaximized"></i>
                     </button>
                     <button
-                        (click)="closeButtonClick()"
+                        (click)="CloseButtonClick()"
                         title="Close"
                         class="window-action-btn">
                         <i class="fa-solid fa-xmark"></i>
@@ -74,23 +74,23 @@ export interface CustomWindowData {
             </mj-window-titlebar>
 
             <div class="window-content">
-                @if (loading) {
+                @if (Loading) {
                     <div class="loading-container">
-                        <mj-loading [text]="'Loading ' + (mode === 'agent' ? 'AI Agent' : 'AI Prompt') + '...'" size="large"></mj-loading>
+                        <mj-loading [text]="'Loading ' + (Mode === 'agent' ? 'AI Agent' : 'AI Prompt') + '...'" size="large"></mj-loading>
                     </div>
                 }
-                @else if (error) {
+                @else if (Error) {
                     <div class="error-container">
                         <i class="fa-solid fa-exclamation-triangle"></i>
-                        <p>{{ error }}</p>
+                        <p>{{ Error }}</p>
                     </div>
                 }
                 @else {
                     <mj-ai-test-harness
-                        [entity]="(agent || prompt) || null"
-                        [mode]="mode"
+                        [entity]="(Agent || Prompt) || null"
+                        [mode]="Mode"
                         [isVisible]="true"
-                        (runOpened)="onRunOpened($event)">
+                        (runOpened)="OnRunOpened($event)">
                     </mj-ai-test-harness>
                 }
             </div>
@@ -189,25 +189,25 @@ export interface CustomWindowData {
     `]
 })
 export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, AfterViewInit {
-    @ViewChild('mjWindow', { static: false }) mjWindow!: MjWindowComponent;
-    @ViewChild(AITestHarnessComponent, { static: false }) testHarness?: AITestHarnessComponent;
-    @Input() data: CustomWindowData = {};
-    @Output() closeWindow = new EventEmitter<void>();
-    @Output() minimizeWindow = new EventEmitter<void>();
-    @Output() restoreWindow = new EventEmitter<void>();
-    @Output() executionStateChange = new EventEmitter<{ windowId?: string; isExecuting: boolean }>();
+    @ViewChild('mjWindow', { static: false }) MjWindow!: MjWindowComponent;
+    @ViewChild(AITestHarnessComponent, { static: false }) TestHarness?: AITestHarnessComponent;
+    @Input() Data: CustomWindowData = {};
+    @Output() CloseWindow = new EventEmitter<void>();
+    @Output() MinimizeWindow = new EventEmitter<void>();
+    @Output() RestoreWindow = new EventEmitter<void>();
+    @Output() ExecutionStateChange = new EventEmitter<{ windowId?: string; isExecuting: boolean }>();
 
-    windowTitle = 'AI Test Harness';
-    windowVisible = true;
-    width: number = 1200;
-    height: number = 800;
-    windowTop: number = 100;
-    windowLeft: number = 100;
-    loading = true;
-    error = '';
-    windowState: 'default' | 'maximized' = 'default';
-    isMaximized = false;
-    isMinimized = false;
+    WindowTitle = 'AI Test Harness';
+    WindowVisible = false;
+    Width: number = 1200;
+    Height: number = 800;
+    WindowTop: number = 100;
+    WindowLeft: number = 100;
+    Loading = true;
+    Error = '';
+    WindowState: 'default' | 'maximized' = 'default';
+    IsMaximized = false;
+    IsMinimized = false;
 
     // Store original dimensions for restore
     private originalWidth: number = 1200;
@@ -215,156 +215,170 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
     private originalTop: number = 100;
     private originalLeft: number = 100;
 
-    agent?: MJAIAgentEntityExtended;
-    prompt?: MJAIPromptEntityExtended;
-    mode: 'agent' | 'prompt' = 'agent';
+    Agent?: MJAIAgentEntityExtended;
+    Prompt?: MJAIPromptEntityExtended;
+    Mode: 'agent' | 'prompt' = 'agent';
 
     private metadata = new Metadata();
     private executionCheckInterval: ReturnType<typeof setInterval> | null = null;
-
-    constructor(
-        private renderer: Renderer2,
-        private elementRef: ElementRef,
-        private cdr: ChangeDetectorRef
-    ) {}
+    private cdr = inject(ChangeDetectorRef);
 
     ngOnInit() {
         // Set window dimensions
-        this.width = this.convertToNumber(this.data.width) || 1200;
-        this.height = this.convertToNumber(this.data.height) || 800;
+        this.Width = this.convertToNumber(this.Data.width) || 1200;
+        this.Height = this.convertToNumber(this.Data.height) || 800;
 
         // Store original dimensions
-        this.originalWidth = this.width;
-        this.originalHeight = this.height;
+        this.originalWidth = this.Width;
+        this.originalHeight = this.Height;
 
         // Calculate centered position
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
-        this.windowLeft = Math.max(0, (viewportWidth - this.width) / 2);
-        this.windowTop = Math.max(0, (viewportHeight - this.height) / 2);
+        this.WindowLeft = Math.max(0, (viewportWidth - this.Width) / 2);
+        this.WindowTop = Math.max(0, (viewportHeight - this.Height) / 2);
 
         // Store original position
-        this.originalLeft = this.windowLeft;
-        this.originalTop = this.windowTop;
+        this.originalLeft = this.WindowLeft;
+        this.originalTop = this.WindowTop;
 
         // Determine mode
-        this.mode = this.data.mode || (this.data.promptId || this.data.prompt ? 'prompt' : 'agent');
+        this.Mode = this.Data.mode || (this.Data.promptId || this.Data.prompt ? 'prompt' : 'agent');
+
+        // Set initial title from data if available
+        if (this.Data.title) {
+            this.WindowTitle = this.Data.title;
+        } else if (this.Data.agent) {
+            this.WindowTitle = `Test: ${this.Data.agent.Name}`;
+        } else if (this.Data.prompt) {
+            this.WindowTitle = `Test: ${this.Data.prompt.Name}`;
+        }
+
+        // Show window now that position is calculated
+        this.WindowVisible = true;
 
         // Load entity
-        this.loadEntity();
+        this.LoadEntity();
     }
 
-    async loadEntity() {
+    async LoadEntity() {
         try {
-            if (this.mode === 'agent') {
-                if (this.data.agent) {
-                    this.agent = this.data.agent;
-                    this.windowTitle = this.data.title || `Test: ${this.agent.Name}`;
-                } else if (this.data.agentId) {
-                    const agentEntity = await this.metadata.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
-                    await agentEntity.Load(this.data.agentId);
-                    if (agentEntity.IsSaved) {
-                        this.agent = agentEntity;
-                        this.windowTitle = this.data.title || `Test: ${this.agent.Name}`;
-                    } else {
-                        throw new Error('Agent not found');
-                    }
-                } else {
-                    throw new Error('No agent provided');
-                }
+            if (this.Mode === 'agent') {
+                await this.loadAgent();
             } else {
-                if (this.data.prompt) {
-                    this.prompt = this.data.prompt;
-                    this.windowTitle = this.data.title || `Test: ${this.prompt.Name}`;
-                } else if (this.data.promptId) {
-                    const promptEntity = await this.metadata.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
-                    await promptEntity.Load(this.data.promptId);
-                    if (promptEntity.IsSaved) {
-                        this.prompt = promptEntity;
-                        this.windowTitle = this.data.title || `Test: ${this.prompt.Name}`;
-                    } else {
-                        throw new Error('Prompt not found');
-                    }
-                } else {
-                    throw new Error('No prompt provided');
-                }
+                await this.loadPrompt();
             }
-
-            this.loading = false;
+            this.Loading = false;
             this.cdr.detectChanges();
         } catch (err: unknown) {
-            this.error = err instanceof Error ? err.message : 'Failed to load entity';
-            this.loading = false;
+            this.Error = err instanceof Error ? err.message : 'Failed to load entity';
+            this.Loading = false;
             this.cdr.detectChanges();
         }
     }
 
-    onClose() {
-        this.closeWindow.emit();
+    private async loadAgent() {
+        if (this.Data.agent) {
+            this.Agent = this.Data.agent;
+            this.WindowTitle = this.Data.title || `Test: ${this.Agent.Name}`;
+        } else if (this.Data.agentId) {
+            const agentEntity = await this.metadata.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
+            await agentEntity.Load(this.Data.agentId);
+            if (agentEntity.IsSaved) {
+                this.Agent = agentEntity;
+                this.WindowTitle = this.Data.title || `Test: ${this.Agent.Name}`;
+            } else {
+                throw new Error('Agent not found');
+            }
+        } else {
+            throw new Error('No agent provided');
+        }
     }
 
-    closeButtonClick() {
-        this.onClose();
+    private async loadPrompt() {
+        if (this.Data.prompt) {
+            this.Prompt = this.Data.prompt;
+            this.WindowTitle = this.Data.title || `Test: ${this.Prompt.Name}`;
+        } else if (this.Data.promptId) {
+            const promptEntity = await this.metadata.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
+            await promptEntity.Load(this.Data.promptId);
+            if (promptEntity.IsSaved) {
+                this.Prompt = promptEntity;
+                this.WindowTitle = this.Data.title || `Test: ${this.Prompt.Name}`;
+            } else {
+                throw new Error('Prompt not found');
+            }
+        } else {
+            throw new Error('No prompt provided');
+        }
     }
 
-    onStateChange(state: 'default' | 'maximized') {
-        this.windowState = state;
-        this.isMaximized = state === 'maximized';
+    OnClose() {
+        this.CloseWindow.emit();
     }
 
-    onWindowResize() {
+    CloseButtonClick() {
+        this.OnClose();
+    }
+
+    OnStateChange(state: 'default' | 'maximized') {
+        this.WindowState = state;
+        this.IsMaximized = state === 'maximized';
+    }
+
+    OnWindowResize() {
         // Window was resized — no special handling needed as mj-window tracks dimensions internally
     }
 
-    onRunOpened(_event: { runId: string; runType: 'agent' | 'prompt' }) {
+    OnRunOpened(_event: { runId: string; runType: 'agent' | 'prompt' }) {
         // Auto-minimize the test harness window when a run is opened
-        this.minimize();
+        this.Minimize();
     }
 
-    minimize() {
-        if (!this.isMinimized) {
+    Minimize() {
+        if (!this.IsMinimized) {
             // Store current dimensions before minimizing
-            this.originalWidth = this.width;
-            this.originalHeight = this.height;
-            this.originalTop = this.windowTop;
-            this.originalLeft = this.windowLeft;
+            this.originalWidth = this.Width;
+            this.originalHeight = this.Height;
+            this.originalTop = this.WindowTop;
+            this.originalLeft = this.WindowLeft;
 
             // Hide the window when minimized (dock will show icon)
-            this.isMinimized = true;
-            this.windowVisible = false;
-            this.minimizeWindow.emit();
+            this.IsMinimized = true;
+            this.WindowVisible = false;
+            this.MinimizeWindow.emit();
             this.cdr.detectChanges();
         }
     }
 
-    restoreFromMinimized() {
-        this.width = this.originalWidth;
-        this.height = this.originalHeight;
-        this.windowTop = this.originalTop;
-        this.windowLeft = this.originalLeft;
-        this.windowState = 'default';
-        this.isMinimized = false;
-        this.isMaximized = false;
-        this.windowVisible = true;
+    RestoreFromMinimized() {
+        this.Width = this.originalWidth;
+        this.Height = this.originalHeight;
+        this.WindowTop = this.originalTop;
+        this.WindowLeft = this.originalLeft;
+        this.WindowState = 'default';
+        this.IsMinimized = false;
+        this.IsMaximized = false;
+        this.WindowVisible = true;
 
         this.cdr.detectChanges();
 
         // Emit restore event
-        this.restoreWindow.emit();
+        this.RestoreWindow.emit();
     }
 
-    toggleMaximize() {
-        if (this.isMinimized) {
+    ToggleMaximize() {
+        if (this.IsMinimized) {
             // First restore from minimized, then maximize
-            this.restoreFromMinimized();
+            this.RestoreFromMinimized();
             setTimeout(() => {
-                this.windowState = 'maximized';
-                this.isMaximized = true;
+                this.WindowState = 'maximized';
+                this.IsMaximized = true;
                 this.cdr.detectChanges();
             }, 100);
         } else {
-            this.windowState = this.isMaximized ? 'default' : 'maximized';
-            this.isMaximized = !this.isMaximized;
+            this.WindowState = this.IsMaximized ? 'default' : 'maximized';
+            this.IsMaximized = !this.IsMaximized;
         }
     }
 
@@ -399,13 +413,13 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
 
     private setupExecutionTracking() {
         // Use a timer to check the test harness execution state
-        if (this.testHarness) {
+        if (this.TestHarness) {
             let lastExecutingState = false;
 
             this.executionCheckInterval = setInterval(() => {
-                if (this.testHarness && this.testHarness.isExecuting !== lastExecutingState) {
-                    lastExecutingState = this.testHarness.isExecuting;
-                    this.executionStateChange.emit({ isExecuting: lastExecutingState });
+                if (this.TestHarness && this.TestHarness.isExecuting !== lastExecutingState) {
+                    lastExecutingState = this.TestHarness.isExecuting;
+                    this.ExecutionStateChange.emit({ isExecuting: lastExecutingState });
                 }
             }, 100);
         }

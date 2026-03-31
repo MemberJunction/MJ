@@ -44,6 +44,25 @@
   color: var(--mj-text-disabled);
 }
 
+.mj-combobox-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--mj-text-disabled);
+  cursor: pointer;
+  padding: 0;
+  transition: var(--mj-transition-colors);
+  font-size: 12px;
+}
+
+.mj-combobox-clear:hover {
+  color: var(--mj-text-primary);
+}
+
 .mj-combobox-toggle {
   display: flex;
   align-items: center;
