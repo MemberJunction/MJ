@@ -8,7 +8,7 @@
  * @module @memberjunction/ai-knowledge-pipeline
  */
 
-import { UserInfo, LogStatus, LogError } from '@memberjunction/core';
+import { UserInfo, LogStatus, LogError, RunView } from '@memberjunction/core';
 import { EntityVectorSyncer, VectorizeEntityParams } from '@memberjunction/ai-vector-sync';
 import {
     PipelineEntityParams,
@@ -98,24 +98,101 @@ export class KnowledgePipeline {
 
     /**
      * Process a content source (websites, files, etc.) through the pipeline.
+     * Loads content items from the source, then vectorizes each one.
      */
     public async ProcessContentSource(
         params: PipelineContentParams,
         contextUser: UserInfo
     ): Promise<PipelineResult> {
         const startTime = Date.now();
+        const errors: PipelineError[] = [];
+        let recordsVectorized = 0;
+        let recordsAutotagged = 0;
+        let totalProcessed = 0;
 
-        // Content source processing delegates to entity processing
-        // once the content items are loaded. For now, return a stub result.
-        LogStatus(`KnowledgePipeline.ProcessContentSource called for source ${params.ContentSourceID}`);
+        try {
+            this.emitProgress('extract', 0, 0, 'Loading content source items...', startTime);
+
+            // Load content items for this content source
+            const rv = new RunView();
+            const contentItems = await rv.RunView<Record<string, unknown>>({
+                EntityName: 'Content Items',
+                ExtraFilter: `ContentSourceID='${params.ContentSourceID}'`,
+                ResultType: 'simple',
+                Fields: ['ID', 'Name', 'ContentSourceID'],
+            }, contextUser);
+
+            if (!contentItems.Success) {
+                LogError(`KnowledgePipeline.ProcessContentSource: Failed to load content items: ${contentItems.ErrorMessage}`);
+                return {
+                    Success: false,
+                    TotalRecordsProcessed: 0,
+                    RecordsAutotagged: 0,
+                    RecordsVectorized: 0,
+                    ElapsedMs: Date.now() - startTime,
+                    Errors: [{ Stage: 'extract', Message: contentItems.ErrorMessage || 'Failed to load content items' }],
+                };
+            }
+
+            const items = contentItems.Results;
+            LogStatus(`KnowledgePipeline: Found ${items.length} content items for source ${params.ContentSourceID}`);
+
+            if (items.length === 0) {
+                this.emitProgress('complete', 0, 0, 'No content items found', startTime);
+                return {
+                    Success: true,
+                    TotalRecordsProcessed: 0,
+                    RecordsAutotagged: 0,
+                    RecordsVectorized: 0,
+                    ElapsedMs: Date.now() - startTime,
+                    Errors: [],
+                };
+            }
+
+            // Vectorize if enabled and EntityDocumentID is provided
+            if (params.EnableVectorization && params.EntityDocumentID) {
+                this.emitProgress('vectorize', 0, items.length, 'Starting content vectorization...', startTime);
+
+                const syncer = new EntityVectorSyncer();
+                await syncer.Config(false, contextUser);
+
+                const vectorizeParams: VectorizeEntityParams = {
+                    entityDocumentID: params.EntityDocumentID,
+                    entityID: '', // Will be resolved from the EntityDocument
+                    listBatchCount: 50,
+                };
+
+                const result = await syncer.VectorizeEntity(vectorizeParams, contextUser);
+                if (result.success) {
+                    recordsVectorized = items.length;
+                } else {
+                    errors.push({
+                        Stage: 'vectorize',
+                        Message: result.errorMessage || 'Vectorization failed',
+                    });
+                }
+
+                totalProcessed = items.length;
+                this.emitProgress('vectorize', totalProcessed, totalProcessed, 'Content vectorization complete', startTime);
+            } else {
+                totalProcessed = items.length;
+            }
+
+            this.emitProgress('complete', totalProcessed, totalProcessed, 'Pipeline complete', startTime);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`KnowledgePipeline.ProcessContentSource failed: ${message}`);
+            errors.push({ Stage: 'vectorize', Message: message });
+            this.emitProgress('error', 0, 0, message, startTime);
+        }
 
         return {
-            Success: true,
-            TotalRecordsProcessed: 0,
-            RecordsAutotagged: 0,
-            RecordsVectorized: 0,
+            Success: errors.length === 0,
+            TotalRecordsProcessed: totalProcessed,
+            RecordsAutotagged: recordsAutotagged,
+            RecordsVectorized: recordsVectorized,
             ElapsedMs: Date.now() - startTime,
-            Errors: [],
+            Errors: errors,
         };
     }
 

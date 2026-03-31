@@ -51,8 +51,14 @@ export class SearchResultsComponent {
 
     @Output() ResultSelected = new EventEmitter<SearchResultSelectedEvent>();
 
+    /** Emitted when user clicks "Open Record" — parent handles navigation */
+    @Output() OpenRecordRequested = new EventEmitter<{ EntityName: string; RecordID: string }>();
+
     /** Tracks which groups are expanded */
     public ExpandedGroups = new Set<string>();
+
+    /** ID of the currently expanded result card (null = none expanded) */
+    public ExpandedResultID: string | null = null;
 
     /** Toggle group expansion */
     public ToggleGroup(sourceType: string): void {
@@ -92,6 +98,22 @@ export class SearchResultsComponent {
         this.ResultSelected.emit({
             Result: result,
             OpenInNewTab: event.metaKey || event.ctrlKey
+        });
+    }
+
+    /** Toggle expand/collapse of a result card */
+    public ToggleExpand(result: SearchResultItem, event?: MouseEvent): void {
+        if (event) event.stopPropagation();
+        this.ExpandedResultID = this.ExpandedResultID === result.ID ? null : result.ID;
+        this.cdr.detectChanges();
+    }
+
+    /** Handle "Open Record" button click */
+    public OnOpenRecord(result: SearchResultItem, event: MouseEvent): void {
+        event.stopPropagation();
+        this.OpenRecordRequested.emit({
+            EntityName: result.EntityName,
+            RecordID: result.RecordID
         });
     }
 

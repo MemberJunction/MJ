@@ -6,7 +6,7 @@
  * Registered as BaseResourceComponent for the Knowledge Hub app.
  */
 
-import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, Injector } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ResourceData } from '@memberjunction/core-entities';
@@ -22,6 +22,7 @@ import {
     SearchFilterChangeEvent
 } from '@memberjunction/ng-search';
 import { SearchService, RecentSearch } from '@memberjunction/ng-search';
+import { ConversationBridgeService } from '@memberjunction/ng-conversations';
 
 /** Saved search entry */
 interface SavedSearch {
@@ -40,6 +41,7 @@ interface SavedSearch {
 export class KnowledgeSearchResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
     private searchService = inject(SearchService);
+    private injector = inject(Injector);
     private destroy$ = new Subject<void>();
 
     // --- State ---
@@ -72,6 +74,7 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
 
     ngAfterViewInit(): void {
         this.subscribeToSearchState();
+        this.parseUrlParameters();
     }
 
     ngOnDestroy(): void {
@@ -110,6 +113,21 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         this.cdr.detectChanges();
     }
 
+    /** Handle "Open Record" — navigate to the entity record */
+    public OnOpenRecord(event: { EntityName: string; RecordID: string }): void {
+        try {
+            // Use NavigationService if available (Explorer context)
+            // For now emit via window event for the shell to handle
+            const navEvent = new CustomEvent('mj-navigate-to-record', {
+                detail: { entityName: event.EntityName, recordID: event.RecordID },
+                bubbles: true
+            });
+            window.dispatchEvent(navEvent);
+        } catch {
+            console.warn('[KnowledgeSearch] Navigation not available');
+        }
+    }
+
     /** Close the result detail view */
     public CloseResultDetail(): void {
         this.ShowResultDetail = false;
@@ -135,9 +153,18 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         this.RunSearch();
     }
 
-    /** Handle agent CTA click */
+    /** Open the chat overlay with Knowledge Agent context */
     public OnAskAgent(): void {
-        // TODO: Navigate to agent chat or open overlay with Knowledge Agent
+        try {
+            const bridge = this.injector.get(ConversationBridgeService, null);
+            if (bridge) {
+                bridge.SwitchToOverlay(null);
+            } else {
+                console.warn('[KnowledgeSearch] ConversationBridgeService not available');
+            }
+        } catch {
+            console.warn('[KnowledgeSearch] ConversationBridgeService not available');
+        }
     }
 
     /** Apply a recent search */
@@ -165,6 +192,26 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
     }
 
     // --- Private Methods ---
+
+    /** Parse URL parameters for deep links (e.g., ?conversationId=xxx or ?q=search+term) */
+    private parseUrlParameters(): void {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const conversationId = urlParams.get('conversationId');
+            if (conversationId) {
+                // Deep link to conversation - open the agent chat
+                this.OnAskAgent();
+            }
+
+            const searchQuery = urlParams.get('q');
+            if (searchQuery) {
+                this.Query = searchQuery;
+                this.RunSearch();
+            }
+        } catch {
+            // Ignore URL parsing errors
+        }
+    }
 
     private subscribeToSearchState(): void {
         this.searchService.IsSearching$

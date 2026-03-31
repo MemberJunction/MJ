@@ -111,6 +111,7 @@
     "@memberjunction/ng-ai-test-harness": "5.21.0",
     "@memberjunction/ng-base-application": "5.21.0",
     "@memberjunction/ng-code-editor": "5.21.0",
+    "@memberjunction/ng-conversations": "5.21.0",
     "@memberjunction/ng-container-directives": "5.21.0",
     "@memberjunction/ng-core-entity-forms": "5.21.0",
     "@memberjunction/ng-agent-requests": "5.21.0",

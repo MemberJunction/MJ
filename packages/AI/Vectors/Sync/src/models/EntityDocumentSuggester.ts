@@ -168,6 +168,10 @@ export class EntityDocumentSuggester {
             FieldsJSON: JSON.stringify(fields, null, 2),
             RelationshipsJSON: JSON.stringify(relationships, null, 2),
             UseCase: useCase,
+            TemplateStyle: 'The template MUST generate natural language sentences that read like a human-written description. ' +
+                'Do NOT simply concatenate field values. Instead, compose prose that naturally incorporates the entity data. ' +
+                'For example, instead of "{{Name}} - {{Description}}" generate "{{Name}} is a {{Type}} that {{Description}}. ' +
+                'It was created on {{CreatedAt}} and is currently {{Status}}."',
         };
 
         LogStatus(`Generating Entity Document suggestion for "${entity.Name}" (${useCase})`);

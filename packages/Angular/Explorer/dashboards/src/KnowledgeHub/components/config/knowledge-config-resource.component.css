@@ -748,3 +748,103 @@
         padding: 1rem;
     }
 }
+
+/* Full-Text Search Entity Management */
+.fts-entity-controls {
+    margin-bottom: 16px;
+}
+
+.fts-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.fts-summary-count {
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+}
+
+.fts-filter-input {
+    max-width: 240px;
+}
+
+.fts-entity-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.fts-entity-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    background: var(--mj-bg-surface);
+    transition: border-color 0.15s, background 0.15s;
+}
+
+.fts-entity-card:hover {
+    border-color: var(--mj-border-strong);
+}
+
+.fts-entity-card.fts-entity-enabled {
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-border-default));
+    background: color-mix(in srgb, var(--mj-brand-primary) 3%, var(--mj-bg-surface));
+}
+
+.fts-entity-toggle {
+    flex-shrink: 0;
+}
+
+.fts-entity-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.fts-entity-name {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    margin-bottom: 4px;
+}
+
+.fts-entity-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.fts-field-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    background: var(--mj-bg-surface-sunken);
+    border-radius: 4px;
+}
+
+.fts-entity-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.fts-entity-title-field,
+.fts-entity-snippet-field {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    white-space: nowrap;
+}
+
+.fts-entity-title-field i,
+.fts-entity-snippet-field i {
+    margin-right: 4px;
+    font-size: 10px;
+}

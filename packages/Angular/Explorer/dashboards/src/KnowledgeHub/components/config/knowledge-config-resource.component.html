@@ -260,13 +260,53 @@
             <!-- Full-Text Indexes -->
             @if (ActiveSection === 'fulltext') {
                 <div class="config-section">
-                    <h2 class="config-section-title">Full-Text Indexes</h2>
-                    <p class="config-section-desc">Manage SQL full-text search catalogs and indexes for entity fields.</p>
+                    <h2 class="config-section-title">Full-Text Search Entities</h2>
+                    <p class="config-section-desc">Configure which entities are included in full-text search. Entities with text fields (Name, Description, etc.) are automatically discovered.</p>
 
-                    <div class="config-placeholder">
-                        <i class="fa-solid fa-text-width config-placeholder-icon"></i>
-                        <p>Full-text index management will be available after the KnowledgeHubFullTextIndex migration is applied.</p>
-                    </div>
+                    @if (IsLoadingFTSEntities) {
+                        <mj-loading text="Discovering searchable entities..." size="medium"></mj-loading>
+                    } @else if (FTSEntities.length === 0) {
+                        <div class="config-empty-state">
+                            <i class="fa-solid fa-text-width config-empty-icon"></i>
+                            <h3 class="config-empty-title">No Searchable Entities Found</h3>
+                            <p class="config-empty-text">No entities with text fields were discovered. Ensure your database schema includes entities with varchar/nvarchar columns.</p>
+                        </div>
+                    } @else {
+                        <div class="fts-entity-controls">
+                            <div class="fts-summary">
+                                <span class="fts-summary-count">{{ EnabledFTSCount }} of {{ FTSEntities.length }} entities enabled for search</span>
+                                <input type="text" class="config-input fts-filter-input" placeholder="Filter entities..." [(ngModel)]="FTSFilterText" />
+                            </div>
+                        </div>
+
+                        <div class="fts-entity-list">
+                            @for (entity of FilteredFTSEntities; track entity.EntityName) {
+                                <div class="fts-entity-card" [class.fts-entity-enabled]="entity.Enabled">
+                                    <div class="fts-entity-toggle">
+                                        <input type="checkbox" [(ngModel)]="entity.Enabled" (change)="OnFTSEntityToggled(entity)" class="config-checkbox" />
+                                    </div>
+                                    <div class="fts-entity-info">
+                                        <span class="fts-entity-name">{{ entity.EntityName }}</span>
+                                        <div class="fts-entity-fields">
+                                            @for (field of entity.IndexedFields; track field) {
+                                                <span class="fts-field-tag">{{ field }}</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="fts-entity-meta">
+                                        <span class="fts-entity-title-field" title="Title field">
+                                            <i class="fa-solid fa-heading"></i> {{ entity.TitleField }}
+                                        </span>
+                                        @if (entity.SnippetField !== entity.TitleField) {
+                                            <span class="fts-entity-snippet-field" title="Snippet field">
+                                                <i class="fa-solid fa-align-left"></i> {{ entity.SnippetField }}
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
                 </div>
             }
 

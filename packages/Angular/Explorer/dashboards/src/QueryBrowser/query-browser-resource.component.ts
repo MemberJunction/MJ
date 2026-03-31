@@ -62,7 +62,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /** Status filter toggles — which statuses to show in the tree */
     public StatusFilters: Record<string, boolean> = {
         'Approved': true,
-        'Pending': true,
+        'Pending': false,
         'Rejected': false,
         'Expired': false
     };

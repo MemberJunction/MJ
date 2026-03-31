@@ -147,6 +147,10 @@ Key types exported from this package:
 
 When developing against both SQL Server and PostgreSQL on the same URL/port, **clear your browser cache** after switching backends. The client-side `GraphQLDataProvider` caches entity metadata and query results in the browser. UUID casing differs between platforms (SQL Server: uppercase, PostgreSQL: lowercase), so stale cached data from one platform will cause subtle mismatches on the other. Clear browser cache or use an incognito window whenever you switch the backend database.
 
+## Full-Text Search
+
+This package implements the `createViewUserSearchSQL()` method which generates platform-specific full-text search SQL. When `entity.FullTextSearchEnabled` is true, it calls the CodeGen-generated search function. Otherwise, it falls back to `LIKE` on fields with `IncludeInUserSearchAPI`. See the **[Full-Text Search Guide](../MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)** for the complete architecture.
+
 ## Dependencies
 
 - `@memberjunction/core` — Base class and entity types

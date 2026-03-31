@@ -1,2 +1,4 @@
 export { DuplicateRecordDetector } from './duplicateRecordDetector';
-export { ComputeRRF, ScoredCandidate } from './scoring/ReciprocalRankFusion';
+// Re-export from @memberjunction/core for backward compatibility
+// ComputeRRF and ScoredCandidate have moved to @memberjunction/core
+export { ComputeRRF, ScoredCandidate } from '@memberjunction/core';

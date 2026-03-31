@@ -31,35 +31,77 @@
             </div>
 
             @for (result of GetVisibleResults(group); track result.ID) {
-                <div class="result-card" (click)="OnResultClick(result, $event)">
-                    <div class="result-card-left">
-                        @if (ShowSourceIcons) {
-                            <div class="result-card-icon">
-                                <i [class]="result.SourceIcon"></i>
+                <div class="result-card" [class.result-card-expanded]="ExpandedResultID === result.ID">
+                    <!-- Main row -->
+                    <div class="result-card-main" (click)="ToggleExpand(result)">
+                        <div class="result-card-icon-wrap">
+                            <i [class]="result.EntityIcon || result.SourceIcon || 'fa-solid fa-database'"></i>
+                        </div>
+                        <div class="result-card-body">
+                            <div class="result-card-title">{{ result.RecordName || result.Title }}</div>
+                            <div class="result-card-entity">{{ result.EntityName }}</div>
+                        </div>
+                        @if (ShowScores) {
+                            <div class="result-card-score">
+                                <div class="score-circle">
+                                    <span class="score-value">{{ FormatScore(result.Score) }}</span>
+                                </div>
                             </div>
                         }
+                        <div class="result-card-actions">
+                            <button class="result-open-btn" (click)="OnOpenRecord(result, $event)" title="Open record">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                            </button>
+                            <button class="result-expand-btn" (click)="ToggleExpand(result, $event)" title="Expand details">
+                                <i class="fa-solid" [class.fa-chevron-down]="ExpandedResultID !== result.ID"
+                                   [class.fa-chevron-up]="ExpandedResultID === result.ID"></i>
+                            </button>
+                        </div>
                     </div>
-                    <div class="result-card-body">
-                        <div class="result-card-title">{{ result.Title }}</div>
-                        <div class="result-card-entity">{{ result.EntityName }}</div>
-                        <div class="result-card-snippet">{{ result.Snippet }}</div>
-                        @if (ShowTags && result.Tags.length > 0) {
-                            <div class="result-card-tags">
-                                @for (tag of result.Tags; track tag; let ti = $index) {
-                                    @if (ti < 4) {
+
+                    <!-- Expanded detail -->
+                    @if (ExpandedResultID === result.ID) {
+                        <div class="result-card-detail">
+                            @if (result.Snippet) {
+                                <div class="detail-section">
+                                    <span class="detail-label">Preview</span>
+                                    <p class="detail-snippet">{{ result.Snippet }}</p>
+                                </div>
+                            }
+                            <div class="detail-meta">
+                                <div class="detail-meta-item">
+                                    <i class="fa-solid fa-layer-group"></i>
+                                    <span>{{ result.EntityName }}</span>
+                                </div>
+                                <div class="detail-meta-item">
+                                    <i class="fa-solid fa-fingerprint"></i>
+                                    <span class="detail-record-id">{{ result.RecordID }}</span>
+                                </div>
+                                <div class="detail-meta-item">
+                                    <i class="fa-solid fa-signal"></i>
+                                    <span>{{ result.SourceType }} match</span>
+                                </div>
+                                @if (result.ScoreBreakdown) {
+                                    <div class="detail-meta-item">
+                                        <i class="fa-solid fa-chart-bar"></i>
+                                        <span>
+                                            @if (result.ScoreBreakdown.Vector) { Vector: {{ (result.ScoreBreakdown.Vector * 100).toFixed(0) }}% }
+                                            @if (result.ScoreBreakdown.FullText) { FTS: {{ (result.ScoreBreakdown.FullText * 100).toFixed(0) }}% }
+                                        </span>
+                                    </div>
+                                }
+                            </div>
+                            @if (ShowTags && result.Tags.length > 0) {
+                                <div class="detail-tags">
+                                    @for (tag of result.Tags; track tag) {
                                         <span class="result-card-tag">{{ tag }}</span>
                                     }
-                                }
-                                @if (result.Tags.length > 4) {
-                                    <span class="result-card-tag result-card-tag-more">+{{ result.Tags.length - 4 }}</span>
-                                }
-                            </div>
-                        }
-                    </div>
-                    @if (ShowScores) {
-                        <div class="result-card-score">
-                            <div class="score-circle">
-                                <span class="score-value">{{ FormatScore(result.Score) }}</span>
+                                </div>
+                            }
+                            <div class="detail-actions">
+                                <button class="detail-open-btn" (click)="OnOpenRecord(result, $event)">
+                                    <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Record
+                                </button>
                             </div>
                         </div>
                     }

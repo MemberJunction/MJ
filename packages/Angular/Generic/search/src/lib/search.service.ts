@@ -247,6 +247,8 @@ export class SearchService {
                             Entity
                         }
                         Tags
+                        EntityIcon
+                        RecordName
                         MatchedAt
                     }
                 }
@@ -267,7 +269,7 @@ export class SearchService {
                 ID: string; EntityName: string; RecordID: string; SourceType: string;
                 Title: string; Snippet: string; Score: number;
                 ScoreBreakdown: { Vector?: number; FullText?: number; Entity?: number };
-                Tags: string[]; MatchedAt: string;
+                Tags: string[]; EntityIcon?: string; RecordName?: string; MatchedAt: string;
             }>;
             TotalCount: number;
             ElapsedMs: number;
@@ -281,7 +283,7 @@ export class SearchService {
 
         const results: SearchResultItem[] = (data.Results ?? []).map(r => ({
             ID: r.ID,
-            Title: r.Title,
+            Title: r.RecordName || r.Title,
             Snippet: r.Snippet,
             EntityName: r.EntityName,
             RecordID: r.RecordID,
@@ -289,7 +291,9 @@ export class SearchService {
             Score: r.Score,
             ScoreBreakdown: r.ScoreBreakdown ?? {},
             Tags: r.Tags ?? [],
-            SourceIcon: SOURCE_TYPE_ICONS[r.SourceType] ?? 'fa-solid fa-database',
+            SourceIcon: r.EntityIcon || SOURCE_TYPE_ICONS[r.SourceType] || 'fa-solid fa-database',
+            EntityIcon: r.EntityIcon,
+            RecordName: r.RecordName,
             MatchedAt: new Date(r.MatchedAt),
         }));
 

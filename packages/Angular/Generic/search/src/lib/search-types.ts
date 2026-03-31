@@ -27,6 +27,10 @@ export interface SearchResultItem {
     Tags: string[];
     /** Font Awesome icon class for the source type */
     SourceIcon: string;
+    /** Entity-specific icon from EntityInfo.Icon (e.g., "fa-solid fa-robot") */
+    EntityIcon?: string;
+    /** Human-readable record name resolved from EntityRecordName */
+    RecordName?: string;
     /** When this result was matched */
     MatchedAt: Date;
 }

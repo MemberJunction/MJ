@@ -827,6 +827,118 @@ export interface IRunViewProvider {
      * @returns Response containing status and fresh data only for stale caches
      */
     RunViewsWithCacheCheck?<T = unknown>(params: RunViewWithCacheCheckParams[], contextUser?: UserInfo): Promise<RunViewsWithCacheCheckResponse<T>>
+
+    /**
+     * Performs a full-text search across all entities that have FullTextSearchEnabled=true in their metadata.
+     * Uses the database-native full-text search capabilities (SQL Server FREETEXT via CodeGen-generated functions,
+     * PostgreSQL tsvector/GIN indexes, etc.) through the existing RunView + UserSearchString infrastructure.
+     *
+     * @param params Search parameters including the search text and optional entity name filter
+     * @param contextUser Optional user context for permissions and row-level security
+     * @returns Array of search results grouped by entity, with title, snippet, and relevance score
+     *
+     * @see {@link FullTextSearchParams} for parameter details
+     * @see {@link FullTextSearchResult} for result structure
+     * @see /packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md for comprehensive documentation
+     */
+    FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult>
+}
+
+// ============================================================================
+// FULL-TEXT SEARCH TYPES
+// ============================================================================
+
+/**
+ * Parameters for the FullTextSearch method.
+ */
+export type FullTextSearchParams = {
+    /**
+     * The search text to find across entities. This is passed as UserSearchString to RunView,
+     * which routes it through the database-native full-text search infrastructure
+     * (SQL Server FREETEXT functions or PostgreSQL tsvector queries).
+     */
+    SearchText: string;
+
+    /**
+     * Optional list of entity names to restrict the search to. Each entity in this list
+     * MUST have FullTextSearchEnabled=true — entities without FTS enabled will be silently skipped.
+     * If not provided, ALL entities with FullTextSearchEnabled=true are searched.
+     */
+    EntityNames?: string[];
+
+    /**
+     * Maximum number of rows to return per entity. Defaults to 10 if not specified.
+     * Helps control result set size when searching across many entities.
+     */
+    MaxRowsPerEntity?: number;
+}
+
+/**
+ * A single matched record from a full-text search.
+ */
+export type FullTextSearchResultItem = {
+    /**
+     * The name of the entity this result came from (e.g., "MJ: AI Models")
+     */
+    EntityName: string;
+
+    /**
+     * The primary key value of the matched record
+     */
+    RecordID: string;
+
+    /**
+     * The display title for this result, sourced from the entity's best "name" field
+     * (Name, Title, Subject, etc.)
+     */
+    Title: string;
+
+    /**
+     * A text snippet providing context for the match, sourced from the entity's best
+     * "description" field (Description, Summary, Body, etc.). Truncated to ~200 chars.
+     */
+    Snippet: string;
+
+    /**
+     * Relevance score for ranking. Uses rank-based scoring (1/(rank+1)) to be
+     * compatible with Reciprocal Rank Fusion (RRF) when combined with vector search results.
+     */
+    Score: number;
+}
+
+/**
+ * Result of a FullTextSearch operation across multiple entities.
+ */
+export type FullTextSearchResult = {
+    /**
+     * Whether the search completed successfully
+     */
+    Success: boolean;
+
+    /**
+     * Error message if Success is false
+     */
+    ErrorMessage?: string;
+
+    /**
+     * All matched records across all searched entities, ordered by relevance score descending
+     */
+    Results: FullTextSearchResultItem[];
+
+    /**
+     * Total number of results found
+     */
+    TotalCount: number;
+
+    /**
+     * Number of entities that were searched
+     */
+    EntitiesSearched: number;
+
+    /**
+     * Time taken to execute the search in milliseconds
+     */
+    ElapsedMs: number;
 }
 
 // ============================================================================

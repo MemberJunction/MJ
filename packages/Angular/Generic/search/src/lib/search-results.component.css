@@ -77,34 +77,48 @@
     transition: transform 0.2s ease;
 }
 
-/* Result Card */
+/* Result Card — expandable */
 .result-card {
+    border: 1px solid var(--mj-border-subtle);
+    border-radius: 8px;
+    margin: 0 0 0.35rem 1.5rem;
+    overflow: hidden;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.result-card:hover {
+    border-color: var(--mj-border-default);
+}
+
+.result-card-expanded {
+    border-color: var(--mj-brand-primary);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.result-card-main {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.75rem;
-    padding: 0.75rem 1rem 0.75rem 1.5rem;
+    padding: 0.65rem 0.85rem;
     cursor: pointer;
     transition: background 0.1s ease;
 }
 
-.result-card:hover {
+.result-card-main:hover {
     background: var(--mj-bg-surface-hover);
 }
 
-.result-card-left {
-    flex-shrink: 0;
-}
-
-.result-card-icon {
-    width: 2.25rem;
-    height: 2.25rem;
+.result-card-icon-wrap {
+    width: 2rem;
+    height: 2rem;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 8px;
-    background: var(--mj-bg-surface-sunken);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
     color: var(--mj-brand-primary);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
+    flex-shrink: 0;
 }
 
 .result-card-body {
@@ -114,15 +128,137 @@
 
 .result-card-title {
     color: var(--mj-text-primary);
-    font-weight: 500;
-    font-size: 0.9rem;
-    margin-bottom: 0.15rem;
+    font-weight: 600;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .result-card-entity {
     color: var(--mj-text-muted);
-    font-size: 0.75rem;
+    font-size: 0.7rem;
+}
+
+.result-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.result-open-btn,
+.result-expand-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--mj-text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.result-open-btn:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+}
+
+.result-expand-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+/* Expanded detail panel */
+.result-card-detail {
+    padding: 0.75rem 1rem 0.85rem 3.5rem;
+    border-top: 1px solid var(--mj-border-subtle);
+    background: var(--mj-bg-surface-card);
+}
+
+.detail-section {
+    margin-bottom: 0.65rem;
+}
+
+.detail-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--mj-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
     margin-bottom: 0.25rem;
+    display: block;
+}
+
+.detail-snippet {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--mj-text-secondary);
+    line-height: 1.5;
+}
+
+.detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
+}
+
+.detail-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    color: var(--mj-text-muted);
+}
+
+.detail-meta-item i {
+    font-size: 0.65rem;
+}
+
+.detail-record-id {
+    font-family: monospace;
+    font-size: 0.7rem;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.detail-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 0.65rem;
+}
+
+.detail-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.detail-open-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 1px solid var(--mj-brand-primary);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--mj-brand-primary);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.detail-open-btn:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 
 .result-card-snippet {

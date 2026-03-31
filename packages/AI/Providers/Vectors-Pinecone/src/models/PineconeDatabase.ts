@@ -126,9 +126,15 @@ export class PineconeDatabase extends VectorDBBase {
     public async queryIndex(params: QueryOptions): Promise<BaseResponse> {
         try{
             // Use index name from params.id if available (for multi-index support)
+            // But strip 'id' before passing to Pinecone query() since Pinecone treats
+            // 'id' as "query by record ID" which is mutually exclusive with 'vector'
             const indexId = 'id' in params ? (params as { id: string }).id : undefined;
             let index: Index = this.getIndex(indexId ? { id: indexId } : undefined).data;
-            let result: QueryResponse = await index.query(params);
+            const queryParams = { ...params };
+            if (indexId && 'vector' in queryParams) {
+                delete (queryParams as Record<string, unknown>)['id'];
+            }
+            let result: QueryResponse = await index.query(queryParams);
             return this.wrapSuccessResponse(result);
         }
         catch(ex){

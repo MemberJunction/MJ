@@ -62,6 +62,15 @@ interface EmbeddingModelRecord {
     Name: string;
 }
 
+/** Full-text searchable entity */
+interface FTSEntityRecord {
+    EntityName: string;
+    IndexedFields: string[];
+    TitleField: string;
+    SnippetField: string;
+    Enabled: boolean;
+}
+
 @RegisterClass(BaseResourceComponent, 'KnowledgeConfigResource')
 @Component({
     standalone: false,
@@ -136,6 +145,21 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         return this.HasVectorDBProvider && this.HasVectorIndex && this.HasEmbeddingModel;
     }
 
+    // --- Full-Text Search Entities ---
+    public FTSEntities: FTSEntityRecord[] = [];
+    public IsLoadingFTSEntities = false;
+    public FTSFilterText = '';
+
+    public get EnabledFTSCount(): number {
+        return this.FTSEntities.filter(e => e.Enabled).length;
+    }
+
+    public get FilteredFTSEntities(): FTSEntityRecord[] {
+        if (!this.FTSFilterText.trim()) return this.FTSEntities;
+        const filter = this.FTSFilterText.toLowerCase();
+        return this.FTSEntities.filter(e => e.EntityName.toLowerCase().includes(filter));
+    }
+
     // --- Create Index Form ---
     public ShowCreateIndexForm = false;
     public IsCreatingIndex = false;
@@ -182,6 +206,12 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     public ResetConfiguration(): void {
         this.loadConfiguration();
         this.HasUnsavedChanges = false;
+        this.cdr.detectChanges();
+    }
+
+    /** Handle toggling an FTS entity */
+    public OnFTSEntityToggled(entity: FTSEntityRecord): void {
+        this.HasUnsavedChanges = true;
         this.cdr.detectChanges();
     }
 
@@ -313,6 +343,59 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             console.error('[KnowledgeConfig] Error loading configuration:', error);
         } finally {
             this.IsLoading = false;
+            this.cdr.detectChanges();
+        }
+
+        // Load FTS entities in background (doesn't block main config)
+        this.loadFTSEntities();
+    }
+
+    private async loadFTSEntities(): Promise<void> {
+        this.IsLoadingFTSEntities = true;
+        this.cdr.detectChanges();
+
+        try {
+            const md = new Metadata();
+            const allEntities = md.Entities;
+            const ftsEntities: FTSEntityRecord[] = [];
+
+            for (const entity of allEntities) {
+                const textFields = entity.Fields.filter(
+                    (f: { Name: string; Type: string; MaxLength: number; IsPrimaryKey: boolean }) =>
+                        !f.IsPrimaryKey &&
+                        !f.Name.startsWith('__mj') &&
+                        (f.Type.toLowerCase().includes('varchar') ||
+                         f.Type.toLowerCase().includes('text') ||
+                         f.Type.toLowerCase() === 'ntext') &&
+                        f.MaxLength !== 1
+                );
+
+                if (textFields.length === 0) continue;
+
+                const preferredTitleNames = ['Name', 'Title', 'Subject', 'Label'];
+                const preferredSnippetNames = ['Description', 'Summary', 'Body', 'Content', 'Text', 'Notes'];
+
+                const titleField = textFields.find((f: { Name: string }) => preferredTitleNames.includes(f.Name))?.Name
+                    || textFields[0]?.Name || 'Name';
+                const snippetField = textFields.find((f: { Name: string }) =>
+                    preferredSnippetNames.includes(f.Name) && f.Name !== titleField
+                )?.Name || titleField;
+
+                ftsEntities.push({
+                    EntityName: entity.Name,
+                    IndexedFields: textFields.slice(0, 4).map((f: { Name: string }) => f.Name),
+                    TitleField: titleField,
+                    SnippetField: snippetField,
+                    Enabled: true,
+                });
+            }
+
+            ftsEntities.sort((a, b) => a.EntityName.localeCompare(b.EntityName));
+            this.FTSEntities = ftsEntities;
+        } catch (error) {
+            console.error('[KnowledgeConfig] Error loading FTS entities:', error);
+        } finally {
+            this.IsLoadingFTSEntities = false;
             this.cdr.detectChanges();
         }
     }
