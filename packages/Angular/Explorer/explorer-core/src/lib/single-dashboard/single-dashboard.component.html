@@ -16,13 +16,13 @@
     <div class="dashboard-title">
       @if (isEditDashboardNameDialogOpened) {
         <div class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
-          <input class="k-textbox k-input k-input-md k-rounded-md k-input-solid" (keydown.enter)="saveDashboardName()" type="text" placeholder="Enter name here" id="txtDashboardName" #dashboardNameInput>
-          <button kendoButton (click)="saveDashboardName()">
-            <span class="k-i-check k-button-icon k-icon ng-star-inserted"></span>
+          <input class="mj-input" (keydown.enter)="saveDashboardName()" type="text" placeholder="Enter name here" id="txtDashboardName" #dashboardNameInput>
+          <button mjButton (click)="saveDashboardName()">
+            <span class="fa-solid fa-check"></span>
             Save
           </button>
-          <button kendoButton (click)="cancelNameChange()" >
-            <span class="k-icon k-i-cancel"></span>
+          <button mjButton (click)="cancelNameChange()" >
+            <span class="fa-solid fa-xmark"></span>
             Cancel
           </button>
         </div>
@@ -34,21 +34,21 @@
     <div class="dashboard-header k-d-flex k-flex-row k-justify-content-flex-end">
       @if (isEditingDashboard) {
         <div>
-          <button kendoButton (click)="onClickSaveDashboard()">
+          <button mjButton (click)="onClickSaveDashboard()">
             <span class="fa-solid fa-check"></span>
             Save
           </button>
-          <button kendoButton (click)="onclickCancelChanges()">
+          <button mjButton (click)="onclickCancelChanges()">
             <span class="fa-solid fa-xmark"></span>
             Cancel
           </button>
         </div>
       } @else {
-        <button kendoButton (click)="addItem()">
+        <button mjButton (click)="addItem()">
           <span class="fa-solid fa-plus"></span>
           Add Item
         </button>
-        <button kendoButton (click)="toggleEditDashboard(true)" >
+        <button mjButton (click)="toggleEditDashboard(true)" >
           <span class="fa-solid fa-gear"></span>
           Edit Dashboard
         </button>
@@ -62,7 +62,7 @@
         <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
         <h3>This dashboard is empty</h3>
         <p>Start by adding reports or user views to your dashboard</p>
-        <button kendoButton themeColor="primary" (click)="addItem()">
+        <button mjButton variant="primary" (click)="addItem()">
           <span class="fa-solid fa-plus"></span>
           Add Item
         </button>
@@ -89,10 +89,10 @@
               @if(!isEditingDashboard) {
                 <div>
                   <div class="btn-wrapper">
-                    <button kendoButton title="Edit dashboard" (click)="toggleEditDashboard(true)">
+                    <button mjButton title="Edit dashboard" (click)="toggleEditDashboard(true)">
                       <span class="fa-solid fa-pen-to-square"></span>
                     </button>
-                    <button kendoButton title="Remove item" (click)="showConfirmDeleteDashboardItem(item)">
+                    <button mjButton title="Remove item" (click)="showConfirmDeleteDashboardItem(item)">
                       <span class="fa-solid fa-trash"></span>
                     </button>
                   </div>

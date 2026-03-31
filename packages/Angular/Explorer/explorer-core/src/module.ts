@@ -24,6 +24,7 @@ import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
 // MJ
+import { MjButtonDirective, MjDialogComponent, MjDialogTitlebarComponent, MjDialogActionsComponent, MjDropdownComponent, MjWindowComponent, MjWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
@@ -143,7 +144,14 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     ArtifactsModule,
     SharedGenericModule,
     EntityViewerModule,
-    ListDetailGridModule
+    ListDetailGridModule,
+    MjButtonDirective,
+    MjDialogComponent,
+    MjDialogTitlebarComponent,
+    MjDialogActionsComponent,
+    MjDropdownComponent,
+    MjWindowComponent,
+    MjWindowTitlebarComponent
   ],
   exports: [
     FormToolbarComponent,

@@ -1,13 +1,13 @@
 <div class="k-overlay"></div>
-<kendo-window
-  class="kendo-window-hide-restore"
-  [width]="500"
-  [minHeight]="300"
-  [minWidth]="400"
-  [resizable]="true"
-  (close)="closeDialog($event)"
-  [state]="'maximized'"
-  title="Customize Dashboard">
+<mj-window
+  [Visible]="true"
+  [Width]="500"
+  [MinHeight]="300"
+  [MinWidth]="400"
+  [Resizable]="true"
+  (Close)="closeDialog($event)"
+  [State]="'maximized'"
+  Title="Customize Dashboard">
   <div class="k-d-flex k-flex-col k-justify-content-between k-h-full custom-dialog-body">
     <div class="dialog-content ">
       <div class="dialog-actions">
@@ -27,7 +27,7 @@
           <kendo-tilelayout-item [col]="item.col" [colSpan]="item.colSpan" [rowSpan]="item.rowSpan" [id]="item.uniqueId">
             <kendo-tilelayout-item-header>
               {{item.title}}
-              <button kendoButton class="k-float-right" (click)="removeItem(item)">X</button>
+              <button mjButton class="k-float-right" (click)="removeItem(item)">X</button>
             </kendo-tilelayout-item-header>
             <kendo-tilelayout-item-body>
               <!-- <div class="overlay"></div> -->
@@ -40,15 +40,15 @@
     </div>
     <div class="dialog-footer">
       <div class="k-card-footer !k-border-none">
-        <button kendoButton (click)="closeDialog($event)" >
+        <button mjButton (click)="closeDialog($event)" >
           <span class="fa-solid fa-xmark"></span>
           Cancel
         </button>
-        <button kendoButton (click)="saveChanges()">
+        <button mjButton (click)="saveChanges()">
           <span class="fa-solid fa-check"></span>
           Save
         </button>
       </div>
     </div>
   </div>
-</kendo-window>
+</mj-window>
