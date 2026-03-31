@@ -256,6 +256,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public isUploadingAttachments: boolean = false;
   public uploadingMessage: string = '';
 
+  // Artifact picker state
+  public showArtifactPickerPanel: boolean = false;
+  public artifactPickerItems: Array<{
+    artifactId: string; artifactVersionId: string; name: string; description: string;
+    contentMode: string; fileID: string | null; mimeType: string | null;
+    fileName: string | null; sizeBytes: number; typeName: string; updatedAt: string;
+  }> = [];
+  public isLoadingArtifactPicker: boolean = false;
+
   // Attachment support based on agent modalities
   // Computed from conversation manager (Sage) and any previous agent in conversation
   public enableAttachments: boolean = false;
@@ -2233,6 +2242,91 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       this.canShareSelectedArtifact = false;
       this.canEditSelectedArtifact = false;
     }
+  }
+
+  /**
+   * Handle artifact picker request from message input
+   */
+  async onArtifactPickerRequested(): Promise<void> {
+    this.showArtifactPickerPanel = true;
+    this.isLoadingArtifactPicker = true;
+    this.cdr.detectChanges();
+
+    try {
+      // Load user's recent artifact versions (both text and file-backed)
+      const rv = new RunView();
+      const result = await rv.RunView<{
+        ID: string; ArtifactID: string; VersionNumber: number;
+        Name: string; Description: string; ContentMode: string;
+        FileID: string | null; MimeType: string | null;
+        FileName: string | null; ContentSizeBytes: number;
+        Artifact: string; __mj_UpdatedAt: string;
+      }>({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID IN (SELECT ID FROM __mj.Artifact WHERE Visibility <> 'System Only')`,
+        OrderBy: '__mj_UpdatedAt DESC',
+        MaxRows: 50,
+        ResultType: 'simple'
+      });
+
+      if (result.Success && result.Results) {
+        this.artifactPickerItems = result.Results.map(r => ({
+          artifactId: r.ArtifactID,
+          artifactVersionId: r.ID,
+          name: r.Name || r.Artifact || 'Untitled',
+          description: r.Description || '',
+          contentMode: r.ContentMode || 'Text',
+          fileID: r.FileID,
+          mimeType: r.MimeType,
+          fileName: r.FileName,
+          sizeBytes: r.ContentSizeBytes || 0,
+          typeName: r.ContentMode === 'File' ? (r.MimeType || 'File') : 'Text',
+          updatedAt: r.__mj_UpdatedAt
+        }));
+      } else {
+        this.artifactPickerItems = [];
+      }
+    } catch (error) {
+      console.error('Failed to load artifacts for picker:', error);
+      this.artifactPickerItems = [];
+    } finally {
+      this.isLoadingArtifactPicker = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Handle artifact selection from the picker panel.
+   * Adds the artifact as a pending attachment so it appears in the message input.
+   * The ConversationDetailArtifact with Direction='Input' is created when the message is sent.
+   */
+  OnArtifactSelected(item: {
+    artifactId: string; artifactVersionId: string; name: string;
+    contentMode: string; fileID: string | null; mimeType: string | null;
+    fileName: string | null; sizeBytes: number;
+  }): void {
+    const activeInput = this.messageInputComponents?.find(
+      (input: MessageInputComponent) => !input.disabled
+    );
+    if (activeInput?.inputBox) {
+      activeInput.inputBox.AddArtifactAttachment({
+        fileID: item.fileID || item.artifactVersionId,
+        fileName: item.fileName || item.name,
+        mimeType: item.mimeType || 'text/plain',
+        sizeBytes: item.sizeBytes,
+        artifactVersionId: item.artifactVersionId
+      });
+    }
+    this.showArtifactPickerPanel = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Close artifact picker panel
+   */
+  CloseArtifactPicker(): void {
+    this.showArtifactPickerPanel = false;
+    this.cdr.detectChanges();
   }
 
   /**

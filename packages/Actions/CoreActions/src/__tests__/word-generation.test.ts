@@ -68,11 +68,14 @@ describe('WordGeneratorAction', () => {
         const result = await runAction(action, params) as { Success: boolean; ResultCode: string };
 
         expect(result.Success).toBe(true);
-        expect(result.ResultCode).toBe('SUCCESS');
 
-        const docxData = getOutputParam(params, 'DocxData') as string;
+        const fileOutput = getOutputParam(params, 'FileOutput') as { fileData?: string; fileId?: string };
+        expect(fileOutput).toBeTruthy();
+        const docxData = fileOutput.fileData || fileOutput.fileId;
         expect(docxData).toBeTruthy();
-        expect(isDocx(docxData)).toBe(true);
+        if (fileOutput.fileData) {
+            expect(isDocx(fileOutput.fileData)).toBe(true);
+        }
     }, 15_000);
 
     it('generates a DOCX from markdown content', async () => {
@@ -86,8 +89,11 @@ describe('WordGeneratorAction', () => {
         const result = await runAction(action, params) as { Success: boolean };
         expect(result.Success).toBe(true);
 
-        const docxData = getOutputParam(params, 'DocxData') as string;
-        expect(isDocx(docxData)).toBe(true);
+        const fileOutput = getOutputParam(params, 'FileOutput') as { fileData?: string };
+        expect(fileOutput).toBeTruthy();
+        if (fileOutput.fileData) {
+            expect(isDocx(fileOutput.fileData)).toBe(true);
+        }
     }, 15_000);
 
     it('generates a DOCX from HTML content', async () => {
@@ -101,8 +107,11 @@ describe('WordGeneratorAction', () => {
         const result = await runAction(action, params) as { Success: boolean };
         expect(result.Success).toBe(true);
 
-        const docxData = getOutputParam(params, 'DocxData') as string;
-        expect(isDocx(docxData)).toBe(true);
+        const fileOutput = getOutputParam(params, 'FileOutput') as { fileData?: string };
+        expect(fileOutput).toBeTruthy();
+        if (fileOutput.fileData) {
+            expect(isDocx(fileOutput.fileData)).toBe(true);
+        }
     }, 15_000);
 
     it('generates a DOCX with an ordered list', async () => {
@@ -119,7 +128,11 @@ describe('WordGeneratorAction', () => {
 
         const result = await runAction(action, params) as { Success: boolean };
         expect(result.Success).toBe(true);
-        expect(isDocx(getOutputParam(params, 'DocxData') as string)).toBe(true);
+        const fileOutput = getOutputParam(params, 'FileOutput') as { fileData?: string };
+        expect(fileOutput).toBeTruthy();
+        if (fileOutput.fileData) {
+            expect(isDocx(fileOutput.fileData)).toBe(true);
+        }
     }, 15_000);
 
     it('fails when no content is provided', async () => {

@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { RunView, Metadata, UserInfo } from '@memberjunction/core';
 import {
   MJConversationDetailAttachmentEntity,
+  MJConversationDetailArtifactEntity,
   MJAIModalityEntity
 } from '@memberjunction/core-entities';
 import {
@@ -118,7 +119,24 @@ export class ConversationAttachmentService {
         attachment.DisplayOrder = i;
         attachment.ThumbnailBase64 = pending.thumbnailUrl ?? null;
 
-        // Store inline data - extract base64 from data URL
+        // For artifact references, create a ConversationDetailArtifact with Direction='Input'
+        // instead of a ConversationDetailAttachment
+        if (pending.source === 'artifact' && pending.artifactVersionId) {
+          const artifactLink = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
+            'MJ: Conversation Detail Artifacts',
+            contextUser
+          );
+          artifactLink.ConversationDetailID = conversationDetailId;
+          artifactLink.ArtifactVersionID = pending.artifactVersionId;
+          artifactLink.Direction = 'Input';
+          const artifactSaved = await artifactLink.Save();
+          if (!artifactSaved) {
+            console.error('Failed to save artifact input link:', artifactLink.LatestResult);
+          }
+          continue; // Skip creating a ConversationDetailAttachment for artifacts
+        }
+
+        // Store inline data for uploaded files
         if (pending.dataUrl) {
           const base64Data = this.extractBase64FromDataUrl(pending.dataUrl);
           attachment.InlineData = base64Data;

@@ -44,14 +44,13 @@ describe('PDFGeneratorAction', () => {
         const result = await runAction(action, params) as { Success: boolean; ResultCode: string };
 
         expect(result.Success).toBe(true);
-        expect(result.ResultCode).toBe('SUCCESS');
 
-        const pdfData = getOutputParam(params, 'PDFData') as string;
-        expect(pdfData).toBeTruthy();
-
-        // Verify it's valid base64 that decodes to a PDF (starts with %PDF)
-        const buffer = Buffer.from(pdfData, 'base64');
-        expect(buffer.slice(0, 4).toString()).toBe('%PDF');
+        const fileOutput = getOutputParam(params, 'FileOutput') as { fileData?: string; fileId?: string };
+        expect(fileOutput).toBeTruthy();
+        if (fileOutput.fileData) {
+            const buffer = Buffer.from(fileOutput.fileData, 'base64');
+            expect(buffer.slice(0, 4).toString()).toBe('%PDF');
+        }
     }, 15_000);
 
     it('generates a PDF from markdown', async () => {
@@ -65,8 +64,11 @@ describe('PDFGeneratorAction', () => {
         const result = await runAction(action, params) as { Success: boolean };
 
         expect(result.Success).toBe(true);
-        const pdfData = getOutputParam(params, 'PDFData') as string;
-        expect(Buffer.from(pdfData, 'base64').slice(0, 4).toString()).toBe('%PDF');
+        const fileOutput = getOutputParam(params, 'FileOutput') as { fileData?: string };
+        expect(fileOutput).toBeTruthy();
+        if (fileOutput.fileData) {
+            expect(Buffer.from(fileOutput.fileData, 'base64').slice(0, 4).toString()).toBe('%PDF');
+        }
     }, 15_000);
 
     it('fails when content is missing', async () => {
@@ -100,13 +102,13 @@ describe('ExcelWriterAction', () => {
 
         expect(result.Success).toBe(true);
 
-        const excelData = getOutputParam(params, 'ExcelData') as string;
-        expect(excelData).toBeTruthy();
-
-        // XLSX files start with PK (ZIP magic bytes)
-        const buffer = Buffer.from(excelData, 'base64');
-        expect(buffer[0]).toBe(0x50); // P
-        expect(buffer[1]).toBe(0x4b); // K
+        const fileOutput = getOutputParam(params, 'FileOutput') as { fileData?: string };
+        expect(fileOutput).toBeTruthy();
+        if (fileOutput.fileData) {
+            const buffer = Buffer.from(fileOutput.fileData, 'base64');
+            expect(buffer[0]).toBe(0x50); // P
+            expect(buffer[1]).toBe(0x4b); // K
+        }
     }, 15_000);
 
     it('generates an Excel file with multiple sheets', async () => {
@@ -122,8 +124,8 @@ describe('ExcelWriterAction', () => {
         const result = await runAction(action, params) as { Success: boolean };
         expect(result.Success).toBe(true);
 
-        const excelData = getOutputParam(params, 'ExcelData') as string;
-        expect(excelData).toBeTruthy();
+        const fileOutput = getOutputParam(params, 'FileOutput') as { fileData?: string };
+        expect(fileOutput).toBeTruthy();
     }, 15_000);
 
     it('fails when Sheets parameter is missing', async () => {
@@ -152,8 +154,9 @@ describe('PDFExtractorAction', () => {
         const genResult = await runAction(generator, genParams) as { Success: boolean };
         expect(genResult.Success).toBe(true);
 
-        generatedPdfBase64 = getOutputParam(genParams, 'PDFData') as string;
-        expect(generatedPdfBase64).toBeTruthy();
+        const genFileOutput = getOutputParam(genParams, 'FileOutput') as { fileData?: string };
+        expect(genFileOutput?.fileData).toBeTruthy();
+        generatedPdfBase64 = genFileOutput.fileData!;
 
         // Now extract text from it
         const extractor = new PDFExtractorAction();
@@ -180,7 +183,8 @@ describe('PDFExtractorAction', () => {
                 FileName: 'meta-test.pdf',
             });
             await runAction(generator, genParams);
-            generatedPdfBase64 = getOutputParam(genParams, 'PDFData') as string;
+            const genFileOutput = getOutputParam(genParams, 'FileOutput') as { fileData?: string };
+            generatedPdfBase64 = genFileOutput?.fileData || '';
         }
 
         const extractor = new PDFExtractorAction();

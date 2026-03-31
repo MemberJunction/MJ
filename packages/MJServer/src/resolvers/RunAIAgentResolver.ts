@@ -1,7 +1,7 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -1251,7 +1251,10 @@ export class RunAIAgentResolver extends ResolverBase {
         // Batch load all attachments for these messages
         const attachmentsByDetailId = await attachmentService.getAttachmentsBatch(messageIds, contextUser);
 
-        // Build ChatMessage array with attachments
+        // Batch load input artifacts for these messages
+        const inputArtifactsByDetailId = await this.loadInputArtifactsBatch(messageIds, contextUser);
+
+        // Build ChatMessage array with attachments and input artifacts
         const messages: ChatMessage[] = [];
 
         for (const detail of details) {
@@ -1277,6 +1280,32 @@ export class RunAIAgentResolver extends ResolverBase {
                     durationSeconds: result.attachment.DurationSeconds ?? undefined,
                     content: result.contentUrl
                 }));
+
+            // Get input artifacts for this message and convert to AttachmentData
+            const inputArtifacts = inputArtifactsByDetailId.get(detail.ID) || [];
+            for (const artifactVersion of inputArtifacts) {
+                if (artifactVersion.ContentMode === 'File' && artifactVersion.FileID) {
+                    // File-backed artifact — download content and treat like a document attachment
+                    const fileContent = await this.downloadArtifactFileContent(artifactVersion, contextUser);
+                    if (fileContent) {
+                        validAttachments.push({
+                            type: ConversationUtility.GetAttachmentTypeFromMime(artifactVersion.MimeType || ''),
+                            mimeType: artifactVersion.MimeType || 'application/octet-stream',
+                            fileName: artifactVersion.FileName || artifactVersion.Name || undefined,
+                            sizeBytes: artifactVersion.ContentSizeBytes || undefined,
+                            content: fileContent
+                        });
+                    }
+                } else if (artifactVersion.Content) {
+                    // Text artifact — include content directly as a text attachment
+                    validAttachments.push({
+                        type: 'Document' as AttachmentData['type'],
+                        mimeType: 'text/plain',
+                        fileName: artifactVersion.Name || 'artifact.txt',
+                        content: `[Artifact: ${artifactVersion.Name || 'Untitled'}]\n\n${artifactVersion.Content}`
+                    });
+                }
+            }
 
             // Build message content (with or without attachments)
             let content: ChatMessageContent;
@@ -1309,6 +1338,87 @@ export class RunAIAgentResolver extends ResolverBase {
         if (roleLower === 'assistant' || roleLower === 'agent' || roleLower === 'ai') return 'assistant';
         if (roleLower === 'system') return 'system';
         return 'user'; // Default to user
+    }
+
+    /**
+     * Batch load input artifact versions for conversation details.
+     * Returns a map of ConversationDetailID -> ArtifactVersion[]
+     */
+    private async loadInputArtifactsBatch(
+        conversationDetailIds: string[],
+        contextUser: UserInfo
+    ): Promise<Map<string, MJArtifactVersionEntity[]>> {
+        const map = new Map<string, MJArtifactVersionEntity[]>();
+        if (conversationDetailIds.length === 0) return map;
+
+        const rv = new RunView();
+        const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
+
+        // Load ConversationDetailArtifact links with Direction='Input'
+        const linksResult = await rv.RunView<MJConversationDetailArtifactEntity>({
+            EntityName: 'MJ: Conversation Detail Artifacts',
+            ExtraFilter: `ConversationDetailID IN (${idList}) AND Direction = 'Input'`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!linksResult.Success || !linksResult.Results || linksResult.Results.length === 0) {
+            return map;
+        }
+
+        // Load the referenced artifact versions
+        const versionIds = linksResult.Results.map(l => `'${l.ArtifactVersionID}'`).join(',');
+        const versionsResult = await rv.RunView<MJArtifactVersionEntity>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN (${versionIds})`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (!versionsResult.Success || !versionsResult.Results) return map;
+
+        // Build a lookup of version ID -> version entity
+        const versionMap = new Map<string, MJArtifactVersionEntity>();
+        for (const v of versionsResult.Results) {
+            versionMap.set(v.ID, v);
+        }
+
+        // Group by conversation detail ID
+        for (const link of linksResult.Results) {
+            const version = versionMap.get(link.ArtifactVersionID);
+            if (version) {
+                const existing = map.get(link.ConversationDetailID) || [];
+                existing.push(version);
+                map.set(link.ConversationDetailID, existing);
+            }
+        }
+
+        return map;
+    }
+
+    /**
+     * Download file content from an artifact version's FileID.
+     * Returns base64 data URL for extraction pipeline compatibility.
+     * Uses the same downloadFileContent path as ConversationAttachmentService
+     * to avoid Box driver path resolution issues.
+     */
+    private async downloadArtifactFileContent(
+        artifactVersion: MJArtifactVersionEntity,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        if (!artifactVersion.FileID) return null;
+
+        try {
+            // Use the attachment service's downloadFileContent which uses GetObject directly
+            const attachmentService = getAttachmentService();
+            const buffer = await attachmentService.downloadFileContent(artifactVersion.FileID, contextUser);
+            if (!buffer) return null;
+
+            const base64 = buffer.toString('base64');
+            const mimeType = artifactVersion.MimeType || 'application/octet-stream';
+            return `data:${mimeType};base64,${base64}`;
+        } catch (err) {
+            LogError(`Failed to download artifact file ${artifactVersion.FileID}: ${err}`);
+            return null;
+        }
     }
 
 }
