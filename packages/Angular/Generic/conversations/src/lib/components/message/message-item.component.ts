@@ -37,6 +37,8 @@ export interface MessageAttachment {
   height?: number;
   thumbnailUrl?: string;
   contentUrl?: string;
+  /** Source of the attachment: 'upload' for chat uploads, 'artifact' for artifact picker */
+  source?: 'upload' | 'artifact';
 }
 
 /**

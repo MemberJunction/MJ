@@ -25,8 +25,8 @@ import { UUIDsEqual } from '@memberjunction/global';
 export interface PendingAttachment {
   /** Local ID for tracking */
   id: string;
-  /** Original File object */
-  file: File;
+  /** Original File object (null for artifact references) */
+  file: File | null;
   /** Base64 data URL for display */
   dataUrl: string;
   /** MIME type */
@@ -41,6 +41,12 @@ export interface PendingAttachment {
   height?: number;
   /** Small thumbnail URL for preview */
   thumbnailUrl?: string;
+  /** MJStorage File ID (for artifact references, mutually exclusive with inline data) */
+  fileID?: string;
+  /** Source of the attachment */
+  source?: 'upload' | 'artifact';
+  /** Artifact Version ID (for artifact references, used to create ConversationDetailArtifact) */
+  artifactVersionId?: string;
 }
 
 /**
@@ -1184,6 +1190,29 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
    */
   public getPendingAttachments(): PendingAttachment[] {
     return [...this.pendingAttachments];
+  }
+
+  /**
+   * Add an artifact as a pending attachment programmatically.
+   * Used by the artifact picker to attach artifacts as conversation inputs.
+   */
+  public AddArtifactAttachment(artifact: {
+    fileID: string; fileName: string; mimeType: string;
+    sizeBytes: number; artifactVersionId?: string;
+  }): void {
+    const attachment: PendingAttachment = {
+      id: crypto.randomUUID(),
+      file: null,
+      dataUrl: '',
+      mimeType: artifact.mimeType,
+      fileName: artifact.fileName,
+      sizeBytes: artifact.sizeBytes,
+      fileID: artifact.fileID,
+      source: 'artifact',
+      artifactVersionId: artifact.artifactVersionId
+    };
+    this.pendingAttachments.push(attachment);
+    this.attachmentsChanged.emit([...this.pendingAttachments]);
   }
 
   /**

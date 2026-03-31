@@ -15,6 +15,7 @@
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     MJFileStorageProviderEntity,
+    MJFileStorageAccountEntity,
     MJFileEntity,
     MJAIAgentEntity,
     MJAIModelEntity,
@@ -22,7 +23,7 @@ import {
     MJAIModalityEntity
 } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
-import { FileStorageBase } from '@memberjunction/storage';
+import { FileStorageBase, initializeDriverWithAccountCredentials } from '@memberjunction/storage';
 import {
     ConversationUtility,
     AttachmentType,
@@ -279,12 +280,19 @@ export class ConversationAttachmentService {
             // Inline data - convert to data URL
             contentUrl = createBase64DataUrl(attachment.InlineData, attachment.MimeType);
         } else if (attachment.FileID) {
-            // MJStorage - get download URL
-            const downloadUrl = await this.getDownloadUrl(attachment.FileID, contextUser);
-            if (!downloadUrl) {
-                return null;
+            // MJStorage - download file content and convert to data URL
+            // This ensures the extraction pipeline can process it identically to inline data
+            const fileContent = await this.downloadFileContent(attachment.FileID, contextUser);
+            if (!fileContent) {
+                // Fall back to pre-auth download URL if direct download fails
+                const downloadUrl = await this.getDownloadUrl(attachment.FileID, contextUser);
+                if (!downloadUrl) {
+                    return null;
+                }
+                contentUrl = downloadUrl;
+            } else {
+                contentUrl = createBase64DataUrl(fileContent.toString('base64'), attachment.MimeType);
             }
-            contentUrl = downloadUrl;
         } else {
             return null;
         }
@@ -293,6 +301,58 @@ export class ConversationAttachmentService {
             attachment,
             contentUrl
         };
+    }
+
+    /**
+     * Download file content from MJStorage as a Buffer.
+     *
+     * @param fileId - The File entity ID
+     * @param contextUser - The current user context
+     * @returns Buffer of file content, or null if unavailable
+     */
+    async downloadFileContent(fileId: string, contextUser: UserInfo): Promise<Buffer | null> {
+        try {
+            const file = await this.md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
+            if (!await file.Load(fileId)) {
+                return null;
+            }
+
+            const provider = await this.md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
+            if (!await provider.Load(file.ProviderID)) {
+                return null;
+            }
+
+            // Find the FileStorageAccount that links to this provider
+            const rv = new RunView();
+            const accountResult = await rv.RunView<MJFileStorageAccountEntity>({
+                EntityName: 'MJ: File Storage Accounts',
+                ExtraFilter: `ProviderID = '${file.ProviderID}'`,
+                MaxRows: 1,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            let driver: FileStorageBase;
+            if (accountResult.Success && accountResult.Results.length > 0) {
+                // Initialize driver with account credentials (handles OAuth token refresh)
+                driver = await initializeDriverWithAccountCredentials({
+                    accountEntity: accountResult.Results[0],
+                    providerEntity: provider,
+                    contextUser
+                });
+            } else {
+                // Fallback: create driver without account credentials (env vars only)
+                driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
+                    FileStorageBase,
+                    provider.ServerDriverKey
+                );
+            }
+
+            const objectKey = file.ProviderKey || file.Name;
+            return await driver.GetObject({ fullPath: objectKey });
+        } catch (err) {
+            console.error(`[ConversationAttachmentService] Failed to download file ${fileId}:`, err);
+            return null;
+        }
     }
 
     /**

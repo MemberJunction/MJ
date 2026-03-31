@@ -118,6 +118,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Output() intentCheckCompleted = new EventEmitter<void>(); // Emits when intent checking completes
   @Output() emptyStateSubmit = new EventEmitter<{text: string; attachments: PendingAttachment[]}>(); // Emitted when in emptyStateMode
   @Output() uploadStateChanged = new EventEmitter<{isUploading: boolean; message: string}>(); // Emits when attachment upload state changes
+  @Output() artifactPickerRequested = new EventEmitter<void>(); // Emits when user clicks "Attach Artifact"
 
   @ViewChild('inputBox') inputBox!: MessageInputBoxComponent;
 
@@ -336,6 +337,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
    */
   onAttachmentError(error: string): void {
     this.toastService.error(error);
+  }
+
+  /**
+   * Handle artifact picker request — bubble up to parent
+   */
+  onArtifactPickerRequested(): void {
+    this.artifactPickerRequested.emit();
   }
 
   /**

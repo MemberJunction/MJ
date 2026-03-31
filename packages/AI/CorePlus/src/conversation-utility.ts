@@ -333,7 +333,9 @@ export class ConversationUtility {
     for (const att of attachmentData) {
       // For document attachments, extract text content for LLM context
       if (att.type === 'Document' && FileContentExtractor.IsSupported(att.mimeType)) {
+        console.log(`[BuildChatMessageContent] Extracting: type=${att.type}, mime=${att.mimeType}, file=${att.fileName}, contentLen=${att.content?.length ?? 0}`);
         const extractedText = await FileContentExtractor.Extract(att.content, att.mimeType, att.fileName);
+        console.log(`[BuildChatMessageContent] Extraction result: ${extractedText ? extractedText.length + ' chars' : 'EMPTY'}`);
         if (extractedText) {
           blocks.push({
             type: 'text',
