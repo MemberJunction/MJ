@@ -9,8 +9,7 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { ChatComponent } from './chat/chat.component';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { DialogModule } from '@progress/kendo-angular-dialog'; // kept for kendo-dialog — Phase 2.2
-import { MjButtonDirective } from '@memberjunction/ng-ui-components';
+import { MjButtonDirective, MjDialogComponent, MjDialogActionsComponent } from '@memberjunction/ng-ui-components';
 
 @NgModule({
   declarations: [
@@ -21,8 +20,9 @@ import { MjButtonDirective } from '@memberjunction/ng-ui-components';
     FormsModule,
     ContainerDirectivesModule,
     SharedGenericModule,
-    DialogModule,
     MjButtonDirective,
+    MjDialogComponent,
+    MjDialogActionsComponent,
     MarkdownModule
   ],
   exports: [

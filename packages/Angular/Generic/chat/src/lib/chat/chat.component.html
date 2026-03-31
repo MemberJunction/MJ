@@ -77,11 +77,11 @@
     </div>
 </div>
 @if (showingClearAllDialog) {
-    <kendo-dialog>
+    <mj-dialog [Visible]="true" (Close)="showingClearAllDialog = false">
         <p>{{ClearAllMessagesPrompt}}</p>
-          <kendo-dialog-actions>
+          <mj-dialog-actions>
             <button mjButton variant="primary" (click)="HandleClearChat()">Yes</button>
             <button mjButton (click)="showingClearAllDialog = false">No</button>
-          </kendo-dialog-actions>
-    </kendo-dialog>
+          </mj-dialog-actions>
+    </mj-dialog>
 }

@@ -7,13 +7,12 @@ import { RouterModule } from '@angular/router';
 import { DialogModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 // MJ UI Components
-import { MjButtonDirective } from '@memberjunction/ng-ui-components';
+import { MjButtonDirective, MjDatepickerComponent } from '@memberjunction/ng-ui-components';
 import { LayoutModule } from '@progress/kendo-angular-layout';
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { NotificationModule } from '@progress/kendo-angular-notification';
 import { UploadsModule } from '@progress/kendo-angular-upload';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -142,7 +141,7 @@ const COMPONENTS = [
     DropDownsModule,
     NotificationModule,
     UploadsModule,
-    DateInputsModule,
+    MjDatepickerComponent,
     ContainerDirectivesModule,
     CodeEditorModule,
     ArtifactsModule,
