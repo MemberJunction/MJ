@@ -41,6 +41,8 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
   public IsDarkMode = false;
   /** True when the current route is the full Conversations/Chat workspace — hides the chat overlay */
   public isChatRoute = false;
+  /** Suppresses chat overlay during initial app load — set true after workspace initializes */
+  public IsChatOverlayReady = false;
 
   private destroy$ = new Subject<void>();
 
@@ -68,6 +70,9 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
       });
 
       if (result.success) {
+        // Chat overlay can now render — workspace is initialized
+        this.IsChatOverlayReady = true;
+
         // Navigate to initial route
         if (this.initialPath === '/') {
           // use first nav item url instead

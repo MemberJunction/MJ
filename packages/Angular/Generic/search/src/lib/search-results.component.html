@@ -31,7 +31,7 @@
             </div>
 
             @for (result of GetVisibleResults(group); track result.ID) {
-                <div class="result-card" [class.result-card-expanded]="ExpandedResultID === result.ID">
+                <div class="result-card" [class.result-card-expanded]="IsExpanded(result.ID)">
                     <!-- Main row -->
                     <div class="result-card-main" (click)="ToggleExpand(result)">
                         <div class="result-card-icon-wrap">
@@ -53,14 +53,14 @@
                                 <i class="fa-solid fa-arrow-up-right-from-square"></i>
                             </button>
                             <button class="result-expand-btn" (click)="ToggleExpand(result, $event)" title="Expand details">
-                                <i class="fa-solid" [class.fa-chevron-down]="ExpandedResultID !== result.ID"
-                                   [class.fa-chevron-up]="ExpandedResultID === result.ID"></i>
+                                <i class="fa-solid" [class.fa-chevron-down]="!IsExpanded(result.ID)"
+                                   [class.fa-chevron-up]="IsExpanded(result.ID)"></i>
                             </button>
                         </div>
                     </div>
 
                     <!-- Expanded detail -->
-                    @if (ExpandedResultID === result.ID) {
+                    @if (IsExpanded(result.ID)) {
                         <div class="result-card-detail">
                             @if (result.Snippet) {
                                 <div class="detail-section">

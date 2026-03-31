@@ -35,7 +35,7 @@ export async function UpsertVectorRecords() {
     };
   });
 
-  const response: BaseResponse = await vectorDB.createRecords(vectorRecords);
+  const response: BaseResponse = await vectorDB.CreateRecords(vectorRecords);
   if (!response.success) {
     LogError('Unable to successfully save records to vector database', undefined, response.message);
   }

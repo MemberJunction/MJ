@@ -6,8 +6,8 @@ import { GetAIAPIKey } from "@memberjunction/ai";
 
 /**
  * Server-side VectorIndex entity that syncs with the vector database provider.
- * On create: calls vectorDB.createIndex() to provision the index in the provider (e.g., Pinecone).
- * On delete: calls vectorDB.deleteIndex() to remove the index from the provider.
+ * On create: calls vectorDB.CreateIndex() to provision the index in the provider (e.g., Pinecone).
+ * On delete: calls vectorDB.DeleteIndex() to remove the index from the provider.
  */
 @RegisterClass(BaseEntity, 'MJ: Vector Indexes')
 export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
@@ -62,7 +62,7 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
         };
 
         LogStatus(`Creating index "${this.Name}" in vector DB provider...`);
-        const result = await vectorDB.createIndex(params);
+        const result = await vectorDB.CreateIndex(params);
         if (result.success) {
             LogStatus(`Index "${this.Name}" created successfully in provider`);
             await this.saveProviderMetadata(result.data, params);
@@ -82,7 +82,7 @@ export class MJVectorIndexEntityServer extends MJVectorIndexEntity {
         }
 
         LogStatus(`Deleting index "${this.Name}" from vector DB provider...`);
-        const result = await vectorDB.deleteIndex({ id: this.Name });
+        const result = await vectorDB.DeleteIndex({ id: this.Name });
         if (result.success) {
             LogStatus(`Index "${this.Name}" deleted from provider`);
         } else {

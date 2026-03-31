@@ -138,5 +138,6 @@
     <app-search-result-detail
         [Result]="DetailResult"
         (BackClicked)="CloseResultDetail()"
+        (NavigateToRecord)="OnOpenRecord($event)"
     ></app-search-result-detail>
 }

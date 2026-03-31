@@ -927,6 +927,7 @@ export class GraphQLAIClient {
                         Success
                         Status
                         ErrorMessage
+                        PipelineRunID
                     }
                 }
             `;
@@ -970,6 +971,7 @@ export interface VectorizeEntityResult {
     Success: boolean;
     Status?: string;
     ErrorMessage?: string;
+    PipelineRunID?: string;
     RecordsProcessed?: number;
 }
 

@@ -415,7 +415,7 @@ export class DuplicateRecordDetector extends VectorBase {
             });
         }
 
-        return this.vectorDB.queryIndex({
+        return this.vectorDB.QueryIndex({
             vector,
             topK,
             includeMetadata: true,

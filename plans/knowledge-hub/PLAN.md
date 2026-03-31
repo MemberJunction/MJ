@@ -1349,3 +1349,41 @@ This could become a standalone "Related Items" widget embeddable in any entity f
 
 **Priority**: Phase 1.14 (Advanced Features). Build after Knowledge Hub v1 is stable.
 
+
+---
+
+## Follow-Up: Incremental Vector Index Sync
+
+**Problem**: Currently, vectorization is a full re-sync — all records for an entity document are re-embedded and re-upserted. There's no automatic mechanism to keep vector indexes up-to-date as source data changes (inserts, updates, deletes).
+
+**Proposed Approach**:
+
+### Incremental Updates
+- Track `__mj_UpdatedAt` on `EntityRecordDocument` records
+- On sync, only process records where the source entity record's `__mj_UpdatedAt` is newer than the ERD's `EntityRecordUpdatedAt`
+- For new records (no ERD exists), create new vectors
+- For deleted records (ERD exists but source record gone), remove vectors from the index
+
+### Automatic Scheduling
+- Use MJ's existing Scheduled Jobs infrastructure (`MJ: Scheduled Jobs` entity)
+- Create a "Vector Index Sync" Action that can be scheduled
+- Configurable per entity document: 15 min, 30 min, hourly, daily
+- The Action calls `EntityVectorSyncer.VectorizeEntity()` with an `IncrementalOnly` flag
+- Dashboard shows last sync time, next scheduled sync, sync history
+
+### Delete Propagation
+- When a source record is deleted, the corresponding vector should be removed from the index
+- Option 1: Server-side entity hook on BaseEntity delete → remove vector (real-time but adds latency)
+- Option 2: Batch cleanup during scheduled sync — compare ERDs against source records, delete orphans
+- Option 2 is safer and doesn't impact normal delete performance
+
+### Implementation Tasks
+- [ ] Add `IncrementalOnly` flag to `VectorizeEntityParams`
+- [ ] Update `EntityVectorSyncer` to check `EntityRecordUpdatedAt` vs source `__mj_UpdatedAt`
+- [ ] Create "Vector Index Sync" Action in `packages/Actions/`
+- [ ] Add scheduling UI to Knowledge Hub Configuration tab
+- [ ] Implement orphan detection and vector deletion during sync
+- [ ] Add sync history/log display to Vector Management dashboard
+
+**Priority**: High — essential for production use. Without this, vector indexes go stale.
+

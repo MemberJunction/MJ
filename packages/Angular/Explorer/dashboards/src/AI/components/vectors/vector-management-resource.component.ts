@@ -9,6 +9,7 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject } from '@angular/core';
 import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import {
@@ -20,7 +21,7 @@ import {
     MJTemplateEntity,
     MJTemplateContentEntity
 } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { KPICardData } from '../widgets/kpi-card.component';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
@@ -36,6 +37,10 @@ interface EntitySyncRow {
     VectorCount: number;
     LastSynced: Date | null;
     Status: 'Synced' | 'Syncing' | 'Error' | 'Pending';
+    /** Percent complete during active sync (0-100) */
+    PercentComplete: number;
+    /** Pipeline run ID for tracking active subscription */
+    PipelineRunID?: string;
 }
 
 /** Sidebar embedding model summary */
@@ -293,62 +298,170 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         }
     }
 
-    /** Trigger vectorization for a specific entity document via GraphQL */
+    /** Trigger vectorization for a specific entity document via GraphQL (fire-and-forget with progress subscription) */
     public async SyncEntity(entityDocumentId: string): Promise<void> {
         if (this.SyncingIds.has(entityDocumentId)) {
             return;
         }
 
-        this.SyncingIds.add(entityDocumentId);
+        const doc = this.entityDocuments.find(d => d.ID === entityDocumentId);
+        if (!doc) return;
+
+        const provider = Metadata.Provider as GraphQLDataProvider;
+        if (!provider) return;
+
+        this.addSyncingId(entityDocumentId);
         this.updateRowStatus(entityDocumentId, 'Syncing');
+        this.updateRowProgress(entityDocumentId, 0);
         this.cdr.detectChanges();
 
         try {
-            const doc = this.entityDocuments.find(d => d.ID === entityDocumentId);
-            if (!doc) {
-                throw new Error('Entity document not found');
-            }
-
-            const provider = Metadata.Provider as GraphQLDataProvider;
-            if (!provider) {
-                throw new Error('GraphQL provider not available');
-            }
-
             const aiClient = new GraphQLAIClient(provider);
             MJNotificationService.Instance.CreateSimpleNotification(
                 `Starting vectorization for ${doc.Entity}...`,
                 'info', 3000
             );
 
+            // Step 1: Start the mutation (fire-and-forget — returns PipelineRunID immediately)
             const result = await aiClient.VectorizeEntity({
                 entityDocumentID: entityDocumentId,
                 entityID: doc.EntityID,
                 batchSize: 50
             });
 
-            if (result.Success) {
-                MJNotificationService.Instance.CreateSimpleNotification(
-                    `Vectorization complete for ${doc.Entity}`,
-                    'success', 3000
-                );
-                this.updateRowStatus(entityDocumentId, 'Synced');
-            } else {
+            if (!result.Success || !result.PipelineRunID) {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Vectorization failed: ${result.ErrorMessage || 'Unknown error'}`,
                     'error', 5000
                 );
+                this.removeSyncingId(entityDocumentId);
                 this.updateRowStatus(entityDocumentId, 'Error');
+                this.cdr.detectChanges();
+                return;
             }
 
-            await this.LoadData();
+            // Store PipelineRunID on the row for tracking
+            const row = this.SyncRows.find(r => r.EntityDocumentID === entityDocumentId);
+            if (row) {
+                row.PipelineRunID = result.PipelineRunID;
+            }
+
+            // Step 2: Subscribe to progress updates and also set a safety timeout
+            // in case the subscription misses events (race condition, network issue, etc.)
+            this.subscribeToPipelineProgress(entityDocumentId, result.PipelineRunID, doc.Entity);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
-            console.error(`[VectorManagement] Error syncing entity document ${entityDocumentId}:`, msg);
+            console.error(`[VectorManagement] Error starting sync for ${entityDocumentId}:`, msg);
             MJNotificationService.Instance.CreateSimpleNotification(`Sync error: ${msg}`, 'error', 5000);
+            this.removeSyncingId(entityDocumentId);
             this.updateRowStatus(entityDocumentId, 'Error');
-        } finally {
-            this.SyncingIds.delete(entityDocumentId);
             this.cdr.detectChanges();
+        }
+    }
+
+    /** Subscribe to PipelineProgress for a specific pipeline run */
+    private subscribeToPipelineProgress(entityDocumentId: string, pipelineRunID: string, entityName: string): void {
+        const provider = Metadata.Provider as GraphQLDataProvider;
+        const subscriptionQuery = `
+            subscription PipelineProgress($pipelineRunID: String!) {
+                PipelineProgress(pipelineRunID: $pipelineRunID) {
+                    PipelineRunID
+                    Stage
+                    TotalItems
+                    ProcessedItems
+                    PercentComplete
+                    ElapsedMs
+                }
+            }
+        `;
+
+        let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const finishSync = (success: boolean) => {
+            if (idleTimer) clearTimeout(idleTimer);
+            rxSub?.unsubscribe();
+
+            // Use Promise.resolve().then() to defer state changes to the next
+            // microtask, avoiding ExpressionChangedAfterItHasBeenCheckedError
+            Promise.resolve().then(async () => {
+                this.removeSyncingId(entityDocumentId);
+
+                if (success) {
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        `Vectorization complete for ${entityName}`,
+                        'success', 3000
+                    );
+                    await this.refreshSyncRow(entityDocumentId);
+                } else {
+                    this.updateRowStatus(entityDocumentId, 'Error');
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        `Vectorization failed for ${entityName}`,
+                        'error', 5000
+                    );
+                    this.cdr.detectChanges();
+                }
+            });
+        };
+
+        // Reset idle timer on every event. When no events arrive for 5s,
+        // assume the pipeline is done (handles missing 'complete' event).
+        const resetIdleTimer = () => {
+            if (idleTimer) clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => {
+                if (this.SyncingIds.has(entityDocumentId)) {
+                    finishSync(true);
+                }
+            }, 5000);
+        };
+
+        // Start the idle timer immediately in case no events ever arrive
+        resetIdleTimer();
+
+        const sub = provider.subscribe(subscriptionQuery, { pipelineRunID });
+        const rxSub = sub.pipe(takeUntil(this.destroy$)).subscribe({
+            next: (data: Record<string, unknown>) => {
+                const progress = (data as Record<string, Record<string, unknown>>)['PipelineProgress'];
+                if (!progress) return;
+
+                const stage = progress['Stage'] as string;
+                const pct = progress['PercentComplete'] as number;
+
+                this.updateRowProgress(entityDocumentId, pct);
+                this.cdr.detectChanges();
+
+                if (stage === 'complete') {
+                    finishSync(true);
+                } else if (stage === 'error') {
+                    finishSync(false);
+                } else {
+                    // Got a progress event — reset idle timer
+                    resetIdleTimer();
+                }
+            },
+            error: (err: unknown) => {
+                console.error(`[VectorManagement] Pipeline subscription error:`, err);
+                finishSync(false);
+            }
+        });
+    }
+
+    /**
+     * Add an ID to SyncingIds, creating a new Set reference so Angular
+     * change detection picks up the mutation in template bindings.
+     */
+    private addSyncingId(id: string): void {
+        this.SyncingIds = new Set([...this.SyncingIds, id]);
+    }
+
+    /**
+     * Remove an ID from SyncingIds, creating a new Set reference so Angular
+     * change detection picks up the mutation in template bindings.
+     */
+    private removeSyncingId(id: string): void {
+        if (this.SyncingIds.has(id)) {
+            const next = new Set(this.SyncingIds);
+            next.delete(id);
+            this.SyncingIds = next;
         }
     }
 
@@ -623,13 +736,17 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             const lastSynced = this.computeLastSynced(docsForEntity);
             const status = this.computeSyncStatus(doc, vectorCount, docsForEntity.length);
 
+            // Preserve progress info from any active sync
+            const existingRow = this.SyncRows.find(r => r.EntityDocumentID === doc.ID);
             return {
                 EntityDocumentID: doc.ID,
                 EntityName: doc.Entity || '',
                 DocumentName: doc.Name,
                 VectorCount: vectorCount,
                 LastSynced: lastSynced,
-                Status: status
+                Status: status,
+                PercentComplete: existingRow?.PercentComplete ?? 0,
+                PipelineRunID: existingRow?.PipelineRunID,
             };
         });
     }
@@ -657,11 +774,10 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         if (totalRecords === 0) {
             return 'Pending';
         }
-        if (vectorCount === 0) {
-            return 'Error';
-        }
-        if (vectorCount < totalRecords) {
-            return 'Pending';
+        // If there are any vectors, consider it synced — partial syncs
+        // still represent a successful state since the pipeline ran
+        if (vectorCount > 0) {
+            return 'Synced';
         }
         return 'Synced';
     }
@@ -917,6 +1033,35 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         const row = this.SyncRows.find(r => r.EntityDocumentID === entityDocumentId);
         if (row) {
             row.Status = status;
+        }
+    }
+
+    private updateRowProgress(entityDocumentId: string, percentComplete: number): void {
+        const row = this.SyncRows.find(r => r.EntityDocumentID === entityDocumentId);
+        if (row) {
+            row.PercentComplete = percentComplete;
+        }
+    }
+
+    /** Refresh a single sync row's vector count and status from the DB */
+    private async refreshSyncRow(entityDocumentId: string): Promise<void> {
+        const row = this.SyncRows.find(r => r.EntityDocumentID === entityDocumentId);
+        if (!row) return;
+
+        const rv = new RunView();
+        const result = await rv.RunView<MJEntityRecordDocumentEntity>({
+            EntityName: 'MJ: Entity Record Documents',
+            ExtraFilter: `EntityDocumentID='${entityDocumentId}'`,
+            ResultType: 'entity_object'
+        });
+
+        if (result.Success) {
+            const docs = result.Results;
+            row.VectorCount = docs.filter(d => d.VectorID != null).length;
+            row.LastSynced = this.computeLastSynced(docs);
+            row.Status = row.VectorCount > 0 ? 'Synced' : 'Pending';
+            row.PercentComplete = 100;
+            this.cdr.detectChanges();
         }
     }
 

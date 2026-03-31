@@ -3,7 +3,7 @@
  *
  * Provides a `VectorMetadataFilter` utility that converts high-level
  * filter options into provider-native filter objects suitable for
- * passing to `VectorDBBase.queryIndex()`.
+ * passing to `VectorDBBase.QueryIndex()`.
  *
  * @module @memberjunction/ai-vectordb
  */

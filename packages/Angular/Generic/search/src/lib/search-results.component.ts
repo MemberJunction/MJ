@@ -57,8 +57,8 @@ export class SearchResultsComponent {
     /** Tracks which groups are expanded */
     public ExpandedGroups = new Set<string>();
 
-    /** ID of the currently expanded result card (null = none expanded) */
-    public ExpandedResultID: string | null = null;
+    /** Set of expanded result card IDs — multiple can be open simultaneously */
+    public ExpandedResultIDs = new Set<string>();
 
     /** Toggle group expansion */
     public ToggleGroup(sourceType: string): void {
@@ -101,11 +101,20 @@ export class SearchResultsComponent {
         });
     }
 
-    /** Toggle expand/collapse of a result card */
+    /** Toggle expand/collapse of a result card — multiple can be open */
     public ToggleExpand(result: SearchResultItem, event?: MouseEvent): void {
         if (event) event.stopPropagation();
-        this.ExpandedResultID = this.ExpandedResultID === result.ID ? null : result.ID;
+        if (this.ExpandedResultIDs.has(result.ID)) {
+            this.ExpandedResultIDs.delete(result.ID);
+        } else {
+            this.ExpandedResultIDs.add(result.ID);
+        }
         this.cdr.detectChanges();
+    }
+
+    /** Check if a result card is expanded */
+    public IsExpanded(resultID: string): boolean {
+        return this.ExpandedResultIDs.has(resultID);
     }
 
     /** Handle "Open Record" button click */

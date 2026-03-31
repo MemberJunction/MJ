@@ -9,9 +9,10 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, Injector } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { CompositeKey, Metadata } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import {
     SearchResultItem,
     SearchResultGroup,
@@ -42,6 +43,7 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
     private cdr = inject(ChangeDetectorRef);
     private searchService = inject(SearchService);
     private injector = inject(Injector);
+    private navigationService = inject(NavigationService);
     private destroy$ = new Subject<void>();
 
     // --- State ---
@@ -113,19 +115,18 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
         this.cdr.detectChanges();
     }
 
-    /** Handle "Open Record" — navigate to the entity record */
+    /** Handle "Open Record" — navigate to the entity record via NavigationService */
     public OnOpenRecord(event: { EntityName: string; RecordID: string }): void {
-        try {
-            // Use NavigationService if available (Explorer context)
-            // For now emit via window event for the shell to handle
-            const navEvent = new CustomEvent('mj-navigate-to-record', {
-                detail: { entityName: event.EntityName, recordID: event.RecordID },
-                bubbles: true
-            });
-            window.dispatchEvent(navEvent);
-        } catch {
-            console.warn('[KnowledgeSearch] Navigation not available');
+        const md = new Metadata();
+        const entityInfo = md.Entities.find(e => e.Name === event.EntityName);
+        const pkey = new CompositeKey();
+        if (entityInfo) {
+            pkey.LoadFromURLSegment(entityInfo, event.RecordID);
+        } else {
+            // Fallback: treat as simple single-field PK
+            pkey.KeyValuePairs = [{ FieldName: 'ID', Value: event.RecordID }];
         }
+        this.navigationService.OpenEntityRecord(event.EntityName, pkey);
     }
 
     /** Close the result detail view */

@@ -58,7 +58,7 @@ export class VectorSearchProvider {
         const metadataFilter = this.buildMetadataFilter(filters);
 
         // Step 3: Query the vector index
-        const response: BaseResponse = await this.config.VectorDB.queryIndex({
+        const response: BaseResponse = await this.config.VectorDB.QueryIndex({
             vector: queryVector,
             topK: this.config.TopK,
             includeMetadata: true,

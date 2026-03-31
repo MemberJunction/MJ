@@ -33,6 +33,11 @@ export type VectorizeEntityParams = {
      */
     StartingOffset?: number;
     options?: VectorizeEntityOptions;
+    /**
+     * Optional callback invoked during vectorization with progress updates.
+     * Called after each batch is upserted to the vector database.
+     */
+    OnProgress?: (update: VectorizeProgressUpdate) => void;
 }
 
 export type VectorizeEntityOptions = {
@@ -40,6 +45,23 @@ export type VectorizeEntityOptions = {
     delayTimeMS?: number;
     /** Whether to force re-vectorization of already-vectorized records */
     forceRevectorize?: boolean;
+}
+
+/**
+ * Progress update emitted during vectorization.
+ * Pass a callback via VectorizeEntityParams.OnProgress to receive updates.
+ */
+export type VectorizeProgressUpdate = {
+    /** Total records to process (may increase as pages are fetched) */
+    TotalRecords: number;
+    /** Number of records processed so far */
+    ProcessedRecords: number;
+    /** Current pipeline stage */
+    Stage: 'embedding' | 'upserting' | 'complete' | 'error';
+    /** Percent complete (0-100) */
+    PercentComplete: number;
+    /** Elapsed time in ms since pipeline start */
+    ElapsedMs: number;
 }
 
 export type VectorizeEntityResponse = {

@@ -9,7 +9,7 @@ export abstract class VectorDBBase {
     /**
      * Only sub-classes can access the API key
      */
-    protected get apiKey(): string {
+    protected get ApiKey(): string {
         return this._apiKey;
     }
 
@@ -21,21 +21,28 @@ export abstract class VectorDBBase {
     }
 
     //Union types to allow the sub class implementing the functions to mark them as async or not
-    abstract listIndexes(): IndexList | Promise<IndexList>;
-    abstract getIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
-    abstract createIndex(params: CreateIndexParams): BaseResponse | Promise<BaseResponse>;
-    abstract deleteIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
-    abstract editIndex(params: EditIndexParams): BaseResponse  | Promise<BaseResponse>;
-    abstract queryIndex(params: QueryOptions): BaseResponse | Promise<BaseResponse>;
+    abstract ListIndexes(): IndexList | Promise<IndexList>;
+    abstract GetIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
+    abstract CreateIndex(params: CreateIndexParams): BaseResponse | Promise<BaseResponse>;
+    abstract DeleteIndex(params: BaseRequestParams): BaseResponse | Promise<BaseResponse>;
+    abstract EditIndex(params: EditIndexParams): BaseResponse  | Promise<BaseResponse>;
+    abstract QueryIndex(params: QueryOptions): BaseResponse | Promise<BaseResponse>;
 
-    abstract createRecord(record: VectorRecord, indexName?: string): BaseResponse | Promise<BaseResponse>;
-    abstract createRecords(records: VectorRecord[], indexName?: string): BaseResponse  | Promise<BaseResponse>;
-    abstract getRecord(param: BaseRequestParams): BaseResponse  | Promise<BaseResponse>;
-    abstract getRecords(params: BaseRequestParams): BaseResponse  | Promise<BaseResponse>;
-    abstract updateRecord(record: UpdateOptions): BaseResponse  | Promise<BaseResponse>;
-    abstract updateRecords(records: UpdateOptions): BaseResponse  | Promise<BaseResponse>;
-    abstract deleteRecord(record: VectorRecord): BaseResponse  | Promise<BaseResponse>;
-    abstract deleteRecords(records: VectorRecord[]): BaseResponse  | Promise<BaseResponse>;
+    abstract CreateRecord(record: VectorRecord, indexName?: string): BaseResponse | Promise<BaseResponse>;
+    abstract CreateRecords(records: VectorRecord[], indexName?: string): BaseResponse  | Promise<BaseResponse>;
+    abstract GetRecord(param: BaseRequestParams): BaseResponse  | Promise<BaseResponse>;
+    abstract GetRecords(params: BaseRequestParams): BaseResponse  | Promise<BaseResponse>;
+    abstract UpdateRecord(record: UpdateOptions): BaseResponse  | Promise<BaseResponse>;
+    abstract UpdateRecords(records: UpdateOptions): BaseResponse  | Promise<BaseResponse>;
+    abstract DeleteRecord(record: VectorRecord, indexName?: string): BaseResponse  | Promise<BaseResponse>;
+    abstract DeleteRecords(records: VectorRecord[], indexName?: string): BaseResponse  | Promise<BaseResponse>;
+
+    /**
+     * Delete ALL records from an index. Use with caution.
+     * @param indexName The name of the index to clear
+     * @param namespace Optional namespace within the index
+     */
+    abstract DeleteAllRecords(indexName: string, namespace?: string): BaseResponse | Promise<BaseResponse>;
 
     /**
      * Whether this provider supports hybrid (vector + keyword) search.
@@ -48,18 +55,18 @@ export abstract class VectorDBBase {
     /**
      * Perform a hybrid search combining vector similarity with keyword (BM25) matching.
      * Only available on providers where SupportsHybridSearch is true.
-     * Default implementation falls back to a standard vector queryIndex call.
+     * Default implementation falls back to a standard vector QueryIndex call.
      */
     public HybridQuery(params: HybridQueryOptions): BaseResponse | Promise<BaseResponse> {
         // Default: fall back to pure vector search, ignoring keyword params
-        return this.queryIndex({ vector: params.vector, topK: params.topK, includeMetadata: params.includeMetadata, includeValues: params.includeValues, filter: params.filter });
+        return this.QueryIndex({ vector: params.vector, topK: params.topK, includeMetadata: params.includeMetadata, includeValues: params.includeValues, filter: params.filter });
     }
 
     /**
      * Query the vector index with metadata filtering using SharedIndexFilterOptions.
      *
      * Default implementation converts the filter options to a native filter object
-     * and delegates to queryIndex. Providers can override BuildMetadataFilter()
+     * and delegates to QueryIndex. Providers can override BuildMetadataFilter()
      * for custom filter syntax.
      *
      * @param params - Standard query options with an additional metadataFilter field
@@ -73,9 +80,9 @@ export abstract class VectorDBBase {
             ...params,
             filter: nativeFilter ?? params.filter,
         };
-        // Remove the metadataFilter before passing to queryIndex
+        // Remove the metadataFilter before passing to QueryIndex
         delete (queryParams as Record<string, unknown>)['metadataFilter'];
-        return this.queryIndex(queryParams);
+        return this.QueryIndex(queryParams);
     }
 
     /**

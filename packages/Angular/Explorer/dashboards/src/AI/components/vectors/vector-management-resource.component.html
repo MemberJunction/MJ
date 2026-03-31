@@ -72,7 +72,11 @@
                     <td>
                       <span class="status-badge" [class]="GetStatusClass(row.Status)">
                         <i [class]="GetStatusIcon(row.Status)"></i>
-                        {{ row.Status }}
+                        @if (row.Status === 'Syncing' && row.PercentComplete > 0) {
+                          {{ row.PercentComplete }}%
+                        } @else {
+                          {{ row.Status }}
+                        }
                       </span>
                     </td>
                     <td class="text-center actions-cell">
@@ -83,10 +87,11 @@
                         title="Sync now">
                         @if (SyncingIds.has(row.EntityDocumentID)) {
                           <i class="fa-solid fa-spinner fa-spin"></i>
+                          {{ row.PercentComplete > 0 ? row.PercentComplete + '%' : 'Sync' }}
                         } @else {
                           <i class="fa-solid fa-play"></i>
+                          Sync
                         }
-                        Sync
                       </button>
                       <button
                         class="edit-btn"

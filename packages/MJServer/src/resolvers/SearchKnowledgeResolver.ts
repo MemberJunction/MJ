@@ -315,7 +315,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
         }
 
         // Query with the specific index name
-        const response: BaseResponse = await vectorDBInstance.queryIndex({
+        const response: BaseResponse = await vectorDBInstance.QueryIndex({
             id: vectorIndex.Name,
             vector: queryVector,
             topK,
@@ -452,7 +452,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
         return { $and: conditions };
     }
 
-    /** Convert Pinecone matches to SearchKnowledgeResultItem[] */
+    /** Convert Pinecone matches to SearchKnowledgeResultItem[] using enriched metadata */
     private convertMatches(
         matches: Array<{ id: string; score?: number; metadata?: Record<string, unknown> }>,
         indexName: string
@@ -462,19 +462,66 @@ export class SearchKnowledgeResolver extends ResolverBase {
             const entityName = (meta['Entity'] as string) ?? 'Unknown';
             const recordID = (meta['RecordID'] as string) ?? match.id;
 
+            // Extract display fields from enriched metadata
+            const title = this.extractDisplayTitle(meta, entityName);
+            const snippet = this.extractDisplaySnippet(meta, indexName, match.score);
+            const entityIcon = (meta['EntityIcon'] as string) || undefined;
+            const updatedAt = meta['__mj_UpdatedAt'] ? new Date(meta['__mj_UpdatedAt'] as string) : new Date();
+
             return {
                 ID: match.id,
                 EntityName: entityName,
                 RecordID: recordID,
                 SourceType: 'vector',
-                Title: `${entityName} Record`,
-                Snippet: `Matched from index "${indexName}" with score ${(match.score ?? 0).toFixed(4)}`,
+                Title: title,
+                Snippet: snippet,
                 Score: match.score ?? 0,
                 ScoreBreakdown: { Vector: match.score ?? 0 },
                 Tags: [],
-                MatchedAt: new Date(),
+                EntityIcon: entityIcon,
+                RecordName: title,
+                MatchedAt: updatedAt,
             };
         });
+    }
+
+    /** Extract the best display title from vector metadata */
+    private extractDisplayTitle(meta: Record<string, unknown>, fallbackEntity: string): string {
+        // Check common name fields stored in metadata
+        const nameFields = ['Name', 'Title', 'Subject', 'Label', 'DisplayName'];
+        for (const field of nameFields) {
+            if (meta[field] && typeof meta[field] === 'string') {
+                return meta[field] as string;
+            }
+        }
+        return `${fallbackEntity} Record`;
+    }
+
+    /** Extract the best display snippet from vector metadata */
+    private extractDisplaySnippet(meta: Record<string, unknown>, indexName: string, score?: number): string {
+        // Check common description fields stored in metadata
+        const descFields = ['Description', 'Summary', 'Body', 'Content', 'Text', 'Notes'];
+        for (const field of descFields) {
+            if (meta[field] && typeof meta[field] === 'string') {
+                const val = meta[field] as string;
+                return val.length > 200 ? val.substring(0, 200) + '...' : val;
+            }
+        }
+
+        // Build a snippet from other metadata fields (exclude system fields)
+        const skipFields = new Set(['RecordID', 'Entity', 'TemplateID', 'EntityIcon', '__mj_UpdatedAt']);
+        const parts: string[] = [];
+        for (const [key, val] of Object.entries(meta)) {
+            if (skipFields.has(key) || val == null) continue;
+            const strVal = String(val);
+            if (strVal.length > 0 && strVal.length < 100) {
+                parts.push(`${key}: ${strVal}`);
+            }
+            if (parts.length >= 3) break;
+        }
+        if (parts.length > 0) return parts.join(' · ');
+
+        return `Matched from index "${indexName}" with score ${(score ?? 0).toFixed(4)}`;
     }
 
     /** Remove duplicate results by RecordID, keeping the highest-scored entry */
@@ -494,21 +541,28 @@ export class SearchKnowledgeResolver extends ResolverBase {
     private async enrichResults(results: SearchKnowledgeResultItem[], contextUser: UserInfo): Promise<void> {
         const md = new Metadata();
 
-        // Add entity icons
+        // Add entity icons for results that don't already have them from metadata
         for (const result of results) {
-            const entity = md.Entities.find(e => e.Name === result.EntityName);
-            if (entity) {
-                result.EntityIcon = entity.Icon || undefined;
+            if (!result.EntityIcon) {
+                const entity = md.Entities.find(e => e.Name === result.EntityName);
+                if (entity?.Icon) {
+                    result.EntityIcon = entity.Icon;
+                }
             }
         }
 
-        // Batch-resolve record names
+        // Only resolve record names for results that don't already have them
+        // (vector results from enriched metadata should already have names)
+        const needsNameResolution = results.filter(r =>
+            !r.RecordName || r.RecordName === `${r.EntityName} Record`
+        );
+
+        if (needsNameResolution.length === 0) return;
+
         try {
-            // Build name inputs only for results that have entity matches
             const indexedResults: { index: number; input: EntityRecordNameInput }[] = [];
-            for (let i = 0; i < results.length; i++) {
-                const r = results[i];
-                if (r.SourceType !== 'vector' && r.SourceType !== 'fulltext') continue;
+            for (const r of needsNameResolution) {
+                const resultIndex = results.indexOf(r);
                 const entity = md.Entities.find(e => e.Name === r.EntityName);
                 if (!entity) continue;
 
@@ -518,7 +572,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
                 const input = new EntityRecordNameInput();
                 input.EntityName = r.EntityName;
                 input.CompositeKey = key;
-                indexedResults.push({ index: i, input });
+                indexedResults.push({ index: resultIndex, input });
             }
 
             if (indexedResults.length > 0) {

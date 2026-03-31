@@ -181,6 +181,8 @@
 .search-results-main {
     flex: 1;
     min-width: 0;
+    overflow-y: auto;
+    max-height: calc(100vh - 220px);
 }
 
 /* Results Header */
