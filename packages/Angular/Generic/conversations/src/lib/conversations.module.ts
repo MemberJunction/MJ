@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 
-// Kendo UI modules (remaining Kendo — migrated in Phase 2.2/2.3)
+// Kendo UI modules (remaining Kendo — DialogModule for template-based <kendo-dialog> in share/members/export modals)
 import { DialogModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 // MJ UI Components

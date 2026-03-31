@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewContainerRef } from '@angular/core';
 import { MJProjectEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { DialogService as KendoDialogService } from '@progress/kendo-angular-dialog';
+import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { DialogService } from '../../services/dialog.service';
 import { ProjectFormModalComponent } from './project-form-modal.component';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -134,7 +134,7 @@ export class ProjectSelectorComponent implements OnInit {
 
   constructor(
     private dialogService: DialogService,
-    private kendoDialogService: KendoDialogService,
+    private mjDialogService: MJDialogService,
     private viewContainerRef: ViewContainerRef
   ) {}
 
@@ -202,13 +202,13 @@ export class ProjectSelectorComponent implements OnInit {
   }
 
   onCreateProject(): void {
-    const dialogRef = this.kendoDialogService.open({
+    const dialogRef = this.mjDialogService.open({
       content: ProjectFormModalComponent,
       width: 600,
       minWidth: 400
     });
 
-    const modalInstance = dialogRef.content.instance as ProjectFormModalComponent;
+    const modalInstance = dialogRef.Content!.instance as unknown as ProjectFormModalComponent;
     modalInstance.dialogRef = dialogRef;
     modalInstance.environmentId = this.environmentId;
     modalInstance.currentUser = this.currentUser;
@@ -224,13 +224,13 @@ export class ProjectSelectorComponent implements OnInit {
   onEditProject(): void {
     if (!this.selectedProject) return;
 
-    const dialogRef = this.kendoDialogService.open({
+    const dialogRef = this.mjDialogService.open({
       content: ProjectFormModalComponent,
       width: 600,
       minWidth: 400
     });
 
-    const modalInstance = dialogRef.content.instance as ProjectFormModalComponent;
+    const modalInstance = dialogRef.Content!.instance as unknown as ProjectFormModalComponent;
     modalInstance.dialogRef = dialogRef;
     modalInstance.project = this.selectedProject;
     modalInstance.environmentId = this.environmentId;

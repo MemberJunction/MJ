@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
+import { MJDialogRef } from '@memberjunction/ng-ui-components';
 import { MJProjectEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata } from '@memberjunction/core';
 
@@ -342,7 +342,7 @@ const DEFAULT_PROJECT_ICONS = [
   `]
 })
 export class ProjectFormModalComponent implements OnInit {
-  @Input() dialogRef!: DialogRef;
+  @Input() dialogRef!: MJDialogRef;
   @Input() project: MJProjectEntity | null = null;
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
@@ -419,7 +419,7 @@ export class ProjectFormModalComponent implements OnInit {
       const saved = await project.Save();
       if (saved) {
         this.projectSaved.emit(project);
-        this.dialogRef.close();
+        this.dialogRef.Close();
       } else {
         throw new Error('Failed to save project');
       }
@@ -430,6 +430,6 @@ export class ProjectFormModalComponent implements OnInit {
   }
 
   onCancel(): void {
-    this.dialogRef.close();
+    this.dialogRef.Close();
   }
 }
