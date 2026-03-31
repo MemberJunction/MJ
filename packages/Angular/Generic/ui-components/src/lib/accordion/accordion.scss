@@ -34,6 +34,12 @@
 
 .mj-accordion-title { flex: 1; }
 
+.mj-accordion-panel--disabled .mj-accordion-header {
+  opacity: 0.5;
+  cursor: not-allowed;
+  &:hover { background: var(--mj-bg-surface-sunken); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mj-accordion-icon { transition: none; }
 }

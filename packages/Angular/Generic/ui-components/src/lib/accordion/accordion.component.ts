@@ -14,9 +14,10 @@ import { Component, Input, Output, EventEmitter, HostBinding } from '@angular/co
   selector: 'mj-accordion-panel',
   standalone: true,
   template: `
-    <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded">
+    <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded" [class.mj-accordion-panel--disabled]="Disabled">
       <button class="mj-accordion-header" type="button"
         [attr.aria-expanded]="Expanded"
+        [disabled]="Disabled"
         (click)="Toggle()">
         <span class="mj-accordion-title">{{ Title }}</span>
         <i class="fa-solid fa-chevron-down mj-accordion-icon"></i>
@@ -32,10 +33,12 @@ import { Component, Input, Output, EventEmitter, HostBinding } from '@angular/co
 export class MjAccordionPanelComponent {
   @Input() Title = '';
   @Input() Expanded = false;
+  @Input() Disabled = false;
   @Output() ExpandedChange = new EventEmitter<boolean>();
   @HostBinding('class.mj-accordion-panel-host') readonly hostClass = true;
 
   Toggle(): void {
+    if (this.Disabled) return;
     this.Expanded = !this.Expanded;
     this.ExpandedChange.emit(this.Expanded);
   }
