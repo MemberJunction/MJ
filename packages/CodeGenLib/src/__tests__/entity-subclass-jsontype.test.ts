@@ -508,4 +508,90 @@ describe('EntitySubClassGeneratorBase - JSONType', () => {
             expect(result).toContain('Description: z.string().nullable()');
         });
     });
+
+    describe('ValidateJSONTypeDefinition - AST validation', () => {
+        // Access the static method via the class
+        const validate = (EntitySubClassGeneratorBase as unknown as {
+            ValidateJSONTypeDefinition: (def: string, typeName: string, entity: string, field: string) =>
+                { valid: boolean; errors: string[] };
+        }).ValidateJSONTypeDefinition.bind(EntitySubClassGeneratorBase);
+
+        it('should accept a valid interface definition', () => {
+            const def = `export interface IMyConfig {
+                Name: string;
+                Value?: number;
+            }`;
+            const result = validate(def, 'IMyConfig', 'TestEntity', 'ConfigField');
+            expect(result.valid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('should accept a valid type alias definition', () => {
+            const def = `export type MyStatus = 'active' | 'inactive' | 'pending';`;
+            const result = validate(def, 'MyStatus', 'TestEntity', 'StatusField');
+            expect(result.valid).toBe(true);
+            expect(result.errors).toHaveLength(0);
+        });
+
+        it('should accept multiple interfaces where one matches the expected type', () => {
+            const def = `export interface ISubItem {
+                id: string;
+            }
+            export interface IMyConfig {
+                items: ISubItem[];
+            }`;
+            const result = validate(def, 'IMyConfig', 'TestEntity', 'ConfigField');
+            expect(result.valid).toBe(true);
+        });
+
+        it('should reject when expected type name is not defined', () => {
+            const def = `export interface IWrongName {
+                Name: string;
+            }`;
+            const result = validate(def, 'IMyConfig', 'TestEntity', 'ConfigField');
+            expect(result.valid).toBe(false);
+            expect(result.errors.length).toBeGreaterThan(0);
+            expect(result.errors[0]).toContain('IMyConfig');
+            expect(result.errors[0]).toContain('not defined');
+            expect(result.errors[0]).toContain('IWrongName');
+        });
+
+        it('should reject invalid TypeScript syntax', () => {
+            const def = `export interface IMyConfig {
+                Name: string;
+                this is not valid typescript!!!
+            }`;
+            const result = validate(def, 'IMyConfig', 'TestEntity', 'ConfigField');
+            expect(result.valid).toBe(false);
+            expect(result.errors.some(e => e.includes('Syntax error'))).toBe(true);
+        });
+
+        it('should reject completely unparseable input', () => {
+            const def = `}}}{{{{[[[`;
+            const result = validate(def, 'IMyConfig', 'TestEntity', 'ConfigField');
+            expect(result.valid).toBe(false);
+            expect(result.errors.length).toBeGreaterThan(0);
+        });
+
+        it('should accept definition with Record<> and optional fields', () => {
+            const def = `export interface IJSONSchemaProperty {
+                type: string;
+                title?: string;
+            }
+            export interface IJSONSchema {
+                properties: Record<string, IJSONSchemaProperty>;
+                required?: string[];
+            }`;
+            const result = validate(def, 'IJSONSchema', 'TestEntity', 'SchemaField');
+            expect(result.valid).toBe(true);
+        });
+
+        it('should include entity and field name in error messages', () => {
+            const def = `export interface IWrong { x: string; }`;
+            const result = validate(def, 'IExpected', 'MyEntity', 'MyField');
+            expect(result.valid).toBe(false);
+            expect(result.errors[0]).toContain('MyEntity');
+            expect(result.errors[0]).toContain('MyField');
+        });
+    });
 });

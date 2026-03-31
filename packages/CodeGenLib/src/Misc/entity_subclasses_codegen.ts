@@ -1,6 +1,7 @@
 import { BaseEntity, EntityFieldInfo, EntityFieldValueListType, EntityInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
+import ts from 'typescript';
 import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { logError, logStatus } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
@@ -55,6 +56,81 @@ export class EntitySubClassGeneratorBase {
     else {
       return '';
     }
+  }
+
+  /**
+   * Validates that a JSONTypeDefinition string contains valid TypeScript and (optionally)
+   * exports the expected type name. Uses the TypeScript compiler API to parse without
+   * writing any files to disk.
+   *
+   * @param definition - The raw TypeScript code from EntityField.JSONTypeDefinition
+   * @param expectedTypeName - The JSONType name that should be defined/exported in the definition
+   * @param entityName - Entity name for error messages
+   * @param fieldName - Field name for error messages
+   * @returns An object with `valid` boolean and optional `errors` array of diagnostic messages
+   */
+  protected static ValidateJSONTypeDefinition(
+      definition: string,
+      expectedTypeName: string,
+      entityName: string,
+      fieldName: string
+  ): { valid: boolean; errors: string[] } {
+      const errors: string[] = [];
+      const prefix = `[JSONType] ${entityName}.${fieldName}`;
+
+      // Parse the definition as a TypeScript source file
+      const sourceFile = ts.createSourceFile(
+          'jsontype-validation.ts',
+          definition,
+          ts.ScriptTarget.Latest,
+          true,
+          ts.ScriptKind.TS
+      );
+
+      // Check for syntax errors using a minimal compiler program
+      const compilerHost = ts.createCompilerHost({});
+      const originalGetSourceFile = compilerHost.getSourceFile;
+      compilerHost.getSourceFile = (fileName: string, languageVersion: ts.ScriptTarget) => {
+          if (fileName === 'jsontype-validation.ts') return sourceFile;
+          return originalGetSourceFile.call(compilerHost, fileName, languageVersion);
+      };
+
+      const program = ts.createProgram(
+          ['jsontype-validation.ts'],
+          { noEmit: true, strict: false, skipLibCheck: true },
+          compilerHost
+      );
+
+      const syntacticDiagnostics = program.getSyntacticDiagnostics(sourceFile);
+      for (const diag of syntacticDiagnostics) {
+          const message = ts.flattenDiagnosticMessageText(diag.messageText, '\n');
+          errors.push(`${prefix}: Syntax error — ${message}`);
+      }
+
+      if (errors.length > 0) {
+          return { valid: false, errors };
+      }
+
+      // Check that the expected type name is defined in the source
+      const definedNames = new Set<string>();
+      ts.forEachChild(sourceFile, (node) => {
+          if (ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) ||
+              ts.isEnumDeclaration(node) || ts.isClassDeclaration(node)) {
+              if (node.name) {
+                  definedNames.add(node.name.text);
+              }
+          }
+      });
+
+      if (!definedNames.has(expectedTypeName)) {
+          errors.push(
+              `${prefix}: JSONType "${expectedTypeName}" is not defined in JSONTypeDefinition. ` +
+              `Found: ${definedNames.size > 0 ? Array.from(definedNames).join(', ') : '(none)'}`
+          );
+          return { valid: false, errors };
+      }
+
+      return { valid: true, errors: [] };
   }
 
   /**
@@ -297,10 +373,26 @@ export const loadModule = () => {
       // These are raw TypeScript interface/type definitions (from EntityField.JSONTypeDefinition)
       // that get emitted above the entity class so the typed getters/setters can reference them.
       // A Set is used because multiple fields may share the same definition (e.g., a shared config type).
+      // Each definition is validated via the TypeScript compiler API before inclusion.
       const jsonTypeDefinitions = new Set<string>();
       for (const field of sortedFields) {
           if (field.JSONTypeDefinition && field.JSONTypeDefinition.trim().length > 0) {
-              jsonTypeDefinitions.add(field.JSONTypeDefinition.trim());
+              const definition = field.JSONTypeDefinition.trim();
+              if (field.JSONType && field.JSONType.trim().length > 0) {
+                  const validation = EntitySubClassGeneratorBase.ValidateJSONTypeDefinition(
+                      definition, field.JSONType.trim(), entity.Name, field.Name
+                  );
+                  if (!validation.valid) {
+                      for (const err of validation.errors) {
+                          logError(err);
+                      }
+                      logError(`[JSONType] Skipping JSONTypeDefinition for ${entity.Name}.${field.Name} due to validation errors. The field will use a plain string getter/setter instead.`);
+                      // Clear JSONType so the getter/setter falls back to standard string type
+                      (field as unknown as Record<string, unknown>).JSONType = null;
+                      continue;
+                  }
+              }
+              jsonTypeDefinitions.add(definition);
           }
       }
       const jsonTypeBlock = jsonTypeDefinitions.size > 0
