@@ -1985,17 +1985,28 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       if (resolved) displayName = resolved;
     }
 
+    // Resolve nav item icon for Custom pins
+    let pinIcon: string | undefined;
+    if (resourceType === 'Custom' && this.activeApp) {
+      const navItemName = activeTab.configuration?.['navItemName'] as string;
+      if (navItemName) {
+        const navItems = await this.activeApp.GetNavItems();
+        const navItem = navItems.find(ni => ni.Label === navItemName);
+        pinIcon = navItem?.Icon || undefined;
+      }
+    }
+
     const added = this.homePinService.AddPin({
       DisplayName: displayName,
       ResourceType: resourceType,
       ApplicationID: activeTab.applicationId,
       ApplicationName: this.activeApp?.Name,
+      Icon: pinIcon,
       Color: this.activeApp?.GetColor() || undefined,
       Configuration: activeTab.configuration as Record<string, unknown>
     });
 
     if (added) {
-      console.log(`[Pin to Home] Pinned "${displayName}" as "${resourceType}"`, activeTab.configuration);
       this.showPinProgress(`Capturing preview for "${displayName}"...`);
       await this.captureAndAttachThumbnail(activeTab, resourceType);
     } else {
@@ -2010,24 +2021,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async captureAndAttachThumbnail(tab: WorkspaceTab, resourceType: string): Promise<void> {
     try {
-      if (!this.tabContainerRef) {
-        console.warn('[Pin Thumbnail] tabContainerRef not available');
-        return;
-      }
+      if (!this.tabContainerRef) return;
       const thumbnail = await this.tabContainerRef.CaptureActiveThumbnail();
       if (thumbnail) {
-        console.log(`[Pin Thumbnail] Captured (${Math.round(thumbnail.length / 1024)}KB)`);
         const pin = this.homePinService.FindPin(resourceType, tab.configuration as Record<string, unknown>);
         if (pin) {
           this.homePinService.UpdatePin(pin.Id, { Thumbnail: thumbnail });
-        } else {
-          console.warn('[Pin Thumbnail] Could not find pin to attach thumbnail to');
         }
-      } else {
-        console.warn('[Pin Thumbnail] Capture returned empty');
       }
-    } catch (err) {
-      console.warn('[Pin Thumbnail] Capture failed:', err);
+    } catch {
+      // Thumbnail capture is best-effort
     }
   }
 

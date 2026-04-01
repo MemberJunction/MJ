@@ -80,17 +80,23 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   public EditingGroupName: string | null = null;
 
   // Add pin panel - available resources
-  public AvailableDashboards: { id: string; name: string; appName: string; pinned: boolean }[] = [];
-  public AvailableViews: { id: string; name: string; entityName: string; appName: string; pinned: boolean }[] = [];
-  public AvailableQueries: { id: string; name: string; appName: string; pinned: boolean }[] = [];
-  public AvailableReports: { id: string; name: string; appName: string; pinned: boolean }[] = [];
+  public AvailableDashboards: { id: string; name: string; pinned: boolean }[] = [];
+  public AvailableViews: { id: string; name: string; entityName: string; pinned: boolean }[] = [];
+  public AvailableQueries: { id: string; name: string; pinned: boolean }[] = [];
+  public AvailableApps: { appId: string; appName: string; icon: string; color: string; navItems: { label: string; icon: string; pinned: boolean }[] }[] = [];
   public AddPanelLoading = false;
+
+  // Collapsible section state for Add Pin panel
+  public PanelSectionCollapsed: Record<string, boolean> = {};
 
   // Pin context menu (ellipsis)
   public PinMenuVisible = false;
   public PinMenuX = 0;
   public PinMenuY = 0;
   public PinMenuPin: HomeAppPinnedItem | null = null;
+
+  // Whether Data Explorer app is available (if so, dashboards/queries/views are accessible via its nav items)
+  public HasDataExplorerApp = false;
 
   // Drag state
   public DraggingPinId: string | null = null;
@@ -218,6 +224,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
     // Resolve display names for record-type pins that have raw ID titles
     this.resolveRecordPinNames();
+
+    // Resolve missing icons for Custom pins
+    this.resolveCustomPinIcons();
   }
 
   ngOnDestroy(): void {
@@ -622,6 +631,32 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     }
   }
 
+  /**
+   * Resolve missing icons for Custom (app nav item) pins by looking up nav items.
+   */
+  private async resolveCustomPinIcons(): Promise<void> {
+    const pinsNeedingIcons = this.PinnedItems.filter(pin =>
+      this.resolveStoredResourceType(pin) === 'Custom' && !pin.Icon
+    );
+
+    if (pinsNeedingIcons.length === 0) return;
+
+    for (const pin of pinsNeedingIcons) {
+      const appName = pin.ApplicationName || pin.Configuration['appName'] as string;
+      const navItemName = pin.Configuration['navItemName'] as string;
+      if (!appName || !navItemName) continue;
+
+      const app = this.appManager.GetAllApps().find(a => a.Name === appName);
+      if (!app) continue;
+
+      const navItems = await app.GetNavItems();
+      const navItem = navItems.find(ni => ni.Label === navItemName);
+      if (navItem?.Icon) {
+        this.pinService.UpdatePin(pin.Id, { Icon: navItem.Icon });
+      }
+    }
+  }
+
   // =============================================
   // PIN MANAGEMENT
   // =============================================
@@ -633,8 +668,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     if (this.EditMode) return;
     const config = pin.Configuration;
     const rt = this.resolveStoredResourceType(pin);
-
-    console.log(`[Pin Click] "${pin.DisplayName}" → resolved type: "${rt}", stored type: "${pin.ResourceType}"`, config);
 
     switch (rt) {
       case 'Dashboards': {
@@ -700,7 +733,6 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         if (appName) {
           const app = this.appManager.GetAllApps().find(a => a.Name === appName);
           if (app) {
-            console.log(`[Pin Click] Custom: SwitchToApp("${app.ID}", "${navItemName}") via appName="${appName}"`, queryParams ? `queryParams: ${JSON.stringify(queryParams)}` : '');
             this.navigationService.SwitchToApp(app.ID, navItemName).then(() => {
               // Apply query params after the tab is created/activated
               if (queryParams && Object.keys(queryParams).length > 0) {
@@ -846,7 +878,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
       case 'Queries': return 'fa-solid fa-database';
       case 'Reports': return 'fa-solid fa-chart-bar';
       case 'Records': return entity ? this.getEntityIconByName(entity) : 'fa-solid fa-file';
-      case 'Custom': return this.getAppIcon(pin) || 'fa-solid fa-cube';
+      case 'Custom': return this.getNavItemIcon(pin) || this.getAppIcon(pin) || 'fa-solid fa-cube';
       default: return 'fa-solid fa-thumbtack';
     }
   }
@@ -874,6 +906,32 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     if (!appName) return undefined;
     const app = this.appManager.GetAllApps().find(a => a.Name === appName);
     return app?.Icon || undefined;
+  }
+
+  /**
+   * Look up the nav item icon for a Custom pin from the app's nav items cache.
+   * Uses the pre-computed appsDisplayData to avoid async lookups.
+   */
+  private getNavItemIcon(pin: HomeAppPinnedItem): string | undefined {
+    const appName = pin.ApplicationName || pin.Configuration['appName'] as string;
+    const navItemName = pin.Configuration['navItemName'] as string;
+    if (!appName || !navItemName) return undefined;
+
+    // Check the pre-computed display data first (fast)
+    const appData = this.appsDisplayData.find(d => d.app.Name === appName);
+    if (appData) {
+      const navItem = appData.navItemsPreview.find(ni => ni.Label === navItemName);
+      if (navItem) return navItem.Icon;
+    }
+
+    // Fall back to AvailableApps data (if Add Panel was loaded)
+    const panelApp = this.AvailableApps.find(a => a.appName === appName);
+    if (panelApp) {
+      const ni = panelApp.navItems.find(n => n.label === navItemName);
+      if (ni) return ni.icon;
+    }
+
+    return undefined;
   }
 
   // =============================================
@@ -1040,10 +1098,12 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   private async loadAvailableResources(): Promise<void> {
     const rv = new RunView();
 
-    const [dashboards, views, queries, reports] = await Promise.all([
+    // Load dashboards, views, queries in parallel
+    const [dashboards, views, queries] = await Promise.all([
       rv.RunView<{ID: string; Name: string}>({
         EntityName: 'MJ: Dashboards',
         Fields: ['ID', 'Name'],
+        ExtraFilter: `Type='Config'`,
         OrderBy: 'Name',
         ResultType: 'simple'
       }),
@@ -1059,34 +1119,30 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         Fields: ['ID', 'Name'],
         OrderBy: 'Name',
         ResultType: 'simple'
-      }),
-      rv.RunView<{ID: string; Name: string}>({
-        EntityName: 'MJ: Reports',
-        Fields: ['ID', 'Name'],
-        OrderBy: 'Name',
-        ResultType: 'simple'
       })
     ]);
 
     this.AvailableDashboards = (dashboards.Results || []).map(d => ({
-      id: d.ID, name: d.Name, appName: '',
+      id: d.ID, name: d.Name,
       pinned: this.pinService.IsPinned('Dashboards', { dashboardId: d.ID })
     }));
 
     this.AvailableViews = (views.Results || []).map(v => ({
-      id: v.ID, name: v.Name, entityName: v.Entity || '', appName: '',
+      id: v.ID, name: v.Name, entityName: v.Entity || '',
       pinned: this.pinService.IsPinned('User Views', { viewId: v.ID })
     }));
 
     this.AvailableQueries = (queries.Results || []).map(q => ({
-      id: q.ID, name: q.Name, appName: '',
+      id: q.ID, name: q.Name,
       pinned: this.pinService.IsPinned('Queries', { queryId: q.ID })
     }));
 
-    this.AvailableReports = (reports.Results || []).map(r => ({
-      id: r.ID, name: r.Name, appName: '',
-      pinned: this.pinService.IsPinned('Reports', { reportId: r.ID })
-    }));
+    // Load apps with their nav items
+    await this.loadAvailableApps();
+
+    // Check if Data Explorer is available — if so, dashboards/queries/views
+    // are accessible through its nav items, no need for standalone sections
+    this.HasDataExplorerApp = this.AvailableApps.some(a => a.appName === 'Data Explorer');
   }
 
   /**
@@ -1096,6 +1152,71 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     if (!this.AddPanelSearchQuery) return items;
     const q = this.AddPanelSearchQuery.toLowerCase();
     return items.filter(item => item.name.toLowerCase().includes(q));
+  }
+
+  /**
+   * Load available apps with their nav items for the Add Pin panel
+   */
+  private async loadAvailableApps(): Promise<void> {
+    const allApps = this.appManager.GetAllApps().filter(a => a.Name !== 'Home');
+    this.AvailableApps = await Promise.all(allApps.map(async app => {
+      const navItems = await app.GetNavItems();
+      return {
+        appId: app.ID,
+        appName: app.Name,
+        icon: app.Icon || 'fa-solid fa-cube',
+        color: app.GetColor() || '#1976d2',
+        navItems: navItems.map(ni => ({
+          label: ni.Label,
+          icon: ni.Icon || 'fa-solid fa-circle',
+          pinned: this.pinService.IsPinned('Custom', { appName: app.Name, navItemName: ni.Label })
+        }))
+      };
+    }));
+  }
+
+  /**
+   * Toggle a section's collapsed state in the Add Pin panel
+   */
+  TogglePanelSection(section: string): void {
+    this.PanelSectionCollapsed[section] = !this.PanelSectionCollapsed[section];
+  }
+
+  /**
+   * Pin an app nav item from the Add Panel
+   */
+  PinAppNavItem(appName: string, _appIcon: string, appColor: string, navItemLabel: string, navItemIcon: string): void {
+    const input: HomeAppPinInput = {
+      DisplayName: navItemLabel,
+      ResourceType: 'Custom',
+      ApplicationName: appName,
+      Icon: navItemIcon,
+      Color: appColor,
+      Configuration: {
+        resourceType: 'Custom',
+        appName: appName,
+        navItemName: navItemLabel,
+      },
+      Group: this.getSelectedGroup() || undefined,
+    };
+
+    const added = this.pinService.AddPin(input);
+    if (added) {
+      // Update pinned state in the panel
+      this.AvailableApps = this.AvailableApps.map(app => {
+        if (app.appName !== appName) return app;
+        return {
+          ...app,
+          navItems: app.navItems.map(ni =>
+            ni.label === navItemLabel ? { ...ni, pinned: true } : ni
+          )
+        };
+      });
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `"${navItemLabel}" pinned to Home`, 'success', 3000
+      );
+      this.cdr.markForCheck();
+    }
   }
 
   /**
@@ -1161,12 +1282,21 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
           q.id === id ? { ...q, pinned } : q
         );
         break;
-      case 'Reports':
-        this.AvailableReports = this.AvailableReports.map(r =>
-          r.id === id ? { ...r, pinned } : r
-        );
-        break;
     }
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Filter apps by search query (matches app name or nav item labels)
+   */
+  FilterApps(): typeof this.AvailableApps {
+    if (!this.AddPanelSearchQuery) return this.AvailableApps;
+    const q = this.AddPanelSearchQuery.toLowerCase();
+    return this.AvailableApps
+      .map(app => ({
+        ...app,
+        navItems: app.navItems.filter(ni => ni.label.toLowerCase().includes(q))
+      }))
+      .filter(app => app.appName.toLowerCase().includes(q) || app.navItems.length > 0);
   }
 }

@@ -293,7 +293,7 @@
           <div class="search-input-wrapper">
             <i class="fa-solid fa-magnifying-glass"></i>
             <input type="text"
-              placeholder="Search dashboards, views, queries, reports..."
+              placeholder="Search apps, dashboards, views, queries..."
               [(ngModel)]="AddPanelSearchQuery" />
           </div>
         </div>
@@ -307,14 +307,15 @@
             }
             <option value="__new__">+ New group...</option>
           </select>
-          @if (AddPanelSelectedGroup === '__new__') {
+        </div>
+        @if (AddPanelSelectedGroup === '__new__') {
+          <div class="new-group-row">
             <input class="new-group-input"
               type="text"
-              placeholder="Group name"
-              [(ngModel)]="AddPanelNewGroupName"
-              (keydown.enter)="$event.target.blur()" />
-          }
-        </div>
+              placeholder="Enter new group name..."
+              [(ngModel)]="AddPanelNewGroupName" />
+          </div>
+        }
 
         <div class="panel-results">
           @if (AddPanelLoading) {
@@ -322,119 +323,139 @@
               <mj-loading text="Loading resources..." size="small"></mj-loading>
             </div>
           } @else {
-            <!-- Dashboards -->
-            @if (FilterPanelItems(AvailableDashboards).length > 0) {
+            <!-- Apps with Nav Items -->
+            @if (FilterApps().length > 0) {
               <div class="panel-section">
-                <div class="panel-section-title">
+                <div class="panel-section-title collapsible" (click)="TogglePanelSection('apps')">
+                  <i class="fa-solid fa-grid-2"></i> Applications
+                  <span class="panel-count">{{ FilterApps().length }}</span>
+                  <i class="section-chevron fa-solid" [class.fa-chevron-down]="!PanelSectionCollapsed['apps']" [class.fa-chevron-right]="PanelSectionCollapsed['apps']"></i>
+                </div>
+                @if (!PanelSectionCollapsed['apps']) {
+                  @for (app of FilterApps(); track app.appId) {
+                    <div class="panel-app-header" [style.--panel-app-color]="app.color">
+                      <div class="panel-app-icon">
+                        <i [class]="app.icon"></i>
+                      </div>
+                      <span class="panel-app-name">{{ app.appName }}</span>
+                    </div>
+                    @for (ni of app.navItems; track ni.label) {
+                      <div class="panel-item panel-nav-item">
+                        <div class="panel-item-icon" [style.background]="'color-mix(in srgb, ' + app.color + ' 10%, var(--mj-bg-surface-card))'">
+                          <i [class]="ni.icon" [style.color]="app.color"></i>
+                        </div>
+                        <div class="panel-item-info">
+                          <div class="panel-item-name">{{ ni.label }}</div>
+                        </div>
+                        <div class="panel-item-action">
+                          @if (ni.pinned) {
+                            <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
+                          } @else {
+                            <button class="pin-btn" (click)="PinAppNavItem(app.appName, app.icon, app.color, ni.label, ni.icon)">
+                              <i class="fa-solid fa-plus"></i> Pin
+                            </button>
+                          }
+                        </div>
+                      </div>
+                    }
+                  }
+                }
+              </div>
+            }
+
+            <!-- Dashboards (metadata-driven only) — hidden if Data Explorer app handles these -->
+            @if (!HasDataExplorerApp && FilterPanelItems(AvailableDashboards).length > 0) {
+              <div class="panel-section">
+                <div class="panel-section-title collapsible" (click)="TogglePanelSection('dashboards')">
                   <i class="fa-solid fa-gauge-high"></i> Dashboards
                   <span class="panel-count">{{ FilterPanelItems(AvailableDashboards).length }}</span>
+                  <i class="section-chevron fa-solid" [class.fa-chevron-down]="!PanelSectionCollapsed['dashboards']" [class.fa-chevron-right]="PanelSectionCollapsed['dashboards']"></i>
                 </div>
-                @for (item of FilterPanelItems(AvailableDashboards); track item.id) {
-                  <div class="panel-item">
-                    <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
-                      <i class="fa-solid fa-gauge-high" style="color: var(--mj-brand-primary)"></i>
+                @if (!PanelSectionCollapsed['dashboards']) {
+                  @for (item of FilterPanelItems(AvailableDashboards); track item.id) {
+                    <div class="panel-item">
+                      <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
+                        <i class="fa-solid fa-gauge-high" style="color: var(--mj-brand-primary)"></i>
+                      </div>
+                      <div class="panel-item-info">
+                        <div class="panel-item-name">{{ item.name }}</div>
+                      </div>
+                      <div class="panel-item-action">
+                        @if (item.pinned) {
+                          <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
+                        } @else {
+                          <button class="pin-btn" (click)="PinFromPanel('Dashboards', item.id, item.name)">
+                            <i class="fa-solid fa-plus"></i> Pin
+                          </button>
+                        }
+                      </div>
                     </div>
-                    <div class="panel-item-info">
-                      <div class="panel-item-name">{{ item.name }}</div>
-                    </div>
-                    <div class="panel-item-action">
-                      @if (item.pinned) {
-                        <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
-                      } @else {
-                        <button class="pin-btn" (click)="PinFromPanel('Dashboards', item.id, item.name)">
-                          <i class="fa-solid fa-plus"></i> Pin
-                        </button>
-                      }
-                    </div>
-                  </div>
+                  }
                 }
               </div>
             }
 
-            <!-- Views -->
-            @if (FilterPanelItems(AvailableViews).length > 0) {
+            <!-- Views — hidden if Data Explorer app handles these -->
+            @if (!HasDataExplorerApp && FilterPanelItems(AvailableViews).length > 0) {
               <div class="panel-section">
-                <div class="panel-section-title">
+                <div class="panel-section-title collapsible" (click)="TogglePanelSection('views')">
                   <i class="fa-solid fa-table-list"></i> Views
                   <span class="panel-count">{{ FilterPanelItems(AvailableViews).length }}</span>
+                  <i class="section-chevron fa-solid" [class.fa-chevron-down]="!PanelSectionCollapsed['views']" [class.fa-chevron-right]="PanelSectionCollapsed['views']"></i>
                 </div>
-                @for (item of FilterPanelItems(AvailableViews); track item.id) {
-                  <div class="panel-item">
-                    <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
-                      <i class="fa-solid fa-table-list" style="color: var(--mj-brand-primary)"></i>
+                @if (!PanelSectionCollapsed['views']) {
+                  @for (item of FilterPanelItems(AvailableViews); track item.id) {
+                    <div class="panel-item">
+                      <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
+                        <i class="fa-solid fa-table-list" style="color: var(--mj-brand-primary)"></i>
+                      </div>
+                      <div class="panel-item-info">
+                        <div class="panel-item-name">{{ item.name }}</div>
+                        <div class="panel-item-sub">{{ item.entityName }}</div>
+                      </div>
+                      <div class="panel-item-action">
+                        @if (item.pinned) {
+                          <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
+                        } @else {
+                          <button class="pin-btn" (click)="PinFromPanel('User Views', item.id, item.name)">
+                            <i class="fa-solid fa-plus"></i> Pin
+                          </button>
+                        }
+                      </div>
                     </div>
-                    <div class="panel-item-info">
-                      <div class="panel-item-name">{{ item.name }}</div>
-                      <div class="panel-item-sub">{{ item.entityName }}</div>
-                    </div>
-                    <div class="panel-item-action">
-                      @if (item.pinned) {
-                        <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
-                      } @else {
-                        <button class="pin-btn" (click)="PinFromPanel('User Views', item.id, item.name)">
-                          <i class="fa-solid fa-plus"></i> Pin
-                        </button>
-                      }
-                    </div>
-                  </div>
+                  }
                 }
               </div>
             }
 
-            <!-- Queries -->
-            @if (FilterPanelItems(AvailableQueries).length > 0) {
+            <!-- Queries — hidden if Data Explorer app handles these -->
+            @if (!HasDataExplorerApp && FilterPanelItems(AvailableQueries).length > 0) {
               <div class="panel-section">
-                <div class="panel-section-title">
+                <div class="panel-section-title collapsible" (click)="TogglePanelSection('queries')">
                   <i class="fa-solid fa-database"></i> Queries
                   <span class="panel-count">{{ FilterPanelItems(AvailableQueries).length }}</span>
+                  <i class="section-chevron fa-solid" [class.fa-chevron-down]="!PanelSectionCollapsed['queries']" [class.fa-chevron-right]="PanelSectionCollapsed['queries']"></i>
                 </div>
-                @for (item of FilterPanelItems(AvailableQueries); track item.id) {
-                  <div class="panel-item">
-                    <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
-                      <i class="fa-solid fa-database" style="color: var(--mj-brand-primary)"></i>
+                @if (!PanelSectionCollapsed['queries']) {
+                  @for (item of FilterPanelItems(AvailableQueries); track item.id) {
+                    <div class="panel-item">
+                      <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
+                        <i class="fa-solid fa-database" style="color: var(--mj-brand-primary)"></i>
+                      </div>
+                      <div class="panel-item-info">
+                        <div class="panel-item-name">{{ item.name }}</div>
+                      </div>
+                      <div class="panel-item-action">
+                        @if (item.pinned) {
+                          <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
+                        } @else {
+                          <button class="pin-btn" (click)="PinFromPanel('Queries', item.id, item.name)">
+                            <i class="fa-solid fa-plus"></i> Pin
+                          </button>
+                        }
+                      </div>
                     </div>
-                    <div class="panel-item-info">
-                      <div class="panel-item-name">{{ item.name }}</div>
-                    </div>
-                    <div class="panel-item-action">
-                      @if (item.pinned) {
-                        <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
-                      } @else {
-                        <button class="pin-btn" (click)="PinFromPanel('Queries', item.id, item.name)">
-                          <i class="fa-solid fa-plus"></i> Pin
-                        </button>
-                      }
-                    </div>
-                  </div>
-                }
-              </div>
-            }
-
-            <!-- Reports -->
-            @if (FilterPanelItems(AvailableReports).length > 0) {
-              <div class="panel-section">
-                <div class="panel-section-title">
-                  <i class="fa-solid fa-chart-bar"></i> Reports
-                  <span class="panel-count">{{ FilterPanelItems(AvailableReports).length }}</span>
-                </div>
-                @for (item of FilterPanelItems(AvailableReports); track item.id) {
-                  <div class="panel-item">
-                    <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
-                      <i class="fa-solid fa-chart-bar" style="color: var(--mj-brand-primary)"></i>
-                    </div>
-                    <div class="panel-item-info">
-                      <div class="panel-item-name">{{ item.name }}</div>
-                    </div>
-                    <div class="panel-item-action">
-                      @if (item.pinned) {
-                        <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
-                      } @else {
-                        <button class="pin-btn" (click)="PinFromPanel('Reports', item.id, item.name)">
-                          <i class="fa-solid fa-plus"></i> Pin
-                        </button>
-                      }
-                    </div>
-                  </div>
+                  }
                 }
               </div>
             }
@@ -455,7 +476,7 @@
       <div class="apps-section">
         <h2 class="section-title">
           <i class="fa-solid fa-grid-2"></i>
-          Your Applications
+          My Applications
         </h2>
         <div class="apps-grid">
           @for (appData of appsDisplayData; track trackByApp($index, appData)) {

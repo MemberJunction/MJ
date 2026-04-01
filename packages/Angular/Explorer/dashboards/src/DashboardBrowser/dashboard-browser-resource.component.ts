@@ -472,6 +472,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         );
 
         this.updateUrlQueryParams();
+        this.NotifyDisplayNameChanged(dashboard.Name || 'Dashboard');
         this.cdr.detectChanges();
     }
 
@@ -514,6 +515,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.selectedDashboard = null;
         this.mode = 'list';
         this.updateUrlQueryParams();
+        this.NotifyDisplayNameChanged('Dashboards');
         this.cdr.detectChanges();
     }
 
@@ -977,6 +979,13 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 categories: this.categories.map(c => ({ id: c.ID, name: c.Name, parentId: c.ParentID }))
             });
 
+            // After dashboards are loaded, check for deep-link from configuration
+            // (e.g., pin navigation passes dashboard ID via queryParams in config)
+            this.applyConfigurationState();
+
+            // Also watch for late-arriving query params from pin navigation
+            this.watchForLateQueryParams();
+
             this.NotifyLoadComplete();
         } catch (err) {
             console.error('Failed to load dashboards:', err);
@@ -984,6 +993,60 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.isLoading = false;
             this.cdr.detectChanges();
         }
+    }
+
+    /**
+     * Apply initial state from resource configuration (handles pin navigation
+     * and other deep-link scenarios where ActivatedRoute may not fire).
+     */
+    private applyConfigurationState(): void {
+        const config = this.Data?.Configuration;
+        if (!config) return;
+
+        const qp = config['queryParams'] as Record<string, string> | undefined;
+        const dashboardId = qp?.['dashboard'] || config['dashboard'] as string;
+        const categoryId = qp?.['category'] || config['category'] as string;
+
+        if (categoryId && categoryId !== this.selectedCategoryId) {
+            this.selectedCategoryId = categoryId;
+        }
+
+        if (dashboardId && !this.selectedDashboard) {
+            const dashboard = this.dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
+            if (dashboard) {
+                this.openDashboard(dashboard);
+            }
+        }
+    }
+
+    /**
+     * Check for late-arriving query params (e.g., from pin navigation where
+     * UpdateActiveTabQueryParams runs after the component has already loaded).
+     * Polls briefly for queryParams to appear in the URL.
+     */
+    private watchForLateQueryParams(): void {
+        // Check every 200ms for up to 3 seconds for queryParams to appear
+        // AND for dashboards to be loaded (both conditions must be met)
+        let attempts = 0;
+        const interval = setInterval(() => {
+            attempts++;
+            if (attempts > 15 || this.selectedDashboard) {
+                clearInterval(interval);
+                return;
+            }
+            // Re-check the URL directly since ActivatedRoute may not fire
+            const url = window.location.href;
+            const dashboardMatch = url.match(/[?&]dashboard=([^&]+)/);
+            if (dashboardMatch && !this.selectedDashboard && this.dashboards.length > 0) {
+                const dashboardId = decodeURIComponent(dashboardMatch[1]);
+                const dashboard = this.dashboards.find(d => UUIDsEqual(d.ID, dashboardId));
+                if (dashboard) {
+                    this.openDashboard(dashboard);
+                    this.cdr.detectChanges();
+                    clearInterval(interval);
+                }
+            }
+        }, 200);
     }
 
     // ========================================

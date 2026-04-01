@@ -1298,8 +1298,23 @@
   border-bottom: 1px solid var(--mj-border-subtle);
 }
 
-.panel-section-title i {
+.panel-section-title i:first-child {
   font-size: 12px;
+}
+
+.panel-section-title.collapsible {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--mj-transition-base);
+}
+
+.panel-section-title.collapsible:hover {
+  color: var(--mj-text-secondary);
+}
+
+.section-chevron {
+  font-size: 10px;
+  transition: transform 0.2s ease;
 }
 
 .panel-count {
@@ -1309,6 +1324,73 @@
   border-radius: 8px;
   font-size: 10px;
   color: var(--mj-text-disabled);
+}
+
+/* App hierarchy in panel */
+.panel-app-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 6px 12px;
+  margin-top: 8px;
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.panel-app-header:first-child {
+  margin-top: 0;
+}
+
+.panel-app-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.panel-app-icon i {
+  font-size: 14px;
+  color: var(--panel-app-color);
+}
+
+.panel-app-name {
+  font-size: 12px;
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Nav items under app — indented with left border accent */
+.panel-item.panel-nav-item {
+  padding: 10px 12px 10px 32px;
+  margin-left: 12px;
+  border-left: 2px solid var(--mj-border-subtle);
+}
+
+.panel-item.panel-nav-item:last-of-type {
+  border-left-color: transparent;
+}
+
+.panel-item.panel-nav-item:hover {
+  border-left-color: var(--mj-brand-primary);
+}
+
+/* New group row */
+.new-group-row {
+  padding: 0 20px 12px 20px;
+}
+
+.new-group-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--mj-border-focus);
+  border-radius: var(--mj-radius-sm);
+  font-size: var(--mj-text-sm);
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface);
+  outline: none;
 }
 
 .panel-item {

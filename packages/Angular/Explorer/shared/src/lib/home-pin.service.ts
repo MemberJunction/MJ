@@ -171,20 +171,15 @@ export class HomeAppPinService {
    */
   async CaptureThumbnail(element: HTMLElement): Promise<string | undefined> {
     try {
-      console.log(`[Pin Thumbnail] Element: ${element.tagName}.${element.className}, size: ${element.clientWidth}x${element.clientHeight}`);
       if (element.clientWidth === 0 || element.clientHeight === 0) {
-        console.warn('[Pin Thumbnail] Element has zero dimensions, skipping capture');
         return undefined;
       }
-      const dataUrl = await toJpeg(element, {
+      return await toJpeg(element, {
         quality: 0.6,
         pixelRatio: 0.2,
         cacheBust: true,
       });
-      console.log(`[Pin Thumbnail] Success: ${Math.round(dataUrl.length / 1024)}KB`);
-      return dataUrl;
-    } catch (error) {
-      console.warn('[Pin Thumbnail] Capture failed:', error);
+    } catch {
       return undefined;
     }
   }

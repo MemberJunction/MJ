@@ -508,6 +508,16 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       this.emitFirstLoadCompleteOnce();
     };
 
+    // Wire up display name change for single-resource mode
+    // Use a closure that resolves the tab ID at call time, not at wire-up time,
+    // because the tab may not be active yet when the component is first created.
+    instance.DisplayNameChangedEvent = (newName: string) => {
+      const tabId = this.workspaceManager.GetActiveTabId();
+      if (tabId) {
+        this.workspaceManager.UpdateTabTitle(tabId, newName);
+      }
+    };
+
     // Get the native element and append to container
     const nativeElement = (componentRef.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
     container.appendChild(nativeElement);
@@ -696,6 +706,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         if (entity && entity.Get && entity.Get('Name')) {
           // TODO: Implement UpdateTabTitle in WorkspaceStateManager
         }
+      };
+
+      // Wire up display name change notifications
+      instance.DisplayNameChangedEvent = (newName: string) => {
+        this.layoutManager.UpdateTabStyle(tabId, { title: newName });
+        this.workspaceManager.UpdateTabTitle(tabId, newName);
       };
 
       // Create a container div for the component
@@ -1174,7 +1190,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   /**
    * Pin current context menu tab to Home dashboard
    */
-  onContextPinToHome(): void {
+  async onContextPinToHome(): Promise<void> {
     if (this.isContextTabPinnedToHome) {
       this.hideContextMenu();
       return;
@@ -1193,11 +1209,23 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     const resourceType = this.resolveResourceType(tab);
     const activeApp = this.appManager.GetActiveApp();
 
+    // Resolve nav item icon for Custom pins
+    let pinIcon: string | undefined;
+    if (resourceType === 'Custom' && activeApp) {
+      const navItemName = tab.configuration?.['navItemName'] as string;
+      if (navItemName) {
+        const navItems = await activeApp.GetNavItems();
+        const navItem = navItems.find(ni => ni.Label === navItemName);
+        pinIcon = navItem?.Icon || undefined;
+      }
+    }
+
     const added = this.pinService.AddPin({
       DisplayName: tab.title || 'Untitled',
       ResourceType: resourceType,
       ApplicationID: tab.applicationId || activeApp?.ID,
       ApplicationName: activeApp?.Name,
+      Icon: pinIcon,
       Color: activeApp?.GetColor() || undefined,
       Configuration: tab.configuration as Record<string, unknown>,
     });
@@ -1269,10 +1297,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     try {
       let contentEl: HTMLElement | null = null;
       if (this.useSingleResourceMode) {
-        console.log('[Pin Thumbnail] Single-resource mode, using directContentContainer');
         contentEl = this.directContentContainer?.nativeElement ?? null;
       } else {
-        console.log('[Pin Thumbnail] Multi-tab mode, querying Golden Layout content');
         contentEl = this.glContainer?.nativeElement?.querySelector(
           '.lm_item_container .lm_content'
         ) as HTMLElement | null;
