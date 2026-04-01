@@ -1229,7 +1229,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     Success: true,
                     Results: cached.results,
                     RowCount: cached.results.length,
-                    TotalRowCount: cached.results.length,
+                    TotalRowCount: cached.totalRowCount ?? cached.results.length,
                     ExecutionTime: 0, // Cached, no execution time
                     ErrorMessage: '',
                     UserViewRunID: '',
@@ -1372,7 +1372,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         Success: true,
                         Results: cached.results,
                         RowCount: cached.results.length,
-                        TotalRowCount: cached.results.length,
+                        TotalRowCount: cached.totalRowCount ?? cached.results.length,
                         ExecutionTime: 0,
                         ErrorMessage: '',
                         UserViewRunID: '',
@@ -1569,7 +1569,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     Success: true,
                     Results: cached.results as T[],
                     RowCount: cached.rowCount,
-                    TotalRowCount: cached.rowCount,
+                    TotalRowCount: cached.totalRowCount ?? cached.rowCount,
                     ExecutionTime: 0,
                     ErrorMessage: '',
                     UserViewRunID: '',
@@ -1620,7 +1620,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         Success: true,
                         Results: merged.results as T[],
                         RowCount: merged.rowCount,
-                        TotalRowCount: merged.rowCount,
+                        TotalRowCount: merged.totalRowCount ?? merged.rowCount,
                         ExecutionTime: 0,
                         ErrorMessage: '',
                         UserViewRunID: '',
@@ -1643,11 +1643,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             );
         } else if (checkResult.status === 'stale') {
             // Cache is stale - use fresh data and update cache (entity doesn't support differential)
+            const staleResults = checkResult.results || [];
             const freshResult: RunViewResult<T> = {
                 Success: true,
-                Results: checkResult.results || [],
-                RowCount: checkResult.rowCount || 0,
-                TotalRowCount: checkResult.rowCount || 0,
+                Results: staleResults,
+                RowCount: staleResults.length,
+                TotalRowCount: checkResult.rowCount || staleResults.length,
                 ExecutionTime: 0,
                 ErrorMessage: '',
                 UserViewRunID: '',
@@ -1664,7 +1665,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     param,
                     checkResult.results || [],
                     checkResult.maxUpdatedAt,
-                    checkResult.aggregateResults // Include aggregate results in cache
+                    checkResult.aggregateResults, // Include aggregate results in cache
+                    checkResult.rowCount
                 ).catch(e => LogError(`Failed to update cache: ${e}`));
             }
 
@@ -1782,7 +1784,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 params,
                 result.Results,
                 maxUpdatedAt,
-                result.AggregateResults
+                result.AggregateResults,
+                result.TotalRowCount
             );
         } else if (this.shouldAutoCache(params, result)) {
             // Server-side auto-cache: small, unfiltered, unsorted results are
@@ -1795,7 +1798,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 params,
                 result.Results,
                 maxUpdatedAt,
-                result.AggregateResults
+                result.AggregateResults,
+                result.TotalRowCount
             );
             LogStatusEx({ message: `  📦 [Auto-Cache] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${result.Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
         }
@@ -1859,7 +1863,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     params[i],
                     results[i].Results,
                     maxUpdatedAt,
-                    results[i].AggregateResults
+                    results[i].AggregateResults,
+                    results[i].TotalRowCount
                 ));
             } else if (this.shouldAutoCache(params[i], results[i])) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
@@ -1868,7 +1873,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     params[i],
                     results[i].Results,
                     maxUpdatedAt,
-                    results[i].AggregateResults
+                    results[i].AggregateResults,
+                    results[i].TotalRowCount
                 ));
                 LogStatusEx({ message: `    📦 [Auto-Cache] RunViews "${params[i].EntityName || params[i].ViewName || 'unknown'}" — ${results[i].Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
             }

@@ -1,7 +1,7 @@
-import { BaseEntity } from "./baseEntity";
-import { IMetadataProvider } from "./interfaces";
+import type { BaseEntity } from "./baseEntity";
+import type { IMetadataProvider } from "./interfaces";
 import { LogError } from "./logging";
-import { UserInfo } from "./securityInfo";
+import type { UserInfo } from "./securityInfo";
 
 /**
  * Returns the TypeScript type that corresponds to the SQL type passed in
@@ -410,9 +410,9 @@ export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(
     // we need to transform each of the items in the result set into a BaseEntity-derived object
     // Create entities and load data in parallel for better performance
     const entityPromises = items.map(async (item) => {
-        if (item instanceof BaseEntity || (typeof item.Save === 'function')) {
-            // the second check is a "duck-typing" check in case we have different runtime
-            // loading sources where the instanceof will fail
+        if (typeof item.Save === 'function') {
+            // duck-typing check — detects BaseEntity instances (and subclasses loaded
+            // from different runtime sources where instanceof would fail)
             return item as T;
         }
         else {
