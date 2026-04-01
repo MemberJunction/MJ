@@ -2408,6 +2408,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                     'Engine': { events: 0, avgMs: 0 },
                     'AI': { events: 0, avgMs: 0 },
                     'Cache': { events: 0, avgMs: 0 },
+                    'Coalesce': { events: 0, avgMs: 0 },
                     'Network': { events: 0, avgMs: 0 },
                     'Custom': { events: 0, avgMs: 0 }
                 };
