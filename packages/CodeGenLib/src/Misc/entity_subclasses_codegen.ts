@@ -185,7 +185,8 @@ export const loadModule = () => {
     } else {
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
       const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
-      
+      const sClassName: string = `${entity.ClassName}Entity`;
+
       const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
@@ -197,19 +198,22 @@ export const loadModule = () => {
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
-        // JSONType override: when a field has JSONType metadata, emit a strongly-typed
-        // getter (JSON.parse) and setter (JSON.stringify) using the named interface/type
-        // instead of the default string getter/setter. Supports array types via JSONTypeIsArray.
+        // JSONType: when a field has JSONType metadata, we emit the standard string getter/setter
+        // unchanged, plus an additional typed "Object" accessor (e.g., DefaultNavItemsObject) that
+        // handles JSON.parse/stringify with caching. Interface names are entity-prefixed for safety.
         const hasJSONType = e.JSONType && e.JSONType.trim().length > 0;
         let typeString: string = TypeScriptTypeFromSQLType(e.Type) + (e.AllowsNull ? ' | null' : '');
+        // Build the typed accessor info (used later for the Object suffix property)
+        let jsonTypeAccessorInfo: { prefixedTypeName: string; fullTypeString: string; isArray: boolean } | null = null;
         if (hasJSONType) {
-          const jsonTypeName = e.JSONType.trim();
+          const originalTypeName = e.JSONType.trim();
+          const prefixedTypeName = `${sClassName}_${originalTypeName}`;
           const isArray = e.JSONTypeIsArray === true;
-          typeString = isArray ? `${jsonTypeName}[]` : jsonTypeName;
-          if (e.AllowsNull) {
-            typeString += ' | null';
-          }
-        } else if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
+          const fullTypeString = isArray ? `Array<${prefixedTypeName}>` : prefixedTypeName;
+          jsonTypeAccessorInfo = { prefixedTypeName, fullTypeString: fullTypeString + (e.AllowsNull ? ' | null' : ''), isArray };
+          // typeString stays as the standard SQL-mapped type (string | null) for the base getter
+        }
+        if (!hasJSONType && e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
@@ -235,8 +239,8 @@ export const loadModule = () => {
             ? `\n    * * IS-A Source: Inherited from ${this.getISAFieldSourceEntity(entity, e)}`
             : '';
 
-        const jsonTypeComment = hasJSONType
-            ? `\n    * * JSON Type: ${e.JSONType.trim()}${e.JSONTypeIsArray ? '[]' : ''}`
+        const jsonTypeComment = hasJSONType && jsonTypeAccessorInfo
+            ? `\n    * * JSON Type: ${jsonTypeAccessorInfo.isArray ? `Array<${jsonTypeAccessorInfo.prefixedTypeName}>` : jsonTypeAccessorInfo.prefixedTypeName}`
             : '';
 
         const safeName = SafeCodeName(e);
@@ -244,16 +248,9 @@ export const loadModule = () => {
             ? `\n    * * NOTE: Property renamed to \`${safeName}\` to avoid conflict with BaseEntity.${e.CodeName}`
             : '';
 
-        let getterBody: string;
-        let setterBody: string;
-        if (hasJSONType) {
-          // JSONType fields: parse JSON from raw string on get, stringify on set
-          getterBody = `return this.Get('${e.Name}') ? JSON.parse(this.Get('${e.Name}')) : null;`;
-          setterBody = `this.Set('${e.Name}', value ? JSON.stringify(value) : null);`;
-        } else {
-          getterBody = `return this.Get('${e.Name}');`;
-          setterBody = `this.Set('${e.Name}', value);`;
-        }
+        // Standard getter/setter (always uses raw string, even for JSONType fields)
+        const getterBody = `return this.Get('${e.Name}');`;
+        const setterBody = `this.Set('${e.Name}', value);`;
 
         let sRet: string = `    /**
     * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
@@ -263,16 +260,46 @@ export const loadModule = () => {
         ${getterBody}
     }`;
         if (!e.ReadOnly || (e.IsPrimaryKey && !e.AutoIncrement) || isISAParentField) {
-          // Generate setter for non-readonly fields, non-auto-increment PKs, or IS-A parent fields
           sRet += `
     set ${safeName}(value: ${typeString}) {
         ${setterBody}
     }`;
         }
+
+        // JSONType: emit additional typed "Object" accessor with caching
+        if (hasJSONType && jsonTypeAccessorInfo) {
+          const objName = `${safeName}Object`;
+          const cachedField = `_${objName}_cached`;
+          const lastRawField = `_${objName}_lastRaw`;
+          const ft = jsonTypeAccessorInfo.fullTypeString;
+
+          sRet += `
+
+    private ${cachedField}: ${ft} | undefined = undefined;
+    private ${lastRawField}: string | null = null;
+    /**
+    * Typed accessor for ${e.Name} — returns parsed JSON as ${jsonTypeAccessorInfo.isArray ? `Array<${jsonTypeAccessorInfo.prefixedTypeName}>` : jsonTypeAccessorInfo.prefixedTypeName}.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ${objName}(): ${ft} {
+        const raw = this.Get('${e.Name}');
+        if (raw !== this.${lastRawField}) {
+            this.${cachedField} = raw ? JSON.parse(raw) : null;
+            this.${lastRawField} = raw;
+        }
+        return this.${cachedField}!;
+    }
+    set ${objName}(value: ${ft}) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Set('${e.Name}', raw);
+        this.${cachedField} = value;
+        this.${lastRawField} = raw;
+    }`;
+        }
+
         return sRet;
       }).join('\n\n');
 
-      const sClassName: string = `${entity.ClassName}Entity`;
       const subClass: string = entity.EntityObjectSubclassName ? entity.EntityObjectSubclassName : '';
       const subClassImport: string = entity.EntityObjectSubclassImport ? entity.EntityObjectSubclassImport : '';
       const sBaseClass: string = subClass.length > 0 && subClassImport.length > 0 ? `${subClass}` : 'BaseEntity';
@@ -387,12 +414,23 @@ export const loadModule = () => {
                           logError(err);
                       }
                       logError(`[JSONType] Skipping JSONTypeDefinition for ${entity.Name}.${field.Name} due to validation errors. The field will use a plain string getter/setter instead.`);
-                      // Clear JSONType so the getter/setter falls back to standard string type
                       (field as unknown as Record<string, unknown>).JSONType = null;
                       continue;
                   }
               }
-              jsonTypeDefinitions.add(definition);
+              // Prefix all type names defined in this definition block with the entity class name
+              // to avoid naming conflicts across entities. Uses AST to find all defined type names.
+              let rewrittenDef = definition;
+              const sourceFile = ts.createSourceFile('temp.ts', definition, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+              ts.forEachChild(sourceFile, (node) => {
+                  if ((ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) ||
+                       ts.isEnumDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
+                      const originalName = node.name.text;
+                      const prefixedName = `${sClassName}_${originalName}`;
+                      rewrittenDef = rewrittenDef.replace(new RegExp('\\b' + originalName + '\\b', 'g'), prefixedName);
+                  }
+              });
+              jsonTypeDefinitions.add(rewrittenDef);
           }
       }
       const jsonTypeBlock = jsonTypeDefinitions.size > 0
@@ -615,7 +653,7 @@ ${validationFunctions}`
             typeString += '.nullable()';
           }
         }
-        let sRet: string = `    ${SafeCodeName(e)}: z.${typeString}.describe(\`\n${this.GenerateZodDescription(e)}\`),`;
+        let sRet: string = `    ${SafeCodeName(e)}: z.${typeString}.describe(\`\n${this.GenerateZodDescription(e, entity)}\`),`;
         return sRet;
       }).join('\n');
 
@@ -635,7 +673,7 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
     return content;
   }
 
-  public GenerateZodDescription(entityField: EntityFieldInfo): string {
+  public GenerateZodDescription(entityField: EntityFieldInfo, entity?: EntityInfo): string {
     let result: string = '';
 
     let valueList: string = '';
@@ -649,9 +687,14 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
     }
 
     result += `        * * Field Name: ${entityField.Name}${entityField.DisplayName && entityField.DisplayName.length > 0 ? '\n        * * Display Name: ' + entityField.DisplayName : ''}\n`;
-    const jsonTypeAnnotation = entityField.JSONType && entityField.JSONType.trim().length > 0
-        ? `\n        * * JSON Type: ${entityField.JSONType.trim()}${entityField.JSONTypeIsArray ? '[]' : ''}`
-        : '';
+    let jsonTypeAnnotation = '';
+    if (entityField.JSONType && entityField.JSONType.trim().length > 0) {
+        const prefix = entity ? `${entity.ClassName}Entity_` : '';
+        const prefixedName = `${prefix}${entityField.JSONType.trim()}`;
+        jsonTypeAnnotation = entityField.JSONTypeIsArray
+            ? `\n        * * JSON Type: Array<${prefixedName}>`
+            : `\n        * * JSON Type: ${prefixedName}`;
+    }
     result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' + entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${jsonTypeAnnotation}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n        * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(entityField.Description) : ''}`;
     return result;
   }

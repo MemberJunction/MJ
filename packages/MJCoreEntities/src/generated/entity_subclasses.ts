@@ -6883,7 +6883,7 @@ export const MJApplicationSchema = z.object({
         * * Field Name: DefaultNavItems
         * * Display Name: Default Nav Items
         * * SQL Data Type: nvarchar(MAX)
-        * * JSON Type: IDefaultNavItem[]
+        * * JSON Type: Array<MJApplicationEntity_IDefaultNavItem>
         * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()`),
     ClassName: z.string().nullable().describe(`
         * * Field Name: ClassName
@@ -12693,7 +12693,7 @@ export const MJEntitySchema = z.object({
         * * Field Name: AdditionalBaseViews
         * * Display Name: Additional Base Views
         * * SQL Data Type: nvarchar(MAX)
-        * * JSON Type: IAdditionalBaseView[]
+        * * JSON Type: Array<MJEntityEntity_IAdditionalBaseView>
         * * Description: JSON array of additional database view registrations for this entity beyond the default BaseView. Each entry specifies a view name, optional description, optional schema, and whether it is user-searchable.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
@@ -41859,7 +41859,7 @@ export class MJApplicationSettingEntity extends BaseEntity<MJApplicationSettingE
 }
 
 
-export interface IDefaultNavItem {
+export interface MJApplicationEntity_IDefaultNavItem {
     /** Display label for the navigation item */
     Label: string;
     /** Font Awesome icon class (e.g., "fa-solid fa-database") */
@@ -42018,14 +42018,35 @@ export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
     * * Field Name: DefaultNavItems
     * * Display Name: Default Nav Items
     * * SQL Data Type: nvarchar(MAX)
-    * * JSON Type: IDefaultNavItem[]
+    * * JSON Type: Array<MJApplicationEntity_IDefaultNavItem>
     * * Description: JSON array of default navigation items for this application. Parsed by BaseApplication.GetNavItems()
     */
-    get DefaultNavItems(): IDefaultNavItem[] | null {
-        return this.Get('DefaultNavItems') ? JSON.parse(this.Get('DefaultNavItems')) : null;
+    get DefaultNavItems(): string | null {
+        return this.Get('DefaultNavItems');
     }
-    set DefaultNavItems(value: IDefaultNavItem[] | null) {
-        this.Set('DefaultNavItems', value ? JSON.stringify(value) : null);
+    set DefaultNavItems(value: string | null) {
+        this.Set('DefaultNavItems', value);
+    }
+
+    private _DefaultNavItemsObject_cached: Array<MJApplicationEntity_IDefaultNavItem> | null | undefined = undefined;
+    private _DefaultNavItemsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for DefaultNavItems — returns parsed JSON as Array<MJApplicationEntity_IDefaultNavItem>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
+        const raw = this.Get('DefaultNavItems');
+        if (raw !== this._DefaultNavItemsObject_lastRaw) {
+            this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
+            this._DefaultNavItemsObject_lastRaw = raw;
+        }
+        return this._DefaultNavItemsObject_cached!;
+    }
+    set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Set('DefaultNavItems', raw);
+        this._DefaultNavItemsObject_cached = value;
+        this._DefaultNavItemsObject_lastRaw = raw;
     }
 
     /**
@@ -56070,7 +56091,7 @@ export class MJEncryptionKeyEntity extends BaseEntity<MJEncryptionKeyEntityType>
 }
 
 
-export interface IAdditionalBaseView {
+export interface MJEntityEntity_IAdditionalBaseView {
     /** Name of the database view (e.g., "vwEntitiesWithPermissions") */
     Name: string;
     /** Human-readable description of what this view provides */
@@ -56938,14 +56959,35 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     * * Field Name: AdditionalBaseViews
     * * Display Name: Additional Base Views
     * * SQL Data Type: nvarchar(MAX)
-    * * JSON Type: IAdditionalBaseView[]
+    * * JSON Type: Array<MJEntityEntity_IAdditionalBaseView>
     * * Description: JSON array of additional database view registrations for this entity beyond the default BaseView. Each entry specifies a view name, optional description, optional schema, and whether it is user-searchable.
     */
-    get AdditionalBaseViews(): IAdditionalBaseView[] | null {
-        return this.Get('AdditionalBaseViews') ? JSON.parse(this.Get('AdditionalBaseViews')) : null;
+    get AdditionalBaseViews(): string | null {
+        return this.Get('AdditionalBaseViews');
     }
-    set AdditionalBaseViews(value: IAdditionalBaseView[] | null) {
-        this.Set('AdditionalBaseViews', value ? JSON.stringify(value) : null);
+    set AdditionalBaseViews(value: string | null) {
+        this.Set('AdditionalBaseViews', value);
+    }
+
+    private _AdditionalBaseViewsObject_cached: Array<MJEntityEntity_IAdditionalBaseView> | null | undefined = undefined;
+    private _AdditionalBaseViewsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for AdditionalBaseViews — returns parsed JSON as Array<MJEntityEntity_IAdditionalBaseView>.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get AdditionalBaseViewsObject(): Array<MJEntityEntity_IAdditionalBaseView> | null {
+        const raw = this.Get('AdditionalBaseViews');
+        if (raw !== this._AdditionalBaseViewsObject_lastRaw) {
+            this._AdditionalBaseViewsObject_cached = raw ? JSON.parse(raw) : null;
+            this._AdditionalBaseViewsObject_lastRaw = raw;
+        }
+        return this._AdditionalBaseViewsObject_cached!;
+    }
+    set AdditionalBaseViewsObject(value: Array<MJEntityEntity_IAdditionalBaseView> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Set('AdditionalBaseViews', raw);
+        this._AdditionalBaseViewsObject_cached = value;
+        this._AdditionalBaseViewsObject_lastRaw = raw;
     }
 
     /**
