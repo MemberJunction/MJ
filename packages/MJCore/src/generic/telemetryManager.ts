@@ -63,6 +63,7 @@ export type TelemetryCategory =
     | 'Network'
     | 'AI'
     | 'Cache'
+    | 'Coalesce'
     | 'Custom';
 
 /**
@@ -230,6 +231,22 @@ export interface TelemetryCacheParams {
 }
 
 /**
+ * Telemetry params for request coalescing operations.
+ * Tracks when concurrent RunViews calls are merged into a single mega-batch,
+ * capturing the merge shape and entity composition for performance analysis.
+ */
+export interface TelemetryCoalesceParams {
+    /** Number of independent RunViews callers that were merged into this batch */
+    CallerCount: number;
+    /** Total number of RunViewParams across all merged callers */
+    TotalEntityCount: number;
+    /** Entity/view names included in the mega-batch */
+    Entities: string[];
+    /** Per-caller boundary info showing how many params each caller contributed */
+    CallerBoundaries: Array<{ start: number; count: number }>;
+}
+
+/**
  * Telemetry params for Network operations.
  * Tracks API calls and network requests.
  */
@@ -269,6 +286,7 @@ export type TelemetryParamsUnion =
     | TelemetryEngineParams
     | TelemetryAIParams
     | TelemetryCacheParams
+    | TelemetryCoalesceParams
     | TelemetryNetworkParams
     | TelemetryCustomParams;
 
@@ -281,6 +299,7 @@ export interface TelemetryCategoryParamsMap {
     Engine: TelemetryEngineParams;
     AI: TelemetryAIParams;
     Cache: TelemetryCacheParams;
+    Coalesce: TelemetryCoalesceParams;
     Network: TelemetryNetworkParams;
     Custom: TelemetryCustomParams;
 }
@@ -868,6 +887,16 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
     ): string | null;
 
     /**
+     * Start tracking a Coalesce event
+     */
+    public StartEvent(
+        category: 'Coalesce',
+        operation: string,
+        params: TelemetryCoalesceParams,
+        userId?: string
+    ): string | null;
+
+    /**
      * Start tracking a Network event
      */
     public StartEvent(
@@ -1004,6 +1033,17 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         category: 'Cache',
         operation: string,
         params: TelemetryCacheParams,
+        elapsedMs: number,
+        userId?: string
+    ): void;
+
+    /**
+     * Record a completed Coalesce event directly
+     */
+    public RecordEvent(
+        category: 'Coalesce',
+        operation: string,
+        params: TelemetryCoalesceParams,
         elapsedMs: number,
         userId?: string
     ): void;
@@ -1643,6 +1683,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
             Network: { events: 0, totalMs: 0 },
             AI: { events: 0, totalMs: 0 },
             Cache: { events: 0, totalMs: 0 },
+            Coalesce: { events: 0, totalMs: 0 },
             Custom: { events: 0, totalMs: 0 }
         };
 
