@@ -11,6 +11,7 @@ export * from "./views/runView";
 export * from "./generic/runReport";
 export * from "./generic/runQuery";
 export * from "./generic/interfaces";
+export * from "./generic/scoring/ReciprocalRankFusion";
 export * from "./generic/baseEntity";
 export * from "./generic/applicationInfo";
 export * from "./generic/providerBase";

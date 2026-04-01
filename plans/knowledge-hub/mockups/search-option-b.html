@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search Dashboard — Option B: Command Palette / Spotlight</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --bg-input: #0f172a;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --accent-glow: rgba(59,130,246,0.15);
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+    --pink: #ec4899;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.5rem;
+    text-decoration: none; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  /* Dimmed background */
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(8px);
+    z-index: 50;
+  }
+
+  /* Spotlight container */
+  .spotlight {
+    position: fixed;
+    top: 12%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 680px;
+    max-width: calc(100vw - 2rem);
+    z-index: 60;
+    animation: spotlightIn 0.25s ease;
+  }
+  @keyframes spotlightIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(0.98); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  }
+
+  .spotlight-input-wrap {
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    border-radius: 14px 14px 0 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    position: relative;
+  }
+  .spotlight-input-wrap .prefix {
+    padding: 1rem 0 1rem 1.25rem;
+    color: var(--accent);
+    font-size: 1.2rem;
+  }
+  .spotlight-input {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 1rem 1rem;
+    font-size: 1.15rem;
+    color: var(--text-primary);
+    outline: none;
+  }
+  .spotlight-input::placeholder { color: var(--text-muted); }
+  .spotlight-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-right: 1rem;
+  }
+  .spotlight-actions .kbd {
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    font-family: monospace;
+  }
+
+  /* Results panel */
+  .spotlight-results {
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 14px 14px;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+  .spotlight-results::-webkit-scrollbar { width: 6px; }
+  .spotlight-results::-webkit-scrollbar-track { background: transparent; }
+  .spotlight-results::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .result-group {
+    border-bottom: 1px solid var(--border);
+  }
+  .result-group:last-child { border-bottom: none; }
+  .group-header {
+    padding: 0.6rem 1.25rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    background: rgba(15,23,42,0.5);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .group-count {
+    background: var(--bg-page);
+    border-radius: 10px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.65rem;
+  }
+
+  .result-item {
+    display: flex;
+    align-items: center;
+    padding: 0.7rem 1.25rem;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-left: 3px solid transparent;
+  }
+  .result-item:hover, .result-item.selected {
+    background: var(--bg-card-hover);
+    border-left-color: var(--accent);
+  }
+  .result-item .icon-wrap {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.8rem;
+  }
+  .icon-wrap.blue { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .icon-wrap.purple { background: rgba(168,85,247,0.15); color: var(--purple); }
+  .icon-wrap.green { background: rgba(34,197,94,0.15); color: var(--success); }
+  .icon-wrap.pink { background: rgba(236,72,153,0.15); color: var(--pink); }
+
+  .result-item .info { flex: 1; min-width: 0; }
+  .result-item .title {
+    font-size: 0.9rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .result-item .title mark {
+    background: rgba(59,130,246,0.2);
+    color: var(--accent);
+    border-radius: 2px;
+    padding: 0 2px;
+  }
+  .result-item .subtitle {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 0.1rem;
+  }
+  .result-item .score {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--success);
+    flex-shrink: 0;
+  }
+  .result-item .enter-hint {
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .result-item:hover .enter-hint, .result-item.selected .enter-hint { opacity: 1; }
+
+  /* Footer bar */
+  .spotlight-footer {
+    background: rgba(15,23,42,0.7);
+    border-top: 1px solid var(--border);
+    border-radius: 0 0 14px 14px;
+    padding: 0.6rem 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+  .spotlight-footer .actions {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+  }
+  .spotlight-footer .action-item {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .spotlight-footer kbd {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.65rem;
+    font-family: monospace;
+  }
+
+  /* Background content (dimmed) */
+  .bg-content {
+    padding: 2rem;
+    opacity: 0.3;
+    pointer-events: none;
+  }
+  .bg-content h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+  }
+  .stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+  .stat-card .label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .stat-card .value {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-top: 0.25rem;
+  }
+
+  /* Agent suggestion inside spotlight */
+  .agent-suggestion {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.25rem;
+    background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(168,85,247,0.08));
+    border-top: 1px solid rgba(59,130,246,0.2);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .agent-suggestion:hover {
+    background: linear-gradient(135deg, rgba(59,130,246,0.12), rgba(168,85,247,0.12));
+  }
+  .agent-icon {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; flex-shrink: 0;
+  }
+  .agent-suggestion .text {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+  }
+  .agent-suggestion .text strong { color: var(--accent); }
+
+  @media (max-width: 768px) {
+    .spotlight { top: 2rem; width: calc(100vw - 1rem); }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<!-- Background content (dimmed behind spotlight) -->
+<div class="bg-content">
+  <h2>Knowledge Hub</h2>
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="label">Indexed Records</div>
+      <div class="value" style="color: var(--accent)">142,847</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Content Items</div>
+      <div class="value" style="color: var(--purple)">8,234</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Documents</div>
+      <div class="value" style="color: var(--success)">1,892</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Searches Today</div>
+      <div class="value" style="color: var(--warning)">347</div>
+    </div>
+  </div>
+</div>
+
+<!-- Backdrop -->
+<div class="backdrop"></div>
+
+<!-- Spotlight -->
+<div class="spotlight">
+  <div class="spotlight-input-wrap">
+    <div class="prefix"><i class="fa-solid fa-magnifying-glass"></i></div>
+    <input type="text" class="spotlight-input" placeholder="Search anything..." value="customer retention" autofocus>
+    <div class="spotlight-actions">
+      <span class="kbd">ESC</span>
+    </div>
+  </div>
+
+  <div class="spotlight-results">
+    <!-- Entity Records Group -->
+    <div class="result-group">
+      <div class="group-header">
+        <i class="fa-solid fa-table"></i> Entity Records <span class="group-count">18</span>
+      </div>
+      <div class="result-item selected">
+        <div class="icon-wrap blue"><i class="fa-solid fa-chart-line"></i></div>
+        <div class="info">
+          <div class="title">Q4 2025 <mark>Customer Retention</mark> Analysis</div>
+          <div class="subtitle">Reports &middot; Updated 3 days ago &middot; Churn decreased 12%</div>
+        </div>
+        <span class="score">97%</span>
+        <span class="enter-hint"><kbd style="background: var(--bg-page); border: 1px solid var(--border); border-radius: 3px; padding: 0.1rem 0.35rem; font-size: 0.65rem; font-family: monospace;">Enter</kbd></span>
+      </div>
+      <div class="result-item">
+        <div class="icon-wrap blue"><i class="fa-solid fa-building"></i></div>
+        <div class="info">
+          <div class="title">Acme Corp &mdash; At-Risk Account</div>
+          <div class="subtitle">Accounts &middot; $2.4M ARR &middot; <mark>Retention</mark> escalation active</div>
+        </div>
+        <span class="score">87%</span>
+        <span class="enter-hint"><kbd style="background: var(--bg-page); border: 1px solid var(--border); border-radius: 3px; padding: 0.1rem 0.35rem; font-size: 0.65rem; font-family: monospace;">Enter</kbd></span>
+      </div>
+      <div class="result-item">
+        <div class="icon-wrap blue"><i class="fa-solid fa-user"></i></div>
+        <div class="info">
+          <div class="title">Sarah Chen &mdash; VP <mark>Customer</mark> Success</div>
+          <div class="subtitle">Contacts &middot; Acme Corp &middot; Last contacted Jan 20</div>
+        </div>
+        <span class="score">82%</span>
+        <span class="enter-hint"><kbd style="background: var(--bg-page); border: 1px solid var(--border); border-radius: 3px; padding: 0.1rem 0.35rem; font-size: 0.65rem; font-family: monospace;">Enter</kbd></span>
+      </div>
+    </div>
+
+    <!-- Content Items Group -->
+    <div class="result-group">
+      <div class="group-header">
+        <i class="fa-solid fa-file-lines"></i> Content Items <span class="group-count">21</span>
+      </div>
+      <div class="result-item">
+        <div class="icon-wrap purple"><i class="fa-solid fa-star"></i></div>
+        <div class="info">
+          <div class="title"><mark>Customer</mark> Loyalty Program Strategy</div>
+          <div class="subtitle">Strategy doc &middot; 3 pillars: rewards, offers, engagement</div>
+        </div>
+        <span class="score">94%</span>
+        <span class="enter-hint"><kbd style="background: var(--bg-page); border: 1px solid var(--border); border-radius: 3px; padding: 0.1rem 0.35rem; font-size: 0.65rem; font-family: monospace;">Enter</kbd></span>
+      </div>
+      <div class="result-item">
+        <div class="icon-wrap purple"><i class="fa-solid fa-envelope"></i></div>
+        <div class="info">
+          <div class="title">Renewal Reminder Email Templates</div>
+          <div class="subtitle">Email series &middot; 90/60/30-day intervals with <mark>retention</mark> offers</div>
+        </div>
+        <span class="score">83%</span>
+        <span class="enter-hint"><kbd style="background: var(--bg-page); border: 1px solid var(--border); border-radius: 3px; padding: 0.1rem 0.35rem; font-size: 0.65rem; font-family: monospace;">Enter</kbd></span>
+      </div>
+    </div>
+
+    <!-- Documents Group -->
+    <div class="result-group">
+      <div class="group-header">
+        <i class="fa-solid fa-file-pdf"></i> Documents <span class="group-count">8</span>
+      </div>
+      <div class="result-item">
+        <div class="icon-wrap green"><i class="fa-solid fa-file-pdf"></i></div>
+        <div class="info">
+          <div class="title"><mark>Customer</mark> Success Playbook v3.pdf</div>
+          <div class="subtitle">PDF &middot; 42 pages &middot; Section 4.2: Proactive <mark>Retention</mark> Framework</div>
+        </div>
+        <span class="score">91%</span>
+        <span class="enter-hint"><kbd style="background: var(--bg-page); border: 1px solid var(--border); border-radius: 3px; padding: 0.1rem 0.35rem; font-size: 0.65rem; font-family: monospace;">Enter</kbd></span>
+      </div>
+      <div class="result-item">
+        <div class="icon-wrap green"><i class="fa-solid fa-file-excel"></i></div>
+        <div class="info">
+          <div class="title">Churn Analysis Workbook.xlsx</div>
+          <div class="subtitle">Spreadsheet &middot; Monthly cohort analysis &middot; 6 sheets</div>
+        </div>
+        <span class="score">78%</span>
+        <span class="enter-hint"><kbd style="background: var(--bg-page); border: 1px solid var(--border); border-radius: 3px; padding: 0.1rem 0.35rem; font-size: 0.65rem; font-family: monospace;">Enter</kbd></span>
+      </div>
+    </div>
+
+    <!-- Agent suggestion -->
+    <div class="agent-suggestion">
+      <div class="agent-icon"><i class="fa-solid fa-robot"></i></div>
+      <div class="text">
+        <strong>Ask Knowledge Agent:</strong> "Summarize our customer retention strategies and their effectiveness"
+      </div>
+    </div>
+  </div>
+
+  <div class="spotlight-footer">
+    <div class="actions">
+      <div class="action-item"><kbd>&uarr;</kbd><kbd>&darr;</kbd> Navigate</div>
+      <div class="action-item"><kbd>Enter</kbd> Open</div>
+      <div class="action-item"><kbd>Tab</kbd> Preview</div>
+      <div class="action-item"><kbd>Esc</kbd> Close</div>
+    </div>
+    <div>47 results &middot; 0.23s</div>
+  </div>
+</div>
+
+</body>
+</html>

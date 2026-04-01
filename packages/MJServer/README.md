@@ -952,6 +952,15 @@ DEBUG=mj:*
 NODE_ENV=development
 ```
 
+## Knowledge Hub Resolvers
+
+This package includes GraphQL resolvers for the Knowledge Hub:
+- **`SearchKnowledgeResolver`** — Unified search combining vector similarity (Pinecone) with full-text search via `Metadata.FullTextSearch()` and RRF fusion
+- **`VectorizeEntityResolver`** — Triggers entity vectorization via `EntityVectorSyncer`
+- **`PipelineProgressResolver`** — GraphQL subscription for real-time pipeline progress
+
+See the **[Full-Text Search Guide](../MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)** for the complete FTS architecture.
+
 ## Contributing
 
 See the [MemberJunction Contributing Guide](../../CONTRIBUTING.md) for development setup and guidelines.

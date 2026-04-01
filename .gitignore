@@ -16,6 +16,9 @@ experiments/**/.angular/
 # Turbo local cache
 .turbo/
 
+# Test scripts (local-only, not part of the build)
+test-scripts/
+
 # Node artifact files
 node_modules/
 dist/

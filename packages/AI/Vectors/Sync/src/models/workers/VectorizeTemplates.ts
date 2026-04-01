@@ -48,11 +48,11 @@ export async function VectorizeEntity(): Promise<void> {
       ID: index,
       Vector: vector,
       EntityData: batch[index],
-      __mj_recordID: batch[index].__mj_recordID,
-      __mj_compositeKey: batch[index].__mj_compositeKey,
+      __mj_recordID: String(batch[index].__mj_recordID),
+      __mj_compositeKey: String(batch[index].__mj_compositeKey ?? ''),
       EntityDocument: context.entityDocument,
-      VectorID: batch[index].VectorID,
-      VectorIndexID: batch[index].VectorIndexID,
+      VectorID: String(batch[index].VectorID ?? ''),
+      VectorIndexID: String(batch[index].VectorIndexID ?? ''),
       TemplateContent: templateContent.TemplateText
     };
   });

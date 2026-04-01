@@ -1,0 +1,281 @@
+<!--
+  Option A: Dashboard Overview
+  Design Philosophy: High-level operational awareness at a glance.
+  This layout prioritizes KPIs and entity sync status as the primary focus,
+  with supporting context (DB health, model info, storage) in a sidebar.
+  A timeline at the bottom provides temporal context for recent activity.
+  Intended for administrators who need quick status checks and want to
+  drill into specific entities only when something needs attention.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector DB Management - Dashboard Overview</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-brand-primary: #264FAF;
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: #ffffff;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #475569;
+    --mj-border-default: #e2e8f0;
+    --mj-status-success: #22c55e;
+    --mj-status-warning: #f59e0b;
+    --mj-status-error: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); }
+
+  /* Header */
+  .header { background: var(--mj-brand-primary); color: #fff; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 18px; font-weight: 600; }
+  .header h1 i { margin-right: 8px; }
+  .header-actions button { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; margin-left: 8px; }
+  .header-actions button:hover { background: rgba(255,255,255,0.25); }
+
+  /* Layout */
+  .layout { display: grid; grid-template-columns: 1fr 300px; grid-template-rows: auto 1fr auto; gap: 20px; padding: 20px; max-width: 1400px; margin: 0 auto; }
+
+  /* KPI Cards */
+  .kpi-row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .kpi-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 8px; padding: 20px; }
+  .kpi-card .kpi-label { font-size: 12px; color: var(--mj-text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .kpi-card .kpi-value { font-size: 28px; font-weight: 700; color: var(--mj-text-primary); }
+  .kpi-card .kpi-sub { font-size: 12px; color: var(--mj-text-secondary); margin-top: 4px; }
+  .kpi-card .kpi-icon { float: right; font-size: 24px; color: var(--mj-brand-primary); opacity: 0.6; }
+
+  /* Main table area */
+  .main-area { grid-column: 1; }
+  .panel { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 8px; overflow: hidden; }
+  .panel-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .panel-header h2 { font-size: 15px; font-weight: 600; }
+  .panel-header h2 i { margin-right: 6px; color: var(--mj-brand-primary); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { text-align: left; padding: 10px 14px; background: var(--mj-bg-page); color: var(--mj-text-secondary); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
+  tbody td { padding: 10px 14px; border-bottom: 1px solid var(--mj-border-default); }
+  tbody tr:hover { background: #f1f5f9; }
+
+  .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .status-synced { background: #dcfce7; color: #166534; }
+  .status-syncing { background: #fef3c7; color: #92400e; }
+  .status-error { background: #fee2e2; color: #991b1b; }
+  .status-pending { background: #e0e7ff; color: #3730a3; }
+
+  .btn-sm { padding: 4px 10px; border: 1px solid var(--mj-border-default); border-radius: 4px; background: var(--mj-bg-surface); cursor: pointer; font-size: 12px; color: var(--mj-text-secondary); }
+  .btn-sm:hover { background: var(--mj-bg-page); }
+  .btn-sm i { margin-right: 3px; }
+
+  /* Sidebar */
+  .sidebar { grid-column: 2; display: flex; flex-direction: column; gap: 16px; }
+  .sidebar .panel { padding: 16px; }
+  .sidebar h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+  .sidebar h3 i { margin-right: 6px; color: var(--mj-brand-primary); }
+
+  .db-status-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--mj-border-default); }
+  .db-status-item:last-child { border-bottom: none; }
+  .db-status-item .name { font-size: 13px; font-weight: 500; }
+  .db-status-item .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .dot-green { background: var(--mj-status-success); }
+  .dot-yellow { background: var(--mj-status-warning); }
+  .db-status-item .latency { font-size: 11px; color: var(--mj-text-secondary); }
+
+  .model-info { font-size: 13px; }
+  .model-info dt { color: var(--mj-text-secondary); font-size: 11px; margin-top: 8px; }
+  .model-info dd { font-weight: 500; }
+
+  .gauge-container { margin-top: 8px; }
+  .gauge-bar { height: 10px; background: var(--mj-border-default); border-radius: 5px; overflow: hidden; }
+  .gauge-fill { height: 100%; background: var(--mj-brand-primary); border-radius: 5px; width: 62%; }
+  .gauge-label { display: flex; justify-content: space-between; font-size: 11px; color: var(--mj-text-secondary); margin-top: 4px; }
+
+  /* Timeline */
+  .timeline-area { grid-column: 1 / -1; }
+  .timeline-list { padding: 14px 18px; max-height: 180px; overflow-y: auto; }
+  .timeline-item { display: flex; align-items: flex-start; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--mj-border-default); font-size: 13px; }
+  .timeline-item:last-child { border-bottom: none; }
+  .timeline-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .timeline-time { color: var(--mj-text-secondary); font-size: 11px; white-space: nowrap; min-width: 70px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><i class="fa-solid fa-database"></i> Vector Database Management</h1>
+  <div class="header-actions">
+    <button><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+    <button><i class="fa-solid fa-gear"></i> Settings</button>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- KPI Row -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <i class="fa-solid fa-cubes kpi-icon"></i>
+      <div class="kpi-label">Total Vectors</div>
+      <div class="kpi-value">1,284,537</div>
+      <div class="kpi-sub"><i class="fa-solid fa-arrow-up" style="color:var(--mj-status-success)"></i> +12,408 today</div>
+    </div>
+    <div class="kpi-card">
+      <i class="fa-solid fa-link kpi-icon"></i>
+      <div class="kpi-label">Entities Synced</div>
+      <div class="kpi-value">14 / 18</div>
+      <div class="kpi-sub">4 entities pending setup</div>
+    </div>
+    <div class="kpi-card">
+      <i class="fa-solid fa-clock kpi-icon"></i>
+      <div class="kpi-label">Last Sync</div>
+      <div class="kpi-value">3m ago</div>
+      <div class="kpi-sub">Mar 27, 2026 10:42 AM</div>
+    </div>
+    <div class="kpi-card">
+      <i class="fa-solid fa-bolt kpi-icon"></i>
+      <div class="kpi-label">Avg Embedding Time</div>
+      <div class="kpi-value">142ms</div>
+      <div class="kpi-sub"><i class="fa-solid fa-arrow-down" style="color:var(--mj-status-success)"></i> -8ms from last week</div>
+    </div>
+  </div>
+
+  <!-- Main: Entity Sync Status Table -->
+  <div class="main-area">
+    <div class="panel">
+      <div class="panel-header">
+        <h2><i class="fa-solid fa-table-list"></i> Entity Sync Status</h2>
+        <button class="btn-sm"><i class="fa-solid fa-plus"></i> Add Entity</button>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Entity</th><th>Records</th><th>Vectorized</th><th>Last Synced</th><th>Status</th><th>Vector DB</th><th>Actions</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Contacts</strong></td><td>245,891</td><td>245,891</td><td>3 min ago</td>
+            <td><span class="status-badge status-synced"><i class="fa-solid fa-check"></i> Synced</span></td>
+            <td>Pinecone</td>
+            <td><button class="btn-sm"><i class="fa-solid fa-rotate"></i> Sync</button> <button class="btn-sm"><i class="fa-solid fa-eye"></i></button></td>
+          </tr>
+          <tr>
+            <td><strong>Companies</strong></td><td>89,412</td><td>89,412</td><td>3 min ago</td>
+            <td><span class="status-badge status-synced"><i class="fa-solid fa-check"></i> Synced</span></td>
+            <td>Pinecone</td>
+            <td><button class="btn-sm"><i class="fa-solid fa-rotate"></i> Sync</button> <button class="btn-sm"><i class="fa-solid fa-eye"></i></button></td>
+          </tr>
+          <tr>
+            <td><strong>Deals</strong></td><td>156,320</td><td>148,210</td><td>Syncing...</td>
+            <td><span class="status-badge status-syncing"><i class="fa-solid fa-spinner fa-spin"></i> Syncing</span></td>
+            <td>Pinecone</td>
+            <td><button class="btn-sm"><i class="fa-solid fa-pause"></i> Pause</button> <button class="btn-sm"><i class="fa-solid fa-eye"></i></button></td>
+          </tr>
+          <tr>
+            <td><strong>Support Tickets</strong></td><td>412,003</td><td>412,003</td><td>18 min ago</td>
+            <td><span class="status-badge status-synced"><i class="fa-solid fa-check"></i> Synced</span></td>
+            <td>Weaviate</td>
+            <td><button class="btn-sm"><i class="fa-solid fa-rotate"></i> Sync</button> <button class="btn-sm"><i class="fa-solid fa-eye"></i></button></td>
+          </tr>
+          <tr>
+            <td><strong>Knowledge Articles</strong></td><td>34,208</td><td>0</td><td>Failed</td>
+            <td><span class="status-badge status-error"><i class="fa-solid fa-xmark"></i> Error</span></td>
+            <td>Weaviate</td>
+            <td><button class="btn-sm"><i class="fa-solid fa-rotate"></i> Retry</button> <button class="btn-sm"><i class="fa-solid fa-eye"></i></button></td>
+          </tr>
+          <tr>
+            <td><strong>Emails</strong></td><td>892,104</td><td>389,021</td><td>Queued</td>
+            <td><span class="status-badge status-pending"><i class="fa-solid fa-clock"></i> Pending</span></td>
+            <td>Pinecone</td>
+            <td><button class="btn-sm"><i class="fa-solid fa-play"></i> Start</button> <button class="btn-sm"><i class="fa-solid fa-eye"></i></button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="panel">
+      <h3><i class="fa-solid fa-heart-pulse"></i> Vector DB Health</h3>
+      <div class="db-status-item">
+        <span><span class="dot dot-green"></span><span class="name">Pinecone (us-east-1)</span></span>
+        <span class="latency">12ms</span>
+      </div>
+      <div class="db-status-item">
+        <span><span class="dot dot-green"></span><span class="name">Weaviate (cluster-1)</span></span>
+        <span class="latency">28ms</span>
+      </div>
+      <div class="db-status-item">
+        <span><span class="dot dot-yellow"></span><span class="name">Qdrant (staging)</span></span>
+        <span class="latency">145ms</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3><i class="fa-solid fa-microchip"></i> Embedding Model</h3>
+      <dl class="model-info">
+        <dt>Active Model</dt><dd>text-embedding-3-large</dd>
+        <dt>Provider</dt><dd>OpenAI</dd>
+        <dt>Dimensions</dt><dd>3072</dd>
+        <dt>Cost Today</dt><dd>$4.82 (68,420 calls)</dd>
+      </dl>
+    </div>
+
+    <div class="panel">
+      <h3><i class="fa-solid fa-hard-drive"></i> Storage Usage</h3>
+      <div class="gauge-container">
+        <div class="gauge-bar"><div class="gauge-fill"></div></div>
+        <div class="gauge-label"><span>3.1 GB used</span><span>5.0 GB limit</span></div>
+      </div>
+      <div style="margin-top:12px; font-size:12px; color:var(--mj-text-secondary);">
+        <div>Pinecone: 2.1 GB (3 indexes)</div>
+        <div>Weaviate: 0.8 GB (2 classes)</div>
+        <div>Qdrant: 0.2 GB (1 collection)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timeline -->
+  <div class="timeline-area">
+    <div class="panel">
+      <div class="panel-header">
+        <h2><i class="fa-solid fa-timeline"></i> Recent Sync Activity</h2>
+      </div>
+      <div class="timeline-list">
+        <div class="timeline-item">
+          <div class="timeline-dot dot-green"></div>
+          <div class="timeline-time">10:42 AM</div>
+          <div><strong>Contacts</strong> sync completed. 245,891 vectors up to date.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot dot-green"></div>
+          <div class="timeline-time">10:42 AM</div>
+          <div><strong>Companies</strong> sync completed. 312 new records embedded.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot" style="background:var(--mj-status-warning)"></div>
+          <div class="timeline-time">10:40 AM</div>
+          <div><strong>Deals</strong> sync started. 8,110 records queued for embedding.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot" style="background:var(--mj-status-error)"></div>
+          <div class="timeline-time">10:35 AM</div>
+          <div><strong>Knowledge Articles</strong> sync failed. Weaviate schema mismatch on field "category_v2".</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot dot-green"></div>
+          <div class="timeline-time">10:18 AM</div>
+          <div><strong>Support Tickets</strong> sync completed. 412,003 vectors verified.</div>
+        </div>
+        <div class="timeline-item">
+          <div class="timeline-dot dot-green"></div>
+          <div class="timeline-time">9:55 AM</div>
+          <div><strong>System</strong> automatic sync cycle triggered by schedule.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -396,6 +396,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     const conversation = this.conversationData.getConversationById(conversationId);
     if (conversation) {
       this.selectedConversation = conversation;
+      this.updateTabTitle();
     }
     // If not in cache, the chat area component will handle loading it
   }
@@ -491,6 +492,20 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
     // Use NavigationService to update query params properly
     this.navigationService.UpdateActiveTabQueryParams(queryParams);
+  }
+
+  /**
+   * Update the tab/browser title based on the currently selected conversation.
+   */
+  private updateTabTitle(): void {
+    if (this.isNewUnsavedConversation || !this.selectedConversation) {
+      this.NotifyDisplayNameChanged('Conversations');
+      return;
+    }
+    const name = this.selectedConversation.Name;
+    if (name) {
+      this.NotifyDisplayNameChanged(name);
+    }
   }
 
   /**
@@ -617,6 +632,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.selectedThreadId = null; // Clear thread when switching conversations
     this.isNewUnsavedConversation = false;
     this.updateUrl();
+    this.updateTabTitle();
 
     // Auto-collapse if mobile OR if sidebar is not pinned
     if (this.isMobileView || !this.isSidebarPinned) {
@@ -846,6 +862,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.selectedThreadId = null;
     this.isNewUnsavedConversation = true;
     this.updateUrl();
+    this.NotifyDisplayNameChanged('New Conversation');
 
     // Auto-collapse if mobile OR if sidebar is not pinned
     if (this.isMobileView || !this.isSidebarPinned) {
@@ -869,6 +886,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.selectedConversation = event.conversation;
     this.isNewUnsavedConversation = false;
     this.updateUrl();
+    this.updateTabTitle();
   }
 
   /**
@@ -877,6 +895,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   onConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
     // Trigger rename animation in the list
     this.renamedConversationId = event.conversationId;
+
+    // Update tab title with the new name
+    if (event.name) {
+      this.NotifyDisplayNameChanged(event.name);
+    }
 
     // Clear the animation trigger after it completes
     setTimeout(() => {

@@ -1,0 +1,125 @@
+@if (Config && Comparison) {
+    <div class="merge-panel">
+        <!-- Header -->
+        <div class="merge-header">
+            <div class="merge-header-info">
+                <h3 class="merge-title">Record Comparison</h3>
+                <span class="merge-entity-name">{{ Config.EntityName }}</span>
+                <span class="merge-conflict-badge">
+                    {{ Comparison.ConflictCount }} conflicts / {{ Comparison.TotalFieldCount }} fields
+                </span>
+            </div>
+            <div class="merge-header-actions">
+                <button class="merge-toggle-btn" (click)="ToggleShowAll()">
+                    @if (ShowAllFields) {
+                        <i class="fa-solid fa-filter"></i> Show Conflicts Only
+                    } @else {
+                        <i class="fa-solid fa-list"></i> Show All Fields
+                    }
+                </button>
+            </div>
+        </div>
+
+        <!-- Column Headers -->
+        <div class="merge-columns">
+            <div class="merge-col-label merge-col-field">Field</div>
+            <div class="merge-col-label merge-col-left">
+                <span>{{ Config.LeftLabel }}</span>
+                <button class="merge-select-all-btn" (click)="SelectAllLeft()" title="Select all from left">
+                    <i class="fa-solid fa-check-double"></i>
+                </button>
+            </div>
+            <div class="merge-col-label merge-col-right">
+                <span>{{ Config.RightLabel }}</span>
+                <button class="merge-select-all-btn" (click)="SelectAllRight()" title="Select all from right">
+                    <i class="fa-solid fa-check-double"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Field Rows -->
+        <div class="merge-fields">
+            @for (field of GetVisibleFields(); track field.FieldName) {
+                <div class="merge-row" [class.merge-row-conflict]="field.HasConflict" [class.merge-row-readonly]="field.IsReadOnly">
+                    <div class="merge-cell merge-cell-field">
+                        <span class="merge-field-name">{{ field.DisplayLabel }}</span>
+                        @if (field.IsReadOnly) {
+                            <i class="fa-solid fa-lock merge-readonly-icon" title="Read-only field"></i>
+                        }
+                    </div>
+                    <div
+                        class="merge-cell merge-cell-value merge-cell-left"
+                        [class.merge-cell-selected]="field.SelectedSide === 'left'"
+                        [class.merge-cell-selectable]="!field.IsReadOnly"
+                        (click)="SelectLeft(field)"
+                    >
+                        <span class="merge-value" [class.merge-value-empty]="field.LeftValue === null || field.LeftValue === undefined">
+                            {{ FormatValue(field.LeftValue) }}
+                        </span>
+                        @if (field.SelectedSide === 'left' && !field.IsReadOnly) {
+                            <i class="fa-solid fa-check merge-check-icon"></i>
+                        }
+                    </div>
+                    <div
+                        class="merge-cell merge-cell-value merge-cell-right"
+                        [class.merge-cell-selected]="field.SelectedSide === 'right'"
+                        [class.merge-cell-selectable]="!field.IsReadOnly"
+                        (click)="SelectRight(field)"
+                    >
+                        <span class="merge-value" [class.merge-value-empty]="field.RightValue === null || field.RightValue === undefined">
+                            {{ FormatValue(field.RightValue) }}
+                        </span>
+                        @if (field.SelectedSide === 'right' && !field.IsReadOnly) {
+                            <i class="fa-solid fa-check merge-check-icon"></i>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Footer Actions -->
+        @if (MergeEnabled) {
+            <div class="merge-footer">
+                <button class="merge-btn merge-btn-primary" (click)="ShowConfirmDialog()" [disabled]="IsMerging">
+                    @if (IsMerging) {
+                        <i class="fa-solid fa-spinner fa-spin"></i> Merging...
+                    } @else {
+                        <i class="fa-solid fa-code-merge"></i> Merge Records
+                    }
+                </button>
+                <button class="merge-btn merge-btn-secondary" (click)="CancelMerge()" [disabled]="IsMerging">
+                    Cancel
+                </button>
+            </div>
+        }
+    </div>
+
+    <!-- Confirmation Dialog -->
+    @if (ConfirmDialogVisible) {
+        <div class="merge-dialog-backdrop" (click)="ConfirmDialogVisible = false">
+            <div class="merge-dialog" (click)="$event.stopPropagation()">
+                <div class="merge-dialog-header">
+                    <i class="fa-solid fa-exclamation-triangle merge-dialog-warning-icon"></i>
+                    <h4>Confirm Merge</h4>
+                </div>
+                <p class="merge-dialog-text">
+                    This will merge the selected field values and create a merge log.
+                    This action cannot be undone. Are you sure?
+                </p>
+                <div class="merge-dialog-actions">
+                    <button class="merge-btn merge-btn-primary" (click)="ConfirmMerge()">
+                        <i class="fa-solid fa-code-merge"></i> Confirm Merge
+                    </button>
+                    <button class="merge-btn merge-btn-secondary" (click)="ConfirmDialogVisible = false">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+} @else {
+    <div class="merge-panel merge-panel-empty">
+        <i class="fa-solid fa-code-compare merge-empty-icon"></i>
+        <p>Select two records to compare</p>
+    </div>
+}

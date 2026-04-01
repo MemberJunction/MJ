@@ -12,13 +12,20 @@ export class ChatMessage {
   public message!: string;
   public senderName!: string;
   public senderType: 'user' | 'ai' = 'user';
-  public id?: any;
+  public id?: string | number | null;
+  /** Optional: indicates a tool execution is in progress */
+  public toolName?: string;
+  /** Optional: indicates a thinking/processing state */
+  public isThinking?: boolean;
+  /** Timestamp when the message was created */
+  public timestamp: Date = new Date();
 
-  constructor(message: string, senderName: string, senderType: 'user' | 'ai', id: any = null) {
+  constructor(message: string, senderName: string, senderType: 'user' | 'ai', id: string | number | null = null) {
     this.message = message;
     this.senderName = senderName;
     this.senderType = senderType;
     this.id = id;
+    this.timestamp = new Date();
   }
 }
 

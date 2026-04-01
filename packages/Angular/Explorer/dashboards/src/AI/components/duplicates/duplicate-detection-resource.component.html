@@ -1,0 +1,242 @@
+<div class="duplicate-detection-container">
+    <!-- Header -->
+    <div class="page-header">
+        <div class="header-left">
+            <h2 class="page-title">
+                <i class="fa-solid fa-clone"></i> Duplicate Detection
+            </h2>
+        </div>
+    </div>
+
+    <!-- KPI Strip -->
+    <div class="kpi-strip">
+        <div class="kpi-card">
+            <div class="kpi-value">{{ TotalGroupCount }}</div>
+            <div class="kpi-label">Total Groups</div>
+        </div>
+        <div class="kpi-card kpi-pending">
+            <div class="kpi-value">{{ PendingCount }}</div>
+            <div class="kpi-label">Pending</div>
+        </div>
+        <div class="kpi-card kpi-approved">
+            <div class="kpi-value">{{ ApprovedCount }}</div>
+            <div class="kpi-label">Approved</div>
+        </div>
+        <div class="kpi-card kpi-rejected">
+            <div class="kpi-value">{{ RejectedCount }}</div>
+            <div class="kpi-label">Rejected</div>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <div class="filter-group">
+            <select class="filter-select"
+                    [(ngModel)]="Filters.EntityName"
+                    (ngModelChange)="OnFilterChange()">
+                <option value="">All Entities</option>
+                @for (name of EntityNames; track name) {
+                    <option [value]="name">{{ name }}</option>
+                }
+            </select>
+
+            <div class="filter-range">
+                <label class="filter-label">Min Score</label>
+                <input type="number"
+                       class="filter-input"
+                       min="0" max="1" step="0.05"
+                       [(ngModel)]="Filters.MinScore"
+                       (ngModelChange)="OnFilterChange()">
+            </div>
+
+            <div class="filter-range">
+                <label class="filter-label">Max Score</label>
+                <input type="number"
+                       class="filter-input"
+                       min="0" max="1" step="0.05"
+                       [(ngModel)]="Filters.MaxScore"
+                       (ngModelChange)="OnFilterChange()">
+            </div>
+
+            <div class="filter-range">
+                <label class="filter-label">From</label>
+                <input type="date"
+                       class="filter-input"
+                       [(ngModel)]="Filters.DateFrom"
+                       (ngModelChange)="OnFilterChange()">
+            </div>
+
+            <div class="filter-range">
+                <label class="filter-label">To</label>
+                <input type="date"
+                       class="filter-input"
+                       [(ngModel)]="Filters.DateTo"
+                       (ngModelChange)="OnFilterChange()">
+            </div>
+        </div>
+
+        @if (HasActiveFilters) {
+            <button class="clear-filters-btn" (click)="ClearFilters()">
+                <i class="fa-solid fa-times"></i> Clear Filters
+            </button>
+        }
+    </div>
+
+    <!-- Content -->
+    @if (IsLoading) {
+        <div class="loading-container">
+            <mj-loading text="Loading duplicate detection results..."></mj-loading>
+        </div>
+    } @else if (TotalGroupCount === 0) {
+        <div class="empty-state">
+            <i class="fa-solid fa-clone empty-icon"></i>
+            <p class="empty-text">No duplicate detection results found.</p>
+            <p class="empty-subtext">Run a duplicate detection scan to see results here.</p>
+        </div>
+    } @else {
+        <!-- Kanban Board -->
+        <div class="kanban-board">
+            <!-- Pending Column -->
+            <div class="kanban-column">
+                <div class="column-header column-header-pending">
+                    <i class="fa-solid fa-clock"></i>
+                    <span class="column-title">Pending Review</span>
+                    <span class="column-count">{{ PendingCount }}</span>
+                </div>
+                <div class="column-body">
+                    @for (group of PendingGroups; track group.DetailId) {
+                        <div class="kanban-card">
+                            <div class="card-header">
+                                <span class="entity-badge">{{ group.EntityName }}</span>
+                                <span class="score-indicator" [class]="GetScoreClass(group.HighestScore)">
+                                    {{ (group.HighestScore * 100).toFixed(0) }}%
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <div class="card-field">
+                                    <i class="fa-solid fa-fingerprint field-icon"></i>
+                                    <span class="field-value record-id" [title]="group.RecordId">{{ group.RecordId }}</span>
+                                </div>
+                                <div class="card-field">
+                                    <i class="fa-solid fa-layer-group field-icon"></i>
+                                    <span class="field-value">{{ group.MatchCount }} match{{ group.MatchCount !== 1 ? 'es' : '' }}</span>
+                                </div>
+                                <div class="card-field">
+                                    <i class="fa-solid fa-calendar field-icon"></i>
+                                    <span class="field-value">{{ FormatDate(group.MatchedAt) }}</span>
+                                </div>
+                            </div>
+                            <div class="card-actions">
+                                <button class="action-btn approve-btn"
+                                        [disabled]="IsSaving"
+                                        (click)="ApproveMatch(group)">
+                                    <i class="fa-solid fa-check"></i> Approve
+                                </button>
+                                <button class="action-btn reject-btn"
+                                        [disabled]="IsSaving"
+                                        (click)="RejectMatch(group)">
+                                    <i class="fa-solid fa-times"></i> Reject
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    @if (PendingGroups.length === 0) {
+                        <div class="column-empty">
+                            <i class="fa-solid fa-check-circle"></i>
+                            <span>No pending items</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Approved Column -->
+            <div class="kanban-column">
+                <div class="column-header column-header-approved">
+                    <i class="fa-solid fa-check-circle"></i>
+                    <span class="column-title">Approved</span>
+                    <span class="column-count">{{ ApprovedCount }}</span>
+                </div>
+                <div class="column-body">
+                    @for (group of ApprovedGroups; track group.DetailId) {
+                        <div class="kanban-card">
+                            <div class="card-header">
+                                <span class="entity-badge">{{ group.EntityName }}</span>
+                                <span class="score-indicator" [class]="GetScoreClass(group.HighestScore)">
+                                    {{ (group.HighestScore * 100).toFixed(0) }}%
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <div class="card-field">
+                                    <i class="fa-solid fa-fingerprint field-icon"></i>
+                                    <span class="field-value record-id" [title]="group.RecordId">{{ group.RecordId }}</span>
+                                </div>
+                                <div class="card-field">
+                                    <i class="fa-solid fa-layer-group field-icon"></i>
+                                    <span class="field-value">{{ group.MatchCount }} match{{ group.MatchCount !== 1 ? 'es' : '' }}</span>
+                                </div>
+                                <div class="card-field">
+                                    <i class="fa-solid fa-calendar field-icon"></i>
+                                    <span class="field-value">{{ FormatDate(group.MatchedAt) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    @if (ApprovedGroups.length === 0) {
+                        <div class="column-empty">
+                            <i class="fa-solid fa-inbox"></i>
+                            <span>No approved items</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Rejected Column -->
+            <div class="kanban-column">
+                <div class="column-header column-header-rejected">
+                    <i class="fa-solid fa-ban"></i>
+                    <span class="column-title">Rejected</span>
+                    <span class="column-count">{{ RejectedCount }}</span>
+                </div>
+                <div class="column-body">
+                    @for (group of RejectedGroups; track group.DetailId) {
+                        <div class="kanban-card">
+                            <div class="card-header">
+                                <span class="entity-badge">{{ group.EntityName }}</span>
+                                <span class="score-indicator" [class]="GetScoreClass(group.HighestScore)">
+                                    {{ (group.HighestScore * 100).toFixed(0) }}%
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                <div class="card-field">
+                                    <i class="fa-solid fa-fingerprint field-icon"></i>
+                                    <span class="field-value record-id" [title]="group.RecordId">{{ group.RecordId }}</span>
+                                </div>
+                                <div class="card-field">
+                                    <i class="fa-solid fa-layer-group field-icon"></i>
+                                    <span class="field-value">{{ group.MatchCount }} match{{ group.MatchCount !== 1 ? 'es' : '' }}</span>
+                                </div>
+                                <div class="card-field">
+                                    <i class="fa-solid fa-calendar field-icon"></i>
+                                    <span class="field-value">{{ FormatDate(group.MatchedAt) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    @if (RejectedGroups.length === 0) {
+                        <div class="column-empty">
+                            <i class="fa-solid fa-inbox"></i>
+                            <span>No rejected items</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Saving overlay -->
+    @if (IsSaving) {
+        <div class="saving-overlay">
+            <mj-loading text="Saving..." size="small"></mj-loading>
+        </div>
+    }
+</div>
