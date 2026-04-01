@@ -263,15 +263,15 @@ export class MJNotificationService {
       pointer-events: auto; padding: 12px 20px; border-radius: 6px; font-size: 14px;
       font-family: inherit; max-width: 500px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
       display: flex; align-items: center; gap: 8px; animation: mj-toast-slide-in 0.3s ease-out;
-      color: #fff;
+      color: var(--mj-text-inverse);
     `;
 
     const bgColors: Record<string, string> = {
-      success: '#2e7d32',
-      error:   '#c62828',
-      warning: '#ef6c00',
-      info:    '#1565c0',
-      none:    '#424242'
+      success: 'var(--mj-status-success)',
+      error:   'var(--mj-status-error)',
+      warning: 'var(--mj-status-warning)',
+      info:    'var(--mj-status-info)',
+      none:    'var(--mj-text-secondary)'
     };
     toast.style.backgroundColor = bgColors[style] || bgColors['none'];
 
@@ -292,7 +292,7 @@ export class MJNotificationService {
     toast.innerHTML = `
       ${icon ? `<span style="font-size:16px;font-weight:bold;">${icon}</span>` : ''}
       <span style="flex:1;">${this.escapeHtml(message)}</span>
-      ${!hideAfter ? `<button style="background:none;border:none;color:#fff;cursor:pointer;font-size:18px;padding:0 0 0 8px;line-height:1;" aria-label="Close">&times;</button>` : ''}
+      ${!hideAfter ? `<button style="background:none;border:none;color:var(--mj-text-inverse);cursor:pointer;font-size:18px;padding:0 0 0 8px;line-height:1;" aria-label="Close">&times;</button>` : ''}
     `;
 
     if (!hideAfter) {

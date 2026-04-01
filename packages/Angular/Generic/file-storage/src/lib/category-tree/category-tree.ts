@@ -131,6 +131,7 @@ export class CategoryTreeComponent implements OnInit {
     await categoryEntity?.Save();
     this.categoriesData = [...this.categoriesData, categoryEntity];
     this.showNew = false;
+    this.newCategoryName = '';
     this.isLoading = false;
   }
 
@@ -141,6 +142,7 @@ export class CategoryTreeComponent implements OnInit {
     if (!success) {
       console.error('Unable to delete file category:', fileCategory);
       this.sharedService.CreateSimpleNotification(`Unable to delete category '${fileCategory.Name}'`, 'error');
+      this.isLoading = false;
       return;
     }
 

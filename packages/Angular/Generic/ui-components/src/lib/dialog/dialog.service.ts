@@ -63,6 +63,7 @@ export class MJDialogRef {
   Close(result?: unknown): void {
     this.resultSubject.next(result);
     this.resultSubject.complete();
+    this.containerRef?.location.nativeElement.remove();
     this.containerRef?.destroy();
   }
 }

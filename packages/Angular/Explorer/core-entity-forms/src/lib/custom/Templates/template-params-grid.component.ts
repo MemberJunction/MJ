@@ -111,7 +111,8 @@ export class TemplateParamsGridComponent implements OnInit, OnChanges {
             const results = await rv.RunView<MJTemplateParamEntity>({
                 EntityName: 'MJ: Template Params',
                 ExtraFilter: `TemplateID='${this.template.ID}'`,
-                OrderBy: 'Name ASC'
+                OrderBy: 'Name ASC',
+                ResultType: 'entity_object'
             });
 
             if (results.Success) {
@@ -162,6 +163,7 @@ export class TemplateParamsGridComponent implements OnInit, OnChanges {
                     rowIndex: 0,
                     colKey: 'Name'
                 });
+                this.gridApi.refreshCells({ columns: ['actions'], force: true });
             }
         });
     }
@@ -181,6 +183,7 @@ export class TemplateParamsGridComponent implements OnInit, OnChanges {
             rowIndex,
             colKey: 'Name'
         });
+        this.gridApi.refreshCells({ columns: ['actions'], force: true });
     }
 
     public cancelEditRow(): void {
@@ -191,6 +194,7 @@ export class TemplateParamsGridComponent implements OnInit, OnChanges {
         if (!this.gridApi) return;
         // stopEditing triggers onRowEditingStopped, which handles the save
         this.gridApi.stopEditing(false);
+        this.gridApi.refreshCells({ columns: ['actions'], force: true });
     }
 
     public async onRowEditingStopped(event: RowEditingStoppedEvent): Promise<void> {
@@ -372,6 +376,7 @@ export class TemplateParamsGridComponent implements OnInit, OnChanges {
 
         this.clearEditState();
         this.gridApi.stopEditing(true);
+        this.gridApi.refreshCells({ columns: ['actions'], force: true });
     }
 
     private revertRow(rowNode: { setData: (data: ParamRowData) => void }, backup: ParamRowData): void {
