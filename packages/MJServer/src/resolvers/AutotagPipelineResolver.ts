@@ -74,11 +74,11 @@ export class AutotagPipelineResolver extends ResolverBase {
             // Find the Autotag action by name
             await ActionEngineServer.Instance.Config(false, currentUser);
             const action = ActionEngineServer.Instance.Actions.find(
-                a => a.Name === '__AutotagAndVectorizeContent'
+                a => a.Name === 'Autotag and Vectorize Content'
             );
 
             if (!action) {
-                LogError(`RunAutotagPipeline: Action '__AutotagAndVectorizeContent' not found`);
+                LogError(`RunAutotagPipeline: Action 'Autotag and Vectorize Content' not found`);
                 this.publishProgress(pipelineRunID, 'error', 0, 0, startTime, 'Autotag action not found');
                 return;
             }
