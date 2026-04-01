@@ -614,7 +614,10 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             return { vectorized: 0, skipped: items.length };
         }
 
-        const { embedding, vectorDB, indexName, embeddingModelName } = await this.getVectorInfrastructure();
+        // Ensure AIEngine is loaded so we can resolve the embedding model
+        await AIEngine.Instance.Config(false, contextUser);
+
+        const { embedding, vectorDB, indexName, embeddingModelName } = await this.getVectorInfrastructure(contextUser);
 
         // Load tags for all items in one query
         const tagMap = await this.loadTagsForItems(eligible, contextUser);
@@ -707,8 +710,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return tagMap;
     }
 
-    /** Resolve embedding model + vector DB + index name from the first active VectorIndex */
-    private async getVectorInfrastructure(): Promise<{
+    /**
+     * Resolve embedding model + vector DB + index name from the first active VectorIndex.
+     * Uses the VectorIndex's EmbeddingModelID and VectorDatabaseID to find the correct
+     * driver classes and API keys — same pattern as entityVectorSync.
+     */
+    private async getVectorInfrastructure(contextUser: UserInfo): Promise<{
         embedding: BaseEmbeddings;
         vectorDB: VectorDBBase;
         indexName: string;
@@ -716,48 +723,64 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }> {
         const rv = new RunView();
 
-        // Get the first active vector index
+        // Get the first vector index (use the view which has denormalized fields)
         const indexResult = await rv.RunView({
             EntityName: 'MJ: Vector Indexes',
             ResultType: 'simple',
             MaxRows: 1
-        });
+        }, contextUser);
         if (!indexResult.Success || indexResult.Results.length === 0) {
             throw new Error('No vector indexes found — create one in the Configuration tab first');
         }
         const vectorIndex = indexResult.Results[0] as Record<string, unknown>;
         const indexName = vectorIndex['Name'] as string;
         const vectorDatabaseID = vectorIndex['VectorDatabaseID'] as string;
+        const embeddingModelID = vectorIndex['EmbeddingModelID'] as string;
 
-        // Get vector database
+        // Get vector database ClassKey
         const dbResult = await rv.RunView({
             EntityName: 'MJ: Vector Databases',
             ExtraFilter: `ID='${vectorDatabaseID}'`,
             ResultType: 'simple',
             MaxRows: 1
-        });
+        }, contextUser);
         if (!dbResult.Success || dbResult.Results.length === 0) {
             throw new Error(`Vector database ${vectorDatabaseID} not found`);
         }
         const vectorDBRecord = dbResult.Results[0] as Record<string, unknown>;
         const vectorDBClassKey = vectorDBRecord['ClassKey'] as string;
 
-        // Get embedding model — use text-embedding-3-small by convention
-        const modelResult = await rv.RunView({
-            EntityName: 'AI Models',
-            ExtraFilter: `Name='text-embedding-3-small' AND IsActive=1`,
-            ResultType: 'simple',
-            MaxRows: 1
+        // Get embedding model DriverClass from AIEngine (uses the cached model list)
+        LogStatus(`VectorizeContentItems: searching for embeddingModelID="${embeddingModelID}" in ${AIEngine.Instance.Models.length} models`);
+        const first3 = AIEngine.Instance.Models.slice(0, 3).map(m => `${m.ID}|${m.Name}|${m.DriverClass}`);
+        LogStatus(`VectorizeContentItems: first 3 models: ${JSON.stringify(first3)}`);
+
+        const aiModel = AIEngine.Instance.Models.find(m => {
+            const match = UUIDsEqual(m.ID, embeddingModelID);
+            if (m.Name?.includes('embedding')) {
+                LogStatus(`VectorizeContentItems: checking model ${m.ID} "${m.Name}" driver=${m.DriverClass} match=${match}`);
+            }
+            return match;
         });
-        if (!modelResult.Success || modelResult.Results.length === 0) {
-            throw new Error('Embedding model text-embedding-3-small not found or not active');
+        if (!aiModel) {
+            // Dump all embedding-related models for debugging
+            const embModels = AIEngine.Instance.Models.filter(m => m.DriverClass?.includes('Embed') || m.Name?.includes('embed'));
+            LogError(`VectorizeContentItems: embeddingModelID ${embeddingModelID} NOT FOUND. Embedding models available: ${JSON.stringify(embModels.map(m => ({id: m.ID, name: m.Name, driver: m.DriverClass})))}`);
+            throw new Error(`Embedding model ${embeddingModelID} not found in AIEngine — ensure AIEngine is configured`);
         }
-        const modelRecord = modelResult.Results[0] as Record<string, unknown>;
-        const driverClass = modelRecord['DriverClass'] as string;
-        const embeddingModelName = (modelRecord['APIName'] as string) ?? 'text-embedding-3-small';
+        const driverClass = aiModel.DriverClass;
+        const embeddingModelName = aiModel.APIName ?? aiModel.Name;
+
+        LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}"`);
 
         const embeddingAPIKey = GetAIAPIKey(driverClass);
+        if (!embeddingAPIKey) {
+            throw new Error(`No API key found for embedding driver ${driverClass} — set AI_VENDOR_API_KEY__${driverClass} in .env`);
+        }
         const vectorDBAPIKey = GetAIAPIKey(vectorDBClassKey);
+        if (!vectorDBAPIKey) {
+            throw new Error(`No API key found for vector DB ${vectorDBClassKey} — set AI_VENDOR_API_KEY__${vectorDBClassKey} in .env`);
+        }
 
         const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
             BaseEmbeddings, driverClass, embeddingAPIKey
