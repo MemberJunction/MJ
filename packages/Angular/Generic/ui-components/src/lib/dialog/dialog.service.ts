@@ -122,7 +122,7 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
     .mj-dialog-backdrop {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.5);
+      background: var(--mj-bg-overlay);
       z-index: 10001;
       display: flex;
       align-items: center;
@@ -132,7 +132,7 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
     .mj-dialog-container {
       background: var(--mj-bg-surface);
       border-radius: var(--mj-radius-lg);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: var(--mj-shadow-xl, 0 20px 60px color-mix(in srgb, var(--mj-text-primary) 30%, transparent));
       display: flex;
       flex-direction: column;
       max-height: 90vh;
@@ -304,14 +304,29 @@ export class MJDialogService {
    */
   Open(settings: MJDialogSettings): MJDialogRef {
     const dialogRef = new MJDialogRef();
+    const injector = settings.appendTo?.injector ?? this.injector;
 
-    // Create the container component
-    const containerRef = createComponent(MJDialogContainerComponent, {
+    const containerRef = this.createContainer(injector);
+    this.configureContainer(containerRef, settings, dialogRef);
+    this.attachToDOM(containerRef, settings);
+    this.attachContentComponent(containerRef, settings, dialogRef, injector);
+
+    containerRef.changeDetectorRef.detectChanges();
+    return dialogRef;
+  }
+
+  private createContainer(injector: Injector): ComponentRef<MJDialogContainerComponent> {
+    return createComponent(MJDialogContainerComponent, {
       environmentInjector: this.appRef.injector,
-      elementInjector: settings.appendTo?.injector ?? this.injector
+      elementInjector: injector
     });
+  }
 
-    // Configure container
+  private configureContainer(
+    containerRef: ComponentRef<MJDialogContainerComponent>,
+    settings: MJDialogSettings,
+    dialogRef: MJDialogRef
+  ): void {
     containerRef.instance.Title = settings.title ?? '';
     containerRef.instance.Width = settings.width ?? null;
     containerRef.instance.MinWidth = settings.minWidth ?? null;
@@ -322,43 +337,38 @@ export class MJDialogService {
       containerRef.instance.StringContent = settings.content;
     }
 
-    // Handle close
-    containerRef.instance.CloseClicked.subscribe(() => {
-      dialogRef.Close(undefined);
-    });
-
-    // Handle action clicks
-    containerRef.instance.ActionClicked.subscribe((action: MJDialogAction) => {
-      dialogRef.Close(action);
-    });
-
+    containerRef.instance.CloseClicked.subscribe(() => dialogRef.Close(undefined));
+    containerRef.instance.ActionClicked.subscribe((action: MJDialogAction) => dialogRef.Close(action));
     dialogRef.SetContainerRef(containerRef);
+  }
 
-    // Attach to DOM
+  private attachToDOM(containerRef: ComponentRef<MJDialogContainerComponent>, settings: MJDialogSettings): void {
     if (settings.appendTo) {
       settings.appendTo.insert(containerRef.hostView);
     } else {
       document.body.appendChild(containerRef.location.nativeElement);
       this.appRef.attachView(containerRef.hostView);
     }
+  }
 
-    // If content is a Component class, create it inside the container
-    if (settings.content && typeof settings.content !== 'string') {
-      const contentHost = containerRef.location.nativeElement.querySelector('.mj-dialog-body div');
-      if (contentHost) {
-        const contentRef = createComponent(settings.content as Type<unknown>, {
-          environmentInjector: this.appRef.injector,
-          elementInjector: settings.appendTo?.injector ?? this.injector,
-          hostElement: contentHost
-        });
-        this.appRef.attachView(contentRef.hostView);
-        dialogRef.Content = { instance: contentRef.instance as Record<string, unknown> };
-      }
-    }
+  private attachContentComponent(
+    containerRef: ComponentRef<MJDialogContainerComponent>,
+    settings: MJDialogSettings,
+    dialogRef: MJDialogRef,
+    injector: Injector
+  ): void {
+    if (!settings.content || typeof settings.content === 'string') return;
 
-    containerRef.changeDetectorRef.detectChanges();
+    const contentHost = containerRef.location.nativeElement.querySelector('.mj-dialog-body div');
+    if (!contentHost) return;
 
-    return dialogRef;
+    const contentRef = createComponent(settings.content as Type<unknown>, {
+      environmentInjector: this.appRef.injector,
+      elementInjector: injector,
+      hostElement: contentHost
+    });
+    this.appRef.attachView(contentRef.hostView);
+    dialogRef.Content = { instance: contentRef.instance as Record<string, unknown> };
   }
 
   /**
