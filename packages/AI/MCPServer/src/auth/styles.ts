@@ -131,6 +131,9 @@ export function getOAuthStyles(): string {
 
     .scope-section {
       margin-bottom: 1.5rem;
+      max-height: 60vh;
+      overflow-y: auto;
+      padding-right: 0.25rem;
     }
 
     .scope-description {
@@ -613,7 +616,7 @@ export function getOAuthStyles(): string {
     .button-group {
       display: flex;
       gap: 0.75rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem;
     }
 
     .btn {

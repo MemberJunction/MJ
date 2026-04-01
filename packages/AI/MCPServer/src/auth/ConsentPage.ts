@@ -212,11 +212,12 @@ function renderScopeCheckboxes(
 ): string {
   const { fullAccessScope, categories } = hierarchicalGroups;
 
-  // Count total scopes for display
+  // Count total scopes for display (exclude parents that have children,
+  // since those are displayed as the category/group header, not as list items)
   let totalScopes = fullAccessScope ? 1 : 0;
   for (const prefixGroups of categories.values()) {
     for (const group of prefixGroups) {
-      if (group.parent) totalScopes++;
+      if (group.parent && group.children.length === 0) totalScopes++;
       totalScopes += group.children.length;
     }
   }
@@ -264,10 +265,11 @@ function renderScopeCheckboxes(
     const categoryId = `category-${categoryIndex}`;
     categoryIndex++;
 
-    // Count scopes in this category
+    // Count scopes in this category (exclude parents that have children,
+    // since those are displayed as the category/group header, not as list items)
     let categoryTotal = 0;
     for (const group of prefixGroups) {
-      if (group.parent) categoryTotal++;
+      if (group.parent && group.children.length === 0) categoryTotal++;
       categoryTotal += group.children.length;
     }
 
@@ -371,6 +373,7 @@ function renderScopeCheckboxes(
         if (body.style.display === 'none') {
           body.style.display = 'block';
           arrow.innerHTML = '&#9660;';
+          body.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
           body.style.display = 'none';
           arrow.innerHTML = '&#9654;';
@@ -488,6 +491,7 @@ function renderScopeCheckboxes(
         if (scopeList.style.display === 'none') {
           scopeList.style.display = 'block';
           toggle.innerHTML = '&#9660;';
+          scopeList.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
           scopeList.style.display = 'none';
           toggle.innerHTML = '&#9654;';
