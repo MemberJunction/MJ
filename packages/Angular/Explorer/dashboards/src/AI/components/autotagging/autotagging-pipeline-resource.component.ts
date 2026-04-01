@@ -3,15 +3,18 @@
  *
  * Operations dashboard for monitoring the content autotagging pipeline.
  * Displays KPI metrics, pipeline stage visualization, recent processing feed,
- * and source configuration status.
+ * and source configuration status. Supports triggering pipeline runs with
+ * real-time progress via GraphQL subscriptions.
  */
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
-import { RunView } from '@memberjunction/core';
+import { takeUntil } from 'rxjs/operators';
+import { Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 
 /** Represents a single pipeline stage with its current status */
 interface PipelineStage {
@@ -74,6 +77,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     // Source configuration
     public ContentSources: ContentSource[] = [];
+
+    // Pipeline run state
+    public IsRunning = false;
+    public RunProgress = 0;
+    public RunStage = '';
+    public RunCurrentItem = '';
+    private currentPipelineRunID: string | null = null;
 
     // Raw data holders for aggregation
     private contentItems: Record<string, unknown>[] = [];
@@ -162,6 +172,43 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         await this.LoadData();
     }
 
+    /** Trigger the autotagging pipeline via GraphQL mutation */
+    public async RunPipeline(): Promise<void> {
+        if (this.IsRunning) return;
+
+        const provider = Metadata.Provider as GraphQLDataProvider;
+        if (!provider) return;
+
+        this.IsRunning = true;
+        this.RunProgress = 0;
+        this.RunStage = 'Starting...';
+        this.RunCurrentItem = '';
+        this.cdr.detectChanges();
+
+        try {
+            const aiClient = new GraphQLAIClient(provider);
+            const result = await aiClient.RunAutotagPipeline();
+
+            if (!result.Success || !result.PipelineRunID) {
+                this.IsRunning = false;
+                this.RunStage = '';
+                this.ErrorMessage = `Pipeline failed: ${result.ErrorMessage || 'Unknown error'}`;
+                this.cdr.detectChanges();
+                return;
+            }
+
+            this.currentPipelineRunID = result.PipelineRunID;
+            this.subscribeToPipelineProgress(result.PipelineRunID);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[Autotagging] Error starting pipeline:', msg);
+            this.IsRunning = false;
+            this.RunStage = '';
+            this.ErrorMessage = `Pipeline error: ${msg}`;
+            this.cdr.detectChanges();
+        }
+    }
+
     /** Format milliseconds into a human-readable duration */
     public FormatDuration(ms: number): string {
         if (ms < 1000) return `${ms}ms`;
@@ -216,6 +263,96 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     // ---- Private Methods ----
+
+    /** Subscribe to PipelineProgress for a specific pipeline run */
+    private subscribeToPipelineProgress(pipelineRunID: string): void {
+        const provider = Metadata.Provider as GraphQLDataProvider;
+        const subscriptionQuery = `
+            subscription PipelineProgress($pipelineRunID: String!) {
+                PipelineProgress(pipelineRunID: $pipelineRunID) {
+                    PipelineRunID
+                    Stage
+                    TotalItems
+                    ProcessedItems
+                    CurrentItem
+                    PercentComplete
+                    ElapsedMs
+                }
+            }
+        `;
+
+        let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const finishPipeline = (success: boolean) => {
+            if (idleTimer) clearTimeout(idleTimer);
+            rxSub?.unsubscribe();
+
+            Promise.resolve().then(async () => {
+                this.IsRunning = false;
+                this.RunStage = success ? 'Complete' : 'Error';
+                this.RunProgress = success ? 100 : 0;
+                this.currentPipelineRunID = null;
+
+                if (success) {
+                    // Refresh data to show new results
+                    await this.LoadData();
+                }
+                this.cdr.detectChanges();
+            });
+        };
+
+        const resetIdleTimer = () => {
+            if (idleTimer) clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => {
+                if (this.IsRunning) {
+                    finishPipeline(true);
+                }
+            }, 30000); // 30s timeout for autotag pipeline (can be long-running)
+        };
+
+        resetIdleTimer();
+
+        const sub = provider.subscribe(subscriptionQuery, { pipelineRunID });
+        const rxSub = sub.pipe(takeUntil(this.destroy$)).subscribe({
+            next: (data: Record<string, unknown>) => {
+                const progress = (data as Record<string, Record<string, unknown>>)['PipelineProgress'];
+                if (!progress) return;
+
+                const stage = progress['Stage'] as string;
+                const pct = progress['PercentComplete'] as number;
+                const currentItem = progress['CurrentItem'] as string | undefined;
+
+                this.RunProgress = pct;
+                this.RunStage = this.formatStageName(stage);
+                this.RunCurrentItem = currentItem ?? '';
+                this.cdr.detectChanges();
+
+                if (stage === 'complete') {
+                    finishPipeline(true);
+                } else if (stage === 'error') {
+                    finishPipeline(false);
+                } else {
+                    resetIdleTimer();
+                }
+            },
+            error: (err: unknown) => {
+                console.error('[Autotagging] Pipeline subscription error:', err);
+                finishPipeline(false);
+            }
+        });
+    }
+
+    /** Convert stage codes to human-readable names */
+    private formatStageName(stage: string): string {
+        const stageMap: Record<string, string> = {
+            'extract': 'Extracting content',
+            'autotag': 'Running autotaggers',
+            'vectorize': 'Vectorizing content',
+            'complete': 'Complete',
+            'error': 'Error'
+        };
+        return stageMap[stage] ?? stage;
+    }
 
     /** Build KPI metrics from loaded data */
     private buildKPIMetrics(): void {

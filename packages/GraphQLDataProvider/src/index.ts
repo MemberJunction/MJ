@@ -17,7 +17,10 @@ export type {
     SimplePromptResult,
     EmbedTextParams,
     EmbedTextResult,
-    RunAIAgentFromConversationDetailParams
+    RunAIAgentFromConversationDetailParams,
+    AutotagPipelineResult,
+    VectorizeEntityParams,
+    VectorizeEntityResult
 } from './graphQLAIClient';
 export { GraphQLTestingClient } from './graphQLTestingClient';
 export type {

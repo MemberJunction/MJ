@@ -1,7 +1,18 @@
-import { BaseEntity, LogError, LogStatus, PotentialDuplicateRequest } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
+import { BaseEntity, DuplicateDetectionProgress, LogError, LogStatus, PotentialDuplicateRequest } from "@memberjunction/core";
+import { RegisterClass, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJDuplicateRunEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
+
+const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
+
+/** Map DuplicateDetectionProgress phases to pipeline stage names */
+const PHASE_TO_STAGE: Record<DuplicateDetectionProgress['Phase'], string> = {
+    'Vectorizing': 'vectorize',
+    'Embedding': 'autotag',
+    'Querying': 'extract',
+    'Matching': 'autotag',
+    'Merging': 'complete'
+};
 
 @RegisterClass(BaseEntity, 'MJ: Duplicate Runs')
 export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
@@ -23,17 +34,32 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
      * ProcessingStatus to 'Error' so the UI can surface the problem.
      */
     private async runDetectionAsync(): Promise<void> {
+        const startTime = Date.now();
         try {
             const detector = new DuplicateRecordDetector();
             const request = new PotentialDuplicateRequest();
             request.EntityID = this.EntityID;
             request.ListID = this.SourceListID;
-            request.Options = { DuplicateRunID: this.ID };
+            request.Options = {
+                DuplicateRunID: this.ID,
+                OnProgress: (progress: DuplicateDetectionProgress) => {
+                    this.publishProgress(progress, startTime);
+                }
+            };
+
+            // Publish initial progress
+            this.publishPipelineNotification('autotag', 0, 0, 0, startTime, 'Starting duplicate detection...');
 
             await detector.GetDuplicateRecords(request, this.ContextCurrentUser);
             LogStatus(`Duplicate detection completed for run ${this.ID}`);
+
+            // Publish completion
+            this.publishPipelineNotification('complete', 100, 100, 100, startTime);
         } catch (error) {
             LogError(`Duplicate detection error for run ${this.ID}`, undefined, error);
+
+            // Publish error
+            this.publishPipelineNotification('error', 0, 0, 0, startTime, String(error));
 
             // Update the run record to reflect the error
             try {
@@ -43,6 +69,61 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
             } catch (updateError) {
                 LogError(`Failed to update run ${this.ID} after detection error`, undefined, updateError);
             }
+        }
+    }
+
+    /**
+     * Convert a DuplicateDetectionProgress callback into a PipelineProgress notification.
+     */
+    private publishProgress(progress: DuplicateDetectionProgress, startTime: number): void {
+        const stage = PHASE_TO_STAGE[progress.Phase] ?? 'autotag';
+        const pct = progress.TotalRecords > 0
+            ? Math.round((progress.ProcessedRecords / progress.TotalRecords) * 100)
+            : 0;
+
+        this.publishPipelineNotification(
+            stage,
+            progress.TotalRecords,
+            progress.ProcessedRecords,
+            pct,
+            startTime,
+            progress.CurrentRecordID
+        );
+    }
+
+    /**
+     * Publish a pipeline progress notification via the global PubSubManager.
+     * Uses GetGlobalObjectStore to access PubSubManager without a direct dependency
+     * on @memberjunction/server.
+     */
+    private publishPipelineNotification(
+        stage: string,
+        totalItems: number,
+        processedItems: number,
+        percentComplete: number,
+        startTime: number,
+        currentItem?: string
+    ): void {
+        try {
+            // Access PubSubManager through the global object store
+            // PubSubManager is a BaseSingleton stored in the global registry
+            const globalStore = GetGlobalObjectStore();
+            const pubSubManager = globalStore['___SINGLETON__PubSubManager'];
+            if (pubSubManager && typeof pubSubManager.Publish === 'function') {
+                const elapsedMs = Date.now() - startTime;
+                pubSubManager.Publish(PIPELINE_PROGRESS_TOPIC, {
+                    PipelineRunID: this.ID,
+                    Stage: stage,
+                    TotalItems: totalItems,
+                    ProcessedItems: processedItems,
+                    CurrentItem: currentItem,
+                    ElapsedMs: elapsedMs,
+                    PercentComplete: percentComplete
+                });
+            }
+        } catch (error) {
+            // Don't let progress publishing errors break detection
+            LogError(`Failed to publish pipeline progress for run ${this.ID}`, undefined, error);
         }
     }
 }

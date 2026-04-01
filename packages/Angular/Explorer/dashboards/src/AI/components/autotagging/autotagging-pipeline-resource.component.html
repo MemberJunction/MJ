@@ -23,10 +23,38 @@
                 <i class="fa-solid fa-tags header-icon"></i>
                 <h2>Content Autotagging Pipeline</h2>
             </div>
-            <button class="refresh-btn" (click)="RefreshData()">
-                <i class="fa-solid fa-rotate-right"></i> Refresh
-            </button>
+            <div class="header-actions">
+                <button class="run-pipeline-btn" (click)="RunPipeline()" [disabled]="IsRunning">
+                    @if (IsRunning) {
+                        <i class="fa-solid fa-spinner fa-spin"></i> Running...
+                    } @else {
+                        <i class="fa-solid fa-play"></i> Run Pipeline
+                    }
+                </button>
+                <button class="refresh-btn" (click)="RefreshData()" [disabled]="IsRunning">
+                    <i class="fa-solid fa-rotate-right"></i> Refresh
+                </button>
+            </div>
         </div>
+
+        <!-- Pipeline Progress Bar (visible during run) -->
+        @if (IsRunning) {
+            <div class="pipeline-progress-section">
+                <div class="progress-header">
+                    <span class="progress-stage">
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                        {{ RunStage }}
+                    </span>
+                    <span class="progress-percent">{{ RunProgress }}%</span>
+                </div>
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill" [style.width.%]="RunProgress"></div>
+                </div>
+                @if (RunCurrentItem) {
+                    <span class="progress-current-item">{{ RunCurrentItem }}</span>
+                }
+            </div>
+        }
 
         <!-- KPI Strip -->
         <div class="kpi-strip">

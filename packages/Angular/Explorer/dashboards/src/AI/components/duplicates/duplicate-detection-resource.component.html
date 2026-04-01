@@ -6,7 +6,61 @@
                 <i class="fa-solid fa-clone"></i> Duplicate Detection
             </h2>
         </div>
+        <div class="header-actions">
+            <div class="run-detection-controls">
+                <select class="entity-doc-select"
+                        [(ngModel)]="SelectedEntityDocumentID"
+                        [disabled]="IsDetecting">
+                    <option value="">Select entity document...</option>
+                    @for (doc of EntityDocuments; track doc.ID) {
+                        <option [value]="doc.ID">{{ doc.Name }} ({{ doc.EntityName }})</option>
+                    }
+                </select>
+                <button class="run-detection-btn"
+                        (click)="RunDetection()"
+                        [disabled]="IsDetecting || !SelectedEntityDocumentID">
+                    @if (IsDetecting) {
+                        <i class="fa-solid fa-spinner fa-spin"></i> Detecting...
+                    } @else {
+                        <i class="fa-solid fa-magnifying-glass"></i> Run Detection
+                    }
+                </button>
+            </div>
+        </div>
     </div>
+
+    <!-- Detection Progress (visible during run) -->
+    @if (IsDetecting) {
+        <div class="detection-progress-section">
+            <div class="progress-header">
+                <span class="progress-stage">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    {{ DetectionStage }}
+                </span>
+                <span class="progress-percent">{{ DetectionProgress }}%</span>
+            </div>
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" [style.width.%]="DetectionProgress"></div>
+            </div>
+            @if (DetectionCurrentItem) {
+                <span class="progress-current-item">{{ DetectionCurrentItem }}</span>
+            }
+        </div>
+    }
+
+    <!-- Threshold Info (when entity doc selected) -->
+    @if (SelectedDocumentThresholds) {
+        <div class="threshold-info">
+            <span class="threshold-item">
+                <i class="fa-solid fa-bullseye"></i>
+                Absolute: {{ (SelectedDocumentThresholds.AbsoluteMatchThreshold * 100).toFixed(0) }}%
+            </span>
+            <span class="threshold-item">
+                <i class="fa-solid fa-adjust"></i>
+                Potential: {{ (SelectedDocumentThresholds.PotentialMatchThreshold * 100).toFixed(0) }}%
+            </span>
+        </div>
+    }
 
     <!-- KPI Strip -->
     <div class="kpi-strip">
@@ -91,7 +145,7 @@
         <div class="empty-state">
             <i class="fa-solid fa-clone empty-icon"></i>
             <p class="empty-text">No duplicate detection results found.</p>
-            <p class="empty-subtext">Run a duplicate detection scan to see results here.</p>
+            <p class="empty-subtext">Select an entity document and click "Run Detection" to start.</p>
         </div>
     } @else {
         <!-- Kanban Board -->

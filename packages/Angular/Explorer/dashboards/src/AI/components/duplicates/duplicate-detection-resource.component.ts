@@ -3,14 +3,14 @@
  *
  * Dashboard resource for reviewing duplicate detection results in a Kanban-style
  * board with three columns: Pending Review, Approved, and Rejected.
- * Loads data from MJ: Duplicate Runs, MJ: Duplicate Run Details, and
- * MJ: Duplicate Run Detail Matches entities.
+ * Supports triggering new detection runs with real-time progress via
+ * GraphQL subscriptions.
  */
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { RunView } from '@memberjunction/core';
+import { Metadata, RunView } from '@memberjunction/core';
 import {
     ResourceData,
     MJDuplicateRunEntity,
@@ -19,6 +19,7 @@ import {
 } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
 /**
  * Represents a group of duplicate matches for a single source record,
@@ -42,6 +43,15 @@ interface DuplicateFilter {
     MaxScore: number;
     DateFrom: string;
     DateTo: string;
+}
+
+/** Lightweight entity document info for the picker dropdown */
+interface EntityDocumentOption {
+    ID: string;
+    Name: string;
+    EntityName: string;
+    PotentialMatchThreshold: number;
+    AbsoluteMatchThreshold: number;
 }
 
 @RegisterClass(BaseResourceComponent, 'DuplicateDetectionResource')
@@ -82,6 +92,16 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
     // Available entity names from loaded runs
     public EntityNames: string[] = [];
+
+    // Detection run state
+    public IsDetecting = false;
+    public DetectionProgress = 0;
+    public DetectionStage = '';
+    public DetectionCurrentItem = '';
+
+    // Entity document picker
+    public EntityDocuments: EntityDocumentOption[] = [];
+    public SelectedEntityDocumentID = '';
 
     /** Whether this component is embedded inside the Knowledge Hub shell */
     @Input() EmbeddedMode = false;
@@ -182,6 +202,12 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         return this.RejectedGroups.length;
     }
 
+    /** Get selected entity document threshold info */
+    public get SelectedDocumentThresholds(): EntityDocumentOption | null {
+        if (!this.SelectedEntityDocumentID) return null;
+        return this.EntityDocuments.find(d => d.ID === this.SelectedEntityDocumentID) ?? null;
+    }
+
     async ngAfterViewInit(): Promise<void> {
         this.setupFilterDebounce();
         await this.LoadData();
@@ -210,7 +236,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
         try {
             const rv = new RunView();
-            const [runsResult, detailsResult, matchesResult] = await rv.RunViews([
+            const [runsResult, detailsResult, matchesResult, entityDocsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Duplicate Runs',
                     ExtraFilter: "ProcessingStatus = 'Complete'",
@@ -227,6 +253,12 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     EntityName: 'MJ: Duplicate Run Detail Matches',
                     OrderBy: 'MatchProbability DESC',
                     ResultType: 'entity_object'
+                },
+                {
+                    EntityName: 'Entity Documents',
+                    ExtraFilter: "Status = 'Active'",
+                    OrderBy: 'Name',
+                    ResultType: 'simple'
                 }
             ]);
 
@@ -239,6 +271,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             if (matchesResult.Success) {
                 this.Matches = matchesResult.Results as MJDuplicateRunDetailMatchEntity[];
             }
+            if (entityDocsResult.Success) {
+                this.buildEntityDocumentOptions(entityDocsResult.Results);
+            }
 
             this.extractEntityNames();
             this.buildGroups();
@@ -247,6 +282,57 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             console.error('Error loading duplicate detection data:', error);
         } finally {
             this.IsLoading = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Trigger a new duplicate detection run by creating a DuplicateRun entity.
+     * The server hook auto-triggers detection when a run is saved with EndedAt === null.
+     */
+    public async RunDetection(): Promise<void> {
+        if (this.IsDetecting || !this.SelectedEntityDocumentID) return;
+
+        const selectedDoc = this.EntityDocuments.find(d => d.ID === this.SelectedEntityDocumentID);
+        if (!selectedDoc) return;
+
+        this.IsDetecting = true;
+        this.DetectionProgress = 0;
+        this.DetectionStage = 'Initializing...';
+        this.DetectionCurrentItem = '';
+        this.cdr.detectChanges();
+
+        try {
+            const md = new Metadata();
+            const dupeRun = await md.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
+            dupeRun.NewRecord();
+
+            // Look up the EntityID from the entity document's entity name
+            const entityInfo = md.Entities.find(e => e.Name === selectedDoc.EntityName);
+            if (entityInfo) {
+                dupeRun.EntityID = entityInfo.ID;
+            }
+
+            dupeRun.StartedAt = new Date();
+            dupeRun.ProcessingStatus = 'In Progress';
+            dupeRun.ApprovalStatus = 'Pending';
+
+            const saved = await dupeRun.Save();
+            if (!saved) {
+                console.error('Failed to create duplicate run');
+                this.IsDetecting = false;
+                this.DetectionStage = '';
+                this.cdr.detectChanges();
+                return;
+            }
+
+            // Subscribe to progress using the run ID as PipelineRunID
+            this.subscribeToPipelineProgress(dupeRun.ID);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[DuplicateDetection] Error starting detection:', msg);
+            this.IsDetecting = false;
+            this.DetectionStage = '';
             this.cdr.detectChanges();
         }
     }
@@ -321,6 +407,110 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         ).subscribe(() => {
             this.applyFilters();
         });
+    }
+
+    /** Build entity document options from simple results */
+    private buildEntityDocumentOptions(records: Record<string, unknown>[]): void {
+        this.EntityDocuments = records.map(r => ({
+            ID: String(r['ID'] ?? ''),
+            Name: String(r['Name'] ?? 'Unnamed'),
+            EntityName: String(r['Entity'] ?? r['EntityID'] ?? ''),
+            PotentialMatchThreshold: (r['PotentialMatchThreshold'] as number) ?? 0.75,
+            AbsoluteMatchThreshold: (r['AbsoluteMatchThreshold'] as number) ?? 0.95
+        }));
+
+        // Auto-select the first entity document if available
+        if (this.EntityDocuments.length > 0 && !this.SelectedEntityDocumentID) {
+            this.SelectedEntityDocumentID = this.EntityDocuments[0].ID;
+        }
+    }
+
+    /** Subscribe to PipelineProgress for a specific detection run */
+    private subscribeToPipelineProgress(pipelineRunID: string): void {
+        const provider = Metadata.Provider as GraphQLDataProvider;
+        const subscriptionQuery = `
+            subscription PipelineProgress($pipelineRunID: String!) {
+                PipelineProgress(pipelineRunID: $pipelineRunID) {
+                    PipelineRunID
+                    Stage
+                    TotalItems
+                    ProcessedItems
+                    CurrentItem
+                    PercentComplete
+                    ElapsedMs
+                }
+            }
+        `;
+
+        let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const finishDetection = (success: boolean) => {
+            if (idleTimer) clearTimeout(idleTimer);
+            rxSub?.unsubscribe();
+
+            Promise.resolve().then(async () => {
+                this.IsDetecting = false;
+                this.DetectionStage = success ? 'Complete' : 'Error';
+                this.DetectionProgress = success ? 100 : 0;
+
+                if (success) {
+                    await this.LoadData();
+                }
+                this.cdr.detectChanges();
+            });
+        };
+
+        const resetIdleTimer = () => {
+            if (idleTimer) clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => {
+                if (this.IsDetecting) {
+                    finishDetection(true);
+                }
+            }, 60000); // 60s timeout for duplicate detection (can be very long)
+        };
+
+        resetIdleTimer();
+
+        const sub = provider.subscribe(subscriptionQuery, { pipelineRunID });
+        const rxSub = sub.pipe(takeUntil(this.destroy$)).subscribe({
+            next: (data: Record<string, unknown>) => {
+                const progress = (data as Record<string, Record<string, unknown>>)['PipelineProgress'];
+                if (!progress) return;
+
+                const stage = progress['Stage'] as string;
+                const pct = progress['PercentComplete'] as number;
+                const currentItem = progress['CurrentItem'] as string | undefined;
+
+                this.DetectionProgress = pct;
+                this.DetectionStage = this.formatDetectionStage(stage);
+                this.DetectionCurrentItem = currentItem ?? '';
+                this.cdr.detectChanges();
+
+                if (stage === 'complete') {
+                    finishDetection(true);
+                } else if (stage === 'error') {
+                    finishDetection(false);
+                } else {
+                    resetIdleTimer();
+                }
+            },
+            error: (err: unknown) => {
+                console.error('[DuplicateDetection] Pipeline subscription error:', err);
+                finishDetection(false);
+            }
+        });
+    }
+
+    /** Format detection stage names for display */
+    private formatDetectionStage(stage: string): string {
+        const stageMap: Record<string, string> = {
+            'vectorize': 'Vectorizing records',
+            'autotag': 'Analyzing matches',
+            'extract': 'Querying vector database',
+            'complete': 'Complete',
+            'error': 'Error'
+        };
+        return stageMap[stage] ?? stage;
     }
 
     /** Extract unique entity names from loaded runs */
@@ -457,10 +647,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
     }
 
-    /** Update the ApprovalStatus of all matches within a group and re-sort.
-     *  Since this.Matches already contains entity_object instances, we update and save them directly
-     *  instead of loading each one individually from the database.
-     */
+    /** Update the ApprovalStatus of all matches within a group and re-sort. */
     private async updateGroupApprovalStatus(
         group: DuplicateGroup,
         status: 'Approved' | 'Rejected'

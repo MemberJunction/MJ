@@ -76,6 +76,12 @@
     color: var(--mj-text-primary);
 }
 
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .refresh-btn {
     display: inline-flex;
     align-items: center;
@@ -93,6 +99,86 @@
 .refresh-btn:hover {
     background: var(--mj-bg-surface-hover);
     border-color: var(--mj-border-strong);
+}
+
+.refresh-btn:disabled,
+.run-pipeline-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.run-pipeline-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background 0.15s;
+}
+
+.run-pipeline-btn:hover:not(:disabled) {
+    background: var(--mj-brand-primary-hover);
+}
+
+/* ---- Pipeline Progress ---- */
+
+.pipeline-progress-section {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-brand-primary);
+    border-radius: 8px;
+    padding: 14px 18px;
+}
+
+.progress-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.progress-stage {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mj-brand-primary);
+}
+
+.progress-percent {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+}
+
+.progress-bar-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--mj-bg-surface-sunken);
+    overflow: hidden;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--mj-brand-primary);
+    transition: width 0.3s ease;
+}
+
+.progress-current-item {
+    display: block;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* ---- KPI Strip ---- */

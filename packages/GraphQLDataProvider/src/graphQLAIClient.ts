@@ -908,6 +908,41 @@ export class GraphQLAIClient {
     }
 
     /**
+     * Trigger the autotagging pipeline (fire-and-forget).
+     * Returns a PipelineRunID that can be used to subscribe to PipelineProgress.
+     */
+    public async RunAutotagPipeline(): Promise<AutotagPipelineResult> {
+        try {
+            const mutation = gql`
+                mutation RunAutotagPipeline {
+                    RunAutotagPipeline {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, {});
+
+            if (!result?.RunAutotagPipeline) {
+                throw new Error('Invalid response from server');
+            }
+
+            return result.RunAutotagPipeline as AutotagPipelineResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.RunAutotagPipeline failed', undefined, e);
+            return {
+                Success: false,
+                Status: 'Error',
+                ErrorMessage: e.message || 'Unknown error'
+            };
+        }
+    }
+
+    /**
      * Trigger vectorization for an entity document.
      * Calls the server-side EntityVectorSyncer to embed and upsert entity records.
      */
@@ -957,6 +992,14 @@ export class GraphQLAIClient {
             };
         }
     }
+}
+
+/** Result from RunAutotagPipeline */
+export interface AutotagPipelineResult {
+    Success: boolean;
+    Status?: string;
+    ErrorMessage?: string;
+    PipelineRunID?: string;
 }
 
 /** Parameters for VectorizeEntity */
