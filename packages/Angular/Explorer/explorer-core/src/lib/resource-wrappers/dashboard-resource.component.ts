@@ -6,8 +6,6 @@ import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core'
 import type { DataExplorerFilter } from '@memberjunction/ng-dashboards/data-explorer-dashboards.module';
 import type { ShareDialogResult } from '@memberjunction/ng-dashboards/core-dashboards.module';
 import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEvent, AddPanelResult, DashboardPanel } from '@memberjunction/ng-dashboard-viewer';
-import { Subject } from 'rxjs';
-import { debounceTime } from 'rxjs/operators';
 import { LazyModuleRegistry } from '../services/lazy-module-registry';
 /**
  * Dashboard Resource Wrapper - displays a single dashboard in a tab
@@ -427,13 +425,6 @@ export class DashboardResource extends BaseResourceComponent {
     /** Reference to the dashboard viewer component (for config-based dashboards) */
     private viewerInstance: DashboardViewerComponent | null = null;
 
-    /** Debounce subject for config-based dashboard user state persistence */
-    private configUserStateSave$ = new Subject<void>();
-    /** In-memory panel-keyed user state for config-based dashboards */
-    private configPanelState: Record<string, Record<string, unknown>> = {};
-    /** The user state entity for config-based dashboards */
-    private configUserStateEntity: MJDashboardUserStateEntity | null = null;
-
     /** The config-based dashboard entity (null for code-based dashboards) */
     public configDashboard: MJDashboardEntity | null = null;
 
@@ -516,7 +507,6 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     ngOnDestroy(): void {
-        this.configUserStateSave$.complete();
         if (this.componentRef) {
             this.componentRef.destroy();
         }
@@ -888,12 +878,6 @@ export class DashboardResource extends BaseResourceComponent {
                 this.categories = DashboardEngine.Instance.DashboardCategories;
             }
 
-            // Load user state for this dashboard (panel-keyed)
-            this.configUserStateEntity = await this.loadDashboardUserState(dashboard.ID);
-            this.configPanelState = this.configUserStateEntity.UserState
-                ? SafeJSONParse(this.configUserStateEntity.UserState) || {}
-                : {};
-
             // Set the dashboard entity directly on the viewer
             // We provide our own external toolbar, so disable the viewer's internal toolbar
             instance.dashboard = dashboard;
@@ -902,7 +886,6 @@ export class DashboardResource extends BaseResourceComponent {
             instance.showOpenInTabButton = false; // Already in its own tab
             instance.showEditButton = false;      // External toolbar handles edit
             instance.Categories = this.categories;
-            instance.UserState = this.configPanelState;
 
             // Wire up navigation events - handle navigation requests from the dashboard
             instance.navigationRequested.subscribe((event: DashboardNavRequestEvent) => {
@@ -922,26 +905,6 @@ export class DashboardResource extends BaseResourceComponent {
             // Wire up error events
             instance.error.subscribe((errorEvent: { message: string; error?: Error }) => {
                 console.error('Dashboard error:', errorEvent.message, errorEvent.error);
-            });
-
-            // Wire up user state persistence with debouncing
-            instance.userStateChanged.subscribe((event: { panelId: string; state: Record<string, unknown> }) => {
-                // Patch-merge panel state
-                this.configPanelState[event.panelId] = {
-                    ...this.configPanelState[event.panelId],
-                    ...event.state
-                };
-                this.configUserStateSave$.next();
-            });
-
-            // Debounced save (3 seconds)
-            this.configUserStateSave$.pipe(debounceTime(3000)).subscribe(async () => {
-                if (this.configUserStateEntity) {
-                    this.configUserStateEntity.UserState = JSON.stringify(this.configPanelState);
-                    if (!await this.configUserStateEntity.Save()) {
-                        LogError('Error saving config dashboard user state', undefined, this.configUserStateEntity.LatestResult?.CompleteMessage);
-                    }
-                }
             });
 
             // Notify load complete after a brief delay to let Golden Layout initialize

@@ -31,6 +31,8 @@ import {
 } from '@memberjunction/react-runtime';
 import { createRuntimeUtilities } from '../utilities/runtime-utilities';
 import { LogError, CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import { SafeJSONParse } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 
@@ -414,6 +416,9 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         this.componentId
       );
       
+      // Load persisted user state before the first render
+      this.loadPersistedUserState();
+
       // Initial render
       this.renderComponent();
       this.isInitialized = true;
@@ -982,18 +987,60 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   }
 
   /**
-   * Handle onSaveUserSettings from components
-   * This implements the SavedUserSettings pattern
+   * Generate a stable settings key for persisting this component's user state.
+   * Uses registry/namespace/name for registry components, or just the name for embedded.
+   */
+  private getUserStateSettingKey(): string | null {
+    const spec = this._component;
+    if (!spec?.name) {
+      return null;
+    }
+    if (spec.location === 'registry' && spec.registry && spec.namespace) {
+      return `component-user-state/${spec.registry}/${spec.namespace}/${spec.name}`;
+    }
+    return `component-user-state/${spec.name}`;
+  }
+
+  /**
+   * Load saved user state from UserInfoEngine and merge into savedUserSettings.
+   * Called during component initialization before the first render.
+   */
+  private loadPersistedUserState(): void {
+    const key = this.getUserStateSettingKey();
+    if (!key) {
+      return;
+    }
+    const saved = UserInfoEngine.Instance.GetSetting(key);
+    if (saved) {
+      const parsed = SafeJSONParse(saved);
+      if (parsed && typeof parsed === 'object') {
+        // Merge persisted state with any externally-provided savedUserSettings
+        this._savedUserSettings = { ...parsed, ...this._savedUserSettings };
+      }
+    }
+  }
+
+  /**
+   * Handle onSaveUserSettings from components.
+   * Persists to UserInfoEngine (debounced) and emits event for parent containers.
    */
   private handleSaveUserSettings(newSettings: Record<string, any>) {
-    // Just bubble the event up to parent containers for persistence
-    // We don't need to store anything here
+    // Patch-merge into local state
+    this._savedUserSettings = { ...this._savedUserSettings, ...newSettings };
+
+    // Persist via UserInfoEngine (debounced)
+    const key = this.getUserStateSettingKey();
+    if (key) {
+      UserInfoEngine.Instance.SetSettingDebounced(key, JSON.stringify(this._savedUserSettings));
+    }
+
+    // Still bubble the event up for any parent that wants to react
     this.userSettingsChanged.emit({
       settings: newSettings,
       componentName: this.component?.name,
       timestamp: new Date()
     });
-    
+
     // DO NOT re-render the component!
     // The component already has the correct state - it's the one that told us about the change.
     // Re-rendering would cause unnecessary DOM updates and visual flashing.
