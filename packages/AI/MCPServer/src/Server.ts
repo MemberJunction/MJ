@@ -3033,7 +3033,7 @@ function addSingleParamToObject(
     let newParam: z.ZodTypeAny;
     switch (field.TSType) {
         case 'Date':
-            newParam = z.date();
+            newParam = z.coerce.date();
             break;
         case 'boolean':
             newParam = z.boolean();
