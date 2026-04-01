@@ -1,14 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ButtonsModule } from '@progress/kendo-angular-buttons'; // kept for other core dashboard components
 import { MjButtonDirective, MjDatepickerComponent, MjWindowComponent, MjWindowTitlebarComponent, MjDropdownComponent } from '@memberjunction/ng-ui-components';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -71,19 +64,11 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    ButtonsModule,
     MjButtonDirective,
     MjDatepickerComponent,
     MjWindowComponent,
     MjWindowTitlebarComponent,
     MjDropdownComponent,
-    GridModule,
-    DropDownsModule,
-    InputsModule,
-    IndicatorsModule,
-    DateInputsModule,
-    DialogsModule,
-    WindowModule,
     ContainerDirectivesModule,
     SharedGenericModule,
     CodeEditorModule,

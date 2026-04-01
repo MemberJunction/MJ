@@ -3,9 +3,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChange
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
-import { DialogModule } from '@progress/kendo-angular-dialog';
-import { MjButtonDirective } from '@memberjunction/ng-ui-components';
-import { InputsModule } from '@progress/kendo-angular-inputs';
+import { MjDialogComponent, MjDialogActionsComponent, MjButtonDirective } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService, CollectionPermission } from '../../services/collection-permission.service';
@@ -32,18 +30,19 @@ interface CollectionNode {
   standalone: true,
   imports: [
     FormsModule,
-    DialogModule,
+    MjDialogComponent,
+    MjDialogActionsComponent,
     MjButtonDirective,
-    InputsModule,
     SharedGenericModule
 ],
   template: `
     @if (isOpen) {
-      <kendo-dialog
-        title="Save to Collection"
-        (close)="onCancel()"
-        [width]="700"
-        [minWidth]="500">
+      <mj-dialog
+        Title="Save to Collection"
+        (Close)="onCancel()"
+        [Visible]="true"
+        [Width]="700"
+        [MinWidth]="500">
         <div class="picker-modal">
           <!-- Breadcrumb Navigation -->
           @if (navigationPath.length > 0) {
@@ -174,7 +173,7 @@ interface CollectionNode {
             }
           </div>
         </div>
-        <kendo-dialog-actions>
+        <mj-dialog-actions>
           <button mjButton (click)="onCancel()">
             Cancel
           </button>
@@ -188,8 +187,8 @@ interface CollectionNode {
               <i class="fas fa-save"></i> Save to {{ selectedCollections.length }} Collection(s)
             }
           </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
     `,
   styles: [`

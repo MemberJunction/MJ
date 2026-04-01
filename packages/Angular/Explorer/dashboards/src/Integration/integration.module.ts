@@ -2,8 +2,6 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MjButtonDirective, MjComboboxComponent, MjDropdownComponent, MjSwitchComponent } from '@memberjunction/ng-ui-components';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { LayoutModule } from '@progress/kendo-angular-layout';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
 import { NgTreesModule } from '@memberjunction/ng-trees';
@@ -39,8 +37,6 @@ import { IntegrationDataService } from './services/integration-data.service';
     MjComboboxComponent,
     MjDropdownComponent,
     MjSwitchComponent,
-    GridModule,
-    LayoutModule,
     SharedGenericModule,
     CredentialsModule,
     NgTreesModule,

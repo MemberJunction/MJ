@@ -1,14 +1,8 @@
 import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { InputsModule, TextBoxModule, TextAreaModule, NumericTextBoxModule, SwitchModule, CheckBoxModule } from '@progress/kendo-angular-inputs';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
-import { ButtonsModule, ButtonModule, SplitButtonModule } from '@progress/kendo-angular-buttons';
 import { MjButtonDirective, MjAccordionPanelComponent, MjAccordionTitleDirective, MjDropdownComponent, MjComboboxComponent, MjSwitchComponent, MjDialogComponent, MjDialogTitlebarComponent, MjDialogActionsComponent, MjNumericInputComponent, MjWindowComponent, MjWindowTitlebarComponent, MjProgressBarComponent } from '@memberjunction/ng-ui-components';
-import { DropDownsModule, ComboBoxModule, DropDownTreesModule, DropDownListModule } from '@progress/kendo-angular-dropdowns';
-import { LayoutModule, ExpansionPanelModule, TabStripModule, SplitterModule, PanelBarModule } from '@progress/kendo-angular-layout';
 import { AngularSplitModule } from 'angular-split';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { AgGridModule } from 'ag-grid-angular';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
@@ -40,7 +34,6 @@ import { TestingModule } from "@memberjunction/ng-testing";
 import { JoinGridModule } from "@memberjunction/ng-join-grid";
 import { CodeEditorModule } from "@memberjunction/ng-code-editor";
 import { DeepDiffModule } from "@memberjunction/ng-deep-diff";
-import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { EntityRelationshipDiagramModule } from '@memberjunction/ng-entity-relationship-diagram';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntitySelectorDialogComponent } from "./shared/entity-selector-dialog.component";
@@ -117,26 +110,7 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
-        LayoutModule,
-        ExpansionPanelModule,
-        TabStripModule,
-        SplitterModule,
-        PanelBarModule,
-        DialogsModule,
-        WindowModule,
         AgGridModule,
-        InputsModule,
-        TextBoxModule,
-        TextAreaModule,
-        NumericTextBoxModule,
-        SwitchModule,
-        DropDownsModule,
-        ComboBoxModule,
-        DropDownTreesModule,
-        DropDownListModule,
-        ButtonsModule,
-        ButtonModule,
-        SplitButtonModule,
         MjButtonDirective,
         MjAccordionPanelComponent,
         MjAccordionTitleDirective,
@@ -150,15 +124,12 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         MjWindowComponent,
         MjWindowTitlebarComponent,
         MjProgressBarComponent,
-        DateInputsModule,
         LinkDirectivesModule,
         JoinGridModule,
         BaseFormsModule,
         MJTabStripModule,
         CodeEditorModule,
         DeepDiffModule,
-        TreeViewModule,
-        CheckBoxModule,
         AITestHarnessModule,
         ActionGalleryModule,
         TestingModule,

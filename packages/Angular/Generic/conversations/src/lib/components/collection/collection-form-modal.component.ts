@@ -14,11 +14,12 @@ import { UUIDsEqual } from '@memberjunction/global';
   selector: 'mj-collection-form-modal',
   template: `
     @if (isOpen) {
-      <kendo-dialog
-        [title]="collection?.ID ? 'Edit Collection' : 'New Collection'"
-        (close)="onCancel()"
-        [width]="500"
-        [minWidth]="300">
+      <mj-dialog
+        [Title]="collection?.ID ? 'Edit Collection' : 'New Collection'"
+        (Close)="onCancel()"
+        [Width]="500"
+        [MinWidth]="300"
+        [Visible]="true">
         <div class="collection-form">
           <div class="form-group">
             <label class="form-label">
@@ -57,7 +58,7 @@ import { UUIDsEqual } from '@memberjunction/global';
             </div>
           }
         </div>
-        <kendo-dialog-actions>
+        <mj-dialog-actions>
           <button mjButton (click)="onCancel()" [disabled]="isSaving">
             Cancel
           </button>
@@ -67,8 +68,8 @@ import { UUIDsEqual } from '@memberjunction/global';
             [disabled]="!canSave || isSaving">
             {{ isSaving ? 'Saving...' : 'Save' }}
           </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
     `,
   styles: [`

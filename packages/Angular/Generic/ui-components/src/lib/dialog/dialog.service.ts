@@ -176,8 +176,23 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 
     .mj-dialog-body {
       flex: 1;
+      padding: 0;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .mj-dialog-body > p {
       padding: 20px;
-      overflow-y: auto;
+    }
+
+    .mj-dialog-body > div {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 0;
     }
 
     .mj-dialog-body p {

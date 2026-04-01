@@ -2,9 +2,6 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { MjButtonDirective } from '@memberjunction/ng-ui-components';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
@@ -34,10 +31,6 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     FormsModule,
     ReactiveFormsModule,
     MjButtonDirective,
-    GridModule,
-    DropDownsModule,
-    DialogsModule,
-    WindowModule,
     ContainerDirectivesModule,
     SharedGenericModule,
     ListManagementModule

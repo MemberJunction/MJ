@@ -1,8 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { WindowModule } from '@progress/kendo-angular-dialog';
-import { ButtonModule } from '@progress/kendo-angular-buttons';
+import { MjWindowComponent, MjButtonDirective } from '@memberjunction/ng-ui-components';
 import { UserInfo } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { CollectionPermissionService, CollectionPermission, PermissionSet } from '../../services/collection-permission.service';
@@ -17,16 +16,17 @@ interface PermissionDisplay extends CollectionPermission {
 @Component({
     selector: 'mj-collection-share-modal',
     standalone: true,
-    imports: [FormsModule, WindowModule, ButtonModule, UserPickerComponent],
+    imports: [FormsModule, MjWindowComponent, MjButtonDirective, UserPickerComponent],
     template: `
         @if (isOpen && collection) {
-            <kendo-window
-                [title]="'Share: ' + collection.Name"
-                [width]="600"
-                [height]="500"
-                [minWidth]="400"
-                [minHeight]="400"
-                (close)="onCancel()"
+            <mj-window
+                [Title]="'Share: ' + collection.Name"
+                [Width]="600"
+                [Height]="500"
+                [MinWidth]="400"
+                [MinHeight]="400"
+                [Visible]="true"
+                (Close)="onCancel()"
             >
                 <div class="share-modal-content">
                     <!-- Add User Section -->
@@ -216,7 +216,7 @@ interface PermissionDisplay extends CollectionPermission {
                 <div class="modal-actions">
                     <button mjButton (click)="onCancel()">Close</button>
                 </div>
-            </kendo-window>
+            </mj-window>
         }
     `,
     styleUrls: ['./collection-share-modal.component.css']

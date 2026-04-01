@@ -60,11 +60,12 @@ const DEFAULT_PROJECT_ICONS = [
   standalone: false,
   selector: 'mj-project-form-modal',
   template: `
-    <kendo-dialog
-      [title]="isEditMode ? 'Edit Project' : 'New Project'"
-      [width]="600"
-      [minWidth]="400"
-      (close)="onCancel()">
+    <mj-dialog
+      [Title]="isEditMode ? 'Edit Project' : 'New Project'"
+      [Width]="600"
+      [MinWidth]="400"
+      [Visible]="true"
+      (Close)="onCancel()">
 
       <div class="project-form">
         <!-- Name Input -->
@@ -74,10 +75,10 @@ const DEFAULT_PROJECT_ICONS = [
           </label>
           <input
             id="projectName"
-            kendoTextBox
+            type="text"
             [(ngModel)]="formData.name"
             placeholder="Enter project name"
-            class="k-textbox full-width"
+            class="mj-textbox full-width"
             (keydown.enter)="onSave()"
             autofocus />
           @if (showNameError) {
@@ -92,10 +93,9 @@ const DEFAULT_PROJECT_ICONS = [
           </label>
           <textarea
             id="projectDescription"
-            kendoTextArea
             [(ngModel)]="formData.description"
             placeholder="Enter project description (optional)"
-            class="k-textarea full-width"
+            class="mj-textarea full-width"
             rows="3"></textarea>
         </div>
 
@@ -151,13 +151,13 @@ const DEFAULT_PROJECT_ICONS = [
         </div>
       </div>
 
-      <kendo-dialog-actions>
+      <mj-dialog-actions>
         <button mjButton (click)="onCancel()">Cancel</button>
         <button mjButton variant="primary" (click)="onSave()">
           {{ isEditMode ? 'Save' : 'Create' }}
         </button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
+      </mj-dialog-actions>
+    </mj-dialog>
   `,
   styles: [`
     .project-form {

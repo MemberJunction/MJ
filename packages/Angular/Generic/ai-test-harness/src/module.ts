@@ -2,12 +2,6 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
-// Kendo UI Modules (remaining — used by older services)
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { NotificationModule } from '@progress/kendo-angular-notification';
-import { TooltipsModule } from '@progress/kendo-angular-tooltip';
-import { IconsModule } from '@progress/kendo-angular-icons';
-
 // MJ UI Components
 import {
   MjWindowComponent, MjWindowTitlebarComponent,
@@ -38,7 +32,6 @@ import { WindowDockService } from './lib/window-dock.service';
 
 // Services
 import { AITestHarnessDialogService } from './lib/ai-test-harness-dialog.service';
-import { TestHarnessWindowService } from './lib/test-harness-window.service';
 import { TestHarnessWindowManagerService } from './lib/test-harness-window-manager.service';
 
 @NgModule({
@@ -55,12 +48,6 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    // Kendo UI (remaining)
-    DialogsModule,
-    WindowModule,
-    NotificationModule,
-    TooltipsModule,
-    IconsModule,
     // MJ UI Components
     MjWindowComponent,
     MjWindowTitlebarComponent,
@@ -88,7 +75,6 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
   ],
   providers: [
     AITestHarnessDialogService,
-    TestHarnessWindowService,
     TestHarnessWindowManagerService,
     WindowDockService
   ]

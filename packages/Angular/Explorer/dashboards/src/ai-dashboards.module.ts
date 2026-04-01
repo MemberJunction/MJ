@@ -1,14 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { AngularSplitModule } from 'angular-split';
-import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -61,15 +54,7 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    ButtonsModule,
-    GridModule,
-    DropDownsModule,
-    InputsModule,
-    IndicatorsModule,
-    DialogsModule,
-    WindowModule,
     AngularSplitModule,
-    TreeViewModule,
     ContainerDirectivesModule,
     CodeEditorModule,
     SharedGenericModule,

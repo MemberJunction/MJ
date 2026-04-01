@@ -7,20 +7,8 @@ import { RouterModule, RouteReuseStrategy } from '@angular/router';
 import { SystemValidationService } from './lib/services/system-validation.service';
 import { StartupValidationService } from './lib/services/startup-validation.service';
 
-// Kendo UI Angular imports
-import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
-import { DialogsModule } from '@progress/kendo-angular-dialog';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
-import { ExcelModule, GridModule, PDFModule } from '@progress/kendo-angular-grid';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { LabelModule } from '@progress/kendo-angular-label';
-import { TabStripModule, CardModule, AvatarModule } from '@progress/kendo-angular-layout';
-import { ListViewModule } from '@progress/kendo-angular-listview';
-import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { MjProgressBarComponent } from '@memberjunction/ng-ui-components';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
 // MJ
@@ -107,23 +95,11 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     FormsModule,
     ReactiveFormsModule,
     RouterModule,
-    GridModule,
-    DialogsModule,
     ExportServiceModule,
-    IndicatorsModule,
-    ButtonsModule,
-    TabStripModule,
-    ExcelModule,
-    PDFModule,
-    InputsModule,
-    LabelModule,
     RecordChangesModule,
     ContainerDirectivesModule,
     BaseFormsModule,
-    ListViewModule,
-    TreeViewModule,
     QueryViewerModule,
-    DropDownsModule,
     MemberJunctionSharedModule,
     ConversationsModule,
     CoreDashboardsModule,
@@ -135,10 +111,7 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     ResourcePermissionsModule,
     GenericDialogModule,
     MjProgressBarComponent,
-    DateInputsModule,
     DragDropModule,
-    CardModule,
-    AvatarModule,
     AITestHarnessModule, // [3.0] TO DO TO-DO Need to verify this works correctly!
     ArtifactsModule,
     SharedGenericModule,

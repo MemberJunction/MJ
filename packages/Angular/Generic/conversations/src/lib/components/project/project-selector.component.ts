@@ -15,33 +15,16 @@ export interface ProjectWithStats extends MJProjectEntity {
   selector: 'mj-project-selector',
   template: `
     <div class="project-selector">
-      <kendo-dropdownlist
-        [data]="projectsWithStats"
-        [value]="selectedProject"
-        [textField]="'Name'"
-        [valueField]="'ID'"
-        [disabled]="disabled"
-        (valueChange)="onProjectChange($event)">
-        <ng-template kendoDropDownListItemTemplate let-dataItem>
-          <div class="project-item">
-            <i class="fa-solid {{ dataItem.Icon || 'fa-folder' }}"
-               [style.color]="dataItem.Color || '#0076B6'"></i>
-            <div class="project-info">
-              <span class="project-name">{{ dataItem.Name }}</span>
-              @if (showStats && dataItem.conversationCount != null) {
-                <span class="project-stats">{{ dataItem.conversationCount }} conversations</span>
-              }
-            </div>
-          </div>
-        </ng-template>
-        <ng-template kendoDropDownListValueTemplate let-dataItem>
-          <div class="project-item">
-            <i class="fa-solid {{ dataItem.Icon || 'fa-folder' }}"
-               [style.color]="dataItem.Color || '#0076B6'"></i>
-            <span>{{ dataItem.Name }}</span>
-          </div>
-        </ng-template>
-      </kendo-dropdownlist>
+      <select
+        class="mj-select project-dropdown"
+        [ngModel]="selectedProject?.ID || ''"
+        (ngModelChange)="onProjectSelectChange($event)"
+        [disabled]="disabled">
+        <option value="" disabled>Select a project...</option>
+        @for (project of projectsWithStats; track project.ID) {
+          <option [value]="project.ID">{{ project.Name }}{{ showStats && project.conversationCount != null ? ' (' + project.conversationCount + ')' : '' }}</option>
+        }
+      </select>
 
       <div class="project-actions">
         @if (selectedProject) {
@@ -79,7 +62,7 @@ export interface ProjectWithStats extends MJProjectEntity {
       gap: 8px;
       align-items: center;
     }
-    .project-selector kendo-dropdownlist {
+    .project-dropdown {
       flex: 1;
       min-width: 200px;
     }
@@ -199,6 +182,11 @@ export class ProjectSelectorComponent implements OnInit {
   onProjectChange(project: MJProjectEntity | null): void {
     this.selectedProject = project;
     this.projectSelected.emit(project);
+  }
+
+  onProjectSelectChange(projectId: string): void {
+    const project = this.projectsWithStats.find(p => p.ID === projectId) || null;
+    this.onProjectChange(project);
   }
 
   onCreateProject(): void {

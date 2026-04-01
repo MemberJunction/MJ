@@ -2,10 +2,6 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
-// Kendo UI Angular imports (grid still uses Kendo)
-import { GridModule } from '@progress/kendo-angular-grid';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-
 // MJ UI Components
 import { MjButtonDirective, MjWindowComponent, MjWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
 
@@ -22,8 +18,6 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
   imports: [
     CommonModule,
     FormsModule,
-    GridModule,
-    IndicatorsModule,
     MjButtonDirective,
     MjWindowComponent,
     MjWindowTitlebarComponent,

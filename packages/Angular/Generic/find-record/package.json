@@ -25,7 +25,6 @@
     "@angular/core": "21.1.3",
     "@angular/forms": "21.1.3",
     "@angular/router": "21.1.3",
-    "@progress/kendo-angular-listbox": "22.0.1",
     "ag-grid-angular": "^35.0.1",
     "ag-grid-community": "^35.0.1"
   },

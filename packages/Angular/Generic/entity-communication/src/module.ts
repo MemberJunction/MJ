@@ -1,10 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-// Kendo UI Angular imports
-import { ListBoxModule } from '@progress/kendo-angular-listbox';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-
 // MJ UI Components
 import { MjButtonDirective, MjWindowComponent } from '@memberjunction/ng-ui-components';
 
@@ -23,8 +19,6 @@ import { EntityCommunicationsPreviewComponent } from './lib/preview.component';
     ContainerDirectivesModule,
     MjButtonDirective,
     MjWindowComponent,
-    ListBoxModule,
-    IndicatorsModule,
     SharedGenericModule
   ],
   exports: [

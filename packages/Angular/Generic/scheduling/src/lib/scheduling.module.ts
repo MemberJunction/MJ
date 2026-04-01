@@ -1,8 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { DialogModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 import { ScheduledJobEditorComponent } from './panels/scheduled-job-editor/scheduled-job-editor.component';
@@ -20,8 +18,6 @@ import { ScheduledJobDialogComponent } from './dialogs/scheduled-job-dialog.comp
     imports: [
         CommonModule,
         FormsModule,
-        DialogModule,
-        ButtonsModule,
         SharedGenericModule,
     ],
     exports: [

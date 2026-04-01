@@ -39,6 +39,7 @@ export class NewAgentDialogService {
     // Configure the component
     const component = this.dialogRef.Content!.instance as unknown as NewAgentDialogComponent;
     component.config = config;
+    component.dialogRef = this.dialogRef;
 
     // Handle dialog result
     this.dialogRef.Result.subscribe((result: unknown) => {
