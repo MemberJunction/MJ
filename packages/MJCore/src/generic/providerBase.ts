@@ -18,6 +18,7 @@ import { Metadata } from "./metadata";
 import { RunView, RunViewParams } from "../views/runView";
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
+import { TransformSimpleObjectToEntityObject } from "./util";
 
 
 
@@ -2248,25 +2249,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param contextUser - The user context for permissions
      */
     protected async TransformSimpleObjectToEntityObject(param: RunViewParams, result: RunViewResult, contextUser?: UserInfo) {
-        // only if needed (e.g. ResultType==='entity_object'), transform the result set into BaseEntity-derived objects
-        if (param.ResultType === 'entity_object' && result && result.Success && result.Results?.length > 0){
-            // we need to transform each of the items in the result set into a BaseEntity-derived object
-            // Create entities and load data in parallel for better performance
-            const entityPromises = result.Results.map(async (item) => {
-                if (item instanceof BaseEntity || (typeof item.Save === 'function')) {
-                    // the second check is a "duck-typing" check in case we have different runtime
-                    // loading sources where the instanceof will fail
-                    return item;
-                }
-                else {
-                    // not a base entity sub-class already so convert
-                    const entity = await this.GetEntityObject(param.EntityName, contextUser);
-                    await entity.LoadFromData(item);
-                    return entity;
-                } 
-            });
-            
-            result.Results = await Promise.all(entityPromises);
+        if (param.ResultType === 'entity_object' && result && result.Success && result.Results?.length > 0) {
+            result.Results = await TransformSimpleObjectToEntityObject(this, param.EntityName, result.Results, contextUser);
         }
     }
 
