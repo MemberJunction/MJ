@@ -710,11 +710,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             allParams.push(...entry.params);
         }
 
-        const entityNames = allParams.map(p => p.EntityName || p.ViewName || '?').join(', ');
-        LogStatusEx({
-            message: `⚡ [Coalesce] Merged ${queue.length} RunViews calls (${allParams.length} total entities) into 1 mega-batch: [${entityNames}]`,
-            verboseOnly: false
-        });
+        const entityNames = allParams.map(p => p.EntityName || p.ViewName || '?');
+        const eventId = TelemetryManager.Instance.StartEvent(
+            'Coalesce',
+            'ProviderBase.flushCoalesceQueue',
+            {
+                CallerCount: queue.length,
+                TotalEntityCount: allParams.length,
+                Entities: entityNames,
+                CallerBoundaries: [...boundaries]
+            }
+        );
 
         try {
             // Execute the mega-batch as a single pipeline call
@@ -726,7 +732,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const callerResults = allResults.slice(start, start + count);
                 queue[i].resolve(callerResults);
             }
+
+            TelemetryManager.Instance.EndEvent(eventId);
         } catch (err) {
+            TelemetryManager.Instance.EndEvent(eventId, { success: false, error: String(err) });
+
             // If the mega-batch fails, reject all callers
             for (const entry of queue) {
                 entry.reject(err);
