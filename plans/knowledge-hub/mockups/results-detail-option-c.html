@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search Results Detail — Option C: Modal Overlay</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 200;
+    display: flex; align-items: center; gap: 0.5rem; text-decoration: none; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  /* Dimmed background */
+  .bg-content {
+    padding: 3rem 2rem;
+    max-width: 900px;
+    margin: 0 auto;
+    opacity: 0.25;
+    pointer-events: none;
+  }
+  .bg-content h2 { font-size: 1.3rem; margin-bottom: 1rem; }
+  .bg-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1rem; margin-bottom: 0.75rem;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .bg-dot {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--border); flex-shrink: 0;
+  }
+  .bg-lines { flex: 1; }
+  .bg-line {
+    height: 10px; background: var(--border); border-radius: 4px;
+    margin-bottom: 0.5rem;
+  }
+  .bg-line:last-child { width: 60%; margin-bottom: 0; }
+
+  /* Overlay */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(6px);
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+
+  /* Modal */
+  .modal {
+    width: 100%;
+    max-width: 860px;
+    max-height: calc(100vh - 4rem);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 16px 60px rgba(0,0,0,0.5);
+    animation: modalIn 0.3s ease;
+    overflow: hidden;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.96) translateY(10px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  /* Modal header */
+  .modal-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: flex-start; gap: 1rem;
+    background: rgba(15,23,42,0.5);
+    flex-shrink: 0;
+  }
+  .mh-icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    background: rgba(59,130,246,0.15); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; flex-shrink: 0;
+  }
+  .mh-info { flex: 1; min-width: 0; }
+  .mh-type {
+    font-size: 0.68rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--accent); margin-bottom: 0.25rem;
+  }
+  .mh-title {
+    font-size: 1.15rem; font-weight: 700;
+    line-height: 1.3; margin-bottom: 0.35rem;
+  }
+  .mh-meta {
+    display: flex; gap: 1rem; font-size: 0.78rem; color: var(--text-muted);
+    flex-wrap: wrap;
+  }
+  .mh-meta span { display: flex; align-items: center; gap: 0.3rem; }
+  .mh-score {
+    display: flex; align-items: center; gap: 0.5rem;
+    flex-shrink: 0;
+  }
+  .score-ring {
+    width: 48px; height: 48px; border-radius: 50%;
+    border: 3px solid var(--success);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; font-weight: 700; color: var(--success);
+  }
+  .mh-actions {
+    display: flex; gap: 0.35rem; flex-shrink: 0;
+  }
+  .mh-btn {
+    width: 32px; height: 32px; border-radius: 8px;
+    border: 1px solid transparent; background: transparent;
+    color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 0.8rem; transition: all 0.2s;
+  }
+  .mh-btn:hover { border-color: var(--border); color: var(--text-primary); background: var(--bg-card-hover); }
+
+  /* Tabs */
+  .modal-tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 1.5rem;
+    flex-shrink: 0;
+  }
+  .modal-tab {
+    padding: 0.75rem 1rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .modal-tab:hover { color: var(--text-secondary); }
+  .modal-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .tab-count {
+    background: var(--bg-page); padding: 0.1rem 0.4rem;
+    border-radius: 8px; font-size: 0.62rem; font-weight: 700;
+  }
+
+  /* Modal body */
+  .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem;
+  }
+  .modal-body::-webkit-scrollbar { width: 4px; }
+  .modal-body::-webkit-scrollbar-track { background: transparent; }
+  .modal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* Tab: Details */
+  .section-title {
+    font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted); margin-bottom: 0.75rem;
+    margin-top: 1.5rem;
+  }
+  .section-title:first-child { margin-top: 0; }
+
+  .excerpt {
+    font-size: 0.9rem; color: var(--text-secondary);
+    line-height: 1.8;
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+  .excerpt mark {
+    background: rgba(59,130,246,0.2);
+    color: var(--accent); border-radius: 2px; padding: 0 2px;
+  }
+
+  .fields-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+  .field-card {
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.65rem 0.85rem;
+  }
+  .field-card .fl {
+    font-size: 0.62rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-muted); margin-bottom: 0.2rem;
+  }
+  .field-card .fv {
+    font-size: 0.88rem; font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  .tags {
+    display: flex; gap: 0.35rem; flex-wrap: wrap;
+  }
+  .tag {
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem; color: var(--text-muted);
+  }
+
+  /* Tab: Related (shown too) */
+  .related-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+  .related-card {
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .related-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .rc-header {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .rc-icon {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; flex-shrink: 0;
+  }
+  .rc-icon.blue { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .rc-icon.purple { background: rgba(168,85,247,0.15); color: var(--purple); }
+  .rc-icon.green { background: rgba(34,197,94,0.15); color: var(--success); }
+  .rc-title { font-size: 0.85rem; font-weight: 600; flex: 1; min-width: 0; }
+  .rc-score { font-size: 0.68rem; font-weight: 700; color: var(--success); flex-shrink: 0; }
+  .rc-sub { font-size: 0.72rem; color: var(--text-muted); }
+
+  /* History (shown under history tab) */
+  .timeline-item {
+    display: flex; gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(51,65,85,0.4);
+  }
+  .timeline-item:last-child { border-bottom: none; }
+  .tl-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    flex-shrink: 0; margin-top: 4px;
+  }
+  .tl-text { flex: 1; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.4; }
+  .tl-text strong { color: var(--text-primary); font-weight: 600; }
+  .tl-time { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.15rem; }
+
+  /* Modal footer */
+  .modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--border);
+    display: flex; gap: 0.5rem; justify-content: flex-end;
+    flex-shrink: 0;
+    background: rgba(15,23,42,0.3);
+  }
+  .btn {
+    padding: 0.55rem 1.1rem; border-radius: 8px;
+    font-size: 0.82rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 0.4rem; border: none;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-outline { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--text-primary); }
+  .btn-agent {
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    color: white;
+    margin-right: auto;
+  }
+  .btn-agent:hover { opacity: 0.9; }
+
+  @media (max-width: 768px) {
+    .overlay { padding: 0.5rem; }
+    .modal { max-height: calc(100vh - 1rem); border-radius: 12px; }
+    .fields-grid { grid-template-columns: 1fr 1fr; }
+    .related-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<!-- Background search results (dimmed) -->
+<div class="bg-content">
+  <h2>Results for "customer retention strategies"</h2>
+  <div class="bg-card"><div class="bg-dot"></div><div class="bg-lines"><div class="bg-line" style="width: 80%"></div><div class="bg-line"></div></div></div>
+  <div class="bg-card"><div class="bg-dot"></div><div class="bg-lines"><div class="bg-line" style="width: 70%"></div><div class="bg-line"></div></div></div>
+  <div class="bg-card"><div class="bg-dot"></div><div class="bg-lines"><div class="bg-line" style="width: 85%"></div><div class="bg-line"></div></div></div>
+  <div class="bg-card"><div class="bg-dot"></div><div class="bg-lines"><div class="bg-line" style="width: 75%"></div><div class="bg-line"></div></div></div>
+</div>
+
+<!-- Overlay -->
+<div class="overlay">
+  <div class="modal">
+    <!-- Header -->
+    <div class="modal-header">
+      <div class="mh-icon"><i class="fa-solid fa-chart-line"></i></div>
+      <div class="mh-info">
+        <div class="mh-type">Report &middot; Entity Record</div>
+        <div class="mh-title">Q4 2025 Customer Retention Analysis Report</div>
+        <div class="mh-meta">
+          <span><i class="fa-solid fa-user"></i> Marcus Johnson</span>
+          <span><i class="fa-solid fa-calendar"></i> 3 days ago</span>
+          <span><i class="fa-solid fa-eye"></i> 234 views</span>
+        </div>
+      </div>
+      <div class="mh-score">
+        <div class="score-ring">97%</div>
+      </div>
+      <div class="mh-actions">
+        <button class="mh-btn" title="Bookmark"><i class="fa-regular fa-bookmark"></i></button>
+        <button class="mh-btn" title="Share"><i class="fa-solid fa-share-nodes"></i></button>
+        <button class="mh-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="modal-tabs">
+      <div class="modal-tab active"><i class="fa-solid fa-file-lines"></i> Details</div>
+      <div class="modal-tab"><i class="fa-solid fa-link"></i> Related <span class="tab-count">5</span></div>
+      <div class="modal-tab"><i class="fa-solid fa-clock-rotate-left"></i> History <span class="tab-count">4</span></div>
+    </div>
+
+    <!-- Body -->
+    <div class="modal-body">
+      <!-- Details Tab -->
+      <div class="section-title">Matching Excerpt</div>
+      <div class="excerpt">
+        Comprehensive analysis of <mark>customer retention strategies</mark> across all segments. Churn rate decreased by 12% following implementation of personalized engagement campaigns. Key finding: customers who received proactive outreach had 3.2x higher <mark>retention</mark> rates than control group.
+        <br><br>
+        Recommendation: expand the proactive <mark>retention</mark> program to the mid-market segment in Q1 2026. Projected impact: 8-15% improvement in segment <mark>retention</mark>.
+      </div>
+
+      <div class="section-title">Record Fields</div>
+      <div class="fields-grid">
+        <div class="field-card"><div class="fl">Report Type</div><div class="fv">Quarterly Analysis</div></div>
+        <div class="field-card"><div class="fl">Period</div><div class="fv">Q4 2025</div></div>
+        <div class="field-card"><div class="fl">Department</div><div class="fv">Customer Success</div></div>
+        <div class="field-card"><div class="fl">Author</div><div class="fv">Marcus Johnson</div></div>
+        <div class="field-card"><div class="fl">Status</div><div class="fv" style="color: var(--success);">Published</div></div>
+        <div class="field-card"><div class="fl">Key Metric</div><div class="fv">12% churn reduction</div></div>
+      </div>
+
+      <div class="section-title">Tags</div>
+      <div class="tags">
+        <span class="tag">retention</span>
+        <span class="tag">Q4-2025</span>
+        <span class="tag">customer-success</span>
+        <span class="tag">churn-analysis</span>
+        <span class="tag">engagement</span>
+        <span class="tag">quarterly-report</span>
+      </div>
+
+      <div class="section-title">Related Items</div>
+      <div class="related-grid">
+        <div class="related-card">
+          <div class="rc-header">
+            <div class="rc-icon purple"><i class="fa-solid fa-star"></i></div>
+            <span class="rc-title">Customer Loyalty Program Strategy</span>
+            <span class="rc-score">94%</span>
+          </div>
+          <div class="rc-sub">Content Item &middot; 3 pillars: rewards, offers, engagement</div>
+        </div>
+        <div class="related-card">
+          <div class="rc-header">
+            <div class="rc-icon green"><i class="fa-solid fa-file-pdf"></i></div>
+            <span class="rc-title">Customer Success Playbook v3.pdf</span>
+            <span class="rc-score">91%</span>
+          </div>
+          <div class="rc-sub">Document &middot; 42 pages &middot; Section 4.2</div>
+        </div>
+        <div class="related-card">
+          <div class="rc-header">
+            <div class="rc-icon blue"><i class="fa-solid fa-building"></i></div>
+            <span class="rc-title">Acme Corp &mdash; At-Risk Account</span>
+            <span class="rc-score">87%</span>
+          </div>
+          <div class="rc-sub">Accounts &middot; $2.4M ARR &middot; Health: 62/100</div>
+        </div>
+        <div class="related-card">
+          <div class="rc-header">
+            <div class="rc-icon purple"><i class="fa-solid fa-envelope"></i></div>
+            <span class="rc-title">Renewal Reminder Email Templates</span>
+            <span class="rc-score">83%</span>
+          </div>
+          <div class="rc-sub">Content &middot; 90/60/30-day series</div>
+        </div>
+      </div>
+
+      <div class="section-title">Recent History</div>
+      <div class="timeline-item">
+        <div class="tl-dot" style="background: var(--accent);"></div>
+        <div>
+          <div class="tl-text"><strong>Marcus Johnson</strong> updated the report with Q4 final numbers</div>
+          <div class="tl-time">3 days ago</div>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-dot" style="background: var(--success);"></div>
+        <div>
+          <div class="tl-text"><strong>Report</strong> published and distributed to CS leadership</div>
+          <div class="tl-time">1 week ago</div>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-dot" style="background: var(--purple);"></div>
+        <div>
+          <div class="tl-text"><strong>Lisa Park</strong> reviewed and approved the draft</div>
+          <div class="tl-time">2 weeks ago</div>
+        </div>
+      </div>
+      <div class="timeline-item">
+        <div class="tl-dot" style="background: var(--text-muted);"></div>
+        <div>
+          <div class="tl-text"><strong>Marcus Johnson</strong> created the initial report draft</div>
+          <div class="tl-time">3 weeks ago</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="modal-footer">
+      <button class="btn btn-agent"><i class="fa-solid fa-robot"></i> Ask Agent</button>
+      <button class="btn btn-outline"><i class="fa-regular fa-bookmark"></i> Save</button>
+      <button class="btn btn-primary"><i class="fa-solid fa-external-link"></i> Open Record</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

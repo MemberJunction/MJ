@@ -12,6 +12,7 @@
     "packages/AI/Recommendations/*",
     "packages/AI/Vectors/*",
     "packages/AI/Vectors/Memory/*",
+    "packages/AI/Knowledge/*",
     "packages/AI/AgentManager/*",
     "packages/AI/AICLI",
     "packages/Communication/*",

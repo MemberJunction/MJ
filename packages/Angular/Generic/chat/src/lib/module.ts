@@ -9,7 +9,6 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { ChatComponent } from './chat/chat.component';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MjButtonDirective, MjDialogComponent, MjDialogActionsComponent } from '@memberjunction/ng-ui-components';
 
 @NgModule({
   declarations: [
@@ -20,9 +19,6 @@ import { MjButtonDirective, MjDialogComponent, MjDialogActionsComponent } from '
     FormsModule,
     ContainerDirectivesModule,
     SharedGenericModule,
-    MjButtonDirective,
-    MjDialogComponent,
-    MjDialogActionsComponent,
     MarkdownModule
   ],
   exports: [

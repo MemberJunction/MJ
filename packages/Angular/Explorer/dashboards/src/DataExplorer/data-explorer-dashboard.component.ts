@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
@@ -112,6 +112,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Use this alongside contextName for a fully customized header (e.g., "fa-solid fa-users" for CRM).
    */
   @Input() contextIcon: string | null = null;
+
+  /**
+   * Emitted when the display title should change (entity selected, record opened, etc.)
+   */
+  @Output() DisplayNameChanged = new EventEmitter<string>();
 
   // State
   public state: DataExplorerState;
@@ -614,10 +619,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
         this.state = state;
 
-        // When entity changes, clear user search text
+        // When entity changes, clear user search text and update title
         if (entityChanged) {
           this.liveFilterText = '';
           this.debouncedFilterText = '';
+          this.emitDisplayName();
         }
 
         this.onStateChanged();
@@ -2588,6 +2594,17 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Emit the current display name based on selected entity/record.
+   */
+  private emitDisplayName(): void {
+    if (this.state.selectedEntityName) {
+      this.DisplayNameChanged.emit(this.state.selectedEntityName);
+    } else {
+      this.DisplayNameChanged.emit('Data');
+    }
   }
 
   /**

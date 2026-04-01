@@ -260,3 +260,13 @@
 
 <!-- Command Palette -->
 <mj-command-palette (AppSelected)="onAppSwitch($event)"></mj-command-palette>
+
+<!-- Pin Progress Overlay -->
+@if (PinProgressVisible) {
+  <div class="pin-progress-backdrop">
+    <div class="pin-progress-modal">
+      <mj-loading [showText]="false" size="small"></mj-loading>
+      <span class="pin-progress-text">{{ PinProgressText }}</span>
+    </div>
+  </div>
+}

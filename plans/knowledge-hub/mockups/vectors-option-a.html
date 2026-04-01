@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector Management — Option A: Index-Centric View</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+    --pink: #ec4899;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.5rem; text-decoration: none; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  .layout { max-width: 1300px; margin: 2rem auto 0; }
+
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 2rem;
+  }
+  .page-header h1 {
+    font-size: 1.5rem; font-weight: 700;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .page-header h1 i { color: var(--accent); }
+  .header-actions { display: flex; gap: 0.75rem; }
+  .btn {
+    padding: 0.55rem 1.1rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 0.5rem;
+    border: none;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-outline {
+    background: transparent; color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .btn-outline:hover { border-color: var(--accent); color: var(--text-primary); }
+
+  /* Hero Index Card */
+  .index-hero {
+    background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(168,85,247,0.08));
+    border: 1px solid rgba(59,130,246,0.2);
+    border-radius: 14px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .index-hero::before {
+    content: '';
+    position: absolute;
+    top: -50%; right: -20%;
+    width: 400px; height: 400px;
+    background: radial-gradient(circle, rgba(59,130,246,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-top {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 1.5rem;
+  }
+  .hero-title {
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .hero-icon {
+    width: 48px; height: 48px; border-radius: 12px;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.3rem;
+  }
+  .hero-title h2 { font-size: 1.3rem; font-weight: 700; }
+  .hero-title .sub {
+    font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.15rem;
+  }
+  .index-status {
+    display: flex; align-items: center; gap: 0.5rem;
+    background: rgba(34,197,94,0.1);
+    border: 1px solid rgba(34,197,94,0.3);
+    border-radius: 20px;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.78rem; font-weight: 600; color: var(--success);
+  }
+  .index-status .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--success);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+  .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+  }
+  .hero-stat .val {
+    font-size: 1.75rem; font-weight: 700; line-height: 1;
+  }
+  .hero-stat .label {
+    font-size: 0.78rem; color: var(--text-muted); margin-top: 0.3rem;
+  }
+
+  /* Entity Documents Grid */
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .section-header h3 {
+    font-size: 1.1rem; font-weight: 600;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .entity-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .entity-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  .entity-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  .ec-header {
+    display: flex; align-items: center; gap: 0.6rem;
+    margin-bottom: 1rem;
+  }
+  .ec-icon {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85rem; flex-shrink: 0;
+  }
+  .ec-name { font-size: 0.95rem; font-weight: 600; }
+  .ec-badge {
+    margin-left: auto;
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    font-weight: 700;
+  }
+  .ec-badge.synced { background: rgba(34,197,94,0.12); color: var(--success); }
+  .ec-badge.syncing { background: rgba(59,130,246,0.12); color: var(--accent); }
+  .ec-badge.pending { background: rgba(245,158,11,0.12); color: var(--warning); }
+  .ec-badge.error { background: rgba(239,68,68,0.12); color: var(--error); }
+
+  .ec-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .ec-stat {
+    font-size: 0.78rem; color: var(--text-muted);
+  }
+  .ec-stat strong {
+    color: var(--text-primary); font-weight: 600;
+  }
+
+  .ec-progress {
+    height: 4px;
+    background: var(--bg-page);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+  }
+  .ec-progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.6s ease;
+  }
+  .ec-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 0.72rem; color: var(--text-muted);
+  }
+
+  /* Recent Activity */
+  .activity-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .activity-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .activity-header h3 {
+    font-size: 0.95rem; font-weight: 600;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .activity-row {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+    font-size: 0.85rem;
+    transition: background 0.15s;
+  }
+  .activity-row:hover { background: var(--bg-card-hover); }
+  .activity-row:last-child { border-bottom: none; }
+  .act-icon {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; flex-shrink: 0;
+  }
+  .act-icon.sync { background: rgba(34,197,94,0.12); color: var(--success); }
+  .act-icon.add { background: rgba(59,130,246,0.12); color: var(--accent); }
+  .act-icon.err { background: rgba(239,68,68,0.12); color: var(--error); }
+  .act-icon.warn { background: rgba(245,158,11,0.12); color: var(--warning); }
+  .act-text { flex: 1; color: var(--text-secondary); }
+  .act-text strong { color: var(--text-primary); font-weight: 600; }
+  .act-time { font-size: 0.72rem; color: var(--text-muted); flex-shrink: 0; }
+
+  @media (max-width: 768px) {
+    body { padding: 1rem; }
+    .hero-stats { grid-template-columns: repeat(2, 1fr); }
+    .entity-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<div class="layout">
+  <div class="page-header">
+    <h1><i class="fa-solid fa-database"></i> Vector Management</h1>
+    <div class="header-actions">
+      <button class="btn btn-outline"><i class="fa-solid fa-refresh"></i> Sync All</button>
+      <button class="btn btn-primary"><i class="fa-solid fa-plus"></i> Add Entity</button>
+    </div>
+  </div>
+
+  <!-- Hero: Shared Index -->
+  <div class="index-hero">
+    <div class="hero-top">
+      <div class="hero-title">
+        <div class="hero-icon"><i class="fa-solid fa-layer-group"></i></div>
+        <div>
+          <h2>Knowledge Hub Shared Index</h2>
+          <div class="sub">Pinecone &middot; us-east-1 &middot; text-embedding-3-large (3072 dims)</div>
+        </div>
+      </div>
+      <div class="index-status"><span class="dot"></span> Healthy</div>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="val" style="color: var(--accent);">246,832</div>
+        <div class="label">Total Vectors</div>
+      </div>
+      <div class="hero-stat">
+        <div class="val" style="color: var(--purple);">12</div>
+        <div class="label">Entity Types</div>
+      </div>
+      <div class="hero-stat">
+        <div class="val" style="color: var(--success);">99.7%</div>
+        <div class="label">Sync Coverage</div>
+      </div>
+      <div class="hero-stat">
+        <div class="val" style="color: var(--cyan);">142ms</div>
+        <div class="label">Avg Query Time</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Entity Documents -->
+  <div class="section-header">
+    <h3><i class="fa-solid fa-cubes"></i> Entity Document Types</h3>
+    <button class="btn btn-outline" style="font-size: 0.75rem; padding: 0.4rem 0.8rem;">
+      <i class="fa-solid fa-filter"></i> Filter
+    </button>
+  </div>
+
+  <div class="entity-grid">
+    <div class="entity-card">
+      <div class="ec-header">
+        <div class="ec-icon" style="background: rgba(59,130,246,0.15); color: var(--accent);"><i class="fa-solid fa-building"></i></div>
+        <span class="ec-name">Accounts</span>
+        <span class="ec-badge synced">Synced</span>
+      </div>
+      <div class="ec-stats">
+        <div class="ec-stat"><strong>42,847</strong> records</div>
+        <div class="ec-stat"><strong>42,847</strong> vectors</div>
+        <div class="ec-stat"><strong>3</strong> templates</div>
+        <div class="ec-stat"><strong>128MB</strong> size</div>
+      </div>
+      <div class="ec-progress"><div class="ec-progress-fill" style="width: 100%; background: var(--success);"></div></div>
+      <div class="ec-footer">
+        <span>Last sync: 2 hours ago</span>
+        <span>100% coverage</span>
+      </div>
+    </div>
+
+    <div class="entity-card">
+      <div class="ec-header">
+        <div class="ec-icon" style="background: rgba(168,85,247,0.15); color: var(--purple);"><i class="fa-solid fa-users"></i></div>
+        <span class="ec-name">Contacts</span>
+        <span class="ec-badge syncing">Syncing</span>
+      </div>
+      <div class="ec-stats">
+        <div class="ec-stat"><strong>89,234</strong> records</div>
+        <div class="ec-stat"><strong>86,120</strong> vectors</div>
+        <div class="ec-stat"><strong>2</strong> templates</div>
+        <div class="ec-stat"><strong>256MB</strong> size</div>
+      </div>
+      <div class="ec-progress"><div class="ec-progress-fill" style="width: 96%; background: var(--accent);"></div></div>
+      <div class="ec-footer">
+        <span>Syncing... 96%</span>
+        <span>3,114 remaining</span>
+      </div>
+    </div>
+
+    <div class="entity-card">
+      <div class="ec-header">
+        <div class="ec-icon" style="background: rgba(34,197,94,0.15); color: var(--success);"><i class="fa-solid fa-file-lines"></i></div>
+        <span class="ec-name">Reports</span>
+        <span class="ec-badge synced">Synced</span>
+      </div>
+      <div class="ec-stats">
+        <div class="ec-stat"><strong>15,432</strong> records</div>
+        <div class="ec-stat"><strong>15,432</strong> vectors</div>
+        <div class="ec-stat"><strong>4</strong> templates</div>
+        <div class="ec-stat"><strong>92MB</strong> size</div>
+      </div>
+      <div class="ec-progress"><div class="ec-progress-fill" style="width: 100%; background: var(--success);"></div></div>
+      <div class="ec-footer">
+        <span>Last sync: 1 hour ago</span>
+        <span>100% coverage</span>
+      </div>
+    </div>
+
+    <div class="entity-card">
+      <div class="ec-header">
+        <div class="ec-icon" style="background: rgba(236,72,153,0.15); color: var(--pink);"><i class="fa-solid fa-handshake"></i></div>
+        <span class="ec-name">Opportunities</span>
+        <span class="ec-badge synced">Synced</span>
+      </div>
+      <div class="ec-stats">
+        <div class="ec-stat"><strong>28,910</strong> records</div>
+        <div class="ec-stat"><strong>28,910</strong> vectors</div>
+        <div class="ec-stat"><strong>2</strong> templates</div>
+        <div class="ec-stat"><strong>86MB</strong> size</div>
+      </div>
+      <div class="ec-progress"><div class="ec-progress-fill" style="width: 100%; background: var(--success);"></div></div>
+      <div class="ec-footer">
+        <span>Last sync: 3 hours ago</span>
+        <span>100% coverage</span>
+      </div>
+    </div>
+
+    <div class="entity-card">
+      <div class="ec-header">
+        <div class="ec-icon" style="background: rgba(6,182,212,0.15); color: var(--cyan);"><i class="fa-solid fa-clipboard-list"></i></div>
+        <span class="ec-name">Activities</span>
+        <span class="ec-badge pending">Pending</span>
+      </div>
+      <div class="ec-stats">
+        <div class="ec-stat"><strong>67,340</strong> records</div>
+        <div class="ec-stat"><strong>64,200</strong> vectors</div>
+        <div class="ec-stat"><strong>1</strong> template</div>
+        <div class="ec-stat"><strong>190MB</strong> size</div>
+      </div>
+      <div class="ec-progress"><div class="ec-progress-fill" style="width: 95%; background: var(--warning);"></div></div>
+      <div class="ec-footer">
+        <span>3,140 records queued</span>
+        <span>95% coverage</span>
+      </div>
+    </div>
+
+    <div class="entity-card">
+      <div class="ec-header">
+        <div class="ec-icon" style="background: rgba(239,68,68,0.15); color: var(--error);"><i class="fa-solid fa-file-pdf"></i></div>
+        <span class="ec-name">Documents</span>
+        <span class="ec-badge error">Error</span>
+      </div>
+      <div class="ec-stats">
+        <div class="ec-stat"><strong>3,069</strong> records</div>
+        <div class="ec-stat"><strong>2,812</strong> vectors</div>
+        <div class="ec-stat"><strong>1</strong> template</div>
+        <div class="ec-stat"><strong>45MB</strong> size</div>
+      </div>
+      <div class="ec-progress"><div class="ec-progress-fill" style="width: 92%; background: var(--error);"></div></div>
+      <div class="ec-footer">
+        <span>257 failed &mdash; retry available</span>
+        <span>92% coverage</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Activity -->
+  <div class="activity-section">
+    <div class="activity-header">
+      <h3><i class="fa-solid fa-clock-rotate-left"></i> Sync Activity</h3>
+      <button class="btn btn-outline" style="font-size: 0.72rem; padding: 0.35rem 0.7rem;">View all</button>
+    </div>
+    <div class="activity-row">
+      <div class="act-icon sync"><i class="fa-solid fa-check"></i></div>
+      <div class="act-text"><strong>Accounts</strong> sync completed &mdash; 42,847 vectors updated</div>
+      <span class="act-time">2 hours ago</span>
+    </div>
+    <div class="activity-row">
+      <div class="act-icon add"><i class="fa-solid fa-plus"></i></div>
+      <div class="act-text"><strong>Reports</strong> &mdash; 48 new records added to index</div>
+      <span class="act-time">3 hours ago</span>
+    </div>
+    <div class="activity-row">
+      <div class="act-icon err"><i class="fa-solid fa-exclamation"></i></div>
+      <div class="act-text"><strong>Documents</strong> &mdash; 257 records failed: embedding model timeout</div>
+      <span class="act-time">4 hours ago</span>
+    </div>
+    <div class="activity-row">
+      <div class="act-icon sync"><i class="fa-solid fa-check"></i></div>
+      <div class="act-text"><strong>Opportunities</strong> sync completed &mdash; 28,910 vectors updated</div>
+      <span class="act-time">5 hours ago</span>
+    </div>
+    <div class="activity-row">
+      <div class="act-icon warn"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <div class="act-text"><strong>Contacts</strong> &mdash; sync rate limited, will resume in 5 minutes</div>
+      <span class="act-time">6 hours ago</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

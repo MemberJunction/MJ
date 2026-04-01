@@ -24,8 +24,22 @@ export {
   LiveExecutionWidgetComponent,
   TimeSeriesChartComponent,
   PerformanceHeatmapComponent,
-  AgentRequestsResourceComponent
+  AgentRequestsResourceComponent,
+  AutotaggingPipelineResourceComponent,
+  VectorManagementResourceComponent,
+  DuplicateDetectionResourceComponent
 } from './AI/index';
+
+// Knowledge Hub components
+export {
+  KnowledgeSearchResourceComponent,
+  LoadKnowledgeSearchResource
+} from './KnowledgeHub/components/search/knowledge-search-resource.component';
+export {
+  KnowledgeConfigResourceComponent,
+  LoadKnowledgeConfigResource
+} from './KnowledgeHub/components/config/knowledge-config-resource.component';
+export { SearchResultDetailComponent } from './KnowledgeHub/components/results-detail/search-result-detail.component';
 
 // Export Actions components as resources (BaseResourceComponent-based)
 export {

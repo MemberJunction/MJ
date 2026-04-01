@@ -1,4 +1,4 @@
-import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType } from "./interfaces";
+import { DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput, EntityRecordNameResult, EntityMergeOptions, ILocalStorageProvider, IMetadataProvider, IRunViewProvider, PotentialDuplicateRequest, PotentialDuplicateResponse, ProviderConfigDataBase, ProviderType, FullTextSearchParams, FullTextSearchResult } from "./interfaces";
 import { EntityDependency, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo"
 import { ApplicationInfo } from "./applicationInfo"
 import { BaseEntity } from "./baseEntity"
@@ -571,6 +571,44 @@ export class Metadata {
      */
     get ConfigData(): ProviderConfigDataBase {
         return Metadata.Provider.ConfigData;
+    }
+
+    /**
+     * Performs a full-text search across all entities with FullTextSearchEnabled=true.
+     * Uses the database-native full-text search capabilities through the provider stack.
+     *
+     * @param params Search parameters — SearchText is required, EntityNames and MaxRowsPerEntity are optional
+     * @param contextUser Optional user context for permissions
+     * @returns Search results with title, snippet, and relevance score per match
+     *
+     * @example
+     * ```typescript
+     * const md = new Metadata();
+     * const results = await md.FullTextSearch({
+     *     SearchText: 'claude',
+     *     MaxRowsPerEntity: 5
+     * });
+     * // results.Results contains matches across all FTS-enabled entities
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Search only specific entities
+     * const results = await md.FullTextSearch({
+     *     SearchText: 'quarterly report',
+     *     EntityNames: ['MJ: AI Models', 'MJ: AI Prompts'],
+     *     MaxRowsPerEntity: 10
+     * }, contextUser);
+     * ```
+     *
+     * @see /packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md
+     */
+    public async FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult> {
+        const provider = Metadata.Provider as unknown as IRunViewProvider;
+        if (!provider.FullTextSearch) {
+            return { Success: false, ErrorMessage: 'Provider does not support FullTextSearch', Results: [], TotalCount: 0, EntitiesSearched: 0, ElapsedMs: 0 };
+        }
+        return provider.FullTextSearch(params, contextUser);
     }
 
 }

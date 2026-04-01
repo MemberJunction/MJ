@@ -1,7 +1,12 @@
-import { Metadata, RunView, UserInfo } from '@memberjunction/core'
-import { RegisterClass, MJGlobal, UUIDsEqual } from '@memberjunction/global'
-import { MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity, MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity, MJContentTypeAttributeEntity, MJContentSourceParamEntity } from '@memberjunction/core-entities'
-import { ContentSourceParams, ContentSourceTypeParams } from './content.types'
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core'
+import { MJGlobal, UUIDsEqual, RegisterClass } from '@memberjunction/global'
+import {
+    MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity,
+    MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity,
+    MJContentTypeAttributeEntity, MJContentSourceParamEntity, MJContentItemTagEntity,
+    MJContentItemAttributeEntity, MJContentSourceTypeParamEntity
+} from '@memberjunction/core-entities'
+import { ContentSourceParams, ContentSourceTypeParams, ContentSourceTypeParamValue } from './content.types'
 import pdfParse from 'pdf-parse'
 import officeparser from 'officeparser'
 import * as fs from 'fs'
@@ -12,58 +17,89 @@ import * as cheerio from 'cheerio'
 import crypto from 'crypto'
 import { BaseLLM, GetAIAPIKey } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
-import { MJContentItemAttributeEntity } from '@memberjunction/core-entities'
+import { TextChunker, ChunkTextParams } from '@memberjunction/ai-vectors'
 
-@RegisterClass(AIEngine, 'AutotagBaseEngine')
-export class AutotagBaseEngine extends AIEngine {
-    constructor() {
-        super();
-
-    }
-
+/**
+ * Core engine for content autotagging. Extends BaseEngine to cache content metadata
+ * (types, source types, file types, attributes) at startup. Uses AIEngine via composition
+ * for AI model access, then delegates to LLM for text analysis and tagging.
+ */
+@RegisterClass(BaseEngine, 'AutotagBaseEngine')
+export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     public static get Instance(): AutotagBaseEngine {
         return super.getInstance<AutotagBaseEngine>();
     }
 
+    // Cached metadata — loaded by BaseEngine.Config() via property configs
+    private _ContentTypes: MJContentTypeEntity[] = [];
+    private _ContentSourceTypes: MJContentSourceTypeEntity[] = [];
+    private _ContentFileTypes: MJContentFileTypeEntity[] = [];
+    private _ContentTypeAttributes: MJContentTypeAttributeEntity[] = [];
+    private _ContentSourceTypeParams: MJContentSourceTypeParamEntity[] = [];
+
+    /** All content types, cached at startup */
+    public get ContentTypes(): MJContentTypeEntity[] { return this._ContentTypes; }
+    /** All content source types, cached at startup */
+    public get ContentSourceTypes(): MJContentSourceTypeEntity[] { return this._ContentSourceTypes; }
+    /** All content file types, cached at startup */
+    public get ContentFileTypes(): MJContentFileTypeEntity[] { return this._ContentFileTypes; }
+    /** All content type attributes, cached at startup */
+    public get ContentTypeAttributes(): MJContentTypeAttributeEntity[] { return this._ContentTypeAttributes; }
+    /** All content source type params, cached at startup */
+    public get ContentSourceTypeParams(): MJContentSourceTypeParamEntity[] { return this._ContentSourceTypeParams; }
+
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<unknown> {
+        const configs: Partial<BaseEnginePropertyConfig>[] = [
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content Types',
+                PropertyName: '_ContentTypes',
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content Source Types',
+                PropertyName: '_ContentSourceTypes',
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content File Types',
+                PropertyName: '_ContentFileTypes',
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content Type Attributes',
+                PropertyName: '_ContentTypeAttributes',
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content Source Type Params',
+                PropertyName: '_ContentSourceTypeParams',
+            },
+        ];
+        await this.Load(configs, provider, forceRefresh, contextUser);
+        return this;
+    }
+
     /**
-     * Given a list of content items, extract the text from each content item with the LLM and send off the required parameters to the LLM for tagging.
-     * @param contentItems 
-     * @returns 
+     * Given a list of content items, extract the text from each and process with LLM for tagging.
      */
     public async ExtractTextAndProcessWithLLM(contentItems: MJContentItemEntity[], contextUser: UserInfo): Promise<void> {
         if (!contentItems || contentItems.length === 0) {
-            console.log('No content items to process');
+            LogStatus('No content items to process');
             return;
         }
 
         const processRunParams = new ProcessRunParams();
-        processRunParams.sourceID = contentItems[0].ContentSourceID
+        processRunParams.sourceID = contentItems[0].ContentSourceID;
         processRunParams.startTime = new Date();
         processRunParams.numItemsProcessed = contentItems.length;
 
         for (const contentItem of contentItems) {
             try {
-                const processingParams = new ContentItemProcessParams();
-                
-                // Parameters that depend on the content item
-                processingParams.text = contentItem.Text;
-                processingParams.contentSourceTypeID = contentItem.ContentSourceTypeID;
-                processingParams.contentFileTypeID = contentItem.ContentFileTypeID;
-                processingParams.contentTypeID = contentItem.ContentTypeID;
-
-                // Parameters that depend on the content type
-                const { modelID, minTags, maxTags } = await this.getContentItemParams(processingParams.contentTypeID, contextUser) 
-                processingParams.modelID = modelID;
-                processingParams.minTags = minTags;
-                processingParams.maxTags = maxTags;
-                processingParams.contentItemID = contentItem.ID;
-
+                const processingParams = await this.buildProcessingParams(contentItem, contextUser);
                 await this.ProcessContentItemText(processingParams, contextUser);
-
-            }
-
-            catch (e) {
-                console.error(`Failed to process content source item: ${contentItem.Get('contentItemID')}`);
+            } catch (e) {
+                LogError(`Failed to process content item: ${contentItem.ID}`, undefined, e);
                 throw e;
             }
         }
@@ -73,78 +109,100 @@ export class AutotagBaseEngine extends AIEngine {
     }
 
     /**
-     * Given processing parameters that include the text from our content item, process the text with the LLM and extract the 
-     * information related to that content type.
-     * @param params 
-     * @returns 
+     * Builds processing parameters for a single content item
+     */
+    private async buildProcessingParams(contentItem: MJContentItemEntity, contextUser: UserInfo): Promise<ContentItemProcessParams> {
+        const processingParams = new ContentItemProcessParams();
+        processingParams.text = contentItem.Text;
+        processingParams.contentSourceTypeID = contentItem.ContentSourceTypeID;
+        processingParams.contentFileTypeID = contentItem.ContentFileTypeID;
+        processingParams.contentTypeID = contentItem.ContentTypeID;
+
+        const { modelID, minTags, maxTags } = this.GetContentItemParams(processingParams.contentTypeID);
+        processingParams.modelID = modelID;
+        processingParams.minTags = minTags;
+        processingParams.maxTags = maxTags;
+        processingParams.contentItemID = contentItem.ID;
+
+        return processingParams;
+    }
+
+    /**
+     * Process a content item's text with the LLM and save results.
      */
     public async ProcessContentItemText(params: ContentItemProcessParams, contextUser: UserInfo): Promise<void> {
         const LLMResults: JsonObject = await this.promptAndRetrieveResultsFromLLM(params, contextUser);
         await this.saveLLMResults(LLMResults, contextUser);
     }
 
-    public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo) { 
-        const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, params.modelID))
-        const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass))
-        const tokenLimit = model.InputTokenLimit
-        const text = this.chunkExtractedText(params.text, model.InputTokenLimit)
-        let LLMResults: JsonObject = {}
-        const startTime = new Date()
+    public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
+        const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, params.modelID));
+        if (!model) {
+            throw new Error(`AI Model with ID ${params.modelID} not found`);
+        }
 
-        for (const chunk of text) {
-            const { systemPrompt, userPrompt } = await this.getLLMPrompts(params, chunk, LLMResults, contextUser)
-            LLMResults = await this.processChunkWithLLM(llm, systemPrompt, userPrompt, LLMResults, model.APIName)
-        }   
-        
-        const endTime = new Date();
-        LLMResults.processStartTime = startTime
-        LLMResults.processEndTime = endTime
-        LLMResults.contentItemID = params.contentItemID
+        const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass));
+        if (!llm) {
+            throw new Error(`Failed to create LLM instance for driver ${model.DriverClass}`);
+        }
 
-        return LLMResults
+        const chunks = this.chunkExtractedText(params.text, model.InputTokenLimit);
+        let LLMResults: JsonObject = {};
+        const startTime = new Date();
+
+        for (const chunk of chunks) {
+            const { systemPrompt, userPrompt } = await this.getLLMPrompts(params, chunk, LLMResults, contextUser);
+            LLMResults = await this.processChunkWithLLM(llm, systemPrompt, userPrompt, LLMResults, model.APIName);
+        }
+
+        LLMResults.processStartTime = startTime;
+        LLMResults.processEndTime = new Date();
+        LLMResults.contentItemID = params.contentItemID;
+
+        return LLMResults;
     }
 
-    public async processChunkWithLLM(llm: BaseLLM, systemPrompt: string, userPrompt: string, LLMResults:JsonObject, modelAPIName: string): Promise<JsonObject> {
-
+    public async processChunkWithLLM(llm: BaseLLM, systemPrompt: string, userPrompt: string, LLMResults: JsonObject, modelAPIName: string): Promise<JsonObject> {
         const response = await llm.ChatCompletion({
             messages: [
-                {
-                    role: 'system',
-                    content: systemPrompt,
-                },
-                {
-                    role: 'user',
-                    content: userPrompt,
-                }
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
             ],
             model: modelAPIName,
-            temperature:0.0,
+            temperature: 0.0,
         });
 
         const queryResponse = response.data.choices[0]?.message?.content?.trim() || '';
-        const JSONQueryResponse: JsonObject = JSON.parse(queryResponse);
 
-        // check if the response has info to add to LLMResults
+        let JSONQueryResponse: JsonObject;
+        try {
+            JSONQueryResponse = JSON.parse(queryResponse);
+        } catch (parseError) {
+            LogError('Failed to parse LLM response as JSON', undefined, queryResponse);
+            return LLMResults;
+        }
+
         for (const key in JSONQueryResponse) {
-            const value = JSONQueryResponse[key]
-            if (value !== null) { 
-                LLMResults[key] = value
+            const value = JSONQueryResponse[key];
+            if (value !== null) {
+                LLMResults[key] = value;
             }
         }
 
-        return LLMResults
+        return LLMResults;
     }
 
-    public async getLLMPrompts(params: ContentItemProcessParams, chunk: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<{ systemPrompt: string, userPrompt: string }> {
-        const contentType = await this.getContentTypeName(params.contentTypeID, contextUser)
-        const contentSourceType = await this.getContentSourceTypeName(params.contentSourceTypeID, contextUser)
-        const additionalContentTypePrompts = await this.getAdditionalContentTypePrompt(params.contentTypeID, contextUser)
-        
-        const systemPrompt = `You are a highly skilled text analysis assistant. You have decades of experience and pride yourself on your attention to detail and ability to capture both accurate information, as well as tone and subtext. 
-        Your task is to accurately extract key information from a provided piece of text based on a series of prompts. You are provided with text that should be a ${contentType}, that has been extracted from a ${contentSourceType}. 
-        The text MUST be of the type ${contentType} for the subsequent processing.`
+    public async getLLMPrompts(params: ContentItemProcessParams, chunk: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<{ systemPrompt: string; userPrompt: string }> {
+        const contentType = this.GetContentTypeName(params.contentTypeID);
+        const contentSourceType = this.GetContentSourceTypeName(params.contentSourceTypeID);
+        const additionalContentTypePrompts = this.GetAdditionalContentTypePrompt(params.contentTypeID);
+
+        const systemPrompt = `You are a highly skilled text analysis assistant. You have decades of experience and pride yourself on your attention to detail and ability to capture both accurate information, as well as tone and subtext.
+        Your task is to accurately extract key information from a provided piece of text based on a series of prompts. You are provided with text that should be a ${contentType}, that has been extracted from a ${contentSourceType}.
+        The text MUST be of the type ${contentType} for the subsequent processing.`;
+
         const userPrompt = `
-        If the provided text does not actually appear to be of the type ${contentType}, please disregard everything in the instructions after this and return this exact JSON response: { isValidContent: false (as a boolean) }. 
+        If the provided text does not actually appear to be of the type ${contentType}, please disregard everything in the instructions after this and return this exact JSON response: { isValidContent: false (as a boolean) }.
         Assuming the type of the text is in fact from a ${contentType}, please extract the title of the provided text, a short summary of the provided documents, as well as between ${params.minTags} and ${params.maxTags} topical key words that are most relevant to the text.
         If there is no title explicitly provided in the text, please provide a title that you think best represents the text.
         Please provide the keywords in a list format.
@@ -153,528 +211,387 @@ export class AutotagBaseEngine extends AIEngine {
         {
             "title": (title here),
             "description": (description here),
-            "keywords": (list keywords here), 
+            "keywords": (list keywords here),
             "isValidContent": true (as a boolean)
         }
 
         ${additionalContentTypePrompts}
 
-        Please make sure the response in is valid JSON format. 
+        Please make sure the response in is valid JSON format.
 
         You are also provided with the results so far as additional context, please use them to formulate the best results given the provided text: ${JSON.stringify(LLMResults)}
         The supplied text is: ${chunk}
         `;
 
-        return { systemPrompt, userPrompt }
+        return { systemPrompt, userPrompt };
     }
 
-    public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo) {
-        if (LLMResults.isValidContent === true) {   
-            // Only save results if the content is of the type that we expected. 
-            await this.saveResultsToContentItemAttribute(LLMResults, contextUser)
-            await this.saveContentItemTags(LLMResults.contentItemID, LLMResults, contextUser)
-            console.log(`Results for content item ${LLMResults.contentItemID} saved successfully`)
-        }
-        else {
-            await this.deleteInvalidContentItem(LLMResults.contentItemID, contextUser)
+    public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+        if (LLMResults.isValidContent === true) {
+            await this.saveResultsToContentItemAttribute(LLMResults, contextUser);
+            await this.saveContentItemTags(LLMResults.contentItemID as string, LLMResults, contextUser);
+            LogStatus(`Results for content item ${LLMResults.contentItemID} saved successfully`);
+        } else {
+            await this.deleteInvalidContentItem(LLMResults.contentItemID as string, contextUser);
         }
     }
 
-    public async deleteInvalidContentItem(contentItemID: string, contextUser: UserInfo) {
-        const md = new Metadata()
-        const contentItem: MJContentItemEntity = await md.GetEntityObject<any>('MJ: Content Items', contextUser)
-        await contentItem.Load(contentItemID)
-        await contentItem.Delete()
+    public async deleteInvalidContentItem(contentItemID: string, contextUser: UserInfo): Promise<void> {
+        const md = new Metadata();
+        const contentItem: MJContentItemEntity = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
+        await contentItem.Load(contentItemID);
+        await contentItem.Delete();
     }
 
-    public chunkExtractedText(text: string, tokenLimit: number): string[]{
+    /**
+     * Chunks text using the shared TextChunker utility for token-aware splitting.
+     * Falls back to simple character-based splitting when TextChunker is not available.
+     */
+    public chunkExtractedText(text: string, tokenLimit: number): string[] {
         try {
-            const textLimit = Math.ceil(tokenLimit / 1.5 ) // bit of a conservatice estimate to ensure there is room for the additional prompts
-            
-            if (text.length <= textLimit) {
-                // No need to chunk the text
-                return [text]
+            const maxChunkTokens = Math.ceil(tokenLimit / 1.5);
+
+            if (text.length <= maxChunkTokens * 4) {
+                return [text];
             }
 
-            const numChunks = Math.ceil(text.length / textLimit)
-            const chunkSize = Math.ceil(text.length / numChunks)
-            const chunks = []
-            for (let i = 0; i < numChunks; i++) {
-                const start = i * chunkSize
-                const end = (i + 1) * chunkSize
-                chunks.push(text.slice(start, end))
+            try {
+                const chunkParams: ChunkTextParams = {
+                    Text: text,
+                    MaxChunkTokens: maxChunkTokens,
+                    OverlapTokens: Math.ceil(maxChunkTokens * 0.1),
+                    Strategy: 'sentence',
+                };
+                const chunks = TextChunker.ChunkText(chunkParams);
+                return chunks.map(c => c.Text);
+            } catch {
+                return this.fallbackChunkText(text, maxChunkTokens);
             }
-            return chunks
-        } catch (e) {
-            console.log('Could not chunk the text')
-            return [text]
+        } catch {
+            LogError('Could not chunk the text');
+            return [text];
         }
     }
 
     /**
-     * Given the processing results from the LLM and the Content Element Item that was saved to the database, this function saves the tags as Content Element Tags in the database.
-     * @param md: The metadata object to save the tags
-     * @param contentElementItem: The content element item that was saved to the database
-     * @param results: The results of the processing from the LLM
-     * @param contextUser: The user context to save the tags
-     * @returns
+     * Simple character-based chunking as fallback
      */
-    public async saveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo) {
-        const md = new Metadata()
-        for (const keyword of LLMResults.keywords) {
+    private fallbackChunkText(text: string, textLimit: number): string[] {
+        const numChunks = Math.ceil(text.length / textLimit);
+        const chunkSize = Math.ceil(text.length / numChunks);
+        const chunks: string[] = [];
+        for (let i = 0; i < numChunks; i++) {
+            const start = i * chunkSize;
+            const end = (i + 1) * chunkSize;
+            chunks.push(text.slice(start, end));
+        }
+        return chunks;
+    }
 
-            const contentItemTags = await md.GetEntityObject<any>('MJ: Content Item Tags', contextUser)
-            contentItemTags.NewRecord()
-            
-            contentItemTags.ItemID = contentItemID
-            contentItemTags.Tag = keyword
-            await contentItemTags.Save()
+    /**
+     * Saves keyword tags from LLM results as Content Item Tags.
+     * Uses batched saves for better performance.
+     */
+    public async saveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+        const md = new Metadata();
+        const keywords = LLMResults.keywords as string[];
+        if (!keywords || !Array.isArray(keywords)) return;
+
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
+            const batch = keywords.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(async (keyword: string) => {
+                const contentItemTag: MJContentItemTagEntity = await md.GetEntityObject<MJContentItemTagEntity>('MJ: Content Item Tags', contextUser);
+                contentItemTag.NewRecord();
+                contentItemTag.ItemID = contentItemID;
+                contentItemTag.Tag = keyword;
+                await contentItemTag.Save();
+            }));
         }
     }
 
-    public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo) {
-        const md = new Metadata()
-        for (const key in LLMResults) {
-            // Overwrite name of content item with title if it exists
-            if (key === 'title') {
-                const ID = LLMResults.contentItemID
-                const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser)
-                await contentItem.Load(ID)
-                contentItem.Name = LLMResults.title
-                await contentItem.Save()
-            }
-            if(key === 'description') {
-                const ID = LLMResults.contentItemID
-                const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser)
-                await contentItem.Load(ID)
-                contentItem.Description = LLMResults.description
-                await contentItem.Save()
-            }
-            if (key !== 'keywords' && key !== 'processStartTime' && key !== 'processEndTime' && key !== 'contentItemID' && key !== 'isValidContent') {
-                const contentItemAttribute = await md.GetEntityObject<MJContentItemAttributeEntity>('MJ: Content Item Attributes', contextUser)
-                contentItemAttribute.NewRecord()
-                
-                //Value should be a string, if its a null or undefined value, set it to an empty string
-                const value = LLMResults[key] || ''
+    /**
+     * Saves LLM-extracted attributes to the database.
+     * Updates content item name/description, then creates attribute records for other fields.
+     */
+    public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
+        const md = new Metadata();
+        const contentItemID = LLMResults.contentItemID as string;
+        const skipKeys = new Set(['keywords', 'processStartTime', 'processEndTime', 'contentItemID', 'isValidContent']);
 
-                contentItemAttribute.ContentItemID = LLMResults.contentItemID
-                contentItemAttribute.Name = key
-                contentItemAttribute.Value = value
-                await contentItemAttribute.Save()
-            }
+        // Update title and description on the content item
+        if (LLMResults.title || LLMResults.description) {
+            const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
+            await contentItem.Load(contentItemID);
+            if (LLMResults.title) contentItem.Name = LLMResults.title as string;
+            if (LLMResults.description) contentItem.Description = LLMResults.description as string;
+            await contentItem.Save();
+        }
+
+        // Create attribute records for remaining fields
+        const attributeEntries = Object.entries(LLMResults).filter(([key]) => !skipKeys.has(key) && key !== 'title' && key !== 'description');
+
+        const BATCH_SIZE = 10;
+        for (let i = 0; i < attributeEntries.length; i += BATCH_SIZE) {
+            const batch = attributeEntries.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(async ([key, value]) => {
+                const contentItemAttribute = await md.GetEntityObject<MJContentItemAttributeEntity>('MJ: Content Item Attributes', contextUser);
+                contentItemAttribute.NewRecord();
+                contentItemAttribute.ContentItemID = contentItemID;
+                contentItemAttribute.Name = key;
+                contentItemAttribute.Value = value != null ? String(value) : '';
+                await contentItemAttribute.Save();
+            }));
         }
     }
 
-    /*** 
-    * Retrieves all of the content sources of a given content source type data from the database.
-    * @param contextUser: The user context to retrieve the content source data
-    * @returns A list of content sources
-    */
+    /**
+     * Retrieves all content sources for a given content source type.
+     */
     public async getAllContentSources(contextUser: UserInfo, contentSourceTypeID: string): Promise<MJContentSourceEntity[]> {
         const rv = new RunView();
-        
-        const contentSourceResult = await rv.RunView<MJContentSourceEntity>({
+        const result = await rv.RunView<MJContentSourceEntity>({
             EntityName: 'MJ: Content Sources',
-            ResultType: 'entity_object', 
+            ResultType: 'entity_object',
             ExtraFilter: `ContentSourceTypeID='${contentSourceTypeID}'`
         }, contextUser);
-        try {
-        if (contentSourceResult.Success && contentSourceResult.Results.length) {
-            const contentSources: MJContentSourceEntity[] = contentSourceResult.Results
-            return contentSources
+
+        if (result.Success && result.Results.length) {
+            return result.Results;
         }
-        else {
-            throw new Error(`No content sources found for content source type with ID '${contentSourceTypeID}'`)
-        }
-        }
-    
-        catch (e) {
-            console.error(e);
-            throw e;
-            }
+
+        throw new Error(`No content sources found for content source type with ID '${contentSourceTypeID}'`);
     }
 
-    public async setSubclassContentSourceType(subclass: string, contextUser: UserInfo): Promise<string>{
-        const rv = new RunView()
-        const results = await rv.RunView<MJContentSourceTypeEntity>({
-            EntityName: 'MJ: Content Source Types',
-            ExtraFilter: `Name='${subclass}'`,
-            ResultType: 'entity_object'
-        }, contextUser)
-        if (results.Success && results.Results.length) {
-            const contentSourceType: MJContentSourceTypeEntity = results.Results[0]
-            return contentSourceType.ID
+    public SetSubclassContentSourceType(subclass: string): string {
+        const sourceType = this._ContentSourceTypes.find(st => st.Name === subclass);
+        if (!sourceType) {
+            throw new Error(`Content Source Type with name '${subclass}' not found in cached metadata`);
         }
-        else {
-            throw new Error(`Subclass with name ${subclass} not found`)
-        }
+        return sourceType.ID;
     }
 
-    public async getContentSourceParams(contentSource: MJContentSourceEntity, contextUser: UserInfo): Promise<any> {
-        const contentSourceParams = new Map<string, any>()
+    public async getContentSourceParams(contentSource: MJContentSourceEntity, contextUser: UserInfo): Promise<Map<string, ContentSourceTypeParamValue>> {
+        const contentSourceParams = new Map<string, ContentSourceTypeParamValue>();
 
-        const rv = new RunView()
+        const rv = new RunView();
         const results = await rv.RunView<MJContentSourceParamEntity>({
-            EntityName: 'MJ: Content Source Params', 
+            EntityName: 'MJ: Content Source Params',
             ExtraFilter: `ContentSourceID='${contentSource.ID}'`,
             ResultType: 'entity_object'
-        }, contextUser)
+        }, contextUser);
 
         if (results.Success && results.Results.length) {
-            const contentSourceParamResults: MJContentSourceParamEntity[] = results.Results
-            for (const contentSourceParam of contentSourceParamResults) {
-                const params: ContentSourceTypeParams = await this.getDefaultContentSourceTypeParams(contentSourceParam.ContentSourceTypeParamID, contextUser)
-                params.contentSourceID = contentSource.ID
+            for (const contentSourceParam of results.Results) {
+                const params: ContentSourceTypeParams = this.GetDefaultContentSourceTypeParams(contentSourceParam.ContentSourceTypeParamID);
+                params.contentSourceID = contentSource.ID;
 
                 if (contentSourceParam.Value) {
-                    // There is a provided value, so overwrite the default value
-                    params.value = this.castValueAsCorrectType(contentSourceParam.Value, params.type)
+                    params.value = this.castValueAsCorrectType(contentSourceParam.Value, params.type);
                 }
-                contentSourceParams.set(params.name, params.value)
+                contentSourceParams.set(params.name, params.value);
             }
-            return contentSourceParams
+        } else {
+            LogStatus(`No content source params found for content source with ID ${contentSource.ID}, using default values`);
         }
-        else {
-            console.log(`No content source params found for content source with ID ${contentSource.ID}, using default values`)
-        }
+
+        return contentSourceParams;
     }
 
-    public async getDefaultContentSourceTypeParams(contentSourceTypeParamID: string, contextUser: UserInfo): Promise<ContentSourceTypeParams> {
-        const rv = new RunView()
-        const results = await rv.RunView<MJContentSourceEntity>({
-            EntityName: 'MJ: Content Source Type Params', 
-            ExtraFilter: `ID='${contentSourceTypeParamID}'`,
-            ResultType: 'entity_object'
-        }, contextUser)
-
-        if (results.Success && results.Results.length) {
-            const params = new ContentSourceTypeParams()
-            
-            params.name = results.Results[0].Get('Name')
-            params.type = results.Results[0].Get('Type').toLowerCase()
-            params.value = this.castValueAsCorrectType(results.Results[0].Get('DefaultValue'), params.type) // Default value in this case, can be null or overridden later
-            return params
+    public GetDefaultContentSourceTypeParams(contentSourceTypeParamID: string): ContentSourceTypeParams {
+        const result = this._ContentSourceTypeParams.find(p => UUIDsEqual(p.ID, contentSourceTypeParamID));
+        if (!result) {
+            throw new Error(`Content Source Type Param with ID '${contentSourceTypeParamID}' not found in cached metadata`);
         }
-        throw new Error(`Content Source Type with ID '${contentSourceTypeParamID}' not found`)
+
+        const params = new ContentSourceTypeParams();
+        params.name = result.Name;
+        params.type = result.Type.toLowerCase();
+        params.value = this.castValueAsCorrectType(result.DefaultValue ?? '', params.type);
+        return params;
     }
 
-    public castValueAsCorrectType(value: string, type: string): any {
+    public castValueAsCorrectType(value: string, type: string): ContentSourceTypeParamValue {
         switch (type) {
             case 'number':
-                return parseInt(value)
+                return parseInt(value, 10);
             case 'boolean':
-                return this.stringToBoolean(value)
+                return this.stringToBoolean(value);
             case 'string':
-                return value
+                return value;
             case 'string[]':
-                return this.parseStringArray(value)
+                return this.parseStringArray(value);
             case 'regexp':
-                return new RegExp(value.replace(/\\\\/g, '\\'))
+                return new RegExp(value.replace(/\\\\/g, '\\'));
             default:
-                return value
+                return value;
         }
     }
 
-    public stringToBoolean(string: string): boolean {
-        return string === 'true'
+    public stringToBoolean(str: string): boolean {
+        return str === 'true';
     }
 
     public parseStringArray(value: string): string[] {
-        const stringArray = JSON.parse(value)
-        return stringArray
+        return JSON.parse(value) as string[];
     }
 
     /**
-     * Given a run date, this function converts the run date to the user's timezone and formats it as a date object.
-     * @param lastRunDate: The retrieved last run date from the database 
-     * @returns The last run date converted to the user's timezone
+     * Converts a run date to the user's local timezone.
      */
     public async convertLastRunDateToTimezone(lastRunDate: Date): Promise<Date> {
-        const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
-        const date = toZonedTime(lastRunDate, userTimeZone)
-        return date
+        const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        return toZonedTime(lastRunDate, userTimeZone);
     }
 
     /**
-     * Retrieves the last run date of the provided content source from the database. If no previous runs exist, the epoch date is returned.
-     * @param contentSourceID: The ID of the content source to retrieve the last run date
-     * @param contextUser: The user context to retrieve the last run date 
-     * @returns 
+     * Retrieves the last run date for a content source. Returns epoch date if no runs exist.
      */
     public async getContentSourceLastRunDate(contentSourceID: string, contextUser: UserInfo): Promise<Date> {
-        const rv = new RunView()
-        const results = await rv.RunView<MJContentProcessRunEntity>({
-            EntityName: 'MJ: Content Process Runs', 
-            ExtraFilter: `SourceID='${contentSourceID}'`,
-            ResultType: 'entity_object', 
-            OrderBy: 'EndTime DESC'
-        }, contextUser)
-        
-        try{
-            if (results.Success && results.Results.length) {
-            const contentProcessRun: MJContentProcessRunEntity = results.Results[0]
-            const lastRunDate = contentProcessRun.Get('__mj_CreatedAt')
-            return this.convertLastRunDateToTimezone(lastRunDate)
-            }
-            else if (results.Success && !results.Results.length) {
-                // Case where we do not have any previous runs for the content source, just return the epoch date
-                return new Date(0)
-            }
-            else {
-                throw new Error(`Failed to retrieve last run date for content source with ID ${contentSourceID}`)
-            }
-        }
-        catch (e) {
-            console.error(e);
-            throw e;
-        }
-    }
-
-    public async getContentItemParams(contentTypeID: string, contextUser: UserInfo): Promise<{ modelID: string; minTags: number; maxTags: number; }> {
         const rv = new RunView();
-        const results = await rv.RunView<MJContentTypeEntity>({
-            EntityName: 'MJ: Content Types',
-            ExtraFilter: `ID='${contentTypeID}'`,
+        const results = await rv.RunView<MJContentProcessRunEntity>({
+            EntityName: 'MJ: Content Process Runs',
+            ExtraFilter: `SourceID='${contentSourceID}'`,
             ResultType: 'entity_object',
-        }, contextUser); 
+            OrderBy: 'EndTime DESC'
+        }, contextUser);
 
         if (results.Success && results.Results.length) {
-            const contentType: MJContentTypeEntity = results.Results[0];
-            return {
-                modelID: contentType.AIModelID,
-                minTags: contentType.MinTags,
-                maxTags: contentType.MaxTags
-            }
+            const lastRunDate = results.Results[0].__mj_CreatedAt;
+            return this.convertLastRunDateToTimezone(lastRunDate);
         }
-        else {
-            throw new Error(`Content Type with ID ${contentTypeID} not found`);
+
+        if (results.Success) {
+            return new Date(0);
         }
+
+        throw new Error(`Failed to retrieve last run date for content source with ID ${contentSourceID}`);
     }
 
-    /**
-     * Given a content source type ID, this function retrieves the content source type name from the database.
-     * @param contentSourceTypeID 
-     * @param contextUser 
-     * @returns 
-     */
-    public async getContentSourceTypeName(contentSourceTypeID: string, contextUser: UserInfo): Promise<string> {
-        const rv = new RunView();
-
-        const contentFileTypeResult = await rv.RunView<MJContentSourceTypeEntity>({
-            EntityName: 'MJ: Content Source Types',
-            ResultType: 'entity_object',
-            ExtraFilter: `ID='${contentSourceTypeID}'`
-        }, contextUser);
-        try {
-            if (contentFileTypeResult.Success && contentFileTypeResult.Results.length) {
-                const contentSourceType: MJContentSourceTypeEntity = contentFileTypeResult.Results[0]
-                return contentSourceType.Name
-            }
-        } catch (e) {
-            console.error(e);
-            throw e;
+    public GetContentItemParams(contentTypeID: string): { modelID: string; minTags: number; maxTags: number } {
+        const contentType = this._ContentTypes.find(ct => UUIDsEqual(ct.ID, contentTypeID));
+        if (!contentType) {
+            throw new Error(`Content Type with ID ${contentTypeID} not found in cached metadata`);
         }
-
-        throw new Error(`Content Source Type with ID ${contentSourceTypeID} not found`);
+        return {
+            modelID: contentType.AIModelID,
+            minTags: contentType.MinTags,
+            maxTags: contentType.MaxTags
+        };
     }
 
-    /**
-     * Given a content type ID, this function retrieves the content type name from the database.
-     * @param contentTypeID 
-     * @param contextUser 
-     * @returns 
-     */
-    public async getContentTypeName(contentTypeID: string, contextUser: UserInfo): Promise<string> {
-        const rv = new RunView();
-
-        const contentFileTypeResult = await rv.RunView<MJContentTypeEntity>({
-            EntityName: 'MJ: Content Types',
-            ResultType: 'entity_object',
-            ExtraFilter: `ID='${contentTypeID}'`
-        }, contextUser);
-        try {
-            if (contentFileTypeResult.Success && contentFileTypeResult.Results.length) {
-                const contentFileType: MJContentTypeEntity = contentFileTypeResult.Results[0]
-                return contentFileType.Name
-            }
-        } catch (e) {
-            console.error(e);
-            throw e;
+    public GetContentSourceTypeName(contentSourceTypeID: string): string {
+        const sourceType = this._ContentSourceTypes.find(st => UUIDsEqual(st.ID, contentSourceTypeID));
+        if (!sourceType) {
+            throw new Error(`Content Source Type with ID ${contentSourceTypeID} not found in cached metadata`);
         }
-
-        throw new Error(`Content Type with ID ${contentTypeID} not found`);
+        return sourceType.Name;
     }
 
-    /**
-     * Given a content file type ID, this function retrieves the content file type name from the database.
-     * @param contentFileTypeID 
-     * @param contextUser 
-     * @returns
-     */
-    public async getContentFileTypeName(contentFileTypeID: string, contextUser: UserInfo): Promise<string> {
-        const rv = new RunView();
-
-        const contentFileTypeResult = await rv.RunView<MJContentFileTypeEntity>({
-            EntityName: 'MJ: Content File Types',
-            ResultType: 'entity_object',
-            ExtraFilter: `ID='${contentFileTypeID}'`
-        }, contextUser);
-        try {
-            if (contentFileTypeResult.Success && contentFileTypeResult.Results.length) {
-                const contentFileType: MJContentFileTypeEntity = contentFileTypeResult.Results[0]
-                return contentFileType.Name
-            }
-        } catch (e) {
-            console.error(e);
-            throw e;
+    public GetContentTypeName(contentTypeID: string): string {
+        const contentType = this._ContentTypes.find(ct => UUIDsEqual(ct.ID, contentTypeID));
+        if (!contentType) {
+            throw new Error(`Content Type with ID ${contentTypeID} not found in cached metadata`);
         }
-
-        throw new Error(`Content File Type with ID ${contentFileTypeID} not found`);
+        return contentType.Name;
     }
 
-    public async getAdditionalContentTypePrompt(contentTypeID: string, contextUser: UserInfo): Promise<string> {
-        try { 
-            const rv = new RunView()
-            const results = await rv.RunView<MJContentTypeAttributeEntity>({
-                EntityName: 'MJ: Content Type Attributes', 
-                ExtraFilter: `ContentTypeID='${contentTypeID}'`,
-                ResultType: 'entity_object'
-            }, contextUser)
-
-            if (results.Success && results.Results.length) {
-                let prompt = ''
-                for (const contentTypeAttribute of results.Results) {
-                    prompt += `${contentTypeAttribute.Prompt}. The data must be included in the above described JSON file in this key-value format:     { "${contentTypeAttribute.Name}": (value of ${contentTypeAttribute.Name} here)}\n`
-                }
-
-                return prompt
-            }
-            return ''
-        } catch (e) {
-            console.error(e)
-            throw e
+    public GetContentFileTypeName(contentFileTypeID: string): string {
+        const fileType = this._ContentFileTypes.find(ft => UUIDsEqual(ft.ID, contentFileTypeID));
+        if (!fileType) {
+            throw new Error(`Content File Type with ID ${contentFileTypeID} not found in cached metadata`);
         }
+        return fileType.Name;
     }
-    
-    /**
-    * Given the content source parameters, this function creates a description of the content source item.
-    * @param contentSourceParams: The parameters of the content source item
-    * @returns The description of the content source item
-    */
-    public async getContentItemDescription(contentSourceParams: ContentSourceParams, contextUser): Promise<string> {
-        const description = `${await this.getContentTypeName(contentSourceParams.ContentTypeID, contextUser)} in ${await this.getContentFileTypeName(contentSourceParams.ContentFileTypeID, contextUser)} format obtained from a ${await this.getContentSourceTypeName(contentSourceParams.ContentSourceTypeID, contextUser)} source`
-        
-        return description
+
+    public GetAdditionalContentTypePrompt(contentTypeID: string): string {
+        const attrs = this._ContentTypeAttributes.filter(a => UUIDsEqual(a.ContentTypeID, contentTypeID));
+        if (attrs.length === 0) return '';
+
+        return attrs.map(attr =>
+            `${attr.Prompt}. The data must be included in the above described JSON file in this key-value format:     { "${attr.Name}": (value of ${attr.Name} here)}`
+        ).join('\n');
+    }
+
+    public GetContentItemDescription(contentSourceParams: ContentSourceParams): string {
+        const contentTypeName = this.GetContentTypeName(contentSourceParams.ContentTypeID);
+        const fileTypeName = this.GetContentFileTypeName(contentSourceParams.ContentFileTypeID);
+        const sourceTypeName = this.GetContentSourceTypeName(contentSourceParams.ContentSourceTypeID);
+        return `${contentTypeName} in ${fileTypeName} format obtained from a ${sourceTypeName} source`;
     }
 
     public async getChecksumFromURL(url: string): Promise<string> {
-        const response = await axios.get(url)
-        const content = response.data
-        const hash = crypto.createHash('sha256').update(content).digest('hex')
-        return hash
+        const response = await axios.get(url);
+        const content = String(response.data);
+        return crypto.createHash('sha256').update(content).digest('hex');
     }
 
     public async getChecksumFromText(text: string): Promise<string> {
-        const hash = crypto.createHash('sha256').update(text).digest('hex')
-        return hash
+        return crypto.createHash('sha256').update(text).digest('hex');
     }
 
     public async getContentItemIDFromURL(contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<string> {
-        const url: string = contentSourceParams.URL
-        const rv = new RunView()
-        try{
-            const results = await rv.RunView<MJContentItemEntity>({
-                EntityName: 'MJ: Content Items',
-                ExtraFilter: `URL='${url}' AND ContentSourceID='${contentSourceParams.contentSourceID}'`,
-                ResultType: 'entity_object'
-            }, contextUser)
+        const url = contentSourceParams.URL;
+        const rv = new RunView();
+        const results = await rv.RunView<MJContentItemEntity>({
+            EntityName: 'MJ: Content Items',
+            ExtraFilter: `URL='${url}' AND ContentSourceID='${contentSourceParams.contentSourceID}'`,
+            ResultType: 'entity_object'
+        }, contextUser);
 
-            if (results.Success && results.Results.length) {
-                const contentItem: MJContentItemEntity = results.Results[0]
-                return contentItem.ID
-            }
-            else {
-                throw new Error(`Content item with URL ${url} not found`)
-            }
+        if (results.Success && results.Results.length) {
+            return results.Results[0].ID;
         }
-        catch (e) {
-            throw new Error(`Failed to retrieve content item ID from URL: ${url}`)
-        }
+
+        throw new Error(`Content item with URL ${url} not found`);
     }
 
     /**
-     * Given the results of the processing from the LLM, this function saves the details of the process run in the database.
-     * @param processRunParams: The parameters holding the details of the process run
-     * @param contextUser: The user context to save the process run
-     * @returns
+     * Saves process run metadata to the database.
      */
-    public async saveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo){
-        const md = new Metadata()
-        const processRun = await md.GetEntityObject<any>('MJ: Content Process Runs', contextUser)
-        processRun.NewRecord()
-        processRun.SourceID = processRunParams.sourceID
-        processRun.StartTime = processRunParams.startTime
-        processRun.EndTime = processRunParams.endTime
-        processRun.Status = 'Complete'
-        processRun.ProcessedItems = processRunParams.numItemsProcessed
-        await processRun.Save()
+    public async saveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo): Promise<void> {
+        const md = new Metadata();
+        const processRun = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', contextUser);
+        processRun.NewRecord();
+        processRun.SourceID = processRunParams.sourceID;
+        processRun.StartTime = processRunParams.startTime;
+        processRun.EndTime = processRunParams.endTime;
+        processRun.Status = 'Complete';
+        processRun.ProcessedItems = processRunParams.numItemsProcessed;
+        await processRun.Save();
     }
 
-    /**
-    * Given a buffer of data, this function extracts text from a PDF file
-    * @param dataBuffer: The buffer of data to extract text from
-    * @returns The extracted text from the PDF file
-    */
     public async parsePDF(dataBuffer: Buffer): Promise<string> {
         const dataPDF = await pdfParse(dataBuffer);
-        return dataPDF.text
+        return dataPDF.text;
     }
 
-    /**
-    * Given a buffer of data, this function extracts text from a DOCX file
-    * @param dataBuffer: The buffer of data to extract text from
-    * @returns The extracted text from the DOCX file
-    */
     public async parseDOCX(dataBuffer: Buffer): Promise<string> {
         const dataDOCX = await officeparser.parseOffice(dataBuffer);
-        return dataDOCX.toText()
+        return dataDOCX.toText();
     }
 
     public async parseHTML(data: string): Promise<string> {
         try {
-            let $: cheerio.CheerioAPI;
-            try {
-                $ = cheerio.load(data);
-            } catch (loadError) {
-                console.error('Error loading data with cheerio:', loadError);
-                return undefined;
-            }
-            
+            const $ = cheerio.load(data);
             $('script, style, nav, footer, header, .hidden').remove();
-            const text = $('body').text().replace(/\s\s+/g, ' ').trim();
-            return text;
+            return $('body').text().replace(/\s\s+/g, ' ').trim();
         } catch (e) {
-            console.error(e);
+            LogError('Error parsing HTML', undefined, e);
             throw e;
         }
     }
 
-    /**
-    * Given a file path, as along as its one of the supported file types, this function choses the correct parser
-    * and returns the extracted text. 
-    * @param filePath - The path to the file to extract text from
-    * @returns - The extracted text from the file
-    */
     public async parseFileFromPath(filePath: string): Promise<string> {
-        const dataBuffer = await fs.promises.readFile(filePath)
-        const fileExtension = filePath.split('.').pop();
+        const dataBuffer = await fs.promises.readFile(filePath);
+        const fileExtension = filePath.split('.').pop()?.toLowerCase();
         switch (fileExtension) {
             case 'pdf':
-                return await this.parsePDF(dataBuffer)
+                return this.parsePDF(dataBuffer);
             case 'docx':
-                return await this.parseDOCX(dataBuffer)
+                return this.parseDOCX(dataBuffer);
             default:
-                throw new Error('File type not supported');
+                throw new Error(`File type '${fileExtension}' not supported`);
         }
     }
-} 
+}
