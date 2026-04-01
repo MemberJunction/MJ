@@ -142,6 +142,15 @@ export interface SQLParseOptions {
  * All methods are static — no instance state is needed.
  */
 export class SQLParser {
+    /**
+     * Fixes a known node-sql-parser bug where CAST(x AS NVARCHAR(MAX)) is
+     * serialized as CAST(x AS NVARCHARmax). Applies to NVARCHAR, VARCHAR,
+     * and VARBINARY — all SQL Server types that accept (MAX).
+     */
+    private static fixMaxTypeSerialization(sql: string): string {
+        return sql.replace(/\b(N?VARCHAR|VARBINARY)max\b/gi, '$1(MAX)');
+    }
+
     // ─── Core Pipeline ─────────────────────────────────
 
     /**
@@ -195,7 +204,8 @@ export class SQLParser {
         if (!result.mjParse.hasMJExtensions && result.ast) {
             const parser = new Parser();
             const astToSqlify = Array.isArray(result.ast) ? result.ast[0] : result.ast;
-            return parser.sqlify(astToSqlify, { database: result.dialect });
+            const sql = parser.sqlify(astToSqlify, { database: result.dialect });
+            return SQLParser.fixMaxTypeSerialization(sql);
         }
 
         return result.mjParse.tokens.map(t => t.raw).join('');
@@ -218,7 +228,8 @@ export class SQLParser {
      */
     static SqlifyAST(ast: NodeSqlParser.AST | NodeSqlParser.AST[], dialect: string = 'TransactSQL'): string {
         const parser = new Parser();
-        return parser.sqlify(Array.isArray(ast) ? ast[0] : ast, { database: dialect });
+        const sql = parser.sqlify(Array.isArray(ast) ? ast[0] : ast, { database: dialect });
+        return SQLParser.fixMaxTypeSerialization(sql);
     }
 
     /**
@@ -232,7 +243,8 @@ export class SQLParser {
      */
     static ExprToSQL(expr: unknown, dialect: string = 'TransactSQL'): string {
         const parser = new Parser();
-        const sql = parser.exprToSQL(expr);
+        let sql = parser.exprToSQL(expr);
+        sql = SQLParser.fixMaxTypeSerialization(sql);
 
         if (dialect === 'TransactSQL') {
             return sql.replace(/`([^`]+)`/g, '[$1]');
@@ -1212,12 +1224,16 @@ export class SQLParser {
             for (const cte of singleAst.with as unknown[]) {
                 const cteRecord = cte as { name: { value: string }; stmt: { ast: unknown } };
                 const cteName = cteRecord.name.value;
-                const bodySQL = parser.sqlify(cteRecord.stmt.ast as NodeSqlParser.AST, { database: dialect });
+                const bodySQL = SQLParser.fixMaxTypeSerialization(
+                    parser.sqlify(cteRecord.stmt.ast as NodeSqlParser.AST, { database: dialect })
+                );
                 cteDefinitions.push(`${cteName} AS (\n${bodySQL}\n)`);
             }
 
             const mainAst = { ...singleAst, with: null } as unknown as NodeSqlParser.AST;
-            const mainStatement = parser.sqlify(mainAst, { database: dialect });
+            const mainStatement = SQLParser.fixMaxTypeSerialization(
+                parser.sqlify(mainAst, { database: dialect })
+            );
 
             return { CTEDefinitions: cteDefinitions, MainStatement: mainStatement, UsedASTParsing: true };
         } catch {
