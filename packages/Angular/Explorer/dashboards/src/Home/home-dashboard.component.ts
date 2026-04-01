@@ -215,6 +215,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         this.PinGroups = this.pinService.GetGroups();
         this.cdr.markForCheck();
       });
+
+    // Resolve display names for record-type pins that have raw ID titles
+    this.resolveRecordPinNames();
   }
 
   ngOnDestroy(): void {
@@ -564,6 +567,59 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
    */
   trackByNotification(_index: number, item: MJUserNotificationEntity): string {
     return item.ID;
+  }
+
+  // =============================================
+  // PIN NAME RESOLUTION
+  // =============================================
+
+  /**
+   * Resolve display names for record-type pins that have raw "Entity - ID|..." titles.
+   * Uses batch GetEntityRecordNames() for efficiency, same pattern as favorites.
+   */
+  private async resolveRecordPinNames(): Promise<void> {
+    // Find pins that need name resolution: records with raw ID titles,
+    // or any pin whose DisplayName contains "ID|" (raw composite key)
+    const pinsNeedingNames = this.PinnedItems.filter(pin => {
+      const rt = this.resolveStoredResourceType(pin);
+      if (rt !== 'Records') return false;
+      // Check if the name looks like a raw ID format
+      return pin.DisplayName.includes('ID|') || pin.DisplayName.includes(' - ID');
+    });
+
+    if (pinsNeedingNames.length === 0) return;
+
+    const nameInputs: EntityRecordNameInput[] = [];
+    const pinIdByKey = new Map<string, string>();
+
+    for (const pin of pinsNeedingNames) {
+      const entityName = (pin.Configuration['Entity'] || pin.Configuration['entity']) as string;
+      const recordId = pin.Configuration['recordId'] as string;
+      if (!entityName || !recordId) continue;
+
+      const compositeKey = this.buildCompositeKeyForRecord(entityName, recordId);
+      if (!compositeKey) continue;
+
+      nameInputs.push({ EntityName: entityName, CompositeKey: compositeKey });
+      pinIdByKey.set(`${entityName}||${compositeKey.ToConcatenatedString()}`, pin.Id);
+    }
+
+    if (nameInputs.length === 0) return;
+
+    try {
+      const nameResults = await this.metadata.GetEntityRecordNames(nameInputs);
+      for (const result of nameResults) {
+        if (result.Success && result.RecordName) {
+          const key = `${result.EntityName}||${result.CompositeKey.ToConcatenatedString()}`;
+          const pinId = pinIdByKey.get(key);
+          if (pinId) {
+            this.pinService.UpdatePin(pinId, { DisplayName: result.RecordName });
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('[Pin Names] Failed to resolve record names:', error);
+    }
   }
 
   // =============================================

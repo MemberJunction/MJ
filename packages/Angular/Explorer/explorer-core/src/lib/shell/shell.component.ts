@@ -1978,8 +1978,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     const resourceType = this.resolveTabResourceType(activeTab);
 
+    // Resolve a better display name for record pins
+    let displayName = activeTab.title;
+    if (resourceType === 'Records') {
+      const resolved = await this.resolveRecordDisplayName(activeTab);
+      if (resolved) displayName = resolved;
+    }
+
     const added = this.homePinService.AddPin({
-      DisplayName: activeTab.title,
+      DisplayName: displayName,
       ResourceType: resourceType,
       ApplicationID: activeTab.applicationId,
       ApplicationName: this.activeApp?.Name,
@@ -1988,8 +1995,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     });
 
     if (added) {
-      console.log(`[Pin to Home] Pinned "${activeTab.title}" as "${resourceType}"`, activeTab.configuration);
-      this.showPinProgress(`Capturing preview for "${activeTab.title}"...`);
+      console.log(`[Pin to Home] Pinned "${displayName}" as "${resourceType}"`, activeTab.configuration);
+      this.showPinProgress(`Capturing preview for "${displayName}"...`);
       await this.captureAndAttachThumbnail(activeTab, resourceType);
     } else {
       MJNotificationService.Instance.CreateSimpleNotification(
@@ -2022,6 +2029,36 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     } catch (err) {
       console.warn('[Pin Thumbnail] Capture failed:', err);
     }
+  }
+
+  /**
+   * Resolve a friendly display name for a record tab using GetEntityRecordNames.
+   */
+  private async resolveRecordDisplayName(tab: WorkspaceTab): Promise<string | null> {
+    try {
+      const config = tab.configuration;
+      const entityName = (config['Entity'] || config['entity']) as string;
+      const recordId = config['recordId'] as string;
+      if (!entityName || !recordId) return null;
+
+      const md = new Metadata();
+      const entityInfo = md.Entities.find(e => e.Name === entityName);
+      if (!entityInfo) return null;
+
+      const pkField = entityInfo.FirstPrimaryKey;
+      if (!pkField) return null;
+
+      const compositeKey = new CompositeKey();
+      compositeKey.KeyValuePairs = [{ FieldName: pkField.Name, Value: recordId }];
+
+      const results = await md.GetEntityRecordNames([{ EntityName: entityName, CompositeKey: compositeKey }]);
+      if (results.length > 0 && results[0].Success && results[0].RecordName) {
+        return results[0].RecordName;
+      }
+    } catch {
+      // Fall through to null
+    }
+    return null;
   }
 
   private showPinProgress(text: string): void {
