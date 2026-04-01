@@ -1515,11 +1515,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             );
         } else if (checkResult.status === 'stale') {
             // Cache is stale - use fresh data and update cache (entity doesn't support differential)
+            const staleResults = checkResult.results || [];
             const freshResult: RunViewResult<T> = {
                 Success: true,
-                Results: checkResult.results || [],
-                RowCount: checkResult.rowCount || 0,
-                TotalRowCount: checkResult.rowCount || 0,
+                Results: staleResults,
+                RowCount: staleResults.length,
+                TotalRowCount: checkResult.rowCount || staleResults.length,
                 ExecutionTime: 0,
                 ErrorMessage: '',
                 UserViewRunID: '',
