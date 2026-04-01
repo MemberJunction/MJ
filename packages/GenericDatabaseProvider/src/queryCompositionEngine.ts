@@ -629,11 +629,14 @@ export class QueryCompositionEngine {
         const cteDefinitions: string[] = [];
         for (const entry of cteEntries) {
             const strippedSQL = this.stripTrailingOrderBy(entry.SQL, dialect);
-            const trimmedSQL = strippedSQL.trimStart();
+            // Strip SQL comments before checking for WITH, because dependency queries
+            // may have comment headers (-- or /* */) before the WITH clause.
+            const commentStrippedSQL = this.stripSQLComments(strippedSQL).trimStart();
 
-            if (/^WITH\s/i.test(trimmedSQL)) {
-                // Dependency SQL has its own WITH clause — hoist inner CTEs as siblings
-                const { innerCTEDefinitions, mainSelect } = this.hoistInnerCTEs(trimmedSQL, platform);
+            if (/^WITH\s/i.test(commentStrippedSQL)) {
+                // Dependency SQL has its own WITH clause — hoist inner CTEs as siblings.
+                // Pass the comment-stripped version so ExtractCTEs can detect the WITH prefix.
+                const { innerCTEDefinitions, mainSelect } = this.hoistInnerCTEs(commentStrippedSQL, platform);
                 cteDefinitions.push(...innerCTEDefinitions);
                 cteDefinitions.push(`${entry.CTEName} AS (\n${mainSelect}\n)`);
             } else {
