@@ -12,6 +12,7 @@ Key patterns for `updateElements`:
 - Use `{}` as placeholder for unchanged array items — only include properties being changed
 - Use `"__DELETE__"` to remove properties or array elements at any nesting depth
 - Nest objects to target deep properties surgically (e.g., `{ user: { email: "new@x.com" } }`)
+- **Arrays merge positionally** — a shorter update array does NOT remove trailing elements. To shrink an array, use `replaceElements` instead.
 
-`replaceElements` replaces the entire target object/array. Use when providing a complete replacement rather than surgical updates.
+`replaceElements` replaces the entire target object/array. Use when providing a complete replacement rather than surgical updates. **Use for primitive arrays** (e.g., `string[]`) when you want to set the exact final value.
 `removeElements` marks top-level items for removal by setting their value to `"__DELETE__"`.
