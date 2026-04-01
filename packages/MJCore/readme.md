@@ -1429,6 +1429,12 @@ For detailed guides on specific topics, see the [docs/](./docs/) folder:
 - [IS-A Relationships](./docs/isa-relationships.md) — Type inheritance, save/delete orchestration, provider integration
 - [Organic Keys](./docs/organic-keys.md) — Cross-system matching by shared business data (email, phone, domain), CodeGen integration, transitive views
 - [RunQuery Pagination](./docs/runquery-pagination.md) — Parameterized queries with pagination support
+- [Full-Text Search](./docs/FULL_TEXT_SEARCH_GUIDE.md) — Database-native FTS via `Metadata.FullTextSearch()`, SQL Server FREETEXT / PostgreSQL tsvector, provider architecture, Knowledge Hub integration
+
+### Scoring Utilities
+
+- **`ComputeRRF(rankedLists, k?)`** — Reciprocal Rank Fusion for combining ranked result lists from different retrieval methods. Score-scale independent — works on ordinal position, making it ideal for fusing vector similarity results with full-text search results. Located in `@memberjunction/core` (exported from `src/generic/scoring/ReciprocalRankFusion.ts`).
+- **`ScoredCandidate`** — Interface for RRF input/output: `{ ID: string, Score: number, Metadata?: Record<string, unknown> }`
 
 ## Support
 

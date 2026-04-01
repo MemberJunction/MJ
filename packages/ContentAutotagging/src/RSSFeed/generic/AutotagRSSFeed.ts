@@ -32,7 +32,7 @@ export class AutotagRSSFeed extends AutotagBase {
      */
     public async Autotag(contextUser: UserInfo): Promise<void> {
         this.contextUser = contextUser;
-        this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('RSS Feed', this.contextUser);
+        this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('RSS Feed');
         const contentSources = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
         const contentItemsToProcess = await this.SetContentItemsToProcess(contentSources);
         await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
@@ -117,7 +117,7 @@ export class AutotagRSSFeed extends AutotagBase {
                 const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
                 contentItem.ContentSourceID = contentSourceParams.contentSourceID
                 contentItem.Name = contentSourceParams.name
-                contentItem.Description = RSSContentItem.description || await this.engine.getContentItemDescription(contentSourceParams, this.contextUser)
+                contentItem.Description = RSSContentItem.description || this.engine.GetContentItemDescription(contentSourceParams)
                 contentItem.ContentTypeID = contentSourceParams.ContentTypeID
                 contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID
                 contentItem.ContentSourceTypeID = contentSourceParams.ContentSourceTypeID

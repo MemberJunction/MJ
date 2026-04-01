@@ -14,6 +14,10 @@
       <div><h1>System Error</h1><hr/>{{this.ErrorMessage}}</div>
     }
   </div>
+  <!-- Floating chat overlay — persistent across navigation, hidden during load and in Conversations -->
+  @if (IsChatOverlayReady) {
+    <mj-chat-overlay [IsHidden]="isChatRoute"></mj-chat-overlay>
+  }
   <!-- Hidden router-outlet required for Angular's router to activate routes and update the browser URL.
        The shell manages all visible content rendering through its tab system, not through routing.
        Without this outlet, router.navigateByUrl() fails silently and the URL stays at '/'. -->
