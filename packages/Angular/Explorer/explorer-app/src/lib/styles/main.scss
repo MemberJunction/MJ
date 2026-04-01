@@ -1,6 +1,9 @@
 // Design tokens (must be first - provides CSS custom properties)
 @import '@memberjunction/ng-shared-generic/dist/lib/tokens';
 
+// Global reset — previously provided by Kendo theme
+[hidden] { display: none !important; }
+
 // Core style imports
 @import './variables';
 @import './typography';

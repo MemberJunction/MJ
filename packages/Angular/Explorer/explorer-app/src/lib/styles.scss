@@ -17,6 +17,9 @@
 @import '@memberjunction/ng-shared-generic/dist/lib/tokens';
 @import './styles/md3-theme';
 
+// Global reset — previously provided by Kendo theme
+[hidden] { display: none !important; }
+
 // Core style imports
 @import './styles/variables';
 @import './styles/typography';
