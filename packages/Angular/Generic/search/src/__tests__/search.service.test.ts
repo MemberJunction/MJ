@@ -20,7 +20,7 @@ function installMockProvider(): ReturnType<typeof vi.fn> {
             SourceCounts: { Vector: 0, FullText: 0, Entity: 0 },
         }
     });
-    (Metadata as Record<string, unknown>)['Provider'] = { ExecuteGQL: mockExecuteGQL };
+    (Metadata as unknown as Record<string, unknown>)['Provider'] = { ExecuteGQL: mockExecuteGQL };
     return mockExecuteGQL;
 }
 
