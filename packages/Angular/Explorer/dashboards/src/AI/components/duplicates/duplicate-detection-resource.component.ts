@@ -255,7 +255,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     ResultType: 'entity_object'
                 },
                 {
-                    EntityName: 'Entity Documents',
+                    EntityName: 'MJ: Entity Documents',
                     ExtraFilter: "Status = 'Active'",
                     OrderBy: 'Name',
                     ResultType: 'simple'
