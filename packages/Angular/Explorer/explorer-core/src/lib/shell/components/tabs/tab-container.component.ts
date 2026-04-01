@@ -27,8 +27,9 @@ import {
   LayoutNode
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, HomeAppPinService } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager } from './component-cache-manager';
 import { LazyModuleRegistry } from '../../../services/lazy-module-registry';
@@ -68,6 +69,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   @Output() layoutInitError = new EventEmitter<void>();
 
   private lazyRegistry = inject(LazyModuleRegistry);
+  private pinService = inject(HomeAppPinService);
   private subscriptions: Subscription[] = [];
   private layoutInitRetryCount = 0;
   private readonly MAX_LAYOUT_INIT_RETRIES = 5;
@@ -1156,6 +1158,130 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       this.workspaceManager.CloseTabsToRight(this.contextMenuTabId);
     }
     this.hideContextMenu();
+  }
+
+  /**
+   * Check if context menu tab is pinned to Home dashboard
+   */
+  get isContextTabPinnedToHome(): boolean {
+    if (!this.contextMenuTabId) return false;
+    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+    if (!tab) return false;
+    const resourceType = this.resolveResourceType(tab);
+    return this.pinService.IsPinned(resourceType, tab.configuration as Record<string, unknown>);
+  }
+
+  /**
+   * Pin current context menu tab to Home dashboard
+   */
+  onContextPinToHome(): void {
+    if (this.isContextTabPinnedToHome) {
+      this.hideContextMenu();
+      return;
+    }
+    if (!this.contextMenuTabId) {
+      this.hideContextMenu();
+      return;
+    }
+
+    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+    if (!tab) {
+      this.hideContextMenu();
+      return;
+    }
+
+    const resourceType = this.resolveResourceType(tab);
+    const activeApp = this.appManager.GetActiveApp();
+
+    const added = this.pinService.AddPin({
+      DisplayName: tab.title || 'Untitled',
+      ResourceType: resourceType,
+      ApplicationID: tab.applicationId || activeApp?.ID,
+      ApplicationName: activeApp?.Name,
+      Color: activeApp?.GetColor() || undefined,
+      Configuration: tab.configuration as Record<string, unknown>,
+    });
+
+    if (added) {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `Pinned "${tab.title}" to Home`, 'success', 2000
+      );
+      this.captureContextTabThumbnail(tab);
+    } else {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `"${tab.title}" is already pinned to Home`, 'info', 3000
+      );
+    }
+
+    this.hideContextMenu();
+  }
+
+  /**
+   * Resolve a WorkspaceTab's resource type string for pin matching
+   */
+  private resolveResourceType(tab: WorkspaceTab): string {
+    const config = tab.configuration;
+    const rt = (config.resourceType as string) || '';
+    if (rt === 'Dashboards' || config['dashboardId']) return 'Dashboards';
+    if (rt === 'User Views' || rt === 'MJ: User Views' || config['viewId']) return 'User Views';
+    if (rt === 'Queries' || config['queryId']) return 'Queries';
+    if (rt === 'Reports' || config['reportId']) return 'Reports';
+    if (rt === 'Records' || (config['entity'] && config['recordId'])) return 'Records';
+    if (rt === 'Custom' || config['navItemName']) return 'Custom';
+    return rt || 'Custom';
+  }
+
+  /**
+   * Capture thumbnail for a just-pinned tab (async, non-blocking)
+   */
+  private async captureContextTabThumbnail(tab: WorkspaceTab): Promise<void> {
+    try {
+      // Find the active content element — differs by mode
+      let contentEl: HTMLElement | null = null;
+      if (this.useSingleResourceMode) {
+        contentEl = this.directContentContainer?.nativeElement ?? null;
+      } else {
+        // In Golden Layout mode, find the active tab's content pane
+        contentEl = this.glContainer?.nativeElement?.querySelector(
+          '.lm_item_container .lm_content'
+        ) as HTMLElement | null;
+      }
+      if (!contentEl) return;
+
+      const thumbnail = await this.pinService.CaptureThumbnail(contentEl);
+      if (thumbnail) {
+        const resourceType = this.resolveResourceType(tab);
+        const pin = this.pinService.FindPin(resourceType, tab.configuration as Record<string, unknown>);
+        if (pin) {
+          this.pinService.UpdatePin(pin.Id, { Thumbnail: thumbnail });
+        }
+      }
+    } catch {
+      // Thumbnail capture is best-effort
+    }
+  }
+
+  /**
+   * Public method for external callers (e.g. shell) to capture a thumbnail
+   * of the currently visible content, regardless of mode.
+   */
+  public async CaptureActiveThumbnail(): Promise<string | undefined> {
+    try {
+      let contentEl: HTMLElement | null = null;
+      if (this.useSingleResourceMode) {
+        console.log('[Pin Thumbnail] Single-resource mode, using directContentContainer');
+        contentEl = this.directContentContainer?.nativeElement ?? null;
+      } else {
+        console.log('[Pin Thumbnail] Multi-tab mode, querying Golden Layout content');
+        contentEl = this.glContainer?.nativeElement?.querySelector(
+          '.lm_item_container .lm_content'
+        ) as HTMLElement | null;
+      }
+      if (!contentEl) return undefined;
+      return await this.pinService.CaptureThumbnail(contentEl);
+    } catch {
+      return undefined;
+    }
   }
 
   /**

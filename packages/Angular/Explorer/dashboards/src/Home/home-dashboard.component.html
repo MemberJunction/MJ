@@ -9,6 +9,440 @@
       </div>
     </div>
 
+    <!-- Pinned Section -->
+    @if (!isLoading) {
+      <div class="pinned-section">
+        <div class="pinned-header">
+          <h2 class="section-title">
+            <i class="fa-solid fa-thumbtack"></i>
+            Pinned
+          </h2>
+          <div class="pinned-actions">
+            @if (EditMode) {
+              <button class="pin-action-btn done" (click)="ToggleEditMode()">
+                <i class="fa-solid fa-check"></i> Done
+              </button>
+            } @else {
+              <button class="pin-action-btn primary" (click)="OpenAddPinPanel()">
+                <i class="fa-solid fa-plus"></i> Add Pin
+              </button>
+              @if (PinnedItems.length > 0) {
+                <button class="pin-action-btn" (click)="ToggleEditMode()">
+                  <i class="fa-solid fa-pen"></i> Edit
+                </button>
+              }
+            }
+          </div>
+        </div>
+
+        @if (EditMode) {
+          <div class="edit-mode-banner">
+            <i class="fa-solid fa-arrows-up-down-left-right"></i>
+            <span><strong>Edit mode</strong> — Drag cards to reorder. Click names to rename.</span>
+          </div>
+        }
+
+        <!-- Empty State -->
+        @if (PinnedItems.length === 0 && !EditMode) {
+          <div class="pin-empty-state">
+            <i class="fa-solid fa-thumbtack"></i>
+            <h3>No pinned items yet</h3>
+            <p>Pin your favorite dashboards, views, queries, and reports for quick access.</p>
+            <button class="pin-action-btn primary" (click)="OpenAddPinPanel()">
+              <i class="fa-solid fa-plus"></i> Add your first pin
+            </button>
+          </div>
+        }
+
+        <!-- Pin Grid -->
+        @if (PinnedItems.length > 0) {
+          <div class="pin-grid">
+            <!-- Ungrouped Pins -->
+            @for (pin of UngroupedPins; track trackByPin($index, pin)) {
+              <div class="pin-card"
+                [class.edit-mode]="EditMode"
+                [class.dragging]="DraggingPinId === pin.Id"
+                [class.drag-over]="DragOverPinId === pin.Id"
+                [draggable]="EditMode"
+                (dragstart)="OnDragStart($event, pin)"
+                (dragover)="OnDragOver($event, pin)"
+                (dragleave)="OnDragLeave()"
+                (drop)="OnDrop($event, pin)"
+                (dragend)="OnDragEnd()"
+                (click)="OnPinClick(pin)">
+
+                <!-- Edit mode controls -->
+                @if (EditMode) {
+                  <div class="edit-controls">
+                    <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
+                    <div class="edit-card-actions">
+                      <button class="edit-card-btn delete" (click)="RemovePin(pin.Id); $event.stopPropagation()">
+                        <i class="fa-solid fa-xmark"></i>
+                      </button>
+                    </div>
+                  </div>
+                }
+
+                <!-- Thumbnail / Icon -->
+                @if (pin.Thumbnail) {
+                  <div class="pin-thumbnail">
+                    <img [src]="pin.Thumbnail" [alt]="pin.DisplayName" />
+                    @if (!EditMode) {
+                      <div class="pin-overlay">
+                        <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Open</button>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div class="pin-thumbnail icon-mode" [style.--pin-icon-color]="pin.Color || 'var(--mj-text-muted)'">
+                    <i [class]="GetPinIcon(pin)"></i>
+                    @if (!EditMode) {
+                      <div class="pin-overlay">
+                        <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Open</button>
+                      </div>
+                    }
+                  </div>
+                }
+
+                <!-- Pin Info -->
+                <div class="pin-info">
+                  @if (EditMode && EditingPinId === pin.Id) {
+                    <input class="pin-name-input"
+                      [value]="pin.DisplayName"
+                      (blur)="SavePinName(pin.Id, GetInputValue($event))"
+                      (keydown.enter)="SavePinName(pin.Id, GetInputValue($event))"
+                      (click)="$event.stopPropagation()" />
+                  } @else {
+                    <div class="pin-name" (click)="EditMode ? StartEditingPin(pin.Id, $event) : null">
+                      {{ pin.DisplayName }}
+                      @if (!EditMode) {
+                        <button class="more-btn" (click)="ShowPinMenu($event, pin)">
+                          <i class="fa-solid fa-ellipsis"></i>
+                        </button>
+                      }
+                    </div>
+                  }
+                  <div class="pin-meta">
+                    <i [class]="GetPinIcon(pin)"></i>
+                    {{ GetResourceTypeLabel(pin) }}
+                    @if (pin.ApplicationName && pin.ResourceType !== 'Custom') {
+                      <span class="pin-app-badge">{{ pin.ApplicationName }}</span>
+                    }
+                  </div>
+                </div>
+              </div>
+            }
+
+            <!-- Grouped Pins -->
+            @for (group of PinGroups; track trackByGroup($index, group)) {
+              <!-- Group Header -->
+              <div class="group-header">
+                @if (EditMode && EditingGroupName === group) {
+                  <input class="group-name-input"
+                    [value]="group"
+                    (blur)="SaveGroupName(group, GetInputValue($event))"
+                    (keydown.enter)="SaveGroupName(group, GetInputValue($event))" />
+                } @else {
+                  <span class="group-name" (click)="EditMode ? StartEditingGroup(group) : null">{{ group }}</span>
+                }
+                <div class="group-line"></div>
+                <span class="group-count">{{ GetPinsInGroup(group).length }} pins</span>
+                @if (EditMode) {
+                  <div class="group-edit-controls">
+                    <button class="group-edit-btn danger" (click)="RemoveGroup(group)">
+                      <i class="fa-solid fa-folder-minus"></i> Remove Group
+                    </button>
+                  </div>
+                }
+              </div>
+
+              <!-- Pins in Group -->
+              @for (pin of GetPinsInGroup(group); track trackByPin($index, pin)) {
+                <div class="pin-card"
+                  [class.edit-mode]="EditMode"
+                  [class.dragging]="DraggingPinId === pin.Id"
+                  [class.drag-over]="DragOverPinId === pin.Id"
+                  [draggable]="EditMode"
+                  (dragstart)="OnDragStart($event, pin)"
+                  (dragover)="OnDragOver($event, pin)"
+                  (dragleave)="OnDragLeave()"
+                  (drop)="OnDrop($event, pin)"
+                  (dragend)="OnDragEnd()"
+                  (click)="OnPinClick(pin)">
+
+                  @if (EditMode) {
+                    <div class="edit-controls">
+                      <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
+                      <div class="edit-card-actions">
+                        <button class="edit-card-btn delete" (click)="RemovePin(pin.Id); $event.stopPropagation()">
+                          <i class="fa-solid fa-xmark"></i>
+                        </button>
+                      </div>
+                    </div>
+                  }
+
+                  @if (pin.Thumbnail) {
+                    <div class="pin-thumbnail">
+                      <img [src]="pin.Thumbnail" [alt]="pin.DisplayName" />
+                      @if (!EditMode) {
+                        <div class="pin-overlay">
+                          <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Open</button>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <div class="pin-thumbnail icon-mode" [style.--pin-icon-color]="pin.Color || 'var(--mj-text-muted)'">
+                      <i [class]="GetPinIcon(pin)"></i>
+                      @if (!EditMode) {
+                        <div class="pin-overlay">
+                          <button class="open-btn" (click)="OnPinClick(pin); $event.stopPropagation()">Open</button>
+                        </div>
+                      }
+                    </div>
+                  }
+
+                  <div class="pin-info">
+                    @if (EditMode && EditingPinId === pin.Id) {
+                      <input class="pin-name-input"
+                        [value]="pin.DisplayName"
+                        (blur)="SavePinName(pin.Id, $event.target.value)"
+                        (keydown.enter)="SavePinName(pin.Id, $event.target.value)"
+                        (click)="$event.stopPropagation()" />
+                    } @else {
+                      <div class="pin-name" (click)="EditMode ? StartEditingPin(pin.Id, $event) : null">
+                        {{ pin.DisplayName }}
+                        @if (!EditMode) {
+                          <button class="more-btn" (click)="$event.stopPropagation()">
+                            <i class="fa-solid fa-ellipsis"></i>
+                          </button>
+                        }
+                      </div>
+                    }
+                    <div class="pin-meta">
+                      <i [class]="GetPinIcon(pin)"></i>
+                      {{ GetResourceTypeLabel(pin) }}
+                      @if (pin.ApplicationName) {
+                        <span class="pin-app-badge">{{ pin.ApplicationName }}</span>
+                      }
+                    </div>
+                  </div>
+                </div>
+              }
+            }
+
+            <!-- Add Pin card (edit mode) -->
+            @if (EditMode) {
+              <div class="add-pin-card" (click)="OpenAddPinPanel()">
+                <i class="fa-solid fa-plus"></i>
+                <span>Add Pin</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Pin Context Menu (ellipsis) -->
+    @if (PinMenuVisible && PinMenuPin) {
+      <div class="pin-context-menu"
+        [style.left.px]="PinMenuX"
+        [style.top.px]="PinMenuY">
+        <div class="pin-context-item" (click)="OnPinMenuEdit()">
+          <i class="fa-solid fa-pen"></i>
+          <span>Edit</span>
+        </div>
+        <div class="pin-context-divider"></div>
+        <div class="pin-context-submenu">
+          <div class="pin-context-item submenu-header">
+            <i class="fa-solid fa-folder"></i>
+            <span>Move to Group</span>
+          </div>
+          @if (PinMenuPin.Group) {
+            <div class="pin-context-item submenu-item" (click)="OnPinMenuMoveToGroup(undefined)">
+              <span>(No group)</span>
+            </div>
+          }
+          @for (group of PinGroups; track group) {
+            @if (group !== PinMenuPin.Group) {
+              <div class="pin-context-item submenu-item" (click)="OnPinMenuMoveToGroup(group)">
+                <span>{{ group }}</span>
+              </div>
+            }
+          }
+        </div>
+        <div class="pin-context-divider"></div>
+        <div class="pin-context-item danger" (click)="OnPinMenuUnpin()">
+          <i class="fa-solid fa-thumbtack-slash"></i>
+          <span>Unpin</span>
+        </div>
+      </div>
+    }
+
+    <!-- Add Pin Slide-In Panel -->
+    @if (AddPanelOpen) {
+      <div class="slide-panel-backdrop" (click)="CloseAddPinPanel()"></div>
+      <div class="slide-panel">
+        <div class="slide-panel-header">
+          <h3><i class="fa-solid fa-thumbtack"></i> Add Pin</h3>
+          <button class="slide-panel-close" (click)="CloseAddPinPanel()">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div class="search-box">
+          <div class="search-input-wrapper">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text"
+              placeholder="Search dashboards, views, queries, reports..."
+              [(ngModel)]="AddPanelSearchQuery" />
+          </div>
+        </div>
+
+        <div class="group-selector">
+          <label><i class="fa-solid fa-folder"></i> Add to group:</label>
+          <select [(ngModel)]="AddPanelSelectedGroup">
+            <option value="">(No group)</option>
+            @for (group of PinGroups; track group) {
+              <option [value]="group">{{ group }}</option>
+            }
+            <option value="__new__">+ New group...</option>
+          </select>
+          @if (AddPanelSelectedGroup === '__new__') {
+            <input class="new-group-input"
+              type="text"
+              placeholder="Group name"
+              [(ngModel)]="AddPanelNewGroupName"
+              (keydown.enter)="$event.target.blur()" />
+          }
+        </div>
+
+        <div class="panel-results">
+          @if (AddPanelLoading) {
+            <div class="panel-loading">
+              <mj-loading text="Loading resources..." size="small"></mj-loading>
+            </div>
+          } @else {
+            <!-- Dashboards -->
+            @if (FilterPanelItems(AvailableDashboards).length > 0) {
+              <div class="panel-section">
+                <div class="panel-section-title">
+                  <i class="fa-solid fa-gauge-high"></i> Dashboards
+                  <span class="panel-count">{{ FilterPanelItems(AvailableDashboards).length }}</span>
+                </div>
+                @for (item of FilterPanelItems(AvailableDashboards); track item.id) {
+                  <div class="panel-item">
+                    <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
+                      <i class="fa-solid fa-gauge-high" style="color: var(--mj-brand-primary)"></i>
+                    </div>
+                    <div class="panel-item-info">
+                      <div class="panel-item-name">{{ item.name }}</div>
+                    </div>
+                    <div class="panel-item-action">
+                      @if (item.pinned) {
+                        <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
+                      } @else {
+                        <button class="pin-btn" (click)="PinFromPanel('Dashboards', item.id, item.name)">
+                          <i class="fa-solid fa-plus"></i> Pin
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Views -->
+            @if (FilterPanelItems(AvailableViews).length > 0) {
+              <div class="panel-section">
+                <div class="panel-section-title">
+                  <i class="fa-solid fa-table-list"></i> Views
+                  <span class="panel-count">{{ FilterPanelItems(AvailableViews).length }}</span>
+                </div>
+                @for (item of FilterPanelItems(AvailableViews); track item.id) {
+                  <div class="panel-item">
+                    <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
+                      <i class="fa-solid fa-table-list" style="color: var(--mj-brand-primary)"></i>
+                    </div>
+                    <div class="panel-item-info">
+                      <div class="panel-item-name">{{ item.name }}</div>
+                      <div class="panel-item-sub">{{ item.entityName }}</div>
+                    </div>
+                    <div class="panel-item-action">
+                      @if (item.pinned) {
+                        <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
+                      } @else {
+                        <button class="pin-btn" (click)="PinFromPanel('User Views', item.id, item.name)">
+                          <i class="fa-solid fa-plus"></i> Pin
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Queries -->
+            @if (FilterPanelItems(AvailableQueries).length > 0) {
+              <div class="panel-section">
+                <div class="panel-section-title">
+                  <i class="fa-solid fa-database"></i> Queries
+                  <span class="panel-count">{{ FilterPanelItems(AvailableQueries).length }}</span>
+                </div>
+                @for (item of FilterPanelItems(AvailableQueries); track item.id) {
+                  <div class="panel-item">
+                    <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
+                      <i class="fa-solid fa-database" style="color: var(--mj-brand-primary)"></i>
+                    </div>
+                    <div class="panel-item-info">
+                      <div class="panel-item-name">{{ item.name }}</div>
+                    </div>
+                    <div class="panel-item-action">
+                      @if (item.pinned) {
+                        <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
+                      } @else {
+                        <button class="pin-btn" (click)="PinFromPanel('Queries', item.id, item.name)">
+                          <i class="fa-solid fa-plus"></i> Pin
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+
+            <!-- Reports -->
+            @if (FilterPanelItems(AvailableReports).length > 0) {
+              <div class="panel-section">
+                <div class="panel-section-title">
+                  <i class="fa-solid fa-chart-bar"></i> Reports
+                  <span class="panel-count">{{ FilterPanelItems(AvailableReports).length }}</span>
+                </div>
+                @for (item of FilterPanelItems(AvailableReports); track item.id) {
+                  <div class="panel-item">
+                    <div class="panel-item-icon" style="background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface-card))">
+                      <i class="fa-solid fa-chart-bar" style="color: var(--mj-brand-primary)"></i>
+                    </div>
+                    <div class="panel-item-info">
+                      <div class="panel-item-name">{{ item.name }}</div>
+                    </div>
+                    <div class="panel-item-action">
+                      @if (item.pinned) {
+                        <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
+                      } @else {
+                        <button class="pin-btn" (click)="PinFromPanel('Reports', item.id, item.name)">
+                          <i class="fa-solid fa-plus"></i> Pin
+                        </button>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      </div>
+    }
+
     <!-- Loading State -->
     @if (isLoading) {
       <div class="loading-container">

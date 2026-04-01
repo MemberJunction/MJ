@@ -15,7 +15,7 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
@@ -24,6 +24,7 @@ import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SettingsDialogService } from './services/settings-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
+import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
 import { MJUserEntity } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
@@ -96,11 +97,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   public userMenuElements: UserMenuElement[] = [];
   private destroy$ = new Subject<void>();
 
+  // Pin progress overlay
+  public PinProgressVisible = false;
+  public PinProgressText = '';
+
   // Search state
   isSearchOpen = false;
   searchableEntities: EntityInfo[] = [];
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
+
+  // Tab container reference for thumbnail capture
+  @ViewChild(TabContainerComponent) tabContainerRef!: TabContainerComponent;
 
   // App access dialog
   @ViewChild('appAccessDialog') appAccessDialog!: AppAccessDialogComponent;
@@ -140,7 +148,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
     private commandPaletteService: CommandPaletteService,
-    private themeService: ThemeService
+    private themeService: ThemeService,
+    private homePinService: HomeAppPinService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -1787,6 +1796,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       currentApplication: this.activeApp as unknown as ApplicationInfoRef | null,
       workspaceManager: this.workspaceManager,
       authService: this.authBase,
+      pinService: this.homePinService,
       openSettings: () => this.openSettingsDialog(),
       themePreference: this.themeService.Preference,
       availableThemes: this.themeService.AvailableThemes,
@@ -1874,6 +1884,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
+    if (result.message === 'pin-to-home') {
+      // Close menu and show overlay immediately before any async work
+      this.userMenuVisible = false;
+      this.refreshMenuElements();
+      this.showPinProgress('Pinning...');
+      // Let the UI render the overlay before starting the work
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      await this.handlePinToHome();
+      this.hidePinProgress();
+      return;
+    }
+
     if (result.closeMenu) {
       this.userMenuVisible = false;
     }
@@ -1933,6 +1955,101 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   onSettings(): void {
     this.userMenuVisible = false;
     this.openSettingsDialog();
+  }
+
+  /**
+   * Pin the currently active resource to the Home dashboard
+   */
+  private async handlePinToHome(): Promise<void> {
+    const activeTabId = this.workspaceManager.GetActiveTabId();
+    if (!activeTabId) {
+      console.warn('Pin to Home: No active tab found');
+      return;
+    }
+
+    const activeTab = this.workspaceManager.GetTab(activeTabId);
+    if (!activeTab) {
+      console.warn('Pin to Home: Active tab not found');
+      return;
+    }
+
+    // Ensure pins are loaded before adding
+    await this.homePinService.LoadPins();
+
+    const resourceType = this.resolveTabResourceType(activeTab);
+
+    const added = this.homePinService.AddPin({
+      DisplayName: activeTab.title,
+      ResourceType: resourceType,
+      ApplicationID: activeTab.applicationId,
+      ApplicationName: this.activeApp?.Name,
+      Color: this.activeApp?.GetColor() || undefined,
+      Configuration: activeTab.configuration as Record<string, unknown>
+    });
+
+    if (added) {
+      console.log(`[Pin to Home] Pinned "${activeTab.title}" as "${resourceType}"`, activeTab.configuration);
+      this.showPinProgress(`Capturing preview for "${activeTab.title}"...`);
+      await this.captureAndAttachThumbnail(activeTab, resourceType);
+    } else {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `"${activeTab.title}" is already pinned to Home`, 'info', 3000
+      );
+    }
+  }
+
+  /**
+   * Capture a thumbnail of the currently visible content and attach it to the pin.
+   */
+  private async captureAndAttachThumbnail(tab: WorkspaceTab, resourceType: string): Promise<void> {
+    try {
+      if (!this.tabContainerRef) {
+        console.warn('[Pin Thumbnail] tabContainerRef not available');
+        return;
+      }
+      const thumbnail = await this.tabContainerRef.CaptureActiveThumbnail();
+      if (thumbnail) {
+        console.log(`[Pin Thumbnail] Captured (${Math.round(thumbnail.length / 1024)}KB)`);
+        const pin = this.homePinService.FindPin(resourceType, tab.configuration as Record<string, unknown>);
+        if (pin) {
+          this.homePinService.UpdatePin(pin.Id, { Thumbnail: thumbnail });
+        } else {
+          console.warn('[Pin Thumbnail] Could not find pin to attach thumbnail to');
+        }
+      } else {
+        console.warn('[Pin Thumbnail] Capture returned empty');
+      }
+    } catch (err) {
+      console.warn('[Pin Thumbnail] Capture failed:', err);
+    }
+  }
+
+  private showPinProgress(text: string): void {
+    this.PinProgressText = text;
+    this.PinProgressVisible = true;
+    this.cdr.detectChanges();
+  }
+
+  private hidePinProgress(): void {
+    this.PinProgressVisible = false;
+    this.PinProgressText = '';
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Resolve a WorkspaceTab's resource type to a human-readable string
+   * used by the pin service for matching and by the Home dashboard for navigation.
+   */
+  private resolveTabResourceType(tab: WorkspaceTab): string {
+    const config = tab.configuration;
+    const rt = (config.resourceType as string) || '';
+    if (rt === 'Dashboards' || config['dashboardId']) return 'Dashboards';
+    if (rt === 'User Views' || rt === 'MJ: User Views' || config['viewId']) return 'User Views';
+    if (rt === 'Queries' || config['queryId']) return 'Queries';
+    if (rt === 'Reports' || config['reportId']) return 'Reports';
+    if (rt === 'Records' || (config['Entity'] && config['recordId'])) return 'Records';
+    if (rt === 'Custom' || config['navItemName']) return 'Custom';
+    return rt || 'Custom';
   }
 
   /**
