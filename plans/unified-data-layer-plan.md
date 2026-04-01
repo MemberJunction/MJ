@@ -2,7 +2,7 @@
 
 > **Status**: PLANNING
 > **Created**: 2026-03-27
-> **Builds on**: `plans/unified-data-snapshots-component-events-plan.md` (PR #2237), `plans/visualization-layer-design.md` (PR #2215)
+> **Builds on**: `plans/visualization-layer-design.md` (PR #2215)
 > **Related**: `plans/file-artifact-io-plan.md` (file-based artifact I/O)
 > **Scope**: `@memberjunction/core`, `@memberjunction/interactive-component-types`, `@memberjunction/ng-artifacts`, `@memberjunction/ng-react`, agent integration, future visualization foundation
 
@@ -15,7 +15,7 @@
 5. [Component Event System](#5-component-event-system)
 6. [Artifact-Level State Snapshots](#6-artifact-level-state-snapshots)
 7. [Multi-Table Viewer UX](#7-multi-table-viewer-ux)
-8. [Document Tools: Agent Artifact Access](#8-document-tools-agent-artifact-access)
+8. [Artifact Tools: Agent Artifact Access](#8-artifact-tools-agent-artifact-access)
 9. [Interactive Component Data Contract](#9-interactive-component-data-contract)
 10. [Relationship to File Artifact I/O](#10-relationship-to-file-artifact-io)
 11. [Cross-Cutting Concerns](#11-cross-cutting-concerns)
@@ -40,7 +40,7 @@ Two additional capabilities complete the picture:
 | Capability | Gap Today | Solution |
 |---|---|---|
 | **Component event notification** | Interactive components have declarative event metadata but no runtime notification mechanism. Containers can't react to or cancel component actions. | Add `NotifyEvent` to the existing `ComponentCallbacks` interface, with base interfaces for cancelable and after-event args. Components call `callbacks.NotifyEvent()` — containers handle routing. |
-| **Agent artifact access** | Agents have no way to explore artifact content. Dumping large artifacts into prompt context doesn't scale. | Add **Document Tools** as a 5th agent primitive (alongside actions, subagents, scratchpad, client tools). Agents see an artifact manifest and use type-specific tools to sip content on demand. |
+| **Agent artifact access** | Agents have no way to explore artifact content. Dumping large artifacts into prompt context doesn't scale. | Add **Artifact Tools** as a 5th agent primitive (alongside actions, subagents, scratchpad, client tools). Agents see an artifact manifest and use type-specific tools to sip content on demand. |
 
 ### Design Philosophy
 
@@ -72,12 +72,12 @@ Core Type System & Utilities (foundation)
     ├──▶ Artifact-Level State Snapshots (abstract method on viewers)
     ├──▶ Multi-Table Viewer UX (Angular)
     ├──▶ Interactive Component Data Contract (get/setDataState on React runtime)
-    └──▶ Document Tools (5th agent primitive — artifact manifest + exploration tools)
+    └──▶ Artifact Tools (5th agent primitive — artifact manifest + exploration tools)
               │
               └──▶ depends on: Scratchpad pattern, input artifact infrastructure (shared w/ file I/O)
 ```
 
-All sections after the core types can proceed in parallel. Document Tools depends on the shared input artifact infrastructure being co-built with the file I/O team.
+All sections after the core types can proceed in parallel. Artifact Tools depends on the shared input artifact infrastructure being co-built with the file I/O team.
 
 ---
 
@@ -147,12 +147,14 @@ The current `DataArtifactSpec` is defined locally inside `data-artifact-viewer.c
 
 ### 2.3 The ComponentObject Contract: Untyped
 
+> **Note:** `ComponentObject` itself is **fully implemented and actively used**. The React compiler builds `ComponentObject` instances with method registries, the Angular bridge (`MJReactComponent`) exposes typed proxy methods, and containers can call `getCurrentDataState()`, `validate()`, `isDirty()`, `invokeMethod()`, etc. The gap is specifically the **return type** of `getCurrentDataState()` — it's `any`, not a structured contract.
+
 `ComponentObject.getCurrentDataState` in `runtime-types.ts`:
 ```typescript
 getCurrentDataState?: () => any;
 ```
 
-Returns `any`. Each React component returns whatever it wants. The Angular bridge passes it through unchanged. Nothing downstream can safely consume the result because there is no contract.
+Returns `any`. Each React component returns whatever it wants. The Angular bridge passes it through unchanged. Nothing downstream can safely consume the result because there is no contract for the return value.
 
 ### 2.4 No Snapshot Mechanism
 
@@ -250,7 +252,6 @@ Different consumers use different levels:
                                    │                     │
                                    │   tables[]          │
                                    │   computations[]    │
-                                   │   visualState       │
                                    │   interpretation    │
                                    └────────┬────────────┘
                                             │
@@ -524,58 +525,8 @@ export class DataTable {
      * How the data was produced, how much there is, how long it took.
      */
     metadata?: DataTableMetadata;
-}
 
-/**
- * Metadata about how a DataTable's data was produced.
- * Every field is optional — populate what's available.
- */
-export interface DataTableMetadata {
-    /** SQL that produced this data (if source is 'query') */
-    sql?: string;
-
-    /** MJ entity name (if source is 'view') */
-    entityName?: string;
-
-    /** Extra WHERE filter applied (if source is 'view') */
-    extraFilter?: string;
-
-    /** Query name in MJ (if from a stored query) */
-    queryName?: string;
-
-    /** Query category path in MJ (if from a stored query) */
-    queryCategoryPath?: string;
-
-    /** Query parameters used */
-    parameters?: Record<string, string | number | boolean>;
-
-    /** Number of rows in the `rows[]` array (this page of results) */
-    rowCount?: number;
-
-    /** Starting row index in the full result set (0-based). Indicates which page this is. */
-    startRowIndex?: number;
-
-    /** Page size used for this result set */
-    pageSize?: number;
-
-    /**
-     * Total rows available from the query/view (not the entire table —
-     * the result set size before paging). Tells consumers: "the query
-     * matched 50,000 rows but you're seeing rows 200-299."
-     */
-    totalAvailableRows?: number;
-
-    /** Time to execute the query/view in milliseconds */
-    executionTimeMs?: number;
-
-    /** When this data was fetched (UTC) */
-    fetchedAt?: Date;
-
-    /** For computed tables: how the data was derived */
-    computationDescription?: string;
-}
-
-// ─── PER-TABLE STATE (moved here from DataVisualState — each table has its own) ───
+    // ─── PER-TABLE STATE (each table has its own) ───
 
     /** Pre-computed aggregations for this table's data */
     computations?: DataComputation[];
@@ -591,9 +542,6 @@ export interface DataTableMetadata {
 
     /** Current page number (1-based) */
     pageNumber?: number;
-
-    /** Current page size */
-    pageSize?: number;
 
     /** Create from a single-table DataSnapshot (legacy format) */
     static FromLegacySpec(spec: {
@@ -617,6 +565,39 @@ export interface DataTableMetadata {
         return table;
     }
 }
+
+/**
+ * Metadata about how a DataTable's data was produced.
+ * Every field is optional — populate what's available.
+ */
+export interface DataTableMetadata {
+    /** SQL that produced this data (if source is 'query') */
+    sql?: string;
+    /** MJ entity name (if source is 'view') */
+    entityName?: string;
+    /** Extra WHERE filter applied (if source is 'view') */
+    extraFilter?: string;
+    /** Query name in MJ (if from a stored query) */
+    queryName?: string;
+    /** Query category path in MJ (if from a stored query) */
+    queryCategoryPath?: string;
+    /** Query parameters used */
+    parameters?: Record<string, string | number | boolean>;
+    /** Number of rows in the `rows[]` array (this page of results) */
+    rowCount?: number;
+    /** Starting row index in the full result set (0-based) */
+    startRowIndex?: number;
+    /** Page size used for this result set */
+    pageSize?: number;
+    /** Total rows available from the query/view (not the entire table) */
+    totalAvailableRows?: number;
+    /** Time to execute the query/view in milliseconds */
+    executionTimeMs?: number;
+    /** When this data was fetched (UTC) */
+    fetchedAt?: Date;
+    /** For computed tables: how the data was derived */
+    computationDescription?: string;
+}
 ```
 
 > **Filter types:** `CompositeFilterDescriptor` and `FilterDescriptor` are extracted from `@memberjunction/ng-filter-builder` into `@memberjunction/core` so they're available to both the UI filter builder and the data layer. These support recursive AND/OR grouping — not flat filter lists. See the existing `FilterDescriptor`, `CompositeFilterDescriptor`, `FilterOperator` types in `packages/Angular/Generic/filter-builder/src/lib/types/`.
@@ -639,6 +620,8 @@ export interface DataComputation {
     type: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'median' | 'distinct_count' | 'custom';
     /** Source field this computation operates on */
     field?: string;
+    /** Which table this computation belongs to (for cross-table snapshots) */
+    table?: string;
     /** The computed value */
     value: number | string | boolean;
     /** Human-formatted display value: "$1,234,567.89" */
@@ -657,7 +640,7 @@ export interface DataComputation {
  * lives on each DataTable — not here. DataSnapshot holds only
  * component-level state that spans all tables.
  *
- * **Consumers should always call `ToTables()` to get a normalized
+ * **Consumers should always call `NormalizeToTables()` to get a normalized
  * DataTable array** — this handles both multi-table and legacy
  * single-table formats.
  */
@@ -667,20 +650,10 @@ export class DataSnapshot {
     /** Named datasets — the core payload */
     tables?: DataTable[];
 
-    // ─── BACKWARD-COMPATIBLE SINGLE-TABLE FIELDS ───
-    // @deprecated — used only when `tables` is absent (legacy format).
-    // New code should always use `tables`. These exist so existing
-    // artifact JSON (from Query Builder) doesn't need migration.
-
-    /** @deprecated */ source?: 'query' | 'view';
-    /** @deprecated */ queryName?: string;
-    /** @deprecated */ queryCategoryPath?: string;
-    /** @deprecated */ parameters?: Record<string, string | number | boolean>;
-    /** @deprecated */ entityName?: string;
-    /** @deprecated */ extraFilter?: string;
-    /** @deprecated */ columns?: MJColumnDescriptor[];
-    /** @deprecated */ rows?: Record<string, unknown>[];
-    /** @deprecated */ metadata?: DataTableMetadata;
+    // NOTE: Legacy single-table fields (source, queryName, columns, rows, etc.)
+    // are NOT on this class. They exist only in persisted artifact JSON from
+    // Query Builder. The viewer detects absence of `tables` and auto-converts
+    // via DataTable.FromLegacySpec(). See NormalizeToTables() below.
 
     // ─── SHARED CONTEXT ───
 
@@ -690,7 +663,16 @@ export class DataSnapshot {
     /** How the data was obtained (markdown, may include Mermaid diagrams) */
     plan?: string;
 
-    /** What the data MEANS — patterns, insights, key takeaways */
+    /**
+     * What the data MEANS — patterns, insights, key takeaways.
+     * Generated by agents when creating artifacts. Displayed as a
+     * "Summary" or "Interpretation" section in the artifact viewer.
+     *
+     * Example: "Q4 West region revenue totals $4.5M (+12.3% YoY).
+     * Top customer Acme Corp represents 15% of total revenue.
+     * Growth is concentrated in the SaaS product line (+28%)
+     * while hardware declined (-3%)."
+     */
     interpretation?: string;
 
     /** Cross-table computations (rare — most computations live on individual DataTables) */
@@ -718,15 +700,6 @@ export class DataSnapshot {
 
     // ─── FACTORY METHODS ───
 
-    /** Normalize to tables array. Handles legacy single-table format. */
-    ToTables(defaultTableName: string = 'results'): DataTable[] {
-        if (this.tables && this.tables.length > 0) return this.tables;
-        if (this.rows || this.columns || this.metadata?.sql) {
-            return [DataTable.FromLegacySpec(this, defaultTableName)];
-        }
-        return [];
-    }
-
     /** Check whether this snapshot has multiple tables */
     get IsMultiTable(): boolean {
         return !!(this.tables && this.tables.length > 1);
@@ -749,9 +722,6 @@ export class DataSnapshot {
     }
 }
 
-/** Backward compatibility alias */
-export type DataArtifactSpec = DataSnapshot;
-
 /**
  * Backward compatibility alias.
  * Existing code that references DataArtifactSpec continues to work.
@@ -765,47 +735,37 @@ In the same file (`data-snapshot.ts`):
 
 ```typescript
 /**
- * Normalize any DataSnapshot to always use the `tables[]` array format.
+ * Normalize any DataSnapshot (or legacy artifact JSON) to always use the `tables[]` array format.
  *
  * - Multi-table snapshots: returns the tables array as-is
- * - Single-table snapshots: wraps root-level fields into a single DataTable
+ * - Legacy single-table JSON (from Query Builder): wraps root-level fields into a single DataTable
  * - Empty snapshots: returns []
+ *
+ * The `Record<string, unknown>` input type handles legacy artifact JSON that was persisted
+ * before the `tables[]` format existed. These have root-level `source`, `columns`, `rows`,
+ * `metadata` etc. that are not on the DataSnapshot class but exist in stored JSON.
  *
  * After calling this, consumers never need to check root-level fields.
  * This is the standard entry point for all snapshot processing.
  *
- * @param snap - The snapshot to normalize
+ * @param snap - The snapshot (or deserialized legacy JSON) to normalize
  * @param defaultTableName - Name for the implicit table when converting from single-table
  * @returns Array of DataTable objects
  */
 export function NormalizeToTables(
-    snap: DataSnapshot,
+    snap: DataSnapshot | Record<string, unknown>,
     defaultTableName: string = 'results'
 ): DataTable[] {
+    const s = snap as Record<string, unknown>;
+
     // Multi-table: tables array is authoritative
-    if (snap.tables && snap.tables.length > 0) {
-        return snap.tables;
+    if (Array.isArray(s.tables) && s.tables.length > 0) {
+        return s.tables as DataTable[];
     }
 
-    // Single-table: wrap root-level fields
-    if (snap.rows || snap.columns || snap.metadata?.sql) {
-        return [{
-            name: defaultTableName,
-            source: snap.source,
-            columns: snap.columns ?? [],
-            rows: snap.rows ?? [],
-            metadata: snap.metadata ? {
-                sql: snap.metadata.sql,
-                entityName: snap.entityName,
-                extraFilter: snap.extraFilter,
-                queryName: snap.queryName,
-                queryCategoryPath: snap.queryCategoryPath,
-                parameters: snap.parameters,
-                rowCount: snap.metadata.rowCount,
-                totalAvailableRows: snap.metadata.totalAvailableRows,
-                executionTimeMs: snap.metadata.executionTimeMs
-            } : undefined
-        }];
+    // Legacy single-table: wrap root-level fields via factory method
+    if (s.rows || s.columns || (s.metadata as Record<string, unknown>)?.sql) {
+        return [DataTable.FromLegacySpec(s as Parameters<typeof DataTable.FromLegacySpec>[0], defaultTableName)];
     }
 
     // Empty (context-only snapshot)
@@ -813,16 +773,9 @@ export function NormalizeToTables(
 }
 
 /**
- * Check whether a DataSnapshot has multiple tables.
- */
-export function IsMultiTable(snap: DataSnapshot): boolean {
-    return !!(snap.tables && snap.tables.length > 1);
-}
-
-/**
  * Get the total row count across all tables in a snapshot.
  */
-export function TotalRowCount(snap: DataSnapshot): number {
+export function TotalRowCount(snap: DataSnapshot | Record<string, unknown>): number {
     return NormalizeToTables(snap).reduce(
         (sum, table) => sum + (table.metadata?.rowCount ?? table.rows.length),
         0
@@ -833,7 +786,7 @@ export function TotalRowCount(snap: DataSnapshot): number {
  * Get the total available row count across all tables
  * (the full dataset size, not just the current page).
  */
-export function TotalAvailableRowCount(snap: DataSnapshot): number {
+export function TotalAvailableRowCount(snap: DataSnapshot | Record<string, unknown>): number {
     return NormalizeToTables(snap).reduce(
         (sum, table) => sum + (
             table.metadata?.totalAvailableRows ??
@@ -856,14 +809,13 @@ Add to `packages/MJCore/src/index.ts`:
 export * from './generic/column-descriptors';
 export * from './generic/data-table';
 export * from './generic/data-snapshot';
-export * from './generic/data-transforms';
 ```
 
 ### 4.6 Backward Compatibility
 
 **DataArtifactSpec alias:** The `DataArtifactSpec` type alias ensures existing code that references the old name continues to compile.
 
-**Single-table format:** All root-level single-table fields are preserved. Existing artifact JSON with `source`, `columns`, `rows`, `metadata` at the root level is a valid `DataSnapshot`. No migration needed.
+**Legacy single-table JSON:** Existing artifact JSON from Query Builder has root-level `source`, `columns`, `rows`, `metadata` fields. These fields are NOT on the `DataSnapshot` class — the class only has `tables[]`. Instead, `NormalizeToTables()` accepts `Record<string, unknown>` and detects the legacy shape, converting it via `DataTable.FromLegacySpec()`. The artifact viewer calls `NormalizeToTables()` on the deserialized JSON, so legacy artifacts render without migration.
 
 **DataArtifactColumn:** The existing `DataArtifactColumn` fields (`field`, `headerName`, `width`, `sourceEntity`, `sourceFieldName`, `isComputed`, `isSummary`, `sqlBaseType`) are a subset of `MJColumnDescriptor`. The rename from `headerName` to `displayName` is the only naming change — the data artifact viewer migration (Phase 5) handles this.
 
@@ -878,19 +830,14 @@ Add `packages/MJCore/src/__tests__/core-types.test.ts`:
 - `IsMultiTable()` returns correct boolean for various inputs
 - `TotalRowCount()` sums across multiple tables
 - `TotalAvailableRowCount()` uses totalAvailableRows when present
-- `WithEntityLineage()` correctly populates sourceEntity/sourceFieldName
-- `WithGridDefaults()` sets sensible defaults for all grid flags
-- `StripGridFlags()` removes grid-only properties
-- `FromSimpleQueryField()` correctly converts from legacy type
+- `MJColumnDescriptor.FromColumnDescriptor()` correctly populates sourceEntity/sourceFieldName
+- `GridColumnDescriptor.FromMJColumn()` sets sensible defaults for all grid flags
+- `GridColumnDescriptor.ToMJColumn()` strips grid-only properties
+- `MJColumnDescriptor.FromSimpleQueryField()` correctly converts from legacy type
 - Backward compatibility: existing single-table DataArtifactSpec shape is valid DataSnapshot
 - Type compatibility: MJColumnDescriptor is assignable to ColumnDescriptor
 
 ---
-
-### 4.8 Transform Utilities (Deferred)
-
-Composable transform functions (`Pipe`, `MapTables`, `TruncateRows`, `SelectColumns`, `FilterTables`, `FormatSnapshotForAgent`, etc.) are a natural extension of the core types. However, there are no immediate consumers that require them — building them now would be speculative bloat. They will be designed and built when concrete consumers emerge (agent context formatting, export, snapshot comparison, etc.). The static factory methods on the classes (Comment 5 pattern) cover the construction/conversion needs for now.
-
 
 ## 5. Component Event System
 
@@ -1029,6 +976,12 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
      */
     public abstract GetCurrentStateSnapshot(): DataSnapshot | null;
 
+    // Future: SetDataState(snapshot: DataSnapshot) will allow rehydrating
+    // a viewer with a previously captured snapshot — enabling "show this
+    // artifact as of Tuesday" by loading a prior artifact version's snapshot
+    // into a live viewer. The get side (above) ships now; the set side is
+    // scaffolded in ComponentObject (Section 9) for near-term follow-up.
+
     /**
      * Get the raw string content of this artifact.
      * Subclasses may override for custom content extraction.
@@ -1058,26 +1011,26 @@ In `data-artifact-viewer.component.ts`:
 public override GetCurrentStateSnapshot(): DataSnapshot | null {
     if (!this.spec) return null;
 
-    return {
-        ...this.spec,
-        // Override rows with current live data if available
-        ...(this.IsLive ? { rows: this.GridData } : {}),
-        // Add visual state
-        visualState: {
-            pageNumber: this.PagerPageNumber,
-            pageSize: this.PagerPageSize,
-            // Future: extract sort/filter state from grid component
-        },
-        // Update metadata with live execution info
-        metadata: {
-            ...this.spec.metadata,
+    // Normalize to tables (handles both legacy single-table and multi-table)
+    const tables = NormalizeToTables(this.spec, this.spec.title || 'Results');
+    const activeTable = tables[this.ActiveTableIndex];
+
+    if (activeTable) {
+        // Override with live data for the active table
+        if (this.IsLive) activeTable.rows = this.GridData;
+        activeTable.pageNumber = this.PagerPageNumber;
+        activeTable.metadata = {
+            ...activeTable.metadata,
             ...(this.liveRowCount != null ? { rowCount: this.liveRowCount } : {}),
             ...(this.liveExecutionTime != null
                 ? { executionTimeMs: this.liveExecutionTime } : {}),
             ...(this.PagerTotalRowCount > 0
-                ? { totalAvailableRows: this.PagerTotalRowCount } : {})
-        }
-    };
+                ? { totalAvailableRows: this.PagerTotalRowCount } : {}),
+            pageSize: this.PagerPageSize
+        };
+    }
+
+    return DataSnapshot.FromTables(tables, this.spec.title);
 }
 ```
 
@@ -1099,32 +1052,40 @@ public override GetCurrentStateSnapshot(): DataSnapshot | null {
     }
 
     return null;
-
-    return null;
 }
 ```
 
 ### 6.5 JSON Artifact Viewer Override
 
 ```typescript
-public override GetCurrentStateSnapshot(): Record<string, unknown> | null {
-    return this.parseJsonContent<Record<string, unknown>>();
+public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    const parsed = this.parseJsonContent<Record<string, unknown>>();
+    if (!parsed) return null;
+
+    const snap = new DataSnapshot();
+    snap.title = this.getDisplayTitle() ?? undefined;
+    snap.interpretation = `JSON artifact with ${Object.keys(parsed).length} top-level keys.`;
+    snap.custom = parsed;
+    return snap;
 }
 ```
 
 ### 6.6 Code Artifact Viewer Override
 
 ```typescript
-public override GetCurrentStateSnapshot(): Record<string, unknown> | null {
+public override GetCurrentStateSnapshot(): DataSnapshot | null {
     const content = this.getRawContent();
     if (!content) return null;
-    return {
+
+    const snap = new DataSnapshot();
+    snap.title = this.getDisplayTitle() ?? undefined;
+    snap.interpretation = `${this.detectedLanguage || 'Unknown language'} code, ${content.split('\n').length} lines.`;
+    snap.custom = {
         language: this.detectedLanguage || 'unknown',
         content: content,
-        lineCount: content.split('\n').length,
-        title: this.getDisplayTitle(),
-        snapshotTimestamp: new Date().toISOString()
+        lineCount: content.split('\n').length
     };
+    return snap;
 }
 ```
 
@@ -1139,7 +1100,7 @@ In `artifact-viewer-panel.component.ts`:
  *
  * @returns Snapshot, or null if no plugin is active
  */
-public GetCurrentStateSnapshot(): DataSnapshot | Record<string, unknown> | null {
+public GetCurrentStateSnapshot(): DataSnapshot | null {
     return this.activePlugin?.GetCurrentStateSnapshot() ?? null;
 }
 ```
@@ -1148,11 +1109,11 @@ public GetCurrentStateSnapshot(): DataSnapshot | Record<string, unknown> | null 
 
 ## 7. Multi-Table Viewer UX
 
-### 8.1 Overview
+### 7.1 Overview
 
 Update `DataArtifactViewerComponent` to render multi-table snapshots with a tabbed interface. Single-table snapshots display identically to today — no tabs, just the grid. Multi-table snapshots show a tab strip between the toolbar and grid.
 
-### 8.2 UX Design
+### 7.2 UX Design
 
 #### Single Table (No Change)
 
@@ -1192,7 +1153,7 @@ Update `DataArtifactViewerComponent` to render multi-table snapshots with a tabb
 └─────────────────────────────────────────────────────┘
 ```
 
-### 8.3 Component Changes
+### 7.3 Component Changes
 
 #### New Properties
 
@@ -1232,7 +1193,7 @@ public get ActiveTable(): DataTable | null {
 In `ngOnInit()`, use `NormalizeToTables()` to resolve all tables:
 
 ```typescript
-import { normalizeToTables } from '@memberjunction/core';
+import { NormalizeToTables } from '@memberjunction/core';
 
 async ngOnInit(): Promise<void> {
     this.spec = this.parseJsonContent<DataSnapshot>();
@@ -1379,7 +1340,7 @@ public async OnPageChange(event: PageChangeEvent): Promise<void> {
 }
 ```
 
-### 8.4 Template Changes
+### 7.4 Template Changes
 
 In `data-artifact-viewer.component.html`, add between toolbar and grid:
 
@@ -1421,7 +1382,7 @@ In `data-artifact-viewer.component.html`, add between toolbar and grid:
 }
 ```
 
-### 8.5 Styles
+### 7.5 Styles
 
 In `data-artifact-viewer.component.css`:
 
@@ -1514,7 +1475,7 @@ In `data-artifact-viewer.component.css`:
 }
 ```
 
-### 8.6 Additional Tabs
+### 7.6 Additional Tabs
 
 Update `GetAdditionalTabs()` for multi-table SQL and interpretation:
 
@@ -1570,24 +1531,24 @@ public override GetAdditionalTabs(): ArtifactViewerTab[] {
 }
 ```
 
-### 8.7 Migration: Remove Local Interfaces
+### 7.7 Migration: Remove Local Interfaces
 
 Remove the local `DataArtifactSpec` and `DataArtifactColumn` interfaces from `data-artifact-viewer.component.ts`. Import from `@memberjunction/core` instead:
 
 ```typescript
 import {
     DataSnapshot, DataArtifactSpec, DataTable, MJColumnDescriptor,
-    normalizeToTables, isMultiTable
+    NormalizeToTables
 } from '@memberjunction/core';
 ```
 
 ---
 
-## 8. Document Tools: Agent Artifact Access
+## 8. Artifact Tools: Agent Artifact Access
 
 ### 8.1 Overview
 
-Add **Document Tools** as a 5th agent primitive in the MJ agent architecture, alongside actions, subagents, scratchpad, and client tools. Document Tools give agents the ability to explore input artifacts on demand rather than having full artifact content dumped into context.
+Add **Artifact Tools** as a 5th agent primitive in the MJ agent architecture, alongside actions, subagents, scratchpad, and client tools. Artifact Tools give agents the ability to explore input artifacts on demand rather than having full artifact content dumped into context.
 
 This is modeled after the Scratchpad pattern (`packages/AI/Agents/src/ScratchpadManager.ts`): the agent sees a manifest of available artifacts injected into its prompt each turn, then uses type-specific tools to request the specific content it needs.
 
@@ -1599,9 +1560,9 @@ This is modeled after the Scratchpad pattern (`packages/AI/Agents/src/Scratchpad
 | **Subagents** | Delegate to specialized agents | Agent spawns child run → result returned |
 | **Scratchpad** | Private working memory (notes + task list) | First-class response field, processed inline, zero turn cost |
 | **Client Tools** | Interactive UI control (open dialog, switch view) | Agent sends command → UI executes → may pause for user input |
-| **Document Tools** | Explore input artifacts | **NEW** — Agent sees manifest → calls type-specific tools → sips content |
+| **Artifact Tools** | Explore input artifacts | **NEW** — Agent sees manifest → calls type-specific tools → sips content |
 
-### 8.3 How Document Tools Work
+### 8.3 How Artifact Tools Work
 
 **Step 1 — Artifact Manifest Injection:**
 
@@ -1619,17 +1580,17 @@ You have the following input artifacts available:
 
 [artifact-3] Excel: "Budget Forecast.xlsx" (3 sheets: Summary, Detail, Assumptions)
 
-Use the document tools below to explore artifact content as needed.
+Use the artifact tools below to explore artifact content as needed.
 Do not request entire large artifacts — request specific slices.
 For small artifacts (< 50 rows or < 2 pages), you may request the full content.
 ```
 
-**Step 2 — Agent Calls Document Tools:**
+**Step 2 — Agent Calls Artifact Tools:**
 
 The agent decides what it needs and calls tools:
 
 ```json
-{ "name": "doc_get_rows", "input": { "artifactId": "artifact-1", "table": "top_customers", "start": 0, "count": 10 } }
+{ "name": "artifact_get_rows", "input": { "artifactId": "artifact-1", "table": "top_customers", "start": 0, "count": 10 } }
 ```
 
 **Step 3 — Tool Handler Executes Locally:**
@@ -1640,47 +1601,134 @@ The tool handler runs on the server against the in-memory artifact content. Only
 
 The agent can make multiple tool calls across turns to explore the artifact, just like it calls actions. It builds understanding incrementally.
 
-### 8.4 Type-Specific Document Tools
+### 8.4 Plugin-Based Tool Architecture
 
-Each artifact type provides its own set of tools. The system auto-injects the appropriate tools based on the input artifact types.
+Artifact tools are **extensible via a plugin system** tied to `MJ: Artifact Types`. Each artifact type (or sub-type) can register a tool library class that provides type-specific tools.
 
-**Data Snapshot tools:**
+> **Key finding:** `MJ: Artifact Types` already has a `ParentID` field (added in migration `V202510081612`). This means artifact type hierarchies already exist — "Data Snapshot" can be a sub-type of "JSON", and "PDF"/"Word"/"Excel" can be sub-types of a "Document" parent. Tool libraries registered on a parent type are inherited by child types, with child types able to override or extend.
+
+**New metadata on `MJ: Artifact Types`:**
+- `ToolLibraryClass: nvarchar(100) NULL` — class name for the tool library (e.g., `DataSnapshotToolLibrary`, `JSONToolLibrary`, `PDFToolLibrary`)
+
+**Base class:**
+```typescript
+// packages/AI/Agents/src/artifact-tools/BaseArtifactToolLibrary.ts
+
+/**
+ * Base class for artifact type-specific tool libraries.
+ * Each artifact type can register a subclass that provides
+ * tools for agents to explore artifacts of that type.
+ *
+ * Tool libraries are instantiated by the ArtifactToolManager when
+ * an agent run includes input artifacts of the corresponding type.
+ * Tools from parent artifact types are inherited — child types
+ * can override or add additional tools.
+ */
+export abstract class BaseArtifactToolLibrary {
+    /** Return the list of tools this library provides */
+    abstract GetToolList(): ArtifactToolDefinition[];
+
+    /** Invoke a tool by name with the given input */
+    abstract InvokeTool(
+        toolName: string,
+        input: Record<string, unknown>,
+        artifactContent: string | Buffer
+    ): Promise<ArtifactToolResult>;
+}
+
+export interface ArtifactToolDefinition {
+    name: string;
+    description: string;
+    inputSchema: Record<string, unknown>;
+}
+
+export interface ArtifactToolResult {
+    success: boolean;
+    data: unknown;
+    errorMessage?: string;
+}
+```
+
+### 8.4.1 Type-Specific Tool Libraries
+
+Each artifact type provides its own set of tools via a registered `BaseArtifactToolLibrary` subclass. The system auto-injects the appropriate tools based on the input artifact types. Tools from parent types are inherited (e.g., all JSON sub-types get JSON path tools).
+
+**Data Snapshot tools** (`DataSnapshotToolLibrary`):
 
 | Tool | Input | Returns |
 |---|---|---|
-| `doc_get_tables` | `artifactId` | Table names, row counts, column schemas |
-| `doc_get_schema` | `artifactId, table` | Column names, types, descriptions |
-| `doc_get_rows` | `artifactId, table, start, count` | Rows as JSON array |
-| `doc_search_rows` | `artifactId, table, field, operator, value` | Matching rows |
-| `doc_aggregate` | `artifactId, table, field, operation` | Computed value (sum, avg, count, etc.) |
-| `doc_get_full` | `artifactId` | Full artifact content (for small artifacts only) |
+| `artifact_get_tables` | `artifactId` | Table names, row counts, column schemas |
+| `artifact_get_schema` | `artifactId, table` | Column names, types, descriptions |
+| `artifact_get_rows` | `artifactId, table, start, count` | Rows as JSON array |
+| `artifact_search_rows` | `artifactId, table, field, operator, value` | Matching rows |
+| `artifact_aggregate` | `artifactId, table, field, operation` | Computed value (sum, avg, count, etc.) |
+| `artifact_get_full` | `artifactId` | Full artifact content (for small artifacts only) |
 
-**PDF tools:**
-
-| Tool | Input | Returns |
-|---|---|---|
-| `doc_get_page_count` | `artifactId` | Number of pages |
-| `doc_get_text` | `artifactId, startPage, endPage` | Extracted text for page range |
-| `doc_search_text` | `artifactId, query` | Matching text passages with page numbers |
-
-**Excel tools:**
+**JSON tools** (`JSONToolLibrary` — inherited by Data Snapshot and all JSON sub-types):
 
 | Tool | Input | Returns |
 |---|---|---|
-| `doc_get_sheets` | `artifactId` | Sheet names and dimensions |
-| `doc_get_sheet_data` | `artifactId, sheet, range?` | Cell data (optional A1-notation range) |
-| `doc_search_cells` | `artifactId, query` | Matching cells with sheet/cell references |
+| `artifact_json_path` | `artifactId, path` | Value at JSON path (e.g., `$.tables[0].rows`) |
+| `artifact_json_keys` | `artifactId, path?` | Keys at the given path (or root) |
+| `artifact_json_search` | `artifactId, key, pattern` | Matching values with paths (regex on sub-keys) |
+| `artifact_json_iterate` | `artifactId, arrayPath, start, count` | Slice of an array at the given path |
 
-**Generic tools (all types):**
+**PDF tools** (`PDFToolLibrary`):
 
 | Tool | Input | Returns |
 |---|---|---|
-| `doc_get_size` | `artifactId` | Size in bytes/rows/pages (type-dependent) |
-| `doc_get_content` | `artifactId` | Full content (for small artifacts) |
+| `artifact_get_page_count` | `artifactId` | Number of pages |
+| `artifact_get_text` | `artifactId, startPage, endPage` | Extracted text for page range |
+| `artifact_search_text` | `artifactId, query` | Matching text passages with page numbers |
+| `artifact_get_tables` | `artifactId, page?` | Extracted tables as structured data (rows/columns) |
+| `artifact_get_images` | `artifactId, page?` | Image metadata (dimensions, alt text, page location) |
+| `artifact_get_metadata` | `artifactId` | Document metadata (title, author, creation date, etc.) |
+| `artifact_get_toc` | `artifactId` | Table of contents / outline structure |
 
-### 8.5 Implementation: ArtifactAccessManager
+> PDF image/table reasoning requires good extraction libraries (e.g., `pdf-parse`, `tabula-js` for tables, image extraction via `pdf-lib`). These tools return structured data the LLM can reason over.
 
-Following the `ScratchpadManager` pattern, create an `ArtifactAccessManager` that:
+**Excel tools** (`ExcelToolLibrary`):
+
+| Tool | Input | Returns |
+|---|---|---|
+| `artifact_get_sheets` | `artifactId` | Sheet names, dimensions, visibility |
+| `artifact_get_sheet_data` | `artifactId, sheet, range?` | Cell data (optional A1-notation range) |
+| `artifact_get_cell` | `artifactId, sheet, cell` | Single cell value, formula, and format |
+| `artifact_get_formulas` | `artifactId, sheet, range?` | Formulas in the range (not computed values) |
+| `artifact_get_named_ranges` | `artifactId` | Named ranges and their definitions |
+| `artifact_search_cells` | `artifactId, query` | Matching cells with sheet/cell references |
+| `artifact_get_charts` | `artifactId, sheet?` | Chart metadata (type, data ranges, titles) |
+| `artifact_get_pivot_tables` | `artifactId, sheet?` | Pivot table structure and source ranges |
+| `artifact_aggregate_column` | `artifactId, sheet, column, operation` | Computed aggregate over a column |
+
+**Text tools** (`TextToolLibrary` — inherited by all text-based artifact types):
+
+| Tool | Input | Returns |
+|---|---|---|
+| `artifact_grep` | `artifactId, pattern, flags?` | Matching lines with line numbers (regex) |
+| `artifact_get_lines` | `artifactId, start, count` | Lines from the content |
+| `artifact_search_replace` | `artifactId, search, replace` | Preview of replacements (for mutable artifacts) |
+
+> **Note on mutability:** Whether an artifact is writable by an agent is a design question deferred to v2. For now, all artifact tools are **read-only**. Mutation tools (like `search_replace`) would preview changes but not apply them.
+
+**CSV/YAML tools** (future — similar structured-text libraries for CSV, YAML, and other formats):
+
+| Tool | Input | Returns |
+|---|---|---|
+| `artifact_csv_get_headers` | `artifactId` | Column headers |
+| `artifact_csv_get_rows` | `artifactId, start, count` | Rows as arrays |
+| `artifact_yaml_path` | `artifactId, path` | Value at YAML path |
+
+**Generic tools** (all types — provided by `BaseArtifactToolLibrary`):
+
+| Tool | Input | Returns |
+|---|---|---|
+| `artifact_get_size` | `artifactId` | Size in bytes/rows/pages (type-dependent) |
+| `artifact_get_content` | `artifactId` | Full content (for small artifacts) |
+
+### 8.5 Implementation: ArtifactToolManager
+
+Following the `ScratchpadManager` pattern, create an `ArtifactToolManager` that:
 
 1. Is instantiated once per agent run
 2. Holds references to all input artifacts for that run
@@ -1688,68 +1736,207 @@ Following the `ScratchpadManager` pattern, create an `ArtifactAccessManager` tha
 4. Provides methods that tool handlers call to access artifact content
 5. Tracks which artifacts/slices were accessed (for audit/training data)
 
-```typescript
-// Conceptual — in packages/AI/Agents/src/
-class ArtifactAccessManager {
-    private artifacts: Map<string, ArtifactAccessEntry>;
-
-    /** Called at agent run start with all input artifacts */
-    Initialize(inputArtifacts: InputArtifact[]): void;
-
-    /** Generate manifest for prompt injection */
-    ToManifestString(): string;
-
-    /** Tool handler methods */
-    GetTables(artifactId: string): TableSummary[];
-    GetSchema(artifactId: string, table: string): MJColumnDescriptor[];
-    GetRows(artifactId: string, table: string, start: number, count: number): Record<string, unknown>[];
-    SearchRows(artifactId: string, table: string, field: string, op: string, value: unknown): Record<string, unknown>[];
-    Aggregate(artifactId: string, table: string, field: string, operation: string): number | string;
-    GetFullContent(artifactId: string): DataSnapshot | string | null;
-    GetSize(artifactId: string): ArtifactSizeInfo;
-
-    /** Audit */
-    GetAccessLog(): ArtifactAccessLogEntry[];
-    ToJSON(): object;  // Snapshot for step InputData/OutputData
-
-    HasArtifacts(): boolean;
-    Clear(): void;
-}
-```
+See Section 8.6.4 for the full `ArtifactToolManager` API. The individual tool handler methods (GetRows, SearchRows, Aggregate, etc.) are delegated to the type-specific `BaseArtifactToolLibrary` instances — the manager itself doesn't hard-code any artifact-type-specific logic.
 
 ### 8.6 Integration Into Agent Execution Loop
 
-Following the Scratchpad integration pattern in `base-agent.ts`:
+Artifact tools follow the **Scratchpad pattern** exactly — a first-class response field in `LoopAgentResponse`, processed inline with zero extra LLM calls, state carrying forward across turns. This is **NOT** an action, NOT an LLM SDK tool definition — it's a parallel pathway alongside `scratchpad`, `payloadChangeRequest`, `actions`, etc.
 
-**Initialization** (top of `Execute()`):
-```typescript
-this._artifactAccessManager.Clear();
-this._artifactAccessManager.Initialize(inputArtifacts);
-```
+> **Key insight from studying the code:** The MJ agent system does NOT use LLM SDK tool registration. Actions are documented in the prompt as markdown text. The LLM outputs structured JSON with action names. The agent validates and executes them. Scratchpad works the same way — documented in prompt, LLM outputs changes as a response field, agent processes inline. Artifact tools must follow this same pattern.
 
-**Prompt injection** (template variable preparation):
+#### 8.6.1 New Response Field on LoopAgentResponse
+
+In `packages/AI/Agents/src/agent-types/loop-agent-response-type.ts`, add a new field parallel to `scratchpad`:
+
 ```typescript
-if (this._artifactAccessManager.HasArtifacts()) {
-    promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactAccessManager.ToManifestString();
-    promptParams.data['_ARTIFACT_TOOLS_DOCS'] = this._artifactAccessManager.GetToolDocumentation();
+export interface LoopAgentResponse<P = any> {
+    taskComplete?: boolean;
+    message?: string;
+    responseForm?: AgentResponseForm;
+    actionableCommands?: ActionableCommand[];
+    automaticCommands?: AutomaticCommand[];
+    payloadChangeRequest?: AgentPayloadChangeRequest<P>;
+    scratchpad?: AgentScratchpad;
+
+    /**
+     * Artifact tool invocations — explore input artifacts without
+     * dumping full content into context. Processed inline on the same
+     * turn as other response fields (zero turn cost). Results are
+     * injected into the next turn's prompt via _ARTIFACT_TOOL_RESULTS.
+     *
+     * The LLM sees the artifact manifest and tool documentation in the
+     * prompt, then requests specific slices here. The agent executes
+     * each tool call against the in-memory artifact content and stores
+     * results for the next iteration.
+     * @since TBD
+     */
+    artifactToolCalls?: ArtifactToolCall[];
+
+    reasoning?: string;
+    confidence?: number;
+    nextStep?: { ... };
+}
+
+/**
+ * A single artifact tool invocation requested by the LLM.
+ */
+export interface ArtifactToolCall {
+    /** Tool name from the documented tool list (e.g., "artifact_get_rows") */
+    tool: string;
+    /** Tool-specific input parameters */
+    input: Record<string, unknown>;
 }
 ```
 
-**Tool registration** (auto-injected based on input artifact types):
+#### 8.6.2 Lifecycle (Mirrors ScratchpadManager Exactly)
+
+**Phase 1 — Initialization** (top of `Execute()`, parallel to `_scratchpadManager.Clear()`):
 ```typescript
-// If any input artifacts are Data Snapshots, inject data tools
-// If any are PDFs, inject PDF tools
-// If any are Excel, inject Excel tools
-// Generic tools (get_size, get_content) always available
+// base-agent.ts, Execute() method
+this._scratchpadManager.Clear();
+this._artifactToolManager.Clear();
+this._artifactToolManager.Initialize(inputArtifacts);
 ```
 
-**Persistence** (step InputData/OutputData):
+**Phase 2 — Prompt Injection** (in `preparePromptParams()`, parallel to scratchpad injection):
 ```typescript
-// Include artifact access log in step data for audit/training
-...(this._artifactAccessManager.HasArtifacts() && {
-    artifactAccess: this._artifactAccessManager.ToJSON()
-})
+// base-agent.ts, preparePromptParams() method
+// After scratchpad injection (lines 1853-1862)...
+
+const artifactToolsEnabled = agentTypePromptParams?.includeArtifactToolsDocs !== false;
+if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
+    // Manifest: artifact names, types, sizes, table schemas
+    promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
+
+    // Tool documentation: available tools based on input artifact types
+    // (walks ParentID chain to inherit parent type tools)
+    promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
+
+    // Previous tool results (from prior turns in this run)
+    promptParams.data['_ARTIFACT_TOOL_RESULTS'] = this._artifactToolManager.GetPendingResults();
+
+    // Summary for compact prompt contexts
+    promptParams.data['_ARTIFACT_TOOL_SUMMARY'] = this._artifactToolManager.GetSummary();
+}
 ```
+
+**Phase 3 — Input Data Capture** (before LLM call, in `executePromptStep()`):
+```typescript
+// Capture artifact state before LLM response (parallel to scratchpad snapshot)
+const artifactSnapshotBeforeStep = this._artifactToolManager.HasArtifacts()
+    ? this._artifactToolManager.ToJSON()
+    : undefined;
+const inputData = {
+    promptId, promptName, isRetry, retryContext,
+    conversationMessages: params.conversationMessages,
+    ...(scratchpadSnapshotBeforeStep && { scratchpad: scratchpadSnapshotBeforeStep }),
+    ...(artifactSnapshotBeforeStep && { artifactTools: artifactSnapshotBeforeStep }),
+};
+```
+
+**Phase 4 — Response Processing** (after LLM response, parallel to scratchpad):
+```typescript
+// base-agent.ts, executePromptStep() method
+// After scratchpad processing (lines 5474-5485)...
+
+if (initialNextStep.artifactToolCalls?.length) {
+    // Execute each tool call against in-memory artifact content
+    // Results are stored and injected into next turn's prompt
+    await this._artifactToolManager.ExecuteToolCalls(initialNextStep.artifactToolCalls);
+}
+```
+
+**Phase 5 — Output Data Persistence** (after response processing):
+```typescript
+// Include artifact tool state after changes for audit/training
+...(this._artifactToolManager.HasArtifacts() && {
+    artifactTools: this._artifactToolManager.ToJSON()
+}),
+```
+
+#### 8.6.3 State Carry-Forward Across Turns
+
+Like scratchpad, artifact tool state is **ephemeral per run** but **persistent across turns within a run**:
+
+```
+Turn 1:
+  Prompt includes: _ARTIFACT_MANIFEST (artifact list + schemas)
+                   _ARTIFACT_TOOLS (available tool documentation)
+                   _ARTIFACT_TOOL_RESULTS (empty — first turn)
+  LLM responds:    artifactToolCalls: [{ tool: "artifact_get_rows", input: { artifactId: "a1", table: "customers", start: 0, count: 10 } }]
+  Agent executes:  ArtifactToolManager.ExecuteToolCalls() → stores results
+
+Turn 2:
+  Prompt includes: _ARTIFACT_MANIFEST (unchanged)
+                   _ARTIFACT_TOOLS (unchanged)
+                   _ARTIFACT_TOOL_RESULTS (contains rows 0-10 from turn 1)
+  LLM responds:    artifactToolCalls: [{ tool: "artifact_aggregate", input: { artifactId: "a1", table: "customers", field: "Revenue", operation: "sum" } }]
+                   message: "Looking at the top customers, total revenue is..."
+  Agent executes:  More tool calls → stores results
+
+Turn 3:
+  Prompt includes: _ARTIFACT_TOOL_RESULTS (contains all prior results)
+  LLM responds:    message: "Based on my analysis, the top 10 customers represent 45% of revenue..."
+                   taskComplete: true
+```
+
+#### 8.6.4 ArtifactToolManager Core API
+
+```typescript
+// packages/AI/Agents/src/ArtifactToolManager.ts
+
+export class ArtifactToolManager {
+    private artifacts: Map<string, ArtifactEntry>;
+    private toolLibraries: Map<string, BaseArtifactToolLibrary>;
+    private toolResults: ArtifactToolResult[];
+    private accessLog: ArtifactAccessLogEntry[];
+
+    // ─── LIFECYCLE (mirrors ScratchpadManager) ───
+
+    /** Called at agent run start with all input artifacts */
+    Initialize(inputArtifacts: InputArtifact[]): void;
+    /** Reset state between runs */
+    Clear(): void;
+    /** Whether any artifacts are available */
+    HasArtifacts(): boolean;
+
+    // ─── PROMPT INJECTION (mirrors ScratchpadManager) ───
+
+    /** Compact manifest for prompt: artifact names, types, schemas, sizes */
+    ToManifestString(): string;
+    /** Documentation of available tools based on artifact types */
+    GetToolDocumentation(): string;
+    /** Results from previous turns, formatted for prompt injection */
+    GetPendingResults(): string;
+    /** One-line summary for compact contexts */
+    GetSummary(): string;
+
+    // ─── TOOL EXECUTION (new — scratchpad doesn't have this) ───
+
+    /** Execute tool calls from LLM response, store results */
+    ExecuteToolCalls(calls: ArtifactToolCall[]): Promise<void>;
+
+    // ─── SERIALIZATION (mirrors ScratchpadManager) ───
+
+    /** Snapshot for step InputData/OutputData persistence */
+    ToJSON(): ArtifactToolSnapshot;
+
+    // ─── AUDIT ───
+
+    /** Access log for training data / debugging */
+    GetAccessLog(): ArtifactAccessLogEntry[];
+}
+```
+
+#### 8.6.5 Tool Library Resolution
+
+When `Initialize()` is called, the manager:
+1. Groups input artifacts by artifact type
+2. For each type, looks up `ToolLibraryClass` on `MJ: Artifact Types`
+3. Walks the `ParentID` chain to collect inherited tool libraries
+4. Instantiates each library via `ClassFactory` (same pattern as other MJ plugins)
+5. Merges tool lists (child overrides parent for same-named tools)
+6. Generates the `_ARTIFACT_TOOLS` documentation from the merged tool list
 
 ### 8.7 AI Model Metadata for File Support
 
@@ -1757,39 +1944,46 @@ Some LLM providers natively accept files (Claude reads PDFs, Gemini accepts mult
 
 **AI Model level:**
 - `SupportsFileInput: boolean` — does this model accept file content blocks?
+- `HasFileAPI: boolean` — does the inference provider have a separate file upload API? If true, files can be uploaded separately from the request. If false, files must be base64-encoded into conversation message parts.
 - `SupportedFileTypes: string` — comma-separated MIME types (e.g., `application/pdf,image/*`)
-- `MaxFileSize: number` — maximum file size in bytes per file
+- `MaxFileSize: number` — maximum file size in bytes per individual file
+- `MaxTotalFileSize: number` — maximum total size across all files in a single request (some providers cap total payload separately from per-file limits)
 - `MaxFilesPerRequest: number` — maximum number of files per request
 
 **AI Model Vendor level** (same model, different provider may differ):
-- Override fields for `SupportsFileInput`, `SupportedFileTypes`, `MaxFileSize`, `MaxFilesPerRequest`
+- Override fields for `SupportsFileInput`, `HasFileAPI`, `SupportedFileTypes`, `MaxFileSize`, `MaxTotalFileSize`, `MaxFilesPerRequest`
 
 **AI Prompt Model level:**
+- `UseFileAPI: boolean` — override to force or prevent use of the file upload API for this specific prompt/model combination. When true, files are uploaded via the provider's file API rather than base64-encoded inline.
 - `UseNativeFileInput: boolean` — override to force or prevent native file upload for this specific prompt/model combination
 
 **Runtime override via ExecuteAgentParams:**
-- File management behavior overridable per agent run (highest priority)
+- File management behavior overridable per agent run (highest priority), including `UseFileAPI`
 
 **BaseLLM additions:**
 - Abstract method `UploadFile(data: Buffer, mimeType: string, fileName: string): Promise<string>` — returns provider file ID
 - Abstract method `SupportsNativeFileInput(): boolean`
 
-**Decision logic:** If the model supports native file input for this file type AND the file is under the size limit, use native upload. Otherwise, fall back to document tools for exploration.
+**Decision logic:** If the model supports native file input for this file type AND the file is under the size limit, use native upload. Otherwise, fall back to artifact tools for exploration.
 
-### 8.8 The "Analyze" Button Flow (Revised)
+### 8.8 The "Analyze" Flow (Revised)
 
-With document tools and the input artifact system, the "Analyze" flow becomes:
+With artifact tools and the input artifact system, the analyze flow works differently depending on context:
 
-1. User clicks "Analyze" on an artifact viewer
+**In-conversation context** (artifact was just created by an agent):
+The user simply types their next message in the same conversation. The existing agent (e.g., Skip) continues the conversation with the artifact already available. An "intent checker" before the main agent could detect "discuss/analyze" intent and route to a simpler analysis agent that gets the full spec + data snapshot for focused discussion.
+
+**Standalone context** (artifact viewed outside a conversation — in a collection, dashboard, or saved artifact browser):
+1. User clicks "Discuss" / "AI Analysis" on an artifact viewer
 2. UI calls `GetCurrentStateSnapshot()` → gets `DataSnapshot`
 3. UI creates a new artifact version containing the snapshot JSON
 4. Artifact appears as an **attachment** on the user's draft message (shared input artifact UI — co-built with file I/O team)
 5. User types their question and sends
-6. AgentRunner starts the run, passes input artifacts to `ArtifactAccessManager`
-7. Agent sees the manifest in its prompt, uses document tools to explore the data
+6. AgentRunner starts the run, passes input artifacts to `ArtifactToolManager`
+7. Agent sees the manifest in its prompt, uses artifact tools to explore the data
 8. Agent responds with insights
 
-The snapshot is a first-class artifact, not inline text. The agent explores it via tools, not by reading a giant JSON blob in context.
+In both cases, the snapshot is a first-class artifact. The agent explores it via tools, not by reading a giant JSON blob in context. The UX for the button/trigger depends on the containing surface — this is a UX design decision that will be finalized when we see it live.
 
 ### 8.9 Data Snapshot Artifact Type
 
@@ -1815,7 +2009,7 @@ For small data snapshots (a few hundred rows), storing JSON inline in the `Conte
 - **First N rows stay inline** — keep the first ~30 rows per table inline for immediate rendering without a storage round-trip.
 - **`ArtifactVersion.FileID`** — references the MJStorage file containing the full row data. This uses the same `FileID` / `ContentMode` infrastructure the file I/O team is building.
 
-The `ArtifactAccessManager` handles transparently loading row data from either inline content or MJStorage when document tools request it.
+The `ArtifactToolManager` handles transparently loading row data from either inline content or MJStorage when artifact tools request it.
 
 ---
 
@@ -1830,7 +2024,7 @@ Update the `ComponentObject` interface so that `getCurrentDataState()` returns a
 In `packages/InteractiveComponents/src/runtime-types.ts`:
 
 ```typescript
-import { DataSnapshot } from './data-snapshot';
+import { DataSnapshot } from '@memberjunction/core';
 import { BaseEventArgs } from './component-events';
 
 export interface ComponentObject {
@@ -1844,7 +2038,7 @@ export interface ComponentObject {
      * Components should return a snapshot that includes:
      * - `tables[]`: Named datasets the component is displaying
      * - `computations[]`: Aggregations or KPIs the component has calculated
-     * - `visualState`: Current filters, sorting, selections, drill path
+     * - Per-table state: sorting, activeFilters, selectedRows, pageNumber (on each DataTable)
      * - `interpretation`: Optional narrative of what the data shows
      * - `title`: Display name of the component/view
      *
@@ -1922,9 +2116,11 @@ getCurrentDataState: () => ({
                   isSummary: true, isComputed: true }
             ],
             rows: topCustomers,
+            sorting: [{ field: "Revenue", direction: "desc" }],
             metadata: { rowCount: 10, entityName: "Customers" }
         }
     ],
+    // Cross-table computations (per-table ones go on the DataTable)
     computations: [
         { name: "Total Revenue", type: "sum", field: "Revenue",
           table: "monthly_revenue", value: 4500000, formattedValue: "$4.5M" },
@@ -1932,15 +2128,9 @@ getCurrentDataState: () => ({
           formattedValue: "+12.3%",
           description: "Year-over-year revenue growth rate" }
     ],
-    visualState: {
-        activeFilters: [
-            { field: "Region", operator: "eq", value: "West",
-              displayText: "Region = West" }
-        ],
-        drillPath: ["All Regions", "West"],
-        sorting: [{ field: "Revenue", direction: "desc" }],
-        activeTab: "monthly_revenue"
-    },
+    // Component-level state (spans all tables)
+    drillPath: ["All Regions", "West"],
+    activeTab: "monthly_revenue",
     interpretation: "Q4 West region revenue totals $4.5M (+12.3% YoY). " +
         "Top customer Acme Corp represents 15% of total."
 })
@@ -1953,12 +2143,12 @@ getCurrentDataState: () => ({
     tables: [],
     interpretation: "Displaying 47 nodes across 3 clusters. " +
         "Cluster A (production) has 22 nodes with 2 showing warning status.",
-    visualState: {
-        activeFilters: [
-            { field: "status", operator: "neq", value: "offline",
-              displayText: "Status is not Offline" }
-        ],
-        custom: { zoomLevel: 0.85, selectedCluster: "production" }
+    custom: {
+        zoomLevel: 0.85,
+        selectedCluster: "production",
+        nodeCount: 47,
+        clusterCount: 3,
+        warningNodes: 2
     }
 })
 ```
@@ -2023,13 +2213,17 @@ Both this plan and the file I/O plan need the same input artifact plumbing. Neit
 
 ### 10.4 Recommended Coordination
 
-The shared infrastructure (Section 10.1) should be designed and built jointly. See the review notes document for a detailed dependency breakdown and recommended build order.
+The shared infrastructure (Section 10.1) should be designed and built jointly. Specific coordination points:
+
+- **MJStorage backing** (Section 8.10): The large snapshot storage pattern uses the same `FileID` / `ContentMode` infrastructure the file I/O team is building. Coordinate with @bc-izygmunt who is deeper into MJStorage. Test using the demo box account.
+- **Input artifact plumbing** (Section 10.1): `ConversationDetailArtifact Direction='Input'`, message attachment UI, and AgentRunner processing must be co-designed.
+- **Artifact type hierarchy**: Both teams need the `ParentID` chain on `MJ: Artifact Types` — verify the file I/O team's artifact types fit the hierarchy.
 
 ---
 
 ## 11. Cross-Cutting Concerns
 
-### 12.1 Package Dependencies
+### 11.1 Package Dependencies
 
 | Package | New Dependencies | Why |
 |---|---|---|
@@ -2039,55 +2233,34 @@ The shared infrastructure (Section 10.1) should be designed and built jointly. S
 | `@memberjunction/ng-react` | Already depends on `core` and `interactive-component-types` | No new dependency needed |
 | `@memberjunction/ng-query-viewer` | None | Uses `QueryGridColumnConfig` which maps to `GridColumnDescriptor` |
 
-### 12.2 Versioning
+### 11.2 Versioning
 
-All changes are additive. No breaking changes to existing interfaces:
+All changes are additive except one intentional breaking change:
 - `DataSnapshot` has `DataArtifactSpec` as a type alias for backward compatibility
 - `ComponentObject.getCurrentDataState()` changes from `() => any` to `() => DataSnapshot | undefined` — compatible because `any` accepts any return type
-- `BaseArtifactViewerPluginComponent` gains a new virtual method with a default implementation
-- New fields on `DataSnapshot` (tables, computations, visualState, interpretation) are all optional
+- `BaseArtifactViewerPluginComponent` gains a new **abstract** method `GetCurrentStateSnapshot()` — all viewer plugins MUST implement it. This is a breaking change but intentional: every viewer should provide a semantically appropriate result for its content type.
+- New fields on `DataSnapshot` (tables, computations, interpretation) are all optional
 
-### 12.3 Build Order
+### 11.3 Migration Path
 
-1. `@memberjunction/core` (data types — classes with static factory methods)
-2. `@memberjunction/interactive-component-types` (base event interfaces, NotifyEvent, ComponentObject updates)
-2. `@memberjunction/ng-artifacts` (viewer changes, snapshot method)
-3. `@memberjunction/ng-react` (bridge update)
-4. Consumer code (conversation panel, agent integration)
+See Section 4.6 for backward compatibility details. Summary: all changes are additive. Existing data artifacts, interactive components, and agents require zero migration. The `headerName` → `displayName` rename in the data viewer is the only internal change.
 
-### 12.4 Migration Path
-
-**Existing data artifacts:** Zero migration. Single-table specs with root-level fields continue to work. The viewer detects whether `tables[]` is present and falls back to root-level fields.
-
-**Existing interactive components:** Zero migration. Components that don't implement `getCurrentDataState()` continue to work. The snapshot system returns `null` gracefully.
-
-**Existing agents:** Zero migration. Agents that don't consume snapshots are unaffected.
-
-**Existing `DataArtifactColumn` references:** The local interface is removed from the viewer component and replaced with `MJColumnDescriptor` from the shared package. The fields are the same except `headerName` → `displayName`. Internal search-and-replace within the data viewer.
-
-### 12.5 Performance Considerations
-
-- **Large snapshot storage**: For snapshots with many rows, back row data via MJStorage rather than inline JSON. Keep metadata + first ~30 rows inline for immediate rendering. See Section 8.10.
-- **Multi-table lazy loading**: Only load data for the active table tab. Other tabs load on first click.
-- **Document tools token efficiency**: Agents sip content via tools instead of receiving full artifact content in context. Manifest injection is lightweight (names, schemas, row counts — not rows).
-
-### 12.6 Security Considerations
+### 11.4 Security Considerations
 
 - **Snapshot content**: Snapshots inherit the permission model of their source artifact. A user who can view the artifact can capture its snapshot.
 - **Agent context**: When snapshots are passed to agents, the agent runs under the user's permission context (`contextUser`). The agent cannot access data the user cannot see.
 - **Artifact persistence**: When snapshots are saved as artifact versions, they inherit the parent artifact's permissions.
 
-### 12.7 Testing Strategy
+### 11.5 Testing Strategy
 
 | Phase | Test Type | What to Test |
 |---|---|---|
-| 1 | Unit | Type compatibility, normalization, column conversions |
-| 2 | Unit | Every transform function, pipeline composition, formatters |
-| 3 | Unit | Event bus subscribe/unsubscribe, cancellation, handler ordering |
-| 4 | Unit | Default snapshot for each viewer plugin type |
-| 5 | Component | Multi-table tab rendering, tab switching, per-table paging |
-| 6 | Integration | Snapshot → agent context formatting, artifact creation |
-| 7 | Unit | `getCurrentDataState()` return type, backward compatibility |
+| 1 | Unit | Type compatibility, normalization, column conversions, factory methods |
+| 2 | Unit | NotifyEvent callback firing, cancellation, after-event args |
+| 3 | Unit | `GetCurrentStateSnapshot()` for each viewer plugin type |
+| 4 | Component | Multi-table tab rendering, tab switching, per-table paging |
+| 5 | Integration | Snapshot → artifact creation, ArtifactToolManager lifecycle |
+| 6 | Unit | `getCurrentDataState()` return type, backward compatibility |
 
 ---
 
@@ -2101,7 +2274,8 @@ All changes are additive. No breaking changes to existing interfaces:
 | `packages/MJCore/src/generic/data-table.ts` | 4 | `DataTable` class |
 | `packages/MJCore/src/generic/data-snapshot.ts` | 4 | `DataSnapshot` class with normalization, `DataComputation` |
 | `packages/InteractiveComponents/src/component-events.ts` | 5 | Base event interfaces (`BaseEventArgs`, `CancelableEventArgs`, `AfterEventArgs`) |
-| `packages/AI/Agents/src/ArtifactAccessManager.ts` | 8 | Document tools manager (Scratchpad pattern) |
+| `packages/AI/Agents/src/ArtifactToolManager.ts` | 8 | Artifact tools manager (Scratchpad pattern) |
+| `packages/AI/Agents/src/artifact-tools/BaseArtifactToolLibrary.ts` | 8 | Base class for type-specific artifact tool libraries |
 | `packages/MJCore/src/__tests__/core-types.test.ts` | 4 | Unit tests for types and normalization |
 | `metadata/artifact-types/.data-snapshot-artifact-type.json` | 8 | Data Snapshot artifact type metadata |
 
@@ -2117,7 +2291,8 @@ All changes are additive. No breaking changes to existing interfaces:
 | `packages/Angular/Generic/artifacts/.../component-artifact-viewer.component.ts` | 6 | Add snapshot override delegating to React component |
 | `packages/Angular/Generic/artifacts/.../artifact-viewer-panel.component.ts` | 6, 8 | Add `GetCurrentStateSnapshot()` passthrough, add "Analyze" action |
 | `packages/Angular/Generic/react/.../mj-react-component.component.ts` | 9 | Add `GetCurrentDataState()` and `SetDataState()` |
-| `packages/AI/Agents/src/base-agent.ts` | 8 | Integrate ArtifactAccessManager (prompt injection, tool registration) |
+| `packages/AI/Agents/src/agent-types/loop-agent-response-type.ts` | 8 | Add `artifactToolCalls` field and `ArtifactToolCall` interface |
+| `packages/AI/Agents/src/base-agent.ts` | 8 | Integrate ArtifactToolManager (init, prompt injection, response processing, persistence) |
 
 ---
 
@@ -2148,12 +2323,14 @@ All changes are additive. No breaking changes to existing interfaces:
    │         get/setDataState on ComponentObject
    │         GetCurrentDataState/SetDataState on MJReactComponent bridge
    │
-   └──▶ Document Tools (5th agent primitive)      (parallel, co-build w/ file I/O)
-              ArtifactAccessManager (Scratchpad pattern)
+   └──▶ Artifact Tools (5th agent primitive)      (parallel, co-build w/ file I/O)
+              ArtifactToolManager (Scratchpad pattern)
+              BaseArtifactToolLibrary plugin system
+              ToolLibraryClass on MJ: Artifact Types entity
               Artifact manifest prompt injection
-              Type-specific exploration tools
-              AI Model metadata for file support
-              "Analyze" button → input artifact → agent run
+              Type-specific tool libraries (Data Snapshot, JSON, PDF, Excel, Text)
+              AI Model metadata for file support (HasFileAPI, MaxTotalFileSize)
+              "Analyze" flow (in-chat + standalone contexts)
               Data Snapshot artifact type metadata
 ```
 
@@ -2165,7 +2342,7 @@ All changes are additive. No breaking changes to existing interfaces:
 
 1. **Snapshot size limits.** When a component has 100K rows, should `getCurrentDataState()` return all of them? Recommendation: return the full dataset in the snapshot, but provide schema + sample rows + exploration tools to agents rather than dumping all rows into conversation context. The snapshot itself is the source of truth; how it's consumed is consumer-specific.
 
-2. **Document tools vs native file upload.** When a model natively supports file input (Claude reads PDFs, Gemini accepts multiple types), when do we use native upload vs document tools? Recommendation: native upload for small files where the model supports the type, document tools for large files or unsupported types. The decision logic is in Section 8.7.
+2. **Artifact tools vs native file upload.** When a model natively supports file input (Claude reads PDFs, Gemini accepts multiple types), when do we use native upload vs artifact tools? Recommendation: native upload for small files where the model supports the type, artifact tools for large files or unsupported types. Decision logic in Section 8.7. New `HasFileAPI` / `UseFileAPI` metadata controls whether files are uploaded via provider API or base64'd inline.
 
 3. **Column naming:** `displayName` is the canonical field name. `DataArtifactColumn.headerName` is replaced outright — no transition period. The only current consumer is Query Builder, so verify that old saved queries with `headerName` in their artifact JSON still render correctly (handle in the viewer's deserialization).
 
