@@ -231,7 +231,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
   }
 
   onTypeSelected(typeId: string): void {
-    this.formData.selectedType = this.artifactTypes.find(t => t.ID === typeId) || null;
+    this.formData.selectedType = this.artifactTypes.find(t => UUIDsEqual(t.ID, typeId)) || null;
   }
 
   async onSave(): Promise<void> {

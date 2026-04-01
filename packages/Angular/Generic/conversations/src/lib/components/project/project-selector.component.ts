@@ -185,7 +185,7 @@ export class ProjectSelectorComponent implements OnInit {
   }
 
   onProjectSelectChange(projectId: string): void {
-    const project = this.projectsWithStats.find(p => p.ID === projectId) || null;
+    const project = this.projectsWithStats.find(p => UUIDsEqual(p.ID, projectId)) || null;
     this.onProjectChange(project);
   }
 
