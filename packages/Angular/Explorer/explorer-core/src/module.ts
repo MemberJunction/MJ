@@ -16,7 +16,7 @@ import { ExcelModule, GridModule, PDFModule } from '@progress/kendo-angular-grid
 import { IndicatorsModule } from '@progress/kendo-angular-indicators';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { LabelModule } from '@progress/kendo-angular-label';
-import { LayoutModule, TabStripModule, CardModule, AvatarModule } from '@progress/kendo-angular-layout';
+import { TabStripModule, CardModule, AvatarModule } from '@progress/kendo-angular-layout';
 import { ListViewModule } from '@progress/kendo-angular-listview';
 import { TreeViewModule } from '@progress/kendo-angular-treeview';
 import { MjProgressBarComponent } from '@memberjunction/ng-ui-components';
@@ -123,7 +123,6 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     ListViewModule,
     TreeViewModule,
     QueryViewerModule,
-    LayoutModule,
     DropDownsModule,
     MemberJunctionSharedModule,
     ConversationsModule,
