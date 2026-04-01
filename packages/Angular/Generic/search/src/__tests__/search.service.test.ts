@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { Metadata } from '@memberjunction/core';
 import { SearchService, RecentSearch } from '../lib/search.service';
 import {
     SearchRequest,
@@ -8,11 +9,27 @@ import {
     SearchFilter
 } from '../lib/search-types';
 
+/** Installs a fake Metadata.Provider with a mock ExecuteGQL that returns empty success */
+function installMockProvider(): ReturnType<typeof vi.fn> {
+    const mockExecuteGQL = vi.fn().mockResolvedValue({
+        SearchKnowledge: {
+            Success: true,
+            Results: [],
+            TotalCount: 0,
+            ElapsedMs: 1,
+            SourceCounts: { Vector: 0, FullText: 0, Entity: 0 },
+        }
+    });
+    (Metadata as Record<string, unknown>)['Provider'] = { ExecuteGQL: mockExecuteGQL };
+    return mockExecuteGQL;
+}
+
 describe('SearchService', () => {
     let service: SearchService;
 
     beforeEach(() => {
         service = new SearchService();
+        installMockProvider();
     });
 
     describe('ExecuteSearch', () => {
