@@ -363,8 +363,8 @@
               </div>
             }
 
-            <!-- Dashboards (metadata-driven only) — hidden if Data Explorer app handles these -->
-            @if (!HasDataExplorerApp && FilterPanelItems(AvailableDashboards).length > 0) {
+            <!-- Dashboards (metadata-driven Config type only) -->
+            @if (FilterPanelItems(AvailableDashboards).length > 0) {
               <div class="panel-section">
                 <div class="panel-section-title collapsible" (click)="TogglePanelSection('dashboards')">
                   <i class="fa-solid fa-gauge-high"></i> Dashboards
@@ -395,8 +395,8 @@
               </div>
             }
 
-            <!-- Views — hidden if Data Explorer app handles these -->
-            @if (!HasDataExplorerApp && FilterPanelItems(AvailableViews).length > 0) {
+            <!-- Views -->
+            @if (FilterPanelItems(AvailableViews).length > 0) {
               <div class="panel-section">
                 <div class="panel-section-title collapsible" (click)="TogglePanelSection('views')">
                   <i class="fa-solid fa-table-list"></i> Views
@@ -428,8 +428,8 @@
               </div>
             }
 
-            <!-- Queries — hidden if Data Explorer app handles these -->
-            @if (!HasDataExplorerApp && FilterPanelItems(AvailableQueries).length > 0) {
+            <!-- Queries -->
+            @if (FilterPanelItems(AvailableQueries).length > 0) {
               <div class="panel-section">
                 <div class="panel-section-title collapsible" (click)="TogglePanelSection('queries')">
                   <i class="fa-solid fa-database"></i> Queries

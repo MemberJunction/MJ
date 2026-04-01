@@ -669,13 +669,21 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     const config = pin.Configuration;
     const rt = this.resolveStoredResourceType(pin);
 
+    // For Dashboards, Views, Queries — route through Data Explorer if available
+    const deApp = this.HasDataExplorerApp
+      ? this.appManager.GetAllApps().find(a => a.Name === 'Data Explorer')
+      : null;
+
     switch (rt) {
       case 'Dashboards': {
         const dashboardId = config['dashboardId'] as string;
-        if (dashboardId) {
-          this.navigationService.OpenDashboard(dashboardId, pin.DisplayName);
+        if (!dashboardId) break;
+        if (deApp) {
+          this.navigationService.SwitchToApp(deApp.ID, 'Dashboards').then(() => {
+            this.navigationService.UpdateActiveTabQueryParams({ dashboard: dashboardId });
+          });
         } else {
-          console.warn('[Pin Click] Dashboards pin missing dashboardId', config);
+          this.navigationService.OpenDashboard(dashboardId, pin.DisplayName);
         }
         break;
       }
@@ -689,26 +697,18 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
           const viewId = config['viewId'] as string;
           if (viewId) {
             this.navigationService.OpenView(viewId, pin.DisplayName);
-          } else {
-            console.warn('[Pin Click] User Views pin missing viewId', config);
           }
         }
         break;
-      case 'Reports': {
-        const reportId = config['reportId'] as string;
-        if (reportId) {
-          this.navigationService.OpenReport(reportId, pin.DisplayName);
-        } else {
-          console.warn('[Pin Click] Reports pin missing reportId', config);
-        }
-        break;
-      }
       case 'Queries': {
         const queryId = config['queryId'] as string;
-        if (queryId) {
-          this.navigationService.OpenQuery(queryId, pin.DisplayName);
+        if (!queryId) break;
+        if (deApp) {
+          this.navigationService.SwitchToApp(deApp.ID, 'Queries').then(() => {
+            this.navigationService.UpdateActiveTabQueryParams({ queryId: queryId });
+          });
         } else {
-          console.warn('[Pin Click] Queries pin missing queryId', config);
+          this.navigationService.OpenQuery(queryId, pin.DisplayName);
         }
         break;
       }
