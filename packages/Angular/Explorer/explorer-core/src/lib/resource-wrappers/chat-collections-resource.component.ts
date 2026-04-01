@@ -1,6 +1,6 @@
 import { Component, ViewEncapsulation, OnInit, OnDestroy } from '@angular/core';
 import { Router, NavigationEnd } from '@angular/router';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
@@ -172,6 +172,27 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
 
     // Subscribe to state changes to update URL
     this.subscribeToUrlStateChanges();
+
+    // Subscribe to collection and artifact changes to update tab title
+    this.collectionState.activeCollectionId$
+      .pipe(takeUntil(this.destroy$), distinctUntilChanged())
+      .subscribe(collectionId => {
+        // Only update if no artifact is open (artifact title takes priority)
+        if (!this.activeArtifactId) {
+          this.updateCollectionTabTitle(collectionId);
+        }
+      });
+
+    this.artifactState.activeArtifact$
+      .pipe(takeUntil(this.destroy$), distinctUntilChanged())
+      .subscribe(artifact => {
+        if (artifact && artifact.Name) {
+          this.NotifyDisplayNameChanged(artifact.Name);
+        } else {
+          // Artifact closed — fall back to collection name
+          this.updateCollectionTabTitle(this.collectionState.activeCollectionId);
+        }
+      });
 
     // Subscribe to router NavigationEnd events for back/forward button support
     this.router.events
@@ -357,6 +378,31 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
       artifactId: artifactId || undefined,
       versionNumber: versionNumber ? parseInt(versionNumber, 10) : undefined
     };
+  }
+
+  /**
+   * Update the tab/browser title based on the active collection.
+   */
+  private async updateCollectionTabTitle(collectionId: string | null): Promise<void> {
+    if (!collectionId) {
+      this.NotifyDisplayNameChanged('Collections');
+      return;
+    }
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<{ Name: string }>({
+        EntityName: 'MJ: Collections',
+        Fields: ['Name'],
+        ExtraFilter: `ID='${collectionId}'`,
+        ResultType: 'simple'
+      });
+      if (result.Results?.length > 0 && result.Results[0].Name) {
+        this.NotifyDisplayNameChanged(result.Results[0].Name);
+      }
+    } catch {
+      // Fall back to generic title
+      this.NotifyDisplayNameChanged('Collections');
+    }
   }
 
   ngOnDestroy() {

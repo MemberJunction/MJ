@@ -43,6 +43,7 @@
     "@memberjunction/ai-mcp-client": "5.21.0",
     "@memberjunction/ai-prompts": "5.21.0",
     "@memberjunction/ai-provider-bundle": "5.21.0",
+    "@memberjunction/ai-vector-sync": "5.21.0",
     "@memberjunction/ai-vectors-pinecone": "5.21.0",
     "@memberjunction/aiengine": "5.21.0",
     "@memberjunction/api-keys": "5.21.0",

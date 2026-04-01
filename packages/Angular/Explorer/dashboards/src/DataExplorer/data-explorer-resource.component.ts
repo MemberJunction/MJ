@@ -21,7 +21,8 @@ import { DataExplorerFilter } from './models/explorer-state.interface';
                 [entityFilter]="entityFilter"
                 [contextName]="contextName"
                 [contextIcon]="contextIcon"
-                (OpenEntityRecord)="onOpenEntityRecord($event)">
+                (OpenEntityRecord)="onOpenEntityRecord($event)"
+                (DisplayNameChanged)="onDisplayNameChanged($event)">
             </mj-data-explorer-dashboard>
         </div>
     `,
@@ -157,5 +158,9 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
         if (event && event.EntityName && event.RecordPKey) {
             this.navigationService.OpenEntityRecord(event.EntityName, event.RecordPKey);
         }
+    }
+
+    public onDisplayNameChanged(name: string): void {
+        this.NotifyDisplayNameChanged(name);
     }
 }

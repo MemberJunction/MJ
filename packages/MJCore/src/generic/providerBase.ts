@@ -1,6 +1,6 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem } from "./interfaces";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
@@ -737,6 +737,123 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Runs RunViews without coalescing (used internally after coalescing merge).
      * This goes through dedup + linger + the full pipeline.
      */
+    /**
+     * Performs a full-text search across all entities that have FullTextSearchEnabled=true.
+     * Uses the existing RunView + UserSearchString infrastructure which routes through
+     * the database-native FTS capabilities (SQL Server FREETEXT functions, PostgreSQL tsvector).
+     *
+     * This is the default implementation that works across all database providers. Each provider's
+     * createViewUserSearchSQL() method handles the platform-specific SQL generation.
+     *
+     * @see /packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md for comprehensive documentation
+     */
+    public async FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult> {
+        const startTime = Date.now();
+        try {
+            const md = new Metadata();
+            const maxRows = params.MaxRowsPerEntity ?? 10;
+
+            // Get all FTS-enabled entities
+            const ftsEntities = this.resolveFTSEntities(md, params.EntityNames);
+            if (ftsEntities.length === 0) {
+                return {
+                    Success: true,
+                    Results: [],
+                    TotalCount: 0,
+                    EntitiesSearched: 0,
+                    ElapsedMs: Date.now() - startTime
+                };
+            }
+
+            // Build RunView params for each FTS entity
+            const viewParams: RunViewParams[] = ftsEntities.map(entity => ({
+                EntityName: entity.Name,
+                UserSearchString: params.SearchText,
+                MaxRows: maxRows,
+                ResultType: 'simple' as const
+            }));
+
+            // Execute all searches in parallel via RunViews
+            const viewResults = await this.RunViews(viewParams, contextUser);
+
+            // Convert results to FullTextSearchResultItems
+            const allResults: FullTextSearchResultItem[] = [];
+            for (let i = 0; i < viewResults.length; i++) {
+                const result = viewResults[i];
+                const entity = ftsEntities[i];
+                if (!result.Success) continue;
+
+                const titleField = this.findBestField(entity, ['Name', 'Title', 'Subject', 'Label']);
+                const snippetField = this.findBestField(entity, ['Description', 'Summary', 'Body', 'Content', 'Text', 'Notes']);
+
+                for (let j = 0; j < result.Results.length; j++) {
+                    const record = result.Results[j] as Record<string, unknown>;
+                    allResults.push({
+                        EntityName: entity.Name,
+                        RecordID: String(record[entity.FirstPrimaryKey?.Name ?? 'ID'] ?? ''),
+                        Title: String(record[titleField] ?? 'Untitled'),
+                        Snippet: String(record[snippetField] ?? '').substring(0, 200),
+                        Score: 1.0 / (j + 1) // Rank-based scoring for RRF compatibility
+                    });
+                }
+            }
+
+            // Sort by score descending
+            allResults.sort((a, b) => b.Score - a.Score);
+
+            return {
+                Success: true,
+                Results: allResults,
+                TotalCount: allResults.length,
+                EntitiesSearched: ftsEntities.length,
+                ElapsedMs: Date.now() - startTime
+            };
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`FullTextSearch failed: ${msg}`);
+            return {
+                Success: false,
+                ErrorMessage: msg,
+                Results: [],
+                TotalCount: 0,
+                EntitiesSearched: 0,
+                ElapsedMs: Date.now() - startTime
+            };
+        }
+    }
+
+    /**
+     * Resolve which entities to search. Filters to only FTS-enabled entities.
+     * If entityNames provided, intersects with the FTS-enabled set.
+     */
+    private resolveFTSEntities(md: Metadata, entityNames?: string[]): EntityInfo[] {
+        const allEntities = md.Entities.filter(e => e.FullTextSearchEnabled);
+
+        if (!entityNames || entityNames.length === 0) {
+            return allEntities;
+        }
+
+        // Intersect requested names with FTS-enabled entities only
+        const nameSet = new Set(entityNames.map(n => n.toLowerCase()));
+        return allEntities.filter(e => nameSet.has(e.Name.toLowerCase()));
+    }
+
+    /**
+     * Find the best display field from an entity by checking preferred field names.
+     * Returns the first match or falls back to the first text field.
+     */
+    private findBestField(entity: EntityInfo, preferredNames: string[]): string {
+        for (const name of preferredNames) {
+            const field = entity.Fields.find(f => f.Name === name);
+            if (field) return field.Name;
+        }
+        // Fallback to first text field
+        const textField = entity.Fields.find(f =>
+            f.Type.toLowerCase().includes('varchar') || f.Type.toLowerCase().includes('text')
+        );
+        return textField?.Name ?? entity.FirstPrimaryKey?.Name ?? 'ID';
+    }
+
     private async RunViewsUncoalesced<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         const key = this.GenerateDedupKey(params, contextUser);
         const existing = this._inflightViews.get(key);

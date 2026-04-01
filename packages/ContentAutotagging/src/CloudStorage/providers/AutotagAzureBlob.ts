@@ -51,7 +51,7 @@ export class AutotagAzureBlob extends CloudStorageBase {
                 const text = await this.extractText(blob.name)
                 contentItem.ContentSourceID = contentSourceParams.contentSourceID
                 contentItem.Name = blob.name
-                contentItem.Description = await this.engine.getContentItemDescription(contentSourceParams, contextUser)
+                contentItem.Description = this.engine.GetContentItemDescription(contentSourceParams)
                 contentItem.URL = filePath
                 contentItem.ContentTypeID = contentSourceParams.ContentTypeID
                 contentItem.ContentSourceTypeID =  contentSourceParams.ContentSourceTypeID

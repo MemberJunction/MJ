@@ -906,6 +906,73 @@ export class GraphQLAIClient {
             };
         }
     }
+
+    /**
+     * Trigger vectorization for an entity document.
+     * Calls the server-side EntityVectorSyncer to embed and upsert entity records.
+     */
+    public async VectorizeEntity(params: VectorizeEntityParams): Promise<VectorizeEntityResult> {
+        try {
+            const mutation = gql`
+                mutation VectorizeEntity(
+                    $entityDocumentID: String!,
+                    $entityID: String!,
+                    $batchSize: Float
+                ) {
+                    VectorizeEntity(
+                        entityDocumentID: $entityDocumentID,
+                        entityID: $entityID,
+                        batchSize: $batchSize
+                    ) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = {
+                entityDocumentID: params.entityDocumentID,
+                entityID: params.entityID
+            };
+            if (params.batchSize !== undefined) {
+                variables['batchSize'] = params.batchSize;
+            }
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
+
+            if (!result?.VectorizeEntity) {
+                throw new Error('Invalid response from server');
+            }
+
+            return result.VectorizeEntity as VectorizeEntityResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.VectorizeEntity failed', undefined, e);
+            return {
+                Success: false,
+                Status: 'Error',
+                ErrorMessage: e.message || 'Unknown error'
+            };
+        }
+    }
+}
+
+/** Parameters for VectorizeEntity */
+export interface VectorizeEntityParams {
+    entityDocumentID: string;
+    entityID: string;
+    batchSize?: number;
+}
+
+/** Result from VectorizeEntity */
+export interface VectorizeEntityResult {
+    Success: boolean;
+    Status?: string;
+    ErrorMessage?: string;
+    PipelineRunID?: string;
+    RecordsProcessed?: number;
 }
 
 /**
