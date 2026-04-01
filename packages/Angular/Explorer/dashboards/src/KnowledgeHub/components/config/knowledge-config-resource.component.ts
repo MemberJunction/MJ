@@ -9,7 +9,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
-import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -133,6 +133,9 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     public get HasEmbeddingModel(): boolean { return this.EmbeddingModels.length > 0; }
     public get EmbeddingModelName(): string { return this.EmbeddingModels.length > 0 ? this.EmbeddingModels[0].Name : ''; }
 
+    // --- Entity Documents (for persisting thresholds) ---
+    private entityDocuments: MJEntityDocumentEntity[] = [];
+
     // --- Setup Progress ---
     public get SetupStepsCompleted(): number {
         let count = 0;
@@ -194,9 +197,13 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.IsSaving = true;
         this.cdr.detectChanges();
         try {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await this.persistThresholdsToEntityDocuments();
             this.HasUnsavedChanges = false;
             MJNotificationService.Instance.CreateSimpleNotification('Configuration saved', 'success', 2000);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            console.error('[KnowledgeConfig] Save failed:', msg);
+            MJNotificationService.Instance.CreateSimpleNotification(`Save failed: ${msg}`, 'error', 5000);
         } finally {
             this.IsSaving = false;
             this.cdr.detectChanges();
@@ -321,7 +328,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
         try {
             const rv = new RunView();
-            const [vdbResult, modelsResult, indexResult] = await rv.RunViews([
+            const [vdbResult, modelsResult, indexResult, entityDocsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Vector Databases',
                     ResultType: 'simple'
@@ -333,12 +340,18 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
                 {
                     EntityName: 'MJ: Vector Indexes',
                     ResultType: 'simple'
+                },
+                {
+                    EntityName: 'MJ: Entity Documents',
+                    ExtraFilter: "Status = 'Active'",
+                    ResultType: 'entity_object'
                 }
             ]);
 
             this.loadVectorDBProviders(vdbResult.Success ? vdbResult.Results : []);
             this.loadEmbeddingModels(modelsResult.Success ? modelsResult.Results : []);
             this.loadVectorIndexes(indexResult.Success ? indexResult.Results : []);
+            this.loadEntityDocumentsAndThresholds(entityDocsResult.Success ? entityDocsResult.Results as MJEntityDocumentEntity[] : []);
         } catch (error) {
             console.error('[KnowledgeConfig] Error loading configuration:', error);
         } finally {
@@ -418,6 +431,34 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             VectorDatabase: String(r['VectorDatabase'] || ''),
             VectorDatabaseID: String(r['VectorDatabaseID'] || '')
         }));
+    }
+
+    /** Load entity documents and seed threshold settings from the first document's values */
+    private loadEntityDocumentsAndThresholds(docs: MJEntityDocumentEntity[]): void {
+        this.entityDocuments = docs;
+        if (docs.length > 0) {
+            // Use the first entity document's thresholds as the canonical values
+            const doc = docs[0];
+            this.ThresholdSettings.DuplicatePotential = doc.PotentialMatchThreshold;
+            this.ThresholdSettings.DuplicateAbsolute = doc.AbsoluteMatchThreshold;
+        }
+    }
+
+    /** Persist threshold settings back to all active entity documents */
+    private async persistThresholdsToEntityDocuments(): Promise<void> {
+        if (this.entityDocuments.length === 0) {
+            return; // No entity documents to update
+        }
+
+        for (const doc of this.entityDocuments) {
+            doc.PotentialMatchThreshold = this.ThresholdSettings.DuplicatePotential;
+            doc.AbsoluteMatchThreshold = this.ThresholdSettings.DuplicateAbsolute;
+            const saved = await doc.Save();
+            if (!saved) {
+                const msg = doc.LatestResult?.CompleteMessage || 'Unknown error';
+                throw new Error(`Failed to save entity document "${doc.Name}": ${msg}`);
+            }
+        }
     }
 
     private loadEmbeddingModels(records: Record<string, unknown>[]): void {

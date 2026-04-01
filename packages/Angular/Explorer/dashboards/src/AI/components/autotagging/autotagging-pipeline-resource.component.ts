@@ -293,6 +293,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 this.RunProgress = success ? 100 : 0;
                 this.currentPipelineRunID = null;
 
+                // Reset all pipeline stages to idle
+                for (const stage of this.PipelineStages) {
+                    stage.Status = 'idle';
+                    stage.ActiveCount = 0;
+                }
+
                 if (success) {
                     // Refresh data to show new results
                     await this.LoadData();
@@ -325,6 +331,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 this.RunProgress = pct;
                 this.RunStage = this.formatStageName(stage);
                 this.RunCurrentItem = currentItem ?? '';
+                this.updatePipelineStagesForActiveRun(stage);
                 this.cdr.detectChanges();
 
                 if (stage === 'complete') {
@@ -352,6 +359,34 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             'error': 'Error'
         };
         return stageMap[stage] ?? stage;
+    }
+
+    /**
+     * Update PipelineStages to reflect which stage is currently active during a live run.
+     * Maps subscription stage codes to the pipeline visualization stage names.
+     */
+    private updatePipelineStagesForActiveRun(activeStageCode: string): void {
+        // Map subscription stage codes to visualization stage names
+        const stageCodeToName: Record<string, string> = {
+            'ingest': 'Ingest',
+            'extract': 'Extract',
+            'chunk': 'Chunk',
+            'tag': 'Tag',
+            'autotag': 'Tag',
+            'vectorize': 'Vectorize',
+        };
+
+        const activeName = stageCodeToName[activeStageCode] ?? '';
+
+        for (const stage of this.PipelineStages) {
+            if (stage.Name === activeName) {
+                stage.Status = 'active';
+                stage.ActiveCount = 1;
+            } else if (activeStageCode !== 'complete' && activeStageCode !== 'error') {
+                stage.Status = 'idle';
+                stage.ActiveCount = 0;
+            }
+        }
     }
 
     /** Build KPI metrics from loaded data */
