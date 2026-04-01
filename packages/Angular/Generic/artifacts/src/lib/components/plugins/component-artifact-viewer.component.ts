@@ -1,4 +1,4 @@
-import { Component, ViewChild, AfterViewInit, OnInit, OnChanges, SimpleChanges, Output, EventEmitter } from '@angular/core';
+import { Component, ViewChild, AfterViewInit, OnInit, OnChanges, SimpleChanges, Input, Output, EventEmitter } from '@angular/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
@@ -26,6 +26,11 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   @ViewChild('reactComponent') reactComponent?: MJReactComponent;
   @Output() tabsChanged = new EventEmitter<void>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /** Saved user settings passed through to mj-react-component for state rehydration */
+  @Input() savedUserSettings: Record<string, unknown> = {};
+  /** Emitted when the React component's user settings change */
+  @Output() userSettingsChanged = new EventEmitter<Record<string, unknown>>();
 
   // Component data
   public component: ComponentSpec | null = null;
@@ -249,6 +254,10 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       entityName: event.entityName,
       compositeKey: event.key
     });
+  }
+
+  onUserSettingsChanged(event: { settings: Record<string, unknown> }): void {
+    this.userSettingsChanged.emit(event.settings);
   }
 
   /**

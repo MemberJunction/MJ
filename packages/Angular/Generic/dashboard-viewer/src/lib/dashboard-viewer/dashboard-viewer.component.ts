@@ -137,6 +137,9 @@ export class DashboardViewerComponent implements OnDestroy {
     /** All categories for breadcrumb path resolution */
     @Input() Categories: MJDashboardCategoryEntity[] = [];
 
+    /** Panel-keyed user state blob for interactive component state persistence */
+    @Input() UserState: Record<string, Record<string, unknown>> = {};
+
     /**
      * Computed: Should the toolbar be visible?
      * Auto-hides when showToolbar=false OR when all toolbar elements are disabled
@@ -176,6 +179,9 @@ export class DashboardViewerComponent implements OnDestroy {
 
     /** Emitted when user clicks "Open in Tab" button */
     @Output() openInTab = new EventEmitter<{ dashboardId: string; dashboardName: string }>();
+
+    /** Emitted when a panel's user settings change and should be persisted */
+    @Output() userStateChanged = new EventEmitter<{ panelId: string; state: Record<string, unknown> }>();
 
     // ========================================
     // View Children
@@ -761,6 +767,7 @@ export class DashboardViewerComponent implements OnDestroy {
             instance.Panel = panel;
             instance.PartType = partType;
             instance.IsEditing = this.isEditing;
+            instance.SavedUserSettings = this.UserState[panel.id] || {};
 
             // Subscribe to events
             instance.ConfigureRequested.subscribe(() => {
@@ -771,6 +778,9 @@ export class DashboardViewerComponent implements OnDestroy {
             });
             instance.NavigationRequested.subscribe((event: DashboardNavRequestEvent) => {
                 this.navigationRequested.emit(event);
+            });
+            instance.UserSettingsChanged.subscribe((state: Record<string, unknown>) => {
+                this.userStateChanged.emit({ panelId: panel.id, state });
             });
 
             // Attach component to DOM

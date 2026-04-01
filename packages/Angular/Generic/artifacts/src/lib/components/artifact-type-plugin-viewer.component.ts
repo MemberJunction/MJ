@@ -125,6 +125,11 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
   @Output() pluginLoaded = new EventEmitter<void>();
   @Output() tabsChanged = new EventEmitter<void>();
 
+  /** Saved user settings passed through to the plugin component */
+  @Input() savedUserSettings: Record<string, unknown> = {};
+  /** Emitted when the plugin's user settings change */
+  @Output() userSettingsChanged = new EventEmitter<Record<string, unknown>>();
+
   @ViewChild('viewerContainer', { read: ViewContainerRef, static: true })
   viewerContainer!: ViewContainerRef;
 
@@ -270,6 +275,9 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
         this.componentRef.setInput('contentType', this.contentType);
       }
 
+      // Pass saved user settings to the plugin for state rehydration
+      this.componentRef.setInput('savedUserSettings', this.savedUserSettings);
+
       // Subscribe to openEntityRecord event if the plugin emits it
       const componentInstance = this.componentRef.instance;
       if (componentInstance.openEntityRecord) {
@@ -289,6 +297,13 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
       if (componentInstance.tabsChanged) {
         componentInstance.tabsChanged.subscribe(() => {
           this.tabsChanged.emit();
+        });
+      }
+
+      // Subscribe to userSettingsChanged event if the plugin emits it
+      if (componentInstance.userSettingsChanged) {
+        componentInstance.userSettingsChanged.subscribe((settings: Record<string, unknown>) => {
+          this.userSettingsChanged.emit(settings);
         });
       }
 

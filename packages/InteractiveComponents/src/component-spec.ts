@@ -267,6 +267,7 @@ export interface ComponentMethodInfo {
         refresh?: boolean;
         getCurrentDataState?: boolean;
         getDataStateHistory?: boolean;
+        setDataState?: boolean;
         validate?: boolean;
         isDirty?: boolean;
         reset?: boolean;

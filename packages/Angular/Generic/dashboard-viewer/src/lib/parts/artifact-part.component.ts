@@ -57,9 +57,11 @@ import { Subject } from 'rxjs';
               [canEdit]="false"
               [isMaximized]="false"
               [refreshTrigger]="refreshTrigger"
+              [savedUserSettings]="SavedUserSettings"
               (navigateToLink)="onNavigateToLink($event)"
               (openEntityRecord)="onOpenEntityRecord($event)"
-              (navigationRequest)="onNavigationRequest($event)">
+              (navigationRequest)="onNavigationRequest($event)"
+              (userSettingsChanged)="onUserSettingsChanged($event)">
             </mj-artifact-viewer-panel>
           }
         </div>
@@ -255,6 +257,13 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
             event.queryParams,
             false
         );
+    }
+
+    /**
+     * Handle user settings changes from the artifact viewer and bubble up
+     */
+    public onUserSettingsChanged(settings: Record<string, unknown>): void {
+        this.UserSettingsChanged.emit(settings);
     }
 
     protected override cleanup(): void {

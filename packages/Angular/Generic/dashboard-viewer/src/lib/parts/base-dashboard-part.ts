@@ -112,6 +112,18 @@ export abstract class BaseDashboardPart implements OnInit, OnDestroy {
     @Output() DataChanged = new EventEmitter<PartDataChangeEvent>();
 
     /**
+     * Saved user settings for this part, loaded from persistence.
+     * Passed down to interactive components for state rehydration on mount.
+     */
+    @Input() SavedUserSettings: Record<string, unknown> = {};
+
+    /**
+     * Emitted when the part's user settings change and should be persisted.
+     * The container is responsible for debouncing and saving.
+     */
+    @Output() UserSettingsChanged = new EventEmitter<Record<string, unknown>>();
+
+    /**
      * Emitted when the part requests navigation to another resource.
      * Parent component handles actual routing based on the request type.
      */

@@ -116,10 +116,12 @@
                 [artifactTypeName]="artifactTypeName"
                 [contentType]="contentType"
                 [readonly]="true"
+                [savedUserSettings]="savedUserSettings"
                 (openEntityRecord)="onOpenEntityRecord($event)"
                 (navigationRequest)="onNavigationRequest($event)"
                 (pluginLoaded)="onPluginLoaded()"
-                (tabsChanged)="onTabsChanged()">
+                (tabsChanged)="onTabsChanged()"
+                (userSettingsChanged)="onUserSettingsChanged($event)">
               </mj-artifact-type-plugin-viewer>
             </div>
           }

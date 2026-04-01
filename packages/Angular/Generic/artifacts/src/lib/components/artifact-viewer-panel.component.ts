@@ -41,6 +41,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
 
+  /** Saved user settings for the interactive component, passed through to the plugin viewer */
+  @Input() savedUserSettings: Record<string, unknown> = {};
+  /** Emitted when the interactive component's user settings change */
+  @Output() userSettingsChanged = new EventEmitter<Record<string, unknown>>();
+
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
   private destroy$ = new Subject<void>();
@@ -975,6 +980,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    */
   onNavigationRequest(event: NavigationRequest): void {
     this.navigationRequest.emit(event);
+  }
+
+  onUserSettingsChanged(settings: Record<string, unknown>): void {
+    this.userSettingsChanged.emit(settings);
   }
 
   /**

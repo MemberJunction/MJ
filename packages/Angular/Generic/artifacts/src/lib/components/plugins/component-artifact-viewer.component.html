@@ -24,8 +24,10 @@
         <mj-react-component
           #reactComponent
           [component]="component"
+          [savedUserSettings]="savedUserSettings"
           (componentEvent)="onComponentEvent($event)"
           (openEntityRecord)="onOpenEntityRecord($event)"
+          (userSettingsChanged)="onUserSettingsChanged($event)"
           (initialized)="onReactComponentInitialized()">
         </mj-react-component>
       } @else if (component) {
