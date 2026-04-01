@@ -18,7 +18,11 @@ import {
     ClientToolResponse,
     ServerMessage,
     Attachment,
+    ClientToolMetadata,
+    ClientToolDecorator,
+    ClientToolDecoratorContext,
 } from './AgentClientTypes';
+import { ClientToolHandler } from './ClientToolRegistry';
 
 /** Generate a simple unique ID for messages */
 function generateMessageId(): string {
@@ -37,11 +41,23 @@ export class AgentClientSession {
     private toolRegistry: ClientToolRegistry;
     private _agentId = '';
     private _conversationId: string | null = null;
+    private _sessionId: string | null = null;
 
     private messageHandlers: ((msg: AgentMessage) => void)[] = [];
     private toolRequestHandlers: ((req: ClientToolRequest) => void)[] = [];
     private progressHandlers: ((progress: AgentProgress) => void)[] = [];
     private errorHandlers: ((error: AgentError) => void)[] = [];
+
+    /** Decorators that enrich base tool metadata with runtime context */
+    private toolDecorators = new Map<string, ClientToolDecorator>();
+    /** Current runtime context for decorators */
+    private decoratorContext: ClientToolDecoratorContext = {
+        AvailableEntities: [],
+        CurrentAppName: '',
+        CustomContext: {}
+    };
+    /** Callback for sending enriched tool definitions to the server */
+    private sendToolDefinitionsFn: ((sessionID: string, tools: ClientToolMetadata[]) => Promise<void>) | null = null;
 
     constructor(transport: TransportAdapter, toolRegistry: ClientToolRegistry) {
         this.transport = transport;
@@ -133,6 +149,93 @@ export class AgentClientSession {
     /** Register handler for errors */
     public OnError(handler: (error: AgentError) => void): void {
         this.errorHandlers.push(handler);
+    }
+
+    // ================================================================
+    // Client Tool Decoration & Management
+    // ================================================================
+
+    /** The session ID (assigned on connect or generated) */
+    public get SessionId(): string | null {
+        return this._sessionId;
+    }
+
+    /**
+     * Register a decorator that enriches a metadata-driven tool with runtime context.
+     * Called during session init to inject dynamic data (entity lists, tab names, etc.)
+     */
+    public RegisterToolDecorator(toolName: string, decorator: ClientToolDecorator): void {
+        this.toolDecorators.set(toolName, decorator);
+    }
+
+    /**
+     * Set the runtime context that decorators receive.
+     * Call this whenever the context changes (user navigates, new data loads, etc.)
+     */
+    public SetDecoratorContext(context: ClientToolDecoratorContext): void {
+        this.decoratorContext = context;
+    }
+
+    /**
+     * Set the callback function for sending enriched tool definitions to the server.
+     * This should be called by the app once (typically a GraphQL mutation wrapper).
+     */
+    public SetToolDefinitionsSender(fn: (sessionID: string, tools: ClientToolMetadata[]) => Promise<void>): void {
+        this.sendToolDefinitionsFn = fn;
+    }
+
+    /**
+     * Decorate base tools with runtime context and notify the server.
+     * Call this after setting decorators and context (e.g., on session init).
+     */
+    public async DecorateAndSendTools(baseTools: ClientToolMetadata[]): Promise<void> {
+        const enriched = baseTools.map(tool => {
+            const decorator = this.toolDecorators.get(tool.Name);
+            return decorator ? decorator(tool, this.decoratorContext) : tool;
+        });
+
+        if (this._sessionId && this.sendToolDefinitionsFn) {
+            await this.sendToolDefinitionsFn(this._sessionId, enriched);
+        }
+    }
+
+    /**
+     * Add a client tool dynamically at runtime.
+     * Registers the handler locally and notifies the server.
+     */
+    public async AddClientTool(tool: ClientToolMetadata & { Handler: ClientToolHandler }): Promise<void> {
+        // Unregister first to allow re-registration
+        if (this.toolRegistry.GetTool(tool.Name)) {
+            this.toolRegistry.Unregister(tool.Name);
+        }
+        this.toolRegistry.Register({
+            Name: tool.Name,
+            Description: tool.Description,
+            ParameterSchema: tool.InputSchema,
+            Handler: tool.Handler
+        });
+        await this.notifyToolsChanged();
+    }
+
+    /**
+     * Remove a client tool at runtime.
+     * Removes the handler locally and notifies the server.
+     */
+    public async RemoveClientTool(toolName: string): Promise<void> {
+        this.toolRegistry.Unregister(toolName);
+        await this.notifyToolsChanged();
+    }
+
+    /** Notify server that client tools changed (add/remove at runtime) */
+    private async notifyToolsChanged(): Promise<void> {
+        if (!this._sessionId || !this.sendToolDefinitionsFn) return;
+
+        const allTools: ClientToolMetadata[] = this.toolRegistry.GetAllTools().map(t => ({
+            Name: t.Name,
+            Description: t.Description,
+            InputSchema: t.ParameterSchema,
+        }));
+        await this.sendToolDefinitionsFn(this._sessionId, allTools);
     }
 
     /**
@@ -273,6 +376,9 @@ export class AgentClientSession {
     private handleConnected(message: ServerMessage): void {
         if (message.Payload['ConversationId']) {
             this._conversationId = String(message.Payload['ConversationId']);
+        }
+        if (message.Payload['SessionId']) {
+            this._sessionId = String(message.Payload['SessionId']);
         }
     }
 

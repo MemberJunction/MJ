@@ -12,7 +12,7 @@
 
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse } from './loop-agent-response-type';
@@ -184,6 +184,22 @@ export class LoopAgentType extends BaseAgentType {
                             name: action.name,
                             params: action.params
                         }))
+                    }
+                    break;
+                case 'ClientTools':
+                    if (!response.nextStep.clientTools || response.nextStep.clientTools.length === 0) {
+                        retVal.step = 'Retry';
+                        retVal.message = 'When nextStep.type == "ClientTools", 1 or more client tools must be specified in nextStep.clientTools array';
+                        retVal.errorMessage = 'Client tools not specified for ClientTools type';
+                    }
+                    else {
+                        retVal.step = 'ClientTools' as BaseAgentNextStep['step'];
+                        retVal.clientTools = response.nextStep.clientTools.map(tool => ({
+                            Name: tool.name ?? tool.Name,
+                            Params: tool.params ?? tool.Params ?? {},
+                            TimeoutMs: tool.timeoutMs ?? tool.TimeoutMs,
+                            Description: tool.description ?? tool.Description
+                        }));
                     }
                     break;
                 case 'ForEach':

@@ -232,9 +232,103 @@ export type AgentAction = {
     outputMapping?: string;   
 }
 
+// ============================================================================
+// Client Tool Types
+// ============================================================================
+
+/**
+ * Metadata definition for a client tool. Stored in agent configuration
+ * or a dedicated entity. The LLM sees Name + Description + InputSchema
+ * in its system prompt to know how to invoke the tool.
+ */
+export interface ClientToolMetadata {
+    /** Unique identifier for this tool */
+    Name: string;
+    /** Human-readable description — this is what the LLM reads to decide when to use it */
+    Description: string;
+    /** JSON Schema describing the input parameters */
+    InputSchema: Record<string, unknown>;
+    /** JSON Schema describing what the tool returns (optional, for LLM context) */
+    OutputSchema?: Record<string, unknown>;
+    /** Category for grouping in prompts (e.g., 'navigation', 'display', 'data') */
+    Category?: string;
+    /** Default timeout in ms for this specific tool (overrides agent default) */
+    DefaultTimeoutMs?: number;
+}
+
+/**
+ * A single client tool invocation request from the LLM.
+ * Uses the tool's Name to look up the full metadata (description, schema).
+ */
+export type AgentClientToolInvocation = {
+    /** Name of the client tool (must match a registered ClientToolMetadata.Name) */
+    Name: string;
+    /** Parameters to pass to the tool (validated against InputSchema) */
+    Params: Record<string, unknown>;
+    /** Override timeout for this specific invocation */
+    TimeoutMs?: number;
+    /** Human-readable description of why the agent is invoking this tool */
+    Description?: string;
+};
+
+/**
+ * Per-agent configuration for client tools.
+ */
+export interface AgentClientToolConfig {
+    /** Master toggle — if false, agent cannot use any client tools */
+    Enabled: boolean;
+    /** Default timeout for client tool requests (ms) */
+    DefaultTimeoutMs: number;
+    /** Available client tools — full metadata definitions */
+    Tools: ClientToolMetadata[];
+}
+
+/**
+ * Runtime override for client tool availability, mirrors the ActionChange pattern.
+ */
+export interface ClientToolChange {
+    /** Scope of the change */
+    Scope: 'global' | 'root' | 'all-subagents' | 'specific';
+    /** Whether to add or remove tools */
+    Mode: 'add' | 'remove';
+    /** Tool definitions to add, or tool names to remove */
+    Tools: ClientToolMetadata[] | string[];
+    /** Specific agent IDs when Scope is 'specific' */
+    AgentIds?: string[];
+}
+
+/**
+ * Response from a client tool execution — returned to the server when
+ * the client finishes running the tool.
+ */
+export interface ClientToolResponse {
+    /** Must match the RequestID from the original request */
+    RequestID: string;
+    /** Whether the tool executed successfully */
+    Success: boolean;
+    /** The tool result (if successful) */
+    Result?: unknown;
+    /** Error message (if failed) */
+    ErrorMessage?: string;
+}
+
+/**
+ * Summary of a client tool execution result, used in conversation messages.
+ */
+export interface ClientToolResultSummary {
+    /** Name of the tool that was executed */
+    ToolName: string;
+    /** Whether the execution succeeded */
+    Success: boolean;
+    /** Result data from the tool */
+    Result?: unknown;
+    /** Error message if the tool failed */
+    ErrorMessage?: string;
+}
+
 /**
  * Represents a sub-agent invocation request.
- * 
+ *
  * @template TContext - Type of the context object passed to the sub-agent.
  *                      This allows for type-safe context propagation from parent to sub-agent.
  *                      Defaults to any for backward compatibility.
@@ -386,6 +480,11 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * @since 3.1.0
      */
     promoteMediaOutputs?: MediaOutput[];
+    /**
+     * Client-side tools to execute when step is 'ClientTools'.
+     * Each invocation maps to a registered ClientToolMetadata by Name.
+     */
+    clientTools?: AgentClientToolInvocation[];
 }
 
 /**
@@ -1080,6 +1179,25 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * ```
      */
     assignmentStrategy?: AgentRequestAssignmentStrategy;
+
+    /**
+     * Optional session ID for client tool communication.
+     * When provided, enables the agent to invoke client-side tools via PubSub.
+     * The session ID correlates tool requests/responses between server and client.
+     */
+    sessionID?: string;
+
+    /**
+     * Optional runtime override for client tool timeout (ms).
+     * Takes precedence over the agent's DefaultClientToolTimeoutMs config.
+     */
+    clientToolTimeoutMs?: number;
+
+    /**
+     * Optional runtime modifications to the agent's available client tools.
+     * Mirrors the actionChanges pattern for dynamic tool availability.
+     */
+    clientToolChanges?: ClientToolChange[];
 }
 
 /**
@@ -1104,6 +1222,8 @@ export type AgentContextData = {
     actionCount: number;
     /** Markdown formatted details of available actions (name, params, result codes) */
     actionDetails: string;
+    /** Markdown formatted details of available client tools (name, category, description, input schema) */
+    clientToolDetails?: string;
 }
 
 /**

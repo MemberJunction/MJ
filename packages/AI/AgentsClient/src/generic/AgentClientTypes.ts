@@ -133,6 +133,52 @@ export interface AgentError {
     IsRecoverable: boolean;
 }
 
+// ============================================================================
+// Client Tool Metadata & Decoration Types
+// ============================================================================
+
+/**
+ * Metadata definition for a client tool (mirrors server-side ClientToolMetadata).
+ * Used for runtime enrichment and registration.
+ */
+export interface ClientToolMetadata {
+    /** Unique identifier for this tool */
+    Name: string;
+    /** Human-readable description — what the LLM reads to decide when to use it */
+    Description: string;
+    /** JSON Schema describing input parameters */
+    InputSchema: Record<string, unknown>;
+    /** JSON Schema describing what the tool returns (optional) */
+    OutputSchema?: Record<string, unknown>;
+    /** Category for grouping in prompts (e.g., 'navigation', 'display', 'data') */
+    Category?: string;
+    /** Default timeout in ms for this tool */
+    DefaultTimeoutMs?: number;
+}
+
+/**
+ * Context provided to decorators — includes app state, user info, etc.
+ */
+export interface ClientToolDecoratorContext {
+    /** Current user's accessible entities */
+    AvailableEntities: string[];
+    /** Current application name */
+    CurrentAppName: string;
+    /** Current active tab/dashboard */
+    CurrentTabName?: string;
+    /** Any additional context the app provides */
+    CustomContext: Record<string, unknown>;
+}
+
+/**
+ * A decorator function that enriches a tool definition with runtime context.
+ * Called by the SDK when the agent session initializes or when tools are refreshed.
+ */
+export type ClientToolDecorator = (
+    baseTool: ClientToolMetadata,
+    context: ClientToolDecoratorContext
+) => ClientToolMetadata;
+
 /**
  * Options for connecting a transport.
  */
