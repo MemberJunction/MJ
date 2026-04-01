@@ -1,9 +1,6 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-// Kendo (ListBox remains — migrated in Phase 2.3)
-import { ListBoxModule } from '@progress/kendo-angular-listbox';
-
 // MJ UI Components
 import { MjButtonDirective, MjDialogComponent, MjDialogActionsComponent } from '@memberjunction/ng-ui-components';
 
@@ -22,7 +19,6 @@ import { RecordSelectorDialogComponent } from './lib/dialog.component';
     MjDialogComponent,
     MjDialogActionsComponent,
     ContainerDirectivesModule,
-    ListBoxModule
   ],
   exports: [
     RecordSelectorComponent,

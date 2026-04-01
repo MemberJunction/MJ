@@ -329,7 +329,7 @@ export class MJDialogService {
 
     // If content is a Component class, create it inside the container
     if (settings.content && typeof settings.content !== 'string') {
-      const contentHost = containerRef.location.nativeElement.querySelector('[#contentHost], div.mj-dialog-body div');
+      const contentHost = containerRef.location.nativeElement.querySelector('.mj-dialog-body div');
       if (contentHost) {
         const contentRef = createComponent(settings.content as Type<unknown>, {
           environmentInjector: this.appRef.injector,

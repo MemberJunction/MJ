@@ -9,7 +9,7 @@ import { DropDownsModule, ComboBoxModule, DropDownTreesModule, DropDownListModul
 import { LayoutModule, ExpansionPanelModule, TabStripModule, SplitterModule, PanelBarModule } from '@progress/kendo-angular-layout';
 import { AngularSplitModule } from 'angular-split';
 import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { GridModule } from '@progress/kendo-angular-grid';
+import { AgGridModule } from 'ag-grid-angular';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -124,7 +124,7 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         PanelBarModule,
         DialogsModule,
         WindowModule,
-        GridModule,
+        AgGridModule,
         InputsModule,
         TextBoxModule,
         TextAreaModule,

@@ -2,9 +2,6 @@ import { Component, EventEmitter, OnInit, Output } from '@angular/core';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJFileCategoryEntity } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
-
-import { ContextMenuSelectEvent } from '@progress/kendo-angular-menu';
-import { TreeItemAddRemoveArgs } from '@progress/kendo-angular-treeview';
 import { UUIDsEqual } from '@memberjunction/global';
 
 @Component({
@@ -19,10 +16,21 @@ export class CategoryTreeComponent implements OnInit {
   public isLoading: boolean = false;
   public showNew: boolean = false;
   public newCategoryName = '';
-  public selectedKeys = [];
   public renameFileCategory: MJFileCategoryEntity | undefined;
 
   public categoriesData: MJFileCategoryEntity[] = [];
+
+  /** Expanded node IDs for the tree */
+  public expandedIds = new Set<string>();
+
+  /** Currently selected node ID */
+  private selectedId: string | undefined;
+
+  /** Context menu state */
+  public contextMenuVisible = false;
+  public contextMenuX = 0;
+  public contextMenuY = 0;
+  private contextMenuNode: MJFileCategoryEntity | undefined;
 
   private md = new Metadata();
 
@@ -32,23 +40,87 @@ export class CategoryTreeComponent implements OnInit {
     this.Refresh();
   }
 
+  /** Returns root-level nodes (no parent). */
+  get rootNodes(): MJFileCategoryEntity[] {
+    return this.categoriesData.filter((c) => !c.ParentID);
+  }
+
+  /** Checks if a node has children. */
+  hasChildren(node: MJFileCategoryEntity): boolean {
+    return this.categoriesData.some((c) => UUIDsEqual(c.ParentID, node.ID));
+  }
+
+  /** Returns children of a node. */
+  getChildren(node: MJFileCategoryEntity): MJFileCategoryEntity[] {
+    return this.categoriesData.filter((c) => UUIDsEqual(c.ParentID, node.ID));
+  }
+
+  /** Checks if a node is expanded. */
+  isExpanded(node: MJFileCategoryEntity): boolean {
+    return this.expandedIds.has(node.ID);
+  }
+
+  /** Toggles expand/collapse on a node. */
+  toggleExpand(node: MJFileCategoryEntity, event: Event): void {
+    event.stopPropagation();
+    if (this.expandedIds.has(node.ID)) {
+      this.expandedIds.delete(node.ID);
+    } else {
+      this.expandedIds.add(node.ID);
+    }
+  }
+
+  /** Checks if a node is the currently selected node. */
+  isSelected(node: MJFileCategoryEntity): boolean {
+    return this.selectedId != null && UUIDsEqual(this.selectedId, node.ID);
+  }
+
+  /** Selects a node and emits event. */
+  selectNode(node: MJFileCategoryEntity): void {
+    this.selectedId = node.ID;
+    this.categorySelected.emit(node.ID);
+  }
+
+  /** Opens context menu on right-click. */
+  onContextMenu(event: MouseEvent, node: MJFileCategoryEntity): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.contextMenuNode = node;
+    this.contextMenuX = event.clientX;
+    this.contextMenuY = event.clientY;
+    this.contextMenuVisible = true;
+  }
+
+  /** Closes the context menu. */
+  closeContextMenu(): void {
+    this.contextMenuVisible = false;
+    this.contextMenuNode = undefined;
+  }
+
+  /** Handles context menu action selection. */
+  onContextMenuAction(action: string): void {
+    const node = this.contextMenuNode;
+    this.closeContextMenu();
+    if (!node) {
+      return;
+    }
+
+    switch (action) {
+      case 'rename':
+        this.renameFileCategory = node;
+        break;
+      case 'delete':
+        this.deleteCategory(node);
+        break;
+    }
+  }
+
   async createNewCategory() {
     this.showNew = true;
   }
 
   cancelNewCategory() {
     this.showNew = false;
-  }
-
-  async handleDrop(e: TreeItemAddRemoveArgs) {
-    console.log(e);
-    const sourceCategory: MJFileCategoryEntity = e.sourceItem.item.dataItem;
-    const targetCategory: MJFileCategoryEntity = e.destinationItem.item.dataItem;
-    sourceCategory.ParentID = targetCategory.ID;
-
-    this.isLoading = true;
-    await sourceCategory.Save();
-    this.isLoading = false;
   }
 
   async saveNewCategory() {
@@ -78,24 +150,8 @@ export class CategoryTreeComponent implements OnInit {
   }
 
   clearSelection() {
-    this.selectedKeys = [];
+    this.selectedId = undefined;
     this.categorySelected.emit(undefined);
-  }
-
-  handleMenuSelect(e: ContextMenuSelectEvent) {
-    const action = e.item?.text?.toLowerCase() ?? '';
-    switch (action) {
-      case 'rename':
-        this.renameFileCategory = e.item.data;
-        break;
-
-      case 'delete':
-        this.deleteCategory(e.item.data);
-        break;
-
-      default:
-        break;
-    }
   }
 
   cancelRename() {

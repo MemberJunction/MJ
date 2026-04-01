@@ -2,10 +2,7 @@ import { NgModule } from '@angular/core';
 import { ResourcePermissionsComponent } from './lib/resource-permissions.component';
 import { CommonModule } from '@angular/common';
 
-// Kendo UI Angular imports (grid only — other Kendo components have been migrated)
-import { GridModule } from '@progress/kendo-angular-grid';
-import { ExcelExportModule } from '@progress/kendo-angular-excel-export';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
+import { AgGridModule } from 'ag-grid-angular';
 
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FormsModule } from '@angular/forms';
@@ -23,11 +20,9 @@ import { MjButtonDirective, MjDropdownComponent } from '@memberjunction/ng-ui-co
   ],
   imports: [
     CommonModule,
-    GridModule,
+    AgGridModule,
     FormsModule,
-    ExcelExportModule,
     ContainerDirectivesModule,
-    IndicatorsModule,
     GenericDialogModule,
     SharedGenericModule,
     MjButtonDirective,
