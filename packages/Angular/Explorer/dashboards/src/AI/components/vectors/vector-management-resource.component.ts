@@ -12,6 +12,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
     MJEntityDocumentEntity,
     MJVectorDatabaseEntity,
@@ -21,7 +22,6 @@ import {
     MJTemplateEntity,
     MJTemplateContentEntity
 } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { KPICardData } from '../widgets/kpi-card.component';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
@@ -114,7 +114,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Open the edit panel for an entity document */
     public OpenEditPanel(entityDocumentId: string): void {
-        const doc = this.entityDocuments.find(d => d.ID === entityDocumentId);
+        const doc = this.entityDocuments.find(d => UUIDsEqual(d.ID, entityDocumentId));
         if (!doc) return;
         this.EditDocID = doc.ID;
         this.EditDocName = doc.Name;
@@ -304,7 +304,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             return;
         }
 
-        const doc = this.entityDocuments.find(d => d.ID === entityDocumentId);
+        const doc = this.entityDocuments.find(d => UUIDsEqual(d.ID, entityDocumentId));
         if (!doc) return;
 
         const provider = Metadata.Provider as GraphQLDataProvider;
@@ -730,14 +730,14 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private buildSyncRows(): void {
         this.SyncRows = this.entityDocuments.map(doc => {
             const docsForEntity = this.recordDocuments.filter(
-                rd => rd.EntityDocumentID === doc.ID
+                rd => UUIDsEqual(rd.EntityDocumentID, doc.ID)
             );
             const vectorCount = docsForEntity.filter(rd => rd.VectorID != null).length;
             const lastSynced = this.computeLastSynced(docsForEntity);
             const status = this.computeSyncStatus(doc, vectorCount, docsForEntity.length);
 
             // Preserve progress info from any active sync
-            const existingRow = this.SyncRows.find(r => r.EntityDocumentID === doc.ID);
+            const existingRow = this.SyncRows.find(r => UUIDsEqual(r.EntityDocumentID, doc.ID));
             return {
                 EntityDocumentID: doc.ID,
                 EntityName: doc.Entity || '',
@@ -854,7 +854,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private buildEmbeddingModelInfo(): void {
         if (this.vectorIndexes.length > 0) {
             const index = this.vectorIndexes[0];
-            const model = this.aiModels.find(m => m.ID === index.EmbeddingModelID);
+            const model = this.aiModels.find(m => UUIDsEqual(m.ID, index.EmbeddingModelID));
             this.EmbeddingModel = {
                 Name: model?.Name ?? index.EmbeddingModel ?? 'Unknown',
                 Dimensions: null
@@ -937,7 +937,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // If a vector index is selected, use its DB + model so the syncer finds it
         // instead of auto-creating a new one
         if (this.SelectedVectorIndexID) {
-            const idx = this.AvailableVectorIndexes.find(i => i.ID === this.SelectedVectorIndexID);
+            const idx = this.AvailableVectorIndexes.find(i => UUIDsEqual(i.ID, this.SelectedVectorIndexID));
             if (idx) {
                 entityDoc.VectorDatabaseID = idx.VectorDatabaseID;
                 entityDoc.AIModelID = idx.EmbeddingModelID;

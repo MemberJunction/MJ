@@ -10,6 +10,7 @@
  */
 
 import { LogStatus, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 
 /**
  * Describes a tool available to the Knowledge Agent.
@@ -421,8 +422,6 @@ export class KnowledgeAgent {
                 return { Success: false, ErrorMessage: 'listID is required' };
             }
 
-            // Dynamic import to avoid circular dependencies
-            const { DuplicateRecordDetector } = await import('@memberjunction/ai-vector-dupe');
             const detector = new DuplicateRecordDetector();
             detector.CurrentUser = contextUser;
 

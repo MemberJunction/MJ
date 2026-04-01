@@ -6,7 +6,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase, BaseResponse } from '@memberjunction/ai-vectordb';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 
 /* ───── GraphQL types ───── */
 
@@ -247,7 +247,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
     ): Promise<SearchKnowledgeResultItem[]> {
         try {
             // Find the AI model for this embedding
-            const model = AIEngine.Instance.Models.find(m => m.ID === embeddingModelID);
+            const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, embeddingModelID));
             if (!model) {
                 LogError(`SearchKnowledge: Embedding model ${embeddingModelID} not found`);
                 return [];

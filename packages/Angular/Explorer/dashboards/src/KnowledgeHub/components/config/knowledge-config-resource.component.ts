@@ -10,7 +10,7 @@ import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '
 import { Subject } from 'rxjs';
 import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -278,7 +278,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
     /** Delete a vector index */
     public async DeleteIndex(indexId: string): Promise<void> {
-        const idx = this.VectorIndexes.find(i => i.ID === indexId);
+        const idx = this.VectorIndexes.find(i => UUIDsEqual(i.ID, indexId));
         if (!idx) return;
 
         try {
