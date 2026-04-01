@@ -15,9 +15,10 @@ import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
 import crypto from 'crypto'
-import { BaseLLM, GetAIAPIKey } from '@memberjunction/ai'
+import { BaseLLM, BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
 import { TextChunker, ChunkTextParams } from '@memberjunction/ai-vectors'
+import { VectorDBBase, VectorRecord, BaseResponse } from '@memberjunction/ai-vectordb'
 
 /**
  * Core engine for content autotagging. Extends BaseEngine to cache content metadata
@@ -593,5 +594,181 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             default:
                 throw new Error(`File type '${fileExtension}' not supported`);
         }
+    }
+
+    // ---- Direct Vectorization ----
+
+    /**
+     * Embeds content items directly and upserts them to the first active vector index.
+     * Bypasses Entity Documents — content items already have unstructured text.
+     * Uses deterministic IDs (SHA-1 of "content-item_" + ID) so re-runs update in place.
+     */
+    public async VectorizeContentItems(
+        items: MJContentItemEntity[],
+        contextUser: UserInfo,
+        onProgress?: (processed: number, total: number) => void
+    ): Promise<{ vectorized: number; skipped: number }> {
+        const eligible = items.filter(i => i.Text && i.Text.trim().length > 0);
+        if (eligible.length === 0) {
+            LogStatus('VectorizeContentItems: no items with text to vectorize');
+            return { vectorized: 0, skipped: items.length };
+        }
+
+        const { embedding, vectorDB, indexName, embeddingModelName } = await this.getVectorInfrastructure();
+
+        // Load tags for all items in one query
+        const tagMap = await this.loadTagsForItems(eligible, contextUser);
+
+        const BATCH_SIZE = 50;
+        let vectorized = 0;
+
+        for (let i = 0; i < eligible.length; i += BATCH_SIZE) {
+            const batch = eligible.slice(i, i + BATCH_SIZE);
+            const texts = batch.map(item => this.buildEmbeddingText(item));
+
+            const embedResult = await embedding.EmbedTexts({ texts, model: embeddingModelName });
+            if (!embedResult.vectors || embedResult.vectors.length !== batch.length) {
+                LogError(`VectorizeContentItems: embedding returned ${embedResult.vectors?.length ?? 0} vectors for ${batch.length} texts`);
+                continue;
+            }
+
+            const records: VectorRecord[] = batch.map((item, idx) => ({
+                id: this.contentItemVectorId(item.ID),
+                values: embedResult.vectors[idx],
+                metadata: this.buildVectorMetadata(item, tagMap.get(item.ID))
+            }));
+
+            const response: BaseResponse = await vectorDB.CreateRecords(records, indexName);
+            if (!response.success) {
+                LogError(`VectorizeContentItems: upsert failed for batch starting at ${i}: ${response.message}`);
+            } else {
+                vectorized += batch.length;
+            }
+
+            onProgress?.(Math.min(i + BATCH_SIZE, eligible.length), eligible.length);
+        }
+
+        LogStatus(`VectorizeContentItems: ${vectorized} vectorized, ${items.length - eligible.length} skipped (empty text)`);
+        return { vectorized, skipped: items.length - eligible.length };
+    }
+
+    /** SHA-1 deterministic vector ID for a content item */
+    private contentItemVectorId(contentItemId: string): string {
+        return crypto.createHash('sha1').update(`content-item_${contentItemId}`).digest('hex');
+    }
+
+    /** Build the text that gets embedded: Title + Description + full Text */
+    private buildEmbeddingText(item: MJContentItemEntity): string {
+        const parts: string[] = [];
+        if (item.Name) parts.push(item.Name);
+        if (item.Description) parts.push(item.Description);
+        if (item.Text) parts.push(item.Text);
+        return parts.join('\n');
+    }
+
+    /** Build metadata stored alongside the vector — truncate large text fields */
+    private buildVectorMetadata(
+        item: MJContentItemEntity,
+        tags: string[] | undefined
+    ): Record<string, string | number | boolean | string[]> {
+        const META_TEXT_LIMIT = 1000;
+        const meta: Record<string, string | number | boolean | string[]> = {
+            RecordID: item.ID,
+            Entity: 'MJ: Content Items',
+        };
+        if (item.Name) meta['Title'] = item.Name.substring(0, META_TEXT_LIMIT);
+        if (item.Description) meta['Description'] = item.Description.substring(0, META_TEXT_LIMIT);
+        if (item.URL) meta['URL'] = item.URL;
+        if (tags && tags.length > 0) meta['Tags'] = tags;
+        return meta;
+    }
+
+    /** Load all tags for the given items in a single RunView call */
+    private async loadTagsForItems(
+        items: MJContentItemEntity[],
+        contextUser: UserInfo
+    ): Promise<Map<string, string[]>> {
+        const tagMap = new Map<string, string[]>();
+        const rv = new RunView();
+        const ids = items.map(i => `'${i.ID}'`).join(',');
+        const result = await rv.RunView<MJContentItemTagEntity>({
+            EntityName: 'MJ: Content Item Tags',
+            ExtraFilter: `ItemID IN (${ids})`,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (result.Success) {
+            for (const tag of result.Results) {
+                const existing = tagMap.get(tag.ItemID) ?? [];
+                existing.push(tag.Tag);
+                tagMap.set(tag.ItemID, existing);
+            }
+        }
+        return tagMap;
+    }
+
+    /** Resolve embedding model + vector DB + index name from the first active VectorIndex */
+    private async getVectorInfrastructure(): Promise<{
+        embedding: BaseEmbeddings;
+        vectorDB: VectorDBBase;
+        indexName: string;
+        embeddingModelName: string;
+    }> {
+        const rv = new RunView();
+
+        // Get the first active vector index
+        const indexResult = await rv.RunView({
+            EntityName: 'MJ: Vector Indexes',
+            ResultType: 'simple',
+            MaxRows: 1
+        });
+        if (!indexResult.Success || indexResult.Results.length === 0) {
+            throw new Error('No vector indexes found — create one in the Configuration tab first');
+        }
+        const vectorIndex = indexResult.Results[0] as Record<string, unknown>;
+        const indexName = vectorIndex['Name'] as string;
+        const vectorDatabaseID = vectorIndex['VectorDatabaseID'] as string;
+
+        // Get vector database
+        const dbResult = await rv.RunView({
+            EntityName: 'MJ: Vector Databases',
+            ExtraFilter: `ID='${vectorDatabaseID}'`,
+            ResultType: 'simple',
+            MaxRows: 1
+        });
+        if (!dbResult.Success || dbResult.Results.length === 0) {
+            throw new Error(`Vector database ${vectorDatabaseID} not found`);
+        }
+        const vectorDBRecord = dbResult.Results[0] as Record<string, unknown>;
+        const vectorDBClassKey = vectorDBRecord['ClassKey'] as string;
+
+        // Get embedding model — use text-embedding-3-small by convention
+        const modelResult = await rv.RunView({
+            EntityName: 'AI Models',
+            ExtraFilter: `Name='text-embedding-3-small' AND IsActive=1`,
+            ResultType: 'simple',
+            MaxRows: 1
+        });
+        if (!modelResult.Success || modelResult.Results.length === 0) {
+            throw new Error('Embedding model text-embedding-3-small not found or not active');
+        }
+        const modelRecord = modelResult.Results[0] as Record<string, unknown>;
+        const driverClass = modelRecord['DriverClass'] as string;
+        const embeddingModelName = (modelRecord['APIName'] as string) ?? 'text-embedding-3-small';
+
+        const embeddingAPIKey = GetAIAPIKey(driverClass);
+        const vectorDBAPIKey = GetAIAPIKey(vectorDBClassKey);
+
+        const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+            BaseEmbeddings, driverClass, embeddingAPIKey
+        );
+        if (!embedding) throw new Error(`Failed to create embedding instance for ${driverClass}`);
+
+        const vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(
+            VectorDBBase, vectorDBClassKey, vectorDBAPIKey
+        );
+        if (!vectorDB) throw new Error(`Failed to create vector DB instance for ${vectorDBClassKey}`);
+
+        return { embedding, vectorDB, indexName, embeddingModelName };
     }
 }

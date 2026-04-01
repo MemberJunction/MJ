@@ -1,6 +1,6 @@
 import { Resolver, Mutation, Ctx, ObjectType, Field } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, LogStatus, RunView } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { PubSubManager } from '../generic/PubSubManager.js';
@@ -59,7 +59,7 @@ export class AutotagPipelineResolver extends ResolverBase {
     }
 
     /**
-     * Runs the autotag pipeline in the background, publishing progress
+     * Runs the autotag + vectorize pipeline in the background, publishing progress
      * updates via PubSub so the client can subscribe via PipelineProgress.
      */
     private async runPipelineInBackground(
@@ -68,10 +68,8 @@ export class AutotagPipelineResolver extends ResolverBase {
     ): Promise<void> {
         const startTime = Date.now();
         try {
-            // Stage 1: Publish "starting" progress
             this.publishProgress(pipelineRunID, 'autotag', 0, 0, startTime, 'Initializing pipeline...');
 
-            // Find the Autotag action by name
             await ActionEngineServer.Instance.Config(false, currentUser);
             const action = ActionEngineServer.Instance.Actions.find(
                 a => a.Name === 'Autotag and Vectorize Content'
@@ -83,20 +81,22 @@ export class AutotagPipelineResolver extends ResolverBase {
                 return;
             }
 
-            // Stage 2: Publish "autotagging" progress
+            // Stage: autotagging
             this.publishProgress(pipelineRunID, 'autotag', 100, 10, startTime, 'Running autotaggers...');
 
-            // Run the autotag action with Autotag=1 and Vectorize=0
-            // (vectorization is handled separately by the vector sync dashboard)
+            // Run with both Autotag=1 and Vectorize=1: the action will tag, then embed directly
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
                 ContextUser: currentUser,
                 Filters: [],
                 Params: [
                     { Name: 'Autotag', Value: 1, Type: 'Input' },
-                    { Name: 'Vectorize', Value: 0, Type: 'Input' }
+                    { Name: 'Vectorize', Value: 1, Type: 'Input' }
                 ]
             });
+
+            // Stage: vectorize complete
+            this.publishProgress(pipelineRunID, 'vectorize', 100, 90, startTime, 'Vectorizing content...');
 
             if (result.Success) {
                 LogStatus(`RunAutotagPipeline: pipeline ${pipelineRunID} completed successfully`);
