@@ -415,6 +415,366 @@ SELECT MemberID, Score * 1.5 AS FinalScore FROM BaseScores`,
         expectedBehavior:
             'This is a nested composition: Weighted Scores depends on Raw Scores. The engine must recursively resolve Raw Scores, hoist its CTEs, then hoist Weighted Scores CTEs. Circular dependency detection should also be in place.',
     },
+
+    // ---------------------------------------------------------------
+    // CTE Hoisting Failure Cases (from production bug in Skip agent run 3D3A19E8)
+    // These test the silent fallback path in hoistInnerCTEs() when
+    // SQLParser.ExtractCTEs() fails on complex dependency SQL.
+    // ---------------------------------------------------------------
+    {
+        description: 'Dependency CTE with leading comment block before WITH clause',
+        outerSQL: `SELECT mac.MemberID, mac.TotalCount
+FROM {{query:"Analytics/Member Activity Counts"}} mac
+WHERE mac.TotalCount > 5`,
+        dependencies: [
+            {
+                name: 'Member Activity Counts',
+                categoryPath: 'Analytics',
+                sql: `-- Each activity dimension is pre-aggregated in its own subquery
+-- to avoid cartesian products across dimensions.
+WITH MemberActivities AS (
+    SELECT MemberID, COUNT(*) AS TotalCount
+    FROM Activities
+    GROUP BY MemberID
+)
+SELECT MemberID, TotalCount
+FROM MemberActivities`,
+            },
+        ],
+        dialect: 'TransactSQL',
+        expectedBehavior:
+            'The dependency SQL has -- comment lines BEFORE the WITH clause. The comment stripping must handle this so ExtractCTEs() sees the WITH prefix. The MemberActivities CTE must be hoisted as a sibling, not nested inside the wrapper CTE. This is the exact pattern that caused the production bug.',
+    },
+    {
+        description: 'Dependency CTE with block comment (/* */) before WITH clause',
+        outerSQL: `SELECT mac.MemberID
+FROM {{query:"Analytics/Member Counts"}} mac`,
+        dependencies: [
+            {
+                name: 'Member Counts',
+                categoryPath: 'Analytics',
+                sql: `/* Author: admin
+   Created: 2024-01-15
+   Description: Counts member activities across all dimensions */
+WITH MemberActivities AS (
+    SELECT MemberID, COUNT(*) AS TotalCount
+    FROM Activities
+    GROUP BY MemberID
+)
+SELECT MemberID, TotalCount FROM MemberActivities`,
+            },
+        ],
+        dialect: 'TransactSQL',
+        expectedBehavior:
+            'Block comments (/* */) before WITH must be stripped before CTE detection and extraction. The MemberActivities CTE must be hoisted correctly.',
+    },
+    {
+        description: 'Dependency CTE with complex EXISTS subquery inside CTE body',
+        outerSQL: `SELECT o.OrganizationID, o.OrganizationName, o.MemberCount
+FROM {{query:"Engagement/Org Activity Leaderboard"}} o`,
+        dependencies: [
+            {
+                name: 'Org Activity Leaderboard',
+                categoryPath: 'Engagement',
+                sql: `WITH MemberActivities AS (
+    SELECT
+        m.ID AS MemberID,
+        COALESCE(evt.EventsRegistered, 0) AS EventsRegistered,
+        COALESCE(crs.CoursesCompleted, 0) AS CoursesCompleted
+    FROM [AssociationDemo].[vwMembers] m
+    LEFT JOIN (
+        SELECT er.MemberID, COUNT(DISTINCT er.ID) AS EventsRegistered
+        FROM [AssociationDemo].[vwEventRegistrations] er
+        GROUP BY er.MemberID
+    ) evt ON m.ID = evt.MemberID
+    LEFT JOIN (
+        SELECT en.MemberID,
+               SUM(CASE WHEN en.Status = 'Completed' THEN 1 ELSE 0 END) AS CoursesCompleted
+        FROM [AssociationDemo].[vwEnrollments] en
+        GROUP BY en.MemberID
+    ) crs ON m.ID = crs.MemberID
+    WHERE EXISTS (
+        SELECT 1 FROM [AssociationDemo].[vwMemberships] ms
+        INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID
+        WHERE ms.MemberID = m.ID
+          AND ms.Status = 'Active'
+          AND mt.Name = 'Professional'
+    )
+)
+SELECT
+    o.ID AS OrganizationID,
+    o.Name AS OrganizationName,
+    COUNT(DISTINCT mac.MemberID) AS MemberCount
+FROM MemberActivities mac
+INNER JOIN [AssociationDemo].[vwMembers] m ON mac.MemberID = m.ID
+INNER JOIN [AssociationDemo].[vwOrganizations] o ON m.OrganizationID = o.ID
+GROUP BY o.ID, o.Name`,
+            },
+        ],
+        dialect: 'TransactSQL',
+        expectedBehavior:
+            'This is the exact Golden Query pattern from the production bug. The CTE body contains LEFT JOINs to subqueries, EXISTS with nested INNER JOIN, CASE WHEN expressions, and schema-qualified view references. SQLParser.ExtractCTEs() must correctly extract the MemberActivities CTE and the main SELECT even with this complexity.',
+    },
+    {
+        description: 'Dependency CTE with comments + complex body + WHERE 1=1 pattern',
+        outerSQL: `SELECT mac.MemberID, mac.TotalActivityCount
+FROM {{query:"Golden-Queries/Engagement Analytics/Member Activity Counts"}} mac
+WHERE mac.TotalActivityCount > {{ MinActivity | sqlNumber }}`,
+        dependencies: [
+            {
+                name: 'Member Activity Counts',
+                categoryPath: 'Golden-Queries/Engagement Analytics',
+                sql: `-- Each activity dimension is pre-aggregated in its own subquery and LEFT JOINed
+-- to Members. This avoids cartesian products.
+WITH MemberActivities AS (
+    SELECT
+        m.ID AS MemberID,
+        m.FirstName,
+        m.LastName,
+        COALESCE(evt.EventsAttended, 0) AS EventsAttended,
+        COALESCE(evt.EventsRegistered, 0) AS EventsRegistered,
+        COALESCE(crs.CoursesCompleted, 0) AS CoursesCompleted,
+        COALESCE(crs.CoursesInProgress, 0) AS CoursesInProgress,
+        COALESCE(ch.ChaptersJoined, 0) AS ChaptersJoined,
+        COALESCE(com.CommitteesServed, 0) AS CommitteesServed,
+        (
+            COALESCE(evt.EventsAttended, 0)
+            + COALESCE(crs.CoursesCompleted, 0)
+            + COALESCE(ch.ChaptersJoined, 0)
+            + COALESCE(com.CommitteesServed, 0)
+        ) AS TotalActivityCount
+    FROM [AssociationDemo].[vwMembers] m
+    LEFT JOIN (
+        SELECT
+            er.MemberID,
+            COUNT(DISTINCT er.ID) AS EventsRegistered,
+            SUM(CASE WHEN er.Status = 'Attended' THEN 1 ELSE 0 END) AS EventsAttended
+        FROM [AssociationDemo].[vwEventRegistrations] er
+        GROUP BY er.MemberID
+    ) evt ON m.ID = evt.MemberID
+    LEFT JOIN (
+        SELECT
+            en.MemberID,
+            SUM(CASE WHEN en.Status = 'Completed' THEN 1 ELSE 0 END) AS CoursesCompleted,
+            SUM(CASE WHEN en.Status = 'In Progress' THEN 1 ELSE 0 END) AS CoursesInProgress
+        FROM [AssociationDemo].[vwEnrollments] en
+        GROUP BY en.MemberID
+    ) crs ON m.ID = crs.MemberID
+    LEFT JOIN (
+        SELECT cm.MemberID, COUNT(DISTINCT cm.ChapterID) AS ChaptersJoined
+        FROM [AssociationDemo].[vwChapterMemberships] cm
+        WHERE cm.Status = 'Active'
+        GROUP BY cm.MemberID
+    ) ch ON m.ID = ch.MemberID
+    LEFT JOIN (
+        SELECT cm.MemberID, COUNT(DISTINCT cm.CommitteeID) AS CommitteesServed
+        FROM [AssociationDemo].[vwCommitteeMemberships] cm
+        WHERE cm.IsActive = 1
+        GROUP BY cm.MemberID
+    ) com ON m.ID = com.MemberID
+)
+SELECT *
+FROM MemberActivities
+WHERE 1=1
+  AND EXISTS (
+      SELECT 1 FROM [AssociationDemo].[vwMemberships] ms
+      INNER JOIN [AssociationDemo].[vwMembershipTypes] mt ON ms.MembershipTypeID = mt.ID
+      WHERE ms.MemberID = MemberActivities.MemberID
+        AND ms.Status = 'Active'
+        AND mt.Name = 'Professional'
+  )`,
+            },
+        ],
+        dialect: 'TransactSQL',
+        expectedBehavior:
+            'This is the EXACT SQL from the production failure (Agent Run 3D3A19E8, Golden Query "Member Activity Counts"). It has: (1) leading -- comments before WITH, (2) a single large CTE with 4 LEFT JOIN subqueries, (3) CASE WHEN expressions, (4) WHERE 1=1 AND EXISTS(...) pattern in the main SELECT, (5) schema-qualified view names with brackets. ExtractCTEs() must parse this correctly. If it returns null, hoistInnerCTEs() will silently produce invalid nested WITH syntax.',
+    },
+    {
+        description: 'Dependency CTE with Nunjucks template tokens inside CTE body (AST parser failure)',
+        outerSQL: `SELECT mac.MemberID
+FROM {{query:"Analytics/Filtered Members(MinScore=ScoreThreshold)"}} mac`,
+        dependencies: [
+            {
+                name: 'Filtered Members',
+                categoryPath: 'Analytics',
+                sql: `WITH ScoredMembers AS (
+    SELECT MemberID, SUM(Points) AS Score
+    FROM ActivityPoints
+    GROUP BY MemberID
+    HAVING SUM(Points) >= {{ MinScore | default(10) | sqlNumber }}
+)
+SELECT MemberID, Score FROM ScoredMembers`,
+            },
+        ],
+        dialect: 'TransactSQL',
+        expectedBehavior:
+            'The CTE body contains a Nunjucks template expression {{ MinScore | default(10) | sqlNumber }}. AST parsers (node-sql-parser) will fail on this syntax since {{ }} is not valid SQL. The regex fallback must handle paren-depth tracking correctly even with template tokens present. The CTE must still be hoisted correctly.',
+    },
+    {
+        description: 'Dependency CTE with mixed -- and /* */ comments before WITH clause',
+        outerSQL: `SELECT mac.MemberID
+FROM {{query:"Analytics/Member Counts"}} mac`,
+        dependencies: [
+            {
+                name: 'Member Counts',
+                categoryPath: 'Analytics',
+                sql: `-- Line comment first
+/* Then a block comment
+   spanning multiple lines */
+-- Another line comment
+WITH MemberActivities AS (
+    SELECT MemberID, COUNT(*) AS TotalCount
+    FROM Activities
+    GROUP BY MemberID
+)
+SELECT MemberID, TotalCount FROM MemberActivities`,
+            },
+        ],
+        dialect: 'TransactSQL',
+        expectedBehavior:
+            'Mixed comment styles (-- and /* */) before the WITH clause must all be stripped for CTE detection. The hoisting must work regardless of comment interleaving.',
+    },
+    {
+        description: 'Dependency CTE with comments interleaved between CTE definitions',
+        outerSQL: `SELECT s.MemberID, s.Score
+FROM {{query:"Analytics/Engagement Score"}} s`,
+        dependencies: [
+            {
+                name: 'Engagement Score',
+                categoryPath: 'Analytics',
+                sql: `WITH EventCounts AS (
+    SELECT MemberID, COUNT(*) AS EventCount
+    FROM EventAttendance
+    GROUP BY MemberID
+),
+-- This CTE calculates email engagement
+EmailOpens AS (
+    SELECT MemberID, COUNT(*) AS OpenCount
+    FROM EmailEvents
+    WHERE EventType = 'Open'
+    GROUP BY MemberID
+)
+SELECT e.MemberID,
+       ISNULL(e.EventCount, 0) + ISNULL(o.OpenCount, 0) AS Score
+FROM EventCounts e
+LEFT JOIN EmailOpens o ON o.MemberID = e.MemberID`,
+            },
+        ],
+        dialect: 'TransactSQL',
+        expectedBehavior:
+            'Comments between CTE definitions (after the comma, before the next CTE name) must not break CTE extraction. Both EventCounts and EmailOpens must be hoisted correctly.',
+    },
+    {
+        description: 'Dependency CTE with ORDER BY + comments before WITH (combined stripping + hoisting)',
+        outerSQL: `SELECT mac.MemberID
+FROM {{query:"Analytics/Top Active Members"}} mac`,
+        dependencies: [
+            {
+                name: 'Top Active Members',
+                categoryPath: 'Analytics',
+                sql: `-- Returns top active members by activity count
+WITH ActivityCounts AS (
+    SELECT MemberID, COUNT(*) AS ActivityCount
+    FROM Activities
+    GROUP BY MemberID
+)
+SELECT MemberID, ActivityCount
+FROM ActivityCounts
+ORDER BY ActivityCount DESC`,
+            },
+        ],
+        dialect: 'TransactSQL',
+        expectedBehavior:
+            'Both transformations must succeed: (1) comments must be stripped so WITH is detected, (2) the ActivityCounts CTE must be hoisted, AND (3) the trailing ORDER BY must be stripped. All three operations on the same dependency SQL.',
+    },
+    {
+        description: 'Dependency CTE with empty line between comments and WITH',
+        outerSQL: `SELECT mac.MemberID
+FROM {{query:"Analytics/Member Counts"}} mac`,
+        dependencies: [
+            {
+                name: 'Member Counts',
+                categoryPath: 'Analytics',
+                sql: `-- Query description here
+
+WITH MemberActivities AS (
+    SELECT MemberID, COUNT(*) AS TotalCount
+    FROM Activities
+    GROUP BY MemberID
+)
+SELECT MemberID, TotalCount FROM MemberActivities`,
+            },
+        ],
+        dialect: 'TransactSQL',
+        expectedBehavior:
+            'An empty line between the comment block and WITH clause must not prevent CTE detection. After comment stripping, trimStart() should handle the blank line.',
+    },
+    {
+        description: 'Dependency with CTE containing string literal that looks like WITH keyword',
+        outerSQL: `SELECT r.MemberID
+FROM {{query:"Reports/Member Notes"}} r`,
+        dependencies: [
+            {
+                name: 'Member Notes',
+                categoryPath: 'Reports',
+                sql: `WITH RecentNotes AS (
+    SELECT MemberID, Note
+    FROM Notes
+    WHERE Note LIKE '%WITH regard to%'
+      AND Note NOT LIKE '%WITHOUT%'
+)
+SELECT MemberID, Note FROM RecentNotes`,
+            },
+        ],
+        dialect: 'TransactSQL',
+        expectedBehavior:
+            'The string literals containing "WITH" must not confuse CTE extraction. Only the actual WITH keyword at the start of the SQL should trigger hoisting. The paren-depth tracker must not be confused by WITH inside string literals.',
+    },
+    {
+        description: 'Dependency CTE with Nunjucks {% if %} conditional block wrapping part of the CTE',
+        outerSQL: `SELECT mac.MemberID
+FROM {{query:"Analytics/Conditional Members(IncludeInactive=ShowAll)"}} mac`,
+        dependencies: [
+            {
+                name: 'Conditional Members',
+                categoryPath: 'Analytics',
+                sql: `WITH FilteredMembers AS (
+    SELECT MemberID, Status
+    FROM Members
+    {% if IncludeInactive %}
+    WHERE 1=1
+    {% else %}
+    WHERE Status = 'Active'
+    {% endif %}
+)
+SELECT MemberID FROM FilteredMembers`,
+            },
+        ],
+        dialect: 'TransactSQL',
+        expectedBehavior:
+            'Nunjucks {% if %} blocks inside the CTE body will cause AST parsing to fail. The regex fallback must correctly track parentheses and extract the CTE despite the template control flow syntax.',
+    },
+    {
+        description: 'PostgreSQL: Dependency CTE with leading comments before WITH (same bug, different platform)',
+        outerSQL: `SELECT mac.member_id
+FROM {{query:"analytics/member_counts"}} mac`,
+        dependencies: [
+            {
+                name: 'member_counts',
+                categoryPath: 'analytics',
+                sql: `-- PostgreSQL version of the member activity counts
+WITH member_activities AS (
+    SELECT member_id, count(*) AS total_count
+    FROM activities
+    GROUP BY member_id
+)
+SELECT member_id, total_count FROM member_activities`,
+            },
+        ],
+        dialect: 'PostgreSQL',
+        expectedBehavior:
+            'The same leading-comment-before-WITH bug can occur on PostgreSQL. CTE hoisting must work correctly on both platforms when comments precede the WITH clause.',
+    },
 ];
 
 // ---------------------------------------------------------------
