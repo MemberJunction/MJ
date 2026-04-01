@@ -5,19 +5,12 @@
 @import './variables';
 @import './typography';
 
-// Import Kendo theme BEFORE our overrides
-// Using package resolution - works regardless of repository structure
-@import '@progress/kendo-theme-default/scss/all';
-
 // Import dhtmlx-gantt CSS for Gantt chart components
 @import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
 
 // Import Golden Layout CSS for tab management
 @import 'golden-layout/dist/css/goldenlayout-base.css';
 @import 'golden-layout/dist/css/themes/goldenlayout-light-theme.css';
-
-// Apply our theme overrides to Kendo components
-@import './kendo-theme-override';
 
 // Shared UI patterns (selector lists for consistent styling)
 @import './shared-patterns';
@@ -39,17 +32,6 @@
 @import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
 @import '@memberjunction/ng-ui-components/dist/lib/window/window';
 @import '@memberjunction/ng-ui-components/dist/lib/input/chip';
-
-// Ensure button groups have correct colors (override any conflicting styles)
-kendo-buttongroup button,
-kendo-buttongroup .k-button {
-    color: var(--mj-brand-secondary) !important;
-    
-    &[aria-pressed="true"],
-    &.k-selected {
-        color: var(--mj-text-inverse) !important;
-    }
-}
 
 .link-text {
     cursor: pointer;
@@ -103,52 +85,6 @@ kendo-buttongroup .k-button {
     opacity: 0.5;
 }
 
-// Scheduler
-kendo-recurrence-frequency-editor .k-edit-label {
-    width: unset;
-    margin-right: 10px;
-}
-
-kendo-recurrence-frequency-editor .k-edit-field {
-    width: unset;
-    float: none;
-}
-
-.k-team-mark {
-    width: 1em;
-    height: 1em;
-    display: inline-block;
-    vertical-align: middle;
-    margin-right: 8px;
-}
-
-// Header
-.material-bg .k-input,
-.material-bg .k-dropdown-wrap .k-i-arrow-s {
-    color: white;
-}
-
-.material-bg .k-dropdown-wrap {
-    border-color: white;
-}
-
-.material-bg .k-dropdown-wrap.k-state-focused {
-    border-color: #697bcf;
-    border-bottom-width: 2px;
-}
-
-.material-bg .k-dropdown-wrap:hover {
-    border-color: #2942bb;
-    border-bottom-width: 2px;
-}
-
-.ddl-theme {
-    width: 75px;
-}
-
-.k-dropdownlist {
-    margin: 5px;
-}
 
 .ddl-locale {
     width: 120px;
@@ -213,17 +149,3 @@ kendo-recurrence-frequency-editor .k-edit-field {
     opacity: 0.4;
 }
  
-// Tab-specific styling - should not affect button groups
-.k-tabstrip .k-tabstrip-items-wrapper .k-item {
-    color: black;
-    font-weight: normal;
-    border: solid 1px transparent;
-}
-
-.k-tabstrip-top .k-tabstrip-items-wrapper .k-item.k-active {
-    border-bottom: solid 1px white;
-    font-weight: bold;
-    color: blue;
-    background-color: white;
-    z-index: 1;
-}
