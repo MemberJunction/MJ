@@ -17,6 +17,9 @@ import {
     SearchFilterOption
 } from './search-types';
 
+/** Default minimum relevance score threshold (0-1). Results below this are filtered out. */
+const DEFAULT_MIN_SCORE = 0.35;
+
 /** Default icon mapping for source types */
 const SOURCE_TYPE_ICONS: Record<string, string> = {
     'entity': 'fa-solid fa-database',
@@ -222,8 +225,8 @@ export class SearchService {
         }
 
         const mutation = `
-            mutation SearchKnowledge($query: String!, $maxResults: Float, $filters: SearchFiltersInput) {
-                SearchKnowledge(query: $query, maxResults: $maxResults, filters: $filters) {
+            mutation SearchKnowledge($query: String!, $maxResults: Float, $filters: SearchFiltersInput, $minScore: Float) {
+                SearchKnowledge(query: $query, maxResults: $maxResults, filters: $filters, minScore: $minScore) {
                     Success
                     TotalCount
                     ElapsedMs
@@ -256,10 +259,12 @@ export class SearchService {
         `;
 
         const filtersInput = this.buildFiltersInput(request);
+        const minScore = request.MinScore ?? DEFAULT_MIN_SCORE;
         const variables: Record<string, unknown> = {
             query: request.Query,
             maxResults: request.MaxResults || 20,
             filters: filtersInput,
+            minScore: minScore > 0 ? minScore : undefined,
         };
 
         const gqlResult = await provider.ExecuteGQL(mutation, variables);

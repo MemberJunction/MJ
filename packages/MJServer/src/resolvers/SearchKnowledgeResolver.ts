@@ -116,6 +116,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
         @Arg('query') query: string,
         @Arg('maxResults', () => Float, { nullable: true }) maxResults: number | undefined,
         @Arg('filters', () => SearchFiltersInput, { nullable: true }) filters: SearchFiltersInput | undefined,
+        @Arg('minScore', () => Float, { nullable: true }) minScore: number | undefined,
         @Ctx() { userPayload }: AppContext = {} as AppContext
     ): Promise<SearchKnowledgeResult> {
         const startTime = Date.now();
@@ -147,18 +148,24 @@ export class SearchKnowledgeResolver extends ResolverBase {
             t0 = Date.now();
             const fusedResults = this.fuseResults(vectorResults, fullTextResults, topK);
             const dedupedResults = this.deduplicateResults(fusedResults);
-            LogStatus(`SearchKnowledge: Fuse + dedup (${dedupedResults.length} results): ${Date.now() - t0}ms`);
+
+            // Apply minimum score threshold (post-RRF, so fusion can surface cross-source matches first)
+            const scoreThreshold = minScore ?? 0;
+            const filteredResults = scoreThreshold > 0
+                ? dedupedResults.filter(r => r.Score >= scoreThreshold)
+                : dedupedResults;
+            LogStatus(`SearchKnowledge: Fuse + dedup + threshold≥${Math.round(scoreThreshold * 100)}% (${dedupedResults.length} → ${filteredResults.length} results): ${Date.now() - t0}ms`);
 
             // Enrich with entity icons and record names
             t0 = Date.now();
-            await this.enrichResults(dedupedResults, currentUser);
+            await this.enrichResults(filteredResults, currentUser);
             LogStatus(`SearchKnowledge: Enrich (icons + names): ${Date.now() - t0}ms`);
             LogStatus(`SearchKnowledge: Total: ${Date.now() - startTime}ms`);
 
             return {
                 Success: true,
-                Results: dedupedResults,
-                TotalCount: dedupedResults.length,
+                Results: filteredResults,
+                TotalCount: filteredResults.length,
                 ElapsedMs: Date.now() - startTime,
                 SourceCounts: {
                     Vector: vectorResults.length,

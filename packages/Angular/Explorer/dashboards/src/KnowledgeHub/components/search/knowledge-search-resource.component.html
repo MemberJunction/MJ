@@ -61,6 +61,27 @@
                             (FilterChanged)="OnFilterChanged($event)"
                             (FiltersCleared)="OnFiltersCleared()"
                         ></mj-search-filter>
+
+                        <!-- Relevance Threshold Slider -->
+                        <div class="threshold-section">
+                            <label class="threshold-label">
+                                Min Relevance
+                                <span class="threshold-value">{{ (MinScoreThreshold * 100) | number:'1.0-0' }}%</span>
+                            </label>
+                            <input
+                                type="range"
+                                class="threshold-slider"
+                                [min]="0"
+                                [max]="100"
+                                [step]="5"
+                                [value]="MinScoreThreshold * 100"
+                                (input)="OnThresholdChanged($any($event.target).value / 100)"
+                            />
+                            <div class="threshold-range-labels">
+                                <span>All</span>
+                                <span>Strict</span>
+                            </div>
+                        </div>
                     </aside>
                 }
 

@@ -90,6 +90,12 @@ export interface SearchRequest {
     ActiveFilters: Record<string, string[]>;
     /** Which search sources to include */
     IncludeSources: ('vector' | 'fulltext' | 'entity')[];
+    /**
+     * Minimum relevance score (0-1) to include in results.
+     * Results below this threshold are filtered out.
+     * Default: 0.35 (35%).
+     */
+    MinScore?: number;
 }
 
 /** Search response from the service */

@@ -61,6 +61,8 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
     public ActiveFilters: Record<string, string[]> = {};
     public TotalCount = 0;
     public ElapsedMs = 0;
+    /** Minimum relevance score threshold (0-1). Results below this are hidden. */
+    public MinScoreThreshold = 0.35;
 
     // --- Recent & Saved ---
     public RecentSearches: RecentSearch[] = [];
@@ -94,6 +96,7 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
             MaxResults: 50,
             ActiveFilters: this.ActiveFilters,
             IncludeSources: ['vector', 'fulltext', 'entity'],
+            MinScore: this.MinScoreThreshold,
         };
 
         const response = await this.searchService.ExecuteSearch(request);
@@ -151,6 +154,13 @@ export class KnowledgeSearchResourceComponent extends BaseResourceComponent impl
     /** Handle clearing all filters */
     public OnFiltersCleared(): void {
         this.ActiveFilters = {};
+        this.MinScoreThreshold = 0.35;
+        this.RunSearch();
+    }
+
+    /** Handle relevance threshold slider change */
+    public OnThresholdChanged(value: number): void {
+        this.MinScoreThreshold = value;
         this.RunSearch();
     }
 
