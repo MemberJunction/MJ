@@ -117,7 +117,7 @@ export interface DuplicateDetectionOptions {
  * Progress information emitted during long-running duplicate detection operations.
  */
 export interface DuplicateDetectionProgress {
-    Phase: 'Vectorizing' | 'Embedding' | 'Querying' | 'Matching' | 'Merging';
+    Phase: 'Vectorizing' | 'Loading' | 'Embedding' | 'Querying' | 'Matching' | 'Merging';
     TotalRecords: number;
     ProcessedRecords: number;
     MatchesFound: number;
@@ -132,12 +132,16 @@ export interface DuplicateDetectionProgress {
 export class PotentialDuplicateRequest {
     /** The ID of the entity the record belongs to */
     EntityID: string;
-    /** The ID of the List entity to use for batch detection */
-    ListID: string;
+    /** The ID of the List entity to use for batch detection (optional — if omitted, records are loaded directly from the entity) */
+    ListID?: string;
     /** The Primary Key values of each record being checked for duplicates */
     RecordIDs: CompositeKey[];
     /** The ID of the entity document defining the vectorization template */
     EntityDocumentID?: string;
+    /** Optional saved view ID — run this view to determine which records to check */
+    ViewID?: string;
+    /** Optional SQL filter applied to the entity to determine which records to check */
+    ExtraFilter?: string;
     /** Minimum score to consider a record a potential duplicate */
     ProbabilityScore?: number;
     /** Detection options controlling retrieval, scoring, and behavior */

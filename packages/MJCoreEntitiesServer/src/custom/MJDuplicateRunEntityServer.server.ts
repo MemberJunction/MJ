@@ -1,12 +1,13 @@
-import { BaseEntity, DuplicateDetectionProgress, LogError, LogStatus, PotentialDuplicateRequest } from "@memberjunction/core";
+import { BaseEntity, DuplicateDetectionProgress, LogError, LogStatus, PotentialDuplicateRequest, RunView } from "@memberjunction/core";
 import { RegisterClass, GetGlobalObjectStore } from "@memberjunction/global";
-import { MJDuplicateRunEntity } from "@memberjunction/core-entities";
+import { MJDuplicateRunEntity, MJEntityDocumentEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
 
 const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
 
 /** Map DuplicateDetectionProgress phases to pipeline stage names */
 const PHASE_TO_STAGE: Record<DuplicateDetectionProgress['Phase'], string> = {
+    'Loading': 'extract',
     'Vectorizing': 'vectorize',
     'Embedding': 'autotag',
     'Querying': 'extract',
@@ -39,7 +40,20 @@ export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
             const detector = new DuplicateRecordDetector();
             const request = new PotentialDuplicateRequest();
             request.EntityID = this.EntityID;
-            request.ListID = this.SourceListID;
+            request.ListID = this.SourceListID || undefined; // Optional — if not set, scans all entity records
+
+            // Find the first active entity document for this entity to get template/thresholds
+            const rv = new RunView();
+            const edResult = await rv.RunView<MJEntityDocumentEntity>({
+                EntityName: 'MJ: Entity Documents',
+                ExtraFilter: `EntityID='${this.EntityID}' AND Status='Active'`,
+                MaxRows: 1,
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+            if (edResult.Success && edResult.Results.length > 0) {
+                request.EntityDocumentID = edResult.Results[0].ID;
+            }
+
             request.Options = {
                 DuplicateRunID: this.ID,
                 OnProgress: (progress: DuplicateDetectionProgress) => {

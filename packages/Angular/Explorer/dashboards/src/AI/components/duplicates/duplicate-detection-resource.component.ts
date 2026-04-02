@@ -11,6 +11,7 @@ import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, Input, inject }
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { Metadata, RunView } from '@memberjunction/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import {
     ResourceData,
     MJDuplicateRunEntity,
@@ -313,13 +314,18 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 dupeRun.EntityID = entityInfo.ID;
             }
 
+            dupeRun.StartedByUserID = new Metadata().CurrentUser.ID;
             dupeRun.StartedAt = new Date();
             dupeRun.ProcessingStatus = 'In Progress';
             dupeRun.ApprovalStatus = 'Pending';
 
             const saved = await dupeRun.Save();
             if (!saved) {
-                console.error('Failed to create duplicate run');
+                console.error('Failed to create duplicate run:', dupeRun.LatestResult?.Message || 'unknown error');
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to start detection: ${dupeRun.LatestResult?.Message || 'unknown error'}`,
+                    'error', 5000
+                );
                 this.IsDetecting = false;
                 this.DetectionStage = '';
                 this.cdr.detectChanges();
