@@ -68,3 +68,4 @@ export * from './lib/components/notification/activity-indicator.component';
 export * from './lib/components/toast/toast.component';
 export * from './lib/components/global-tasks/global-tasks-panel.component';
 export * from './lib/components/attachment/image-viewer.component';
+export * from './lib/components/overlay/chat-overlay.component';

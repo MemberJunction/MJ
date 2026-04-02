@@ -34,6 +34,7 @@ flowchart TD
         AME["ArtifactMetadataEngine"]
         FE["FileStorageEngine"]
         EE["EncryptionEngineBase"]
+        CE["ConversationEngine"]
         ME["MCPEngine"]
         TTC["TypeTablesCache"]
     end
@@ -387,10 +388,49 @@ Every generated entity class provides:
 | `DeserializeFromStorage(stored)` | Convert stored attributes back to runtime objects |
 | `GetStandardProperty(attributes, prop)` | Find a standard property value (name/description/etc.) |
 
+### ConversationEngine
+
+Centralized, reactive cache for conversations, conversation details (messages), and peripheral data such as agent runs. `ConversationEngine` is the single source of truth for conversation data across all UI consumers (chat area, sidebar, overlay, etc.), replacing per-component caching that previously lived in multiple scattered locations.
+
+The engine is user-scoped and environment-filtered, so it manages its own caching instead of using `BaseEngine.Load()` bulk-load pattern.
+
+```typescript
+import { ConversationEngine } from '@memberjunction/core-entities';
+
+// Initialize once at app startup
+await ConversationEngine.Instance.Config(false, contextUser);
+
+// Load conversations for the current user and environment
+await ConversationEngine.Instance.LoadConversations(environmentId, contextUser);
+
+// Subscribe to reactive conversation list changes
+ConversationEngine.Instance.Conversations$.subscribe(conversations => {
+    console.log(`${conversations.length} conversations loaded`);
+});
+
+// Load and cache details (messages) for a specific conversation
+const details = await ConversationEngine.Instance.LoadConversationDetails(conversationId, contextUser);
+
+// Instant cache reads (no DB round-trip)
+const cached = ConversationEngine.Instance.GetCachedDetails(conversationId);
+
+// CRUD operations that automatically update the reactive list
+await ConversationEngine.Instance.CreateConversation('New Chat', environmentId, contextUser);
+await ConversationEngine.Instance.PinConversation(conversationId, true, contextUser);
+await ConversationEngine.Instance.ArchiveConversation(conversationId, contextUser);
+
+// Cache management
+ConversationEngine.Instance.InvalidateConversation(conversationId);
+ConversationEngine.Instance.ClearCache();
+```
+
+Source: [`src/engines/conversations.ts`](src/engines/conversations.ts)
+
 ### Other Engines
 
 | Engine | Purpose |
 |---|---|
+| `ConversationEngine` | Reactive cache for conversations, messages, and agent runs (user-scoped) |
 | `EncryptionEngineBase` | Caches encryption keys, algorithms, and key sources |
 | `FileStorageEngine` | Caches file storage accounts and providers |
 | `MCPEngine` | Caches MCP servers, connections, and tools |

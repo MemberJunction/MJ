@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ConversationEngine } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ConversationDataService } from '../../services/conversation-data.service';
@@ -295,10 +295,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       await this.mentionAutocompleteService.initialize(this.currentUser);
     }
 
-    // Ensure ArtifactMetadataEngine is loaded so LazyArtifactInfo can
-    // resolve versions from its always-fresh in-memory cache.
+    // Ensure ConversationEngine and ArtifactMetadataEngine are loaded.
     // Config(false) is a no-op if already loaded by another component.
-    await ArtifactMetadataEngine.Instance.Config(false, this.currentUser);
+    // ConversationEngine.Config() also initializes ArtifactMetadataEngine internally.
+    await ConversationEngine.Instance.Config(false, this.currentUser);
 
     // Initialize attachment support based on agent modalities
     await this.initializeAttachmentSupport();
@@ -761,6 +761,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
           });
 
           this.agentRunsByDetailId.set(row.ID, agentRun);
+
+          // Also populate ConversationEngine's cache so other consumers (overlay, etc.) can use it
+          ConversationEngine.Instance.SetAgentRunForDetail(conversationId, row.ID, agentRun);
         }
 
         // Build artifacts map - no need to load full entities, just create LazyArtifactInfo
@@ -988,6 +991,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         newEntity.LoadFromData(existingAgentRun);
         // swap the map entry to have this object now
         this.agentRunsByDetailId.set(event.conversationDetailId, newEntity);
+
+        // Also update ConversationEngine's cache
+        if (this.conversationId) {
+          ConversationEngine.Instance.SetAgentRunForDetail(this.conversationId, event.conversationDetailId, newEntity);
+        }
       }
 
       // Trigger re-render to show updated status
@@ -1015,6 +1023,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       // Directly update map with fresh data from progress (no database query needed)
       // Don't create new Map - message-list component needs to keep the same reference
       this.agentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
+
+      // Also update ConversationEngine's cache for other consumers
+      if (this.conversationId) {
+        ConversationEngine.Instance.SetAgentRunForDetail(this.conversationId, event.conversationDetailId, event.agentRun);
+      }
     }
     else {
       // no agent run, should have agentRunId
@@ -1221,11 +1234,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Invalidate cached conversation data
+   * Invalidate cached conversation data (both local and ConversationEngine caches)
    * Called when new messages are added or conversation data changes
    */
   private invalidateConversationCache(conversationId: string): void {
     this.conversationDataCache.delete(conversationId);
+    ConversationEngine.Instance.InvalidateConversation(conversationId);
     LogStatusEx({message: `🗑️ Invalidated cache for conversation ${conversationId}`, verboseOnly: true});
   }
 
@@ -1242,6 +1256,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
         if (await agentRun.Load(agentRunId)) {
           this.agentRunsByDetailId.set(conversationDetailId, agentRun);
+
+          // Also update ConversationEngine's cache for other consumers
+          if (this.conversationId) {
+            ConversationEngine.Instance.SetAgentRunForDetail(this.conversationId, conversationDetailId, agentRun);
+          }
 
           // Force message list to re-render with updated agent run
           // Keep same Map reference so message-list component can access updates

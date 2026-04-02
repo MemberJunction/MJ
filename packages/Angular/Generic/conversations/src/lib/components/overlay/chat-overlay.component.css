@@ -1,7 +1,11 @@
-/* Chat Overlay - Floating Bubble + Expanding Panel */
+/* ============================================================
+   Chat Overlay — Floating Bubble + Expanding Panel
+   All colors use MJ design tokens (--mj-* CSS variables).
+   ============================================================ */
 
-/* Floating Bubble */
-.chat-bubble {
+/* --- Floating Bubble (collapsed state) --- */
+
+.chat-overlay-bubble {
     position: fixed;
     bottom: 1.5rem;
     right: 1.5rem;
@@ -17,15 +21,15 @@
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     z-index: 999;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
-    animation: bubbleIn 0.3s ease;
+    animation: overlayBubbleIn 0.3s ease;
 }
 
-.chat-bubble:hover {
+.chat-overlay-bubble:hover {
     transform: scale(1.08);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
 }
 
-@keyframes bubbleIn {
+@keyframes overlayBubbleIn {
     from {
         transform: scale(0);
         opacity: 0;
@@ -36,11 +40,11 @@
     }
 }
 
-.chat-bubble-icon {
+.chat-overlay-bubble-icon {
     font-size: 1.3rem;
 }
 
-.chat-badge {
+.chat-overlay-badge {
     position: absolute;
     top: -4px;
     right: -4px;
@@ -58,13 +62,14 @@
     border: 2px solid var(--mj-bg-page);
 }
 
-/* Expanded Panel */
-.chat-panel {
+/* --- Expanded Panel --- */
+
+.chat-overlay-panel {
     position: fixed;
     bottom: 1.5rem;
     right: 1.5rem;
-    width: 400px;
-    height: 550px;
+    width: 420px;
+    height: 600px;
     max-height: calc(100vh - 6rem);
     border-radius: 12px;
     background: var(--mj-bg-surface);
@@ -74,10 +79,10 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    animation: panelIn 0.25s ease;
+    animation: overlayPanelIn 0.25s ease;
 }
 
-@keyframes panelIn {
+@keyframes overlayPanelIn {
     from {
         opacity: 0;
         transform: scale(0.9) translateY(10px);
@@ -88,17 +93,19 @@
     }
 }
 
-/* Panel Header */
-.chat-panel-header {
+/* --- Panel Header --- */
+
+.chat-overlay-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0.6rem 0.75rem;
     border-bottom: 1px solid var(--mj-border-default);
     background: var(--mj-bg-surface-card);
+    flex-shrink: 0;
 }
 
-.chat-panel-title {
+.chat-overlay-title {
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -107,16 +114,16 @@
     color: var(--mj-text-primary);
 }
 
-.chat-panel-title i {
+.chat-overlay-title i {
     color: var(--mj-brand-primary);
 }
 
-.chat-panel-header-actions {
+.chat-overlay-header-actions {
     display: flex;
     gap: 0.25rem;
 }
 
-.chat-panel-btn {
+.chat-overlay-header-btn {
     width: 1.75rem;
     height: 1.75rem;
     border-radius: 6px;
@@ -131,29 +138,32 @@
     transition: all 0.15s ease;
 }
 
-.chat-panel-btn:hover {
+.chat-overlay-header-btn:hover {
     background: var(--mj-bg-surface-hover);
     color: var(--mj-text-primary);
 }
 
-/* Panel Body */
-.chat-panel-body {
+/* --- Panel Body --- */
+
+.chat-overlay-body {
     flex: 1;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    min-height: 0;
 }
 
-.chat-panel-body mj-chat {
+.chat-overlay-body mj-conversation-chat-area {
     flex: 1;
     display: flex;
     flex-direction: column;
     height: 100%;
 }
 
-/* Mobile responsive */
+/* --- Mobile Responsive --- */
+
 @media (max-width: 480px) {
-    .chat-panel {
+    .chat-overlay-panel {
         bottom: 0;
         right: 0;
         width: 100%;
@@ -162,7 +172,7 @@
         border-radius: 0;
     }
 
-    .chat-bubble {
+    .chat-overlay-bubble {
         bottom: 1rem;
         right: 1rem;
     }

@@ -1,0 +1,60 @@
+@if (IsVisible) {
+    <!-- Floating Button (collapsed state) -->
+    @if (State === 'collapsed') {
+        <div class="chat-overlay-bubble" (click)="Toggle()" title="Open Chat">
+            <i class="fa-solid fa-comments chat-overlay-bubble-icon"></i>
+            @if (UnreadCount > 0) {
+                <span class="chat-overlay-badge">{{ UnreadCount > 9 ? '9+' : UnreadCount }}</span>
+            }
+        </div>
+    }
+
+    <!-- Expanded Chat Panel -->
+    @if (State === 'expanded') {
+        <div class="chat-overlay-panel">
+            <!-- Panel Header -->
+            <div class="chat-overlay-header">
+                <div class="chat-overlay-title">
+                    <i class="fa-solid fa-robot"></i>
+                    <span>AI Assistant</span>
+                </div>
+                <div class="chat-overlay-header-actions">
+                    <button
+                        class="chat-overlay-header-btn"
+                        title="New conversation"
+                        (click)="StartNewConversation()">
+                        <i class="fa-solid fa-plus"></i>
+                    </button>
+                    <button
+                        class="chat-overlay-header-btn"
+                        title="Open in full workspace"
+                        (click)="OnOpenFullWorkspace()">
+                        <i class="fa-solid fa-expand"></i>
+                    </button>
+                    <button
+                        class="chat-overlay-header-btn"
+                        title="Minimize"
+                        (click)="Collapse()">
+                        <i class="fa-solid fa-minus"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chat Content — wraps conversation-chat-area -->
+            <div class="chat-overlay-body">
+                <mj-conversation-chat-area
+                    [environmentId]="EnvironmentId"
+                    [currentUser]="CurrentUser"
+                    [conversationId]="ConversationId"
+                    [conversation]="Conversation"
+                    [isNewConversation]="IsNewConversation"
+                    (conversationCreated)="OnConversationCreated($event)"
+                    (conversationRenamed)="OnConversationRenamed($event)"
+                    (openEntityRecord)="OnOpenEntityRecord($event)"
+                    (navigationRequest)="OnNavigationRequest($event)"
+                    (taskClicked)="OnTaskClicked($event)"
+                ></mj-conversation-chat-area>
+            </div>
+        </div>
+    }
+}

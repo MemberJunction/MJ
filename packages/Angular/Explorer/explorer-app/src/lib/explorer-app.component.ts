@@ -13,11 +13,15 @@ import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
 import { filter, take, takeUntil } from 'rxjs/operators';
-import { LogError, SetProductionStatus } from '@memberjunction/core';
+import { CompositeKey, LogError, Metadata, SetProductionStatus } from '@memberjunction/core';
 import { MJAuthBase, StandardUserInfo, AuthErrorType } from '@memberjunction/ng-auth-services';
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap';
 import { SystemValidationService } from '@memberjunction/ng-explorer-core';
+import { NavigationService } from '@memberjunction/ng-shared';
+import { AgentClientService } from '@memberjunction/ng-agent-client';
+import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({
   standalone: false,
@@ -52,8 +56,12 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     @Inject(MJ_ENVIRONMENT) private environment: MJEnvironmentConfig,
     public authBase: MJAuthBase,
     private workspaceInit: WorkspaceInitializerService,
-    private validationService: SystemValidationService
-  ) {}
+    private validationService: SystemValidationService,
+    private agentClient: AgentClientService,
+    private navigationService: NavigationService,
+  ) {
+    this.registerClientTools();
+  }
 
   /**
    * Handle successful login and initialize the application
@@ -225,6 +233,65 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+  }
+
+  /** Handle tool execution events from the chat overlay */
+  public OnOverlayToolExecuted(event: ClientToolResultEvent): void {
+    if (event.Result.Success) {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `Tool "${event.Request.ToolName}" executed`, 'info', 2000
+      );
+    }
+  }
+
+  /** Handle "open entity record" events from the chat overlay */
+  public OnOverlayOpenRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
+    this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+  }
+
+  /** Register Explorer-specific client tool handlers with the AgentClientService */
+  private registerClientTools(): void {
+    this.agentClient.RegisterTool({
+      Name: 'NavigateToRecord',
+      Description: 'Navigate the user to a specific entity record',
+      ParameterSchema: {
+        type: 'object',
+        properties: {
+          EntityName: { type: 'string' },
+          RecordID: { type: 'string' }
+        },
+        required: ['EntityName', 'RecordID']
+      },
+      Handler: async (params) => {
+        const entityName = String(params['EntityName']);
+        const recordId = String(params['RecordID']);
+        const md = new Metadata();
+        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        const pkey = new CompositeKey();
+        if (entityInfo) {
+          pkey.LoadFromURLSegment(entityInfo, recordId);
+        } else {
+          pkey.KeyValuePairs = [{ FieldName: 'ID', Value: recordId }];
+        }
+        this.navigationService.OpenEntityRecord(entityName, pkey);
+        return { Success: true, Data: { Navigated: true } };
+      }
+    });
+
+    this.agentClient.RegisterTool({
+      Name: 'NavigateToApp',
+      Description: 'Switch to a different application in MJ Explorer',
+      ParameterSchema: {
+        type: 'object',
+        properties: { AppName: { type: 'string' } },
+        required: ['AppName']
+      },
+      Handler: async (params) => {
+        const appName = String(params['AppName']);
+        this.router.navigate(['/app', appName]);
+        return { Success: true, Data: { Navigated: true, AppName: appName } };
+      }
+    });
   }
 
   /**
