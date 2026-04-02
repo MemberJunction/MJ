@@ -180,7 +180,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   public override get hasDisplayContent(): boolean {
-    return this.spec != null && (this.HasData || this.IsLoading);
+    return this.spec != null && (this.HasData || this.IsLoading || this.ResolvedTables.length > 0);
   }
 
   public override get parentShouldShowRawContent(): boolean {
@@ -192,7 +192,9 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   public get HasInlineData(): boolean {
-    return !!(this.spec?.rows && this.spec.rows.length > 0);
+    // Check root-level rows (legacy single-table) or any resolved table with rows
+    return !!(this.spec?.rows && this.spec.rows.length > 0) ||
+           this.ResolvedTables.some(t => t.rows && t.rows.length > 0);
   }
 
   public get DisplayRowCount(): number | null {
@@ -248,7 +250,6 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       );
 
       if (this.ResolvedTables.length === 0 && !this.spec.plan) {
-        // No data and no plan — nothing to show
         return;
       }
 
@@ -743,8 +744,35 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     await this.artifactVersion.Save();
   }
 
+  /**
+   * Returns a DataSnapshot with live grid data, current page state,
+   * and query sync state.
+   */
   public override GetCurrentStateSnapshot(): DataSnapshot | null {
-    return createDataSnapshot(this.spec);
+    if (!this.spec) return null;
+
+    const tables = NormalizeToTables(
+      this.spec as unknown as Record<string, unknown>,
+      this.spec.title || 'Results'
+    );
+    const activeTable = tables[this.ActiveTableIndex];
+
+    if (activeTable) {
+      // Override with live data for the active table
+      if (this.IsLive) activeTable.rows = this.GridData;
+      activeTable.pageNumber = this.PagerPageNumber;
+      activeTable.metadata = {
+        ...activeTable.metadata,
+        ...(this.liveRowCount != null ? { rowCount: this.liveRowCount } : {}),
+        ...(this.liveExecutionTime != null
+          ? { executionTimeMs: this.liveExecutionTime } : {}),
+        ...(this.PagerTotalRowCount > 0
+          ? { totalAvailableRows: this.PagerTotalRowCount } : {}),
+        pageSize: this.PagerPageSize
+      };
+    }
+
+    return DataSnapshot.FromTables(tables, this.spec.title);
   }
 
   // ─── Tabs ───────────────────────────────────────────────────────

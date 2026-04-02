@@ -40,6 +40,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Output() maximizeToggled = new EventEmitter<void>(); // Emits when user clicks maximize/restore button
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
+  @Output() analyzeRequested = new EventEmitter<{ artifactId: string; snapshot: DataSnapshot }>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -1125,6 +1126,26 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public getArtifactIcon(): string {
     if (!this.artifact) return 'fa-file';
     return this.artifactIconService.getArtifactIcon(this.artifact);
+  }
+
+  /**
+   * Capture the current snapshot and emit an analyze event.
+   * The parent component handles routing this to an agent conversation.
+   */
+  public OnAnalyze(): void {
+    const snapshot = this.GetCurrentStateSnapshot();
+    if (snapshot && this.artifact) {
+      this.analyzeRequested.emit({
+        artifactId: this.artifact.ID,
+        snapshot
+      });
+    } else {
+      this.notificationService.CreateSimpleNotification(
+        'No data available to analyze',
+        'warning',
+        3000
+      );
+    }
   }
 
   /**

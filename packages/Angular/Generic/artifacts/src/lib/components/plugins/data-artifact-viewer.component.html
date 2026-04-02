@@ -1,6 +1,6 @@
 <div class="data-artifact-viewer" [ngClass]="cssClass">
   @if (spec) {
-    @if (HasData || IsLoading) {
+    @if (HasData || IsLoading || ResolvedTables.length > 0) {
       <!-- Toolbar -->
       <div class="data-toolbar">
         <div class="data-title">

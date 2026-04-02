@@ -3838,7 +3838,8 @@ The context is now within limits. Please retry your request with the recovered c
             { docsFlag: 'includeCommandDocs', responseTypeKey: 'commands' },
             { docsFlag: 'includeForEachDocs', responseTypeKey: 'forEach' },
             { docsFlag: 'includeWhileDocs', responseTypeKey: 'while' },
-            { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' }
+            { docsFlag: 'includeScratchpadDocs', responseTypeKey: 'scratchpad' },
+            { docsFlag: 'includeArtifactToolsDocs', responseTypeKey: 'artifactToolCalls' }
         ];
 
         for (const { docsFlag, responseTypeKey } of alignmentMappings) {
