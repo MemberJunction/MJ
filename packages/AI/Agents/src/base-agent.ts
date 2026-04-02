@@ -1954,7 +1954,7 @@ export class BaseAgent {
         }
 
         // Thread the per-request provider so prompt run records are saved through the isolated provider
-        promptParams.provider = params.provider;
+        promptParams.provider = params.provider || this._activeProvider;
 
         return promptParams;
     }
@@ -4077,7 +4077,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.logStatus(`🤖 Executing sub-agent '${subAgentRequest.name}'`, true, params);
 
             // Create a new AgentRunner instance with the same isolated provider
-            const runner = new AgentRunner(this._activeProvider);
+            const runner = new AgentRunner(params.provider || this._activeProvider);
 
             // Prepare messages for sub-agent using database-configured message mode
             const subAgentMessages = this.prepareSubAgentMessages(
@@ -4656,7 +4656,7 @@ The context is now within limits. Please retry your request with the recovered c
         this._promptTurnCount = 0;
 
         // Create MJAIAgentRunEntity
-        this._agentRun = await this._activeProvider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
+        this._agentRun = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
         this._agentRun.AgentID = params.agent.ID;
         if (params.conversationDetailId) {
             this._agentRun.ConversationDetailID = params.conversationDetailId;
@@ -7133,7 +7133,7 @@ The context is now within limits. Please retry your request with the recovered c
             const priority = resolvedStrategy?.priority ?? 50;
             const expirationMinutes = resolvedStrategy?.expirationMinutes;
 
-            const request = await this._activeProvider.GetEntityObject<MJAIAgentRequestEntity>(
+            const request = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
                 params.contextUser
             );
@@ -8657,7 +8657,7 @@ The context is now within limits. Please retry your request with the recovered c
             throw new Error('Cannot create compaction step: agent run not initialized');
         }
 
-        const step = await this._activeProvider.GetEntityObject<MJAIAgentRunStepEntityExtended>(
+        const step = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRunStepEntityExtended>(
             'MJ: AI Agent Run Steps',
             params.contextUser
         );
