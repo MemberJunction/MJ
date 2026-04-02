@@ -345,7 +345,9 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (shouldUseSingleResourceMode !== this.useSingleResourceMode) {
       this.useSingleResourceMode = shouldUseSingleResourceMode;
-      this.cdr.detectChanges();
+      // Defer detectChanges to next microtask to avoid ExpressionChangedAfterItHasBeenCheckedError
+      // when this handler fires during an already-running change detection cycle.
+      Promise.resolve().then(() => this.cdr.detectChanges());
 
       if (this.useSingleResourceMode) {
         // Transitioning to single-resource mode
@@ -514,13 +516,16 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       this.emitFirstLoadCompleteOnce();
     };
 
-    // Wire up display name change for single-resource mode
-    // Use a closure that resolves the tab ID at call time, not at wire-up time,
-    // because the tab may not be active yet when the component is first created.
+    // Wire up display name change for single-resource mode.
+    // Guard: only update the title if THIS component is the currently displayed one.
+    // Without this guard, cached components (detached but alive) can fire this callback
+    // and overwrite the active tab's title with a stale name.
     instance.DisplayNameChangedEvent = (newName: string) => {
-      const tabId = this.workspaceManager.GetActiveTabId();
-      if (tabId) {
-        this.workspaceManager.UpdateTabTitle(tabId, newName);
+      if (this.singleResourceComponentRef?.instance === instance) {
+        const tabId = this.workspaceManager.GetActiveTabId();
+        if (tabId) {
+          this.workspaceManager.UpdateTabTitle(tabId, newName);
+        }
       }
     };
 

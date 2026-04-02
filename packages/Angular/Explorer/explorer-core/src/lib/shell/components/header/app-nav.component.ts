@@ -149,19 +149,35 @@ export class AppNavComponent implements OnInit, OnDestroy {
     this.activeStateMap.clear();
 
     if (!config || !this._app) {
+      console.log(`[AppNav] updateActiveStates — no config or app, clearing all`);
       return;
     }
 
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
-    if (!activeTab || activeTab.applicationId !== this._app.ID) {
+    if (!activeTab) {
+      console.log(`[AppNav] updateActiveStates — no active tab found for id=${config.activeTabId}`);
       return;
     }
+    if (activeTab.applicationId !== this._app.ID) {
+      console.log(`[AppNav] updateActiveStates — tab appId="${activeTab.applicationId}" !== app="${this._app.ID}" (${this._app.Name}), clearing`);
+      return;
+    }
+
+    console.log(`[AppNav] updateActiveStates — app="${this._app.Name}", activeTab title="${activeTab.title}", config=`, activeTab.configuration);
 
     // Compute active state for each nav item once
     for (const item of this._cachedNavItems) {
       const key = this.getItemKey(item);
       const isActive = this.computeIsActive(item, activeTab);
       this.activeStateMap.set(key, isActive);
+      if (isActive) {
+        console.log(`[AppNav] ✓ ACTIVE: "${item.Label}" (key="${key}")`);
+      }
+    }
+
+    const anyActive = Array.from(this.activeStateMap.values()).some(v => v);
+    if (!anyActive) {
+      console.log(`[AppNav] ⚠️ NO nav items matched as active! Nav items:`, this._cachedNavItems.map(i => ({ Label: i.Label, Route: i.Route, DriverClass: (i as unknown as Record<string, unknown>)['DriverClass'] })));
     }
   }
 
@@ -190,9 +206,28 @@ export class AppNavComponent implements OnInit, OnDestroy {
       return dynamicItem.isActiveMatch(activeTab);
     }
 
-    // Standard matching: route or label
-    return (item.Route && activeTab.configuration['route'] === item.Route) ||
-           activeTab.title === item.Label;
+    const config = activeTab.configuration || {};
+
+    // Match by DriverClass (most reliable for Custom resource types — always set correctly)
+    if (item.DriverClass && (config['driverClass'] === item.DriverClass || config['resourceTypeDriverClass'] === item.DriverClass)) {
+      return true;
+    }
+
+    // Match by navItemName from config (reliable — set when nav item opens)
+    if (config['navItemName'] && config['navItemName'] === item.Label) {
+      return true;
+    }
+
+    // Match by route (for route-based nav items)
+    if (item.Route && config['route'] === item.Route) {
+      return true;
+    }
+
+    // NOTE: We intentionally do NOT match by activeTab.title here.
+    // Tab titles can be stale (updated asynchronously by DisplayNameChangedEvent
+    // from cached components) and cause double-matches where two nav items
+    // both appear active. DriverClass and navItemName are sufficient.
+    return false;
   }
 
   /**

@@ -226,13 +226,22 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     // ================================================================
 
     /** Populate the entity options for the config panel dropdown */
-    private loadEntityOptions(): void {
+    private async loadEntityOptions(): Promise<void> {
         try {
-            const md = new Metadata();
-            this.EntityOptions = md.Entities
-                .filter(e => e.Fields.length > 0)
-                .map(e => ({ Name: e.Name }))
-                .sort((a, b) => a.Name.localeCompare(b.Name));
+            // Only show entities that have active entity documents (meaning vectors are synced)
+            const rv = new RunView();
+            const result = await rv.RunView<{ Entity: string }>({
+                EntityName: 'MJ: Entity Documents',
+                ExtraFilter: "Status = 'Active'",
+                Fields: ['Entity'],
+                ResultType: 'simple'
+            });
+
+            if (result.Success && result.Results.length > 0) {
+                // Deduplicate entity names (multiple docs per entity possible)
+                const entityNames = [...new Set(result.Results.map(r => r.Entity))].sort();
+                this.EntityOptions = entityNames.map(name => ({ Name: name }));
+            }
 
             // Set default entity if config is blank
             if (this.EntityOptions.length > 0 && !this.ActiveConfig.EntityName) {
