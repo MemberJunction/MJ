@@ -20,7 +20,10 @@
   @if (!isLoading && !error) {
     <div class="analytics-content">
         <!-- Summary Cards -->
-        <mj-accordion-panel [Title]="'Overview'" [Expanded]="true">
+        <mj-accordion-panel [Expanded]="true">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-tachometer-alt"></i> Overview
+            </ng-template>
             <div class="summary-cards">
               <div class="summary-card">
                 <div class="card-icon prompts">
@@ -79,7 +82,10 @@
             </div>
         </mj-accordion-panel>
         <!-- Prompt Analytics -->
-        <mj-accordion-panel [Title]="'Prompt Analytics'" [Expanded]="true">
+        <mj-accordion-panel [Expanded]="true">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-microchip"></i> Prompt Analytics
+            </ng-template>
             <div class="analytics-panel">
               <!-- View Mode Toggle -->
               @if (promptMetrics.totalCount > 0) {
@@ -275,7 +281,10 @@
             </div>
         </mj-accordion-panel>
         <!-- Action Analytics -->
-        <mj-accordion-panel [Title]="'Action Analytics'" [Expanded]="true">
+        <mj-accordion-panel [Expanded]="true">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-cog"></i> Action Analytics
+            </ng-template>
             <div class="analytics-panel">
               <div class="charts-grid">
                 <!-- Action Success Rate -->
@@ -379,7 +388,10 @@
             </div>
         </mj-accordion-panel>
         <!-- Model Performance Comparison -->
-        <mj-accordion-panel [Title]="'Model Performance Comparison'" [Expanded]="true">
+        <mj-accordion-panel [Expanded]="true">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-chart-line"></i> Model Performance Comparison
+            </ng-template>
             <div class="analytics-panel">
               <div class="model-comparison">
                 <table>
@@ -414,7 +426,10 @@
             </div>
         </mj-accordion-panel>
         <!-- Timeline Analysis -->
-        <mj-accordion-panel [Title]="'Execution Timeline Analysis'" [Expanded]="true">
+        <mj-accordion-panel [Expanded]="true">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-stream"></i> Execution Timeline Analysis
+            </ng-template>
             <div class="analytics-panel">
               <div class="timeline-stats">
                 <div class="stat-item">

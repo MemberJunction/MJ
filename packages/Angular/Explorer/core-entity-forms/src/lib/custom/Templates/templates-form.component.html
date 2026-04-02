@@ -105,9 +105,17 @@
 
                 <!-- Template Editor Section -->
                 <mj-accordion-panel
-                    [Title]="'Template Editor'"
                     [Expanded]="true"
                     style="margin-bottom: 12px;">
+                    <ng-template mjAccordionTitle>
+                        <span class="panel-title">
+                            <i class="fa-solid fa-code"></i>
+                            Template Editor
+                            @if (templateContents.length > 0) {
+                                <span class="count-badge">{{ templateContents.length }}</span>
+                            }
+                        </span>
+                    </ng-template>
 
                     <div style="padding: 8px; min-height: 400px;">
                         <mj-template-editor
@@ -122,9 +130,14 @@
 
                 <!-- Details Section -->
                 <mj-accordion-panel
-                    [Title]="'Details'"
                     [Expanded]="false"
                     style="margin-bottom: 12px;">
+                    <ng-template mjAccordionTitle>
+                        <span class="panel-title">
+                            <i class="fa-solid fa-cogs"></i>
+                            Details
+                        </span>
+                    </ng-template>
 
                     <div style="padding: 16px;">
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
@@ -207,9 +220,14 @@
                 <!-- Template Parameters Section -->
                 @if (record.IsSaved) {
                     <mj-accordion-panel
-                        [Title]="'Parameters'"
                         [Expanded]="false"
                         style="margin-bottom: 12px;">
+                        <ng-template mjAccordionTitle>
+                            <span class="panel-title">
+                                <i class="fa-solid fa-sliders"></i>
+                                Parameters
+                            </span>
+                        </ng-template>
 
                         <div style="padding: 16px 0;">
                             <mj-template-params-grid
@@ -223,9 +241,14 @@
                 <!-- AI Prompts Section -->
                 @if (record.IsSaved) {
                     <mj-accordion-panel
-                        [Title]="'AI Prompts'"
                         [Expanded]="false"
                         style="margin-bottom: 12px;">
+                        <ng-template mjAccordionTitle>
+                            <span class="panel-title">
+                                <i class="fa-solid fa-robot"></i>
+                                AI Prompts
+                            </span>
+                        </ng-template>
 
                         <div style="padding: 16px 0;">
                             <mj-explorer-entity-data-grid
@@ -241,9 +264,14 @@
                 <!-- Entity Documents Section -->
                 @if (record.IsSaved) {
                     <mj-accordion-panel
-                        [Title]="'Entity Documents'"
                         [Expanded]="false"
                         style="margin-bottom: 12px;">
+                        <ng-template mjAccordionTitle>
+                            <span class="panel-title">
+                                <i class="fa-solid fa-file-text"></i>
+                                Entity Documents
+                            </span>
+                        </ng-template>
 
                         <div style="padding: 16px 0;">
                             <mj-explorer-entity-data-grid

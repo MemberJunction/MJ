@@ -68,7 +68,10 @@
         <div class="content-area">
             <div class="accordion-container">
                 <!-- Execution Details -->
-                <mj-accordion-panel Title="Execution Details" [Expanded]="true">
+                <mj-accordion-panel [Expanded]="true">
+                    <ng-template mjAccordionTitle>
+                      <i class="fas fa-info-circle"></i> Execution Details
+                    </ng-template>
                         <div class="details-grid">
                             <div class="detail-item">
                                 <label>Execution ID</label>
@@ -102,7 +105,10 @@
 
                 <!-- Input Parameters Only -->
                 @if (hasInputParams && formattedInputParams) {
-                    <mj-accordion-panel Title="Input Parameters" [Expanded]="expandedSections.inputParams">
+                    <mj-accordion-panel [Expanded]="expandedSections.inputParams">
+                        <ng-template mjAccordionTitle>
+                          <i class="fas fa-sign-in-alt"></i> Input Parameters
+                        </ng-template>
                             <div class="json-viewer">
                                 <div class="json-toolbar">
                                     <span class="json-label">JSON (Input Parameters Only)</span>
@@ -124,7 +130,10 @@
 
                 <!-- Output Parameters Only -->
                 @if (hasOutputParams && formattedOutputParams) {
-                    <mj-accordion-panel Title="Output Parameters" [Expanded]="expandedSections.outputParams">
+                    <mj-accordion-panel [Expanded]="expandedSections.outputParams">
+                        <ng-template mjAccordionTitle>
+                          <i class="fas fa-sign-out-alt"></i> Output Parameters
+                        </ng-template>
                             <div class="json-viewer">
                                 <div class="json-toolbar">
                                     <span class="json-label">JSON (Output Parameters Only)</span>
@@ -146,7 +155,10 @@
 
                 <!-- Input+Output Parameters -->
                 @if (hasBothParams && formattedBothParams) {
-                    <mj-accordion-panel Title="Input+Output Parameters" [Expanded]="expandedSections.bothParams">
+                    <mj-accordion-panel [Expanded]="expandedSections.bothParams">
+                        <ng-template mjAccordionTitle>
+                          <i class="fas fa-exchange-alt"></i> Input+Output Parameters
+                        </ng-template>
                             <div class="json-viewer">
                                 <div class="json-toolbar">
                                     <span class="json-label">JSON (Input+Output Parameters)</span>
@@ -168,7 +180,10 @@
 
                 <!-- Output Message -->
                 @if (record.Message) {
-                    <mj-accordion-panel Title="Output Message" [Expanded]="expandedSections.output">
+                    <mj-accordion-panel [Expanded]="expandedSections.output">
+                        <ng-template mjAccordionTitle>
+                          <i class="fas fa-comment-alt"></i> Output Message
+                        </ng-template>
                             <div class="json-viewer">
                                 <div class="json-toolbar">
                                     <span class="json-label">JSON</span>
@@ -190,7 +205,10 @@
 
                 <!-- Empty States for missing data -->
                 @if (!record.Params && !record.Message && !hasInputParams && !hasOutputParams && !hasBothParams) {
-                    <mj-accordion-panel Title="Execution Data" [Expanded]="true">
+                    <mj-accordion-panel [Expanded]="true">
+                        <ng-template mjAccordionTitle>
+                          <i class="fas fa-database"></i> Execution Data
+                        </ng-template>
                             <div class="empty-state">
                                 <i class="fas fa-inbox"></i>
                                 <p>No execution data recorded</p>

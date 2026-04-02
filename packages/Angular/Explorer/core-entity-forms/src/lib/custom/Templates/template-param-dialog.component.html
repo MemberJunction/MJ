@@ -24,9 +24,17 @@
       } @else {
         <!-- Template Parameters Section -->
         <mj-accordion-panel
-          [Title]="'Template Parameters'"
           [(Expanded)]="parametersExpanded"
           style="margin-bottom: 16px; flex-shrink: 0;">
+          <ng-template mjAccordionTitle>
+            <span class="dlg-panel-title">
+              <i class="fa-solid fa-sliders"></i>
+              Template Parameters
+              @if (parameters.length > 0) {
+                <span class="count-badge">{{ parameters.length }}</span>
+              }
+            </span>
+          </ng-template>
           <div style="padding: 12px 0;">
             <div class="dlg-info-text">
               <i class="fa-solid fa-info-circle"></i>
@@ -126,9 +134,14 @@
         </mj-accordion-panel>
         <!-- JSON Preview Section -->
         <mj-accordion-panel
-          [Title]="'Context Data (JSON)'"
           [(Expanded)]="jsonPreviewExpanded"
           style="margin-bottom: 16px; flex-shrink: 0;">
+          <ng-template mjAccordionTitle>
+            <span class="dlg-panel-title">
+              <i class="fa-solid fa-code"></i>
+              Context Data (JSON)
+            </span>
+          </ng-template>
           <div style="padding: 12px 0;">
             <div class="json-preview-box">
               <pre>{{ parametersAsJson }}</pre>
@@ -137,9 +150,21 @@
         </mj-accordion-panel>
         <!-- Test Results Section -->
         <mj-accordion-panel
-          [Title]="'Test Results'"
           [(Expanded)]="resultsExpanded"
           style="margin-bottom: 16px; flex: 1; display: flex; flex-direction: column;">
+          <ng-template mjAccordionTitle>
+            <span class="dlg-panel-title">
+              <i class="fa-solid fa-chart-line"></i>
+              Test Results
+              @if (testResult) {
+                @if (testResult.success) {
+                  <span class="result-badge success"><i class="fa-solid fa-check"></i> Success</span>
+                } @else {
+                  <span class="result-badge error"><i class="fa-solid fa-times"></i> Failed</span>
+                }
+              }
+            </span>
+          </ng-template>
           <div style="padding: 12px 0; flex: 1; display: flex; flex-direction: column;">
             @if (isRunning) {
               <div class="dlg-loading" style="flex: 1;">

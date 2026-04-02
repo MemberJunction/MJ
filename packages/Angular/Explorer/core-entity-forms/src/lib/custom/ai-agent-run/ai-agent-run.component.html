@@ -207,7 +207,10 @@
       <!-- Details Tab -->
       @if (activeTab === 'details') {
         <div class="tab-content">
-          <mj-accordion-panel [Title]="'General Information'" [Expanded]="true">
+          <mj-accordion-panel [Expanded]="true">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-info-circle"></i> General Information
+            </ng-template>
                 <div class="details-grid">
                   <div class="detail-item">
                     <label>Agent</label>
@@ -271,7 +274,10 @@
                   </div>
                 </div>
           </mj-accordion-panel>
-          <mj-accordion-panel [Title]="'Execution Settings'" [Expanded]="false">
+          <mj-accordion-panel [Expanded]="false">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-cogs"></i> Execution Settings
+            </ng-template>
                 <div class="details-grid">
                   <div class="detail-item">
                     <label>Override Model</label>
@@ -305,7 +311,10 @@
                   </div>
                 </div>
           </mj-accordion-panel>
-          <mj-accordion-panel [Title]="'Execution Status'" [Expanded]="false">
+          <mj-accordion-panel [Expanded]="false">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-tasks"></i> Execution Status
+            </ng-template>
                 <div class="details-grid">
                   <div class="detail-item">
                     <label>Status</label>
@@ -339,7 +348,10 @@
                   }
                 </div>
           </mj-accordion-panel>
-          <mj-accordion-panel [Title]="'Usage & Cost'" [Expanded]="false">
+          <mj-accordion-panel [Expanded]="false">
+            <ng-template mjAccordionTitle>
+              <i class="fas fa-dollar-sign"></i> Usage &amp; Cost
+            </ng-template>
             <div class="details-grid">
               <div class="detail-item">
                 <label>Total Tokens Used</label>
@@ -364,7 +376,10 @@
             </div>
           </mj-accordion-panel>
           @if (record.Result) {
-            <mj-accordion-panel [Title]="'Result'" [Expanded]="false">
+            <mj-accordion-panel [Expanded]="false">
+              <ng-template mjAccordionTitle>
+                <i class="fas fa-code"></i> Result
+              </ng-template>
               <div class="result-viewer">
                 @if (isParsingComplete) {
                   <mj-code-editor
@@ -382,7 +397,10 @@
             </mj-accordion-panel>
           }
           @if (record.StartingPayload) {
-            <mj-accordion-panel [Title]="'Starting Payload'" [Expanded]="false">
+            <mj-accordion-panel [Expanded]="false">
+              <ng-template mjAccordionTitle>
+                <i class="fas fa-upload"></i> Starting Payload
+              </ng-template>
               <div class="result-viewer">
                 @if (isParsingComplete) {
                   <mj-code-editor
@@ -400,7 +418,10 @@
             </mj-accordion-panel>
           }
           @if (record.Data) {
-            <mj-accordion-panel [Title]="'Execution Data'" [Expanded]="false">
+            <mj-accordion-panel [Expanded]="false">
+              <ng-template mjAccordionTitle>
+                <i class="fas fa-database"></i> Execution Data
+              </ng-template>
               <div class="result-viewer">
                 @if (isParsingComplete) {
                   <mj-code-editor
@@ -418,7 +439,10 @@
             </mj-accordion-panel>
           }
           @if (record.FinalPayload) {
-            <mj-accordion-panel [Title]="'Final Payload'" [Expanded]="false">
+            <mj-accordion-panel [Expanded]="false">
+              <ng-template mjAccordionTitle>
+                <i class="fas fa-download"></i> Final Payload
+              </ng-template>
               <div class="result-viewer">
                 @if (isParsingComplete) {
                   <mj-code-editor
@@ -436,7 +460,10 @@
             </mj-accordion-panel>
           }
           @if (showPayloadDiff) {
-            <mj-accordion-panel [Title]="'Payload Diff'" [Expanded]="false">
+            <mj-accordion-panel [Expanded]="false">
+              <ng-template mjAccordionTitle>
+                <i class="fas fa-code-compare"></i> Payload Diff
+              </ng-template>
               <div style="padding: 20px; background: var(--mj-bg-surface-card);">
                 @if (isParsingComplete) {
                   <mj-deep-diff

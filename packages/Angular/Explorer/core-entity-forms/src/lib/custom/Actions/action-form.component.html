@@ -165,8 +165,18 @@
                     <!-- Parameters Section (FIRST) -->
                     <mj-accordion-panel
                         [Expanded]="true"
-                        Title="Parameters"
                         style="margin-bottom: 12px;">
+                        <ng-template mjAccordionTitle>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-sliders" style="color: var(--mj-text-muted);"></i>
+                                Parameters
+                                @if (actionParams.length > 0) {
+                                    <span style="background: var(--mj-status-info); color: var(--mj-text-inverse); padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                        {{ actionParams.length }}
+                                    </span>
+                                }
+                            </span>
+                        </ng-template>
                         
                         <div style="padding: 16px;">
                             @if (isLoadingParams) {
@@ -306,8 +316,18 @@
                     @if (record.Type === 'Generated') {
                         <mj-accordion-panel
                             [Expanded]="expandedSections.code"
-                            Title="Code & Generation"
                             style="margin-bottom: 12px;">
+                            <ng-template mjAccordionTitle>
+                                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                    <i class="fa-solid fa-code" style="color: var(--mj-text-muted);"></i>
+                                    Code &amp; Generation
+                                    @if (record.CodeLocked) {
+                                        <span style="background: var(--mj-status-warning); color: var(--mj-color-warning-800); padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                            <i class="fa-solid fa-lock"></i> Locked
+                                        </span>
+                                    }
+                                </span>
+                            </ng-template>
                             
                             <div style="padding: 16px;">
                                 @if (EditMode) {
@@ -390,8 +410,18 @@
                     <!-- Result Codes Section -->
                     <mj-accordion-panel
                         [Expanded]="expandedSections.resultCodes"
-                        Title="Result Codes"
                         style="margin-bottom: 12px;">
+                        <ng-template mjAccordionTitle>
+                            <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                <i class="fa-solid fa-flag-checkered" style="color: var(--mj-text-muted);"></i>
+                                Result Codes
+                                @if (resultCodes.length > 0) {
+                                    <span style="background: var(--mj-status-success); color: var(--mj-text-inverse); padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
+                                        {{ resultCodes.length }}
+                                    </span>
+                                }
+                            </span>
+                        </ng-template>
                         
                         <div style="padding: 16px;">
                             <!-- Add Result Code Button -->
@@ -454,8 +484,13 @@
                     @if (record.IsSaved) {
                         <mj-accordion-panel
                             [Expanded]="expandedSections.execution"
-                            Title="Execution & Monitoring"
                             style="margin-bottom: 12px;">
+                            <ng-template mjAccordionTitle>
+                                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                    <i class="fa-solid fa-chart-line" style="color: var(--mj-text-muted);"></i>
+                                    Execution &amp; Monitoring
+                                </span>
+                            </ng-template>
                             
                             <div style="padding: 16px;">
                                 @if (isLoadingExecutions) {
@@ -543,8 +578,13 @@
                     @if (record.IsSaved) {
                         <mj-accordion-panel
                             [Expanded]="expandedSections.configuration"
-                            Title="Related Configuration"
                             style="margin-bottom: 12px;">
+                            <ng-template mjAccordionTitle>
+                                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                    <i class="fa-solid fa-cogs" style="color: var(--mj-text-muted);"></i>
+                                    Related Configuration
+                                </span>
+                            </ng-template>
                             
                             <div style="padding: 16px;">
                                 <!-- Libraries -->

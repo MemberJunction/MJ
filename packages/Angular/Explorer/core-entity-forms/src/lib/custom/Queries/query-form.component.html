@@ -115,8 +115,18 @@
         <!-- SQL Query Panel -->
         <mj-accordion-panel
           [(Expanded)]="sqlPanelExpanded"
-          [Title]="'SQL' + (record.SQL ? ' — Defined' : '')"
           class="query-panel">
+          <ng-template mjAccordionTitle>
+            <span class="panel-title-row">
+              <span class="panel-title">
+                <i class="fa-solid fa-code panel-icon sql-icon"></i>
+                SQL
+                @if (record.SQL) {
+                  <span class="panel-badge defined">&mdash; Defined</span>
+                }
+              </span>
+            </span>
+          </ng-template>
 
           <div class="sql-panel-toolbar" style="display: flex; justify-content: flex-end; padding: 4px 0 8px;">
             <button type="button"
@@ -167,8 +177,16 @@
         @if (record.TechnicalDescription || EditMode) {
           <mj-accordion-panel
             [(Expanded)]="technicalDescriptionPanelExpanded"
-            [Title]="'Technical Description' + (record.TechnicalDescription ? ' — Documented' : '')"
             class="query-panel">
+            <ng-template mjAccordionTitle>
+              <span class="panel-title">
+                <i class="fa-solid fa-book panel-icon"></i>
+                Technical Description
+                @if (record.TechnicalDescription) {
+                  <span class="panel-badge defined">&mdash; Documented</span>
+                }
+              </span>
+            </ng-template>
 
             <div class="panel-body">
               @if (EditMode) {
@@ -211,8 +229,16 @@
         @if (record.IsSaved) {
           <mj-accordion-panel
             [(Expanded)]="parametersPanelExpanded"
-            [Title]="'Parameters' + (queryParameters.length > 0 ? ' (' + queryParameters.length + ')' : '')"
             class="query-panel">
+            <ng-template mjAccordionTitle>
+              <span class="panel-title">
+                <i class="fa-solid fa-sliders panel-icon"></i>
+                Parameters
+                @if (queryParameters.length > 0) {
+                  <span class="panel-badge count">{{ queryParameters.length }}</span>
+                }
+              </span>
+            </ng-template>
 
             <div class="panel-body">
               @if (isLoadingParameters) {
@@ -294,8 +320,16 @@
         @if (record.IsSaved) {
           <mj-accordion-panel
             [(Expanded)]="fieldsPanelExpanded"
-            [Title]="'Fields' + (queryFields.length > 0 ? ' (' + queryFields.length + ')' : '')"
             class="query-panel">
+            <ng-template mjAccordionTitle>
+              <span class="panel-title">
+                <i class="fa-solid fa-table panel-icon"></i>
+                Fields
+                @if (queryFields.length > 0) {
+                  <span class="panel-badge count">{{ queryFields.length }}</span>
+                }
+              </span>
+            </ng-template>
 
             <div class="panel-body">
               @if (isLoadingFields) {
@@ -369,8 +403,14 @@
         @if (record.IsSaved && DependentQueries.length > 0) {
           <mj-accordion-panel
             [(Expanded)]="dependentsPanelExpanded"
-            [Title]="'Dependent Queries (' + DependentQueries.length + ')'"
             class="query-panel">
+            <ng-template mjAccordionTitle>
+              <span class="panel-title">
+                <i class="fa-solid fa-arrow-left panel-icon dependents-icon"></i>
+                Dependent Queries
+                <span class="panel-badge count">{{ DependentQueries.length }}</span>
+              </span>
+            </ng-template>
 
             <div class="panel-body">
               <div class="dependents-description">
@@ -417,8 +457,16 @@
         @if (record.IsSaved) {
           <mj-accordion-panel
             [(Expanded)]="entitiesPanelExpanded"
-            [Title]="'Entities' + (queryEntities.length > 0 ? ' (' + queryEntities.length + ')' : '')"
             class="query-panel">
+            <ng-template mjAccordionTitle>
+              <span class="panel-title">
+                <i class="fa-solid fa-database panel-icon"></i>
+                Entities
+                @if (queryEntities.length > 0) {
+                  <span class="panel-badge count">{{ queryEntities.length }}</span>
+                }
+              </span>
+            </ng-template>
 
             <div class="panel-body">
               @if (isLoadingEntities) {
@@ -498,8 +546,13 @@
         <!-- Details Panel -->
         <mj-accordion-panel
           [(Expanded)]="detailsPanelExpanded"
-          Title="Details"
           class="query-panel">
+          <ng-template mjAccordionTitle>
+            <span class="panel-title">
+              <i class="fa-solid fa-info-circle panel-icon"></i>
+              Details
+            </span>
+          </ng-template>
 
           <div class="panel-body">
             <div class="details-grid">
@@ -554,8 +607,13 @@
         @if (record.IsSaved) {
           <mj-accordion-panel
             [(Expanded)]="permissionsPanelExpanded"
-            Title="Permissions"
             class="query-panel">
+            <ng-template mjAccordionTitle>
+              <span class="panel-title">
+                <i class="fa-solid fa-shield-alt panel-icon"></i>
+                Permissions
+              </span>
+            </ng-template>
 
             <div class="panel-body">
               @if (isLoadingPermissions) {

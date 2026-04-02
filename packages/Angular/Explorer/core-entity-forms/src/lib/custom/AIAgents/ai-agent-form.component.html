@@ -113,8 +113,10 @@
           <!-- Custom Agent Type Section (if defined) -->
           @if (record.ID && agentType && agentType.UIFormSectionKey) {
             <mj-accordion-panel id="custom"
-              [Expanded]="GetSectionExpanded('custom', agentType.UIFormSectionExpandedByDefault)"
-              [Title]="agentType.Name + ' Configuration'">
+              [Expanded]="GetSectionExpanded('custom', agentType.UIFormSectionExpandedByDefault)">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-puzzle-piece"></i> {{ agentType.Name }} Configuration
+                </ng-template>
                 <div class="panel-content custom-agent-type-section" [style.display]="'block'">
                   @if (loadingStates.customSection) {
                     <mj-loading text="Loading {{ agentType.Name }} configuration..." size="medium"></mj-loading>
@@ -127,8 +129,15 @@
           @if (record.ID) {
             <mj-accordion-panel id="history"
               [Expanded]="GetSectionExpanded('history', false)"
-              [Disabled]="loadingStates.executionHistory"
-              [Title]="'Execution History' + (loadingStates.executionHistory ? '' : (executionHistoryCount > 0 ? ' (' + executionHistoryCount + (executionHistoryCount < totalExecutionHistoryCount ? ' of ' + totalExecutionHistoryCount : '') + ')' : ''))">
+              [Disabled]="loadingStates.executionHistory">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-history"></i> Execution History
+                    @if (loadingStates.executionHistory) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (executionHistoryCount > 0) {
+                        <span> ({{ executionHistoryCount }}@if (executionHistoryCount < totalExecutionHistoryCount) { of {{ totalExecutionHistoryCount }}})</span>
+                    }
+                </ng-template>
                 <div class="panel-content execution-history-panel">
                   @if (executionHistoryCount === 0) {
                     <div class="empty-state">
@@ -352,8 +361,15 @@
           @if (record.ID) {
             <mj-accordion-panel id="actions"
               [Expanded]="GetSectionExpanded('actions', false)"
-              [Disabled]="loadingStates.actions"
-              [Title]="'Actions' + (loadingStates.actions ? '' : (actionCount > 0 ? ' (' + actionCount + ')' : ''))">
+              [Disabled]="loadingStates.actions">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-bolt"></i> Actions
+                    @if (loadingStates.actions) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (actionCount > 0) {
+                        <span> ({{ actionCount }})</span>
+                    }
+                </ng-template>
                 <div class="panel-content">
                   @if (loadingStates.actions) {
                     <div class="loading-state">
@@ -433,8 +449,15 @@
           @if (record.ID) {
             <mj-accordion-panel id="subagents"
               [Expanded]="GetSectionExpanded('subagents', false)"
-              [Disabled]="loadingStates.subAgents"
-              [Title]="'Sub-Agents' + (loadingStates.subAgents ? '' : (totalSubAgentCount > 0 ? ' (' + totalSubAgentCount + ')' : ''))">
+              [Disabled]="loadingStates.subAgents">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-sitemap"></i> Sub-Agents
+                    @if (loadingStates.subAgents) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (totalSubAgentCount > 0) {
+                        <span> ({{ totalSubAgentCount }})</span>
+                    }
+                </ng-template>
                 <div class="panel-content">
                   <!-- Filter Controls -->
                   <div class="section-header sub-agent-filter-header">
@@ -599,8 +622,15 @@
           @if (record.ID) {
             <mj-accordion-panel id="prompts"
               [Expanded]="GetSectionExpanded('prompts', false)"
-              [Disabled]="loadingStates.prompts"
-              [Title]="'Prompts' + (loadingStates.prompts ? '' : (promptCount > 0 ? ' (' + promptCount + ')' : ''))">
+              [Disabled]="loadingStates.prompts">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-comments"></i> Prompts
+                    @if (loadingStates.prompts) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (promptCount > 0) {
+                        <span> ({{ promptCount }})</span>
+                    }
+                </ng-template>
                 <div class="panel-content">
                   <div class="section-header">
                     <div class="prompt-controls">
@@ -700,8 +730,15 @@
           @if (record.ID) {
             <mj-accordion-panel id="learning"
               [Expanded]="GetSectionExpanded('learning', false)"
-              [Disabled]="loadingStates.learningCycles"
-              [Title]="'Learning Cycles' + (learningCycleCount > 0 ? ' (' + learningCycleCount + ')' : '')">
+              [Disabled]="loadingStates.learningCycles">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-brain"></i> Learning Cycles
+                    @if (loadingStates.learningCycles) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (learningCycleCount > 0) {
+                        <span> ({{ learningCycleCount }})</span>
+                    }
+                </ng-template>
                 <div class="panel-content">
                   <div class="section-header">
                     <div class="section-description">
@@ -754,8 +791,15 @@
           @if (record.ID) {
             <mj-accordion-panel id="notes"
               [Expanded]="GetSectionExpanded('notes', false)"
-              [Disabled]="loadingStates.notes"
-              [Title]="'Notes' + (noteCount > 0 ? ' (' + noteCount + ')' : '')">
+              [Disabled]="loadingStates.notes">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-sticky-note"></i> Notes
+                    @if (loadingStates.notes) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (noteCount > 0) {
+                        <span> ({{ noteCount }})</span>
+                    }
+                </ng-template>
                 <div class="panel-content">
                   <div class="section-header">
                     <div class="section-description">
@@ -818,8 +862,10 @@
           }
           <!-- Payload -->
           <mj-accordion-panel id="payload"
-            [Expanded]="GetSectionExpanded('payload', false)"
-            Title="Payload Management">
+            [Expanded]="GetSectionExpanded('payload', false)">
+              <ng-template mjAccordionTitle>
+                  <i class="fa-solid fa-exchange-alt"></i> Payload Management
+              </ng-template>
               <div class="panel-content">
                 <div class="section-header">
                   <div class="section-description">
@@ -1035,8 +1081,10 @@
           </mj-accordion-panel>
           <!-- Execution Guardrails (New Separate Panel) -->
           <mj-accordion-panel id="guardrails"
-            [Expanded]="GetSectionExpanded('guardrails', false)"
-            Title="Execution Guardrails">
+            [Expanded]="GetSectionExpanded('guardrails', false)">
+              <ng-template mjAccordionTitle>
+                  <i class="fa-solid fa-shield-halved"></i> Execution Guardrails
+              </ng-template>
               <div class="panel-content">
                 <div class="section-header">
                   <div class="section-description">
@@ -1081,8 +1129,10 @@
           </mj-accordion-panel>
           <!-- Configuration (Settings Panel) -->
           <mj-accordion-panel id="config"
-            [Expanded]="GetSectionExpanded('config', false)"
-            Title="Configuration">
+            [Expanded]="GetSectionExpanded('config', false)">
+              <ng-template mjAccordionTitle>
+                  <i class="fa-solid fa-cogs"></i> Configuration
+              </ng-template>
               <div class="panel-content">
                 <div class="section-header">
                   <div class="section-description">
