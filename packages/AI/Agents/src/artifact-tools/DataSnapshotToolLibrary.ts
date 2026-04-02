@@ -1,0 +1,312 @@
+/**
+ * @fileoverview Artifact tool library for DataSnapshot content.
+ *
+ * Parses a DataSnapshot JSON string and exposes tools for inspecting
+ * table metadata, slicing rows, searching, and aggregating values.
+ */
+import {
+    BaseArtifactToolLibrary,
+    type ArtifactToolDefinition,
+    type ArtifactToolResult,
+} from './BaseArtifactToolLibrary';
+
+// ---------------------------------------------------------------------------
+// Internal types (kept local — no `any`)
+// ---------------------------------------------------------------------------
+
+interface SnapshotColumn {
+    field: string;
+    sqlBaseType: string;
+}
+
+interface SnapshotTable {
+    name: string;
+    columns: SnapshotColumn[];
+    rows: Array<Record<string, unknown>>;
+    metadata?: { rowCount: number };
+}
+
+interface SnapshotPayload {
+    tables: SnapshotTable[];
+}
+
+type SearchOperator = 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte' | 'contains' | 'startsWith';
+type AggregateOperation = 'sum' | 'avg' | 'count' | 'min' | 'max' | 'distinct_count';
+
+const VALID_SEARCH_OPERATORS: ReadonlySet<string> = new Set<SearchOperator>([
+    'eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'contains', 'startsWith',
+]);
+
+const VALID_AGGREGATE_OPS: ReadonlySet<string> = new Set<AggregateOperation>([
+    'sum', 'avg', 'count', 'min', 'max', 'distinct_count',
+]);
+
+// ---------------------------------------------------------------------------
+// DataSnapshotToolLibrary
+// ---------------------------------------------------------------------------
+
+export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
+
+    // -----------------------------------------------------------------------
+    // GetToolList
+    // -----------------------------------------------------------------------
+
+    public GetToolList(): ArtifactToolDefinition[] {
+        return [
+            {
+                name: 'get_tables',
+                description: 'Returns table names, row counts, and column schemas for every table in the snapshot.',
+                inputSchema: { type: 'object', properties: {}, required: [] },
+            },
+            {
+                name: 'get_schema',
+                description: 'Returns column names, types, and descriptions for a specific table.',
+                inputSchema: {
+                    type: 'object',
+                    properties: { table: { type: 'string', description: 'Table name' } },
+                    required: ['table'],
+                },
+            },
+            {
+                name: 'get_rows',
+                description: 'Returns a slice of rows from a table as a JSON array.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        table: { type: 'string' },
+                        start: { type: 'number', description: 'Zero-based start index' },
+                        count: { type: 'number', description: 'Number of rows to return' },
+                    },
+                    required: ['table', 'start', 'count'],
+                },
+            },
+            {
+                name: 'search_rows',
+                description: 'Returns rows matching a field condition. Operators: eq, neq, gt, lt, gte, lte, contains, startsWith.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        table: { type: 'string' },
+                        field: { type: 'string' },
+                        operator: { type: 'string' },
+                        value: {},
+                    },
+                    required: ['table', 'field', 'operator', 'value'],
+                },
+            },
+            {
+                name: 'aggregate',
+                description: 'Computes an aggregate over a field. Operations: sum, avg, count, min, max, distinct_count.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        table: { type: 'string' },
+                        field: { type: 'string' },
+                        operation: { type: 'string' },
+                    },
+                    required: ['table', 'field', 'operation'],
+                },
+            },
+            {
+                name: 'get_full',
+                description: 'Returns the entire parsed DataSnapshot content.',
+                inputSchema: { type: 'object', properties: {}, required: [] },
+            },
+        ];
+    }
+
+    // -----------------------------------------------------------------------
+    // InvokeTool — dispatcher
+    // -----------------------------------------------------------------------
+
+    public async InvokeTool(
+        toolName: string,
+        input: Record<string, unknown>,
+        artifactContent: string | Buffer
+    ): Promise<ArtifactToolResult> {
+        const contentStr = typeof artifactContent === 'string'
+            ? artifactContent
+            : artifactContent.toString('utf-8');
+
+        let payload: SnapshotPayload;
+        try {
+            payload = JSON.parse(contentStr) as SnapshotPayload;
+        } catch {
+            return this.errorResult(`Failed to parse artifact content as JSON.`);
+        }
+
+        switch (toolName) {
+            case 'get_tables':
+                return this.handleGetTables(payload);
+            case 'get_schema':
+                return this.handleGetSchema(payload, input);
+            case 'get_rows':
+                return this.handleGetRows(payload, input);
+            case 'search_rows':
+                return this.handleSearchRows(payload, input);
+            case 'aggregate':
+                return this.handleAggregate(payload, input);
+            case 'get_full':
+                return this.successResult(payload);
+            default:
+                return this.errorResult(`Unknown tool: "${toolName}".`);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Tool handlers
+    // -----------------------------------------------------------------------
+
+    private handleGetTables(payload: SnapshotPayload): ArtifactToolResult {
+        const tables = payload.tables.map(t => ({
+            name: t.name,
+            rowCount: t.rows.length,
+            columns: t.columns,
+        }));
+        return this.successResult(tables);
+    }
+
+    private handleGetSchema(
+        payload: SnapshotPayload,
+        input: Record<string, unknown>
+    ): ArtifactToolResult {
+        const table = this.findTable(payload, input.table as string);
+        if (!table) {
+            return this.tableNotFoundError(input.table as string);
+        }
+        return this.successResult(table.columns);
+    }
+
+    private handleGetRows(
+        payload: SnapshotPayload,
+        input: Record<string, unknown>
+    ): ArtifactToolResult {
+        const table = this.findTable(payload, input.table as string);
+        if (!table) {
+            return this.tableNotFoundError(input.table as string);
+        }
+        const start = input.start as number;
+        const count = input.count as number;
+        const sliced = table.rows.slice(start, start + count);
+        return this.successResult(sliced);
+    }
+
+    private handleSearchRows(
+        payload: SnapshotPayload,
+        input: Record<string, unknown>
+    ): ArtifactToolResult {
+        const table = this.findTable(payload, input.table as string);
+        if (!table) {
+            return this.tableNotFoundError(input.table as string);
+        }
+
+        const field = input.field as string;
+        const operator = input.operator as string;
+        const value = input.value;
+
+        if (!VALID_SEARCH_OPERATORS.has(operator)) {
+            return this.errorResult(`Unsupported search operator: "${operator}". Valid operators: ${[...VALID_SEARCH_OPERATORS].join(', ')}.`);
+        }
+
+        const matched = table.rows.filter(row =>
+            this.evaluateCondition(row[field], operator as SearchOperator, value)
+        );
+        return this.successResult(matched);
+    }
+
+    private handleAggregate(
+        payload: SnapshotPayload,
+        input: Record<string, unknown>
+    ): ArtifactToolResult {
+        const table = this.findTable(payload, input.table as string);
+        if (!table) {
+            return this.tableNotFoundError(input.table as string);
+        }
+
+        const field = input.field as string;
+        const operation = input.operation as string;
+
+        if (!VALID_AGGREGATE_OPS.has(operation)) {
+            return this.errorResult(`Unsupported aggregate operation: "${operation}". Valid operations: ${[...VALID_AGGREGATE_OPS].join(', ')}.`);
+        }
+
+        const result = this.computeAggregate(table.rows, field, operation as AggregateOperation);
+        return this.successResult(result);
+    }
+
+    // -----------------------------------------------------------------------
+    // Search condition evaluator
+    // -----------------------------------------------------------------------
+
+    private evaluateCondition(
+        fieldValue: unknown,
+        operator: SearchOperator,
+        targetValue: unknown
+    ): boolean {
+        switch (operator) {
+            case 'eq':
+                return fieldValue === targetValue;
+            case 'neq':
+                return fieldValue !== targetValue;
+            case 'gt':
+                return (fieldValue as number) > (targetValue as number);
+            case 'lt':
+                return (fieldValue as number) < (targetValue as number);
+            case 'gte':
+                return (fieldValue as number) >= (targetValue as number);
+            case 'lte':
+                return (fieldValue as number) <= (targetValue as number);
+            case 'contains':
+                return String(fieldValue).includes(String(targetValue));
+            case 'startsWith':
+                return String(fieldValue).startsWith(String(targetValue));
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Aggregate computation
+    // -----------------------------------------------------------------------
+
+    private computeAggregate(
+        rows: Array<Record<string, unknown>>,
+        field: string,
+        operation: AggregateOperation
+    ): number {
+        switch (operation) {
+            case 'count':
+                return rows.length;
+            case 'distinct_count':
+                return new Set(rows.map(r => r[field])).size;
+            case 'sum':
+                return rows.reduce((acc, r) => acc + (r[field] as number), 0);
+            case 'avg': {
+                const sum = rows.reduce((acc, r) => acc + (r[field] as number), 0);
+                return rows.length > 0 ? sum / rows.length : 0;
+            }
+            case 'min':
+                return Math.min(...rows.map(r => r[field] as number));
+            case 'max':
+                return Math.max(...rows.map(r => r[field] as number));
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Helpers
+    // -----------------------------------------------------------------------
+
+    private findTable(payload: SnapshotPayload, tableName: string): SnapshotTable | undefined {
+        return payload.tables.find(t => t.name === tableName);
+    }
+
+    private tableNotFoundError(tableName: string): ArtifactToolResult {
+        return this.errorResult(`Table "${tableName}" not found in snapshot.`);
+    }
+
+    private successResult(data: unknown): ArtifactToolResult {
+        return { success: true, data };
+    }
+
+    private errorResult(errorMessage: string): ArtifactToolResult {
+        return { success: false, data: null, errorMessage };
+    }
+}

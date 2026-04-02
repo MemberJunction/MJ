@@ -55,6 +55,7 @@ import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
+import { ArtifactToolManager, ArtifactToolCall } from './ArtifactToolManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
@@ -683,6 +684,12 @@ export class BaseAgent {
     private _scratchpadManager: ScratchpadManager = new ScratchpadManager();
 
     /**
+     * Manages artifact tools for the current agent run.
+     * Allows agents to explore input artifacts on demand.
+     */
+    private _artifactToolManager: ArtifactToolManager = new ArtifactToolManager();
+
+    /**
      * Effective actions available to this agent after applying actionChanges.
      * Populated during gatherPromptTemplateData() and used for validation in executeActionsStep().
      * @private
@@ -1045,8 +1052,9 @@ export class BaseAgent {
                 this.convertUIMarkupInMessages(wrappedParams.conversationMessages);
             }
 
-            // Reset scratchpad for each new execution (ephemeral per run)
+            // Reset scratchpad and artifact tools for each new execution (ephemeral per run)
             this._scratchpadManager.Clear();
+            this._artifactToolManager.Clear();
 
             await this.initializeStartingPayload(wrappedParams);
 
@@ -1883,6 +1891,15 @@ export class BaseAgent {
                 promptParams.data['_SCRATCHPAD_NOTES'] = this._scratchpadManager.GetNotes() || '_(no notes yet)_';
                 promptParams.data['_SCRATCHPAD_TASKS'] = this._scratchpadManager.ToPromptString();
                 promptParams.data['_SCRATCHPAD_TASK_SUMMARY'] = this._scratchpadManager.GetTaskSummary();
+            }
+
+            // Inject artifact tools template variables if enabled and artifacts are present
+            const artifactToolsEnabled = agentTypePromptParams?.includeArtifactToolsDocs !== false;
+            if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
+                promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
+                promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
+                promptParams.data['_ARTIFACT_TOOL_RESULTS'] = this._artifactToolManager.GetPendingResults();
+                promptParams.data['_ARTIFACT_TOOL_SUMMARY'] = this._artifactToolManager.GetSummary();
             }
         }
 
@@ -5517,6 +5534,14 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
+            // Execute artifact tool calls if provided (zero turn cost — processed inline)
+            // artifactToolCalls is on LoopAgentResponse but not yet on BaseAgentNextStep
+            // (which lives in ai-core-plus). Access via the raw parsed step.
+            const artifactToolCalls = (initialNextStep as Record<string, unknown>)['artifactToolCalls'] as ArtifactToolCall[] | undefined;
+            if (artifactToolCalls?.length) {
+                await this._artifactToolManager.ExecuteToolCalls(artifactToolCalls);
+            }
+
             // now that we have processed the payload, we can process the next step which does validation and changes the next step if
             // validation fails
             const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, finalPayload, stepEntity);
@@ -5540,6 +5565,10 @@ The context is now within limits. Please retry your request with the recovered c
                 // Include scratchpad snapshot after changes for audit/training data
                 ...(this._scratchpadManager.HasContent() && {
                     scratchpad: this._scratchpadManager.ToJSON()
+                }),
+                // Include artifact tools snapshot for audit/training data
+                ...(this._artifactToolManager.HasArtifacts() && {
+                    artifactTools: this._artifactToolManager.ToJSON()
                 }),
                 // Include memory attribution for observability
                 // This tracks which notes/examples were injected and influenced this step
