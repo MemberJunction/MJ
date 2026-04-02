@@ -32,7 +32,6 @@ import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@m
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager } from './component-cache-manager';
-import { LazyModuleRegistry } from '../../../services/lazy-module-registry';
 
 /**
  * Container for Golden Layout tabs with app-colored styling.
@@ -68,7 +67,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   @Output() layoutInitError = new EventEmitter<void>();
 
-  private lazyRegistry = inject(LazyModuleRegistry);
   private pinService = inject(HomeAppPinService);
   private subscriptions: Subscription[] = [];
   private layoutInitRetryCount = 0;
@@ -470,18 +468,11 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       return;
     }
 
-    // Get the component registration (with lazy loading fallback)
-    let resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+    // Get the component registration (with lazy loading fallback via ClassFactory)
+    const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
       BaseResourceComponent,
       driverClass
     );
-
-    if (!resourceReg) {
-      const loaded = await this.lazyRegistry.Load(driverClass);
-      if (loaded) {
-        resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, driverClass);
-      }
-    }
 
     if (!resourceReg) {
       LogError(`Unable to find resource registration for driver class: ${driverClass}`);
@@ -664,18 +655,11 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         return;
       }
 
-      // Get the component registration using the driver class (with lazy loading fallback)
-      let resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+      // Get the component registration using the driver class (with lazy loading fallback via ClassFactory)
+      const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
         BaseResourceComponent,
         driverClass
       );
-
-      if (!resourceReg) {
-        const loaded = await this.lazyRegistry.Load(driverClass);
-        if (loaded) {
-          resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, driverClass);
-        }
-      }
 
       if (!resourceReg) {
         LogError(`Unable to find resource registration for driver class: ${driverClass}`);
@@ -762,17 +746,10 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // Get the resource registration to access GetResourceDisplayName without loading full component
       const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
-      let resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+      const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
         BaseResourceComponent,
         driverClass
       );
-
-      if (!resourceReg) {
-        const loaded = await this.lazyRegistry.Load(driverClass);
-        if (loaded) {
-          resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, driverClass);
-        }
-      }
 
       if (!resourceReg) {
         return;
