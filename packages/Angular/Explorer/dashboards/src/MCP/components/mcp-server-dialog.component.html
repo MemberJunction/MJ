@@ -1,9 +1,9 @@
 @if (visible) {
-  <kendo-dialog
-    [title]="DialogTitle"
-    (close)="cancel()"
-    [width]="600"
-    [minWidth]="400">
+  <mj-dialog
+    [Visible]="true"
+    [Title]="DialogTitle"
+    (Close)="cancel()"
+    [Width]="600">
     <form [formGroup]="serverForm" class="server-form">
       <!-- Error Message -->
       @if (ErrorMessage) {
@@ -17,7 +17,7 @@
         <h3><i class="fa-solid fa-info-circle"></i> Basic Information</h3>
         <div class="form-group">
           <label for="name">Name <span class="required">*</span></label>
-          <input kendoTextBox
+          <input class="mj-input"
             id="name"
             formControlName="Name"
             placeholder="e.g., GitHub MCP Server" />
@@ -27,7 +27,7 @@
         </div>
         <div class="form-group">
           <label for="description">Description</label>
-          <textarea kendoTextArea
+          <textarea class="mj-textarea"
             id="description"
             formControlName="Description"
             placeholder="Optional description of this server"
@@ -35,12 +35,11 @@
         </div>
         <div class="form-group">
           <label for="status">Status</label>
-          <kendo-dropdownlist
-            id="status"
-            formControlName="Status"
-            [data]="['Active', 'Inactive']"
-            [valuePrimitive]="true">
-          </kendo-dropdownlist>
+          <mj-dropdown
+            [Data]="['Active', 'Inactive']"
+            [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('Status')?.value"
+            (ValueChange)="serverForm.get('Status')?.setValue($any($event))">
+          </mj-dropdown>
         </div>
       </div>
       <!-- Transport Section -->
@@ -48,26 +47,25 @@
         <h3><i class="fa-solid fa-network-wired"></i> Transport Configuration</h3>
         <div class="form-group">
           <label for="transportType">Transport Type <span class="required">*</span></label>
-          <kendo-dropdownlist
-            id="transportType"
-            formControlName="TransportType"
-            [data]="transportTypes"
-            textField="label"
-            valueField="value"
-            [valuePrimitive]="true"
-            (valueChange)="onTransportTypeChange()">
-            <ng-template kendoDropDownListItemTemplate let-dataItem>
+          <mj-dropdown
+            [Data]="transportTypes"
+            TextField="label"
+            ValueField="value"
+            [ValuePrimitive]="true"
+            [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('TransportType')?.value"
+            (ValueChange)="serverForm.get('TransportType')?.setValue($any($event)); onTransportTypeChange()">
+            <ng-template #mjDropdownItem let-dataItem>
               <div class="transport-option">
                 <span class="transport-label">{{ dataItem.label }}</span>
                 <span class="transport-desc">{{ dataItem.description }}</span>
               </div>
             </ng-template>
-          </kendo-dropdownlist>
+          </mj-dropdown>
         </div>
         @if (RequiresURL) {
           <div class="form-group">
             <label for="serverUrl">Server URL <span class="required">*</span></label>
-            <input kendoTextBox
+            <input class="mj-input"
               id="serverUrl"
               formControlName="ServerURL"
               placeholder="https://api.example.com/mcp" />
@@ -79,7 +77,7 @@
         @if (RequiresCommand) {
           <div class="form-group">
             <label for="command">Command <span class="required">*</span></label>
-            <input kendoTextBox
+            <input class="mj-input"
               id="command"
               formControlName="Command"
               placeholder="e.g., npx or /usr/local/bin/mcp-server" />
@@ -89,7 +87,7 @@
           </div>
           <div class="form-group">
             <label for="commandArgs">Command Arguments (JSON array)</label>
-            <input kendoTextBox
+            <input class="mj-input"
               id="commandArgs"
               formControlName="CommandArgs"
               placeholder='["arg1", "arg2"]' />
@@ -102,30 +100,29 @@
         <h3><i class="fa-solid fa-shield-halved"></i> Authentication</h3>
         <div class="form-group">
           <label for="authType">Default Auth Type</label>
-          <kendo-dropdownlist
-            id="authType"
-            formControlName="DefaultAuthType"
-            [data]="authTypes"
-            textField="label"
-            valueField="value"
-            [valuePrimitive]="true"
-            (valueChange)="onAuthTypeChange()">
-            <ng-template kendoDropDownListItemTemplate let-dataItem>
+          <mj-dropdown
+            [Data]="authTypes"
+            TextField="label"
+            ValueField="value"
+            [ValuePrimitive]="true"
+            [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('DefaultAuthType')?.value"
+            (ValueChange)="serverForm.get('DefaultAuthType')?.setValue($any($event)); onAuthTypeChange()">
+            <ng-template #mjDropdownItem let-dataItem>
               <div class="auth-option">
                 <span class="auth-label">{{ dataItem.label }}</span>
                 <span class="auth-desc">{{ dataItem.description }}</span>
               </div>
             </ng-template>
-          </kendo-dropdownlist>
+          </mj-dropdown>
         </div>
       </div>
-      <!-- OAuth 2.0 Configuration Section (only shown when OAuth2 is selected) -->
+      <!-- OAuth 2.0 Configuration Section -->
       @if (IsOAuth2) {
         <div class="form-section oauth-section">
           <h3><i class="fa-solid fa-key"></i> OAuth 2.0 Configuration</h3>
           <div class="form-group">
             <label for="oauthIssuerUrl">OAuth Issuer URL <span class="required">*</span></label>
-            <input kendoTextBox
+            <input class="mj-input"
               id="oauthIssuerUrl"
               formControlName="OAuthIssuerURL"
               placeholder="https://auth.example.com" />
@@ -136,7 +133,7 @@
           </div>
           <div class="form-group">
             <label for="oauthScopes">OAuth Scopes</label>
-            <input kendoTextBox
+            <input class="mj-input"
               id="oauthScopes"
               formControlName="OAuthScopes"
               placeholder="openid profile email" />
@@ -144,13 +141,12 @@
           </div>
           <div class="form-group">
             <label for="oauthCacheTtl">Metadata Cache TTL (minutes)</label>
-            <kendo-numerictextbox
-              id="oauthCacheTtl"
-              formControlName="OAuthMetadataCacheTTLMinutes"
-              [min]="5"
-              [format]="'n0'"
-              placeholder="1440">
-            </kendo-numerictextbox>
+            <mj-numeric-input
+              [Min]="5"
+              Placeholder="1440"
+              [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('OAuthMetadataCacheTTLMinutes')?.value"
+              (ngModelChange)="serverForm.get('OAuthMetadataCacheTTLMinutes')?.setValue($event)">
+            </mj-numeric-input>
             <span class="hint">How long to cache OAuth metadata (default: 1440 minutes = 24 hours)</span>
           </div>
           <div class="oauth-client-section">
@@ -158,14 +154,14 @@
             <p class="section-hint">Leave blank to use Dynamic Client Registration (DCR). If the auth server doesn't support DCR, configure your client credentials here.</p>
             <div class="form-group">
               <label for="oauthClientId">Client ID</label>
-              <input kendoTextBox
+              <input class="mj-input"
                 id="oauthClientId"
                 formControlName="OAuthClientID"
                 placeholder="your-client-id" />
             </div>
             <div class="form-group">
               <label for="oauthClientSecret">Client Secret</label>
-              <input kendoTextBox
+              <input class="mj-input"
                 id="oauthClientSecret"
                 formControlName="OAuthClientSecretEncrypted"
                 type="password"
@@ -181,47 +177,44 @@
         <div class="form-row">
           <div class="form-group half">
             <label for="rateLimitMinute">Requests per Minute</label>
-            <kendo-numerictextbox
-              id="rateLimitMinute"
-              formControlName="RateLimitPerMinute"
-              [min]="0"
-              [format]="'n0'"
-              placeholder="No limit">
-            </kendo-numerictextbox>
+            <mj-numeric-input
+              [Min]="0"
+              Placeholder="No limit"
+              [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('RateLimitPerMinute')?.value"
+              (ngModelChange)="serverForm.get('RateLimitPerMinute')?.setValue($event)">
+            </mj-numeric-input>
           </div>
           <div class="form-group half">
             <label for="rateLimitHour">Requests per Hour</label>
-            <kendo-numerictextbox
-              id="rateLimitHour"
-              formControlName="RateLimitPerHour"
-              [min]="0"
-              [format]="'n0'"
-              placeholder="No limit">
-            </kendo-numerictextbox>
+            <mj-numeric-input
+              [Min]="0"
+              Placeholder="No limit"
+              [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('RateLimitPerHour')?.value"
+              (ngModelChange)="serverForm.get('RateLimitPerHour')?.setValue($event)">
+            </mj-numeric-input>
           </div>
         </div>
         <div class="form-group">
           <label for="requestTimeout">Request Timeout (ms)</label>
-          <kendo-numerictextbox
-            id="requestTimeout"
-            formControlName="RequestTimeoutMs"
-            [min]="1000"
-            [max]="600000"
-            [step]="1000"
-            [format]="'n0'">
-          </kendo-numerictextbox>
+          <mj-numeric-input
+            [Min]="1000"
+            [Max]="600000"
+            [Step]="1000"
+            [ngModelOptions]="{standalone: true}" [ngModel]="serverForm.get('RequestTimeoutMs')?.value"
+            (ngModelChange)="serverForm.get('RequestTimeoutMs')?.setValue($event)">
+          </mj-numeric-input>
           <span class="hint">Timeout for individual tool calls (1000-600000ms)</span>
         </div>
       </div>
     </form>
-    <kendo-dialog-actions>
-      <button kendoButton (click)="save()" themeColor="primary" [disabled]="IsSaving">
+    <mj-dialog-actions>
+      <button mjButton variant="primary" (click)="save()" [disabled]="IsSaving">
         @if (IsSaving) {
           <i class="fa-solid fa-spinner fa-spin"></i>
         }
         {{ IsEditMode ? 'Update' : 'Create' }}
       </button>
-      <button kendoButton (click)="cancel()">Cancel</button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+      <button mjButton (click)="cancel()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
 }

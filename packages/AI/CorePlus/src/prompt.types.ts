@@ -11,7 +11,7 @@
 
 import { MJAIPromptRunEntity, MJAIConfigurationEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
 import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
 import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
 
@@ -679,6 +679,14 @@ export class AIPromptParams {
    * @see {@link https://docs.memberjunction.org/ai-authentication AI Authentication Guide}
    */
   credentialId?: string;
+
+  /**
+   * Optional per-request metadata provider for multi-user server isolation.
+   * Set by BaseAgent when invoking prompts so prompt run records are saved
+   * via the same isolated provider as the rest of the agent execution.
+   * When omitted, falls back to the global Metadata.Provider.
+   */
+  provider?: IMetadataProvider;
 }
 
 

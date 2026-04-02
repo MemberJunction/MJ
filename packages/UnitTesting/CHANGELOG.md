@@ -1,5 +1,12 @@
 # @memberjunction/unit-testing
 
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [f2a6bec]
+  - @memberjunction/global@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

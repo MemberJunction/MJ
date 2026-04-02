@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 5.22.0
+
+### Minor Changes
+
+- a42aba6: metadata
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/content-autotagging@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/core-actions@5.22.0
+  - @memberjunction/actions@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/core-entities@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

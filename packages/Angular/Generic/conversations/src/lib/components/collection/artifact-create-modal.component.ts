@@ -13,11 +13,12 @@ import { UUIDsEqual } from '@memberjunction/global';
   selector: 'mj-artifact-create-modal',
   template: `
     @if (isOpen) {
-      <kendo-dialog
-        title="Create Artifact"
-        (close)="onCancel()"
-        [width]="600"
-        [minWidth]="400">
+      <mj-dialog
+        Title="Create Artifact"
+        (Close)="onCancel()"
+        [Width]="600"
+        [MinWidth]="400"
+        [Visible]="true">
         <div class="artifact-form">
           <div class="form-group">
             <label class="form-label">
@@ -34,15 +35,16 @@ import { UUIDsEqual } from '@memberjunction/global';
             <label class="form-label">
               Type <span class="required">*</span>
             </label>
-            <kendo-dropdownlist
-              [data]="artifactTypes"
-              [(ngModel)]="formData.selectedType"
-              textField="Name"
-              valueField="ID"
-              [valuePrimitive]="false"
-              class="form-control"
-              [loading]="isLoadingTypes">
-            </kendo-dropdownlist>
+            <select
+              [ngModel]="formData.selectedType?.ID || ''"
+              (ngModelChange)="onTypeSelected($event)"
+              class="form-control mj-select"
+              [disabled]="isLoadingTypes">
+              <option value="" disabled>Select a type...</option>
+              @for (type of artifactTypes; track type.ID) {
+                <option [value]="type.ID">{{ type.Name }}</option>
+              }
+            </select>
           </div>
           <div class="form-group">
             <label class="form-label">Description</label>
@@ -75,18 +77,18 @@ import { UUIDsEqual } from '@memberjunction/global';
             </div>
           }
         </div>
-        <kendo-dialog-actions>
-          <button kendoButton (click)="onCancel()" [disabled]="isSaving">
+        <mj-dialog-actions>
+          <button mjButton (click)="onCancel()" [disabled]="isSaving">
             Cancel
           </button>
-          <button kendoButton
-            [primary]="true"
+          <button mjButton
+            variant="primary"
             (click)="onSave()"
             [disabled]="!canSave || isSaving">
             {{ isSaving ? 'Creating...' : 'Create Artifact' }}
           </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
     `,
   styles: [`
@@ -226,6 +228,10 @@ export class ArtifactCreateModalComponent implements OnChanges {
       this.isLoadingTypes = false;
       this.cdr.detectChanges(); // zone.js 0.15: async RunView doesn't trigger CD
     }
+  }
+
+  onTypeSelected(typeId: string): void {
+    this.formData.selectedType = this.artifactTypes.find(t => UUIDsEqual(t.ID, typeId)) || null;
   }
 
   async onSave(): Promise<void> {

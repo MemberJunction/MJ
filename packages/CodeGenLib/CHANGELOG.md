@@ -1,5 +1,34 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.22.0
+
+### Patch Changes
+
+- f2a6bec: Universal lazy loading via ClassFactory async API. Fixes HomeApplication being tree-shaken by moving lazy loading from consumer-specific retry patterns into ClassFactory itself with RegisterLazyLoader, CreateInstanceAsync, and GetRegistrationAsync. Lazy config now uses compound keys (BaseClassName::Key) to support any base class. Adds coverage audit to codegen to detect gaps.
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/ai-prompts@5.22.0
+  - @memberjunction/sql-parser@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/server-bootstrap-lite@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/aiengine@5.22.0
+  - @memberjunction/actions@5.22.0
+  - @memberjunction/core-entities-server@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/postgresql-dataprovider@5.22.0
+  - @memberjunction/sqlserver-dataprovider@5.22.0
+  - @memberjunction/ai-provider-bundle@5.22.0
+  - @memberjunction/ai@5.22.0
+  - @memberjunction/config@5.22.0
+  - @memberjunction/sql-dialect@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

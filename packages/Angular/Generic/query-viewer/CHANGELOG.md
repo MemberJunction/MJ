@@ -1,5 +1,23 @@
 # @memberjunction/ng-query-viewer
 
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/ng-code-editor@5.22.0
+  - @memberjunction/ng-notifications@5.22.0
+  - @memberjunction/ng-shared-generic@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/ng-export-service@5.22.0
+  - @memberjunction/ng-markdown@5.22.0
+  - @memberjunction/ng-pagination@5.22.0
+  - @memberjunction/export-engine@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

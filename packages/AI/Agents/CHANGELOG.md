@@ -1,5 +1,35 @@
 # @memberjunction/ai-agents
 
+## 5.22.0
+
+### Minor Changes
+
+- 21e0b69: Auto-inject current date/time into Loop Agent system prompt
+- a42aba6: metadata
+
+### Patch Changes
+
+- 0b23772: Ensure agents use an isolated per-request database provider instead of the shared global singleton.
+- cf91278: Fix NVARCHAR(MAX) mangling in SQL parser, resolve Invalid string length error in AI monitoring dashboard, add unit tests for AI agent components, and add replaceElements guidance for loop agent prompts
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/ai-prompts@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ai-vector-dupe@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/ai-engine-base@5.22.0
+  - @memberjunction/aiengine@5.22.0
+  - @memberjunction/ai-reranker@5.22.0
+  - @memberjunction/actions@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/ai@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

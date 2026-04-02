@@ -1,7 +1,6 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
 import { UUIDsEqual } from '@memberjunction/global';
 
 export interface EntitySelectorConfig {
@@ -256,9 +255,10 @@ export class EntitySelectorDialogComponent implements OnInit {
     public searchText: string = '';
     public isLoading: boolean = true;
 
+    @Output() DialogClosed = new EventEmitter<Record<string, unknown> | null>();
+
     constructor(
-        private sharedService: SharedService,
-        public dialogRef: DialogRef
+        private sharedService: SharedService
     ) {}
 
     async ngOnInit() {
@@ -306,12 +306,12 @@ export class EntitySelectorDialogComponent implements OnInit {
 
     onSelect() {
         if (this.selectedEntity) {
-            this.dialogRef.close({ entity: this.selectedEntity });
+            this.DialogClosed.emit({ entity: this.selectedEntity });
         }
     }
 
     createNew() {
-        this.dialogRef.close({ createNew: true });
+        this.DialogClosed.emit({ createNew: true });
     }
 
     IsEntitySelected(entity: Record<string, unknown>): boolean {
@@ -319,6 +319,6 @@ export class EntitySelectorDialogComponent implements OnInit {
     }
 
     onCancel() {
-        this.dialogRef.close(null);
+        this.DialogClosed.emit(null);
     }
 }
