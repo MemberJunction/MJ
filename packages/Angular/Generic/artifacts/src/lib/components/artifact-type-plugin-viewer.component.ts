@@ -229,7 +229,7 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
 
       // Get the component type using MJGlobal ClassFactory
       // CreateInstance returns the registered component class for the given DriverClass key
-      const tempInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactViewerPluginComponent>(
+      const tempInstance = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseArtifactViewerPluginComponent>(
         BaseArtifactViewerPluginComponent,
         driverClass
       );
