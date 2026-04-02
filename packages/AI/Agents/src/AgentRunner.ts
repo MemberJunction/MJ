@@ -750,10 +750,8 @@ export class AgentRunner {
                     artifactId, serializedContent, newVersionNumber - 1, contextUser
                 );
                 if (existingVersionId) {
-                    LogStatus(`Skipping duplicate artifact version — content identical to version ${newVersionNumber - 1}`);
-                    return this.LinkArtifactToConversationDetail(
-                        existingVersionId, conversationDetailId, artifactId, newVersionNumber - 1, contextUser, md
-                    );
+                    console.debug(`Skipping duplicate artifact version — content identical to version ${newVersionNumber - 1}`);
+                    return undefined;
                 }
             }
 
