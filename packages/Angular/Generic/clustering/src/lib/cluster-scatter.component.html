@@ -1,0 +1,138 @@
+<div class="scatter-container">
+    <!-- Loading overlay -->
+    @if (IsLoading) {
+        <div class="loading-overlay">
+            <div class="loading-spinner">
+                <i class="fa-solid fa-circle-nodes fa-spin"></i>
+                <span>Computing clusters...</span>
+            </div>
+        </div>
+    }
+
+    <!-- Empty state -->
+    @if (!IsLoading && Points.length === 0) {
+        <div class="empty-state">
+            <i class="fa-solid fa-chart-scatter"></i>
+            <p>No data to display</p>
+            <p class="empty-hint">Configure and run clustering to see results</p>
+        </div>
+    }
+
+    <!-- SVG scatter plot -->
+    @if (Points.length > 0) {
+        <svg #svgElement
+             class="scatter-svg"
+             [class.no-transitions]="!AnimateTransitions"
+             [attr.viewBox]="GetViewBoxString()"
+             preserveAspectRatio="xMidYMid meet"
+             (wheel)="OnWheel($event)"
+             (mousedown)="OnMouseDown($event)">
+
+            <!-- Gradient definitions for cluster glow -->
+            <defs>
+                @for (centroid of ClusterCentroids; track TrackCentroidBy($index, centroid)) {
+                    <radialGradient [attr.id]="'cluster-glow-' + centroid.ClusterId"
+                                    cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" [attr.stop-color]="centroid.Color" stop-opacity="0.12"/>
+                        <stop offset="100%" [attr.stop-color]="centroid.Color" stop-opacity="0"/>
+                    </radialGradient>
+                }
+            </defs>
+
+            <!-- Background grid lines -->
+            <g class="grid-lines">
+                @for (y of HorizontalGridLines; track y) {
+                    <line [attr.x1]="0" [attr.y1]="y" [attr.x2]="1000" [attr.y2]="y"/>
+                }
+                @for (x of VerticalGridLines; track x) {
+                    <line [attr.x1]="x" [attr.y1]="0" [attr.x2]="x" [attr.y2]="700"/>
+                }
+            </g>
+
+            <!-- Cluster glow circles -->
+            @for (centroid of ClusterCentroids; track TrackCentroidBy($index, centroid)) {
+                <circle [attr.cx]="centroid.Cx"
+                        [attr.cy]="centroid.Cy"
+                        [attr.r]="centroid.R"
+                        [attr.fill]="'url(#cluster-glow-' + centroid.ClusterId + ')'"/>
+            }
+
+            <!-- Data points -->
+            @for (point of Points; track TrackPointBy($index, point)) {
+                <circle class="data-point"
+                        [attr.cx]="point.X"
+                        [attr.cy]="point.Y"
+                        [attr.r]="GetPointRadius(point)"
+                        [attr.fill]="GetPointColor(point)"
+                        [attr.opacity]="GetPointOpacity(point)"
+                        (mouseenter)="OnPointMouseEnter(point, $event)"
+                        (mouseleave)="OnPointMouseLeave()"
+                        (click)="OnPointClick(point); $event.stopPropagation()"/>
+            }
+
+            <!-- Selection rings for selected points -->
+            @for (point of Points; track TrackPointBy($index, point)) {
+                @if (IsSelected(point)) {
+                    <circle class="selection-ring"
+                            [attr.cx]="point.X"
+                            [attr.cy]="point.Y"
+                            [attr.r]="HighlightRadius + 2"
+                            fill="none"
+                            [attr.stroke]="GetPointColor(point)"
+                            stroke-width="2"
+                            opacity="0.8"/>
+                }
+            }
+
+            <!-- Highlight ring for last-clicked point -->
+            @if (HighlightedKey) {
+                @for (point of Points; track TrackPointBy($index, point)) {
+                    @if (IsHighlighted(point)) {
+                        <circle [attr.cx]="point.X"
+                                [attr.cy]="point.Y"
+                                [attr.r]="HighlightRadius + 4"
+                                fill="none"
+                                [attr.stroke]="GetPointColor(point)"
+                                stroke-width="2.5"
+                                opacity="0.9"/>
+                    }
+                }
+            }
+        </svg>
+    }
+
+    <!-- Legend overlay -->
+    @if (ShowLegend && Clusters.length > 0) {
+        <div class="legend">
+            <div class="legend-title">Clusters</div>
+            @for (cluster of Clusters; track TrackClusterBy($index, cluster)) {
+                <div class="legend-item" (click)="OnClusterLegendClick(cluster)">
+                    <div class="legend-dot" [style.background]="cluster.Color"></div>
+                    <span class="legend-label">{{ cluster.Label }}</span>
+                    <span class="legend-count">{{ cluster.MemberCount }}</span>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Tooltip -->
+    @if (ShowTooltip && HoveredPoint) {
+        <div class="tooltip"
+             [style.left.px]="TooltipX"
+             [style.top.px]="TooltipY">
+            <div class="tt-name">{{ HoveredPoint.Label }}</div>
+            <div class="tt-cluster">
+                <i class="fa-solid fa-circle" style="font-size: 7px; vertical-align: middle"></i>
+                {{ GetClusterLabel(HoveredPoint) }}
+            </div>
+            <div class="tt-fields">
+                @for (entry of TooltipEntries; track entry.Key) {
+                    <div>{{ entry.Key }}: {{ entry.Value }}</div>
+                }
+            </div>
+            <div class="tt-action">
+                <i class="fa-solid fa-arrow-up-right-from-square"></i> Click to open record
+            </div>
+        </div>
+    }
+</div>

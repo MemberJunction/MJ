@@ -98,11 +98,25 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public IsDetecting = false;
     public DetectionProgress = 0;
     public DetectionStage = '';
+
+    /** Runtime threshold overrides — initialized from entity doc, adjustable via sliders */
+    public RunPotentialThreshold = 0.70;
+    public RunAbsoluteThreshold = 0.95;
     public DetectionCurrentItem = '';
 
     // Entity document picker
     public EntityDocuments: EntityDocumentOption[] = [];
-    public SelectedEntityDocumentID = '';
+    private _selectedEntityDocumentID = '';
+    public get SelectedEntityDocumentID(): string { return this._selectedEntityDocumentID; }
+    public set SelectedEntityDocumentID(value: string) {
+        this._selectedEntityDocumentID = value;
+        // Sync threshold sliders from selected entity document
+        const doc = this.EntityDocuments.find(d => UUIDsEqual(d.ID, value));
+        if (doc) {
+            this.RunPotentialThreshold = doc.PotentialMatchThreshold;
+            this.RunAbsoluteThreshold = doc.AbsoluteMatchThreshold;
+        }
+    }
 
     /** Whether this component is embedded inside the Knowledge Hub shell */
     @Input() EmbeddedMode = false;
@@ -210,12 +224,19 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     }
 
     async ngAfterViewInit(): Promise<void> {
+        console.log(`[DuplicateDetection] ngAfterViewInit — SelectedEntityDocumentID="${this.SelectedEntityDocumentID}", EntityDocuments.length=${this.EntityDocuments.length}`);
         this.setupFilterDebounce();
         await this.LoadData();
+        console.log(`[DuplicateDetection] LoadData complete — SelectedEntityDocumentID="${this.SelectedEntityDocumentID}", EntityDocuments.length=${this.EntityDocuments.length}`);
         this.NotifyLoadComplete();
     }
 
+    ngOnInit(): void {
+        console.log(`[DuplicateDetection] ngOnInit — component instance ${this.constructor.name}@${Math.random().toString(36).substring(7)}`);
+    }
+
     ngOnDestroy(): void {
+        console.log(`[DuplicateDetection] ngOnDestroy — SelectedEntityDocumentID="${this.SelectedEntityDocumentID}"`);
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -421,8 +442,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             ID: String(r['ID'] ?? ''),
             Name: String(r['Name'] ?? 'Unnamed'),
             EntityName: String(r['Entity'] ?? r['EntityID'] ?? ''),
-            PotentialMatchThreshold: (r['PotentialMatchThreshold'] as number) ?? 0.75,
-            AbsoluteMatchThreshold: (r['AbsoluteMatchThreshold'] as number) ?? 0.95
+            PotentialMatchThreshold: this.normalizeDupeThreshold((r['PotentialMatchThreshold'] as number), 0.70),
+            AbsoluteMatchThreshold: this.normalizeDupeThreshold((r['AbsoluteMatchThreshold'] as number), 0.95)
         }));
 
         // Auto-select the first entity document if available
@@ -432,6 +453,29 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     }
 
     /** Subscribe to PipelineProgress for a specific detection run */
+    /**
+     * Normalizes a duplicate threshold value — treats null, undefined, 0, and 1.0
+     * as "not configured" and falls back to a sensible default.
+     * Thresholds of exactly 1.0 mean "100% match only" which is effectively useless
+     * for real-world duplicate detection.
+     */
+    private normalizeDupeThreshold(value: number | null | undefined, fallback: number): number {
+        if (value == null || value <= 0 || value >= 1.0) {
+            return fallback;
+        }
+        return value;
+    }
+
+    /** Handle potential threshold slider change */
+    public OnPotentialThresholdChanged(value: number): void {
+        this.RunPotentialThreshold = value;
+    }
+
+    /** Handle absolute threshold slider change */
+    public OnAbsoluteThresholdChanged(value: number): void {
+        this.RunAbsoluteThreshold = value;
+    }
+
     private subscribeToPipelineProgress(pipelineRunID: string): void {
         const provider = Metadata.Provider as GraphQLDataProvider;
         const subscriptionQuery = `

@@ -92,6 +92,7 @@
     "@codemirror/merge": "^6.11.2",
     "@codemirror/state": "^6.5.4",
     "@codemirror/view": "^6.39.12",
+    "@memberjunction/ng-clustering": "5.22.0",
     "@memberjunction/ng-scheduling": "5.22.0",
     "@memberjunction/actions-base": "5.22.0",
     "@memberjunction/ai-engine-base": "5.22.0",

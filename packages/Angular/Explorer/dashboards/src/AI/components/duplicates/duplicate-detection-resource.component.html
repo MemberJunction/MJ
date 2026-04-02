@@ -48,17 +48,35 @@
         </div>
     }
 
-    <!-- Threshold Info (when entity doc selected) -->
+    <!-- Threshold Controls (when entity doc selected) -->
     @if (SelectedDocumentThresholds) {
-        <div class="threshold-info">
-            <span class="threshold-item">
-                <i class="fa-solid fa-bullseye"></i>
-                Absolute: {{ (SelectedDocumentThresholds.AbsoluteMatchThreshold * 100).toFixed(0) }}%
-            </span>
-            <span class="threshold-item">
-                <i class="fa-solid fa-adjust"></i>
-                Potential: {{ (SelectedDocumentThresholds.PotentialMatchThreshold * 100).toFixed(0) }}%
-            </span>
+        <div class="threshold-controls">
+            <div class="threshold-slider-group">
+                <label class="threshold-label">
+                    <i class="fa-solid fa-adjust"></i>
+                    Potential Match
+                    <span class="threshold-value">{{ (RunPotentialThreshold * 100).toFixed(0) }}%</span>
+                </label>
+                <input type="range" class="threshold-slider"
+                    [min]="30" [max]="99" [step]="1"
+                    [value]="RunPotentialThreshold * 100"
+                    (input)="OnPotentialThresholdChanged($any($event.target).value / 100)"
+                    [disabled]="IsDetecting" />
+                <span class="threshold-hint">Score above which duplicates are flagged for review</span>
+            </div>
+            <div class="threshold-slider-group">
+                <label class="threshold-label">
+                    <i class="fa-solid fa-bullseye"></i>
+                    Absolute Match
+                    <span class="threshold-value">{{ (RunAbsoluteThreshold * 100).toFixed(0) }}%</span>
+                </label>
+                <input type="range" class="threshold-slider"
+                    [min]="50" [max]="100" [step]="1"
+                    [value]="RunAbsoluteThreshold * 100"
+                    (input)="OnAbsoluteThresholdChanged($any($event.target).value / 100)"
+                    [disabled]="IsDetecting" />
+                <span class="threshold-hint">Score above which duplicates are auto-confirmed</span>
+            </div>
         </div>
     }
 

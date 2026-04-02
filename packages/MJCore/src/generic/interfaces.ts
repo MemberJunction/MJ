@@ -109,6 +109,12 @@ export interface DuplicateDetectionOptions {
     KeywordSearchWeight?: number;
     /** Enable incremental mode — only check records not in a completed prior run (default: false) */
     IncrementalOnly?: boolean;
+    /**
+     * Re-vectorize records before detection (default: false).
+     * When false, assumes vectors already exist in the index from a prior sync.
+     * Set to true to force a fresh vectorization pass before running detection.
+     */
+    Revectorize?: boolean;
     /** Progress callback invoked at natural milestones during detection */
     OnProgress?: (progress: DuplicateDetectionProgress) => void;
 }

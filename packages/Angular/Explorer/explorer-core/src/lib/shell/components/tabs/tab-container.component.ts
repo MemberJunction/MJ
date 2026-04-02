@@ -89,6 +89,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   // This avoids the 20px height issue when GL header is hidden
   useSingleResourceMode = false;
   private singleResourceComponentRef: ComponentRef<BaseResourceComponent> | null = null;
+  /** Cache identity of the current single-resource component for detachment */
+  private singleResourceCacheIdentity: { driverClass: string; recordId: string; appId: string; tabId: string } | null = null;
   private previousTabBarVisible: boolean | null = null;
   private currentSingleResourceSignature: string | null = null; // Track loaded content signature to avoid unnecessary reloads
   private isCreatingInitialTabs = false; // Flag to prevent syncTabsWithConfiguration during initial tab creation
@@ -450,25 +452,35 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
 
     // **OPTIMIZATION: Check cache first to reuse existing loaded component**
+    const cacheKey = `${activeTab.applicationId}::${driverClass}::${resourceData.ResourceRecordID || '__no_record__'}`;
     const cached = this.cacheManager.getCachedComponent(
       driverClass,
       resourceData.ResourceRecordID || '',
       activeTab.applicationId
     );
+    console.log(`[TabContainer] loadSingleResourceContent — cacheKey="${cacheKey}", cached=${cached ? 'HIT' : 'MISS'}, driverClass="${driverClass}"`);
 
     if (cached) {
       // Clean up previous single-resource component (if different)
       this.cleanupSingleResourceComponent();
 
-      // Detach from tab tracking (it was attached to a tab in Golden Layout)
-      this.cacheManager.markAsDetached(activeTab.id);
+      // Mark cached component as attached to this tab (it was detached / available for reuse).
+      // IMPORTANT: We use markAsAttached here, NOT markAsDetached — the component is being
+      // reattached to the DOM and should NOT be eligible for LRU eviction.
+      this.cacheManager.markAsAttached(
+        driverClass,
+        resourceData.ResourceRecordID || '',
+        activeTab.applicationId,
+        activeTab.id
+      );
 
       // Reattach the cached wrapper element to single-resource container
       cached.wrapperElement.style.height = "100%"; // Ensure full height
       container.appendChild(cached.wrapperElement);
 
-      // Store reference for cleanup
+      // Store reference and identity for cleanup/detachment
       this.singleResourceComponentRef = cached.componentRef;
+      this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id };
 
       return;
     }
@@ -522,24 +534,69 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       (container.children[0] as any).style.height = "100%";
     }
 
-    // Store reference for cleanup
+    // Cache the component for reuse when switching between nav items within the same app.
+    // Without this, every nav switch creates a brand new component from scratch.
+    const wrapperElement = nativeElement;
+    this.cacheManager.cacheComponent(
+      componentRef as ComponentRef<BaseResourceComponent>,
+      wrapperElement,
+      resourceData,
+      activeTab.id
+    );
+
+    // Store reference and identity for cleanup/detachment
     this.singleResourceComponentRef = componentRef as ComponentRef<BaseResourceComponent>;
+    this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id };
   }
 
   /**
    * Clean up single-resource mode component
    */
+  /**
+   * Detaches the current single-resource component from the DOM and marks it as
+   * available for reuse in the component cache.
+   *
+   * ╔══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️  DO NOT DESTROY THE COMPONENT HERE — INTENTIONAL DESIGN CHOICE  ⚠️  ║
+   * ║                                                                        ║
+   * ║  The component is DETACHED from the DOM, NOT destroyed. It stays alive ║
+   * ║  in the ComponentCacheManager with its full Angular state preserved     ║
+   * ║  (properties, subscriptions, loaded data, scroll position, etc).       ║
+   * ║                                                                        ║
+   * ║  When the user returns to this tab, the cached component is reattached ║
+   * ║  instantly — no data reload, no API calls, no flash of empty content.  ║
+   * ║                                                                        ║
+   * ║  Destroying components here "for memory optimization" is a net         ║
+   * ║  NEGATIVE: the reload on return is far more expensive (DB queries,     ║
+   * ║  API calls, re-rendering) than keeping the component in memory.        ║
+   * ║  The LRU eviction in ComponentCacheManager handles memory limits —     ║
+   * ║  when MaxDetachedComponents is exceeded, the LEAST recently used       ║
+   * ║  components are evicted automatically.                                 ║
+   * ║                                                                        ║
+   * ║  If you think memory is a problem, adjust MaxDetachedComponents        ║
+   * ║  instead of destroying components here.                                ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
   private cleanupSingleResourceComponent(): void {
     if (this.singleResourceComponentRef) {
-      this.appRef.detachView(this.singleResourceComponentRef.hostView);
-      this.singleResourceComponentRef.destroy();
+      // Mark as DETACHED by resource identity — the ONE consistent key used everywhere.
+      if (this.singleResourceCacheIdentity) {
+        const { driverClass, recordId, appId } = this.singleResourceCacheIdentity;
+        console.log(`[TabContainer] cleanupSingleResourceComponent — detaching ${driverClass} (identity-based)`);
+        this.cacheManager.markAsDetached(driverClass, recordId, appId);
+      }
       this.singleResourceComponentRef = null;
+      this.singleResourceCacheIdentity = null;
     }
 
-    // Clear the container
+    // Remove children from the container. This detaches the wrapper DOM element
+    // without destroying the Angular component — it lives on in the cache.
+    // Using removeChild (not innerHTML='') to avoid aggressive DOM cleanup.
     const container = this.directContentContainer?.nativeElement;
     if (container) {
-      container.innerHTML = '';
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
     }
   }
 
@@ -981,7 +1038,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private cleanupTabComponent(tabId: string): void {
     // First, try to detach from cache (preserves component for reuse)
-    const cachedInfo = this.cacheManager.markAsDetached(tabId);
+    const cachedInfo = this.cacheManager.findAndDetachByTabId(tabId);
 
     if (cachedInfo) {
       // Remove from legacy componentRefs but keep in cache

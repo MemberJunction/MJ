@@ -30,6 +30,7 @@ import {
     PotentialDuplicate,
     DuplicateDetectionOptions,
     DuplicateDetectionProgress,
+    RunView,
 } from "@memberjunction/core";
 import { BaseResponse, VectorDBBase, VectorDatabaseConfiguration } from "@memberjunction/ai-vectordb";
 import { MJGlobal, UUIDsEqual } from "@memberjunction/global";
@@ -100,6 +101,8 @@ interface RecordQueryResult {
 export class DuplicateRecordDetector extends VectorBase {
     private vectorDB: VectorDBBase;
     private embedding: BaseEmbeddings;
+    /** The Pinecone/pgvector/Qdrant index name resolved from the entity document's VectorIndex */
+    private indexName: string;
 
     /**
      * Run duplicate detection for records identified by ListID, ViewID, ExtraFilter,
@@ -124,12 +127,14 @@ export class DuplicateRecordDetector extends VectorBase {
             return response;
         }
 
-        // Step 2: Vectorize source records (ensures vectors exist in the index)
-        this.reportProgress(options, 'Vectorizing', 0, 0, 0, startTime);
-        await this.VectorizeSourceRecords(entityDocument, contextUser);
+        // Step 2: Optionally vectorize source records (default: skip — vectors should already exist from sync)
+        if (options.Revectorize) {
+            this.reportProgress(options, 'Vectorizing', 0, 0, 0, startTime);
+            await this.VectorizeSourceRecords(entityDocument, contextUser);
+        }
 
         // Step 3: Initialize providers
-        this.InitializeProviders(entityDocument);
+        await this.InitializeProviders(entityDocument);
 
         // Step 4: Create or load DuplicateRun
         const duplicateRun = await this.ResolveOrCreateDuplicateRun(params, entityDocument, options);
@@ -202,7 +207,7 @@ export class DuplicateRecordDetector extends VectorBase {
             throw new Error(`No active Entity Document found for ID ${EntityDocumentID}`);
         }
 
-        this.InitializeProviders(entityDocument);
+        await this.InitializeProviders(entityDocument);
 
         // Load the single record
         const entityInfo = this.Metadata.EntityByID(entityDocument.EntityID);
@@ -391,7 +396,7 @@ export class DuplicateRecordDetector extends VectorBase {
     /**
      * Initialize embedding and vector DB providers via ClassFactory.
      */
-    protected InitializeProviders(entityDocument: MJEntityDocumentEntity): void {
+    protected async InitializeProviders(entityDocument: MJEntityDocumentEntity): Promise<void> {
         const aiModel = this.GetAIModel(entityDocument.AIModelID);
         const vectorDB = this.GetVectorDatabase(entityDocument.VectorDatabaseID);
 
@@ -419,7 +424,26 @@ export class DuplicateRecordDetector extends VectorBase {
             throw new Error(`Failed to create VectorDB instance for ${vectorDB.ClassKey}`);
         }
 
-        LogStatus(`Providers initialized: AI Model=${aiModel.DriverClass}, VectorDB=${vectorDB.ClassKey}`);
+        // Resolve the vector index name from the entity document's VectorIndexID
+        // This is the actual Pinecone/pgvector/Qdrant index name needed for QueryIndex calls
+        if (entityDocument.VectorIndexID) {
+            const rv = new RunView();
+            const indexResult = await rv.RunView<{ Name: string }>({
+                EntityName: 'MJ: Vector Indexes',
+                ExtraFilter: `ID='${entityDocument.VectorIndexID}'`,
+                Fields: ['Name'],
+                ResultType: 'simple',
+                MaxRows: 1
+            }, this.CurrentUser);
+            if (indexResult.Success && indexResult.Results.length > 0) {
+                this.indexName = indexResult.Results[0].Name;
+            }
+        }
+        if (!this.indexName) {
+            throw new Error(`No vector index found for entity document "${entityDocument.Name}". Ensure VectorIndexID is set on the entity document.`);
+        }
+
+        LogStatus(`Providers initialized: AI Model=${aiModel.DriverClass}, VectorDB=${vectorDB.ClassKey}, Index=${this.indexName}`);
     }
 
     /**
@@ -717,6 +741,7 @@ export class DuplicateRecordDetector extends VectorBase {
         }
 
         return this.vectorDB.QueryIndex({
+            id: this.indexName,
             vector,
             topK,
             includeMetadata: true,

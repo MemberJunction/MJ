@@ -50,6 +50,11 @@ import {
   LoadKnowledgeConfigResource
 } from './KnowledgeHub/components/config/knowledge-config-resource.component';
 import { SearchResultDetailComponent } from './KnowledgeHub/components/results-detail/search-result-detail.component';
+import {
+  ClusterVisualizationResourceComponent,
+  LoadClusterVisualizationResource
+} from './KnowledgeHub/components/clusters/cluster-visualization-resource.component';
+import { ClusteringModule } from '@memberjunction/ng-clustering';
 
 /**
  * AIDashboardsModule — AI feature area: models, prompts, agents,
@@ -76,7 +81,8 @@ import { SearchResultDetailComponent } from './KnowledgeHub/components/results-d
     VectorManagementResourceComponent,
     KnowledgeSearchResourceComponent,
     KnowledgeConfigResourceComponent,
-    SearchResultDetailComponent
+    SearchResultDetailComponent,
+    ClusterVisualizationResourceComponent
   ],
   imports: [
     CommonModule,
@@ -100,7 +106,8 @@ import { SearchResultDetailComponent } from './KnowledgeHub/components/results-d
     NgTreesModule,
     SharedDashboardWidgetsModule,
     SharedPipesModule,
-    SearchModule
+    SearchModule,
+    ClusteringModule
   ],
   providers: [
     AIInstrumentationService
@@ -120,7 +127,13 @@ import { SearchResultDetailComponent } from './KnowledgeHub/components/results-d
     KnowledgeSearchResourceComponent,
     KnowledgeConfigResourceComponent,
     SearchResultDetailComponent,
+    ClusterVisualizationResourceComponent,
     SharedDashboardWidgetsModule
   ]
 })
-export class AIDashboardsModule { }
+export class AIDashboardsModule {
+    constructor() {
+        // Ensure tree-shaking prevention loaders are called
+        LoadClusterVisualizationResource();
+    }
+}
