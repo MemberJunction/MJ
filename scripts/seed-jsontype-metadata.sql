@@ -5,7 +5,7 @@
 -- EntityField record for Entity.AdditionalBaseViews, making it the first
 -- consumer of the JSONType system.
 --
--- WHEN TO RUN: After the V202604011203 migration AND a CodeGen run.
+-- WHEN TO RUN: After the V202604021200 migration AND a CodeGen run.
 -- The migration adds the columns; CodeGen creates the EntityField records;
 -- this script configures JSONType metadata on the AdditionalBaseViews field.
 --
@@ -53,10 +53,10 @@ END
 ELSE
 BEGIN
     PRINT 'WARNING: EntityField record for Entity.AdditionalBaseViews not found.';
-    PRINT 'This means CodeGen has not yet run after the V202604011203 migration.';
+    PRINT 'This means CodeGen has not yet run after the V202604021200 migration.';
     PRINT '';
     PRINT 'Deployment sequence:';
-    PRINT '  1. Apply migration V202604011203 (adds columns)';
+    PRINT '  1. Apply migration V202604021200 (adds columns)';
     PRINT '  2. Run CodeGen (creates EntityField records)';
     PRINT '  3. Run this script (sets JSONType metadata)';
     PRINT '  4. Run CodeGen again (generates typed getter/setter)';

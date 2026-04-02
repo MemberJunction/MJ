@@ -163,7 +163,7 @@ AlternateViewName?: string;
 
 #### Task 1.1: Create Migration for EntityField JSONType Columns
 
-**File**: `migrations/v5/V202604011203__v5.22.x__JSONType_and_AdditionalBaseViews.sql`
+**File**: `migrations/v5/V202604021200__v5.23.x__JSONType_and_AdditionalBaseViews.sql`
 
 Add three columns to `__mj.EntityField`:
 
@@ -611,7 +611,7 @@ This can be done via unit tests (Task 5.1) rather than a full CodeGen run.
 
 | File | Change |
 |------|--------|
-| `migrations/v5/V202604011203__v5.22.x__JSONType_and_AdditionalBaseViews.sql` | **NEW** — Add 3 columns to EntityField, 1 column to Entity |
+| `migrations/v5/V202604021200__v5.23.x__JSONType_and_AdditionalBaseViews.sql` | **NEW** — Add 3 columns to EntityField, 1 column to Entity |
 | `packages/MJCore/src/generic/entityInfo.ts` | Add `JSONType`, `JSONTypeIsArray`, `JSONTypeDefinition` to EntityFieldInfo; add `AdditionalBaseViews` raw property + `IAdditionalBaseView` interface + typed accessor + helpers to EntityInfo |
 | `packages/MJCore/src/views/runView.ts` | Add `AlternateViewName` to `RunViewParams`; update `Equals()` method |
 | `packages/MJCore/src/generic/providerBase.ts` | Add validation for `AlternateViewName` in `PreRunView()` |
