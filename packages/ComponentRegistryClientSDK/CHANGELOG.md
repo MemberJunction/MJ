@@ -1,5 +1,16 @@
 # @memberjunction/component-registry-client-sdk
 
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/interactive-component-types@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes
