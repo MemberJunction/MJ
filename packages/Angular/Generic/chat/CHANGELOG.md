@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/ng-chat
 
+## 5.22.0
+
+### Minor Changes
+
+- a42aba6: metadata
+
+### Patch Changes
+
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ng-container-directives@5.22.0
+  - @memberjunction/ng-shared-generic@5.22.0
+  - @memberjunction/ng-markdown@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

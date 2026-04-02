@@ -1,5 +1,35 @@
 # @memberjunction/ng-bootstrap-lite
 
+## 5.22.0
+
+### Minor Changes
+
+- a42aba6: metadata
+
+### Patch Changes
+
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [e5993ff]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ng-explorer-core@5.22.0
+  - @memberjunction/ng-artifacts@5.22.0
+  - @memberjunction/ng-dashboard-viewer@5.22.0
+  - @memberjunction/ai-engine-base@5.22.0
+  - @memberjunction/ng-core-entity-forms@5.22.0
+  - @memberjunction/graphql-dataprovider@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/ng-auth-services@5.22.0
+  - @memberjunction/ng-shared@5.22.0
+  - @memberjunction/ng-file-storage@5.22.0
+  - @memberjunction/communication-types@5.22.0
+  - @memberjunction/entity-communications-base@5.22.0
+  - @memberjunction/core-entities@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

@@ -1,5 +1,52 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.22.0
+
+### Patch Changes
+
+- e5993ff: Generate config for lazy loading dashboards
+- f2a6bec: Universal lazy loading via ClassFactory async API. Fixes HomeApplication being tree-shaken by moving lazy loading from consumer-specific retry patterns into ClassFactory itself with RegisterLazyLoader, CreateInstanceAsync, and GetRegistrationAsync. Lazy config now uses compound keys (BaseClassName::Key) to support any base class. Adds coverage audit to codegen to detect gaps.
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [e89c3bc]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/ng-dashboards@5.22.0
+  - @memberjunction/ng-conversations@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/ng-base-application@5.22.0
+  - @memberjunction/ng-artifacts@5.22.0
+  - @memberjunction/ng-dashboard-viewer@5.22.0
+  - @memberjunction/ai-engine-base@5.22.0
+  - @memberjunction/ng-ai-test-harness@5.22.0
+  - @memberjunction/graphql-dataprovider@5.22.0
+  - @memberjunction/ng-auth-services@5.22.0
+  - @memberjunction/ng-entity-form-dialog@5.22.0
+  - @memberjunction/ng-entity-permissions@5.22.0
+  - @memberjunction/ng-explorer-settings@5.22.0
+  - @memberjunction/ng-list-detail-grid@5.22.0
+  - @memberjunction/ng-shared@5.22.0
+  - @memberjunction/ng-base-forms@5.22.0
+  - @memberjunction/ng-container-directives@5.22.0
+  - @memberjunction/ng-entity-viewer@5.22.0
+  - @memberjunction/ng-file-storage@5.22.0
+  - @memberjunction/ng-notifications@5.22.0
+  - @memberjunction/ng-query-viewer@5.22.0
+  - @memberjunction/ng-record-changes@5.22.0
+  - @memberjunction/ng-record-selector@5.22.0
+  - @memberjunction/ng-resource-permissions@5.22.0
+  - @memberjunction/ng-shared-generic@5.22.0
+  - @memberjunction/ng-user-avatar@5.22.0
+  - @memberjunction/communication-types@5.22.0
+  - @memberjunction/entity-communications-client@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/templates-base-types@5.22.0
+  - @memberjunction/ng-generic-dialog@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

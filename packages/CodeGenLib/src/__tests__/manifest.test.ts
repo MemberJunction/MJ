@@ -1162,9 +1162,9 @@ describe('Lazy Config Generation - Integration', () => {
         expect(lazyWrite).toBeDefined();
         const content = lazyWrite!.content;
 
-        // Should contain both keys
-        expect(content).toContain("'AIModels'");
-        expect(content).toContain("'ActionsOverview'");
+        // Should contain both compound keys (BaseClassName::Key format)
+        expect(content).toContain("'BaseResourceComponent::AIModels'");
+        expect(content).toContain("'BaseResourceComponent::ActionsOverview'");
 
         // Should have correct import paths
         expect(content).toContain("@test/dashboards/ai.module");

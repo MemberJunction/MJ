@@ -10,7 +10,7 @@
  * @since 2.49.0
  */
 
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput } from '@memberjunction/ai-core-plus';
@@ -37,6 +37,12 @@ import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJA
  * ```
  */
 export class AgentRunner {
+    private readonly _provider: IMetadataProvider;
+
+    constructor(provider?: IMetadataProvider) {
+        this._provider = provider || Metadata.Provider;
+    }
+
     /**
      * Runs an AI agent with the specified parameters.
      * 
@@ -86,8 +92,9 @@ export class AgentRunner {
                 throw new Error(`Failed to create agent instance for driver class: ${driverClass}`);
             }
             
-            // Execute the agent and return the result directly
-            return await agentInstance.Execute(params as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
+            // Execute the agent and return the result directly, threading the isolated provider.
+            // Favor provider already in params (caller-supplied) over the instance-level provider.
+            return await agentInstance.Execute({ ...params, provider: params.provider || this._provider } as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
             
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -161,7 +168,7 @@ export class AgentRunner {
             versionNumber: number;
         };
     }> {
-        const md = new Metadata();
+        const md = params.provider || this._provider;
         const contextUser = params.contextUser;
 
         if (!contextUser) {
@@ -217,7 +224,7 @@ export class AgentRunner {
 
                     if (!conversationName && options.userMessage) {
                         // Try to generate a name using the "Name Conversation" prompt (same as UI)
-                        const nameResult = await this.GenerateConversationName(options.userMessage, contextUser);
+                        const nameResult = await this.GenerateConversationName(options.userMessage, contextUser, md);
                         if (nameResult) {
                             conversationName = nameResult.name;
                             conversationDescription = nameResult.description;
@@ -387,7 +394,8 @@ export class AgentRunner {
                     agentResult,
                     agentResponseDetailId!,
                     options.sourceArtifactId,
-                    contextUser
+                    contextUser,
+                    md
                 );
             }
 
@@ -402,7 +410,8 @@ export class AgentRunner {
                 mediaIds = await this.SaveAgentRunMedia(
                     agentResult.agentRun.ID,
                     mediaToSave,  // Pass filtered array
-                    contextUser
+                    contextUser,
+                    md
                 );
 
                 // Create ConversationDetailAttachment records for UI display
@@ -411,7 +420,8 @@ export class AgentRunner {
                         agentResponseDetailId,
                         mediaToSave,  // Pass same filtered array to keep indices aligned
                         mediaIds,
-                        contextUser
+                        contextUser,
+                        md
                     );
                 }
             }
@@ -487,7 +497,8 @@ export class AgentRunner {
      */
     public async FindPreviousArtifactForMessage(
         conversationDetailId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ artifactId: string; versionNumber: number } | null> {
         try {
             const rv = new RunView();
@@ -504,7 +515,7 @@ export class AgentRunner {
             }
 
             const junction = result.Results[0];
-            const md = new Metadata();
+            const md = provider || this._provider;
             const version = await md.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
                 contextUser
@@ -563,7 +574,8 @@ export class AgentRunner {
         agentResult: ExecuteAgentResult<R>,
         conversationDetailId: string,
         sourceArtifactId: string | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ artifactId: string; versionId: string; versionNumber: number } | undefined> {
         const payload = agentResult.payload;
         const agentRun = agentResult.agentRun;
@@ -584,7 +596,7 @@ export class AgentRunner {
         }
 
         try {
-            const md = new Metadata();
+            const md = provider || this._provider;
             const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
 
             // Determine if creating new artifact or new version
@@ -603,7 +615,8 @@ export class AgentRunner {
             else {
                 const previousArtifact = await this.FindPreviousArtifactForMessage(
                     conversationDetailId,
-                    contextUser
+                    contextUser,
+                    md
                 );
 
                 if (previousArtifact) {
@@ -726,7 +739,8 @@ export class AgentRunner {
      */
     private async GenerateConversationName(
         userMessage: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ name: string; description: string } | null> {
         try {
             // Import AIPromptRunner, AIPromptParams, and AIEngine
@@ -749,6 +763,7 @@ export class AgentRunner {
             promptParams.prompt = prompt;
             promptParams.contextUser = contextUser;
             promptParams.conversationMessages = [{ role: 'user', content: userMessage }];
+            promptParams.provider = provider || this._provider;
 
             const runner = new AIPromptRunner();
             const result = await runner.ExecutePrompt(promptParams);
@@ -803,7 +818,8 @@ export class AgentRunner {
     public async SaveAgentRunMedia(
         agentRunId: string,
         mediaOutputs: MediaOutput[] | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<string[]> {
         if (!mediaOutputs || mediaOutputs.length === 0) {
             return [];
@@ -822,7 +838,7 @@ export class AgentRunner {
         }
 
         const savedIds: string[] = [];
-        const md = new Metadata();
+        const md = provider || this._provider;
 
         try {
             // Use AIEngine's cached modalities instead of a fresh DB call
@@ -933,14 +949,15 @@ export class AgentRunner {
         conversationDetailId: string,
         mediaOutputs: MediaOutput[],
         agentRunMediaIds: string[],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<string[]> {
         if (!mediaOutputs || mediaOutputs.length === 0) {
             return [];
         }
 
         const attachmentIds: string[] = [];
-        const md = new Metadata();
+        const md = provider || this._provider;
 
         try {
             // Use AIEngine's cached modalities instead of a fresh DB call

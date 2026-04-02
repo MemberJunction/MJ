@@ -1,5 +1,19 @@
 # @memberjunction/ng-tasks
 
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ai-engine-base@5.22.0
+  - @memberjunction/ng-shared-generic@5.22.0
+  - @memberjunction/core-entities@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

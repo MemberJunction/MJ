@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/core
 
+## 5.22.0
+
+### Patch Changes
+
+- 6a5093b: no migration
+- e123e4b: bug fixes for RunView cache, Data Explorer, and MCP OAuth scopes
+- Updated dependencies [f2a6bec]
+  - @memberjunction/global@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

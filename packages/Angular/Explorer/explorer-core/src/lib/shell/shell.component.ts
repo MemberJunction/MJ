@@ -1773,7 +1773,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async initializeUserMenu(): Promise<void> {
     // Get the highest priority user menu implementation via ClassFactory
-    this.userMenu = MJGlobal.Instance.ClassFactory.CreateInstance<BaseUserMenu>(BaseUserMenu);
+    this.userMenu = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseUserMenu>(BaseUserMenu);
 
     if (!this.userMenu) {
       console.error('No user menu implementation found');

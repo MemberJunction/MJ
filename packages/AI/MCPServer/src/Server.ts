@@ -3005,7 +3005,12 @@ function getEntityParamObject(
             return true;
         }
     }).forEach((f) => {
-        addSingleParamToObject(paramObject, f, f.IsPrimaryKey ? false : nonPKeysOptional);
+        // Primary keys are always required. For non-PK fields, mark as optional if:
+        // 1. The caller requested all non-PKs optional (e.g. Update tools), OR
+        // 2. The field allows NULL in the database, OR
+        // 3. The field has a default value defined
+        const isOptional = f.IsPrimaryKey ? false : (nonPKeysOptional || f.AllowsNull || !!f.DefaultValue);
+        addSingleParamToObject(paramObject, f, isOptional);
     });
 
     return paramObject;
@@ -3028,7 +3033,7 @@ function addSingleParamToObject(
     let newParam: z.ZodTypeAny;
     switch (field.TSType) {
         case 'Date':
-            newParam = z.date();
+            newParam = z.coerce.date();
             break;
         case 'boolean':
             newParam = z.boolean();
@@ -3053,6 +3058,11 @@ function addSingleParamToObject(
                 }
             }
             break;
+    }
+
+    // If the field allows NULL in the database, wrap with .nullable()
+    if (field.AllowsNull) {
+        newParam = newParam.nullable();
     }
 
     if (optional) {
