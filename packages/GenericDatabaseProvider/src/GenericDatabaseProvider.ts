@@ -896,26 +896,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // ── Field selection ──
             const fields: string = this.getRunTimeViewFieldString(params, viewEntity);
 
-            // ── Resolve effective view name/schema (alternate view support) ──
-            // When AlternateViewName is provided, look it up in the entity's AdditionalBaseViews
-            // and use its Name/SchemaName for all SQL construction (SELECT, COUNT, aggregates).
-            // Falls back to the entity's default BaseView/SchemaName if the alternate isn't found
-            // (ProviderBase.PreRunView already validates, so this is a defensive fallback).
-            let effectiveViewName = entityInfo.BaseView;
-            let effectiveSchemaName = entityInfo.SchemaName;
-            if (params.AlternateViewName && params.AlternateViewName.trim().length > 0) {
-                const altView = entityInfo.GetAdditionalBaseView(params.AlternateViewName);
-                if (altView) {
-                    effectiveViewName = altView.Name;
-                    effectiveSchemaName = altView.SchemaName || entityInfo.SchemaName;
-                }
-            }
-
             // ── Build SELECT and COUNT SQL ──
             const topFragment = topSQL ? topSQL + ' ' : '';
-            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(effectiveSchemaName, effectiveViewName)}`;
+            let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
             let countSQL: string | null = (usingPagination || (topSQL && topSQL.length > 0))
-                ? `SELECT COUNT(*) AS TotalRowCount FROM ${this.QuoteSchemaAndView(effectiveSchemaName, effectiveViewName)}`
+                ? `SELECT COUNT(*) AS TotalRowCount FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`
                 : null;
 
             // ── WHERE clause assembly ──
@@ -1018,7 +1003,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             let aggregateValidationErrors: AggregateResult[] = [];
             if (params.Aggregates && params.Aggregates.length > 0) {
                 const aggregateBuild = this.BuildAggregateSQL(
-                    params.Aggregates, entityInfo, effectiveSchemaName, effectiveViewName, whereSQL,
+                    params.Aggregates, entityInfo, entityInfo.SchemaName, entityInfo.BaseView, whereSQL,
                 );
                 aggregateSQL = aggregateBuild.aggregateSQL;
                 aggregateValidationErrors = aggregateBuild.validationErrors;
@@ -1360,7 +1345,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // Phase 1: Check server's LocalCacheManager first (zero DB hits)
             const currentResults: RunViewWithCacheCheckResult<T>[] = [];
-            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } }> = [];
+            const serverCacheStaleItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } }> = [];
             const serverCacheMissItems: Array<{ index: number; item: RunViewWithCacheCheckParams; entityInfo: EntityInfo }> = [];
 
             for (const { index, item, entityInfo } of itemsNeedingValidation) {
@@ -1426,7 +1411,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // Phase 3: For items without cacheStatus (client has nothing), check server cache before hitting DB
-            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } }> = [];
+            const noCacheStatusServedFromCache: Array<{ index: number; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } }> = [];
             const noCacheStatusNeedsDB: Array<{ index: number; item: RunViewWithCacheCheckParams }> = [];
 
             for (const entry of itemsWithoutCacheCheck) {
@@ -1573,7 +1558,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return { viewIndex, status: 'error', errorMessage: result.ErrorMessage || 'Unknown error executing view' };
         }
         const maxUpdatedAt = this.extractMaxUpdatedAt(result.Results);
-        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.Results.length };
+        return { viewIndex, status: 'stale', results: result.Results, maxUpdatedAt, rowCount: result.TotalRowCount };
     }
 
     /**
@@ -1590,7 +1575,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (result.status !== 'error' && result.results && LocalCacheManager.Instance.IsInitialized) {
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
             const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
-            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt);
+            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount);
         }
         return result;
     }
@@ -1604,7 +1589,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         item: RunViewWithCacheCheckParams,
         index: number,
         entityLabel: string,
-    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number } } | null> {
+    ): Promise<{ status: 'current'; result: RunViewWithCacheCheckResult<never> } | { status: 'stale'; serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number } } | null> {
         if (!LocalCacheManager.Instance.IsInitialized) return null;
 
         const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(item.params, this.InstanceConnectionString);
@@ -1627,14 +1612,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     private async serveFromServerCache<T = unknown>(
         viewIndex: number,
-        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number },
+        serverCached: { results: unknown[]; maxUpdatedAt: string; rowCount: number; totalRowCount?: number },
     ): Promise<RunViewWithCacheCheckResult<T>> {
         return {
             viewIndex,
             status: 'stale',
             results: serverCached.results as T[],
             maxUpdatedAt: serverCached.maxUpdatedAt,
-            rowCount: serverCached.rowCount,
+            rowCount: serverCached.totalRowCount ?? serverCached.rowCount,
         };
     }
 

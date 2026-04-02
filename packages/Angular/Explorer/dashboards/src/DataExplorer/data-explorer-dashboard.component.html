@@ -64,21 +64,13 @@
           } @else {
             <span class="record-count">{{ totalRecordCount | number }} records</span>
           }
-          @if (selectedBaseViewName) {
-            <span class="active-base-view-indicator" [title]="'Viewing data from alternate source: ' + selectedBaseViewName">
-              <i class="fa-solid fa-database"></i>
-              {{ selectedBaseViewName }}
-            </span>
-          }
 
           <!-- View Selector -->
           <mj-view-selector
             [entity]="selectedEntity"
             [selectedViewId]="state.selectedViewId"
             [viewModified]="state.viewModified"
-            [selectedBaseViewName]="selectedBaseViewName"
             (viewSelected)="onViewSelected($event)"
-            (baseViewSelected)="onBaseViewSelected($event)"
             (saveViewRequested)="onSaveViewRequested($event)"
             (manageViewsRequested)="onManageViewsRequested()"
             (openInTabRequested)="onOpenInTabRequested($event)"
@@ -486,7 +478,6 @@
           #entityViewer
           [entity]="selectedEntity"
           [viewEntity]="selectedViewEntity"
-          [alternateViewName]="selectedBaseViewName"
           [viewMode]="state.viewMode"
           [filterText]="debouncedFilterText"
           [selectedRecordId]="state.selectedRecordId"

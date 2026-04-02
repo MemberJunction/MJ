@@ -13,15 +13,10 @@
       (click)="toggleDropdown()"
       [disabled]="isLoading"
       title="Select a saved view">
-      <i class="fa-solid fa-layer-group vs-btn-icon" [class.vs-alt-base-active]="HasAlternateBaseView"></i>
+      <i class="fa-solid fa-layer-group vs-btn-icon"></i>
       <span class="vs-btn-name">{{ displayName }}</span>
       @if (viewModified) {
         <span class="vs-modified-dot" title="View has unsaved changes">•</span>
-      }
-      @if (HasAlternateBaseView) {
-        <span class="vs-base-view-badge" [title]="'Data source: ' + selectedBaseViewName">
-          <i class="fa-solid fa-database"></i>
-        </span>
       }
       <i class="fa-solid fa-chevron-down vs-arrow" [class.rotated]="isDropdownOpen"></i>
     </button>
@@ -54,56 +49,6 @@
 
         <!-- Panel Body -->
         <div class="vs-panel-body">
-          <!-- Data Sources Section (only when entity has additional base views) -->
-          @if (hasBaseViews) {
-            <div class="vs-section vs-base-views-section">
-              <div class="vs-section-header">
-                <i class="fa-solid fa-database"></i>
-                <span>Data Sources</span>
-                <span class="vs-section-count">{{ filteredBaseViews.length + 1 }}</span>
-              </div>
-              <!-- Default Base View -->
-              <div
-                class="vs-card"
-                [class.active]="!selectedBaseViewName"
-                (click)="SelectBaseView(null)">
-                <div class="vs-card-icon vs-base-view-icon" [class.active]="!selectedBaseViewName">
-                  <i class="fa-solid fa-table"></i>
-                </div>
-                <div class="vs-card-content">
-                  <div class="vs-card-name">
-                    {{ entity?.BaseView }}
-                    <span class="vs-default-badge">Default</span>
-                  </div>
-                  <div class="vs-card-desc">Default entity view</div>
-                </div>
-                @if (!selectedBaseViewName) {
-                  <i class="fa-solid fa-check vs-card-check"></i>
-                }
-              </div>
-              <!-- Additional Base Views -->
-              @for (bv of filteredBaseViews; track bv.Name) {
-                <div
-                  class="vs-card"
-                  [class.active]="selectedBaseViewName === bv.Name"
-                  (click)="SelectBaseView(bv.Name)">
-                  <div class="vs-card-icon vs-base-view-icon" [class.active]="selectedBaseViewName === bv.Name">
-                    <i class="fa-solid fa-layer-group"></i>
-                  </div>
-                  <div class="vs-card-content">
-                    <div class="vs-card-name">{{ bv.Name }}</div>
-                    @if (bv.Description) {
-                      <div class="vs-card-desc">{{ bv.Description }}</div>
-                    }
-                  </div>
-                  @if (selectedBaseViewName === bv.Name) {
-                    <i class="fa-solid fa-check vs-card-check"></i>
-                  }
-                </div>
-              }
-            </div>
-          }
-
           <!-- Default Option -->
           <div class="vs-section">
             <div

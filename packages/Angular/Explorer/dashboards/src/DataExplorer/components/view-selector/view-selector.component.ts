@@ -35,16 +35,6 @@ export interface SaveViewRequestedEvent {
 }
 
 /**
- * Event emitted when a base view (data source) is selected
- */
-export interface BaseViewSelectedEvent {
-  /** The alternate view name, or null for the default base view */
-  viewName: string | null;
-  /** Optional description of the selected view */
-  description?: string | null;
-}
-
-/**
  * ViewSelectorComponent - Dropdown for selecting saved views
  *
  * Features:
@@ -126,16 +116,6 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
    * Emitted when user wants to revert to saved state (F-007)
    */
   @Output() revertRequested = new EventEmitter<void>();
-
-  /**
-   * Currently selected alternate base view name (null = default base view)
-   */
-  @Input() selectedBaseViewName: string | null = null;
-
-  /**
-   * Emitted when user selects a different base view (data source)
-   */
-  @Output() baseViewSelected = new EventEmitter<BaseViewSelectedEvent>();
 
   // Internal state
   public isLoading: boolean = false;
@@ -387,46 +367,6 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
    */
   get canEditSelectedView(): boolean {
     return this.selectedView?.UserCanEdit ?? false;
-  }
-
-  /**
-   * Whether the entity has additional base views configured
-   */
-  get hasBaseViews(): boolean {
-    return (this.entity?.AdditionalBaseViewsParsed?.length ?? 0) > 0;
-  }
-
-  /**
-   * The parsed additional base views, filtered by search text
-   */
-  get filteredBaseViews(): { Name: string; Description?: string | null }[] {
-    const views = this.entity?.AdditionalBaseViewsParsed ?? [];
-    if (!this.searchText.trim()) return views;
-    const term = this.searchText.toLowerCase();
-    return views.filter(v =>
-      v.Name.toLowerCase().includes(term) ||
-      (v.Description || '').toLowerCase().includes(term)
-    );
-  }
-
-  /**
-   * Whether an alternate base view is currently active
-   */
-  get HasAlternateBaseView(): boolean {
-    return !!this.selectedBaseViewName;
-  }
-
-  /**
-   * Handle base view selection
-   */
-  SelectBaseView(viewName: string | null): void {
-    this.baseViewSelected.emit({
-      viewName,
-      description: viewName
-        ? (this.entity?.AdditionalBaseViewsParsed ?? []).find(v => v.Name === viewName)?.Description
-        : null
-    });
-    this.closeDropdown();
   }
 
   /**

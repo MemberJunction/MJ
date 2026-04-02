@@ -1,16 +1,13 @@
-# JSONType Strong Typing for Entity Fields + AdditionalBaseViews
+# JSONType Strong Typing for Entity Fields
 
 ## Overview
 
-Three interconnected features built as one body of work:
-
-1. **JSONType system on EntityField**: Three new metadata fields (`JSONType`, `JSONTypeIsArray`, `JSONTypeDefinition`) that allow any nvarchar/JSON entity field to carry a TypeScript type definition. CodeGen reads these and emits strongly-typed interfaces plus typed getter/setters instead of raw `string | null`.
-
-2. **AdditionalBaseViews on Entity**: A new nvarchar(max) JSON column on `__mj.Entity` that stores an array of additional view definitions. This is the first consumer of the JSONType system — its getter/setter will be auto-typed to the generated interface.
-
-3. **RunView support for alternative views**: A new optional `AlternateViewName` parameter on `RunViewParams` that flows through the full stack (`GraphQL Input Types` → `ResolverBase` → `RunViewParams` → `ProviderBase` → `GenericDatabaseProvider`) to allow callers to query from any of an entity's registered additional views instead of the default BaseView.
-
-Neither feature changes how CodeGen generates base views. Additional views are created manually (or by AI) via migrations and registered through metadata.
+**JSONType system on EntityField**: Three new metadata fields (`JSONType`, `JSONTypeIsArray`, `JSONTypeDefinition`) that allow any nvarchar/JSON entity field to carry a TypeScript type definition. CodeGen reads these and emits:
+- Entity-prefixed interfaces above the entity class (e.g., `MJApplicationEntity_IDefaultNavItem`)
+- The standard `string | null` getter/setter (unchanged, backwards compatible)
+- An additional `Object`-suffixed typed accessor (e.g., `DefaultNavItemsObject`) with `Array<T>` syntax, auto JSON.parse/stringify, and lazy caching
+- AST validation of JSONTypeDefinition via the TypeScript compiler API before emission
+- `z.any()` Zod schema with JSON Type annotation in the describe block
 
 ## Problem Statement
 
@@ -28,7 +25,7 @@ Add three new columns to `__mj.EntityField`:
 
 | Column | Type | Purpose |
 |--------|------|---------|
-| `JSONType` | nvarchar(255) null | The name of the TypeScript interface/type (e.g., `IAdditionalBaseView`) |
+| `JSONType` | nvarchar(255) null | The name of the TypeScript interface/type (e.g., `IDefaultNavItem`) |
 | `JSONTypeIsArray` | bit null (default 0) | If true, the field holds an array of `JSONType` items |
 | `JSONTypeDefinition` | nvarchar(max) null | Raw TypeScript code emitted above the entity class — can define interfaces, types, imports, anything |
 
@@ -43,127 +40,65 @@ Add three new columns to `__mj.EntityField`:
 **Example — what gets emitted for a field with JSONType configured:**
 
 ```typescript
-// ---- JSONTypeDefinition emitted verbatim above the class ----
-export interface IAdditionalBaseView {
-    Name: string;
-    Description?: string | null;
-    SchemaName?: string | null;
-    UserSearchable?: boolean;
+// ---- Entity-prefixed interface emitted above the class ----
+export interface MJApplicationEntity_IDefaultNavItem {
+    Label: string;
+    Icon: string;
+    ResourceType: string;
+    RecordID?: string | null;
+    DriverClass?: string | null;
+    isDefault?: boolean;
 }
 
 // ---- In the entity class ----
-@RegisterClass(BaseEntity, 'Entities')
-export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
-    // ... other fields ...
-
-    /**
-    * * Field Name: AdditionalBaseViews
-    * * SQL Data Type: nvarchar(MAX)
-    * * JSON Type: IAdditionalBaseView[]
-    */
-    get AdditionalBaseViews(): IAdditionalBaseView[] | null {
-        return this.Get('AdditionalBaseViews') ? JSON.parse(this.Get('AdditionalBaseViews')) : null;
+@RegisterClass(BaseEntity, 'MJ: Applications')
+export class MJApplicationEntity extends BaseEntity<MJApplicationEntityType> {
+    // Standard getter (unchanged, backwards compatible)
+    get DefaultNavItems(): string | null {
+        return this.Get('DefaultNavItems');
     }
-    set AdditionalBaseViews(value: IAdditionalBaseView[] | null) {
-        this.Set('AdditionalBaseViews', value ? JSON.stringify(value) : null);
+    set DefaultNavItems(value: string | null) {
+        this.Set('DefaultNavItems', value);
+    }
+
+    // Object-suffixed typed accessor with caching
+    private _DefaultNavItemsObject_cached: Array<MJApplicationEntity_IDefaultNavItem> | null | undefined = undefined;
+    private _DefaultNavItemsObject_lastRaw: string | null = null;
+
+    get DefaultNavItemsObject(): Array<MJApplicationEntity_IDefaultNavItem> | null {
+        const raw = this.Get('DefaultNavItems');
+        if (raw !== this._DefaultNavItemsObject_lastRaw) {
+            this._DefaultNavItemsObject_cached = raw ? JSON.parse(raw) : null;
+            this._DefaultNavItemsObject_lastRaw = raw;
+        }
+        return this._DefaultNavItemsObject_cached!;
+    }
+    set DefaultNavItemsObject(value: Array<MJApplicationEntity_IDefaultNavItem> | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.Set('DefaultNavItems', raw);
+        this._DefaultNavItemsObject_cached = value;
+        this._DefaultNavItemsObject_lastRaw = raw;
     }
 }
 ```
 
-### Part B: AdditionalBaseViews (Entity-level)
-
-Add one new column to `__mj.Entity`:
-
-| Column | Type | Purpose |
-|--------|------|---------|
-| `AdditionalBaseViews` | nvarchar(max) null | JSON array of additional view registrations |
-
-This column will have its `JSONType` / `JSONTypeIsArray` / `JSONTypeDefinition` set in EntityField metadata so CodeGen auto-types it.
-
-**Interface shape (defined via JSONTypeDefinition):**
-
-```typescript
-export interface IAdditionalBaseView {
-    /**
-     * Name of the database view (e.g., "vwEntitiesWithPermissions")
-     */
-    Name: string;
-    /**
-     * Human-readable description of what this view provides
-     */
-    Description?: string | null;
-    /**
-     * Database schema containing the view. Defaults to entity's SchemaName if omitted.
-     */
-    SchemaName?: string | null;
-    /**
-     * If true, RunView/search operations can consider this view
-     */
-    UserSearchable?: boolean;
-}
-```
-
-**No CodeGen view generation changes.** Users create views via:
-- SQL migrations (manual or AI-generated)
-- Register in entity metadata via mj-sync or direct metadata updates
-
-### Part C: MJCore EntityInfo/EntityFieldInfo Updates
+### Part B: MJCore EntityFieldInfo Updates
 
 The `EntityFieldInfo` class in `entityInfo.ts` needs:
 - `JSONType`, `JSONTypeIsArray`, `JSONTypeDefinition` as new raw string/boolean properties (populated from metadata)
 - These are metadata-only properties — the real typed accessor magic happens in the generated BaseEntity subclasses, not in EntityFieldInfo itself
 
-The `EntityInfo` class in `entityInfo.ts` needs:
-- `AdditionalBaseViews` as a raw `string` property (the raw JSON from the database column)
-- A **typed accessor** (getter) that parses the JSON and returns `IAdditionalBaseView[] | null`, following the same lazy-parse + cache pattern used by `EntityFieldInfo.RelatedEntityJoinFieldsConfig`:
-  - Private `_additionalBaseViewsParsed` cache field
-  - Private `_additionalBaseViewsFailedParsing` flag to avoid repeated parse attempts on bad JSON
-  - Public `AdditionalBaseViewsParsed` getter that returns `IAdditionalBaseView[] | null`
-- A **helper method** `GetAdditionalBaseView(viewName: string): IAdditionalBaseView | null` for easy lookup by name
-- A **validation method** `IsValidAdditionalBaseView(viewName: string): boolean` for use in RunView parameter validation
-
-Note: The `IAdditionalBaseView` interface must be defined manually in `entityInfo.ts` (or a nearby types file) since the JSONTypeDefinition emission only applies to the generated `entity_subclasses.ts`. The EntityInfo class in MJCore is hand-maintained, not generated.
-
-### Part D: RunView Support for Alternative Views
-
-Add an optional `AlternateViewName` parameter to `RunViewParams` that flows through the entire provider stack:
-
-**`RunViewParams` (runView.ts)**:
-```typescript
-/**
- * Optional: Name of an alternative database view to query from instead of the entity's
- * default BaseView. Must be a view registered in the entity's AdditionalBaseViews metadata.
- * If not provided, the default BaseView is used.
- */
-AlternateViewName?: string;
-```
-
-**`ProviderBase.PreRunView()` (providerBase.ts)** — Validate:
-- If `AlternateViewName` is provided, look it up in `entityInfo.AdditionalBaseViewsParsed`
-- If not found, throw a clear error: `"View '${viewName}' is not registered in AdditionalBaseViews for entity '${entityName}'"`
-- If found, pass the resolved view name + schema down to the provider implementation
-
-**`GenericDatabaseProvider.InternalRunView()` (GenericDatabaseProvider.ts)** — Use:
-- Resolve `effectiveViewName` and `effectiveSchemaName` from `entityInfo.GetAdditionalBaseView()`
-- Replace `entityInfo.BaseView` with `effectiveViewName` in the SELECT, COUNT, and aggregate queries
-- Pass effective values to `BuildAggregateSQL()`
-
-**`RunViewParams.Equals()` method** — Update to include `AlternateViewName` in equality checks for caching correctness.
-
-**GraphQL layer (MJServer)** — Wire `AlternateViewName` through the entire GraphQL resolution pipeline:
-- Add `AlternateViewName` field to all 4 GraphQL input types (`RunViewByIDInput`, `RunViewByNameInput`, `RunDynamicViewInput`, `RunViewGenericInput`)
-- Add `alternateViewName` to `RunViewGenericParams` intermediate type
-- Map the field through all resolver methods in `ResolverBase`
-
 ---
 
 ## Implementation Tasks
+
+> **Note:** The implementation tasks below were written for the original combined PR (JSONType + AdditionalBaseViews + AlternateViewName). For this PR, only **Phases 1-3 and 5** (JSONType system) are in scope. Phase 4 (RunView AlternateViewName) and the AdditionalBaseViews portions of Phase 2 are deferred to a future PR. The AltBaseView implementation is backed up in `delete-logs/altbaseview-backup/`.
 
 ### Phase 1: Database Schema Changes
 
 #### Task 1.1: Create Migration for EntityField JSONType Columns
 
-**File**: `migrations/v5/V202604021200__v5.23.x__JSONType_and_AdditionalBaseViews.sql`
+**File**: `migrations/v5/V202604021200__v5.23.x__JSONType_Strong_Typing.sql`
 
 Add three columns to `__mj.EntityField`:
 
@@ -178,56 +113,11 @@ ALTER TABLE ${flyway:defaultSchema}.EntityField
     ADD JSONTypeDefinition NVARCHAR(MAX) NULL;
 ```
 
-#### Task 1.2: Create Migration for Entity AdditionalBaseViews Column
+#### Task 1.2: Seed JSONType Metadata for DefaultNavItems
 
-**Same migration file or separate** — add to `__mj.Entity`:
+The migration seeds JSONType metadata on `DefaultNavItems` (Applications entity) as the first consumer of the JSONType system. This is idempotent (uses IF EXISTS) and runs after CodeGen creates the EntityField records.
 
-```sql
-ALTER TABLE ${flyway:defaultSchema}.Entity
-    ADD AdditionalBaseViews NVARCHAR(MAX) NULL;
-```
-
-#### Task 1.3: Seed JSONType Metadata for AdditionalBaseViews Field
-
-After CodeGen processes the new columns (creating EntityField records for our new columns themselves), we need to set the JSONType metadata on the `AdditionalBaseViews` EntityField record:
-
-```sql
--- Set JSONType metadata on Entity.AdditionalBaseViews field
-UPDATE ef
-SET
-    ef.JSONType = 'IAdditionalBaseView',
-    ef.JSONTypeIsArray = 1,
-    ef.JSONTypeDefinition = 'export interface IAdditionalBaseView {
-    /**
-     * Name of the database view
-     */
-    Name: string;
-    /**
-     * Human-readable description of what this view provides
-     */
-    Description?: string | null;
-    /**
-     * Database schema containing the view. Defaults to entity''s SchemaName if omitted.
-     */
-    SchemaName?: string | null;
-    /**
-     * If true, RunView/search operations can consider this view
-     */
-    UserSearchable?: boolean;
-}'
-FROM ${flyway:defaultSchema}.EntityField ef
-INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
-WHERE e.Name = 'MJ: Entities'
-  AND ef.Name = 'AdditionalBaseViews';
-```
-
-**Implementation:** Created as `scripts/seed-jsontype-metadata.sql` — a post-CodeGen seed script. This cannot be a Flyway migration (it would run before CodeGen creates the EntityField record) or an mj-sync file (mj-sync needs a primaryKey UUID to update existing records, but CodeGen generates the UUID). The script is idempotent and uses the natural key (EntityName + FieldName) to find the record.
-
-**Deployment sequence:**
-1. Apply migration V202603252318 (adds columns to EntityField and Entity)
-2. Run CodeGen (creates EntityField records for the new columns)
-3. Run `scripts/seed-jsontype-metadata.sql` (sets JSONType metadata on AdditionalBaseViews)
-4. Run CodeGen again (generates typed getter/setter in entity_subclasses.ts)
+> **Note:** Tasks 1.2 and 1.3 from the original plan (AdditionalBaseViews column + seed) have been moved to Future Phase D.
 
 ---
 
@@ -584,67 +474,76 @@ This can be done via unit tests (Task 5.1) rather than a full CodeGen run.
 
 ---
 
-## Future Phases (Not in Scope for This Work)
+## Future Phases
 
 ### Future Phase A: Migrate Existing JSON Fields to JSONType
 - `EntityField.RelatedEntityJoinFields` → set JSONType = `IRelatedEntityJoinFieldConfig`
-- Other JSON blob fields across the codebase
+- `FieldSchema`, `SortState`, `FilterState`, `Annotations`, `InputSchema` — these require migrating their consumers first (existing code passes pre-stringified values or calls JSON.parse on the getter result)
 - Eliminate hand-coded typed accessors in `entityInfo.ts` and custom subclasses
 
 ### Future Phase B: Zod Schema Generation for JSONType
 - Parse TypeScript interface definitions from JSONTypeDefinition
-- Emit corresponding Zod schemas for runtime validation
-- More complex with the flexible JSONTypeDefinition approach (arbitrary TS code)
+- Emit corresponding Zod schemas for runtime validation instead of `z.any()`
 
-### Future Phase C: AST Validation in CodeGen
-- Use TypeScript compiler API to validate JSONTypeDefinition syntax before emission
-- Emit clear errors if the definition contains syntax errors
-- Low priority since compilation catches these immediately
+### Future Phase C: AST Validation Improvements
+- AST validation is implemented (syntax check + type name existence check)
+- Future: semantic validation beyond syntax (e.g., verify referenced types exist)
 
-### Future Phase D: UI and Search Consumers for AdditionalBaseViews (IMPLEMENTED)
-- ~~UI components to expose view selection where multiple views exist~~ **Done** — "Data Sources" section added to ViewSelector panel in Data Explorer
-- Search infrastructure to consider UserSearchable additional views (future)
+### Future Phase D: AdditionalBaseViews on Entity
+- New `AdditionalBaseViews` nvarchar(MAX) JSON column on `__mj.Entity` storing alternate view registrations
+- `IAdditionalBaseView` interface: `{ Name, Description?, SchemaName?, UserSearchable? }`
+- `EntityInfo` runtime support: `AdditionalBaseViewsParsed` getter, `GetAdditionalBaseView()`, `IsValidAdditionalBaseView()`
+- First consumer of JSONType system — AdditionalBaseViews field would have JSONType = `IAdditionalBaseView`
+- Implementation backed up in `delete-logs/altbaseview-backup/`
+
+### Future Phase E: AlternateViewName on RunView
+- `AlternateViewName` parameter on `RunViewParams` flowing through full stack
+- GraphQL input types, ResolverBase mapping, ProviderBase validation, GenericDatabaseProvider SQL construction
+- Cache fingerprint and RunViewParams.Equals() inclusion
+- GraphQL DataProvider client-side patches needed
+- Implementation backed up in `delete-logs/altbaseview-backup/`
+
+### Future Phase F: Base View Selector UI
+- "Data Sources" section in ViewSelector panel in Data Explorer
+- Entity-viewer `alternateViewName` input
+- Dashboard wiring with visual indicators
+- Implementation backed up in `delete-logs/altbaseview-backup/angular-ui/`
+
+### Future Phase G: Search Infrastructure for Additional Views
+- Consume `UserSearchable` flag on registered additional views
+- Search across multiple views when applicable
 
 ---
 
-## Files to Modify
+## Files Modified (JSONType Only)
 
 | File | Change |
 |------|--------|
-| `migrations/v5/V202604021200__v5.23.x__JSONType_and_AdditionalBaseViews.sql` | **NEW** — Add 3 columns to EntityField, 1 column to Entity |
-| `packages/MJCore/src/generic/entityInfo.ts` | Add `JSONType`, `JSONTypeIsArray`, `JSONTypeDefinition` to EntityFieldInfo; add `AdditionalBaseViews` raw property + `IAdditionalBaseView` interface + typed accessor + helpers to EntityInfo |
-| `packages/MJCore/src/views/runView.ts` | Add `AlternateViewName` to `RunViewParams`; update `Equals()` method |
-| `packages/MJCore/src/generic/providerBase.ts` | Add validation for `AlternateViewName` in `PreRunView()` |
-| `packages/GenericDatabaseProvider/src/GenericDatabaseProvider.ts` | Use alternate view name/schema in SQL query construction in `InternalRunView()` |
-| `packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts` | Emit JSONTypeDefinition blocks above classes; generate typed getter/setter for JSONType fields; update Zod schema generation |
-| `packages/CodeGenLib/src/__tests__/entity_subclasses_codegen.test.ts` | **NEW or modified** — Unit tests for JSONType emission |
-| `packages/MJCore/src/generic/localCacheManager.ts` | Include `AlternateViewName` in RunView cache fingerprint |
-| `packages/MJServer/src/generic/RunViewResolver.ts` | Add `AlternateViewName` field to all 4 GraphQL input types |
-| `packages/MJServer/src/types.ts` | Add `alternateViewName` to `RunViewGenericParams` |
-| `packages/MJServer/src/generic/ResolverBase.ts` | Map `AlternateViewName` through all resolver methods |
-| `packages/Angular/Explorer/dashboards/src/DataExplorer/components/view-selector/` | **NEW** — "Data Sources" section in ViewSelector panel with base view selection |
-| `packages/Angular/Explorer/dashboards/src/DataExplorer/data-explorer-dashboard.component.*` | Wire base view selection to entity-viewer via `alternateViewName` input |
-| `packages/Angular/Generic/entity-viewer/src/lib/entity-viewer/entity-viewer.component.ts` | **NEW** `alternateViewName` input, pass through to RunView |
+| `migrations/v5/V202604021200__v5.23.x__JSONType_Strong_Typing.sql` | **NEW** — Add 3 JSONType columns to EntityField + seed DefaultNavItems metadata |
+| `packages/MJCore/src/generic/entityInfo.ts` | Add `JSONType`, `JSONTypeIsArray`, `JSONTypeDefinition` to EntityFieldInfo |
+| `packages/CodeGenLib/src/Misc/entity_subclasses_codegen.ts` | Entity-prefixed interface emission, Object-suffixed typed accessor with caching, Array<T> syntax, AST validation |
+| `packages/CodeGenLib/src/__tests__/entity-subclass-jsontype.test.ts` | 25 unit tests for JSONType emission + AST validation |
+| `packages/MJCore/src/__tests__/entityFieldInfo.jsontype.test.ts` | 4 unit tests for JSONType property defaults |
+| `packages/MJCoreEntities/src/generated/entity_subclasses.ts` | Regenerated with `MJApplicationEntity_IDefaultNavItem` interface + `DefaultNavItemsObject` accessor |
+| `packages/MJServer/src/generated/generated.ts` | Regenerated with JSONType/JSONTypeIsArray/JSONTypeDefinition on EntityField GraphQL type |
+| Angular form components (30 files) | Regenerated to include JSONType fields on EntityField form |
 
 ---
 
 ## Implementation Order
 
-1. Migration file (schema changes)
+1. Migration file (add JSONType columns to EntityField)
 2. MJCore EntityFieldInfo property additions (JSONType, JSONTypeIsArray, JSONTypeDefinition)
-3. MJCore EntityInfo: IAdditionalBaseView interface + AdditionalBaseViews raw property + typed accessor + helpers
-4. Build MJCore
-5. CodeGen: JSONTypeDefinition emission above classes
-6. CodeGen: Typed getter/setter for JSONType fields
+3. Build MJCore
+4. CodeGen: Entity-prefixed JSONTypeDefinition emission above classes
+5. CodeGen: Object-suffixed typed accessor with Array<T> syntax and caching
+6. CodeGen: AST validation of JSONTypeDefinition
 7. CodeGen: Zod schema annotation for JSONType fields
 8. Build CodeGenLib
-9. RunViewParams: Add AlternateViewName + update Equals()
-10. ProviderBase: Add AlternateViewName validation in PreRunView()
-11. GenericDatabaseProvider: Use alternate view in query construction
-12. Build GenericDatabaseProvider
-13. Unit tests for all changes
-14. Seed AdditionalBaseViews JSONType metadata (migration or mj-sync)
-15. Integration validation
+9. Unit tests for all changes
+10. Seed DefaultNavItems JSONType metadata in migration
+11. Run CodeGen to regenerate entity_subclasses.ts + MJServer generated + Angular forms
+12. Integration validation
 
 ---
 
@@ -653,7 +552,7 @@ This can be done via unit tests (Task 5.1) rather than a full CodeGen run.
 All changes are additive:
 - New database columns are nullable with defaults — no existing data affected
 - CodeGen changes only activate when JSONType is populated — all existing fields behave identically
-- RunView AlternateViewName is optional — omitting it gives identical behavior to today
+- Standard string getter/setter is preserved unchanged — Object suffix accessor is additional, not a replacement
 - If issues arise, simply leave JSONType/JSONTypeDefinition/JSONTypeIsArray NULL on all EntityField records and behavior is unchanged
 
 ---
@@ -661,13 +560,11 @@ All changes are additive:
 ## Testing Scenarios
 
 1. **Existing entities unchanged**: CodeGen with no JSONType metadata populated produces identical output to current behavior
-2. **Single JSONType field**: Field with all three JSONType properties set → interface emitted, typed getter/setter
-3. **Array JSONType field**: `JSONTypeIsArray=true` → `Type[]` in getter/setter
+2. **Single JSONType field**: Field with all three JSONType properties set → entity-prefixed interface emitted, Object-suffixed typed accessor generated
+3. **Array JSONType field**: `JSONTypeIsArray=true` → `Array<T>` syntax in Object accessor
 4. **Multiple JSONType fields on one entity**: Each definition emitted, deduplication works
-5. **JSONType without JSONTypeDefinition**: Type name used in getter/setter but no definition block emitted (type assumed to be available via import or defined elsewhere)
-6. **AdditionalBaseViews round-trip**: Set JSON value via typed setter, read back via typed getter, verify structure matches interface
-7. **EntityInfo typed accessor**: Parse, cache, and lookup additional views by name
-8. **RunView with default view**: No AlternateViewName → uses BaseView (regression)
-9. **RunView with valid AlternateViewName**: Queries from the specified alternative view
-10. **RunView with invalid AlternateViewName**: Throws clear error listing available views
-11. **RunView caching**: Two RunViewParams differing only by AlternateViewName are not considered equal
+5. **JSONType without JSONTypeDefinition**: Type name used in Object accessor but no definition block emitted (type assumed to be available via import or defined elsewhere)
+6. **Standard getter preserved**: Original field getter still returns `string | null` (backwards compatible)
+7. **Object accessor caching**: `_lastRaw` pattern detects underlying string changes from `Set()` calls
+8. **AST validation**: Invalid TypeScript in JSONTypeDefinition is caught and skipped with clear error messages
+9. **Entity-prefixed names**: No naming conflicts across entities (e.g., `MJApplicationEntity_IDefaultNavItem`)

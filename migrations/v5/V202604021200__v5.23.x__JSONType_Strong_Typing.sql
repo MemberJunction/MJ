@@ -1,5 +1,5 @@
--- Migration: Add JSONType columns to EntityField and AdditionalBaseViews column to Entity
--- Part of the JSONType strong typing system and AdditionalBaseViews feature
+-- Migration: Add JSONType columns to EntityField
+-- Part of the JSONType strong typing system for entity JSON fields
 
 -- ============================================================================
 -- Phase 1: Add JSONType columns to EntityField
@@ -43,61 +43,12 @@ EXEC sp_addextendedproperty
 GO
 
 -- ============================================================================
--- Phase 2: Add AdditionalBaseViews column to Entity
--- ============================================================================
-
-ALTER TABLE ${flyway:defaultSchema}.Entity
-    ADD AdditionalBaseViews NVARCHAR(MAX) NULL;
-GO
-
-EXEC sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'JSON array of additional database view registrations for this entity beyond the default BaseView. Each entry specifies a view name, optional description, optional schema, and whether it is user-searchable.',
-    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'Entity',
-    @level2type = N'COLUMN', @level2name = 'AdditionalBaseViews';
-GO
-
-
-
-
--- ============================================================================
--- Phase 3: Seed JSONType metadata for Entity.AdditionalBaseViews
+-- Phase 2: Seed JSONType metadata on DefaultNavItems
 -- ============================================================================
 -- After CodeGen creates EntityField records for the new columns above,
--- this sets JSONType metadata on AdditionalBaseViews to make it the first
--- consumer of the JSONType system. A subsequent CodeGen run then generates
--- typed getter/setter using this metadata.
+-- this sets JSONType metadata on DefaultNavItems as the first consumer
+-- of the JSONType system.
 -- This is idempotent — safe to run multiple times.
-
-IF EXISTS (
-    SELECT 1
-    FROM ${flyway:defaultSchema}.EntityField ef
-    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
-    WHERE e.Name = 'MJ: Entities'
-      AND ef.Name = 'AdditionalBaseViews'
-)
-BEGIN
-    UPDATE ef
-    SET
-        ef.JSONType = 'IAdditionalBaseView',
-        ef.JSONTypeIsArray = 1,
-        ef.JSONTypeDefinition = 'export interface IAdditionalBaseView {
-    /** Name of the database view (e.g., "vwEntitiesWithPermissions") */
-    Name: string;
-    /** Human-readable description of what this view provides */
-    Description?: string | null;
-    /** Database schema containing the view. Defaults to entity''s SchemaName if omitted. */
-    SchemaName?: string | null;
-    /** If true, RunView/search operations can consider this view */
-    UserSearchable?: boolean;
-}'
-    FROM ${flyway:defaultSchema}.EntityField ef
-    INNER JOIN ${flyway:defaultSchema}.Entity e ON ef.EntityID = e.ID
-    WHERE e.Name = 'MJ: Entities'
-      AND ef.Name = 'AdditionalBaseViews';
-END
-GO
 
 -- DefaultNavItems on Applications
 IF EXISTS (
@@ -132,8 +83,3 @@ BEGIN
       AND ef.Name = 'DefaultNavItems';
 END
 GO
-
--- NOTE: FieldSchema (Credential Types), InputSchema (MCP Server Tools), and Annotations
--- (MCP Server Tools) were considered for JSONType but reverted — existing consumers
--- (CredentialEngine, MCPClientManager) assign strings to these fields. Migrating those
--- consumers to use typed objects is future work.

@@ -30,7 +30,7 @@ import {
   buildCompositeKey,
   buildPkString
 } from '@memberjunction/ng-entity-viewer';
-import { ViewSelectedEvent, SaveViewRequestedEvent, BaseViewSelectedEvent, ViewSelectorComponent } from './components/view-selector/view-selector.component';
+import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from './components/view-selector/view-selector.component';
 import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@memberjunction/ng-filter-builder';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
@@ -144,9 +144,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   // Currently selected view entity (for view data loading)
   public selectedViewEntity: MJUserViewEntityExtended | null = null;
-
-  // Selected alternate base view name (null = default base view)
-  public selectedBaseViewName: string | null = null;
 
   // Live filter text (what the user sees in the input, updates immediately)
   public liveFilterText: string = '';
@@ -936,7 +933,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // Clear the previous entity's view — it belongs to the old entity and its sort/filter
     // state would leak into the new entity's query (e.g., ORDER BY FirstName on Groups)
     this.selectedViewEntity = null;
-    this.selectedBaseViewName = null;
     this.selectedEntity = entity;
     // Load user's saved default grid state for this entity (if any)
     // This ensures formatting and column settings persist across sessions
@@ -975,14 +971,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /**
    * Handle view selection from view selector dropdown
    */
-  /**
-   * Handler for base view selection from the view selector panel.
-   * The entity-viewer's alternateViewName setter detects the change and reloads automatically.
-   */
-  public onBaseViewSelected(event: BaseViewSelectedEvent): void {
-    this.selectedBaseViewName = event.viewName;
-  }
-
   public onViewSelected(event: ViewSelectedEvent): void {
     // Ensure any pending grid state changes are saved before switching views
     // This ensures column resizes/reorders are saved to the current view before switching
@@ -2808,24 +2796,29 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     const applications = this.metadata.Applications;
-    const entityIdToApp = new Map<string, ApplicationInfo>();
+    const entityIdToApps = new Map<string, ApplicationInfo[]>();
     const groupMap = new Map<string, AppEntityGroup>();
 
-    // Build entity -> first application mapping
+    // Build entity -> applications mapping (an entity can belong to multiple apps)
     for (const app of applications) {
       for (const appEntity of app.ApplicationEntities) {
-        if (!entityIdToApp.has(appEntity.EntityID)) {
-          entityIdToApp.set(appEntity.EntityID, app);
+        const apps = entityIdToApps.get(appEntity.EntityID);
+        if (apps) {
+          apps.push(app);
+        } else {
+          entityIdToApps.set(appEntity.EntityID, [app]);
         }
       }
     }
 
-    // Assign each visible entity to its group
+    // Assign each visible entity to all of its application groups
     const ungroupedEntities: EntityInfo[] = [];
     for (const entity of this.entities) {
-      const app = entityIdToApp.get(entity.ID);
-      if (app) {
-        this.addEntityToGroup(groupMap, app, entity);
+      const apps = entityIdToApps.get(entity.ID);
+      if (apps) {
+        for (const app of apps) {
+          this.addEntityToGroup(groupMap, app, entity);
+        }
       } else {
         ungroupedEntities.push(entity);
       }

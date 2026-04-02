@@ -164,15 +164,6 @@ export class RunViewByIDInput {
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
-
-  @Field(() => String, {
-    nullable: true,
-    description:
-      'Optional: Name of an alternative database view to query from instead of the entity\'s default BaseView. Must be registered in the entity\'s AdditionalBaseViews metadata.',
-  })
-  /** Name of an alternative database view to query instead of the entity's default BaseView.
-   *  Must be registered in the entity's AdditionalBaseViews metadata. */
-  AlternateViewName?: string;
 }
 
 @InputType()
@@ -274,15 +265,6 @@ export class RunViewByNameInput {
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
-
-  @Field(() => String, {
-    nullable: true,
-    description:
-      'Optional: Name of an alternative database view to query from instead of the entity\'s default BaseView. Must be registered in the entity\'s AdditionalBaseViews metadata.',
-  })
-  /** Name of an alternative database view to query instead of the entity's default BaseView.
-   *  Must be registered in the entity's AdditionalBaseViews metadata. */
-  AlternateViewName?: string;
 }
 
 @InputType()
@@ -370,15 +352,6 @@ export class RunDynamicViewInput {
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
-
-  @Field(() => String, {
-    nullable: true,
-    description:
-      'Optional: Name of an alternative database view to query from instead of the entity\'s default BaseView. Must be registered in the entity\'s AdditionalBaseViews metadata.',
-  })
-  /** Name of an alternative database view to query instead of the entity's default BaseView.
-   *  Must be registered in the entity's AdditionalBaseViews metadata. */
-  AlternateViewName?: string;
 }
 
 @InputType()
@@ -495,15 +468,6 @@ export class RunViewGenericInput {
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
-
-  @Field(() => String, {
-    nullable: true,
-    description:
-      'Optional: Name of an alternative database view to query from instead of the entity\'s default BaseView. Must be registered in the entity\'s AdditionalBaseViews metadata.',
-  })
-  /** Name of an alternative database view to query instead of the entity's default BaseView.
-   *  Must be registered in the entity's AdditionalBaseViews metadata. */
-  AlternateViewName?: string;
 }
 
 //****************************************************************************
@@ -1052,7 +1016,6 @@ export class RunViewResolver extends ResolverBase {
           AuditLogDescription: item.params.AuditLogDescription,
           ResultType: (item.params.ResultType || 'simple') as 'simple' | 'entity_object' | 'count_only',
           StartRow: item.params.StartRow,
-          AlternateViewName: item.params.AlternateViewName,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,
