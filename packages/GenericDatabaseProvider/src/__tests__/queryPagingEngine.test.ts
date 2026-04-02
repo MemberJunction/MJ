@@ -24,27 +24,33 @@ describe('QueryPagingEngine.ShouldPage', () => {
     });
 });
 
-// ─── splitCTEAndSelect ─────────────────────────────────────────────────────────
+// ─── CTE splitting (via SQLParser.ExtractCTEs) ───────────────────────────────
+// These tests verify that WrapWithPaging correctly handles CTE extraction
+// via SQLParser.ExtractCTEs (which handles comments, string literals, and
+// nested parentheses robustly). Previous versions used a custom
+// splitCTEAndSelect; these tests ensure the SQLParser-based path works.
 
-describe('QueryPagingEngine.splitCTEAndSelect', () => {
-    it('returns empty ctePrefix for simple SELECT', () => {
+describe('WrapWithPaging — CTE splitting basics', () => {
+    it('wraps a simple SELECT (no CTEs) correctly', () => {
         const sql = 'SELECT ID, Name FROM Users WHERE Active = 1';
-        const { ctePrefix, mainSelect } = QueryPagingEngine.splitCTEAndSelect(sql);
-        expect(ctePrefix).toBe('');
-        expect(mainSelect).toBe(sql);
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, 'sqlserver');
+        expect(result.DataSQL).toContain('[__paged] AS');
+        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY');
     });
 
-    it('splits a single CTE from the main SELECT', () => {
+    it('preserves a single CTE as a sibling of __paged', () => {
         const sql = `WITH cte AS (
 SELECT ID FROM Users
 )
 SELECT * FROM cte`;
-        const { ctePrefix, mainSelect } = QueryPagingEngine.splitCTEAndSelect(sql);
-        expect(ctePrefix).toContain('WITH cte AS');
-        expect(mainSelect.trim()).toBe('SELECT * FROM cte');
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, 'sqlserver');
+        expect(result.DataSQL).toMatch(/\[?cte\]?\s+AS/i);
+        expect(result.DataSQL).toContain('[__paged] AS');
+        // Must NOT nest CTEs
+        expect(result.DataSQL).not.toMatch(/WITH\s+\[__paged\]\s+AS\s*\(\s*\n\s*WITH/i);
     });
 
-    it('splits multiple CTEs from the main SELECT', () => {
+    it('preserves multiple CTEs as siblings of __paged', () => {
         const sql = `WITH a AS (
 SELECT 1 AS x
 ),
@@ -52,10 +58,10 @@ b AS (
 SELECT 2 AS y
 )
 SELECT * FROM a JOIN b ON 1=1`;
-        const { ctePrefix, mainSelect } = QueryPagingEngine.splitCTEAndSelect(sql);
-        expect(ctePrefix).toContain('WITH a AS');
-        expect(ctePrefix).toContain('b AS');
-        expect(mainSelect.trim()).toMatch(/^SELECT \* FROM a JOIN b/);
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, 'sqlserver');
+        expect(result.DataSQL).toMatch(/\[?a\]?\s+AS/i);
+        expect(result.DataSQL).toMatch(/\[?b\]?\s+AS/i);
+        expect(result.DataSQL).toContain('[__paged] AS');
     });
 
     it('handles nested parentheses inside CTEs', () => {
@@ -63,9 +69,9 @@ SELECT * FROM a JOIN b ON 1=1`;
 SELECT ID FROM Users WHERE Name IN ('a', 'b')
 )
 SELECT * FROM cte`;
-        const { ctePrefix, mainSelect } = QueryPagingEngine.splitCTEAndSelect(sql);
-        expect(ctePrefix).toContain('WITH cte AS');
-        expect(mainSelect.trim()).toBe('SELECT * FROM cte');
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, 'sqlserver');
+        expect(result.DataSQL).toMatch(/\[?cte\]?\s+AS/i);
+        expect(result.DataSQL).toContain('[__paged] AS');
     });
 });
 
@@ -588,6 +594,120 @@ ORDER BY TotalActivityCount DESC`;
             expect(result.DataSQL).not.toContain('`');
             expect(result.DataSQL).not.toContain('FETCH NEXT');
             expect(result.DataSQL).toMatch(/ORDER BY.*TotalActivityCount.*DESC/i);
+        });
+    });
+
+    describe('CTE with SQL comments containing apostrophes (MSTA lapsed-members bug)', () => {
+        it('should correctly split CTE when comments contain unmatched single quotes', () => {
+            // This is the exact pattern that broke: composition engine produces a CTE
+            // whose body has SQL comments containing apostrophes (e.g. "member's").
+            // The old regex-based CTE splitter treated the apostrophe as a string
+            // literal start, corrupting the paren-depth tracker. Now delegated to
+            // SQLParser.ExtractCTEs which handles comments correctly.
+            const sql = `WITH [__cte_MSTA_NAMSDESE_Member_Bridge_6yqh6l] AS (
+-- Bridge query: maps NAMS member accounts to DESE educator records
+-- Identity is verified by matching first+last name AND confirming the educator
+-- is in the same district as the member's Institution__c via co_dist_desc.
+-- This eliminates false positives from common names (e.g., "Jennifer Smith")
+-- by requiring the person be in the correct district in both systems.
+SELECT DISTINCT
+    a.Id AS AccountId,
+    a.FirstName,
+    a.LastName,
+    a.PersonEmail,
+    a.Institution__c AS District_Name,
+    a.Region__c,
+    e.edssn,
+    e.co_dist_code,
+    e.year AS DESE_Year
+FROM nams.vwAccounts a
+INNER JOIN dese.vwco_dist_descs d
+    ON d.description = a.Institution__c
+INNER JOIN dese.vweducators e
+    ON UPPER(LTRIM(RTRIM(e.edfname))) = UPPER(LTRIM(RTRIM(a.FirstName)))
+    AND UPPER(LTRIM(RTRIM(e.edlname))) = UPPER(LTRIM(RTRIM(a.LastName)))
+    AND e.co_dist_code = d.co_dist_code
+    AND e.year = '2024'
+WHERE a.IsPersonAccount = 1
+  AND a.Institution__c IS NOT NULL
+)
+SELECT DISTINCT
+    bridge.AccountId,
+    bridge.FirstName,
+    bridge.LastName,
+    bridge.PersonEmail,
+    bridge.Region__c,
+    bridge.District_Name AS Prior_District,
+    d_new.description AS New_District,
+    2024 AS Prior_Year,
+    2025 AS New_Year
+FROM [__cte_MSTA_NAMSDESE_Member_Bridge_6yqh6l] bridge
+INNER JOIN nams.vwNU__Membership__cs m1
+    ON m1.NU__Account__c = bridge.AccountId
+    AND m1.Year__c = 2024
+    AND m1.NU__MembershipProductName__c NOT IN ('Student', 'Retired Annual', 'Retired Lifetime', 'Associate')
+INNER JOIN dese.vweducators e_new
+    ON e_new.edssn = bridge.edssn
+    AND CAST(e_new.year AS INT) = 2025
+INNER JOIN dese.vwco_dist_descs d_new
+    ON d_new.co_dist_code = e_new.co_dist_code
+WHERE NOT EXISTS (
+    SELECT 1 FROM nams.vwNU__Membership__cs m2
+    WHERE m2.NU__Account__c = bridge.AccountId AND m2.Year__c = 2025
+)
+AND e_new.co_dist_code != bridge.co_dist_code
+ORDER BY bridge.LastName, bridge.FirstName`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            // The CTE must be a sibling of __paged, NOT nested inside it.
+            // Invalid: WITH [__paged] AS (WITH [__cte_...] AS (...) SELECT ...)
+            // Valid:   WITH [__cte_...] AS (...), [__paged] AS (SELECT ...)
+            expect(result.DataSQL).not.toMatch(/WITH\s+\[__paged\]\s+AS\s*\(\s*\nWITH/i);
+            expect(result.DataSQL).toContain('[__paged] AS');
+            expect(result.DataSQL).toMatch(/\[__cte_MSTA_NAMSDESE_Member_Bridge_6yqh6l\]\s+AS/);
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+            expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount FROM [__paged]');
+        });
+
+        it('should handle line comments with apostrophes inside CTE body', () => {
+            const sql = `WITH cte AS (
+-- This query checks the member's status
+SELECT ID, Name FROM Users WHERE Name = 'test'
+)
+SELECT * FROM cte`;
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, 'sqlserver');
+            expect(result.DataSQL).toMatch(/\[?cte\]?\s+AS/i);
+            expect(result.DataSQL).toContain('[__paged] AS');
+            expect(result.DataSQL).not.toMatch(/WITH\s+\[__paged\]\s+AS\s*\(\s*\n\s*WITH/i);
+        });
+
+        it('should handle block comments with apostrophes inside CTE body', () => {
+            const sql = `WITH cte AS (
+/* This is the member's query — don't remove */
+SELECT ID FROM Users
+)
+SELECT * FROM cte`;
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, 'sqlserver');
+            expect(result.DataSQL).toMatch(/\[?cte\]?\s+AS/i);
+            expect(result.DataSQL).toContain('[__paged] AS');
+            expect(result.DataSQL).not.toMatch(/WITH\s+\[__paged\]\s+AS\s*\(\s*\n\s*WITH/i);
+        });
+
+        it('should handle multiple CTEs with comments containing apostrophes', () => {
+            const sql = `WITH a AS (
+-- This is John's query
+SELECT 1 AS x
+),
+b AS (
+-- Here's another one
+SELECT 2 AS y
+)
+SELECT * FROM a JOIN b ON 1=1`;
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, 'sqlserver');
+            expect(result.DataSQL).toMatch(/\[?a\]?\s+AS/i);
+            expect(result.DataSQL).toMatch(/\[?b\]?\s+AS/i);
+            expect(result.DataSQL).toContain('[__paged] AS');
         });
     });
 });

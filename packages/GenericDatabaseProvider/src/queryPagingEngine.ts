@@ -19,13 +19,21 @@ export interface PagingWrappedSQL {
  * Handles server-side pagination for query SQL by wrapping resolved SQL in CTEs
  * and applying platform-specific OFFSET/FETCH or LIMIT/OFFSET clauses.
  *
- * Uses a two-tier strategy:
- *   1. **AST path** — parse SQL via node-sql-parser, extract ORDER BY and TOP from
- *      the AST, reconstruct clean SQL via sqlify. Handles CTEs, subqueries, UNION,
- *      and complex expressions correctly without string heuristics.
- *   2. **Regex fallback** — for SQL that node-sql-parser cannot handle (e.g.,
- *      STRING_AGG WITHIN GROUP, certain FOR XML patterns), falls back to the
- *      original string-based approach with paren-depth tracking.
+ * Uses a three-tier strategy:
+ *   1. **Full AST** — parse entire SQL via node-sql-parser, extract ORDER BY and
+ *      TOP from the AST, reconstruct clean SQL via sqlify. Handles CTEs,
+ *      subqueries, UNION, and complex expressions correctly.
+ *   2. **Hybrid** — when full AST parsing fails (e.g. complex cross-schema
+ *      joins, function-heavy SQL), uses {@link SQLParser.ExtractCTEs} to robustly
+ *      split existing CTEs, then AST-parses only the main SELECT (which is
+ *      simpler and more likely to succeed) for ORDER BY/TOP extraction.
+ *   3. **Regex fallback** — for SQL that even the main SELECT AST can't handle
+ *      (e.g. STRING_AGG WITHIN GROUP, certain FOR XML patterns), falls back to
+ *      string-based ORDER BY extraction and alias remapping.
+ *
+ * The hybrid tier eliminates the most common cause of regex fallback failures:
+ * CTE bodies containing SQL comments with unmatched quotes, apostrophes, or
+ * other characters that confuse simple paren-depth trackers.
  */
 export class QueryPagingEngine {
 
@@ -47,11 +55,15 @@ export class QueryPagingEngine {
         // Strip trailing semicolons — they break CTE wrapping and OFFSET/FETCH clauses
         const cleanedSQL = resolvedSQL.trimEnd().replace(/;\s*$/, '');
 
-        // Tier 1: AST-based paging (robust, handles CTEs/subqueries/UNION correctly)
-        const astResult = QueryPagingEngine.wrapViaAST(cleanedSQL, startRow, maxRows, platform);
+        // Tier 1: Full AST-based paging (robust, handles CTEs/subqueries/UNION correctly)
+        const astResult = QueryPagingEngine.wrapViaFullAST(cleanedSQL, startRow, maxRows, platform);
         if (astResult) return astResult;
 
-        // Tier 2: Regex-based fallback for SQL the parser can't handle
+        // Tier 2: Hybrid — SQLParser.ExtractCTEs (robust) + AST on main SELECT only
+        const hybridResult = QueryPagingEngine.wrapViaHybrid(cleanedSQL, startRow, maxRows, platform);
+        if (hybridResult) return hybridResult;
+
+        // Tier 3: Pure regex fallback for SQL the parser can't handle at all
         return QueryPagingEngine.wrapViaRegex(cleanedSQL, startRow, maxRows, platform);
     }
 
@@ -63,10 +75,10 @@ export class QueryPagingEngine {
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // AST-based paging (primary path)
+    // Tier 1: Full AST-based paging
     // ════════════════════════════════════════════════════════════════════
 
-    private static wrapViaAST(
+    private static wrapViaFullAST(
         sql: string,
         startRow: number,
         maxRows: number,
@@ -105,21 +117,185 @@ export class QueryPagingEngine {
             stmt.with = null;
             const mainSelectSQL = SQLParser.SqlifyAST(stmt as unknown as Parameters<typeof SQLParser.SqlifyAST>[0], parserDialect);
 
-            // Assemble paged query (skip string-based remapping — already done via AST)
-            const pagingCTEName = QueryPagingEngine.quoteIdentifier('__paged', platform);
-            const allCTEs = [...cteDefs, `${pagingCTEName} AS (\n${mainSelectSQL}\n)`];
-            const cteChain = `WITH ${allCTEs.join(',\n')}`;
-
-            const outerOrderBy = remappedOrderBy || QueryPagingEngine.defaultOrderBy(platform);
-            const pagingClause = QueryPagingEngine.buildPagingClause(startRow, maxRows, platform);
-            const dataSQL = `${cteChain}\nSELECT * FROM ${pagingCTEName}\nORDER BY ${outerOrderBy}\n${pagingClause}`;
-            const countSQL = `${cteChain}\nSELECT COUNT(*) AS TotalRowCount FROM ${pagingCTEName}`;
-
-            return { DataSQL: dataSQL, CountSQL: countSQL, Offset: startRow, PageSize: maxRows };
+            return QueryPagingEngine.assemblePagingResult(cteDefs, mainSelectSQL, remappedOrderBy, startRow, maxRows, platform);
         } catch {
             return null;
         }
     }
+
+    // ════════════════════════════════════════════════════════════════════
+    // Tier 2: Hybrid — SQLParser.ExtractCTEs + AST on main SELECT
+    // ════════════════════════════════════════════════════════════════════
+
+    /**
+     * Uses {@link SQLParser.ExtractCTEs} to robustly split CTEs (handles comments,
+     * nested parens, string literals correctly), then attempts AST parsing on just
+     * the main SELECT statement. If even the main SELECT can't be AST-parsed,
+     * returns null to let the regex fallback handle ORDER BY/TOP.
+     */
+    private static wrapViaHybrid(
+        sql: string,
+        startRow: number,
+        maxRows: number,
+        platform: DatabasePlatform,
+    ): PagingWrappedSQL | null {
+        const parserDialect = platform === 'postgresql' ? 'PostgresQL' : 'TransactSQL';
+
+        // Step 1: Use SQLParser.ExtractCTEs to split CTEs from the main SELECT.
+        // This delegates to SQLParser's findMatchingCloseParen which correctly
+        // handles SQL comments (--), block comments (/* */), string literals,
+        // and nested parentheses — the exact cases that break simple regex.
+        const cteExtraction = SQLParser.ExtractCTEs(sql, parserDialect);
+
+        // Determine existing CTE definitions and the main SELECT
+        let existingCTEDefs: string[];
+        let mainSelect: string;
+
+        if (cteExtraction) {
+            existingCTEDefs = cteExtraction.CTEDefinitions.map(def =>
+                QueryPagingEngine.quoteCteName(def, platform)
+            );
+            mainSelect = cteExtraction.MainStatement;
+        } else {
+            // No CTEs detected — the whole SQL is the main SELECT
+            existingCTEDefs = [];
+            mainSelect = sql;
+        }
+
+        // Step 2: Try to AST-parse just the main SELECT (simpler, more likely to succeed)
+        try {
+            const ast = SQLParser.ParseSQL(mainSelect, parserDialect);
+            if (!ast) return null;
+
+            const stmt = (Array.isArray(ast) ? ast[0] : ast) as unknown as Record<string, unknown>;
+            if (!stmt) return null;
+
+            // Extract ORDER BY and remap
+            const orderByStmt = QueryPagingEngine.findOrderByStatement(stmt);
+            const selectColumns = (stmt.columns && Array.isArray(stmt.columns))
+                ? stmt.columns as Array<{ expr: Record<string, unknown>; as: string | null }>
+                : [];
+            const remappedOrderBy = QueryPagingEngine.remapOrderByViaAST(
+                orderByStmt, selectColumns, parserDialect
+            );
+            if (orderByStmt?.orderby) {
+                orderByStmt.orderby = null;
+            }
+
+            // Strip TOP
+            if (stmt.top) stmt.top = null;
+
+            // Strip any CTEs the main SELECT might have (shouldn't have any after
+            // ExtractCTEs, but be defensive)
+            stmt.with = null;
+            const cleanMainSQL = SQLParser.SqlifyAST(
+                stmt as unknown as Parameters<typeof SQLParser.SqlifyAST>[0], parserDialect
+            );
+
+            return QueryPagingEngine.assemblePagingResult(
+                existingCTEDefs, cleanMainSQL, remappedOrderBy, startRow, maxRows, platform
+            );
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * ExtractCTEs returns CTE definitions with unquoted names (e.g. `myName AS (...)`).
+     * We need to apply platform-specific identifier quoting to the CTE name.
+     */
+    private static quoteCteName(cteDefinition: string, platform: DatabasePlatform): string {
+        // Match the CTE name before " AS (" — handles unquoted, bracket-quoted, and double-quoted names
+        const match = cteDefinition.match(/^(\[([^\]]+)\]|"([^"]+)"|([A-Za-z_]\w*))\s+AS\s*\(/i);
+        if (!match) return cteDefinition; // Can't parse — return as-is
+
+        // Extract the bare name (from whichever capture group matched)
+        const bareName = match[2] ?? match[3] ?? match[4];
+        if (!bareName) return cteDefinition;
+
+        const quotedName = QueryPagingEngine.quoteIdentifier(bareName, platform);
+        // Replace just the name portion, preserving the rest of the definition
+        return quotedName + cteDefinition.substring(match[1].length);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // Tier 3: Pure regex fallback
+    // ════════════════════════════════════════════════════════════════════
+
+    private static wrapViaRegex(
+        sql: string,
+        startRow: number,
+        maxRows: number,
+        platform: DatabasePlatform,
+    ): PagingWrappedSQL {
+        // Use SQLParser.ExtractCTEs for CTE splitting — it handles SQL comments,
+        // string literals, and nested parentheses correctly.
+        const parserDialect = platform === 'postgresql' ? 'PostgresQL' : 'TransactSQL';
+        const cteExtraction = SQLParser.ExtractCTEs(sql, parserDialect);
+
+        let existingCTEDefs: string[];
+        let mainSelect: string;
+
+        if (cteExtraction) {
+            existingCTEDefs = cteExtraction.CTEDefinitions.map(def =>
+                QueryPagingEngine.quoteCteName(def, platform)
+            );
+            mainSelect = cteExtraction.MainStatement;
+        } else {
+            existingCTEDefs = [];
+            mainSelect = sql;
+        }
+
+        const { sqlWithoutOrder, orderByClause } = QueryPagingEngine.extractOrderBy(mainSelect);
+        const { sql: cleanSelect } = QueryPagingEngine.stripTopClause(sqlWithoutOrder);
+
+        const pagingCTEName = QueryPagingEngine.quoteIdentifier('__paged', platform);
+        const allCTEs = [...existingCTEDefs, `${pagingCTEName} AS (\n${cleanSelect}\n)`];
+        const cteChain = `WITH ${allCTEs.join(',\n')}`;
+
+        const rawOrderBy = orderByClause || QueryPagingEngine.defaultOrderBy(platform);
+        const outerOrderBy = orderByClause
+            ? QueryPagingEngine.remapOrderByToProjectedNames(rawOrderBy, cleanSelect)
+            : rawOrderBy;
+
+        const pagingClause = QueryPagingEngine.buildPagingClause(startRow, maxRows, platform);
+        const dataSQL = `${cteChain}\nSELECT * FROM ${pagingCTEName}\nORDER BY ${outerOrderBy}\n${pagingClause}`;
+        const countSQL = `${cteChain}\nSELECT COUNT(*) AS TotalRowCount FROM ${pagingCTEName}`;
+
+        return { DataSQL: dataSQL, CountSQL: countSQL, Offset: startRow, PageSize: maxRows };
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // Shared assembly
+    // ════════════════════════════════════════════════════════════════════
+
+    /**
+     * Assembles the final paged DataSQL and CountSQL from extracted parts.
+     * Used by both the full-AST and hybrid tiers to avoid duplication.
+     */
+    private static assemblePagingResult(
+        existingCTEDefs: string[],
+        mainSelectSQL: string,
+        remappedOrderBy: string | null,
+        startRow: number,
+        maxRows: number,
+        platform: DatabasePlatform,
+    ): PagingWrappedSQL {
+        const pagingCTEName = QueryPagingEngine.quoteIdentifier('__paged', platform);
+        const allCTEs = [...existingCTEDefs, `${pagingCTEName} AS (\n${mainSelectSQL}\n)`];
+        const cteChain = `WITH ${allCTEs.join(',\n')}`;
+
+        const outerOrderBy = remappedOrderBy || QueryPagingEngine.defaultOrderBy(platform);
+        const pagingClause = QueryPagingEngine.buildPagingClause(startRow, maxRows, platform);
+        const dataSQL = `${cteChain}\nSELECT * FROM ${pagingCTEName}\nORDER BY ${outerOrderBy}\n${pagingClause}`;
+        const countSQL = `${cteChain}\nSELECT COUNT(*) AS TotalRowCount FROM ${pagingCTEName}`;
+
+        return { DataSQL: dataSQL, CountSQL: countSQL, Offset: startRow, PageSize: maxRows };
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // AST helpers
+    // ════════════════════════════════════════════════════════════════════
 
     /**
      * Remaps ORDER BY terms to projected column names using AST comparison.
@@ -244,86 +420,8 @@ export class QueryPagingEngine {
     }
 
     // ════════════════════════════════════════════════════════════════════
-    // Regex-based paging (fallback)
+    // Regex helpers (used by tier 3 fallback)
     // ════════════════════════════════════════════════════════════════════
-
-    private static wrapViaRegex(
-        sql: string,
-        startRow: number,
-        maxRows: number,
-        platform: DatabasePlatform,
-    ): PagingWrappedSQL {
-        const { ctePrefix, mainSelect } = QueryPagingEngine.splitCTEAndSelect(sql);
-        const { sqlWithoutOrder, orderByClause } = QueryPagingEngine.extractOrderBy(mainSelect);
-        const { sql: cleanSelect } = QueryPagingEngine.stripTopClause(sqlWithoutOrder);
-
-        const pagingCTEName = QueryPagingEngine.quoteIdentifier('__paged', platform);
-        const existingCTEs = ctePrefix ? ctePrefix + ',\n' : 'WITH ';
-        const cteChain = `${existingCTEs}${pagingCTEName} AS (\n${cleanSelect}\n)`;
-
-        const rawOrderBy = orderByClause || QueryPagingEngine.defaultOrderBy(platform);
-        const outerOrderBy = orderByClause
-            ? QueryPagingEngine.remapOrderByToProjectedNames(rawOrderBy, cleanSelect)
-            : rawOrderBy;
-
-        const pagingClause = QueryPagingEngine.buildPagingClause(startRow, maxRows, platform);
-        const dataSQL = `${cteChain}\nSELECT * FROM ${pagingCTEName}\nORDER BY ${outerOrderBy}\n${pagingClause}`;
-        const countSQL = `${cteChain}\nSELECT COUNT(*) AS TotalRowCount FROM ${pagingCTEName}`;
-
-        return { DataSQL: dataSQL, CountSQL: countSQL, Offset: startRow, PageSize: maxRows };
-    }
-
-    // ════════════════════════════════════════════════════════════════════
-    // Regex helpers (used by fallback path)
-    // ════════════════════════════════════════════════════════════════════
-
-    static splitCTEAndSelect(sql: string): { ctePrefix: string; mainSelect: string } {
-        const trimmed = sql.trim();
-        if (!/^WITH\s/i.test(trimmed)) {
-            return { ctePrefix: '', mainSelect: trimmed };
-        }
-
-        let depth = 0;
-        let lastCTEEnd = -1;
-        let i = 0;
-        const withMatch = trimmed.match(/^WITH\s+/i);
-        if (!withMatch) return { ctePrefix: '', mainSelect: trimmed };
-        i = withMatch[0].length;
-
-        while (i < trimmed.length) {
-            const ch = trimmed[i];
-            if (ch === '(') {
-                depth++;
-            } else if (ch === ')') {
-                depth--;
-                if (depth === 0) {
-                    lastCTEEnd = i;
-                    const rest = trimmed.substring(i + 1).trimStart();
-                    if (rest.startsWith(',')) {
-                        i = trimmed.indexOf(',', i + 1) + 1;
-                        continue;
-                    }
-                    break;
-                }
-            } else if (ch === "'" && depth > 0) {
-                i++;
-                while (i < trimmed.length && trimmed[i] !== "'") {
-                    if (trimmed[i] === "'" && i + 1 < trimmed.length && trimmed[i + 1] === "'") {
-                        i += 2;
-                    } else {
-                        i++;
-                    }
-                }
-            }
-            i++;
-        }
-
-        if (lastCTEEnd === -1) return { ctePrefix: '', mainSelect: trimmed };
-        return {
-            ctePrefix: trimmed.substring(0, lastCTEEnd + 1).trim(),
-            mainSelect: trimmed.substring(lastCTEEnd + 1).trim(),
-        };
-    }
 
     static extractOrderBy(sql: string): { sqlWithoutOrder: string; orderByClause: string | null } {
         const upperSQL = sql.toUpperCase();
