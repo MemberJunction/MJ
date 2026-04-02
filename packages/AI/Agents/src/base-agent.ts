@@ -55,7 +55,7 @@ import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { ScratchpadManager } from './ScratchpadManager';
-import { ArtifactToolManager, ArtifactToolCall } from './ArtifactToolManager';
+import { ArtifactToolManager, ArtifactToolCall, InputArtifact } from './ArtifactToolManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
@@ -1055,6 +1055,12 @@ export class BaseAgent {
             // Reset scratchpad and artifact tools for each new execution (ephemeral per run)
             this._scratchpadManager.Clear();
             this._artifactToolManager.Clear();
+
+            // Initialize artifact tools with any input artifacts from the conversation
+            const inputArtifacts = (wrappedParams.data as Record<string, unknown>)?.__inputArtifacts as InputArtifact[] | undefined;
+            if (inputArtifacts?.length) {
+                this._artifactToolManager.Initialize(inputArtifacts);
+            }
 
             await this.initializeStartingPayload(wrappedParams);
 

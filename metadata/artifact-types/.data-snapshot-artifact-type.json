@@ -1,0 +1,13 @@
+[
+  {
+    "fields": {
+      "Name": "Data Snapshot",
+      "Description": "Point-in-time snapshot of a component or artifact's data state. Contains structured multi-table data with optional computations and interpretation. Rendered using the DataArtifactViewerPlugin (inherited from parent Data type).",
+      "ParentID": "@lookup:MJ: Artifact Types.Name=Data",
+      "ContentType": "application/vnd.mj.data-snapshot",
+      "DriverClass": "DataArtifactViewerPlugin",
+      "IsEnabled": true,
+      "Icon": "fa-solid fa-camera"
+    }
+  }
+]

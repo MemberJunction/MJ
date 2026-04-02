@@ -15,6 +15,7 @@ import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
+import { InputArtifact } from './ArtifactToolManager';
 import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
 
 /**
@@ -339,9 +340,16 @@ export class AgentRunner {
                 }
                 : originalOnProgress;
 
+            // Gather input artifacts attached to the user's message (Direction='Input')
+            const inputArtifacts = await this.gatherInputArtifacts(userMessageDetailId, contextUser);
+
             const modifiedParams: ExecuteAgentParams<C> = {
                 ...params,
-                data: {...params.data, conversationId}, // ensure we pass along OUR conversationId
+                data: {
+                    ...params.data,
+                    conversationId,
+                    ...(inputArtifacts.length > 0 ? { __inputArtifacts: inputArtifacts } : {})
+                },
                 conversationDetailId: agentResponseDetailId,
                 onProgress: wrappedOnProgress
             };
@@ -545,6 +553,64 @@ export class AgentRunner {
      * 3. If previous artifact exists, creates new version of it
      * 4. If no previous artifact, creates entirely new artifact
      *
+    /**
+     * Gather input artifacts attached to a conversation detail message.
+     * Queries ConversationDetailArtifact with Direction='Input', loads each
+     * artifact version's content, and returns InputArtifact objects ready
+     * for ArtifactToolManager.Initialize().
+     */
+    private async gatherInputArtifacts(
+        conversationDetailId: string,
+        contextUser: UserInfo
+    ): Promise<InputArtifact[]> {
+        try {
+            const rv = new RunView();
+            const junctions = await rv.RunView<MJConversationDetailArtifactEntity>({
+                EntityName: 'MJ: Conversation Detail Artifacts',
+                ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Direction='Input'`,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!junctions.Success || junctions.Results.length === 0) {
+                return [];
+            }
+
+            const inputArtifacts: InputArtifact[] = [];
+            const md = contextUser ? new Metadata() : new Metadata();
+
+            for (const junction of junctions.Results) {
+                const version = await md.GetEntityObject<MJArtifactVersionEntity>(
+                    'MJ: Artifact Versions',
+                    contextUser
+                );
+                if (await version.Load(junction.ArtifactVersionID)) {
+                    // Load the parent artifact to get the type name
+                    const artifact = await md.GetEntityObject<MJArtifactEntity>(
+                        'MJ: Artifacts',
+                        contextUser
+                    );
+                    if (await artifact.Load(version.ArtifactID)) {
+                        inputArtifacts.push({
+                            name: version.Name || artifact.Name || 'Untitled',
+                            typeName: artifact.Type || 'Text',
+                            content: version.Content || ''
+                        });
+                    }
+                }
+            }
+
+            if (inputArtifacts.length > 0) {
+                LogStatus(`[AgentRunner] Gathered ${inputArtifacts.length} input artifact(s) for conversation detail ${conversationDetailId}`);
+            }
+
+            return inputArtifacts;
+        } catch (error) {
+            LogError(`[AgentRunner] Failed to gather input artifacts: ${error}`);
+            return [];
+        }
+    }
+
+    /**
      * Respects the agent's ArtifactCreationMode configuration:
      * - "Never": Skips artifact creation entirely
      * - "System Only": Creates artifact with Visibility='System Only'
