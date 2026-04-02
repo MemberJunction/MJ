@@ -8,6 +8,13 @@
       "DriverClass": "DataArtifactViewerPlugin",
       "IsEnabled": true,
       "Icon": "fa-solid fa-camera"
+    },
+    "primaryKey": {
+      "ID": "511B217C-B2BB-490D-8AC2-095893C3048B"
+    },
+    "sync": {
+      "lastModified": "2026-04-02T19:14:59.686Z",
+      "checksum": "faf6d923ed9c814603fda2ab65eec44af948b9387a5834318cecf52459a8cd7d"
     }
   }
 ]

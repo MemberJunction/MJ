@@ -101,7 +101,10 @@ describe('ArtifactToolManager', () => {
         });
 
         it('returns error for unknown artifact ID', async () => {
-            manager.Initialize([makeArtifact('X', 'JSON', '{}')]);
+            manager.Initialize([
+                makeArtifact('X', 'JSON', '{}'),
+                makeArtifact('Y', 'JSON', '{}'),
+            ]);
 
             await manager.ExecuteToolCalls([
                 { artifactId: 'Z', tool: 'json_keys', input: {} },

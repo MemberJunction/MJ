@@ -340,8 +340,12 @@ export class AgentRunner {
                 }
                 : originalOnProgress;
 
-            // Gather input artifacts attached to the user's message (Direction='Input')
-            const inputArtifacts = await this.gatherInputArtifacts(userMessageDetailId, contextUser);
+            // Gather all artifacts from this conversation for the ArtifactToolManager.
+            // Per design doc Section 8.8: in the in-conversation flow, "the agent continues
+            // the conversation with the artifact already available." This means ALL artifacts
+            // in the conversation (both agent-produced Output and user-attached Input) should
+            // be available to the agent via artifact tools.
+            const inputArtifacts = await this.gatherConversationArtifacts(conversationId, contextUser);
 
             const modifiedParams: ExecuteAgentParams<C> = {
                 ...params,
@@ -554,20 +558,38 @@ export class AgentRunner {
      * 4. If no previous artifact, creates entirely new artifact
      *
     /**
-     * Gather input artifacts attached to a conversation detail message.
-     * Queries ConversationDetailArtifact with Direction='Input', loads each
-     * artifact version's content, and returns InputArtifact objects ready
-     * for ArtifactToolManager.Initialize().
+     * Gather all artifacts from a conversation for the ArtifactToolManager.
+     *
+     * Per design doc Section 8.8: in the in-conversation flow, the agent
+     * "continues the conversation with the artifact already available."
+     * This gathers both Output artifacts (agent-produced) and Input artifacts
+     * (user-attached) from the conversation, deduplicating by artifact version ID.
      */
-    private async gatherInputArtifacts(
-        conversationDetailId: string,
+    private async gatherConversationArtifacts(
+        conversationId: string,
         contextUser: UserInfo
     ): Promise<InputArtifact[]> {
         try {
             const rv = new RunView();
+
+            // Get all conversation detail IDs for this conversation
+            const details = await rv.RunView<{ ID: string }>({
+                EntityName: 'MJ: Conversation Details',
+                ExtraFilter: `ConversationID='${conversationId}'`,
+                Fields: ['ID'],
+                ResultType: 'simple'
+            }, contextUser);
+
+            if (!details.Success || details.Results.length === 0) {
+                return [];
+            }
+
+            const detailIds = details.Results.map(d => d.ID);
+
+            // Get all artifact junctions for these conversation details
             const junctions = await rv.RunView<MJConversationDetailArtifactEntity>({
                 EntityName: 'MJ: Conversation Detail Artifacts',
-                ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Direction='Input'`,
+                ExtraFilter: `ConversationDetailID IN ('${detailIds.join("','")}')`,
                 ResultType: 'entity_object'
             }, contextUser);
 
@@ -575,16 +597,24 @@ export class AgentRunner {
                 return [];
             }
 
-            const inputArtifacts: InputArtifact[] = [];
-            const md = contextUser ? new Metadata() : new Metadata();
+            // Deduplicate by artifact version ID (same artifact may be linked multiple times)
+            const seenVersionIds = new Set<string>();
+            const uniqueJunctions = junctions.Results.filter(j => {
+                const vid = j.ArtifactVersionID?.toLowerCase();
+                if (!vid || seenVersionIds.has(vid)) return false;
+                seenVersionIds.add(vid);
+                return true;
+            });
 
-            for (const junction of junctions.Results) {
+            const inputArtifacts: InputArtifact[] = [];
+            const md = new Metadata();
+
+            for (const junction of uniqueJunctions) {
                 const version = await md.GetEntityObject<MJArtifactVersionEntity>(
                     'MJ: Artifact Versions',
                     contextUser
                 );
                 if (await version.Load(junction.ArtifactVersionID)) {
-                    // Load the parent artifact to get the type name
                     const artifact = await md.GetEntityObject<MJArtifactEntity>(
                         'MJ: Artifacts',
                         contextUser
@@ -600,12 +630,12 @@ export class AgentRunner {
             }
 
             if (inputArtifacts.length > 0) {
-                LogStatus(`[AgentRunner] Gathered ${inputArtifacts.length} input artifact(s) for conversation detail ${conversationDetailId}`);
+                LogStatus(`[AgentRunner] Gathered ${inputArtifacts.length} conversation artifact(s) for conversation ${conversationId}`);
             }
 
             return inputArtifacts;
         } catch (error) {
-            LogError(`[AgentRunner] Failed to gather input artifacts: ${error}`);
+            LogError(`[AgentRunner] Failed to gather conversation artifacts: ${error}`);
             return [];
         }
     }

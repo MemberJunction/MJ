@@ -112,7 +112,8 @@ export class ArtifactToolManager {
             lines.push(`**${entry.alphaId}** — ${entry.typeName}: "${entry.name}"`);
         }
         lines.push('');
-        lines.push('Use the artifact tools below to explore content. Specify the artifact ID with each call.');
+        lines.push('Use the artifact tools below to explore content.');
+        lines.push('IMPORTANT: Always use the single-letter artifact ID (A, B, C, etc.) as the `artifactId` value — NOT the artifact name.');
         return lines.join('\n');
     }
 
@@ -146,6 +147,7 @@ export class ArtifactToolManager {
 
     /** Markdown results from previous turns */
     GetPendingResults(): string {
+        console.log(`[ATM] GetPendingResults: ${this.toolResults.length} results stored`);
         if (this.toolResults.length === 0) return '';
 
         const lines: string[] = ['## Artifact Tool Results\n'];
@@ -178,8 +180,24 @@ export class ArtifactToolManager {
 
     /** Execute tool calls from LLM response */
     async ExecuteToolCalls(calls: ArtifactToolCall[]): Promise<void> {
+        console.log(`[ATM] ExecuteToolCalls: ${calls.length} calls, current results: ${this.toolResults.length}`);
         const promises = calls.map(async (call) => {
-            const entry = this.artifacts.get(call.artifactId);
+            // Try exact alpha ID first, then fallback to name match
+            let entry = this.artifacts.get(call.artifactId);
+            if (!entry) {
+                // LLMs sometimes use the artifact name instead of the alpha ID
+                for (const e of this.artifacts.values()) {
+                    if (e.name.toLowerCase() === call.artifactId.toLowerCase() ||
+                        e.name.toLowerCase().replace(/\s+/g, '_') === call.artifactId.toLowerCase()) {
+                        entry = e;
+                        break;
+                    }
+                }
+            }
+            if (!entry && this.artifacts.size === 1) {
+                // If there's only one artifact, use it regardless of what ID was passed
+                entry = this.artifacts.values().next().value;
+            }
             if (!entry) {
                 this.toolResults.push({
                     artifactId: call.artifactId,
@@ -188,7 +206,7 @@ export class ArtifactToolManager {
                     result: {
                         success: false,
                         data: null,
-                        errorMessage: `Unknown artifact ID: ${call.artifactId}`,
+                        errorMessage: `Unknown artifact ID: ${call.artifactId}. Use the alpha ID (A, B, C, etc.) from the manifest.`,
                     },
                 });
                 return;
@@ -237,7 +255,7 @@ export class ArtifactToolManager {
     /** Resolve a tool library for an artifact type name */
     private ResolveLibrary(typeName: string): BaseArtifactToolLibrary {
         const lower = typeName.toLowerCase();
-        if (lower.includes('data snapshot') || lower.includes('datasnapshot')) {
+        if (lower.includes('data') || lower.includes('snapshot')) {
             return new DataSnapshotToolLibrary();
         }
         if (lower.includes('json')) {

@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, MJConversationDetailArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ConversationDataService } from '../../services/conversation-data.service';
@@ -2262,71 +2262,28 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * then routes through the normal agent flow so the agent can
    * explore the artifact via artifact tools.
    */
-  async OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
+  /**
+   * Handle Analyze button click from the artifact viewer panel.
+   *
+   * In-conversation flow (per design doc Section 8.8): "The user simply types
+   * their next message in the same conversation. The existing agent continues
+   * the conversation with the artifact already available."
+   *
+   * All artifacts in the conversation are automatically gathered by
+   * AgentRunner.gatherConversationArtifacts() when the agent run starts.
+   * This handler just sends a contextual analysis prompt.
+   */
+  OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): void {
     if (!this.conversationId || !this.currentUser) return;
 
-    try {
-      const md = new Metadata();
-      const rv = new RunView();
-
-      // Find the latest version of this artifact (query DB, don't rely on cache)
-      const versionResult = await rv.RunView<MJArtifactVersionEntity>({
-        EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ArtifactID='${event.artifactId}'`,
-        OrderBy: 'VersionNumber DESC',
-        MaxRows: 1,
-        ResultType: 'entity_object'
-      });
-      if (!versionResult.Success || versionResult.Results.length === 0) {
-        console.error('[OnAnalyzeArtifact] No versions found for artifact', event.artifactId);
-        return;
-      }
-      const latestVersion = versionResult.Results[0];
-
-      // Build a contextual prompt from the snapshot
-      const title = event.snapshot.title || 'this artifact';
-      const tableCount = event.snapshot.tables?.length || 0;
-      const interpretation = event.snapshot.interpretation;
-      let prompt = `Analyze ${title}`;
-      if (tableCount > 0) {
-        const tableNames = event.snapshot.tables!.map(t => t.name).join(', ');
-        prompt += ` (${tableCount} table${tableCount > 1 ? 's' : ''}: ${tableNames})`;
-      }
-      if (interpretation) {
-        prompt += `. Current interpretation: "${interpretation}"`;
-      }
-      prompt += '. What patterns, insights, or anomalies do you see?';
-
-      // Get the active message input and send the message
-      const messageInput = this.messageInputComponents?.first;
-      if (messageInput) {
-        // Send the message through the normal flow
-        await messageInput.sendMessageWithText(prompt);
-
-        // After the message is saved, find the detail we just created and link the artifact
-        const recentDetails = await rv.RunView<MJConversationDetailEntity>({
-          EntityName: 'MJ: Conversation Details',
-          ExtraFilter: `ConversationID='${this.conversationId}' AND Role='User'`,
-          OrderBy: '__mj_CreatedAt DESC',
-          MaxRows: 1,
-          ResultType: 'entity_object'
-        });
-
-        if (recentDetails.Success && recentDetails.Results.length > 0) {
-          const userDetail = recentDetails.Results[0];
-
-          // Create input artifact junction
-          const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
-            'MJ: Conversation Detail Artifacts'
-          );
-          junction.ConversationDetailID = userDetail.ID;
-          junction.ArtifactVersionID = latestVersion.ID;
-          junction.Direction = 'Input';
-          await junction.Save();
-        }
-      }
-    } catch (error) {
-      console.error('[OnAnalyzeArtifact] Failed:', error);
+    // Pre-fill the message input with a contextual prompt so the user
+    // can edit or add their own question before sending.
+    // AgentRunner automatically gathers all conversation artifacts when the run starts.
+    const title = event.snapshot.title || 'this data';
+    const messageInput = this.getActiveMessageInputComponent();
+    if (messageInput) {
+      messageInput.messageText = `@Data Analyst Analyze "${title}" — `;
+      messageInput.inputBox?.focus();
     }
   }
 
