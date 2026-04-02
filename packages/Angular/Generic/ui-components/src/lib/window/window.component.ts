@@ -30,7 +30,7 @@ import { Component, Input, Output, EventEmitter, HostListener, OnDestroy, Elemen
         [style.height]="State === 'maximized' ? '100vh' : resolvedHeight"
         [style.top]="State === 'maximized' ? '0' : resolvedTop"
         [style.left]="State === 'maximized' ? '0' : resolvedLeft"
-        [style.transform]="hasExplicitPosition || State === 'maximized' ? 'none' : 'translate(-50%, -50%)'"
+        [style.transform]="ResolvedTransform"
         [style.min-width]="MinWidth ? MinWidth + 'px' : null"
         [style.min-height]="MinHeight ? MinHeight + 'px' : null"
         [style.max-width]="State === 'maximized' ? '100vw' : '90vw'"
@@ -173,6 +173,16 @@ export class MJWindowComponent implements OnDestroy {
 
   get hasExplicitPosition(): boolean {
     return this.currentTop != null && this.currentLeft != null;
+  }
+
+  get ResolvedTransform(): string {
+    if (this.State === 'maximized') return 'none';
+    const hasTop = this.currentTop != null;
+    const hasLeft = this.currentLeft != null;
+    if (hasTop && hasLeft) return 'none';
+    if (hasTop && !hasLeft) return 'translateX(-50%)';
+    if (!hasTop && hasLeft) return 'translateY(-50%)';
+    return 'translate(-50%, -50%)';
   }
 
   get resolvedWidth(): string {
