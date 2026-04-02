@@ -428,4 +428,44 @@ GROUP BY YEAR(e.StartDate)`;
             expect(result.astParsed).toBe(true);
         });
     });
+
+    // ================================================================
+    // fixMaxTypeSerialization (node-sql-parser bug workaround)
+    // ================================================================
+    describe('NVARCHAR(MAX) preservation', () => {
+        it('should preserve CAST(x AS NVARCHAR(MAX)) through SqlifyAST round-trip', () => {
+            const sql = "SELECT CAST([ID] AS NVARCHAR(MAX)) FROM [t]";
+            const ast = SQLParser.ParseSQL(sql, 'TransactSQL');
+            expect(ast).not.toBeNull();
+            const result = SQLParser.SqlifyAST(ast!, 'TransactSQL');
+            expect(result).toContain('NVARCHAR(MAX)');
+            expect(result).not.toContain('NVARCHARmax');
+        });
+
+        it('should preserve CAST(x AS VARCHAR(MAX)) through SqlifyAST round-trip', () => {
+            const sql = "SELECT CAST([ID] AS VARCHAR(MAX)) FROM [t]";
+            const ast = SQLParser.ParseSQL(sql, 'TransactSQL');
+            expect(ast).not.toBeNull();
+            const result = SQLParser.SqlifyAST(ast!, 'TransactSQL');
+            expect(result).toContain('VARCHAR(MAX)');
+            expect(result).not.toContain('VARCHARmax');
+        });
+
+        it('should preserve CAST(x AS VARBINARY(MAX)) through SqlifyAST round-trip', () => {
+            const sql = "SELECT CAST([ID] AS VARBINARY(MAX)) FROM [t]";
+            const ast = SQLParser.ParseSQL(sql, 'TransactSQL');
+            expect(ast).not.toBeNull();
+            const result = SQLParser.SqlifyAST(ast!, 'TransactSQL');
+            expect(result).toContain('VARBINARY(MAX)');
+            expect(result).not.toContain('VARBINARYmax');
+        });
+
+        it('should not alter fixed-length types like NVARCHAR(100)', () => {
+            const sql = "SELECT CAST([ID] AS NVARCHAR(100)) FROM [t]";
+            const ast = SQLParser.ParseSQL(sql, 'TransactSQL');
+            expect(ast).not.toBeNull();
+            const result = SQLParser.SqlifyAST(ast!, 'TransactSQL');
+            expect(result).toContain('NVARCHAR(100)');
+        });
+    });
 });
