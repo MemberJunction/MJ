@@ -131,24 +131,65 @@ export class AgentClientSession {
         await this.transport.Disconnect();
     }
 
-    /** Register handler for agent messages */
-    public OnAgentMessage(handler: (msg: AgentMessage) => void): void {
+    /**
+     * Register handler for agent messages.
+     * @returns Unsubscribe function — call it to remove this handler.
+     */
+    public OnAgentMessage(handler: (msg: AgentMessage) => void): () => void {
         this.messageHandlers.push(handler);
+        return () => {
+            const idx = this.messageHandlers.indexOf(handler);
+            if (idx >= 0) this.messageHandlers.splice(idx, 1);
+        };
     }
 
-    /** Register handler for tool requests */
-    public OnToolRequest(handler: (req: ClientToolRequest) => void): void {
+    /**
+     * Register handler for tool requests.
+     * @returns Unsubscribe function — call it to remove this handler.
+     */
+    public OnToolRequest(handler: (req: ClientToolRequest) => void): () => void {
         this.toolRequestHandlers.push(handler);
+        return () => {
+            const idx = this.toolRequestHandlers.indexOf(handler);
+            if (idx >= 0) this.toolRequestHandlers.splice(idx, 1);
+        };
     }
 
-    /** Register handler for progress updates */
-    public OnProgress(handler: (progress: AgentProgress) => void): void {
+    /**
+     * Register handler for progress updates.
+     * @returns Unsubscribe function — call it to remove this handler.
+     */
+    public OnProgress(handler: (progress: AgentProgress) => void): () => void {
         this.progressHandlers.push(handler);
+        return () => {
+            const idx = this.progressHandlers.indexOf(handler);
+            if (idx >= 0) this.progressHandlers.splice(idx, 1);
+        };
     }
 
-    /** Register handler for errors */
-    public OnError(handler: (error: AgentError) => void): void {
+    /**
+     * Register handler for errors.
+     * @returns Unsubscribe function — call it to remove this handler.
+     */
+    public OnError(handler: (error: AgentError) => void): () => void {
         this.errorHandlers.push(handler);
+        return () => {
+            const idx = this.errorHandlers.indexOf(handler);
+            if (idx >= 0) this.errorHandlers.splice(idx, 1);
+        };
+    }
+
+    /**
+     * Dispose the session: clear all handlers, decorators, and internal state.
+     * Call this when the session is no longer needed to prevent memory leaks.
+     */
+    public Dispose(): void {
+        this.messageHandlers.length = 0;
+        this.toolRequestHandlers.length = 0;
+        this.progressHandlers.length = 0;
+        this.errorHandlers.length = 0;
+        this.toolDecorators.clear();
+        this.sendToolDefinitionsFn = null;
     }
 
     // ================================================================
