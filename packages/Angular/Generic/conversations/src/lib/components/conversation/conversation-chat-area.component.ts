@@ -1928,6 +1928,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Reset maximize state and width when closing so the next artifact opens at default size
     this.isArtifactPaneMaximized = false;
     this.artifactPaneWidth = DEFAULT_ARTIFACT_PANE_WIDTH;
+    this.cdr.detectChanges();
   }
 
   toggleMaximizeArtifactPane(): void {

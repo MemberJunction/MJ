@@ -8,7 +8,7 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, OnDestroy, Inject, ViewEncapsulation } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, ViewEncapsulation, ChangeDetectorRef } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
@@ -59,6 +59,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     private validationService: SystemValidationService,
     private agentClient: AgentClientService,
     private navigationService: NavigationService,
+    private cdr: ChangeDetectorRef,
   ) {
     this.registerClientTools();
   }
@@ -80,6 +81,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
       if (result.success) {
         // Chat overlay can now render — workspace is initialized
         this.IsChatOverlayReady = true;
+        this.cdr.detectChanges();
 
         // Navigate to initial route
         if (this.initialPath === '/') {

@@ -1,4 +1,4 @@
-import { Component, ViewEncapsulation, OnInit, OnDestroy } from '@angular/core';
+import { Component, ViewEncapsulation, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { Metadata, CompositeKey, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -43,7 +43,7 @@ import { Subject, takeUntil, distinctUntilChanged, combineLatest } from 'rxjs';
             [versionNumber]="activeVersionNumber ?? undefined"
             [showSaveToCollection]="false"
             [viewContext]="'collection'"
-            [contextCollectionId]="collectionState.activeCollectionId ?? undefined"
+            [contextCollectionId]="activeCollectionId ?? undefined"
             [canShare]="canShareActiveArtifact"
             [canEdit]="canEditActiveArtifact"
             [isMaximized]="isArtifactPanelMaximized"
@@ -123,6 +123,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
 
   // Artifact panel state
   public isArtifactPanelOpen: boolean = false;
+  public activeCollectionId: string | null = null;
   public activeArtifactId: string | null = null;
   public activeVersionNumber: number | null = null;
   public canShareActiveArtifact: boolean = false;
@@ -143,7 +144,8 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     private artifactState: ArtifactStateService,
     private artifactPermissionService: ArtifactPermissionService,
     public collectionState: CollectionStateService,
-    private navigationService: NavigationService
+    private navigationService: NavigationService,
+    private cdr: ChangeDetectorRef
   ) {
     super();
   }
@@ -168,10 +170,12 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     this.collectionState.activeCollectionId$
       .pipe(takeUntil(this.destroy$), distinctUntilChanged())
       .subscribe(collectionId => {
+        this.activeCollectionId = collectionId;
         // Only update if no artifact is open (artifact title takes priority)
         if (!this.activeArtifactId) {
           this.updateCollectionTabTitle(collectionId);
         }
+        this.cdr.detectChanges();
       });
 
     this.artifactState.activeArtifact$
@@ -311,6 +315,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
       .pipe(takeUntil(this.destroy$))
       .subscribe(isOpen => {
         this.isArtifactPanelOpen = isOpen;
+        this.cdr.detectChanges();
       });
 
     // Subscribe to active artifact ID
@@ -324,6 +329,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
           this.canShareActiveArtifact = false;
           this.canEditActiveArtifact = false;
         }
+        this.cdr.detectChanges();
       });
 
     // Subscribe to active version number
