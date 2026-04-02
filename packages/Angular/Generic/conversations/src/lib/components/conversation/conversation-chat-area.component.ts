@@ -2282,7 +2282,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     const title = event.snapshot.title || 'this data';
     const messageInput = this.getActiveMessageInputComponent();
     if (messageInput) {
-      messageInput.messageText = `@Data Analyst Analyze "${title}" — `;
+      messageInput.messageText = `Analyze "${title}" — `;
       messageInput.inputBox?.focus();
     }
   }

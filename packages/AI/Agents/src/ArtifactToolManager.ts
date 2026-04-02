@@ -147,7 +147,6 @@ export class ArtifactToolManager {
 
     /** Markdown results from previous turns */
     GetPendingResults(): string {
-        console.log(`[ATM] GetPendingResults: ${this.toolResults.length} results stored`);
         if (this.toolResults.length === 0) return '';
 
         const lines: string[] = ['## Artifact Tool Results\n'];
@@ -180,7 +179,6 @@ export class ArtifactToolManager {
 
     /** Execute tool calls from LLM response */
     async ExecuteToolCalls(calls: ArtifactToolCall[]): Promise<void> {
-        console.log(`[ATM] ExecuteToolCalls: ${calls.length} calls, current results: ${this.toolResults.length}`);
         const promises = calls.map(async (call) => {
             // Try exact alpha ID first, then fallback to name match
             let entry = this.artifacts.get(call.artifactId);

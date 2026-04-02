@@ -28,6 +28,10 @@ interface LoopAgentResponse {
     /** Private working memory — notes and task tracking. Processed inline, zero turn cost */
     scratchpad?: AgentScratchpad;
 {% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.artifactToolCalls != false and _ARTIFACT_MANIFEST %}
+    /** Explore artifacts via tools. Specify artifactId (A, B, etc.), tool name, and input params. Results appear next turn. */
+    artifactToolCalls?: Array<{ artifactId: string; tool: string; input: Record<string, unknown> }>;
+{% endif %}
     /** Internal reasoning for debugging */
     reasoning?: string;
     /** Confidence level (0.0-1.0) */
@@ -520,4 +524,20 @@ Your private working memory. Manage via `scratchpad` in your response.
 
 ### Tasks ({{ _SCRATCHPAD_TASK_SUMMARY }})
 {{ _SCRATCHPAD_TASKS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includeArtifactToolsDocs != false and _ARTIFACT_MANIFEST %}
+## Artifact Tools
+Explore artifacts attached to this conversation using `artifactToolCalls` in your response.
+Each call specifies an artifact ID (A, B, C, etc.), a tool name, and input parameters.
+Results appear in the next turn. Multiple calls can be batched in one response.
+
+{{ _ARTIFACT_MANIFEST | safe }}
+
+{{ _ARTIFACT_TOOLS | safe }}
+
+{% if _ARTIFACT_TOOL_RESULTS %}
+### Previous Results
+{{ _ARTIFACT_TOOL_RESULTS | safe }}
+{% endif %}
 {% endif %}
