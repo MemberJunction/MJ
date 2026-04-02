@@ -22,6 +22,7 @@ export class ReactRootManager {
   private roots = new Map<string, ManagedReactRoot>();
   private renderingRoots = new Set<string>();
   private unmountQueue = new Map<string, () => void>();
+  private dropdownObserver: MutationObserver | null = null;
   
   /**
    * Create a new managed React root
@@ -35,6 +36,9 @@ export class ReactRootManager {
     createRootFn: (container: HTMLElement) => any,
     componentId?: string
   ): string {
+    // Initialize the dropdown position fix on first root creation
+    this.initDropdownPositionFix();
+
     const rootId = `react-root-${Date.now()}-${Math.random()}`;
     const root = createRootFn(container);
     
@@ -205,9 +209,90 @@ export class ReactRootManager {
   }
   
   /**
+   * Initializes a global fix for antd dropdown positioning.
+   *
+   * antd's popup positioning (via rc-trigger / dom-align) calculates wrong
+   * coordinates in the Angular host, rendering dropdowns thousands of pixels
+   * off-screen. This fix:
+   *
+   * 1. Injects a CSS rule that uses !important with CSS custom properties to
+   *    override antd's inline left/top values. The fallback (-9999px) hides
+   *    dropdowns until positioned, preventing flash-of-wrong-position.
+   *
+   * 2. A MutationObserver catches dropdown elements when added to the DOM
+   *    and sets the CSS variables to the correct viewport-relative coordinates
+   *    based on the trigger element's position.
+   *
+   * Uses position:absolute (antd's default) rather than position:fixed to
+   * preserve antd's virtual scroll behavior inside dropdown panels.
+   */
+  private initDropdownPositionFix(): void {
+    if (this.dropdownObserver) return;
+    if (typeof document === 'undefined') return;
+
+    const DROPDOWN_SELECTOR = '.ant-select-dropdown, .ant-picker-dropdown, .ant-cascader-dropdown';
+    const TRIGGER_SELECTOR = '.ant-select-open, .ant-picker-focused, .ant-dropdown-open';
+
+    // CSS !important overrides antd's inline left/top permanently.
+    // CSS custom properties (--dd-left, --dd-top) are set per-element from JS.
+    // Fallback of -9999px hides dropdowns until the observer positions them.
+    const style = document.createElement('style');
+    style.textContent = DROPDOWN_SELECTOR + ' { left: var(--dd-left, -9999px) !important; top: var(--dd-top, -9999px) !important; z-index: 99999 !important; }';
+    document.head.appendChild(style);
+
+    const fixDropdown = (dd: HTMLElement) => {
+      if (dd.hasAttribute('data-pos-fixed')) return;
+      const trigger = document.querySelector(TRIGGER_SELECTOR);
+      if (!trigger) return;
+
+      const tRect = trigger.getBoundingClientRect();
+      const op = dd.offsetParent as HTMLElement | null;
+
+      if (op) {
+        // Position relative to offset parent (keeps position:absolute working)
+        const opRect = op.getBoundingClientRect();
+        dd.style.setProperty('--dd-left', `${tRect.left - opRect.left}px`);
+        dd.style.setProperty('--dd-top', `${tRect.bottom - opRect.top + 2}px`);
+      } else {
+        // No offset parent — fall back to viewport coordinates
+        dd.style.setProperty('--dd-left', `${tRect.left}px`);
+        dd.style.setProperty('--dd-top', `${tRect.bottom + 2}px`);
+      }
+      dd.setAttribute('data-pos-fixed', '1');
+    };
+
+    // Watch for dropdown elements being added to the DOM.
+    // Only watches childList (not attributes) to avoid firing during scroll/hover.
+    this.dropdownObserver = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        const addedNodes = Array.from(m.addedNodes);
+        for (const node of addedNodes) {
+          if (node.nodeType !== 1) continue;
+          const el = node as HTMLElement;
+
+          // Check if the added node itself is a dropdown
+          if (el.className && typeof el.className === 'string' && /\bant-(select|picker|cascader)-dropdown\b/.test(el.className)) {
+            fixDropdown(el);
+          }
+
+          // Check descendants (dropdown may be nested inside a wrapper)
+          if (el.querySelectorAll) {
+            const nested = el.querySelectorAll(DROPDOWN_SELECTOR);
+            nested.forEach((n) => fixDropdown(n as HTMLElement));
+          }
+        }
+      }
+    });
+
+    this.dropdownObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  /**
    * Clean up all roots (for testing or shutdown)
    */
   async cleanup(): Promise<void> {
+    this.dropdownObserver?.disconnect();
+    this.dropdownObserver = null;
     const allRootIds = Array.from(this.roots.keys());
     await Promise.all(allRootIds.map(id => this.unmountRoot(id, true)));
   }
