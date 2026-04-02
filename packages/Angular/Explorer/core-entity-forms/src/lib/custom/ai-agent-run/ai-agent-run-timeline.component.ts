@@ -54,7 +54,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   
   timelineItems$!: Observable<TimelineItem[]>;
   
-  loading = false;
+  loading = true;
   error: string | null = null;
   selectedItem: TimelineItem | null = null;
   

@@ -135,7 +135,7 @@
           }
           <!-- Requests & History -->
           @if (record.ID) {
-            <kendo-panelbar-item id="history" [expanded]="GetSectionExpanded('history', false)" [disabled]="loadingStates.executionHistory">
+            <kendo-panelbar-item id="history" [expanded]="GetSectionExpanded('history', false)">
               <ng-template kendoPanelBarItemTitle>
                 <i class="fa-solid fa-history"></i> Execution History
                 @if (loadingStates.executionHistory) {
@@ -146,7 +146,9 @@
               </ng-template>
               <ng-template kendoPanelBarContent>
                 <div class="panel-content execution-history-panel">
-                  @if (executionHistoryCount === 0) {
+                  @if (loadingStates.executionHistory) {
+                    <mj-loading text="Loading execution history..." size="medium"></mj-loading>
+                  } @else if (executionHistoryCount === 0) {
                     <div class="empty-state">
                       <i class="fa-solid fa-history"></i>
                       <h4>No Execution History</h4>
