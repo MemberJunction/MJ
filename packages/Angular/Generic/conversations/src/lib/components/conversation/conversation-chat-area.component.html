@@ -64,7 +64,12 @@
     <div class="chat-messages-pane"
       [class.full-width]="!showArtifactPanel"
       [class.hidden]="isArtifactPaneMaximized">
-      @if (isNewConversation || !conversationId) {
+      @if (isLoadingConversation) {
+        <!-- Loading State - Show centered spinner while conversation loads (checked FIRST to prevent empty state flash) -->
+        <div class="conversation-loading-state">
+          <mj-loading text="Loading conversation..." size="large"></mj-loading>
+        </div>
+      } @else if (isNewConversation || !conversationId) {
         <!-- Empty State - No conversation selected OR new unsaved conversation -->
         <mj-conversation-empty-state
           [currentUser]="currentUser"
@@ -73,11 +78,6 @@
           (sidebarToggleClicked)="sidebarToggleClicked.emit()"
           (messageSent)="onEmptyStateMessageSent($event)">
         </mj-conversation-empty-state>
-      } @else if (isLoadingConversation) {
-        <!-- Loading State - Show centered spinner while conversation loads -->
-        <div class="conversation-loading-state">
-          <mj-loading text="Loading conversation..." size="large"></mj-loading>
-        </div>
       } @else {
         <!-- Normal Message View -->
         <div class="chat-messages-wrapper">

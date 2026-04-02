@@ -132,7 +132,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   public isProcessing: boolean = false;
   private intentCheckMessage: MJConversationDetailEntity | null = null; // Temporary message shown during intent checking
-  public isLoadingConversation: boolean = true; // True while loading initial conversation messages
+  public isLoadingConversation: boolean = false; // Set to true only when actively loading conversation data
 
   // Store raw query results and derived data
   private rawConversationData: ConversationDetailComplete[] = [];
@@ -487,10 +487,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       }
 
       // Only show loading spinner if we don't have cached data for this conversation.
-      // When switching between previously visited conversations, the cache provides
-      // instant display without the loading flash.
-      const hasCachedData = this.conversationDataCache.has(conversationId);
-      if (!hasCachedData) {
+      // Show the loading state unless we have cached messages ready to display immediately.
+      // This prevents the "no messages" flash when switching between conversations.
+      const cachedEntry = this.conversationDataCache.get(conversationId);
+      const hasCachedMessages = cachedEntry?.entities && cachedEntry.entities.length > 0;
+      if (!hasCachedMessages) {
         this.isLoadingConversation = true;
         this.messages = [];
         this.cdr.detectChanges();

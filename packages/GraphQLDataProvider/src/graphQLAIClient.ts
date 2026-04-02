@@ -2,7 +2,7 @@ import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { ExecuteAgentParams, ExecuteAgentResult } from "@memberjunction/ai-core-plus";
-import { SafeJSONParse } from "@memberjunction/global";
+import { SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
 import { FireAndForgetHelper } from "./fireAndForgetHelper";
 
 /**
@@ -214,7 +214,7 @@ export class GraphQLAIClient {
 
         try {
             if (promptResult.parsedResult) {
-                parsedResult = JSON.parse(promptResult.parsedResult);
+                parsedResult = CleanAndParseJSON(promptResult.parsedResult);
             }
         } catch (e) {
             // Keep as string if parsing fails

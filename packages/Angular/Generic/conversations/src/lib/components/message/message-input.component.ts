@@ -20,7 +20,7 @@ import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
 
 @Component({
   standalone: false,
@@ -2208,9 +2208,10 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       ]);
 
       if (result && result.success && (result.parsedResult || result.output)) {
-        // Use parsedResult if available, otherwise parse output
+        // Use parsedResult if available, otherwise clean and parse output
+        // (CleanAndParseJSON handles markdown code blocks like ```json ... ```)
         const parsed = result.parsedResult ||
-          (result.output ? JSON.parse(result.output) : null);
+          (result.output ? CleanAndParseJSON(result.output) : null);
 
         if (parsed) {
           const { name, description } = parsed;

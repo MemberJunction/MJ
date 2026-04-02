@@ -64,6 +64,11 @@ vi.mock('@memberjunction/core', () => {
             GetEntityObject() {
                 return Promise.resolve(mockConversationEntity);
             }
+            async CreateTransactionGroup() {
+                return {
+                    Submit: vi.fn().mockResolvedValue(true),
+                };
+            }
         },
         RunView: class MockRunView {
             RunView() {
@@ -109,6 +114,12 @@ function createMockConversation(overrides: Record<string, unknown> = {}) {
         IsArchived: overrides['IsArchived'] ?? false,
         IsPinned: overrides['IsPinned'] ?? false,
         __mj_UpdatedAt: overrides['__mj_UpdatedAt'] ?? new Date('2025-06-01'),
+        // BaseEntity methods needed when the engine uses cached objects directly
+        Save: vi.fn().mockResolvedValue(true),
+        Delete: vi.fn().mockResolvedValue(true),
+        GetAll: vi.fn().mockReturnValue({}),
+        LatestResult: { Success: true, Message: '' },
+        TransactionGroup: null,
         ...overrides,
     };
 }

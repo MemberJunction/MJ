@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, BaseEntityEvent, IMetadataProvider, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
@@ -90,6 +90,13 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
     /** Track the environment ID used for the last load */
     private _lastEnvironmentId: string | null = null;
+
+    /**
+     * Guard flag: set true while the engine itself is performing a mutation.
+     * Prevents the entity event handler from re-processing our own saves/deletes,
+     * which would cause redundant cache updates or infinite loops.
+     */
+    private _selfMutating = false;
 
     // ========================================================================
     // ENGINE CONFIG (BaseEngine pattern)
@@ -206,22 +213,38 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * @throws Error if conversation not found or delete fails
      */
     public async DeleteConversation(id: string, contextUser: UserInfo): Promise<boolean> {
-        const md = new Metadata();
-        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
-
-        const loaded = await conversation.Load(id);
-        if (!loaded) {
-            throw new Error('Conversation not found');
+        // Try to use the cached entity object first to avoid a DB round-trip
+        let conversation = this.GetConversation(id);
+        if (!conversation) {
+            // Not in cache — load from DB as fallback
+            const md = new Metadata();
+            conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+            const loaded = await conversation.Load(id);
+            if (!loaded) {
+                throw new Error('Conversation not found');
+            }
         }
 
-        const deleted = await conversation.Delete();
-        if (!deleted) {
-            throw new Error(conversation.LatestResult?.Message || 'Failed to delete conversation');
-        }
-
-        // Remove from cached list and clear detail cache
+        // Remove from the list and cache BEFORE calling Delete(), because
+        // BaseEntity.Delete() calls NewRecord() which wipes the entity's fields.
+        // Since the cached entity is the same object reference in the list,
+        // wiping it causes a blank render frame before removal.
         this.removeFromList(id);
         this.removeDetailCache(id);
+
+        this._selfMutating = true;
+        try {
+            const deleted = await conversation.Delete();
+            if (!deleted) {
+                // Delete failed — restore to list
+                const current = this._conversations$.value;
+                this._conversations$.next([conversation, ...current]);
+                throw new Error(conversation.LatestResult?.Message || 'Failed to delete conversation');
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
         return true;
     }
 
@@ -290,26 +313,32 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         updates: Partial<MJConversationEntity>,
         contextUser: UserInfo
     ): Promise<boolean> {
-        const md = new Metadata();
-        const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
-
-        const loaded = await conversation.Load(id);
-        if (!loaded) {
-            throw new Error('Conversation not found');
+        // Try to use the cached entity to avoid a DB round-trip
+        let conversation = this.GetConversation(id);
+        if (!conversation) {
+            // Not in cache — load from DB as fallback
+            const md = new Metadata();
+            conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+            const loaded = await conversation.Load(id);
+            if (!loaded) {
+                throw new Error('Conversation not found');
+            }
         }
 
         Object.assign(conversation, updates);
-        const saved = await conversation.Save();
-        if (!saved) {
-            throw new Error(conversation.LatestResult?.Message || 'Failed to update conversation');
+
+        this._selfMutating = true;
+        try {
+            const saved = await conversation.Save();
+            if (!saved) {
+                throw new Error(conversation.LatestResult?.Message || 'Failed to update conversation');
+            }
+        } finally {
+            this._selfMutating = false;
         }
 
-        // Update the in-memory entity in the cached list
-        const cached = this.GetConversation(id);
-        if (cached) {
-            Object.assign(cached, updates);
-            this._conversations$.next([...this._conversations$.value]);
-        }
+        // Re-emit the list so subscribers see the update
+        this._conversations$.next([...this._conversations$.value]);
         return true;
     }
 
@@ -324,29 +353,73 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         ids: string[],
         contextUser: UserInfo
     ): Promise<{ Successful: string[]; Failed: Array<{ ID: string; Name: string; Error: string }> }> {
+        if (ids.length === 0) {
+            return { Successful: [], Failed: [] };
+        }
+
+        const md = new Metadata();
         const successful: string[] = [];
         const failed: Array<{ ID: string; Name: string; Error: string }> = [];
+        const entitiesToDelete: MJConversationEntity[] = [];
 
+        // Phase 1: Gather entities — use cached objects when available to avoid DB round-trips
         for (const id of ids) {
-            try {
-                const conversation = this.GetConversation(id);
-                const name = conversation?.Name || 'Unknown';
-
-                const deleted = await this.DeleteConversation(id, contextUser);
-                if (deleted) {
-                    successful.push(id);
-                } else {
-                    failed.push({ ID: id, Name: name, Error: 'Delete returned false' });
+            const cached = this.GetConversation(id);
+            if (cached) {
+                entitiesToDelete.push(cached);
+            } else {
+                // Not in cache — try loading from DB
+                try {
+                    const entity = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
+                    const loaded = await entity.Load(id);
+                    if (!loaded) {
+                        failed.push({ ID: id, Name: 'Unknown', Error: 'Conversation not found' });
+                    } else {
+                        entitiesToDelete.push(entity);
+                    }
+                } catch (error) {
+                    failed.push({ ID: id, Name: 'Unknown', Error: error instanceof Error ? error.message : 'Unknown error' });
                 }
-            } catch (error) {
-                const conversation = this.GetConversation(id);
-                failed.push({
-                    ID: id,
-                    Name: conversation?.Name || 'Unknown',
-                    Error: error instanceof Error ? error.message : 'Unknown error'
-                });
             }
         }
+
+        if (entitiesToDelete.length === 0) {
+            return { Successful: successful, Failed: failed };
+        }
+
+        // Phase 2: Delete each conversation individually.
+        // We use individual deletes rather than TransactionGroup because cached entities
+        // from RunView may have stale state on the server (e.g., already deleted records
+        // cause InnerLoad failures inside TransactionGroup, failing the entire batch).
+        // Individual deletes let us handle partial success gracefully.
+        this._selfMutating = true;
+        try {
+            for (const entity of entitiesToDelete) {
+                const name = entity.Name || 'Unknown';
+                try {
+                    // Use DeleteConversation which handles Load + Delete properly
+                    // and removes from list/cache on success
+                    await this.DeleteConversation(entity.ID, contextUser);
+                    successful.push(entity.ID);
+                } catch (deleteError) {
+                    const errMsg = deleteError instanceof Error ? deleteError.message : 'Delete failed';
+                    // If the record wasn't found (already deleted), treat as success for UI purposes
+                    if (errMsg.includes('not found') || errMsg.includes('hasn\'t yet been saved')) {
+                        successful.push(entity.ID);
+                        this.removeDetailCache(entity.ID);
+                    } else {
+                        failed.push({ ID: entity.ID, Name: name, Error: errMsg });
+                    }
+                }
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        // Phase 3: Ensure all successful IDs are removed from the list.
+        // DeleteConversation handles its own removal, but "already deleted" items
+        // (counted as successful above) may still be in the stale cache.
+        this.removeMultipleFromList(successful);
 
         return { Successful: successful, Failed: failed };
     }
@@ -544,6 +617,214 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     // ========================================================================
+    // CONVERSATION DETAIL CRUD
+    // ========================================================================
+
+    /**
+     * Creates a new conversation detail (message), saves it, and adds it to the cache.
+     *
+     * @param conversationId - The conversation this detail belongs to
+     * @param role - The message role ('User', 'AI', 'System')
+     * @param message - The message content
+     * @param contextUser - The current user context
+     * @param additionalFields - Optional extra fields to set on the entity
+     * @returns The saved conversation detail entity
+     */
+    public async CreateConversationDetail(
+        conversationId: string,
+        role: MJConversationDetailEntity['Role'],
+        message: string,
+        contextUser: UserInfo,
+        additionalFields?: Partial<MJConversationDetailEntity>
+    ): Promise<MJConversationDetailEntity> {
+        const md = new Metadata();
+        const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+
+        detail.ConversationID = conversationId;
+        detail.Role = role;
+        detail.Message = message;
+        if (additionalFields) {
+            Object.assign(detail, additionalFields);
+        }
+
+        this._selfMutating = true;
+        try {
+            const saved = await detail.Save();
+            if (!saved) {
+                throw new Error(detail.LatestResult?.Message || 'Failed to create conversation detail');
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        // Add to cache if this conversation's details are cached
+        this.AddDetailToCache(conversationId, detail);
+        return detail;
+    }
+
+    /**
+     * Saves an existing conversation detail entity and updates the cache.
+     * Use this instead of calling detail.Save() directly to keep the engine cache in sync.
+     *
+     * @param detail - The conversation detail entity to save (must already be loaded)
+     * @returns true if saved successfully
+     */
+    public async SaveConversationDetail(detail: MJConversationDetailEntity): Promise<boolean> {
+        this._selfMutating = true;
+        try {
+            const saved = await detail.Save();
+            if (!saved) {
+                throw new Error(detail.LatestResult?.Message || 'Failed to save conversation detail');
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        // Update in cache
+        this.UpdateDetailInCache(detail.ConversationID, detail);
+        return true;
+    }
+
+    /**
+     * Deletes a conversation detail and removes it from the cache.
+     *
+     * @param conversationId - The conversation this detail belongs to
+     * @param detailId - The detail ID to delete
+     * @param contextUser - The current user context
+     * @returns true if deleted successfully
+     */
+    public async DeleteConversationDetail(
+        conversationId: string,
+        detailId: string,
+        contextUser: UserInfo
+    ): Promise<boolean> {
+        // Try to use the cached detail entity to avoid a DB round-trip
+        const key = NormalizeUUID(conversationId);
+        const cachedEntry = this._detailCache.get(key);
+        let detail: MJConversationDetailEntity | undefined = cachedEntry?.Details.find(d => UUIDsEqual(d.ID, detailId));
+
+        if (!detail) {
+            // Not in cache — load from DB as fallback
+            const md = new Metadata();
+            detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
+            const loaded = await detail.Load(detailId);
+            if (!loaded) {
+                throw new Error('Conversation detail not found');
+            }
+        }
+
+        this._selfMutating = true;
+        try {
+            const deleted = await detail.Delete();
+            if (!deleted) {
+                throw new Error(detail.LatestResult?.Message || 'Failed to delete conversation detail');
+            }
+        } finally {
+            this._selfMutating = false;
+        }
+
+        // Remove from cache
+        if (cachedEntry) {
+            cachedEntry.Details = cachedEntry.Details.filter(d => !UUIDsEqual(d.ID, detailId));
+            cachedEntry.AgentRunsByDetailId.delete(detailId);
+        }
+
+        return true;
+    }
+
+    // ========================================================================
+    // ENTITY EVENT HANDLING (External Mutation Sync)
+    // ========================================================================
+
+    /**
+     * Overrides BaseEngine's entity event handler to watch for external mutations
+     * to Conversations and Conversation Details. When another piece of code (outside
+     * this engine) saves or deletes these entities, we sync our cache.
+     *
+     * The _selfMutating guard prevents processing events from our own mutations.
+     */
+    protected override async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
+        // Skip events from our own mutations to avoid redundant cache updates
+        if (this._selfMutating) {
+            return true;
+        }
+
+        const entityName = event.baseEntity?.EntityInfo?.Name;
+        if (!entityName) {
+            return await super.HandleIndividualBaseEntityEvent(event);
+        }
+
+        const normalizedName = entityName.toLowerCase().trim();
+
+        if (normalizedName === 'mj: conversations') {
+            return this.handleConversationEntityEvent(event);
+        }
+
+        if (normalizedName === 'mj: conversation details') {
+            return this.handleConversationDetailEntityEvent(event);
+        }
+
+        // Not a conversation entity — let BaseEngine handle it
+        return await super.HandleIndividualBaseEntityEvent(event);
+    }
+
+    /**
+     * Handles save/delete events on Conversation entities from external code.
+     */
+    private handleConversationEntityEvent(event: BaseEntityEvent): boolean {
+        const entity = event.baseEntity as MJConversationEntity;
+        if (!entity?.ID) return true;
+
+        if (event.type === 'save') {
+            // Check if this conversation is in our list
+            const existing = this.GetConversation(entity.ID);
+            if (existing) {
+                // Update the cached entity with the new data
+                Object.assign(existing, entity.GetAll());
+                this._conversations$.next([...this._conversations$.value]);
+            }
+            // If not in our list, it might be for a different user/environment — ignore
+        } else if (event.type === 'delete') {
+            const existing = this.GetConversation(entity.ID);
+            if (existing) {
+                this.removeFromList(entity.ID);
+                this.removeDetailCache(entity.ID);
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Handles save/delete events on ConversationDetail entities from external code.
+     */
+    private handleConversationDetailEntityEvent(event: BaseEntityEvent): boolean {
+        const entity = event.baseEntity as MJConversationDetailEntity;
+        if (!entity?.ID || !entity?.ConversationID) return true;
+
+        const key = NormalizeUUID(entity.ConversationID);
+        const cached = this._detailCache.get(key);
+        if (!cached) return true; // Not cached — nothing to sync
+
+        if (event.type === 'save') {
+            // Check if this detail is already in the cache
+            const existingIdx = cached.Details.findIndex(d => UUIDsEqual(d.ID, entity.ID));
+            if (existingIdx >= 0) {
+                // Update existing — replace with the new entity data
+                cached.Details[existingIdx] = entity;
+            } else {
+                // New detail added externally — append to cache
+                cached.Details.push(entity);
+            }
+        } else if (event.type === 'delete') {
+            cached.Details = cached.Details.filter(d => !UUIDsEqual(d.ID, entity.ID));
+            cached.AgentRunsByDetailId.delete(entity.ID);
+        }
+
+        return true;
+    }
+
+    // ========================================================================
     // PRIVATE HELPERS
     // ========================================================================
 
@@ -580,6 +861,16 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      */
     private removeFromList(id: string): void {
         const filtered = this._conversations$.value.filter(c => !UUIDsEqual(c.ID, id));
+        this._conversations$.next(filtered);
+    }
+
+    /**
+     * Removes multiple IDs from the cached list in a single emission.
+     * Used by DeleteMultipleConversations for a smooth batch UI update.
+     */
+    private removeMultipleFromList(ids: string[]): void {
+        const idSet = new Set(ids.map(id => NormalizeUUID(id)));
+        const filtered = this._conversations$.value.filter(c => !idSet.has(NormalizeUUID(c.ID)));
         this._conversations$.next(filtered);
     }
 

@@ -1016,20 +1016,35 @@ export class ConversationListComponent implements OnInit, OnDestroy {
           this.currentUser
         );
 
-        // Show results if there were any failures
-        if (result.Failed.length > 0) {
+        if (result.Failed.length > 0 && result.Successful.length > 0) {
+          // Partial success
+          const failedNames = result.Failed.map(f => `"${f.Name}"`).join(', ');
           await this.dialogService.alert(
             'Partial Success',
-            `Deleted ${result.Successful.length} of ${count} conversations. ${result.Failed.length} failed.`
+            `Deleted ${result.Successful.length} of ${count} conversations.\n\n` +
+            `${result.Failed.length} could not be deleted: ${failedNames}`
+          );
+        } else if (result.Failed.length > 0 && result.Successful.length === 0) {
+          // All failed
+          await this.dialogService.alert(
+            'Delete Failed',
+            `None of the ${count} conversations could be deleted. They may have already been removed.`
           );
         }
 
-        // Exit selection mode
-        this.toggleSelectionMode();
+        // Emit deleted events for successful deletions
+        for (const id of result.Successful) {
+          this.conversationDeleted.emit(id);
+        }
 
       } catch (error) {
         console.error('Error deleting conversations:', error);
         await this.dialogService.alert('Error', 'Failed to delete conversations. Please try again.');
+      } finally {
+        // Always exit selection mode after an attempt, whether success or failure
+        this.selectedConversationIds.clear();
+        this.isSelectionMode = false;
+        this.cdr.detectChanges();
       }
     }
   }
