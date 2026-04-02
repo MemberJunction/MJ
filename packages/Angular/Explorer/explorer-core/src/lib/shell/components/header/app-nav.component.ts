@@ -149,35 +149,19 @@ export class AppNavComponent implements OnInit, OnDestroy {
     this.activeStateMap.clear();
 
     if (!config || !this._app) {
-      console.log(`[AppNav] updateActiveStates — no config or app, clearing all`);
       return;
     }
 
     const activeTab = config.tabs.find(t => t.id === config.activeTabId);
-    if (!activeTab) {
-      console.log(`[AppNav] updateActiveStates — no active tab found for id=${config.activeTabId}`);
+    if (!activeTab || activeTab.applicationId !== this._app.ID) {
       return;
     }
-    if (activeTab.applicationId !== this._app.ID) {
-      console.log(`[AppNav] updateActiveStates — tab appId="${activeTab.applicationId}" !== app="${this._app.ID}" (${this._app.Name}), clearing`);
-      return;
-    }
-
-    console.log(`[AppNav] updateActiveStates — app="${this._app.Name}", activeTab title="${activeTab.title}", config=`, activeTab.configuration);
 
     // Compute active state for each nav item once
     for (const item of this._cachedNavItems) {
       const key = this.getItemKey(item);
       const isActive = this.computeIsActive(item, activeTab);
       this.activeStateMap.set(key, isActive);
-      if (isActive) {
-        console.log(`[AppNav] ✓ ACTIVE: "${item.Label}" (key="${key}")`);
-      }
-    }
-
-    const anyActive = Array.from(this.activeStateMap.values()).some(v => v);
-    if (!anyActive) {
-      console.log(`[AppNav] ⚠️ NO nav items matched as active! Nav items:`, this._cachedNavItems.map(i => ({ Label: i.Label, Route: i.Route, DriverClass: (i as unknown as Record<string, unknown>)['DriverClass'] })));
     }
   }
 
