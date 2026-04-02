@@ -86,24 +86,24 @@ export class ModelManagementComponent extends BaseResourceComponent { }
 ```
 
 When a tab becomes visible, `ResourceContainerComponent` does:
-1. `ClassFactory.GetRegistration(BaseResourceComponent, 'AIModelsResource')` — looks up the component by string key
+1. `ClassFactory.GetRegistrationAsync(BaseResourceComponent, 'AIModelsResource')` — async lookup that triggers lazy loading if needed
 2. `viewContainerRef.createComponent(registeredClass)` — Angular's dynamic component API instantiates it
 3. Wires up `Data` input and event callbacks
 
-### Lazy Loading with Fallback
+### Universal Lazy Loading via ClassFactory
 
-With the bundle-optimization work, not all components are in the initial bundle. The lazy loading infrastructure handles this transparently:
+Not all components are in the initial bundle. Lazy loading is handled universally by `ClassFactory` itself — no consumer-specific retry logic needed:
 
-1. `ClassFactory.GetRegistration()` returns `null` — the class hasn't been loaded yet
-2. `LazyModuleRegistry.Load('AIModelsResource')` fires, looking up the resource type in `LAZY_FEATURE_CONFIG`
-3. The config maps to a dynamic import: `import('@memberjunction/ng-dashboards/ai-dashboards.module')`
-4. The chunk loads, the module initializes, and `@RegisterClass` decorators execute — registering the components
-5. Retry `ClassFactory.GetRegistration()` — now succeeds
-6. Component renders normally
+1. `ClassFactory.GetRegistrationAsync()` tries sync lookup first
+2. If `null`, calls registered lazy loaders with `('BaseResourceComponent', 'AIModelsResource')`
+3. `LazyModuleRegistry` builds the compound key `'BaseResourceComponent::AIModelsResource'` and looks it up in `LAZY_FEATURE_CONFIG`
+4. The config maps to a dynamic import: `import('@memberjunction/ng-dashboards/ai-dashboards.module')`
+5. The chunk loads, `@RegisterClass` decorators execute — ClassFactory now has the class
+6. Retry succeeds, component renders normally
 
-A `<mj-loading>` spinner displays during steps 2–4.
+This works for ALL base classes (`BaseResourceComponent`, `BaseDashboard`, `BaseApplication`, etc.), not just resource components. Any consumer using `CreateInstanceAsync` or `GetRegistrationAsync` gets lazy loading automatically.
 
-This fallback is wired into all three ClassFactory lookup sites: `ResourceContainerComponent.loadComponent()`, `TabContainerComponent` (tab content + display name), and `DashboardResource.loadCodeBasedDashboard()`.
+See `guides/LAZY_LOADING_GUIDE.md` for the complete guide.
 
 ### Tree-Shaking Prevention via Manifests
 

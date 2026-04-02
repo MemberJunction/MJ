@@ -6,7 +6,6 @@ import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core'
 import type { DataExplorerFilter } from '@memberjunction/ng-dashboards/data-explorer-dashboards.module';
 import type { ShareDialogResult } from '@memberjunction/ng-dashboards/core-dashboards.module';
 import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEvent, AddPanelResult, DashboardPanel } from '@memberjunction/ng-dashboard-viewer';
-import { LazyModuleRegistry } from '../services/lazy-module-registry';
 /**
  * Dashboard Resource Wrapper - displays a single dashboard in a tab
  * Extends BaseResourceComponent to work with the resource type system
@@ -409,7 +408,6 @@ import { LazyModuleRegistry } from '../services/lazy-module-registry';
     `]
 })
 export class DashboardResource extends BaseResourceComponent {
-    private lazyRegistry = inject(LazyModuleRegistry);
     private componentRef: ComponentRef<unknown> | null = null;
     private dataLoaded = false;
     @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
@@ -756,18 +754,11 @@ export class DashboardResource extends BaseResourceComponent {
                 throw new Error(`Dashboard '${dashboard.Name}' is marked as Code type but has no DriverClass specified`);
             }
 
-            // Look up the registered class using the DriverClass name (with lazy loading fallback)
-            let classReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+            // Look up the registered class using the DriverClass name (with lazy loading fallback via ClassFactory)
+            const classReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
                 BaseDashboard,
                 dashboard.DriverClass
             );
-
-            if (!classReg?.SubClass) {
-                const loaded = await this.lazyRegistry.Load(dashboard.DriverClass);
-                if (loaded) {
-                    classReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseDashboard, dashboard.DriverClass);
-                }
-            }
 
             if (!classReg?.SubClass) {
                 throw new Error(`Dashboard class '${dashboard.DriverClass}' is not registered. Please check the class registration.`);
