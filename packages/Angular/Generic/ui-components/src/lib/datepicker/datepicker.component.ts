@@ -54,9 +54,9 @@ import { CalendarDay, WEEK_DAYS, BuildCalendarWeeks, FormatDate, GetMonthYearLab
       </div>
     </ng-template>
   `,
-  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => MjDatepickerComponent), multi: true }]
+  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => MJDatepickerComponent), multi: true }]
 })
-export class MjDatepickerComponent implements ControlValueAccessor, OnDestroy {
+export class MJDatepickerComponent implements ControlValueAccessor, OnDestroy {
   @Input() Min: Date | null = null;
   @Input() Max: Date | null = null;
   @Input() Format = 'MM/dd/yyyy';

@@ -2,7 +2,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 // MJ UI Components
-import { MjButtonDirective, MjWindowComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJWindowComponent } from '@memberjunction/ng-ui-components';
 
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -17,8 +17,8 @@ import { EntityCommunicationsPreviewComponent } from './lib/preview.component';
   imports: [
     CommonModule,
     ContainerDirectivesModule,
-    MjButtonDirective,
-    MjWindowComponent,
+    MJButtonDirective,
+    MJWindowComponent,
     SharedGenericModule
   ],
   exports: [

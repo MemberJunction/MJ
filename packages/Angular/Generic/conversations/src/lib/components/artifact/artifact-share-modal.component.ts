@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { MjWindowComponent, MjButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJWindowComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { UserInfo } from '@memberjunction/core';
 import { MJArtifactEntity } from '@memberjunction/core-entities';
 import { ArtifactPermissionService, ArtifactPermission, ArtifactPermissionSet } from '../../services/artifact-permission.service';
@@ -15,7 +15,7 @@ interface PermissionDisplay extends ArtifactPermission {
 @Component({
     selector: 'mj-artifact-share-modal',
     standalone: true,
-    imports: [FormsModule, MjWindowComponent, MjButtonDirective, UserPickerComponent],
+    imports: [FormsModule, MJWindowComponent, MJButtonDirective, UserPickerComponent],
     template: `
         @if (isOpen && artifact) {
             <mj-window

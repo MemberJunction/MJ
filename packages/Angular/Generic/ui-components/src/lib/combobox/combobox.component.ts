@@ -119,11 +119,11 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
   `,
   providers: [{
     provide: NG_VALUE_ACCESSOR,
-    useExisting: forwardRef(() => MjComboboxComponent),
+    useExisting: forwardRef(() => MJComboboxComponent),
     multi: true
   }]
 })
-export class MjComboboxComponent implements ControlValueAccessor, OnDestroy {
+export class MJComboboxComponent implements ControlValueAccessor, OnDestroy {
   @Input()
   set Data(value: Record<string, unknown>[] | string[] | readonly unknown[] | null) {
     this._data = value;

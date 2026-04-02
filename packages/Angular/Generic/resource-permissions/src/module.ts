@@ -10,7 +10,7 @@ import { AvailableResourcesComponent } from './lib/available-resources.component
 import { GenericDialogModule } from '@memberjunction/ng-generic-dialog';
 import { RequestResourceAccessComponent } from './lib/request-access.component';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MjButtonDirective, MjDropdownComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 
 @NgModule({
   declarations: [
@@ -25,8 +25,8 @@ import { MjButtonDirective, MjDropdownComponent } from '@memberjunction/ng-ui-co
     ContainerDirectivesModule,
     GenericDialogModule,
     SharedGenericModule,
-    MjButtonDirective,
-    MjDropdownComponent
+    MJButtonDirective,
+    MJDropdownComponent
   ],
   exports: [
     ResourcePermissionsComponent,

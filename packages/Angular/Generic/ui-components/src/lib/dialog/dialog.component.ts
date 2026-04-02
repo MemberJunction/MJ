@@ -83,7 +83,7 @@ const SIZE_MAP: Record<MjDialogSize, string> = {
     }
   `
 })
-export class MjDialogComponent implements OnDestroy {
+export class MJDialogComponent implements OnDestroy {
   private _visible = false;
   private static nextId = 0;
 
@@ -111,7 +111,7 @@ export class MjDialogComponent implements OnDestroy {
 
   @Output() Close = new EventEmitter<void>();
 
-  DialogId = MjDialogComponent.nextId++;
+  DialogId = MJDialogComponent.nextId++;
 
   get dialogId(): number {
     return this.DialogId;
@@ -181,7 +181,7 @@ export class MjDialogComponent implements OnDestroy {
   standalone: true,
   template: `<ng-content></ng-content>`
 })
-export class MjDialogTitlebarComponent {}
+export class MJDialogTitlebarComponent {}
 
 /**
  * mj-dialog-actions — Footer action bar for mj-dialog.
@@ -205,4 +205,4 @@ export class MjDialogTitlebarComponent {}
     </div>
   `
 })
-export class MjDialogActionsComponent {}
+export class MJDialogActionsComponent {}

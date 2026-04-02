@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 // MJ UI Components
-import { MjButtonDirective, MjDialogComponent, MjDialogActionsComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
 
 import { EntityFormDialogComponent } from './entity-form-dialog/entity-form-dialog.component';
 
@@ -14,9 +14,9 @@ import { EntityFormDialogComponent } from './entity-form-dialog/entity-form-dial
   imports: [
     CommonModule,
     FormsModule,
-    MjButtonDirective,
-    MjDialogComponent,
-    MjDialogActionsComponent,
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent,
   ],
   exports: [
     EntityFormDialogComponent

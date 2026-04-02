@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MjButtonDirective, MjDialogComponent, MjDialogTitlebarComponent, MjDialogActionsComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJReactModule } from '@memberjunction/ng-react';
@@ -54,10 +54,10 @@ import { SaveVersionDialogComponent } from './ComponentStudio/components/save-ve
     MJReactModule,
     SharedGenericModule,
     MarkdownModule,
-    MjButtonDirective,
-    MjDialogComponent,
-    MjDialogTitlebarComponent,
-    MjDialogActionsComponent
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogTitlebarComponent,
+    MJDialogActionsComponent
   ],
   exports: [
     ComponentStudioDashboardComponent

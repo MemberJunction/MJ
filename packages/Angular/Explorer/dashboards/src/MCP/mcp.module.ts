@@ -11,11 +11,11 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
 // MJ UI Components
 import {
-    MjButtonDirective,
-    MjDialogComponent,
-    MjDialogActionsComponent,
-    MjDropdownComponent,
-    MjNumericInputComponent
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJDropdownComponent,
+    MJNumericInputComponent
 } from '@memberjunction/ng-ui-components';
 
 // MemberJunction Modules
@@ -49,11 +49,11 @@ import { MCPLogDetailPanelComponent } from './components/mcp-log-detail-panel.co
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
-        MjButtonDirective,
-        MjDialogComponent,
-        MjDialogActionsComponent,
-        MjDropdownComponent,
-        MjNumericInputComponent,
+        MJButtonDirective,
+        MJDialogComponent,
+        MJDialogActionsComponent,
+        MJDropdownComponent,
+        MJNumericInputComponent,
         SharedGenericModule,
         CredentialsModule,
         CodeEditorModule,

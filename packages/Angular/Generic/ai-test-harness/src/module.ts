@@ -4,13 +4,13 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
 // MJ UI Components
 import {
-  MjWindowComponent, MjWindowTitlebarComponent,
-  MjButtonDirective,
-  MjDropdownComponent,
-  MjNumericInputComponent,
-  MjSwitchComponent,
-  MjAccordionPanelComponent,
-  MjDialogComponent, MjDialogTitlebarComponent, MjDialogActionsComponent
+  MJWindowComponent, MJWindowTitlebarComponent,
+  MJButtonDirective,
+  MJDropdownComponent,
+  MJNumericInputComponent,
+  MJSwitchComponent,
+  MJAccordionPanelComponent,
+  MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent
 } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 
@@ -49,16 +49,16 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     FormsModule,
     ReactiveFormsModule,
     // MJ UI Components
-    MjWindowComponent,
-    MjWindowTitlebarComponent,
-    MjButtonDirective,
-    MjDropdownComponent,
-    MjNumericInputComponent,
-    MjSwitchComponent,
-    MjAccordionPanelComponent,
-    MjDialogComponent,
-    MjDialogTitlebarComponent,
-    MjDialogActionsComponent,
+    MJWindowComponent,
+    MJWindowTitlebarComponent,
+    MJButtonDirective,
+    MJDropdownComponent,
+    MJNumericInputComponent,
+    MJSwitchComponent,
+    MJAccordionPanelComponent,
+    MJDialogComponent,
+    MJDialogTitlebarComponent,
+    MJDialogActionsComponent,
     AngularSplitModule,
     // MemberJunction
     ContainerDirectivesModule,

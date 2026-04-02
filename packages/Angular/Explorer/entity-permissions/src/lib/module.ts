@@ -6,7 +6,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { FormsModule } from '@angular/forms';
 import { EntityPermissionsSelectorWithGridComponent } from './entity-selector-with-grid/entity-selector-with-grid.component';
-import { MjButtonDirective, MjDropdownComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 
 @NgModule({
   declarations: [
@@ -18,8 +18,8 @@ import { MjButtonDirective, MjDropdownComponent } from '@memberjunction/ng-ui-co
     FormsModule,
     ContainerDirectivesModule,
     SharedGenericModule,
-    MjButtonDirective,
-    MjDropdownComponent
+    MJButtonDirective,
+    MJDropdownComponent
   ],
   exports: [
     EntityPermissionsGridComponent,

@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { AgGridModule } from 'ag-grid-angular';
 
 // MJ UI Components
-import { MjButtonDirective, MjDialogComponent, MjDialogActionsComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
 
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FindRecordComponent } from './lib/find-record.component';
@@ -21,9 +21,9 @@ import { FindRecordDialogComponent } from './lib/dialog.component';
     FormsModule,
     AgGridModule,
     ContainerDirectivesModule,
-    MjButtonDirective,
-    MjDialogComponent,
-    MjDialogActionsComponent
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent
   ],
   exports: [
     FindRecordComponent,

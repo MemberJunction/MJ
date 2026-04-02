@@ -8,11 +8,11 @@ import { SystemValidationService } from './lib/services/system-validation.servic
 import { StartupValidationService } from './lib/services/startup-validation.service';
 
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
-import { MjProgressBarComponent } from '@memberjunction/ng-ui-components';
+import { MJProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
 // MJ
-import { MjButtonDirective, MjDialogComponent, MjDialogTitlebarComponent, MjDialogActionsComponent, MjDropdownComponent, MjWindowComponent, MjWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJDropdownComponent, MJWindowComponent, MJWindowTitlebarComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { FileStorageModule } from '@memberjunction/ng-file-storage';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
@@ -110,20 +110,20 @@ import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
     RecordSelectorModule,
     ResourcePermissionsModule,
     GenericDialogModule,
-    MjProgressBarComponent,
+    MJProgressBarComponent,
     DragDropModule,
     AITestHarnessModule, // [3.0] TO DO TO-DO Need to verify this works correctly!
     ArtifactsModule,
     SharedGenericModule,
     EntityViewerModule,
     ListDetailGridModule,
-    MjButtonDirective,
-    MjDialogComponent,
-    MjDialogTitlebarComponent,
-    MjDialogActionsComponent,
-    MjDropdownComponent,
-    MjWindowComponent,
-    MjWindowTitlebarComponent
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogTitlebarComponent,
+    MJDialogActionsComponent,
+    MJDropdownComponent,
+    MJWindowComponent,
+    MJWindowTitlebarComponent
   ],
   exports: [
     FormToolbarComponent,

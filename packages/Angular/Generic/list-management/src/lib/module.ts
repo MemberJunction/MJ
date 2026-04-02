@@ -4,10 +4,10 @@ import { FormsModule } from '@angular/forms';
 
 // MJ UI Components
 import {
-  MjButtonDirective,
-  MjDialogComponent,
-  MjDialogActionsComponent,
-  MjDropdownComponent
+  MJButtonDirective,
+  MJDialogComponent,
+  MJDialogActionsComponent,
+  MJDropdownComponent
 } from '@memberjunction/ng-ui-components';
 
 // MemberJunction imports
@@ -33,10 +33,10 @@ import { ListSharingService } from './services/list-sharing.service';
   imports: [
     CommonModule,
     FormsModule,
-    MjButtonDirective,
-    MjDialogComponent,
-    MjDialogActionsComponent,
-    MjDropdownComponent,
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJDropdownComponent,
     ContainerDirectivesModule,
     SharedGenericModule
   ],

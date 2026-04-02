@@ -117,11 +117,11 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
   `,
   providers: [{
     provide: NG_VALUE_ACCESSOR,
-    useExisting: forwardRef(() => MjDropdownComponent),
+    useExisting: forwardRef(() => MJDropdownComponent),
     multi: true
   }]
 })
-export class MjDropdownComponent implements ControlValueAccessor, OnDestroy {
+export class MJDropdownComponent implements ControlValueAccessor, OnDestroy {
   @Input() Data: Record<string, unknown>[] | string[] | readonly unknown[] | null = [];
   @Input() TextField = '';
   @Input() ValueField = '';
@@ -144,7 +144,7 @@ export class MjDropdownComponent implements ControlValueAccessor, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
   private static nextId = 0;
 
-  DropdownId = MjDropdownComponent.nextId++;
+  DropdownId = MJDropdownComponent.nextId++;
   IsOpen = false;
   IsDisabled = false;
   HighlightedIndex = -1;

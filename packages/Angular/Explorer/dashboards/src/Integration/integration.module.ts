@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MjButtonDirective, MjComboboxComponent, MjDropdownComponent, MjSwitchComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJSwitchComponent } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
 import { NgTreesModule } from '@memberjunction/ng-trees';
@@ -33,10 +33,10 @@ import { IntegrationDataService } from './services/integration-data.service';
   imports: [
     CommonModule,
     FormsModule,
-    MjButtonDirective,
-    MjComboboxComponent,
-    MjDropdownComponent,
-    MjSwitchComponent,
+    MJButtonDirective,
+    MJComboboxComponent,
+    MJDropdownComponent,
+    MJSwitchComponent,
     SharedGenericModule,
     CredentialsModule,
     NgTreesModule,

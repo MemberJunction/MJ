@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MjButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
@@ -33,7 +33,7 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    MjButtonDirective,
+    MJButtonDirective,
     ContainerDirectivesModule,
     SharedGenericModule,
     CredentialsModule

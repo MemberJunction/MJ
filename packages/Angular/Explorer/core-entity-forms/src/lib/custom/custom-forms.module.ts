@@ -1,7 +1,7 @@
 import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MjButtonDirective, MjAccordionPanelComponent, MjAccordionTitleDirective, MjDropdownComponent, MjComboboxComponent, MjSwitchComponent, MjDialogComponent, MjDialogTitlebarComponent, MjDialogActionsComponent, MjNumericInputComponent, MjWindowComponent, MjWindowTitlebarComponent, MjProgressBarComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJAccordionPanelComponent, MJAccordionTitleDirective, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
@@ -111,19 +111,19 @@ import { MJListFormComponentExtended } from "./Lists/list-form.component";
         FormsModule,
         ReactiveFormsModule,
         AgGridModule,
-        MjButtonDirective,
-        MjAccordionPanelComponent,
-        MjAccordionTitleDirective,
-        MjDropdownComponent,
-        MjComboboxComponent,
-        MjSwitchComponent,
-        MjDialogComponent,
-        MjDialogTitlebarComponent,
-        MjDialogActionsComponent,
-        MjNumericInputComponent,
-        MjWindowComponent,
-        MjWindowTitlebarComponent,
-        MjProgressBarComponent,
+        MJButtonDirective,
+        MJAccordionPanelComponent,
+        MJAccordionTitleDirective,
+        MJDropdownComponent,
+        MJComboboxComponent,
+        MJSwitchComponent,
+        MJDialogComponent,
+        MJDialogTitlebarComponent,
+        MJDialogActionsComponent,
+        MJNumericInputComponent,
+        MJWindowComponent,
+        MJWindowTitlebarComponent,
+        MJProgressBarComponent,
         LinkDirectivesModule,
         JoinGridModule,
         BaseFormsModule,

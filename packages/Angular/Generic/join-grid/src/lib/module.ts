@@ -4,7 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 // MJ UI Components
-import { MjButtonDirective, MjDropdownComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 
 // LOCAL
 import { JoinGridComponent } from './join-grid/join-grid.component';
@@ -20,8 +20,8 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
     FormsModule,
     ContainerDirectivesModule,
     SharedGenericModule,
-    MjButtonDirective,
-    MjDropdownComponent
+    MJButtonDirective,
+    MJDropdownComponent
   ],
   exports: [
     JoinGridComponent

@@ -4,7 +4,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 // MJ UI Components
-import { MjButtonDirective, MjDialogComponent, MjDialogActionsComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
 
 // MJ
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -22,9 +22,9 @@ import { SimpleRecordListComponent } from './simple-record-list/simple-record-li
     CommonModule,
     FormsModule,
     ContainerDirectivesModule,
-    MjButtonDirective,
-    MjDialogComponent,
-    MjDialogActionsComponent,
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent,
     EntityFormDialogModule,
     SharedGenericModule
   ],

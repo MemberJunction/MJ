@@ -1,7 +1,7 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MjButtonDirective, MjDropdownComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { ActionGalleryModule } from '@memberjunction/ng-action-gallery';
@@ -59,8 +59,8 @@ import {
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    MjButtonDirective,
-    MjDropdownComponent,
+    MJButtonDirective,
+    MJDropdownComponent,
     ContainerDirectivesModule,
     CodeEditorModule,
     ActionGalleryModule,

@@ -40,7 +40,7 @@ export type MjButtonSize = 'sm' | 'md' | 'lg';
   selector: 'button[mjButton], a[mjButton]',
   standalone: true
 })
-export class MjButtonDirective {
+export class MJButtonDirective {
   @Input() variant: MjButtonVariant = 'secondary';
   @Input() size: MjButtonSize = 'md';
   @Input() toggleable = false;

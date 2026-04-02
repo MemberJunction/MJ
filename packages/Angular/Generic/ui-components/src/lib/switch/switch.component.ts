@@ -18,9 +18,9 @@ import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
       }
     </button>
   `,
-  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => MjSwitchComponent), multi: true }]
+  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => MJSwitchComponent), multi: true }]
 })
-export class MjSwitchComponent implements ControlValueAccessor {
+export class MJSwitchComponent implements ControlValueAccessor {
   @Input() OnLabel = '';
   @Input() OffLabel = '';
   @Input() Disabled = false;

@@ -20,7 +20,7 @@ import { NgTemplateOutlet } from '@angular/common';
   selector: '[mjAccordionTitle]',
   standalone: true
 })
-export class MjAccordionTitleDirective {
+export class MJAccordionTitleDirective {
   constructor(public templateRef: TemplateRef<unknown>) {}
 }
 
@@ -50,7 +50,7 @@ export class MjAccordionTitleDirective {
 @Component({
   selector: 'mj-accordion-panel',
   standalone: true,
-  imports: [MjAccordionTitleDirective, NgTemplateOutlet],
+  imports: [NgTemplateOutlet],
   template: `
     <div class="mj-accordion-panel" [class.mj-accordion-panel--expanded]="Expanded" [class.mj-accordion-panel--disabled]="Disabled">
       <button class="mj-accordion-header" type="button"
@@ -74,12 +74,12 @@ export class MjAccordionTitleDirective {
     </div>
   `
 })
-export class MjAccordionPanelComponent {
+export class MJAccordionPanelComponent {
   @Input() Title = '';
   @Input() Expanded = false;
   @Input() Disabled = false;
   @Output() ExpandedChange = new EventEmitter<boolean>();
-  @ContentChild(MjAccordionTitleDirective) titleTemplate: MjAccordionTitleDirective | null = null;
+  @ContentChild(MJAccordionTitleDirective) titleTemplate: MJAccordionTitleDirective | null = null;
   @HostBinding('class.mj-accordion-panel-host') readonly hostClass = true;
 
   Toggle(): void {

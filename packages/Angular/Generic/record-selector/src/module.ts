@@ -2,7 +2,7 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 // MJ UI Components
-import { MjButtonDirective, MjDialogComponent, MjDialogActionsComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
 
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { RecordSelectorComponent } from './lib/record-selector.component';
@@ -15,9 +15,9 @@ import { RecordSelectorDialogComponent } from './lib/dialog.component';
   ],
   imports: [
     CommonModule,
-    MjButtonDirective,
-    MjDialogComponent,
-    MjDialogActionsComponent,
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent,
     ContainerDirectivesModule,
   ],
   exports: [

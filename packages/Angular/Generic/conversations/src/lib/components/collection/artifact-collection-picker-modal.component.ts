@@ -3,7 +3,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChange
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
-import { MjDialogComponent, MjDialogActionsComponent, MjButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJDialogComponent, MJDialogActionsComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService, CollectionPermission } from '../../services/collection-permission.service';
@@ -30,9 +30,9 @@ interface CollectionNode {
   standalone: true,
   imports: [
     FormsModule,
-    MjDialogComponent,
-    MjDialogActionsComponent,
-    MjButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJButtonDirective,
     SharedGenericModule
 ],
   template: `

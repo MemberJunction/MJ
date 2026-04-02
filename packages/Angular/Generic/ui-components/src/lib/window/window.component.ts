@@ -71,7 +71,7 @@ import { Component, Input, Output, EventEmitter, HostListener, OnDestroy, Elemen
     }
   `
 })
-export class MjWindowComponent implements OnDestroy {
+export class MJWindowComponent implements OnDestroy {
   private _visible = false;
   private static nextId = 0;
 
@@ -130,7 +130,7 @@ export class MjWindowComponent implements OnDestroy {
   @Output() StateChange = new EventEmitter<'default' | 'maximized'>();
   @Output() Resize = new EventEmitter<void>();
 
-  WindowId = MjWindowComponent.nextId++;
+  WindowId = MJWindowComponent.nextId++;
 
   // Internal position/size tracking
   private _state: 'default' | 'maximized' = 'default';
@@ -382,7 +382,7 @@ export class MjWindowComponent implements OnDestroy {
   template: `<ng-content></ng-content>`,
   styles: [`:host { display: contents; }`]
 })
-export class MjWindowTitlebarComponent {}
+export class MJWindowTitlebarComponent {}
 
 /**
  * mj-window-actions — Footer actions for mj-window.
@@ -392,4 +392,4 @@ export class MjWindowTitlebarComponent {}
   standalone: true,
   template: `<div class="mj-window-actions"><ng-content></ng-content></div>`
 })
-export class MjWindowActionsComponent {}
+export class MJWindowActionsComponent {}

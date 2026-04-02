@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
-import { MjWindowComponent, MjButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJWindowComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { UserInfo } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { CollectionPermissionService, CollectionPermission, PermissionSet } from '../../services/collection-permission.service';
@@ -16,7 +16,7 @@ interface PermissionDisplay extends CollectionPermission {
 @Component({
     selector: 'mj-collection-share-modal',
     standalone: true,
-    imports: [FormsModule, MjWindowComponent, MjButtonDirective, UserPickerComponent],
+    imports: [FormsModule, MJWindowComponent, MJButtonDirective, UserPickerComponent],
     template: `
         @if (isOpen && collection) {
             <mj-window

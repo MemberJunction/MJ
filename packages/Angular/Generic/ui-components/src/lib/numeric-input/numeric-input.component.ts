@@ -14,9 +14,9 @@ import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
       [value]="DisplayValue"
       (input)="OnInput($event)" (blur)="OnBlur()" />
   `,
-  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => MjNumericInputComponent), multi: true }]
+  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => MJNumericInputComponent), multi: true }]
 })
-export class MjNumericInputComponent implements ControlValueAccessor {
+export class MJNumericInputComponent implements ControlValueAccessor {
   @Input() Min: number | null = null;
   @Input() Max: number | null = null;
   @Input() Step: number = 1;

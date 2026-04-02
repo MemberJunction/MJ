@@ -46,7 +46,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
 // MJ UI components
-import { MjButtonDirective, MjNumericInputComponent, MjDatepickerComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJNumericInputComponent, MJDatepickerComponent } from '@memberjunction/ng-ui-components';
 
 // Components
 import { DynamicFormComponent } from './dynamic-form/dynamic-form.component';
@@ -63,9 +63,9 @@ import { DynamicFormResponseComponent } from './dynamic-form-response/dynamic-fo
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
-        MjButtonDirective,
-        MjNumericInputComponent,
-        MjDatepickerComponent
+        MJButtonDirective,
+        MJNumericInputComponent,
+        MJDatepickerComponent
     ],
     exports: [
         DynamicFormComponent,

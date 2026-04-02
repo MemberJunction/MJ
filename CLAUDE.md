@@ -1404,7 +1404,7 @@ When encountering `ExpressionChangedAfterItHasBeenCheckedError` in Angular compo
 - Grids: Use AG Grid (`ag-grid-angular`)
 - CSS classes: `.mj-input`, `.mj-textarea`, `.mj-checkbox` for styled native form elements
 - All components are standalone with `inject()` DI, PascalCase inputs/outputs, and `--mj-*` design tokens
-- Import from: `import { MjButtonDirective, MjDialogComponent, ... } from '@memberjunction/ng-ui-components'`
+- Import from: `import { MJButtonDirective, MJDialogComponent, ... } from '@memberjunction/ng-ui-components'`
 
 ### GraphQL Parameter Types
 - **Numeric Types**: Pay attention to GraphQL scalar types

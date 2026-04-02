@@ -21,7 +21,7 @@ export type MjProgressBarType = 'value' | 'infinite';
     }
   `
 })
-export class MjProgressBarComponent {
+export class MJProgressBarComponent {
   @Input() Value: number = 0;
   @Input() Type: MjProgressBarType = 'value';
   @HostBinding('class.mj-progress-bar-host') readonly hostClass = true;
