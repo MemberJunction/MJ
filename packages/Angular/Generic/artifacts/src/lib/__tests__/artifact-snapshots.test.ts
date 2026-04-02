@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { DataSnapshot, NormalizeToTables } from '@memberjunction/core';
+import { DataSnapshot, DataTable, NormalizeToTables } from '@memberjunction/core';
 import {
   createJsonSnapshot,
   createCodeSnapshot,
   createMarkdownSnapshot,
   createDataSnapshot,
+  buildMultiTableSql,
 } from '../snapshot-helpers';
 
 /**
@@ -119,6 +120,40 @@ describe('Artifact Snapshot Helpers', () => {
       expect(result!.tables).toBeDefined();
       expect(result!.tables![0].name).toBe('Results');
     });
+  });
+});
+
+describe('buildMultiTableSql', () => {
+  it('concatenates SQL from multiple tables with headers', () => {
+    const tables = [
+      { name: 'customers', metadata: { sql: 'SELECT * FROM Customers' } },
+      { name: 'orders', metadata: { sql: 'SELECT * FROM Orders' } },
+    ];
+    const result = buildMultiTableSql(tables as DataTable[]);
+
+    expect(result).toContain('-- ═══ customers ═══');
+    expect(result).toContain('SELECT * FROM Customers');
+    expect(result).toContain('-- ═══ orders ═══');
+    expect(result).toContain('SELECT * FROM Orders');
+  });
+
+  it('skips tables without SQL', () => {
+    const tables = [
+      { name: 'has_sql', metadata: { sql: 'SELECT 1' } },
+      { name: 'no_sql', metadata: {} },
+      { name: 'no_meta' },
+    ];
+    const result = buildMultiTableSql(tables as DataTable[]);
+
+    expect(result).toContain('-- ═══ has_sql ═══');
+    expect(result).not.toContain('no_sql');
+    expect(result).not.toContain('no_meta');
+  });
+
+  it('returns null when no tables have SQL', () => {
+    const tables = [{ name: 'a' }, { name: 'b', metadata: {} }];
+    const result = buildMultiTableSql(tables as DataTable[]);
+    expect(result).toBeNull();
   });
 });
 

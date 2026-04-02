@@ -5,7 +5,7 @@
  * unit-tested without Angular TestBed. Each viewer plugin delegates to
  * the corresponding function here.
  */
-import { DataSnapshot, NormalizeToTables } from '@memberjunction/core';
+import { DataSnapshot, DataTable, NormalizeToTables } from '@memberjunction/core';
 
 /**
  * Shape of a DataArtifactSpec that the data viewer works with.
@@ -67,6 +67,18 @@ export function createMarkdownSnapshot(content: string | null, title: string | n
  * Create a DataSnapshot from a DataArtifactSpec (data viewer).
  * Uses NormalizeToTables to convert the spec into a tabular snapshot.
  */
+/**
+ * Build a combined SQL string from multiple tables, each with a header comment.
+ * Returns null if no tables have SQL.
+ */
+export function buildMultiTableSql(tables: DataTable[]): string | null {
+  const sqlTables = tables.filter(t => t.metadata?.sql);
+  if (sqlTables.length === 0) return null;
+  return sqlTables
+    .map(t => `-- ═══ ${t.name} ═══\n${t.metadata!.sql!}`)
+    .join('\n\n');
+}
+
 export function createDataSnapshot(spec: DataArtifactSpecLike | null): DataSnapshot | null {
   if (!spec) return null;
   const tableName = spec.title || 'Results';

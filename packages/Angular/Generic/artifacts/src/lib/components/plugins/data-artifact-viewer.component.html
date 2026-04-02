@@ -111,6 +111,42 @@
         </div>
       </div>
 
+      <!-- Multi-table tab strip -->
+      @if (IsMultiTable) {
+        <div class="table-tabs">
+          @for (table of ResolvedTables; track table.name; let i = $index) {
+            <button
+              class="table-tab"
+              [class.active]="i === ActiveTableIndex"
+              [title]="table.description || table.name"
+              (click)="OnTableTabClick(i)">
+              <span class="table-tab-name">{{ table.name }}</span>
+              @if (table.metadata?.rowCount != null || table.rows?.length) {
+                <span class="table-tab-count">
+                  ({{ table.metadata?.rowCount ?? table.rows?.length }} rows)
+                </span>
+              }
+            </button>
+          }
+        </div>
+      }
+
+      <!-- Computations summary bar -->
+      @if (spec?.computations?.length) {
+        <div class="computations-bar">
+          @for (comp of spec.computations; track comp.name) {
+            @if (!IsMultiTable || !comp.table || comp.table === ActiveTable?.name) {
+              <div class="computation-chip" [title]="comp.description || comp.name">
+                <span class="computation-label">{{ comp.name }}</span>
+                <span class="computation-value">
+                  {{ comp.formattedValue || comp.value }}
+                </span>
+              </div>
+            }
+          }
+        </div>
+      }
+
       <!-- Grid -->
       <div class="grid-container">
         <!-- Saving overlay -->
