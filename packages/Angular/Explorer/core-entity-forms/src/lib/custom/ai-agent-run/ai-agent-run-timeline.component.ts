@@ -72,14 +72,23 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     this.actionLogs$ = this.dataHelper.actionLogs$;
     this.promptRuns$ = this.dataHelper.promptRuns$;
     
-    // Combine all data sources to build timeline
+    // Combine all data sources to build timeline.
+    // Skip emissions where steps are empty but data is still loading —
+    // the BehaviorSubjects initialise with [] so combineLatest fires
+    // immediately with an empty array before the real data arrives.
     this.timelineItems$ = combineLatest([
       this.steps$,
       this.subRuns$,
       this.actionLogs$,
-      this.promptRuns$
+      this.promptRuns$,
+      this.dataHelper.loading$
     ]).pipe(
-      map(([steps, subRuns, actionLogs, promptRuns]) => 
+      filter(([steps, _subRuns, _actionLogs, _promptRuns, isLoading]) => {
+        // While loading, suppress the empty-array emission so the
+        // template keeps showing the mj-loading indicator.
+        return !(isLoading && steps.length === 0);
+      }),
+      map(([steps, subRuns, actionLogs, promptRuns]) =>
         this.buildTimelineItems(steps, subRuns, actionLogs, promptRuns)
       ),
       shareReplay(1)
@@ -89,10 +98,12 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     // Subscribe to loading state from helper
     this.dataHelper.loading$.pipe(takeUntil(this.destroy$)).subscribe(loading => {
       this.loading = loading;
+      this.cdr.markForCheck();
     });
-    
+
     this.dataHelper.error$.pipe(takeUntil(this.destroy$)).subscribe(error => {
       this.error = error;
+      this.cdr.markForCheck();
     });
     
     // Auto-refresh logic
