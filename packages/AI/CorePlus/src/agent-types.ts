@@ -13,7 +13,7 @@
 import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
 import { ChatMessage } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
 import { AgentScratchpad } from './agent-scratchpad';
 import { AIAPIKey } from '@memberjunction/ai';
@@ -1080,6 +1080,14 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * ```
      */
     assignmentStrategy?: AgentRequestAssignmentStrategy;
+
+    /**
+     * Optional per-request metadata provider for multi-user server isolation.
+     * Pass the request-scoped provider from the GraphQL context so agent DB operations
+     * never share the global singleton's transaction state with concurrent requests.
+     * When omitted, falls back to the global Metadata.Provider (safe for single-user/client-side use).
+     */
+    provider?: IMetadataProvider;
 }
 
 /**

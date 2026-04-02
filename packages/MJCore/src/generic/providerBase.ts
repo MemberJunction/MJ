@@ -1,6 +1,6 @@
 import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
-import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult } from "./interfaces";
+import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem } from "./interfaces";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
@@ -18,6 +18,7 @@ import { Metadata } from "./metadata";
 import { RunView, RunViewParams } from "../views/runView";
 import { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
 import { GetDataHooks, PreRunViewHook, PostRunViewHook } from "./dataHooks";
+import { TransformSimpleObjectToEntityObject } from "./util";
 
 
 
@@ -709,11 +710,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             allParams.push(...entry.params);
         }
 
-        const entityNames = allParams.map(p => p.EntityName || p.ViewName || '?').join(', ');
-        LogStatusEx({
-            message: `⚡ [Coalesce] Merged ${queue.length} RunViews calls (${allParams.length} total entities) into 1 mega-batch: [${entityNames}]`,
-            verboseOnly: false
-        });
+        const entityNames = allParams.map(p => p.EntityName || p.ViewName || '?');
+        const eventId = TelemetryManager.Instance.StartEvent(
+            'Coalesce',
+            'ProviderBase.flushCoalesceQueue',
+            {
+                CallerCount: queue.length,
+                TotalEntityCount: allParams.length,
+                Entities: entityNames,
+                CallerBoundaries: [...boundaries]
+            }
+        );
 
         try {
             // Execute the mega-batch as a single pipeline call
@@ -725,7 +732,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const callerResults = allResults.slice(start, start + count);
                 queue[i].resolve(callerResults);
             }
+
+            TelemetryManager.Instance.EndEvent(eventId);
         } catch (err) {
+            TelemetryManager.Instance.EndEvent(eventId, { success: false, error: String(err) });
+
             // If the mega-batch fails, reject all callers
             for (const entry of queue) {
                 entry.reject(err);
@@ -737,6 +748,123 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Runs RunViews without coalescing (used internally after coalescing merge).
      * This goes through dedup + linger + the full pipeline.
      */
+    /**
+     * Performs a full-text search across all entities that have FullTextSearchEnabled=true.
+     * Uses the existing RunView + UserSearchString infrastructure which routes through
+     * the database-native FTS capabilities (SQL Server FREETEXT functions, PostgreSQL tsvector).
+     *
+     * This is the default implementation that works across all database providers. Each provider's
+     * createViewUserSearchSQL() method handles the platform-specific SQL generation.
+     *
+     * @see /packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md for comprehensive documentation
+     */
+    public async FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult> {
+        const startTime = Date.now();
+        try {
+            const md = new Metadata();
+            const maxRows = params.MaxRowsPerEntity ?? 10;
+
+            // Get all FTS-enabled entities
+            const ftsEntities = this.resolveFTSEntities(md, params.EntityNames);
+            if (ftsEntities.length === 0) {
+                return {
+                    Success: true,
+                    Results: [],
+                    TotalCount: 0,
+                    EntitiesSearched: 0,
+                    ElapsedMs: Date.now() - startTime
+                };
+            }
+
+            // Build RunView params for each FTS entity
+            const viewParams: RunViewParams[] = ftsEntities.map(entity => ({
+                EntityName: entity.Name,
+                UserSearchString: params.SearchText,
+                MaxRows: maxRows,
+                ResultType: 'simple' as const
+            }));
+
+            // Execute all searches in parallel via RunViews
+            const viewResults = await this.RunViews(viewParams, contextUser);
+
+            // Convert results to FullTextSearchResultItems
+            const allResults: FullTextSearchResultItem[] = [];
+            for (let i = 0; i < viewResults.length; i++) {
+                const result = viewResults[i];
+                const entity = ftsEntities[i];
+                if (!result.Success) continue;
+
+                const titleField = this.findBestField(entity, ['Name', 'Title', 'Subject', 'Label']);
+                const snippetField = this.findBestField(entity, ['Description', 'Summary', 'Body', 'Content', 'Text', 'Notes']);
+
+                for (let j = 0; j < result.Results.length; j++) {
+                    const record = result.Results[j] as Record<string, unknown>;
+                    allResults.push({
+                        EntityName: entity.Name,
+                        RecordID: String(record[entity.FirstPrimaryKey?.Name ?? 'ID'] ?? ''),
+                        Title: String(record[titleField] ?? 'Untitled'),
+                        Snippet: String(record[snippetField] ?? '').substring(0, 200),
+                        Score: 1.0 / (j + 1) // Rank-based scoring for RRF compatibility
+                    });
+                }
+            }
+
+            // Sort by score descending
+            allResults.sort((a, b) => b.Score - a.Score);
+
+            return {
+                Success: true,
+                Results: allResults,
+                TotalCount: allResults.length,
+                EntitiesSearched: ftsEntities.length,
+                ElapsedMs: Date.now() - startTime
+            };
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`FullTextSearch failed: ${msg}`);
+            return {
+                Success: false,
+                ErrorMessage: msg,
+                Results: [],
+                TotalCount: 0,
+                EntitiesSearched: 0,
+                ElapsedMs: Date.now() - startTime
+            };
+        }
+    }
+
+    /**
+     * Resolve which entities to search. Filters to only FTS-enabled entities.
+     * If entityNames provided, intersects with the FTS-enabled set.
+     */
+    private resolveFTSEntities(md: Metadata, entityNames?: string[]): EntityInfo[] {
+        const allEntities = md.Entities.filter(e => e.FullTextSearchEnabled);
+
+        if (!entityNames || entityNames.length === 0) {
+            return allEntities;
+        }
+
+        // Intersect requested names with FTS-enabled entities only
+        const nameSet = new Set(entityNames.map(n => n.toLowerCase()));
+        return allEntities.filter(e => nameSet.has(e.Name.toLowerCase()));
+    }
+
+    /**
+     * Find the best display field from an entity by checking preferred field names.
+     * Returns the first match or falls back to the first text field.
+     */
+    private findBestField(entity: EntityInfo, preferredNames: string[]): string {
+        for (const name of preferredNames) {
+            const field = entity.Fields.find(f => f.Name === name);
+            if (field) return field.Name;
+        }
+        // Fallback to first text field
+        const textField = entity.Fields.find(f =>
+            f.Type.toLowerCase().includes('varchar') || f.Type.toLowerCase().includes('text')
+        );
+        return textField?.Name ?? entity.FirstPrimaryKey?.Name ?? 'ID';
+    }
+
     private async RunViewsUncoalesced<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
         const key = this.GenerateDedupKey(params, contextUser);
         const existing = this._inflightViews.get(key);
@@ -1101,7 +1229,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     Success: true,
                     Results: cached.results,
                     RowCount: cached.results.length,
-                    TotalRowCount: cached.results.length,
+                    TotalRowCount: cached.totalRowCount ?? cached.results.length,
                     ExecutionTime: 0, // Cached, no execution time
                     ErrorMessage: '',
                     UserViewRunID: '',
@@ -1244,7 +1372,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         Success: true,
                         Results: cached.results,
                         RowCount: cached.results.length,
-                        TotalRowCount: cached.results.length,
+                        TotalRowCount: cached.totalRowCount ?? cached.results.length,
                         ExecutionTime: 0,
                         ErrorMessage: '',
                         UserViewRunID: '',
@@ -1441,7 +1569,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     Success: true,
                     Results: cached.results as T[],
                     RowCount: cached.rowCount,
-                    TotalRowCount: cached.rowCount,
+                    TotalRowCount: cached.totalRowCount ?? cached.rowCount,
                     ExecutionTime: 0,
                     ErrorMessage: '',
                     UserViewRunID: '',
@@ -1492,7 +1620,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                         Success: true,
                         Results: merged.results as T[],
                         RowCount: merged.rowCount,
-                        TotalRowCount: merged.rowCount,
+                        TotalRowCount: merged.totalRowCount ?? merged.rowCount,
                         ExecutionTime: 0,
                         ErrorMessage: '',
                         UserViewRunID: '',
@@ -1515,11 +1643,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             );
         } else if (checkResult.status === 'stale') {
             // Cache is stale - use fresh data and update cache (entity doesn't support differential)
+            const staleResults = checkResult.results || [];
             const freshResult: RunViewResult<T> = {
                 Success: true,
-                Results: checkResult.results || [],
-                RowCount: checkResult.rowCount || 0,
-                TotalRowCount: checkResult.rowCount || 0,
+                Results: staleResults,
+                RowCount: staleResults.length,
+                TotalRowCount: checkResult.rowCount || staleResults.length,
                 ExecutionTime: 0,
                 ErrorMessage: '',
                 UserViewRunID: '',
@@ -1536,7 +1665,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     param,
                     checkResult.results || [],
                     checkResult.maxUpdatedAt,
-                    checkResult.aggregateResults // Include aggregate results in cache
+                    checkResult.aggregateResults, // Include aggregate results in cache
+                    checkResult.rowCount
                 ).catch(e => LogError(`Failed to update cache: ${e}`));
             }
 
@@ -1654,7 +1784,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 params,
                 result.Results,
                 maxUpdatedAt,
-                result.AggregateResults
+                result.AggregateResults,
+                result.TotalRowCount
             );
         } else if (this.shouldAutoCache(params, result)) {
             // Server-side auto-cache: small, unfiltered, unsorted results are
@@ -1667,7 +1798,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 params,
                 result.Results,
                 maxUpdatedAt,
-                result.AggregateResults
+                result.AggregateResults,
+                result.TotalRowCount
             );
             LogStatusEx({ message: `  📦 [Auto-Cache] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${result.Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
         }
@@ -1731,7 +1863,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     params[i],
                     results[i].Results,
                     maxUpdatedAt,
-                    results[i].AggregateResults
+                    results[i].AggregateResults,
+                    results[i].TotalRowCount
                 ));
             } else if (this.shouldAutoCache(params[i], results[i])) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
@@ -1740,7 +1873,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     params[i],
                     results[i].Results,
                     maxUpdatedAt,
-                    results[i].AggregateResults
+                    results[i].AggregateResults,
+                    results[i].TotalRowCount
                 ));
                 LogStatusEx({ message: `    📦 [Auto-Cache] RunViews "${params[i].EntityName || params[i].ViewName || 'unknown'}" — ${results[i].Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
             }
@@ -2131,25 +2265,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param contextUser - The user context for permissions
      */
     protected async TransformSimpleObjectToEntityObject(param: RunViewParams, result: RunViewResult, contextUser?: UserInfo) {
-        // only if needed (e.g. ResultType==='entity_object'), transform the result set into BaseEntity-derived objects
-        if (param.ResultType === 'entity_object' && result && result.Success && result.Results?.length > 0){
-            // we need to transform each of the items in the result set into a BaseEntity-derived object
-            // Create entities and load data in parallel for better performance
-            const entityPromises = result.Results.map(async (item) => {
-                if (item instanceof BaseEntity || (typeof item.Save === 'function')) {
-                    // the second check is a "duck-typing" check in case we have different runtime
-                    // loading sources where the instanceof will fail
-                    return item;
-                }
-                else {
-                    // not a base entity sub-class already so convert
-                    const entity = await this.GetEntityObject(param.EntityName, contextUser);
-                    await entity.LoadFromData(item);
-                    return entity;
-                } 
-            });
-            
-            result.Results = await Promise.all(entityPromises);
+        if (param.ResultType === 'entity_object' && result && result.Success && result.Results?.length > 0) {
+            result.Results = await TransformSimpleObjectToEntityObject(this, param.EntityName, result.Results, contextUser);
         }
     }
 

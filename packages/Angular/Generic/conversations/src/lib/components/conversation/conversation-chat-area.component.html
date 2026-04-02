@@ -359,6 +359,15 @@
   </mj-artifact-collection-picker-modal>
 }
 
+<!-- Test Feedback Dialog -->
+@if (testFeedbackDialogData) {
+  <mj-test-feedback-dialog
+    [visible]="showTestFeedbackDialog"
+    [data]="testFeedbackDialogData"
+    (closed)="onTestFeedbackDialogClosed($event)">
+  </mj-test-feedback-dialog>
+}
+
 <!-- Image Viewer Modal -->
 @if (showImageViewer) {
   <mj-image-viewer

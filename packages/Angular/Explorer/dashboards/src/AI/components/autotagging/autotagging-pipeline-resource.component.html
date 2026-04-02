@@ -1,0 +1,159 @@
+<!-- Content Autotagging Pipeline Monitor -->
+<div class="autotagging-container">
+    @if (IsLoading) {
+        <div class="loading-overlay">
+            <mj-loading text="Loading pipeline data..."></mj-loading>
+        </div>
+    }
+
+    @if (ErrorMessage) {
+        <div class="error-banner">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>{{ ErrorMessage }}</span>
+            <button class="refresh-btn" (click)="RefreshData()">
+                <i class="fa-solid fa-rotate-right"></i> Retry
+            </button>
+        </div>
+    }
+
+    @if (!IsLoading) {
+        <!-- Header -->
+        <div class="header-row">
+            <div class="header-title">
+                <i class="fa-solid fa-tags header-icon"></i>
+                <h2>Content Autotagging Pipeline</h2>
+            </div>
+            <button class="refresh-btn" (click)="RefreshData()">
+                <i class="fa-solid fa-rotate-right"></i> Refresh
+            </button>
+        </div>
+
+        <!-- KPI Strip -->
+        <div class="kpi-strip">
+            @for (metric of KPIMetrics; track metric.Label) {
+                <div class="kpi-card" [class]="metric.ColorClass">
+                    <div class="kpi-icon">
+                        <i [class]="metric.Icon"></i>
+                    </div>
+                    <div class="kpi-content">
+                        <span class="kpi-value">{{ metric.Value | number }}</span>
+                        <span class="kpi-label">{{ metric.Label }}</span>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Pipeline Stages Visualization -->
+        <div class="pipeline-section">
+            <h3 class="section-title">
+                <i class="fa-solid fa-diagram-project"></i> Pipeline Stages
+            </h3>
+            <div class="pipeline-flow">
+                @for (stage of PipelineStages; track stage.Name; let last = $last) {
+                    <div class="pipeline-stage" [class]="'stage-' + stage.Status">
+                        <div class="stage-icon">
+                            <i [class]="stage.Icon"></i>
+                        </div>
+                        <span class="stage-name">{{ stage.Name }}</span>
+                        <span class="stage-count">
+                            @if (stage.ActiveCount > 0) {
+                                {{ stage.ActiveCount }} active
+                            } @else {
+                                Idle
+                            }
+                        </span>
+                        <div class="stage-indicator"></div>
+                    </div>
+                    @if (!last) {
+                        <div class="stage-connector">
+                            <i class="fa-solid fa-chevron-right"></i>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <!-- Main content area: Feed + Sources sidebar -->
+        <div class="main-content">
+            <!-- Recent Processing Feed -->
+            <div class="feed-section">
+                <h3 class="section-title">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Recent Processing
+                </h3>
+                <div class="feed-list">
+                    @if (ProcessedItems.length === 0) {
+                        <div class="empty-state">
+                            <i class="fa-solid fa-inbox"></i>
+                            <p>No processed items yet.</p>
+                        </div>
+                    }
+                    @for (item of ProcessedItems; track $index) {
+                        <div class="feed-item">
+                            <div class="feed-item-header">
+                                <span class="feed-item-name" [title]="item.Name">{{ item.Name }}</span>
+                                <span class="feed-item-status" [class]="GetStatusClass(item.Status)">
+                                    {{ item.Status }}
+                                </span>
+                            </div>
+                            <div class="feed-item-details">
+                                <span class="feed-detail">
+                                    <i class="fa-solid fa-database"></i> {{ item.SourceName }}
+                                </span>
+                                <span class="feed-detail">
+                                    <i class="fa-solid fa-stopwatch"></i> {{ FormatDuration(item.ProcessingTimeMs) }}
+                                </span>
+                                <span class="feed-detail">
+                                    <i class="fa-solid fa-tags"></i> {{ item.TagCount }} tags
+                                </span>
+                                <span class="feed-detail feed-time">
+                                    {{ FormatRelativeTime(item.ProcessedAt) }}
+                                </span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Source Configuration Panel (right sidebar) -->
+            <div class="sources-panel">
+                <h3 class="section-title">
+                    <i class="fa-solid fa-gear"></i> Content Sources
+                </h3>
+                <div class="sources-list">
+                    @if (ContentSources.length === 0) {
+                        <div class="empty-state">
+                            <i class="fa-solid fa-plug-circle-xmark"></i>
+                            <p>No sources configured.</p>
+                        </div>
+                    }
+                    @for (source of ContentSources; track source.ID) {
+                        <div class="source-card">
+                            <div class="source-header">
+                                <div class="source-icon">
+                                    <i [class]="source.TypeIcon"></i>
+                                </div>
+                                <div class="source-info">
+                                    <span class="source-name">{{ source.Name }}</span>
+                                    <span class="source-type">{{ source.TypeName }}</span>
+                                </div>
+                                <span class="source-status" [class]="GetStatusClass(source.Status)">
+                                    {{ source.Status }}
+                                </span>
+                            </div>
+                            <div class="source-meta">
+                                <span class="source-meta-item">
+                                    <i class="fa-solid fa-clock"></i>
+                                    {{ FormatRelativeTime(source.LastRunAt) }}
+                                </span>
+                                <span class="source-meta-item">
+                                    <i class="fa-solid fa-file-lines"></i>
+                                    {{ source.ItemCount | number }} items
+                                </span>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>

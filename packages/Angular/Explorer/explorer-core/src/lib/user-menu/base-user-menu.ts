@@ -133,6 +133,17 @@ export class BaseUserMenu {
                 enabled: true,
                 tooltip: 'View and edit your profile'
             },
+            {
+                id: 'pin-to-home',
+                label: 'Pin to Home',
+                icon: 'fa-solid fa-house-chimney',
+                group: 'primary',
+                order: 20,
+                developerOnly: false,
+                visible: true,
+                enabled: true,
+                tooltip: 'Pin the current resource to your Home dashboard'
+            },
 
             // === DEVELOPER GROUP (Only visible to developers) ===
             {
@@ -400,6 +411,23 @@ export class BaseUserMenu {
         await this._context.authService.logout();
 
         return { success: true, closeMenu: true };
+    }
+
+    // ========================================
+    // PIN TO HOME HELPERS
+    // ========================================
+
+    /**
+     * Handle "Pin to Home" click - signals the shell to pin the active resource
+     */
+    protected async Handle_pin_to_home(): Promise<UserMenuActionResult> {
+        // Signal the shell to handle the actual pinning (it has access to DI and the active tab)
+        // The shell's handler checks for Home app and duplicate pin conditions
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'pin-to-home'
+        };
     }
 
     // ========================================

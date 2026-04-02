@@ -13,7 +13,7 @@
 
 import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
-import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
@@ -194,6 +194,14 @@ export class BaseAgent {
      * @private
      */
     private _metadata: Metadata = new Metadata();
+
+    /**
+     * Active per-request metadata provider, set at the start of Execute().
+     * Defaults to the global Metadata.Provider; overridden when a per-request
+     * provider is passed through ExecuteAgentParams.provider for server isolation.
+     * @private
+     */
+    private _activeProvider: IMetadataProvider = Metadata.Provider;
 
     /**
      * This is state information that is specific to the agent type. BaseAgent doesn't know what
@@ -1007,6 +1015,9 @@ export class BaseAgent {
      * ```
      */
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
+        // Capture per-request provider for the duration of this execution so all entity
+        // saves go through the isolated provider, never the global singleton's transaction.
+        this._activeProvider = params.provider || Metadata.Provider;
         try {
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
 
@@ -1941,6 +1952,9 @@ export class BaseAgent {
             promptParams.apiKeys = params.apiKeys;
             this.logStatus(`🔑 Using ${params.apiKeys.length} API key(s) provided at runtime`, true, params);
         }
+
+        // Thread the per-request provider so prompt run records are saved through the isolated provider
+        promptParams.provider = params.provider || this._activeProvider;
 
         return promptParams;
     }
@@ -4062,8 +4076,8 @@ The context is now within limits. Please retry your request with the recovered c
         try {
             this.logStatus(`🤖 Executing sub-agent '${subAgentRequest.name}'`, true, params);
 
-            // Create a new AgentRunner instance
-            const runner = new AgentRunner();
+            // Create a new AgentRunner instance with the same isolated provider
+            const runner = new AgentRunner(params.provider || this._activeProvider);
 
             // Prepare messages for sub-agent using database-configured message mode
             const subAgentMessages = this.prepareSubAgentMessages(
@@ -4642,7 +4656,7 @@ The context is now within limits. Please retry your request with the recovered c
         this._promptTurnCount = 0;
 
         // Create MJAIAgentRunEntity
-        this._agentRun = await this._metadata.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
+        this._agentRun = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
         this._agentRun.AgentID = params.agent.ID;
         if (params.conversationDetailId) {
             this._agentRun.ConversationDetailID = params.conversationDetailId;
@@ -4837,7 +4851,7 @@ The context is now within limits. Please retry your request with the recovered c
         payloadAtEnd?: any;
         parentId?: string;
     }): Promise<MJAIAgentRunStepEntityExtended> {
-        const stepEntity = await this._metadata.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', params.contextUser);
+        const stepEntity = await this._activeProvider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', params.contextUser);
 
         stepEntity.AgentRunID = this._agentRun!.ID;
         // Step number is based on current count of steps + 1
@@ -7119,7 +7133,7 @@ The context is now within limits. Please retry your request with the recovered c
             const priority = resolvedStrategy?.priority ?? 50;
             const expirationMinutes = resolvedStrategy?.expirationMinutes;
 
-            const request = await this._metadata.GetEntityObject<MJAIAgentRequestEntity>(
+            const request = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRequestEntity>(
                 'MJ: AI Agent Requests',
                 params.contextUser
             );
@@ -8643,8 +8657,7 @@ The context is now within limits. Please retry your request with the recovered c
             throw new Error('Cannot create compaction step: agent run not initialized');
         }
 
-        const md = new Metadata();
-        const step = await md.GetEntityObject<MJAIAgentRunStepEntityExtended>(
+        const step = await (params.provider || this._activeProvider).GetEntityObject<MJAIAgentRunStepEntityExtended>(
             'MJ: AI Agent Run Steps',
             params.contextUser
         );

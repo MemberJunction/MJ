@@ -1,0 +1,380 @@
+<!--
+  Option C: Tag Management
+  Design Philosophy:
+  A tag-centric interface for taxonomy curation. The tag cloud gives an immediate
+  visual sense of tag distribution (larger = more items). The hierarchy tree below
+  enables drag-to-reorganize taxonomy. The right detail panel shows everything about
+  a selected tag: tagged items, synonyms, and a merge tool. Top-level stats and
+  search/bulk operations make it efficient for librarians and content managers who
+  need to maintain a clean, consistent tagging taxonomy at scale.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Autotagging - Tag Management</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-brand-primary: #264FAF;
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: #ffffff;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #475569;
+    --mj-border-default: #e2e8f0;
+    --mj-status-success: #22c55e;
+    --mj-status-warning: #f59e0b;
+    --mj-status-error: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); height: 100vh; display: flex; flex-direction: column; }
+
+  /* Top Bar */
+  .top-bar { display: flex; align-items: center; gap: 12px; padding: 10px 20px; background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); }
+  .top-bar .logo { font-weight: 700; font-size: 16px; color: var(--mj-brand-primary); white-space: nowrap; }
+  .search-box { flex: 1; max-width: 400px; position: relative; }
+  .search-box input { width: 100%; padding: 8px 12px 8px 34px; border: 1px solid var(--mj-border-default); border-radius: 6px; font-size: 14px; outline: none; }
+  .search-box input:focus { border-color: var(--mj-brand-primary); }
+  .search-box i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--mj-text-secondary); }
+  .top-actions { display: flex; gap: 8px; }
+  .btn { padding: 7px 14px; border-radius: 6px; font-size: 13px; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); cursor: pointer; color: var(--mj-text-primary); display: inline-flex; align-items: center; gap: 6px; }
+  .btn.primary { background: var(--mj-brand-primary); color: #fff; border-color: var(--mj-brand-primary); }
+  .btn:hover { opacity: 0.9; }
+
+  /* Stats Strip */
+  .stats-strip { display: flex; gap: 16px; padding: 14px 20px; }
+  .stat-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 8px; padding: 12px 18px; display: flex; align-items: center; gap: 12px; }
+  .stat-card .stat-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .stat-card .stat-value { font-size: 20px; font-weight: 700; }
+  .stat-card .stat-label { font-size: 11px; color: var(--mj-text-secondary); }
+
+  /* Main Layout */
+  .main-layout { display: flex; flex: 1; overflow: hidden; }
+
+  /* Main Area */
+  .main-area { flex: 1; overflow-y: auto; padding: 20px; }
+
+  /* Tag Cloud */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .section-header h2 { font-size: 16px; font-weight: 700; }
+  .tag-cloud { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 24px; margin-bottom: 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; line-height: 1.8; }
+  .cloud-tag { display: inline-block; padding: 4px 14px; border-radius: 20px; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; white-space: nowrap; }
+  .cloud-tag:hover { border-color: var(--mj-brand-primary); background: #eef2ff; }
+  .cloud-tag.selected { background: var(--mj-brand-primary); color: #fff; }
+  .cloud-tag.xl { font-size: 22px; font-weight: 700; color: var(--mj-brand-primary); }
+  .cloud-tag.lg { font-size: 18px; font-weight: 600; color: var(--mj-brand-primary); }
+  .cloud-tag.md { font-size: 15px; font-weight: 500; color: var(--mj-text-primary); }
+  .cloud-tag.sm { font-size: 13px; color: var(--mj-text-secondary); }
+  .cloud-tag.xs { font-size: 11px; color: var(--mj-text-secondary); }
+
+  /* Tag Hierarchy */
+  .hierarchy { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px; }
+  .hier-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .hier-item:hover { background: var(--mj-bg-page); }
+  .hier-item.selected { background: #eef2ff; }
+  .hier-item i.fa-chevron-right { font-size: 10px; color: var(--mj-text-secondary); width: 12px; transition: transform 0.15s; }
+  .hier-item.expanded i.fa-chevron-right { transform: rotate(90deg); }
+  .hier-item .tag-label { flex: 1; font-weight: 500; }
+  .hier-item .tag-count { font-size: 11px; color: var(--mj-text-secondary); background: var(--mj-bg-page); padding: 1px 8px; border-radius: 10px; }
+  .hier-item .drag-handle { color: var(--mj-border-default); cursor: grab; }
+  .hier-child { padding-left: 24px; }
+  .hier-item .pie-mini { width: 20px; height: 20px; border-radius: 50%; background: conic-gradient(#6366f1 0% 40%, #f59e0b 40% 65%, #06b6d4 65% 85%, #8b5cf6 85% 100%); flex-shrink: 0; }
+
+  /* Detail Panel */
+  .detail-panel { width: 360px; background: var(--mj-bg-surface); border-left: 1px solid var(--mj-border-default); overflow-y: auto; padding: 20px; }
+  .detail-panel h3 { font-size: 18px; margin-bottom: 4px; }
+  .detail-panel .tag-meta { font-size: 12px; color: var(--mj-text-secondary); margin-bottom: 16px; }
+  .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--mj-text-secondary); margin: 18px 0 8px; font-weight: 600; }
+
+  /* Source Distribution */
+  .source-dist { display: flex; gap: 12px; align-items: center; margin-bottom: 8px; }
+  .pie-chart { width: 80px; height: 80px; border-radius: 50%; background: conic-gradient(#6366f1 0% 35%, #f59e0b 35% 58%, #06b6d4 58% 78%, #8b5cf6 78% 100%); flex-shrink: 0; }
+  .pie-legend { font-size: 12px; line-height: 2; }
+  .pie-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+
+  /* Items List */
+  .tag-items { display: flex; flex-direction: column; gap: 6px; }
+  .tag-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--mj-bg-page); border-radius: 6px; font-size: 13px; }
+  .tag-item .item-icon { color: var(--mj-text-secondary); font-size: 12px; width: 16px; }
+  .tag-item .item-title { flex: 1; }
+  .tag-item .item-conf { font-size: 11px; font-weight: 600; color: var(--mj-status-success); }
+
+  /* Synonyms */
+  .synonym-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .synonym-chip { padding: 4px 12px; background: var(--mj-bg-page); border: 1px solid var(--mj-border-default); border-radius: 16px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .synonym-chip .remove { cursor: pointer; color: var(--mj-text-secondary); font-size: 10px; }
+  .synonym-chip .remove:hover { color: var(--mj-status-error); }
+
+  /* Merge Tool */
+  .merge-tool { background: var(--mj-bg-page); border: 1px solid var(--mj-border-default); border-radius: 8px; padding: 12px; }
+  .merge-tool label { font-size: 12px; color: var(--mj-text-secondary); display: block; margin-bottom: 6px; }
+  .merge-tool select { width: 100%; padding: 7px 10px; border: 1px solid var(--mj-border-default); border-radius: 6px; font-size: 13px; margin-bottom: 8px; }
+  .merge-preview { font-size: 12px; color: var(--mj-text-secondary); padding: 8px; background: var(--mj-bg-surface); border-radius: 4px; margin-bottom: 8px; }
+
+  /* Related Tags */
+  .related-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .related-tag { padding: 3px 10px; border-radius: 12px; font-size: 12px; background: #eef2ff; color: var(--mj-brand-primary); border: 1px solid #c7d2fe; cursor: pointer; }
+  .related-tag:hover { background: var(--mj-brand-primary); color: #fff; }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div class="top-bar">
+  <div class="logo"><i class="fa-solid fa-sitemap"></i> Tag Management</div>
+  <div class="search-box">
+    <i class="fa-solid fa-search"></i>
+    <input type="text" placeholder="Search tags...">
+  </div>
+  <div class="top-actions">
+    <button class="btn"><i class="fa-solid fa-code-merge"></i> Bulk Merge</button>
+    <button class="btn"><i class="fa-solid fa-trash"></i> Bulk Delete</button>
+    <button class="btn"><i class="fa-solid fa-pen"></i> Bulk Rename</button>
+    <button class="btn primary"><i class="fa-solid fa-plus"></i> Create Tag</button>
+  </div>
+</div>
+
+<!-- Stats Strip -->
+<div class="stats-strip">
+  <div class="stat-card">
+    <div class="stat-icon" style="background:#eef2ff;color:var(--mj-brand-primary);"><i class="fa-solid fa-tags"></i></div>
+    <div><div class="stat-value">187</div><div class="stat-label">Total Tags</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:#dcfce7;color:#166534;"><i class="fa-solid fa-check-circle"></i></div>
+    <div><div class="stat-value">94.2%</div><div class="stat-label">Tag Coverage</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:#fef9c3;color:#854d0e;"><i class="fa-solid fa-circle-exclamation"></i></div>
+    <div><div class="stat-value">12</div><div class="stat-label">Orphaned Items</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:#ede9fe;color:#6d28d9;"><i class="fa-solid fa-star"></i></div>
+    <div><div class="stat-value">8.7</div><div class="stat-label">Quality Score</div></div>
+  </div>
+</div>
+
+<!-- Main Layout -->
+<div class="main-layout">
+
+  <!-- Main Area -->
+  <div class="main-area">
+    <!-- Tag Cloud -->
+    <div class="section-header">
+      <h2>Tag Cloud</h2>
+      <span style="font-size:12px;color:var(--mj-text-secondary);">Size = item count</span>
+    </div>
+    <div class="tag-cloud">
+      <span class="cloud-tag xl selected">Machine Learning</span>
+      <span class="cloud-tag xl">API Design</span>
+      <span class="cloud-tag lg">TypeScript</span>
+      <span class="cloud-tag lg">DevOps</span>
+      <span class="cloud-tag lg">Kubernetes</span>
+      <span class="cloud-tag md">Databases</span>
+      <span class="cloud-tag md">React</span>
+      <span class="cloud-tag md">Security</span>
+      <span class="cloud-tag lg">Microservices</span>
+      <span class="cloud-tag md">Python</span>
+      <span class="cloud-tag sm">GraphQL</span>
+      <span class="cloud-tag md">Architecture</span>
+      <span class="cloud-tag lg">Deep Learning</span>
+      <span class="cloud-tag sm">Docker</span>
+      <span class="cloud-tag md">NLP</span>
+      <span class="cloud-tag sm">Testing</span>
+      <span class="cloud-tag xs">WebAssembly</span>
+      <span class="cloud-tag md">Cloud Computing</span>
+      <span class="cloud-tag sm">CI/CD</span>
+      <span class="cloud-tag sm">PostgreSQL</span>
+      <span class="cloud-tag xs">Rust</span>
+      <span class="cloud-tag md">Performance</span>
+      <span class="cloud-tag xs">Edge Computing</span>
+      <span class="cloud-tag sm">Angular</span>
+      <span class="cloud-tag md">LLM</span>
+      <span class="cloud-tag xs">Blockchain</span>
+      <span class="cloud-tag sm">Observability</span>
+      <span class="cloud-tag md">RAG</span>
+      <span class="cloud-tag xs">Serverless</span>
+      <span class="cloud-tag sm">Data Engineering</span>
+    </div>
+
+    <!-- Tag Hierarchy -->
+    <div class="section-header">
+      <h2>Tag Hierarchy</h2>
+      <button class="btn" style="font-size:12px;padding:5px 10px;"><i class="fa-solid fa-arrows-up-down-left-right"></i> Reorder Mode</button>
+    </div>
+    <div class="hierarchy">
+      <div class="hier-item expanded selected">
+        <i class="fa-solid fa-grip-vertical drag-handle"></i>
+        <i class="fa-solid fa-chevron-right"></i>
+        <i class="fa-solid fa-brain" style="color:var(--mj-brand-primary);"></i>
+        <span class="tag-label">Machine Learning</span>
+        <div class="pie-mini"></div>
+        <span class="tag-count">284</span>
+      </div>
+      <div class="hier-child">
+        <div class="hier-item">
+          <i class="fa-solid fa-grip-vertical drag-handle"></i>
+          <span style="width:12px;"></span>
+          <i class="fa-solid fa-robot" style="color:#6366f1;"></i>
+          <span class="tag-label">Deep Learning</span>
+          <span class="tag-count">142</span>
+        </div>
+        <div class="hier-item expanded">
+          <i class="fa-solid fa-grip-vertical drag-handle"></i>
+          <i class="fa-solid fa-chevron-right"></i>
+          <i class="fa-solid fa-language" style="color:#06b6d4;"></i>
+          <span class="tag-label">NLP</span>
+          <span class="tag-count">98</span>
+        </div>
+        <div class="hier-child">
+          <div class="hier-item">
+            <i class="fa-solid fa-grip-vertical drag-handle"></i>
+            <span style="width:12px;"></span>
+            <i class="fa-solid fa-arrows-turn-right" style="color:#8b5cf6;"></i>
+            <span class="tag-label">Transformers</span>
+            <span class="tag-count">67</span>
+          </div>
+          <div class="hier-item">
+            <i class="fa-solid fa-grip-vertical drag-handle"></i>
+            <span style="width:12px;"></span>
+            <i class="fa-solid fa-message" style="color:#f59e0b;"></i>
+            <span class="tag-label">LLM</span>
+            <span class="tag-count">89</span>
+          </div>
+          <div class="hier-item">
+            <i class="fa-solid fa-grip-vertical drag-handle"></i>
+            <span style="width:12px;"></span>
+            <i class="fa-solid fa-magnifying-glass" style="color:#22c55e;"></i>
+            <span class="tag-label">RAG</span>
+            <span class="tag-count">45</span>
+          </div>
+        </div>
+        <div class="hier-item">
+          <i class="fa-solid fa-grip-vertical drag-handle"></i>
+          <span style="width:12px;"></span>
+          <i class="fa-solid fa-image" style="color:#ec4899;"></i>
+          <span class="tag-label">Computer Vision</span>
+          <span class="tag-count">44</span>
+        </div>
+      </div>
+
+      <div class="hier-item">
+        <i class="fa-solid fa-grip-vertical drag-handle"></i>
+        <i class="fa-solid fa-chevron-right"></i>
+        <i class="fa-solid fa-code" style="color:#6366f1;"></i>
+        <span class="tag-label">Software Engineering</span>
+        <span class="tag-count">356</span>
+      </div>
+
+      <div class="hier-item">
+        <i class="fa-solid fa-grip-vertical drag-handle"></i>
+        <i class="fa-solid fa-chevron-right"></i>
+        <i class="fa-solid fa-server" style="color:#06b6d4;"></i>
+        <span class="tag-label">Infrastructure</span>
+        <span class="tag-count">198</span>
+      </div>
+
+      <div class="hier-item">
+        <i class="fa-solid fa-grip-vertical drag-handle"></i>
+        <i class="fa-solid fa-chevron-right"></i>
+        <i class="fa-solid fa-database" style="color:#f59e0b;"></i>
+        <span class="tag-label">Data & Storage</span>
+        <span class="tag-count">134</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail Panel -->
+  <div class="detail-panel">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+      <i class="fa-solid fa-brain" style="font-size:22px;color:var(--mj-brand-primary);"></i>
+      <h3>Machine Learning</h3>
+    </div>
+    <div class="tag-meta">Created Jan 12, 2026 &middot; 284 items &middot; 4 child tags</div>
+
+    <div class="section-label">Source Distribution</div>
+    <div class="source-dist">
+      <div class="pie-chart"></div>
+      <div class="pie-legend">
+        <div><span class="dot" style="background:#6366f1;"></span>Files (35%)</div>
+        <div><span class="dot" style="background:#f59e0b;"></span>RSS Feeds (23%)</div>
+        <div><span class="dot" style="background:#06b6d4;"></span>Websites (20%)</div>
+        <div><span class="dot" style="background:#8b5cf6;"></span>Entities (22%)</div>
+      </div>
+    </div>
+
+    <div class="section-label">Related Tags</div>
+    <div class="related-tags">
+      <span class="related-tag">Deep Learning</span>
+      <span class="related-tag">NLP</span>
+      <span class="related-tag">Python</span>
+      <span class="related-tag">Data Engineering</span>
+      <span class="related-tag">Transformers</span>
+      <span class="related-tag">LLM</span>
+    </div>
+
+    <div class="section-label">Synonyms</div>
+    <div class="synonym-list">
+      <span class="synonym-chip">ML <span class="remove"><i class="fa-solid fa-xmark"></i></span></span>
+      <span class="synonym-chip">machine-learning <span class="remove"><i class="fa-solid fa-xmark"></i></span></span>
+      <span class="synonym-chip">statistical learning <span class="remove"><i class="fa-solid fa-xmark"></i></span></span>
+      <button class="btn" style="font-size:11px;padding:3px 10px;border-radius:16px;"><i class="fa-solid fa-plus"></i> Add</button>
+    </div>
+
+    <div class="section-label">Items with this Tag (284)</div>
+    <div class="tag-items">
+      <div class="tag-item">
+        <span class="item-icon"><i class="fa-solid fa-file-pdf"></i></span>
+        <span class="item-title">Transformer Architecture: Annotated</span>
+        <span class="item-conf">97%</span>
+      </div>
+      <div class="tag-item">
+        <span class="item-icon"><i class="fa-solid fa-rss"></i></span>
+        <span class="item-title">RAG vs Fine-Tuning Comparison</span>
+        <span class="item-conf">94%</span>
+      </div>
+      <div class="tag-item">
+        <span class="item-icon"><i class="fa-solid fa-globe"></i></span>
+        <span class="item-title">Feature Engineering Best Practices</span>
+        <span class="item-conf">91%</span>
+      </div>
+      <div class="tag-item">
+        <span class="item-icon"><i class="fa-solid fa-database"></i></span>
+        <span class="item-title">MJ AI Model Config: GPT-4o</span>
+        <span class="item-conf">89%</span>
+      </div>
+      <div class="tag-item">
+        <span class="item-icon"><i class="fa-solid fa-rss"></i></span>
+        <span class="item-title">Scaling Laws for Neural Language Models</span>
+        <span class="item-conf">88%</span>
+      </div>
+      <div class="tag-item">
+        <span class="item-icon"><i class="fa-solid fa-file-code"></i></span>
+        <span class="item-title">PyTorch Lightning Training Pipeline</span>
+        <span class="item-conf">86%</span>
+      </div>
+    </div>
+    <button class="btn" style="width:100%;justify-content:center;margin-top:8px;font-size:12px;">View All 284 Items <i class="fa-solid fa-arrow-right"></i></button>
+
+    <div class="section-label">Merge Tags</div>
+    <div class="merge-tool">
+      <label>Merge another tag into "Machine Learning":</label>
+      <select>
+        <option>Select a tag to merge...</option>
+        <option>ML Engineering (12 items)</option>
+        <option>Machine Intelligence (3 items)</option>
+        <option>Statistical ML (8 items)</option>
+        <option>Predictive Modeling (15 items)</option>
+      </select>
+      <div class="merge-preview">
+        <i class="fa-solid fa-info-circle" style="color:var(--mj-brand-primary);"></i>
+        Merging will reassign all items from the source tag to "Machine Learning" and delete the source tag. This cannot be undone.
+      </div>
+      <button class="btn primary" style="width:100%;justify-content:center;"><i class="fa-solid fa-code-merge"></i> Merge Selected Tag</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

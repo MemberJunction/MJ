@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
-import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx } from '@memberjunction/core';
+import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -17,8 +17,7 @@ import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
-import { TestFeedbackDialogComponent, TestFeedbackDialogData } from '@memberjunction/ng-testing';
-import { DialogService } from '@progress/kendo-angular-dialog';
+import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -168,9 +167,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public isArtifactShareModalOpen: boolean = false;
   public artifactToShare: MJArtifactEntity | null = null;
 
-  // Conversation data cache: ConversationID -> Array of ConversationDetailComplete
-  // Stores raw query results so we don't need to re-query when switching conversations
-  private conversationDataCache = new Map<string, ConversationDetailComplete[]>();
+  // Conversation data cache: ConversationID -> raw query results + optional hydrated entity objects.
+  // On first load, only `raw` is populated. After entity conversion, `entities` is set for instant
+  // reuse on subsequent visits without re-running TransformSimpleObjectToEntityObject.
+  private conversationDataCache = new Map<string, {
+    raw: ConversationDetailComplete[];
+    entities: MJConversationDetailEntity[] | null;
+  }>();
 
   // Artifact mapping: ConversationDetailID -> Array of LazyArtifactInfo
   // Uses lazy-loading pattern: display data loaded immediately, full entities on-demand
@@ -246,6 +249,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     return this.messages.filter(m => m.IsPinned).reverse();
   }
 
+  // Test feedback dialog state
+  public showTestFeedbackDialog: boolean = false;
+  public testFeedbackDialogData: TestFeedbackDialogData | null = null;
+
   // Image viewer state
   public showImageViewer: boolean = false;
   public selectedImageUrl: string = '';
@@ -272,7 +279,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     private cdr: ChangeDetectorRef,
     private mentionAutocompleteService: MentionAutocompleteService,
     private artifactPermissionService: ArtifactPermissionService,
-    private dialogService: DialogService,
     private attachmentService: ConversationAttachmentService,
     private streamingService: ConversationStreamingService,
     private confirmDialog: ConversationsDialogService
@@ -560,12 +566,25 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   private async loadMessages(conversationId: string): Promise<void> {
     try {
-      const cachedData = this.conversationDataCache.get(conversationId);
+      const cached = this.conversationDataCache.get(conversationId);
 
-      if (cachedData) {
-        await this.buildMessagesFromCache(cachedData);
+      if (cached?.entities) {
+        // Fast path: hydrated entity objects are cached — instant switch, no conversion
+        this.messages = cached.entities;
+        this.rawConversationData = cached.raw;
+        this.buildUserAvatarMap(cached.raw);
+        this.updateAttachmentSupport();
+        this.inProgressMessageIds = [...this.messages
+          .filter(m => m.Status === 'In-Progress')
+          .map(m => m.ID)];
+        await this.loadPeripheralData(conversationId);
+      } else if (cached) {
+        // Raw data cached but entities not yet built — convert in parallel
+        await this.buildMessagesFromCache(cached.raw);
+        cached.entities = this.messages;
         await this.loadPeripheralData(conversationId);
       } else {
+        // First visit — fetch from server
         const rq = new RunQuery();
         const result = await rq.RunQuery({
           QueryName: 'GetConversationComplete',
@@ -580,9 +599,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         }
 
         const conversationData = result.Results as ConversationDetailComplete[];
-        this.conversationDataCache.set(conversationId, conversationData);
+        this.conversationDataCache.set(conversationId, { raw: conversationData, entities: null });
 
         await this.buildMessagesFromCache(conversationData);
+        // Store the hydrated entities back into the cache
+        this.conversationDataCache.get(conversationId)!.entities = this.messages;
 
         this.isLoadingPeripheralData = true;
         await this.loadPeripheralData(conversationId);
@@ -604,19 +625,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Creates MJConversationDetailEntity objects from the raw query results
    */
   private async buildMessagesFromCache(conversationData: ConversationDetailComplete[]): Promise<void> {
-    const md = new Metadata();
-    const messages: MJConversationDetailEntity[] = [];
-
     this.rawConversationData = conversationData;
     this.buildUserAvatarMap(conversationData);
 
-    for (const row of conversationData) {
-      if (!row.ID) continue;
-
-      const message = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
-      message.LoadFromData(row);
-      messages.push(message);
-    }
+    // Filter out rows without IDs, then batch-convert in parallel using the shared utility
+    const validRows = conversationData.filter(row => !!row.ID);
+    const messages = await TransformSimpleObjectToEntityObject<MJConversationDetailEntity>(
+      Metadata.Provider, 'MJ: Conversation Details', validRows, this.currentUser
+    );
 
     this.messages = messages;
 
@@ -702,11 +718,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     try {
       // Get cached data - should always be present by the time we get here
-      const conversationData = this.conversationDataCache.get(conversationId);
-      if (!conversationData) {
+      const cached = this.conversationDataCache.get(conversationId);
+      if (!cached) {
         console.warn(`No cached data found for conversation ${conversationId}`);
         return;
       }
+      const conversationData = cached.raw;
 
       const md = new Metadata();
 
@@ -1280,9 +1297,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
       LogStatusEx({message: `📊 Query result: ${result.Results.length} conversation details loaded`, verboseOnly: true});
 
-      // Update cache with fresh data
+      // Update cache with fresh data (invalidate entities since raw changed)
       const conversationData = result.Results as ConversationDetailComplete[];
-      this.conversationDataCache.set(detail.ConversationID, conversationData);
+      this.conversationDataCache.set(detail.ConversationID, { raw: conversationData, entities: null });
 
       // Process ALL messages in the conversation to pick up artifacts from
       // delegated sub-agent messages (e.g., when Sage delegates to Skip,
@@ -1653,11 +1670,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   onMessagePinToggled(message: MJConversationDetailEntity): void {
-    // Patch the raw cache entry in-place so that nav-away/back (which rebuilds entities
-    // via LoadFromData from the cache) preserves the new pin state.
-    const cachedData = this.conversationDataCache.get(this.conversationId!);
-    if (cachedData) {
-      const row = cachedData.find(r => UUIDsEqual(r.ID, message.ID));
+    // Patch the raw cache entry in-place so that full reloads preserve the new pin state.
+    // Entity cache doesn't need patching — the entity object is already mutated by .Save().
+    const cached = this.conversationDataCache.get(this.conversationId!);
+    if (cached) {
+      const row = cached.raw.find(r => UUIDsEqual(r.ID, message.ID));
       if (row) {
         row.IsPinned = message.IsPinned;
       }
@@ -2165,31 +2182,19 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       return;
     }
 
-    const dialogData: TestFeedbackDialogData = {
+    this.testFeedbackDialogData = {
       testRunId: message.TestRunID,
       conversationDetailId: message.ID,
       currentUser: this.currentUser
     };
+    this.showTestFeedbackDialog = true;
+  }
 
-    const dialogRef = this.dialogService.open({
-      content: TestFeedbackDialogComponent,
-      title: 'Provide Test Feedback',
-      width: 600,
-      minHeight: 500
-    });
-
-    const dialogInstance = dialogRef.content.instance as TestFeedbackDialogComponent;
-    dialogInstance.data = dialogData;
-
-    dialogRef.result.subscribe((result) => {
-      if (result && typeof result === 'object' && 'success' in result) {
-        const feedbackResult = result as {success: boolean; feedbackId?: string};
-        if (feedbackResult.success) {
-          console.log('Test feedback saved successfully:', feedbackResult.feedbackId);
-          // TODO: Optionally show success notification
-        }
-      }
-    });
+  onTestFeedbackDialogClosed(result: TestFeedbackDialogResult): void {
+    this.showTestFeedbackDialog = false;
+    if (result.success) {
+      console.log('Test feedback saved successfully:', result.feedbackId);
+    }
   }
 
   onTaskClicked(task: MJTaskEntity): void {

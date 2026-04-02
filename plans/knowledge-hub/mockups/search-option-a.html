@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search Dashboard — Option A: Google-Style Clean</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --bg-input: #0f172a;
+    --border: #334155;
+    --border-subtle: #1e293b;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --accent-glow: rgba(59,130,246,0.15);
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.5rem;
+    transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  /* Search Hero */
+  .search-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 4rem 2rem 2rem;
+    transition: padding 0.4s ease;
+  }
+  .search-hero.has-results {
+    padding: 2rem 2rem 1rem;
+  }
+  .logo {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    transition: font-size 0.4s ease;
+  }
+  .search-hero.has-results .logo { font-size: 1.5rem; }
+  .subtitle {
+    color: var(--text-secondary);
+    margin-bottom: 2rem;
+    font-size: 1.05rem;
+    transition: all 0.4s ease;
+  }
+  .search-hero.has-results .subtitle { font-size: 0; margin: 0; opacity: 0; }
+
+  .search-container {
+    width: 100%;
+    max-width: 720px;
+    position: relative;
+  }
+  .search-box {
+    width: 100%;
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 1rem 1.25rem 1rem 3rem;
+    font-size: 1.1rem;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .search-box::placeholder { color: var(--text-muted); }
+  .search-box:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  .search-icon {
+    position: absolute;
+    left: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 1.1rem;
+  }
+  .search-shortcut {
+    position: absolute;
+    right: 1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  /* Quick Actions */
+  .quick-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .quick-action {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .quick-action:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+    background: var(--bg-card-hover);
+  }
+
+  /* Results Area */
+  .results-area {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 1rem 2rem 4rem;
+    display: flex;
+    gap: 2rem;
+  }
+  .results-main { flex: 1; min-width: 0; }
+  .results-sidebar { width: 240px; flex-shrink: 0; }
+
+  /* Filters bar */
+  .filters-bar {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filter-chip {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .filter-chip:hover, .filter-chip.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(59,130,246,0.08);
+  }
+  .filter-chip.active { font-weight: 600; }
+  .result-count {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    margin-left: auto;
+  }
+
+  /* Result cards */
+  .result-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-bottom: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .result-card:hover {
+    border-color: var(--accent);
+    background: var(--bg-card-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+  .result-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+  .result-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.9rem;
+  }
+  .result-icon.entity { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .result-icon.content { background: rgba(168,85,247,0.15); color: var(--purple); }
+  .result-icon.doc { background: rgba(34,197,94,0.15); color: var(--success); }
+  .result-title {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .result-source {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.15rem;
+  }
+  .result-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .score-badge {
+    background: rgba(34,197,94,0.12);
+    color: var(--success);
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+  .result-snippet {
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+    line-height: 1.6;
+    margin-bottom: 0.75rem;
+  }
+  .result-snippet mark {
+    background: rgba(59,130,246,0.2);
+    color: var(--accent);
+    border-radius: 2px;
+    padding: 0 2px;
+  }
+  .result-tags {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .tag {
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+  }
+
+  /* Agent CTA */
+  .agent-cta {
+    background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(168,85,247,0.1));
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 10px;
+    padding: 1.25rem;
+    margin-top: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .agent-cta:hover {
+    border-color: var(--accent);
+    background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(168,85,247,0.15));
+  }
+  .agent-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+  .agent-cta h4 { font-size: 0.95rem; font-weight: 600; }
+  .agent-cta p { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.2rem; }
+
+  /* Sidebar */
+  .sidebar-section {
+    margin-bottom: 1.5rem;
+  }
+  .sidebar-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+  }
+  .saved-search, .recent-search {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .saved-search:hover, .recent-search:hover {
+    background: var(--bg-card);
+    color: var(--text-primary);
+  }
+  .saved-search i, .recent-search i {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    width: 16px;
+    text-align: center;
+  }
+
+  /* Faceted filters sidebar */
+  .facet-group { margin-bottom: 1.25rem; }
+  .facet-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 0;
+    font-size: 0.83rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .facet-item:hover { color: var(--text-primary); }
+  .facet-check {
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .facet-item.checked .facet-check {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+  .facet-count {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 768px) {
+    .results-area { flex-direction: column; padding: 1rem; }
+    .results-sidebar { width: 100%; order: -1; }
+    .search-hero { padding: 3rem 1rem 1rem; }
+    .logo { font-size: 2rem; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<div class="search-hero has-results" id="searchHero">
+  <div class="logo"><i class="fa-solid fa-brain"></i> Knowledge Hub</div>
+  <div class="subtitle">Search across all your organization's knowledge</div>
+  <div class="search-container">
+    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+    <input type="text" class="search-box" placeholder="Search knowledge base... try &quot;quarterly revenue by region&quot;" value="customer retention strategies">
+    <span class="search-shortcut"><i class="fa-solid fa-command"></i> K</span>
+  </div>
+  <div class="quick-actions">
+    <div class="quick-action"><i class="fa-solid fa-sparkles"></i> AI-powered</div>
+    <div class="quick-action"><i class="fa-solid fa-clock-rotate-left"></i> Recent</div>
+    <div class="quick-action"><i class="fa-solid fa-bookmark"></i> Saved</div>
+    <div class="quick-action"><i class="fa-solid fa-filter"></i> Filters</div>
+  </div>
+</div>
+
+<div class="results-area">
+  <div class="results-main">
+    <div class="filters-bar">
+      <div class="filter-chip active"><i class="fa-solid fa-layer-group"></i> All Sources</div>
+      <div class="filter-chip"><i class="fa-solid fa-table"></i> Entities</div>
+      <div class="filter-chip"><i class="fa-solid fa-file-lines"></i> Content</div>
+      <div class="filter-chip"><i class="fa-solid fa-file-pdf"></i> Documents</div>
+      <span class="result-count">47 results (0.23s)</span>
+    </div>
+
+    <!-- Result 1 -->
+    <div class="result-card">
+      <div class="result-header">
+        <div class="result-icon entity"><i class="fa-solid fa-table"></i></div>
+        <div>
+          <div class="result-title">Q4 2025 Customer Retention Analysis Report</div>
+          <div class="result-source">Entity: Reports &middot; Updated 3 days ago</div>
+        </div>
+        <div class="result-meta">
+          <span class="score-badge">97%</span>
+        </div>
+      </div>
+      <div class="result-snippet">
+        Comprehensive analysis of <mark>customer retention strategies</mark> across all segments. Churn rate decreased by 12% following implementation of personalized engagement campaigns. Key finding: customers who received proactive outreach had 3.2x higher retention...
+      </div>
+      <div class="result-tags">
+        <span class="tag">retention</span>
+        <span class="tag">Q4-2025</span>
+        <span class="tag">customer-success</span>
+      </div>
+    </div>
+
+    <!-- Result 2 -->
+    <div class="result-card">
+      <div class="result-header">
+        <div class="result-icon content"><i class="fa-solid fa-file-lines"></i></div>
+        <div>
+          <div class="result-title">Customer Loyalty Program - Strategy Document</div>
+          <div class="result-source">Content Item &middot; Updated 1 week ago</div>
+        </div>
+        <div class="result-meta">
+          <span class="score-badge">94%</span>
+        </div>
+      </div>
+      <div class="result-snippet">
+        The loyalty program redesign focuses on three pillars: tiered rewards, personalized offers, and community engagement. <mark>Retention strategies</mark> include early-warning systems for at-risk accounts and automated win-back campaigns...
+      </div>
+      <div class="result-tags">
+        <span class="tag">loyalty</span>
+        <span class="tag">strategy</span>
+        <span class="tag">engagement</span>
+      </div>
+    </div>
+
+    <!-- Result 3 -->
+    <div class="result-card">
+      <div class="result-header">
+        <div class="result-icon doc"><i class="fa-solid fa-file-pdf"></i></div>
+        <div>
+          <div class="result-title">Customer Success Playbook v3.pdf</div>
+          <div class="result-source">Document &middot; Uploaded 2 weeks ago</div>
+        </div>
+        <div class="result-meta">
+          <span class="score-badge">91%</span>
+        </div>
+      </div>
+      <div class="result-snippet">
+        Section 4.2: Proactive <mark>Retention</mark> Framework. Outlines the 90-day onboarding journey, quarterly business reviews, and escalation protocols. Includes templates for executive sponsors and CSM talking points...
+      </div>
+      <div class="result-tags">
+        <span class="tag">playbook</span>
+        <span class="tag">onboarding</span>
+        <span class="tag">CSM</span>
+      </div>
+    </div>
+
+    <!-- Result 4 -->
+    <div class="result-card">
+      <div class="result-header">
+        <div class="result-icon entity"><i class="fa-solid fa-table"></i></div>
+        <div>
+          <div class="result-title">Acme Corp - Account Record</div>
+          <div class="result-source">Entity: Accounts &middot; Updated today</div>
+        </div>
+        <div class="result-meta">
+          <span class="score-badge">87%</span>
+        </div>
+      </div>
+      <div class="result-snippet">
+        Enterprise account ($2.4M ARR). Recent notes mention <mark>retention</mark> risk due to delayed implementation. CSM escalation active. Health score: 62/100. Last QBR: Jan 15, 2026...
+      </div>
+      <div class="result-tags">
+        <span class="tag">enterprise</span>
+        <span class="tag">at-risk</span>
+        <span class="tag">escalation</span>
+      </div>
+    </div>
+
+    <!-- Result 5 -->
+    <div class="result-card">
+      <div class="result-header">
+        <div class="result-icon content"><i class="fa-solid fa-file-lines"></i></div>
+        <div>
+          <div class="result-title">Email Template: Renewal Reminder Series</div>
+          <div class="result-source">Content Item &middot; Updated 5 days ago</div>
+        </div>
+        <div class="result-meta">
+          <span class="score-badge">83%</span>
+        </div>
+      </div>
+      <div class="result-snippet">
+        Automated email sequence for upcoming renewals (90/60/30-day intervals). Includes personalized talking points and <mark>retention</mark> offers based on usage data and account health score...
+      </div>
+      <div class="result-tags">
+        <span class="tag">email</span>
+        <span class="tag">automation</span>
+        <span class="tag">renewal</span>
+      </div>
+    </div>
+
+    <!-- Agent CTA -->
+    <div class="agent-cta">
+      <div class="agent-avatar"><i class="fa-solid fa-robot"></i></div>
+      <div>
+        <h4>Need deeper analysis? Ask the Knowledge Agent</h4>
+        <p>Get AI-powered insights by asking questions about customer retention across your entire knowledge base.</p>
+      </div>
+      <i class="fa-solid fa-arrow-right" style="color: var(--accent); margin-left: auto; font-size: 1.2rem;"></i>
+    </div>
+  </div>
+
+  <div class="results-sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">Refine Results</div>
+      <div class="facet-group">
+        <div class="sidebar-title" style="font-size: 0.7rem; margin-bottom: 0.5rem;">Source Type</div>
+        <div class="facet-item checked">
+          <div class="facet-check"><i class="fa-solid fa-check"></i></div>
+          Entity Records
+          <span class="facet-count">18</span>
+        </div>
+        <div class="facet-item checked">
+          <div class="facet-check"><i class="fa-solid fa-check"></i></div>
+          Content Items
+          <span class="facet-count">21</span>
+        </div>
+        <div class="facet-item checked">
+          <div class="facet-check"><i class="fa-solid fa-check"></i></div>
+          Documents
+          <span class="facet-count">8</span>
+        </div>
+      </div>
+      <div class="facet-group">
+        <div class="sidebar-title" style="font-size: 0.7rem; margin-bottom: 0.5rem;">Entity</div>
+        <div class="facet-item">
+          <div class="facet-check"></div>
+          Accounts
+          <span class="facet-count">12</span>
+        </div>
+        <div class="facet-item">
+          <div class="facet-check"></div>
+          Reports
+          <span class="facet-count">6</span>
+        </div>
+        <div class="facet-item">
+          <div class="facet-check"></div>
+          Contacts
+          <span class="facet-count">5</span>
+        </div>
+        <div class="facet-item">
+          <div class="facet-check"></div>
+          Activities
+          <span class="facet-count">3</span>
+        </div>
+      </div>
+      <div class="facet-group">
+        <div class="sidebar-title" style="font-size: 0.7rem; margin-bottom: 0.5rem;">Date Range</div>
+        <div class="facet-item">
+          <div class="facet-check"></div>
+          Last 7 days
+          <span class="facet-count">8</span>
+        </div>
+        <div class="facet-item">
+          <div class="facet-check"></div>
+          Last 30 days
+          <span class="facet-count">26</span>
+        </div>
+        <div class="facet-item">
+          <div class="facet-check"></div>
+          Last 90 days
+          <span class="facet-count">41</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Recent Searches</div>
+      <div class="recent-search"><i class="fa-solid fa-clock-rotate-left"></i> revenue forecast Q1</div>
+      <div class="recent-search"><i class="fa-solid fa-clock-rotate-left"></i> onboarding checklist</div>
+      <div class="recent-search"><i class="fa-solid fa-clock-rotate-left"></i> API documentation</div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Saved Searches</div>
+      <div class="saved-search"><i class="fa-solid fa-bookmark"></i> My open deals</div>
+      <div class="saved-search"><i class="fa-solid fa-bookmark"></i> At-risk accounts</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
