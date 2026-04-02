@@ -17,7 +17,7 @@ import {
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity
 } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
@@ -205,7 +205,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     /** Get selected entity document threshold info */
     public get SelectedDocumentThresholds(): EntityDocumentOption | null {
         if (!this.SelectedEntityDocumentID) return null;
-        return this.EntityDocuments.find(d => d.ID === this.SelectedEntityDocumentID) ?? null;
+        return this.EntityDocuments.find(d => UUIDsEqual(d.ID, this.SelectedEntityDocumentID)) ?? null;
     }
 
     async ngAfterViewInit(): Promise<void> {
@@ -293,7 +293,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     public async RunDetection(): Promise<void> {
         if (this.IsDetecting || !this.SelectedEntityDocumentID) return;
 
-        const selectedDoc = this.EntityDocuments.find(d => d.ID === this.SelectedEntityDocumentID);
+        const selectedDoc = this.EntityDocuments.find(d => UUIDsEqual(d.ID, this.SelectedEntityDocumentID));
         if (!selectedDoc) return;
 
         this.IsDetecting = true;
