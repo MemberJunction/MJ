@@ -4,7 +4,8 @@ import { ResourceData, MJUserViewEntityExtended, ViewInfo } from '@memberjunctio
 import { RegisterClass, MJGlobal, MJEventType , UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/core';
 import { RecordOpenedEvent, ViewGridState, EntityViewerComponent } from '@memberjunction/ng-entity-viewer';
-import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
+import { ExportService } from '@memberjunction/ng-export-service';
+import { ExportColumn } from '@memberjunction/export-engine';
 /**
  * UserViewResource - Resource wrapper for displaying User Views in tabs
  *
@@ -130,15 +131,11 @@ import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
             flex: 1;
             min-height: 0;
         }
-        kendo-excelexport {
-            display: none;
-        }
     `]
 })
 export class UserViewResource extends BaseResourceComponent {
     @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
     @ViewChild('entityViewer') entityViewerRef?: EntityViewerComponent;
-    @ViewChild('excelExport') excelExportRef?: ExcelExportComponent;
 
     public isLoading: boolean = false;
     public errorMessage: string | null = null;
@@ -148,16 +145,14 @@ export class UserViewResource extends BaseResourceComponent {
 
     // Export state
     public isExporting: boolean = false;
-    public exportData: any[] = [];
-    public exportColumns: { Name: string; DisplayName: string }[] = [];
-    public exportFileName: string = 'export.xlsx';
 
     private dataLoaded = false;
     private metadata = new Metadata();
 
     constructor(
         private navigationService: NavigationService,
-        private cdr: ChangeDetectorRef
+        private cdr: ChangeDetectorRef,
+        private exportService: ExportService
     ) {
         super();
     }
@@ -344,8 +339,8 @@ export class UserViewResource extends BaseResourceComponent {
      * Handle export to Excel request
      */
     public async onExport(): Promise<void> {
-        if (!this.excelExportRef || !this.entityInfo) {
-            console.error('Cannot export: Excel export component or entity not available');
+        if (!this.entityInfo) {
+            console.error('Cannot export: entity not available');
             return;
         }
 
@@ -355,75 +350,52 @@ export class UserViewResource extends BaseResourceComponent {
         try {
             this.showNotification('Working on the export, will notify you when it is complete...', 'info', 2000);
 
-            const data = await this.getExportData();
+            const rows = await this.loadExportRows();
+            const columns = this.buildExportColumns();
+            const fileName = this.buildExportFileName();
 
-            // Determine which columns to export based on grid state or view entity
-            if (this.gridState?.columnSettings && this.gridState.columnSettings.length > 0) {
-                // Use grid state - only export visible columns in grid order
-                const visibleColumns = this.gridState.columnSettings.filter(col => col.hidden !== true);
-                this.exportColumns = visibleColumns.map(col => ({
-                    Name: col.Name,
-                    DisplayName: col.DisplayName || col.Name
-                }));
-            } else if (this.viewEntity?.Columns) {
-                // Use view's column configuration - only export visible columns in view order
-                const visibleColumns = this.viewEntity.Columns.filter(col => !col.hidden);
-                this.exportColumns = visibleColumns.map(col => ({
-                    Name: col.Name,
-                    DisplayName: col.DisplayName || col.Name
-                }));
-            } else {
-                // Fall back to all non-virtual fields
-                const visibleFields = this.entityInfo.Fields.filter(f => !f.IsVirtual);
-                this.exportColumns = visibleFields.map(f => ({
-                    Name: f.Name,
-                    DisplayName: f.DisplayNameOrName
-                }));
-            }
+            const result = await this.exportService.toExcel(rows, {
+                fileName,
+                columns,
+                includeHeaders: true
+            });
 
-            this.exportData = data;
-
-            // Set the export filename
-            const viewName = this.viewEntity?.Name || 'Data';
-            this.exportFileName = `${this.entityInfo.Name}_${viewName}_${new Date().toISOString().split('T')[0]}.xlsx`;
-
-            // Wait for Angular to update the DOM with the new data before triggering save
-            setTimeout(() => {
-                this.excelExportRef!.save();
+            if (result.success) {
+                this.exportService.downloadResult(result);
                 this.showNotification('Excel Export Complete', 'success', 2000);
-                this.isExporting = false;
-                this.cdr.detectChanges();
-            }, 100);
+            } else {
+                this.showNotification('Export failed', 'error', 5000);
+            }
         }
         catch (e) {
             this.showNotification('Error exporting data', 'error', 5000);
             console.error('Export error:', e);
+        }
+        finally {
             this.isExporting = false;
             this.cdr.detectChanges();
         }
     }
 
     /**
-     * Get the data for export - loads all records for the current view/entity
+     * Load all records for the current view/entity for export
      */
-    private async getExportData(): Promise<any[]> {
+    private async loadExportRows(): Promise<Record<string, unknown>[]> {
         if (!this.entityInfo) {
             throw new Error('No entity selected for export');
         }
 
         const rv = new RunView();
-
-        // Build the filter for the export - combine view's WhereClause with any smart filter
         let filter = '';
         if (this.viewEntity?.WhereClause) {
             filter = this.viewEntity.WhereClause;
         }
 
-        const result = await rv.RunView({
+        const result = await rv.RunView<Record<string, unknown>>({
             EntityName: this.entityInfo.Name,
             ExtraFilter: filter,
-            OrderBy: '', // Let view handle sorting
-            ResultType: 'simple' // Get plain objects for export
+            OrderBy: '',
+            ResultType: 'simple'
         });
 
         if (!result.Success) {
@@ -431,6 +403,43 @@ export class UserViewResource extends BaseResourceComponent {
         }
 
         return result.Results || [];
+    }
+
+    /**
+     * Determine which columns to export based on grid state, view entity, or entity fields
+     */
+    private buildExportColumns(): ExportColumn[] {
+        if (!this.entityInfo) return [];
+
+        if (this.gridState?.columnSettings && this.gridState.columnSettings.length > 0) {
+            const visibleColumns = this.gridState.columnSettings.filter(col => col.hidden !== true);
+            return visibleColumns.map(col => ({
+                name: col.Name,
+                displayName: col.DisplayName || col.Name
+            }));
+        }
+
+        if (this.viewEntity?.Columns) {
+            const visibleColumns = this.viewEntity.Columns.filter(col => !col.hidden);
+            return visibleColumns.map(col => ({
+                name: col.Name,
+                displayName: col.DisplayName || col.Name
+            }));
+        }
+
+        const visibleFields = this.entityInfo.Fields.filter(f => !f.IsVirtual);
+        return visibleFields.map(f => ({
+            name: f.Name,
+            displayName: f.DisplayNameOrName
+        }));
+    }
+
+    /**
+     * Build the export file name based on entity and view
+     */
+    private buildExportFileName(): string {
+        const viewName = this.viewEntity?.Name || 'Data';
+        return `${this.entityInfo!.Name}_${viewName}_${new Date().toISOString().split('T')[0]}`;
     }
 
     /**

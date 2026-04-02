@@ -3,9 +3,8 @@
     <div class="commands-label">Actions:</div>
     <div class="commands-buttons">
       @for (command of commands; track trackByCommand($index, command)) {
-        <button
-          kendoButton
-          [themeColor]="getButtonTheme(command)"
+        <button mjButton
+          [variant]="getButtonVariant(command)"
           [disabled]="disabled"
           (click)="onCommandClick(command)"
           class="command-button"

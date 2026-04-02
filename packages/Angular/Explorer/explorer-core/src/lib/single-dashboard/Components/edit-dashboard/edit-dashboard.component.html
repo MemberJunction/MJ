@@ -1,54 +1,65 @@
-<div class="k-overlay"></div>
-<kendo-window
-  class="kendo-window-hide-restore"
-  [width]="500"
-  [minHeight]="300"
-  [minWidth]="400"
-  [resizable]="true"
-  (close)="closeDialog($event)"
-  [state]="'maximized'"
-  title="Customize Dashboard">
-  <div class="k-d-flex k-flex-col k-justify-content-between k-h-full custom-dialog-body">
-    <div class="dialog-content ">
+<div class="edit-dashboard-overlay"></div>
+<mj-window
+  [Visible]="true"
+  [Width]="500"
+  [MinHeight]="300"
+  [MinWidth]="400"
+  [Resizable]="true"
+  (Close)="closeDialog()"
+  [State]="'maximized'"
+  Title="Customize Dashboard">
+  <div class="custom-dialog-body">
+    <div class="dialog-content">
       <div class="dialog-actions">
-        <kendo-dropdownbutton class="k-m-2" themeColor="primary" [data]="ResourceTypes" [textField]="'DisplayName'" (itemClick)="onItemSelect($event)">
-          <span class="fa-solid fa-plus"></span> Add item
-        </kendo-dropdownbutton>
+        <div class="add-dropdown-wrapper">
+          <button mjButton variant="primary" (click)="toggleAddMenu()">
+            <span class="fa-solid fa-plus"></span>
+            Add item
+            <span class="fa-solid fa-chevron-down add-dropdown-arrow"></span>
+          </button>
+          @if (showAddMenu) {
+            <div class="add-dropdown-panel">
+              @for (rt of ResourceTypes; track rt.Name) {
+                <div class="add-dropdown-item" (click)="onItemSelect(rt)">
+                  <span class="add-dropdown-item-text">{{ rt.DisplayName }}</span>
+                </div>
+              }
+            </div>
+          }
+        </div>
       </div>
-      <kendo-tilelayout
-        [columns]="config.columns"
-        [rowHeight]="config.rowHeight"
-        [resizable]="true"
-        [reorderable]="true"
-        (resize)="onResize($event)"
-        (reorder)="onReorder($event)"
-        >
-        @for (item of _items; track item) {
-          <kendo-tilelayout-item [col]="item.col" [colSpan]="item.colSpan" [rowSpan]="item.rowSpan" [id]="item.uniqueId">
-            <kendo-tilelayout-item-header>
-              {{item.title}}
-              <button kendoButton class="k-float-right" (click)="removeItem(item)">X</button>
-            </kendo-tilelayout-item-header>
-            <kendo-tilelayout-item-body>
-              <!-- <div class="overlay"></div> -->
-              <!-- <app-resource [Data]="item.ResourceData" [isVisible]="false"></app-resource> -->
-            </kendo-tilelayout-item-body>
-          </kendo-tilelayout-item>
+      <div class="mj-tile-layout"
+        [style.grid-template-columns]="'repeat(' + config.columns + ', 1fr)'"
+        [style.grid-auto-rows]="config.rowHeight + 'px'">
+        @for (item of _items; track item.uniqueId) {
+          <div class="mj-tile-item"
+            [style.grid-column]="item.col + ' / span ' + item.colSpan"
+            [style.grid-row]="'span ' + item.rowSpan"
+            [id]="item.uniqueId">
+            <div class="mj-tile-header">
+              <span class="mj-tile-header-title">{{item.title}}</span>
+              <button mjButton class="remove-item-btn" (click)="removeItem(item)">
+                <span class="fa-solid fa-xmark"></span>
+              </button>
+            </div>
+            <div class="mj-tile-body">
+              <!-- placeholder for resource preview -->
+            </div>
+          </div>
         }
-      </kendo-tilelayout>
-
+      </div>
     </div>
     <div class="dialog-footer">
-      <div class="k-card-footer !k-border-none">
-        <button kendoButton (click)="closeDialog($event)" >
+      <div class="dialog-footer-actions">
+        <button mjButton (click)="closeDialog()" >
           <span class="fa-solid fa-xmark"></span>
           Cancel
         </button>
-        <button kendoButton (click)="saveChanges()">
+        <button mjButton (click)="saveChanges()">
           <span class="fa-solid fa-check"></span>
           Save
         </button>
       </div>
     </div>
   </div>
-</kendo-window>
+</mj-window>

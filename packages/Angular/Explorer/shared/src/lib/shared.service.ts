@@ -7,7 +7,6 @@ import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualRes
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
-import { NotificationService } from "@progress/kendo-angular-notification";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationService } from './navigation.service';
 
@@ -24,7 +23,6 @@ export class SharedService {
   private _navigationService: NavigationService | null = null;
 
   constructor(
-    private notificationService: NotificationService,
     private mjNotificationsService: MJNotificationService,
     private injector: Injector
   ) {
