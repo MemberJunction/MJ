@@ -224,19 +224,12 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     }
 
     async ngAfterViewInit(): Promise<void> {
-        console.log(`[DuplicateDetection] ngAfterViewInit — SelectedEntityDocumentID="${this.SelectedEntityDocumentID}", EntityDocuments.length=${this.EntityDocuments.length}`);
         this.setupFilterDebounce();
         await this.LoadData();
-        console.log(`[DuplicateDetection] LoadData complete — SelectedEntityDocumentID="${this.SelectedEntityDocumentID}", EntityDocuments.length=${this.EntityDocuments.length}`);
         this.NotifyLoadComplete();
     }
 
-    ngOnInit(): void {
-        console.log(`[DuplicateDetection] ngOnInit — component instance ${this.constructor.name}@${Math.random().toString(36).substring(7)}`);
-    }
-
     ngOnDestroy(): void {
-        console.log(`[DuplicateDetection] ngOnDestroy — SelectedEntityDocumentID="${this.SelectedEntityDocumentID}"`);
         this.destroy$.next();
         this.destroy$.complete();
     }

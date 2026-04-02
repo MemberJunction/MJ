@@ -452,13 +452,11 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
 
     // **OPTIMIZATION: Check cache first to reuse existing loaded component**
-    const cacheKey = `${activeTab.applicationId}::${driverClass}::${resourceData.ResourceRecordID || '__no_record__'}`;
     const cached = this.cacheManager.getCachedComponent(
       driverClass,
       resourceData.ResourceRecordID || '',
       activeTab.applicationId
     );
-    console.log(`[TabContainer] loadSingleResourceContent — cacheKey="${cacheKey}", cached=${cached ? 'HIT' : 'MISS'}, driverClass="${driverClass}"`);
 
     if (cached) {
       // Clean up previous single-resource component (if different)
@@ -582,7 +580,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // Mark as DETACHED by resource identity — the ONE consistent key used everywhere.
       if (this.singleResourceCacheIdentity) {
         const { driverClass, recordId, appId } = this.singleResourceCacheIdentity;
-        console.log(`[TabContainer] cleanupSingleResourceComponent — detaching ${driverClass} (identity-based)`);
         this.cacheManager.markAsDetached(driverClass, recordId, appId);
       }
       this.singleResourceComponentRef = null;
