@@ -151,7 +151,15 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
             if (activeTab) {
               const signature = this.getTabContentSignature(activeTab);
               if (signature !== this.currentSingleResourceSignature) {
+                // DO NOT call saveCurrentComponentQueryParams() here — by the time this
+                // subscription fires, OpenTab has already replaced the tab config with the
+                // new nav item's config, so queryParams are gone. The cache entry already
+                // has the correct queryParams from the most recent unchanged-signature save.
                 this.loadSingleResourceContent();
+              } else {
+                // Signature unchanged — sync queryParams to cache entry so it stays current.
+                // This catches incremental queryParam updates (e.g., user selects a conversation).
+                this.saveCurrentComponentQueryParams();
               }
             }
           } else if (this.layoutRestorationComplete && !this.isCreatingInitialTabs) {
@@ -482,6 +490,17 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       this.singleResourceComponentRef = cached.componentRef;
       this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id };
 
+      // Restore saved queryParams to the tab config so the URL reflects
+      // the component's preserved state (e.g., selected conversation, collection drill-down).
+      if (cached.savedQueryParams) {
+        this.workspaceManager.UpdateTabConfiguration(activeTab.id, {
+          queryParams: cached.savedQueryParams
+        });
+        // Do NOT clear savedQueryParams here — the else branch (unchanged-signature saves)
+        // will keep it current while the component is active. Clearing it would cause the
+        // queryParams to be lost on the next detach/reattach cycle.
+      }
+
       return;
     }
 
@@ -580,11 +599,28 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * ║  instead of destroying components here.                                ║
    * ╚══════════════════════════════════════════════════════════════════════════╝
    */
+  /**
+   * Save the currently displayed component's queryParams to its cache entry.
+   * Called on every config change so the cache entry always has the latest queryParams,
+   * even after the tab config is overwritten by a new nav item.
+   */
+  private saveCurrentComponentQueryParams(): void {
+    if (!this.singleResourceCacheIdentity) return;
+
+    const { tabId } = this.singleResourceCacheIdentity;
+    const tab = this.workspaceManager.GetTab(tabId);
+    const qp = tab?.configuration?.['queryParams'] as Record<string, string> | undefined;
+    const cached = this.cacheManager.getComponentByTabId(tabId);
+    if (cached) {
+      cached.savedQueryParams = (qp && Object.keys(qp).length > 0) ? { ...qp } : undefined;
+    }
+  }
+
   private cleanupSingleResourceComponent(): void {
     if (this.singleResourceComponentRef) {
-      // Mark as DETACHED by resource identity — the ONE consistent key used everywhere.
       if (this.singleResourceCacheIdentity) {
         const { driverClass, recordId, appId } = this.singleResourceCacheIdentity;
+        // Mark as DETACHED by resource identity — the ONE consistent key used everywhere.
         this.cacheManager.markAsDetached(driverClass, recordId, appId);
       }
       this.singleResourceComponentRef = null;

@@ -26,6 +26,7 @@ export * from './engines/FileStorageEngine';
 export * from './engines/MCPEngine';
 export * from './engines/QueryEngine';
 export * from './engines/conversations';
+export * from './engines/vectorMetadata';
 
 export * from './artifact-extraction/artifact-extract-rules';
 export * from './artifact-extraction/artifact-extractor';

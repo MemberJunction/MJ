@@ -127,16 +127,17 @@
           }
           <!-- Requests & History -->
           @if (record.ID) {
-            <kendo-panelbar-item id="history" [expanded]="GetSectionExpanded('history', false)" [disabled]="loadingStates.executionHistory">
-              <ng-template kendoPanelBarItemTitle>
-                <i class="fa-solid fa-history"></i> Execution History
-                @if (loadingStates.executionHistory) {
-                  <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
-                } @else if (executionHistoryCount > 0) {
-                  <span> ({{ executionHistoryCount }})@if(executionHistoryCount < totalExecutionHistoryCount){ of {{ totalExecutionHistoryCount }} }</span>
-                }
-              </ng-template>
-              <ng-template kendoPanelBarContent>
+            <mj-accordion-panel id="history"
+              [Expanded]="GetSectionExpanded('history', false)"
+              [Disabled]="loadingStates.executionHistory">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-history"></i> Execution History
+                    @if (loadingStates.executionHistory) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (executionHistoryCount > 0) {
+                        <span> ({{ executionHistoryCount }}@if (executionHistoryCount < totalExecutionHistoryCount) { of {{ totalExecutionHistoryCount }}})</span>
+                    }
+                </ng-template>
                 <div class="panel-content execution-history-panel">
                   @if (loadingStates.executionHistory) {
                     <mj-loading text="Loading execution history..." size="medium"></mj-loading>

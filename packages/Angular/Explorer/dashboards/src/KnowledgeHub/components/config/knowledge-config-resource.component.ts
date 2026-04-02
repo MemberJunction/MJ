@@ -8,8 +8,8 @@
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
-import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
-import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity } from '@memberjunction/core-entities';
+import { Metadata, RunView } from '@memberjunction/core';
+import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, VectorMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -327,31 +327,21 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
-            const [vdbResult, modelsResult, indexResult, entityDocsResult] = await rv.RunViews([
-                {
-                    EntityName: 'MJ: Vector Databases',
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: AI Models',
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: Vector Indexes',
-                    ResultType: 'simple'
-                },
-                {
-                    EntityName: 'MJ: Entity Documents',
-                    ExtraFilter: "Status = 'Active'",
-                    ResultType: 'entity_object'
-                }
-            ]);
+            // Use VectorMetadataEngine for cached vector DBs, indexes, and entity docs
+            const engine = VectorMetadataEngine.Instance;
+            await engine.Config(false);
 
-            this.loadVectorDBProviders(vdbResult.Success ? vdbResult.Results : []);
+            this.loadVectorDBProvidersFromEngine(engine.VectorDatabases);
+            this.loadVectorIndexesFromEngine(engine.VectorIndexes);
+            this.loadEntityDocumentsAndThresholds(engine.GetActiveEntityDocuments());
+
+            // AI Models come from a different domain — fetch via RunView
+            const rv = new RunView();
+            const modelsResult = await rv.RunView({
+                EntityName: 'MJ: AI Models',
+                ResultType: 'simple'
+            });
             this.loadEmbeddingModels(modelsResult.Success ? modelsResult.Results : []);
-            this.loadVectorIndexes(indexResult.Success ? indexResult.Results : []);
-            this.loadEntityDocumentsAndThresholds(entityDocsResult.Success ? entityDocsResult.Results as MJEntityDocumentEntity[] : []);
         } catch (error) {
             console.error('[KnowledgeConfig] Error loading configuration:', error);
         } finally {
@@ -413,23 +403,23 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         }
     }
 
-    private loadVectorDBProviders(records: Record<string, unknown>[]): void {
-        this.VectorDBProviders = records.map(r => ({
-            ID: String(r['ID'] || ''),
-            Name: String(r['Name'] || ''),
-            ClassKey: String(r['ClassKey'] || ''),
-            Description: String(r['Description'] || '')
+    private loadVectorDBProvidersFromEngine(dbs: MJVectorDatabaseEntity[]): void {
+        this.VectorDBProviders = dbs.map(db => ({
+            ID: db.ID,
+            Name: db.Name,
+            ClassKey: db.ClassKey || '',
+            Description: db.Description || ''
         }));
     }
 
-    private loadVectorIndexes(records: Record<string, unknown>[]): void {
-        this.VectorIndexes = records.map(r => ({
-            ID: String(r['ID'] || ''),
-            Name: String(r['Name'] || 'Unnamed Index'),
-            EmbeddingModel: String(r['EmbeddingModel'] || ''),
-            EmbeddingModelID: String(r['EmbeddingModelID'] || ''),
-            VectorDatabase: String(r['VectorDatabase'] || ''),
-            VectorDatabaseID: String(r['VectorDatabaseID'] || '')
+    private loadVectorIndexesFromEngine(indexes: MJVectorIndexEntity[]): void {
+        this.VectorIndexes = indexes.map(vi => ({
+            ID: vi.ID,
+            Name: vi.Name || 'Unnamed Index',
+            EmbeddingModel: vi.EmbeddingModel || '',
+            EmbeddingModelID: vi.EmbeddingModelID || '',
+            VectorDatabase: vi.VectorDatabase || '',
+            VectorDatabaseID: vi.VectorDatabaseID || ''
         }));
     }
 

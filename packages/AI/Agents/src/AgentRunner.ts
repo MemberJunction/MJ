@@ -10,6 +10,7 @@
  * @since 2.49.0
  */
 
+import { createHash } from 'crypto';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -479,6 +480,85 @@ export class AgentRunner {
     }
 
     /**
+     * Checks whether the serialized content for a new artifact version is identical to the
+     * latest existing version of the same artifact, using SHA-256 content hashing.
+     *
+     * When the content is unchanged, creating a new version adds noise without value.
+     * This method computes the hash of the candidate content and compares it against
+     * the `ContentHash` stored on the most recent version (populated by
+     * `MJArtifactVersionEntityServer.Save()`).
+     *
+     * @param artifactId - The artifact whose latest version to compare against
+     * @param candidateContent - The serialized (JSON-stringified) content that would become the new version
+     * @param latestVersionNumber - The version number of the current latest version
+     * @param contextUser - User context for the RunView query
+     * @returns The existing version's ID if content is identical, or `null` if a new version should be created
+     */
+    protected async CheckForDuplicateVersion(
+        artifactId: string,
+        candidateContent: string,
+        latestVersionNumber: number,
+        contextUser: UserInfo
+    ): Promise<string | null> {
+        const candidateHash = createHash('sha256').update(candidateContent, 'utf8').digest('hex');
+
+        const rv = new RunView();
+        const result = await rv.RunView<{ ID: string; ContentHash: string }>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID='${artifactId}' AND VersionNumber=${latestVersionNumber}`,
+            Fields: ['ID', 'ContentHash'],
+            MaxRows: 1,
+            ResultType: 'simple'
+        }, contextUser);
+
+        if (result.Success && result.Results.length > 0 && result.Results[0].ContentHash === candidateHash) {
+            return result.Results[0].ID;
+        }
+
+        return null;
+    }
+
+    /**
+     * Creates a `ConversationDetailArtifact` junction record linking an artifact version
+     * to a conversation detail, then returns the standard artifact result tuple.
+     *
+     * Extracted as a helper so both the normal version-creation path and the
+     * duplicate-skip path can share the same linking and return logic.
+     *
+     * @param versionId - The artifact version ID to link
+     * @param conversationDetailId - The conversation detail to link to
+     * @param artifactId - The parent artifact ID (passed through to the return value)
+     * @param versionNumber - The version number (passed through to the return value)
+     * @param contextUser - User context for the save operation
+     * @param provider - Metadata provider for entity creation
+     * @returns The standard artifact result tuple
+     */
+    protected async LinkArtifactToConversationDetail(
+        versionId: string,
+        conversationDetailId: string,
+        artifactId: string,
+        versionNumber: number,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<{ artifactId: string; versionId: string; versionNumber: number }> {
+        const junction = await provider.GetEntityObject<MJConversationDetailArtifactEntity>(
+            'MJ: Conversation Detail Artifacts',
+            contextUser
+        );
+        junction.ConversationDetailID = conversationDetailId;
+        junction.ArtifactVersionID = versionId;
+        junction.Direction = 'Output';
+
+        if (!(await junction.Save())) {
+            throw new Error('Failed to create artifact-message association');
+        }
+
+        LogStatus(`Linked artifact to conversation detail ${conversationDetailId}`);
+
+        return { artifactId, versionId, versionNumber };
+    }
+
+    /**
      * Finds the most recent artifact for a conversation detail to determine versioning.
      * Queries the junction table to locate artifacts linked to a specific conversation message.
      *
@@ -661,6 +741,22 @@ export class AgentRunner {
                 }
             }
 
+            // Serialize the payload once — used for both dedup check and version creation
+            const serializedContent = JSON.stringify(payload, null, 2);
+
+            // Skip version creation if content is identical to the latest version
+            if (!isNewArtifact && newVersionNumber > 1) {
+                const existingVersionId = await this.CheckForDuplicateVersion(
+                    artifactId, serializedContent, newVersionNumber - 1, contextUser
+                );
+                if (existingVersionId) {
+                    LogStatus(`Skipping duplicate artifact version — content identical to version ${newVersionNumber - 1}`);
+                    return this.LinkArtifactToConversationDetail(
+                        existingVersionId, conversationDetailId, artifactId, newVersionNumber - 1, contextUser, md
+                    );
+                }
+            }
+
             // Create artifact version with content
             const version = await md.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
@@ -668,7 +764,7 @@ export class AgentRunner {
             );
             version.ArtifactID = artifactId;
             version.VersionNumber = newVersionNumber;
-            version.Content = JSON.stringify(payload, null, 2);
+            version.Content = serializedContent;
             version.UserID = contextUser.ID;
 
             if (!(await version.Save())) {
@@ -701,26 +797,10 @@ export class AgentRunner {
                 }
             }
 
-            // Create junction record linking artifact to conversation detail
-            const junction = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
-                'MJ: Conversation Detail Artifacts',
-                contextUser
+            // Link the new version to this conversation detail and return
+            return this.LinkArtifactToConversationDetail(
+                version.ID, conversationDetailId, artifactId, newVersionNumber, contextUser, md
             );
-            junction.ConversationDetailID = conversationDetailId;
-            junction.ArtifactVersionID = version.ID;
-            junction.Direction = 'Output';
-
-            if (!(await junction.Save())) {
-                throw new Error('Failed to create artifact-message association');
-            }
-
-            LogStatus(`Linked artifact to conversation detail ${conversationDetailId}`);
-
-            return {
-                artifactId,
-                versionId: version.ID,
-                versionNumber: newVersionNumber
-            };
         } catch (error) {
             LogError(`Failed to process agent artifacts: ${(error as Error).message}`);
             return undefined;

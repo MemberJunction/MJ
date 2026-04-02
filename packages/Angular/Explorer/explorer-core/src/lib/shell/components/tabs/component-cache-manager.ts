@@ -27,6 +27,11 @@ export interface CachedComponentInfo {
 
   // Resource data snapshot (for comparison)
   resourceData: ResourceData;
+
+  // Saved query params from the tab config at detach time.
+  // Restored to the tab config when the component is reattached,
+  // so the URL reflects the component's preserved state.
+  savedQueryParams?: Record<string, string>;
 }
 
 /**

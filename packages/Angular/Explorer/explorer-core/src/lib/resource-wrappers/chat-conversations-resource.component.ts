@@ -1,5 +1,4 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
-import { Router, NavigationEnd } from '@angular/router';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -8,7 +7,7 @@ import { ConversationChatAreaComponent, ConversationListComponent, MentionAutoco
 import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { Subject, takeUntil, filter } from 'rxjs';
+import { Subject, takeUntil } from 'rxjs';
 /**
  * Chat Conversations Resource - wraps the conversation chat area for tab-based display
  * Extends BaseResourceComponent to work with the resource type system
@@ -187,7 +186,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   public currentUser: any = null;
   private destroy$ = new Subject<void>();
   private skipUrlUpdate = true; // Skip URL updates during initialization
-  private lastNavigatedUrl: string = ''; // Track URL to avoid reacting to our own navigation
 
   // Ready flag - blocks child rendering until AIEngine is initialized
   public isReady: boolean = false;
@@ -226,7 +224,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   constructor(
     private navigationService: NavigationService,
-    private router: Router,
     private mentionAutocompleteService: MentionAutocompleteService,
     private cdr: ChangeDetectorRef,
     private streamingService: ConversationStreamingService,
@@ -268,39 +265,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // This enables reconnection to in-progress agents after browser refresh
     this.streamingService.initialize();
 
-    // CRITICAL: Set selectedConversationId SYNCHRONOUSLY before child components initialize
-    // Parse URL first and apply state synchronously for the ID
-    const urlState = this.parseUrlState();
-
-    if (urlState) {
-      // Set conversationId synchronously so child components see it immediately
-      if (urlState.conversationId) {
-        this.selectedConversationId = urlState.conversationId;
-        this.isNewUnsavedConversation = false;
-      }
-      if (urlState.artifactId) {
-        this.pendingArtifactId = urlState.artifactId;
-        this.pendingArtifactVersionNumber = urlState.versionNumber || null;
-      }
-      // Load the conversation entity asynchronously (non-blocking)
-      this.loadConversationEntity(urlState.conversationId);
-    } else {
-      // Check if we have navigation params from config (e.g., from Collections linking here)
-      this.applyConfigurationParams();
-    }
-
-    // Subscribe to router NavigationEnd events for back/forward button support
-    this.router.events
-      .pipe(
-        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(event => {
-        const currentUrl = event.urlAfterRedirects || event.url;
-        if (currentUrl !== this.lastNavigatedUrl) {
-          this.onExternalNavigation(currentUrl);
-        }
-      });
+    // Apply initial state from tab configuration (populated by shell from URL or nav params)
+    this.applyConfigurationParams();
 
     // Subscribe to actionable commands (open:resource) from the UI command handler service.
     // open:url commands are handled directly by the service; open:resource needs NavigationService.
@@ -363,30 +329,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Parse URL query string for conversation state.
-   * Query params: conversationId, artifactId, versionNumber
-   */
-  private parseUrlState(): { conversationId?: string; artifactId?: string; versionNumber?: number } | null {
-    const url = this.router.url;
-    const queryIndex = url.indexOf('?');
-    if (queryIndex === -1) return null;
-
-    const queryString = url.substring(queryIndex + 1);
-    const params = new URLSearchParams(queryString);
-    const conversationId = params.get('conversationId');
-    const artifactId = params.get('artifactId');
-    const versionNumber = params.get('versionNumber');
-
-    if (!conversationId && !artifactId) return null;
-
-    return {
-      conversationId: conversationId || undefined,
-      artifactId: artifactId || undefined,
-      versionNumber: versionNumber ? parseInt(versionNumber, 10) : undefined
-    };
-  }
-
-  /**
    * Load the conversation entity asynchronously (non-blocking).
    * The conversationId is already set synchronously, this just loads the full entity.
    */
@@ -403,25 +345,33 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Apply configuration params from resource data (e.g., from deep-linking via Collections).
+   * Apply initial state from tab configuration.
+   * The shell populates queryParams from the URL, and nav params come from cross-resource linking.
    * Sets state synchronously so child components see values immediately.
    */
   private applyConfigurationParams(): void {
     const config = this.Data?.Configuration;
     if (!config) return;
 
+    // Check queryParams first (shell populates these from the URL for deep-linking)
+    const qp = config['queryParams'] as Record<string, string> | undefined;
+    const conversationId = qp?.['conversationId'] || (config.conversationId as string);
+    const artifactId = qp?.['artifactId'] || (config.artifactId as string);
+    const versionNumber = qp?.['versionNumber'] ? parseInt(qp['versionNumber'], 10)
+      : config.versionNumber ? (config.versionNumber as number) : null;
+
     // Set pending artifact if provided
-    if (config.artifactId) {
-      this.pendingArtifactId = config.artifactId as string;
-      this.pendingArtifactVersionNumber = (config.versionNumber as number) || null;
+    if (artifactId) {
+      this.pendingArtifactId = artifactId;
+      this.pendingArtifactVersionNumber = versionNumber;
     }
 
     // Set conversationId synchronously so child components see it immediately
-    if (config.conversationId) {
-      this.selectedConversationId = config.conversationId as string;
+    if (conversationId) {
+      this.selectedConversationId = conversationId;
       this.isNewUnsavedConversation = false;
       // Load entity asynchronously
-      this.loadConversationEntity(config.conversationId as string);
+      this.loadConversationEntity(conversationId);
     }
   }
 
@@ -429,21 +379,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * Apply navigation state to local selection state.
    * Sets state synchronously so child components see values immediately.
    */
-  private applyNavigationState(state: { conversationId?: string; artifactId?: string; versionNumber?: number }): void {
-    // Set pending artifact if provided (will be consumed by chat area after loading)
-    if (state.artifactId) {
-      this.pendingArtifactId = state.artifactId;
-      this.pendingArtifactVersionNumber = state.versionNumber || null;
-    }
-
-    // Set the conversation synchronously
-    if (state.conversationId) {
-      this.selectedConversationId = state.conversationId;
-      this.isNewUnsavedConversation = false;
-      this.loadConversationEntity(state.conversationId);
-    }
-  }
-
   /**
    * Select a conversation by ID - loads the entity and updates local state
    */
@@ -509,62 +444,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     }
   }
 
-  /**
-   * Handle external navigation (back/forward buttons).
-   * Parses the URL and applies the state without triggering a new navigation.
-   */
-  private onExternalNavigation(url: string): void {
-    // Check if this URL is for our component (contains our base path)
-    const currentPath = this.router.url.split('?')[0];
-    const newPath = url.split('?')[0];
-
-    // Only handle if we're still on the same base path (same component instance)
-    if (currentPath !== newPath) {
-      return; // Different route entirely, shell will handle it
-    }
-
-    // Parse the new URL state
-    const urlState = this.parseUrlFromString(url);
-
-    // Apply the state without triggering URL updates
-    this.skipUrlUpdate = true;
-    if (urlState) {
-      this.applyNavigationState(urlState);
-    } else {
-      // No params means clear state
-      this.selectedConversationId = null;
-      this.selectedConversation = null;
-      this.selectedThreadId = null;
-      this.pendingArtifactId = null;
-      this.pendingArtifactVersionNumber = null;
-    }
-    this.skipUrlUpdate = false;
-
-    // Update the tracked URL
-    this.lastNavigatedUrl = url;
-  }
-
-  /**
-   * Parse URL state from a URL string (used for external navigation).
-   */
-  private parseUrlFromString(url: string): { conversationId?: string; artifactId?: string; versionNumber?: number } | null {
-    const queryIndex = url.indexOf('?');
-    if (queryIndex === -1) return null;
-
-    const queryString = url.substring(queryIndex + 1);
-    const params = new URLSearchParams(queryString);
-    const conversationId = params.get('conversationId');
-    const artifactId = params.get('artifactId');
-    const versionNumber = params.get('versionNumber');
-
-    if (!conversationId && !artifactId) return null;
-
-    return {
-      conversationId: conversationId || undefined,
-      artifactId: artifactId || undefined,
-      versionNumber: versionNumber ? parseInt(versionNumber, 10) : undefined
-    };
-  }
 
   /**
    * Get the environment ID from configuration or use default

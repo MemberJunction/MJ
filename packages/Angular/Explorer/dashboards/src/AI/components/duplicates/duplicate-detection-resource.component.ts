@@ -16,7 +16,9 @@ import {
     ResourceData,
     MJDuplicateRunEntity,
     MJDuplicateRunDetailEntity,
-    MJDuplicateRunDetailMatchEntity
+    MJDuplicateRunDetailMatchEntity,
+    MJEntityDocumentEntity,
+    VectorMetadataEngine
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -250,8 +252,12 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
 
         try {
+            // Use VectorMetadataEngine for cached entity document data
+            const engine = VectorMetadataEngine.Instance;
+            await engine.Config(false);
+
             const rv = new RunView();
-            const [runsResult, detailsResult, matchesResult, entityDocsResult] = await rv.RunViews([
+            const [runsResult, detailsResult, matchesResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Duplicate Runs',
                     ExtraFilter: "ProcessingStatus = 'Complete'",
@@ -268,12 +274,6 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                     EntityName: 'MJ: Duplicate Run Detail Matches',
                     OrderBy: 'MatchProbability DESC',
                     ResultType: 'entity_object'
-                },
-                {
-                    EntityName: 'MJ: Entity Documents',
-                    ExtraFilter: "Status = 'Active'",
-                    OrderBy: 'Name',
-                    ResultType: 'simple'
                 }
             ]);
 
@@ -286,9 +286,9 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             if (matchesResult.Success) {
                 this.Matches = matchesResult.Results as MJDuplicateRunDetailMatchEntity[];
             }
-            if (entityDocsResult.Success) {
-                this.buildEntityDocumentOptions(entityDocsResult.Results);
-            }
+
+            // Build entity document options from cached active documents
+            this.buildEntityDocumentOptionsFromEngine(engine.GetActiveEntityDocuments());
 
             this.extractEntityNames();
             this.buildGroups();
@@ -429,14 +429,14 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         });
     }
 
-    /** Build entity document options from simple results */
-    private buildEntityDocumentOptions(records: Record<string, unknown>[]): void {
-        this.EntityDocuments = records.map(r => ({
-            ID: String(r['ID'] ?? ''),
-            Name: String(r['Name'] ?? 'Unnamed'),
-            EntityName: String(r['Entity'] ?? r['EntityID'] ?? ''),
-            PotentialMatchThreshold: this.normalizeDupeThreshold((r['PotentialMatchThreshold'] as number), 0.70),
-            AbsoluteMatchThreshold: this.normalizeDupeThreshold((r['AbsoluteMatchThreshold'] as number), 0.95)
+    /** Build entity document options from VectorMetadataEngine cached entities */
+    private buildEntityDocumentOptionsFromEngine(docs: MJEntityDocumentEntity[]): void {
+        this.EntityDocuments = docs.map(d => ({
+            ID: d.ID,
+            Name: d.Name ?? 'Unnamed',
+            EntityName: d.Entity ?? '',
+            PotentialMatchThreshold: this.normalizeDupeThreshold(d.PotentialMatchThreshold, 0.70),
+            AbsoluteMatchThreshold: this.normalizeDupeThreshold(d.AbsoluteMatchThreshold, 0.95)
         }));
 
         // Auto-select the first entity document if available

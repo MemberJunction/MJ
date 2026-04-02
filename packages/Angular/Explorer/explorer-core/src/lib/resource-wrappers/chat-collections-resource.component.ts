@@ -1,11 +1,10 @@
 import { Component, ViewEncapsulation, OnInit, OnDestroy } from '@angular/core';
-import { Router, NavigationEnd } from '@angular/router';
 import { Metadata, CompositeKey, RunView } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { ArtifactStateService, ArtifactPermissionService, CollectionStateService } from '@memberjunction/ng-conversations';
-import { Subject, takeUntil, distinctUntilChanged, combineLatest, filter } from 'rxjs';
+import { Subject, takeUntil, distinctUntilChanged, combineLatest } from 'rxjs';
 /**
  * Chat Collections Resource - displays the collections full view for tab-based display
  * Extends BaseResourceComponent to work with the resource type system
@@ -139,14 +138,12 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
 
   private destroy$ = new Subject<void>();
   private skipUrlUpdate = true; // Skip URL updates during initialization
-  private lastNavigatedUrl: string = ''; // Track URL to avoid reacting to our own navigation
 
   constructor(
     private artifactState: ArtifactStateService,
     private artifactPermissionService: ArtifactPermissionService,
     public collectionState: CollectionStateService,
-    private navigationService: NavigationService,
-    private router: Router
+    private navigationService: NavigationService
   ) {
     super();
   }
@@ -161,14 +158,8 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     // Setup resize listeners
     this.setupResizeListeners();
 
-    // Parse URL first and apply state
-    const urlState = this.parseUrlState();
-    if (urlState) {
-      this.applyUrlState(urlState);
-    } else {
-      // Check if we have navigation params from config (e.g., from Conversations linking here)
-      this.applyNavigationParams();
-    }
+    // Apply initial state from tab configuration (populated by shell from URL or nav params)
+    this.applyNavigationParams();
 
     // Subscribe to state changes to update URL
     this.subscribeToUrlStateChanges();
@@ -194,19 +185,6 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
         }
       });
 
-    // Subscribe to router NavigationEnd events for back/forward button support
-    this.router.events
-      .pipe(
-        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(event => {
-        const currentUrl = event.urlAfterRedirects || event.url;
-        if (currentUrl !== this.lastNavigatedUrl) {
-          this.onExternalNavigation(currentUrl);
-        }
-      });
-
     // Enable URL updates after initialization
     this.skipUrlUpdate = false;
 
@@ -219,62 +197,28 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     }, 100);
   }
 
-  /**
-   * Parse URL query string for collection state.
-   * Query params: collectionId, artifactId, versionNumber
-   */
-  private parseUrlState(): { collectionId?: string; artifactId?: string; versionNumber?: number } | null {
-    const url = this.router.url;
-    const queryIndex = url.indexOf('?');
-    if (queryIndex === -1) return null;
-
-    const queryString = url.substring(queryIndex + 1);
-    const params = new URLSearchParams(queryString);
-    const collectionId = params.get('collectionId');
-    const artifactId = params.get('artifactId');
-    const versionNumber = params.get('versionNumber');
-
-    if (!collectionId && !artifactId) return null;
-
-    return {
-      collectionId: collectionId || undefined,
-      artifactId: artifactId || undefined,
-      versionNumber: versionNumber ? parseInt(versionNumber, 10) : undefined
-    };
-  }
 
   /**
-   * Apply URL state to collection services.
-   */
-  private applyUrlState(state: { collectionId?: string; artifactId?: string; versionNumber?: number }): void {
-    // Set active collection if specified
-    if (state.collectionId) {
-      this.collectionState.setActiveCollection(state.collectionId);
-    }
-
-    // Open artifact if specified
-    if (state.artifactId) {
-      this.artifactState.openArtifact(state.artifactId, state.versionNumber);
-    }
-  }
-
-  /**
-   * Apply navigation parameters from configuration.
-   * This handles deep-linking from other resources (e.g., clicking a link in Conversations).
+   * Apply initial state from tab configuration.
+   * The shell populates queryParams from the URL, and nav params come from cross-resource linking.
    */
   private applyNavigationParams(): void {
     const config = this.Data?.Configuration;
     if (!config) return;
 
-    // Set active collection if specified
-    if (config.collectionId) {
-      this.collectionState.setActiveCollection(config.collectionId as string);
+    // Check queryParams first (shell populates these from the URL for deep-linking)
+    const qp = config['queryParams'] as Record<string, string> | undefined;
+    const collectionId = (qp?.['collectionId'] as string) || (config.collectionId as string);
+    const artifactId = (qp?.['artifactId'] as string) || (config.artifactId as string);
+    const versionNumber = qp?.['versionNumber'] ? parseInt(qp['versionNumber'], 10)
+      : config.versionNumber ? (config.versionNumber as number) : undefined;
+
+    if (collectionId) {
+      this.collectionState.setActiveCollection(collectionId);
     }
 
-    // Open artifact if specified
-    if (config.artifactId) {
-      const versionNumber = config.versionNumber ? (config.versionNumber as number) : undefined;
-      this.artifactState.openArtifact(config.artifactId as string, versionNumber);
+    if (artifactId) {
+      this.artifactState.openArtifact(artifactId, versionNumber);
     }
   }
 
@@ -326,59 +270,6 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     this.navigationService.UpdateActiveTabQueryParams(queryParams);
   }
 
-  /**
-   * Handle external navigation (back/forward buttons).
-   * Parses the URL and applies the state without triggering a new navigation.
-   */
-  private onExternalNavigation(url: string): void {
-    // Check if this URL is for our component (contains our base path)
-    const currentPath = this.router.url.split('?')[0];
-    const newPath = url.split('?')[0];
-
-    // Only handle if we're still on the same base path (same component instance)
-    if (currentPath !== newPath) {
-      return; // Different route entirely, shell will handle it
-    }
-
-    // Parse the new URL state
-    const urlState = this.parseUrlFromString(url);
-
-    // Apply the state without triggering URL updates
-    this.skipUrlUpdate = true;
-    if (urlState) {
-      this.applyUrlState(urlState);
-    } else {
-      // No params means clear state
-      this.collectionState.setActiveCollection(null as unknown as string);
-      this.artifactState.closeArtifact();
-    }
-    this.skipUrlUpdate = false;
-
-    // Update the tracked URL
-    this.lastNavigatedUrl = url;
-  }
-
-  /**
-   * Parse URL state from a URL string (used for external navigation).
-   */
-  private parseUrlFromString(url: string): { collectionId?: string; artifactId?: string; versionNumber?: number } | null {
-    const queryIndex = url.indexOf('?');
-    if (queryIndex === -1) return null;
-
-    const queryString = url.substring(queryIndex + 1);
-    const params = new URLSearchParams(queryString);
-    const collectionId = params.get('collectionId');
-    const artifactId = params.get('artifactId');
-    const versionNumber = params.get('versionNumber');
-
-    if (!collectionId && !artifactId) return null;
-
-    return {
-      collectionId: collectionId || undefined,
-      artifactId: artifactId || undefined,
-      versionNumber: versionNumber ? parseInt(versionNumber, 10) : undefined
-    };
-  }
 
   /**
    * Update the tab/browser title based on the active collection.

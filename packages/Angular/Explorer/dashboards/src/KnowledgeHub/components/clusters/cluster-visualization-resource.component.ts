@@ -13,7 +13,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
-import { ResourceData, UserInfoEngine, MJUserSettingEntity } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine, MJUserSettingEntity, VectorMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
@@ -228,18 +228,12 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     /** Populate the entity options for the config panel dropdown */
     private async loadEntityOptions(): Promise<void> {
         try {
-            // Only show entities that have active entity documents (meaning vectors are synced)
-            const rv = new RunView();
-            const result = await rv.RunView<{ Entity: string }>({
-                EntityName: 'MJ: Entity Documents',
-                ExtraFilter: "Status = 'Active'",
-                Fields: ['Entity'],
-                ResultType: 'simple'
-            });
+            // Use VectorMetadataEngine for cached entity document data
+            const engine = VectorMetadataEngine.Instance;
+            await engine.Config(false);
 
-            if (result.Success && result.Results.length > 0) {
-                // Deduplicate entity names (multiple docs per entity possible)
-                const entityNames = [...new Set(result.Results.map(r => r.Entity))].sort();
+            const entityNames = engine.GetEntitiesWithDocuments();
+            if (entityNames.length > 0) {
                 this.EntityOptions = entityNames.map(name => ({ Name: name }));
             }
 
