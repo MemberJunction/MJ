@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/cli
 
+## 5.22.0
+
+### Patch Changes
+
+- f2a6bec: Universal lazy loading via ClassFactory async API. Fixes HomeApplication being tree-shaken by moving lazy loading from consumer-specific retry patterns into ClassFactory itself with RegisterLazyLoader, CreateInstanceAsync, and GetRegistrationAsync. Lazy config now uses compound keys (BaseClassName::Key) to support any base class. Adds coverage audit to codegen to detect gaps.
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/server-bootstrap-lite@5.22.0
+  - @memberjunction/codegen-lib@5.22.0
+  - @memberjunction/ai-cli@5.22.0
+  - @memberjunction/query-gen@5.22.0
+  - @memberjunction/db-auto-doc@5.22.0
+  - @memberjunction/metadata-sync@5.22.0
+  - @memberjunction/sqlserver-dataprovider@5.22.0
+  - @memberjunction/testing-cli@5.22.0
+  - @memberjunction/config@5.22.0
+  - @memberjunction/installer@5.22.0
+  - @memberjunction/sql-converter@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes

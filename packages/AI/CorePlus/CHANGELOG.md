@@ -1,5 +1,21 @@
 # @memberjunction/ai-core-plus
 
+## 5.22.0
+
+### Patch Changes
+
+- 0b23772: Ensure agents use an isolated per-request database provider instead of the shared global singleton.
+- cf91278: Fix NVARCHAR(MAX) mangling in SQL parser, resolve Invalid string length error in AI monitoring dashboard, add unit tests for AI agent components, and add replaceElements guidance for loop agent prompts
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/core@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/templates-base-types@5.22.0
+  - @memberjunction/ai@5.22.0
+
 ## 5.21.0
 
 ### Patch Changes
