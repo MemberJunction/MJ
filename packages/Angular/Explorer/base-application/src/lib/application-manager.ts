@@ -227,10 +227,10 @@ export class ApplicationManager {
 
         let app: BaseApplication | null;
         if (appInfo.ClassName && appInfo.ClassName.trim().length > 0) {
-          app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
+          app = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseApplication>(
             BaseApplication,
             appInfo.ClassName,
-            args          
+            args
           );
         }
         else {

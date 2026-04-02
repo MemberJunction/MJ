@@ -22,6 +22,10 @@ import { SharedPipesModule } from './shared/shared-pipes.module';
 // Core components — eagerly loaded, most-visited pages
 import { EntityAdminDashboardComponent } from './EntityAdmin/entity-admin-dashboard.component';
 import { HomeDashboardComponent } from './Home/home-dashboard.component';
+// HomeApplication is a non-Angular class registered via @RegisterClass(BaseApplication, 'HomeApplication').
+// It must be imported here so ESBuild includes it in this chunk, making it discoverable
+// via the lazy loading system when ApplicationManager calls CreateInstanceAsync.
+import { HomeApplication } from './Home/home-application';
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
 import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-resource.component';
 import { DashboardBrowserResourceComponent } from './DashboardBrowser/dashboard-browser-resource.component';
@@ -115,3 +119,7 @@ export class CoreDashboardsModule { }
 // Re-export types needed by consumers via subpath import
 export type { ShareDialogResult, UserSharePermission } from './DashboardBrowser/dashboard-share-dialog.component';
 export { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-share-dialog.component';
+
+// Re-export HomeApplication so it's reachable from this subpath for lazy loading.
+// The @RegisterClass decorator fires on import, registering it with ClassFactory.
+export { HomeApplication } from './Home/home-application';
