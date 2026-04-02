@@ -77,6 +77,11 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   // Track component references for cleanup (legacy - keep for backward compat during transition)
   private componentRefs = new Map<string, ComponentRef<BaseResourceComponent>>();
 
+  // Guard against concurrent loadTabContent calls for the same tab.
+  // When a tab's content changes while active, both the reload path (workspace config subscription)
+  // and onTabShown can race to call loadTabContent, resulting in duplicate component rendering.
+  private tabsCurrentlyLoading = new Set<string>();
+
   // NEW: Smart component cache for preserving state across tab switches
   private cacheManager: ComponentCacheManager;
 
@@ -597,6 +602,14 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Uses component cache to reuse components for same resources
    */
   private async loadTabContent(tabId: string, container: unknown): Promise<void> {
+    // Per-tab guard: prevent concurrent loads of the same tab content.
+    // This can happen when a tab's content changes while active — both the workspace
+    // config subscription reload path and onTabShown can race to call this method.
+    if (this.tabsCurrentlyLoading.has(tabId)) {
+      return;
+    }
+    this.tabsCurrentlyLoading.add(tabId);
+
     try {
       const tab = this.workspaceManager.GetTab(tabId);
       if (!tab) {
@@ -723,6 +736,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     } catch (e) {
       LogError(e);
+    } finally {
+      this.tabsCurrentlyLoading.delete(tabId);
     }
   }
 
