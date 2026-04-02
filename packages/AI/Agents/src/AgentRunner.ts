@@ -10,7 +10,7 @@
  * @since 2.49.0
  */
 
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput } from '@memberjunction/ai-core-plus';
@@ -37,6 +37,12 @@ import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJA
  * ```
  */
 export class AgentRunner {
+    private readonly _provider: IMetadataProvider;
+
+    constructor(provider?: IMetadataProvider) {
+        this._provider = provider ?? Metadata.Provider;
+    }
+
     /**
      * Runs an AI agent with the specified parameters.
      * 
@@ -86,8 +92,8 @@ export class AgentRunner {
                 throw new Error(`Failed to create agent instance for driver class: ${driverClass}`);
             }
             
-            // Execute the agent and return the result directly
-            return await agentInstance.Execute(params as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
+            // Execute the agent and return the result directly, threading the isolated provider
+            return await agentInstance.Execute({ ...params, provider: this._provider } as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
             
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -161,7 +167,7 @@ export class AgentRunner {
             versionNumber: number;
         };
     }> {
-        const md = new Metadata();
+        const md = this._provider;
         const contextUser = params.contextUser;
 
         if (!contextUser) {
@@ -504,7 +510,7 @@ export class AgentRunner {
             }
 
             const junction = result.Results[0];
-            const md = new Metadata();
+            const md = this._provider;
             const version = await md.GetEntityObject<MJArtifactVersionEntity>(
                 'MJ: Artifact Versions',
                 contextUser
@@ -584,7 +590,7 @@ export class AgentRunner {
         }
 
         try {
-            const md = new Metadata();
+            const md = this._provider;
             const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
 
             // Determine if creating new artifact or new version
@@ -749,6 +755,7 @@ export class AgentRunner {
             promptParams.prompt = prompt;
             promptParams.contextUser = contextUser;
             promptParams.conversationMessages = [{ role: 'user', content: userMessage }];
+            promptParams.provider = this._provider;
 
             const runner = new AIPromptRunner();
             const result = await runner.ExecutePrompt(promptParams);
@@ -822,7 +829,7 @@ export class AgentRunner {
         }
 
         const savedIds: string[] = [];
-        const md = new Metadata();
+        const md = this._provider;
 
         try {
             // Use AIEngine's cached modalities instead of a fresh DB call
@@ -940,7 +947,7 @@ export class AgentRunner {
         }
 
         const attachmentIds: string[] = [];
-        const md = new Metadata();
+        const md = this._provider;
 
         try {
             // Use AIEngine's cached modalities instead of a fresh DB call
