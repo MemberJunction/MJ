@@ -1,4 +1,5 @@
-import { CompositeKey } from "@memberjunction/core";
+import { CompositeKey, DataSnapshot } from "@memberjunction/core";
+import { BaseEventArgs } from "./component-events";
 import { SimpleAITools, SimpleDataContext, SimpleMetadata, SimpleRunQuery, SimpleRunView } from "./shared";
 
 /**
@@ -27,6 +28,13 @@ export interface ComponentCallbacks {
      * @param handler - The method implementation
      */
     RegisterMethod: (methodName: string, handler: Function) => void;
+
+    /**
+     * Notify the container of a component event.
+     * For cancelable events, the container can set args.cancel = true
+     * before the await resolves.
+     */
+    NotifyEvent: (eventName: string, args: BaseEventArgs) => Promise<void>;
 }
  
 /**
@@ -201,14 +209,15 @@ export interface ComponentObject {
     /**
      * Gets the current data state of the component.
      * Used by AI agents to understand what data is currently displayed.
+     * Returns undefined if the component has no data to report.
      */
-    getCurrentDataState?: () => any;
-    
+    getCurrentDataState?: () => DataSnapshot | undefined;
+
     /**
-     * Gets the history of data state changes in the component.
-     * Returns an array of timestamped state snapshots.
+     * Restores or applies a data state snapshot to the component.
+     * Returns true if the snapshot was successfully applied, false otherwise.
      */
-    getDataStateHistory?: () => Array<{ timestamp: Date; state: any }>;
+    setDataState?: (snapshot: DataSnapshot) => boolean;
     
     /**
      * Validates the current state of the component.

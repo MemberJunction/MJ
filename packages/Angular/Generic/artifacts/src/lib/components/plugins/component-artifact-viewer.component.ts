@@ -3,7 +3,7 @@ import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey, DataSnapshot } from '@memberjunction/core';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
 import { ComponentFeedbackPanelComponent } from './component-feedback-panel/component-feedback-panel.component';
 
@@ -249,6 +249,14 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       entityName: event.entityName,
       compositeKey: event.key
     });
+  }
+
+  public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    const reactState = this.reactComponent?.getCurrentDataState?.();
+    if (reactState && typeof reactState === 'object') {
+      return reactState as DataSnapshot;
+    }
+    return null;
   }
 
   /**

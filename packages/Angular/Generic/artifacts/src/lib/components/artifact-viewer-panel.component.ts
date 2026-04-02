@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { UserInfo, Metadata, RunView, LogError, CompositeKey } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions , UUIDsEqual } from '@memberjunction/global';
 import { MJArtifactEntity, MJArtifactVersionEntity, MJArtifactVersionAttributeEntity, MJArtifactTypeEntity, MJCollectionEntity, MJCollectionArtifactEntity, ArtifactMetadataEngine, MJConversationEntity, MJConversationDetailArtifactEntity, MJConversationDetailEntity, MJArtifactUseEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -1125,5 +1125,13 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public getArtifactIcon(): string {
     if (!this.artifact) return 'fa-file';
     return this.artifactIconService.getArtifactIcon(this.artifact);
+  }
+
+  /**
+   * Passthrough to the active plugin's GetCurrentStateSnapshot().
+   * Returns null if no plugin is loaded or the plugin has no snapshot.
+   */
+  public GetCurrentStateSnapshot(): DataSnapshot | null {
+    return this.pluginViewer?.pluginInstance?.GetCurrentStateSnapshot() ?? null;
   }
 }

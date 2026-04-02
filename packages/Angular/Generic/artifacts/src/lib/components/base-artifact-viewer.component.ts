@@ -1,4 +1,5 @@
 import { Component, EventEmitter, Input, Type } from '@angular/core';
+import { DataSnapshot } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
 
@@ -242,4 +243,28 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
    *          Note: 'Display' cannot be removed (it's the main view)
    */
   public GetStandardTabRemovals?(): string[];
+
+  /**
+   * Return a point-in-time snapshot of the data this viewer is currently displaying.
+   * Each plugin overrides this to expose its content in a uniform DataSnapshot shape.
+   *
+   * @returns A DataSnapshot describing the current state, or null if no data is available.
+   */
+  public abstract GetCurrentStateSnapshot(): DataSnapshot | null;
+
+  /**
+   * Get the raw text content from the artifact version.
+   * Returns null if no content is available.
+   */
+  protected getRawContent(): string | null {
+    return this.artifactVersion?.Content ?? null;
+  }
+
+  /**
+   * Get a display-friendly title for the artifact.
+   * Returns null if no name is available.
+   */
+  protected getDisplayTitle(): string | null {
+    return this.artifactVersion?.Name ?? null;
+  }
 }

@@ -1,11 +1,12 @@
 import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
+import { DataSnapshot, Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { QueryEngine, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, NavigationRequest } from '../base-artifact-viewer.component';
 import { SaveQueryResult } from './save-query-dialog.component';
+import { createDataSnapshot } from '../../snapshot-helpers';
 
 /**
  * JSON schema for Data artifact content.
@@ -647,6 +648,10 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     if (!this.artifactVersion || !this.spec) return;
     this.artifactVersion.Content = JSON.stringify(this.spec);
     await this.artifactVersion.Save();
+  }
+
+  public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    return createDataSnapshot(this.spec);
   }
 
   // ─── Tabs ───────────────────────────────────────────────────────

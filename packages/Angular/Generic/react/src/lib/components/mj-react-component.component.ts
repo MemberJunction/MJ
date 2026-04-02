@@ -30,7 +30,7 @@ import {
   ComponentRegistryService
 } from '@memberjunction/react-runtime';
 import { createRuntimeUtilities } from '../utilities/runtime-utilities';
-import { LogError, CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
+import { LogError, CompositeKey, KeyValuePair, Metadata, RunView, DataSnapshot } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 
@@ -1161,6 +1161,23 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     }
     
     console.log('🧹 All component registries cleared for fresh load');
+  }
+
+  /**
+   * Gets the current data state from the hosted React component.
+   * Returns undefined if the component does not implement getCurrentDataState.
+   */
+  public GetCurrentDataState(): DataSnapshot | undefined {
+    return this.compiledComponent?.getCurrentDataState?.();
+  }
+
+  /**
+   * Applies a data state snapshot to the hosted React component.
+   * Returns true if the snapshot was successfully applied, false if the
+   * component does not support setDataState or the operation failed.
+   */
+  public SetDataState(snapshot: DataSnapshot): boolean {
+    return this.compiledComponent?.setDataState?.(snapshot) ?? false;
   }
 
 }
