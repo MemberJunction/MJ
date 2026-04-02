@@ -40,6 +40,7 @@
     "@memberjunction/sql-converter": "5.22.0",
     "@memberjunction/sql-parser": "5.22.0",
     "@memberjunction/sqlserver-dataprovider": "5.22.0",
+    "nunjucks": "3.2.4",
     "rxjs": "~7.8.1",
     "zod": "~3.24.4"
   },
