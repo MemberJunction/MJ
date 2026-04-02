@@ -2267,14 +2267,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
     try {
       const md = new Metadata();
+      const rv = new RunView();
 
-      // Find the latest version of this artifact
-      const versions = ArtifactMetadataEngine.Instance.GetVersionsForArtifact(event.artifactId);
-      if (!versions || versions.length === 0) {
+      // Find the latest version of this artifact (query DB, don't rely on cache)
+      const versionResult = await rv.RunView<MJArtifactVersionEntity>({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID='${event.artifactId}'`,
+        OrderBy: 'VersionNumber DESC',
+        MaxRows: 1,
+        ResultType: 'entity_object'
+      });
+      if (!versionResult.Success || versionResult.Results.length === 0) {
         console.error('[OnAnalyzeArtifact] No versions found for artifact', event.artifactId);
         return;
       }
-      const latestVersion = versions[0]; // DESC sorted
+      const latestVersion = versionResult.Results[0];
 
       // Build a contextual prompt from the snapshot
       const title = event.snapshot.title || 'this artifact';
@@ -2297,8 +2304,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
         await messageInput.sendMessageWithText(prompt);
 
         // After the message is saved, find the detail we just created and link the artifact
-        // The most recent user message in this conversation is the one we just sent
-        const rv = new RunView();
         const recentDetails = await rv.RunView<MJConversationDetailEntity>({
           EntityName: 'MJ: Conversation Details',
           ExtraFilter: `ConversationID='${this.conversationId}' AND Role='User'`,
