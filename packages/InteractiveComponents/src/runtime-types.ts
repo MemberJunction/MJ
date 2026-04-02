@@ -34,7 +34,7 @@ export interface ComponentCallbacks {
      * For cancelable events, the container can set args.cancel = true
      * before the await resolves.
      */
-    NotifyEvent: (eventName: string, args: BaseEventArgs) => Promise<void>;
+    NotifyEvent?: (eventName: string, args: BaseEventArgs) => Promise<void>;
 }
  
 /**

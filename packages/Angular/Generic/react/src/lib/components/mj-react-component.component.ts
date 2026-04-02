@@ -17,7 +17,7 @@ import {
   ChangeDetectorRef
 } from '@angular/core';
 import { Subject } from 'rxjs';
-import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
+import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject, BaseEventArgs } from '@memberjunction/interactive-component-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
 import { 
@@ -961,8 +961,11 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
           }
 
           this.openEntityRecord.emit({ entityName, key: keyToUse });
-        }  
-      } 
+        }
+      },
+      NotifyEvent: async (eventName: string, args: BaseEventArgs) => {
+        this.componentEvent.emit({ type: eventName, payload: args });
+      }
     };
   }
 
@@ -1066,14 +1069,6 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    */
   getCurrentDataState(): any {
     return this.compiledComponent?.getCurrentDataState?.();
-  }
-  
-  /**
-   * Gets the history of data state changes in the component
-   * @returns Array of timestamped state snapshots, or empty array if not implemented
-   */
-  getDataStateHistory(): Array<{ timestamp: Date; state: any }> {
-    return this.compiledComponent?.getDataStateHistory?.() || [];
   }
   
   /**
