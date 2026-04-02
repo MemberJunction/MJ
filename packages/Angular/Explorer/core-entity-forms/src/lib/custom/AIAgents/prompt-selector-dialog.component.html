@@ -16,17 +16,15 @@
       <div class="search-section">
         <div class="search-box">
           <i class="fa-solid fa-search search-icon"></i>
-          <kendo-textbox 
+          <input
+            class="mj-input search-input"
             [formControl]="searchControl"
-            placeholder="Search prompts by name or description..."
-            class="search-input">
-          </kendo-textbox>
+            placeholder="Search prompts by name or description...">
         </div>
         
         <div class="view-controls">
-          <button kendoButton 
-                  size="small"
-                  fillMode="flat"
+          <button mjButton
+                  variant="flat"
                   [class.active]="viewMode === 'list'"
                   (click)="toggleViewMode()"
                   title="Toggle between list and grid view">
@@ -118,8 +116,8 @@
   <div class="dialog-footer">
     <div class="footer-left">
       @if (config.showCreateNew) {
-        <button kendoButton 
-                look="flat"
+        <button mjButton
+                variant="flat"
                 (click)="createNew()">
           <i class="fa-solid fa-plus"></i>
           Create New Prompt
@@ -128,14 +126,14 @@
     </div>
     
     <div class="footer-right">
-      <button kendoButton 
-              look="flat" 
+      <button mjButton
+              variant="flat"
               (click)="cancel()">
         Cancel
       </button>
-      
-      <button kendoButton 
-              themeColor="primary" 
+
+      <button mjButton
+              variant="primary"
               (click)="selectPrompts()"
               [disabled]="selectedPrompts.size === 0">
         @if (config.multiSelect) {

@@ -1,0 +1,57 @@
+/**
+ * MJ Switch + Progress Bar Styles
+ */
+
+/* ========== Switch ========== */
+.mj-switch {
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px;
+  background: none; border: none; cursor: pointer;
+  font-family: var(--mj-font-family); font-size: var(--mj-text-sm);
+  color: var(--mj-text-primary); min-height: 44px;
+  &:focus-visible { outline: none; .mj-switch-track { box-shadow: var(--mj-focus-ring); } }
+}
+.mj-switch-track {
+  position: relative; width: 44px; height: 24px;
+  background: var(--mj-border-strong); border-radius: var(--mj-radius-full);
+  transition: background var(--mj-transition-base); flex-shrink: 0;
+}
+.mj-switch-thumb {
+  position: absolute; top: 2px; left: 2px; width: 20px; height: 20px;
+  background: var(--mj-bg-surface); border-radius: var(--mj-radius-full);
+  transition: transform var(--mj-transition-base); box-shadow: var(--mj-shadow-sm);
+}
+.mj-switch--on .mj-switch-track { background: var(--mj-brand-primary); }
+.mj-switch--on .mj-switch-thumb { transform: translateX(20px); }
+.mj-switch--disabled { opacity: 0.5; cursor: not-allowed; }
+.mj-switch-label { color: var(--mj-text-secondary); }
+
+/* ========== Progress Bar ========== */
+.mj-progress-bar-host { display: block; width: 100%; }
+progress.mj-progress-bar {
+  display: block; width: 100%; height: 8px; border: none;
+  border-radius: var(--mj-radius-full); overflow: hidden; appearance: none; -webkit-appearance: none;
+  &::-webkit-progress-bar { background: var(--mj-bg-surface-sunken); border-radius: var(--mj-radius-full); }
+  &::-webkit-progress-value { background: var(--mj-brand-primary); border-radius: var(--mj-radius-full); transition: width var(--mj-transition-base); }
+  &::-moz-progress-bar { background: var(--mj-brand-primary); border-radius: var(--mj-radius-full); }
+}
+div.mj-progress-bar--infinite {
+  width: 100%; height: 8px; background: var(--mj-bg-surface-sunken);
+  border-radius: var(--mj-radius-full); overflow: hidden; position: relative;
+}
+.mj-progress-bar-indeterminate {
+  position: absolute; top: 0; left: 0; height: 100%; width: 30%;
+  background: var(--mj-brand-primary); border-radius: var(--mj-radius-full);
+  animation: mj-progress-indeterminate 1.5s infinite ease-in-out;
+}
+@keyframes mj-progress-indeterminate { 0% { left: -30%; } 100% { left: 100%; } }
+
+/* ========== Numeric Input ========== */
+.mj-numeric-input {
+  -moz-appearance: textfield;
+  &::-webkit-inner-spin-button, &::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mj-progress-bar-indeterminate { animation: none; left: 0; width: 100%; opacity: 0.5; }
+  .mj-switch-thumb { transition: none; }
+}

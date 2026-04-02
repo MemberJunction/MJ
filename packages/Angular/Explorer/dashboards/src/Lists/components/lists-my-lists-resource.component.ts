@@ -233,7 +233,7 @@ interface CategoryNode {
                     <span class="list-meta">{{item.entityName}} &middot; {{item.itemCount}} items</span>
                   </div>
                   <div class="list-actions">
-                    <button class="action-btn" (click)="openListMenu($event, item.list)" [attr.aria-label]="'More options for ' + item.list.Name">
+                    <button mjButton variant="flat" size="sm" (click)="openListMenu($event, item.list)" [attr.aria-label]="'More options for ' + item.list.Name">
                       <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
                     </button>
                   </div>

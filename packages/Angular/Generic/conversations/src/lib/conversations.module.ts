@@ -3,16 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 
-// Kendo UI modules
-import { DialogModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { LayoutModule } from '@progress/kendo-angular-layout';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { NotificationModule } from '@progress/kendo-angular-notification';
-import { UploadsModule } from '@progress/kendo-angular-upload';
-import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
+// MJ UI Components
+import { MJButtonDirective, MJDatepickerComponent, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
 
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -134,16 +126,10 @@ const COMPONENTS = [
     FormsModule,
     ReactiveFormsModule,
     RouterModule,
-    DialogModule,
-    WindowModule,
-    ButtonsModule,
-    InputsModule,
-    LayoutModule,
-    IndicatorsModule,
-    DropDownsModule,
-    NotificationModule,
-    UploadsModule,
-    DateInputsModule,
+    MJButtonDirective,
+    MJDatepickerComponent,
+    MJDialogComponent,
+    MJDialogActionsComponent,
     ContainerDirectivesModule,
     CodeEditorModule,
     ArtifactsModule,

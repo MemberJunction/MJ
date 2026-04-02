@@ -1,6 +1,5 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewContainerRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewContainerRef, Output, EventEmitter } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJAIAgentTypeEntity, MJAIAgentPromptEntity, MJAIAgentActionEntity, MJActionEntity } from '@memberjunction/core-entities';
@@ -80,8 +79,9 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
   newlyCreatedPromptTemplates: any[] = [];
   newlyCreatedTemplateContents: any[] = [];
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef,
     private agentManagementService: AIAgentManagementService,
     private viewContainerRef: ViewContainerRef
@@ -519,7 +519,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
       };
 
       this.result.next(result);
-      this.dialogRef.close();
+      this.DialogClose.emit();
 
     } catch (error) {
       console.error('Error preparing sub-agent for creation:', error);
@@ -535,7 +535,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
 
   public cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   // Helper methods for UI

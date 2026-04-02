@@ -17,11 +17,11 @@
       @if(!loading) {
         @if (previewMessages.length === 0) {
           <h2>No Messages Available</h2>
-          <button kendoButton (click)="goBack()">Back</button>
+          <button mjButton (click)="goBack()">Back</button>
         }
         @else {
         <h2>Preview {{ selectedTemplate?.Name }}</h2>
-        <button kendoButton (click)="goBack()">Back</button>
+        <button mjButton (click)="goBack()">Back</button>
         <div class="vcr-controls">
           <button (click)="firstMessage()" aria-label="First" [disabled]="currentMessageIndex === 0">
             <span class="fas fa-angle-double-left"></span>

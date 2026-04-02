@@ -31,15 +31,15 @@ type SortBy = 'name' | 'date' | 'type';
             </button>
           </div>
     
-          <kendo-dropdownlist
-            [data]="sortOptions"
-            [textField]="'label'"
-            [valueField]="'value'"
-            [(value)]="sortBy"
-            (valueChange)="onSortChange()"
-            [style.width.px]="150"
-            placeholder="Sort by...">
-          </kendo-dropdownlist>
+          <select
+            [(ngModel)]="sortBy"
+            (ngModelChange)="onSortChange()"
+            class="mj-select"
+            style="width: 150px;">
+            @for (option of sortOptions; track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
+          </select>
     
           @if (canEdit) {
             <button class="btn-add" (click)="onAddArtifact()" title="Add Artifact">
