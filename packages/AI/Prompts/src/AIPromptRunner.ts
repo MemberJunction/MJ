@@ -2524,7 +2524,7 @@ export class AIPromptRunner {
     vendorId?: string,
     modelSelectionInfo?: any
   ): Promise<MJAIPromptRunEntityExtended> {
-    const provider: IMetadataProvider = params.provider ?? Metadata.Provider;
+    const provider: IMetadataProvider = params.provider || Metadata.Provider;
     const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', params.contextUser);
     try {
       promptRun.NewRecord();

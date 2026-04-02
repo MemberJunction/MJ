@@ -1017,7 +1017,7 @@ export class BaseAgent {
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         // Capture per-request provider for the duration of this execution so all entity
         // saves go through the isolated provider, never the global singleton's transaction.
-        this._activeProvider = params.provider ?? Metadata.Provider;
+        this._activeProvider = params.provider || Metadata.Provider;
         try {
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
 

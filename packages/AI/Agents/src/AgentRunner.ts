@@ -40,7 +40,7 @@ export class AgentRunner {
     private readonly _provider: IMetadataProvider;
 
     constructor(provider?: IMetadataProvider) {
-        this._provider = provider ?? Metadata.Provider;
+        this._provider = provider || Metadata.Provider;
     }
 
     /**
@@ -92,8 +92,9 @@ export class AgentRunner {
                 throw new Error(`Failed to create agent instance for driver class: ${driverClass}`);
             }
             
-            // Execute the agent and return the result directly, threading the isolated provider
-            return await agentInstance.Execute({ ...params, provider: this._provider } as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
+            // Execute the agent and return the result directly, threading the isolated provider.
+            // Favor provider already in params (caller-supplied) over the instance-level provider.
+            return await agentInstance.Execute({ ...params, provider: params.provider || this._provider } as ExecuteAgentParams<any>) as ExecuteAgentResult<R>;
             
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -167,7 +168,7 @@ export class AgentRunner {
             versionNumber: number;
         };
     }> {
-        const md = this._provider;
+        const md = params.provider || this._provider;
         const contextUser = params.contextUser;
 
         if (!contextUser) {
