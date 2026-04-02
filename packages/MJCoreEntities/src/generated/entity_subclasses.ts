@@ -13360,13 +13360,13 @@ export const MJEntityDocumentSchema = z.object({
         * * Field Name: PotentialMatchThreshold
         * * Display Name: Potential Match Threshold
         * * SQL Data Type: numeric(12, 11)
-        * * Default Value: 1
+        * * Default Value: 0.7
         * * Description: Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.`),
     AbsoluteMatchThreshold: z.number().describe(`
         * * Field Name: AbsoluteMatchThreshold
         * * Display Name: Absolute Match Threshold
         * * SQL Data Type: numeric(12, 11)
-        * * Default Value: 1
+        * * Default Value: 0.95
         * * Description: Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -58670,7 +58670,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Field Name: PotentialMatchThreshold
     * * Display Name: Potential Match Threshold
     * * SQL Data Type: numeric(12, 11)
-    * * Default Value: 1
+    * * Default Value: 0.7
     * * Description: Value between 0 and 1 that determines what is considered a potential matching record. Value must be <= AbsoluteMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
     */
     get PotentialMatchThreshold(): number {
@@ -58684,7 +58684,7 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     * * Field Name: AbsoluteMatchThreshold
     * * Display Name: Absolute Match Threshold
     * * SQL Data Type: numeric(12, 11)
-    * * Default Value: 1
+    * * Default Value: 0.95
     * * Description: Value between 0 and 1 that determines what is considered an absolute matching record. Value must be >= PotentialMatchThreshold. This is primarily used for duplicate detection but can be used for other applications as well where matching is relevant.
     */
     get AbsoluteMatchThreshold(): number {
