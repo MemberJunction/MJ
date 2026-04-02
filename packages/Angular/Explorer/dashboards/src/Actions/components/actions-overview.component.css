@@ -17,14 +17,8 @@
   flex: 1;
   min-width: 200px;
 }
-.actions-overview .overview-header .filters-row .search-container kendo-textbox {
-  width: 100%;
-}
 .actions-overview .overview-header .filters-row .filter-container {
   min-width: 150px;
-}
-.actions-overview .overview-header .filters-row .filter-container kendo-dropdownlist {
-  width: 100%;
 }
 .actions-overview .metrics-grid {
   display: grid;

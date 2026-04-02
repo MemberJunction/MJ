@@ -27,15 +27,10 @@ export interface EntitySelectorConfig {
           <div class="dialog-content">
             <!-- Search Bar -->
             <div class="search-bar">
-              <kendo-textbox
-                [(ngModel)]="searchText"
-                placeholder="Search..."
-                (valueChange)="onSearchChange()"
-                class="search-input">
-                <ng-template kendoTextBoxPrefixTemplate>
-                  <i class="fa-solid fa-search"></i>
-                </ng-template>
-              </kendo-textbox>
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-search search-icon"></i>
+                <input class="mj-input search-input" [(ngModel)]="searchText" placeholder="Search..." (ngModelChange)="onSearchChange()" />
+              </div>
             </div>
         
             <!-- Loading State -->
@@ -84,11 +79,11 @@ export interface EntitySelectorConfig {
             }
           </div>
           <div class="dialog-actions">
-            <button kendoButton themeColor="primary" (click)="createNew()">
+            <button mjButton variant="primary" (click)="createNew()">
               <i class="fa-solid fa-plus"></i> Create New
             </button>
-            <button kendoButton (click)="onCancel()">Cancel</button>
-            <button kendoButton themeColor="primary" [disabled]="!selectedEntity" (click)="onSelect()">Select</button>
+            <button mjButton (click)="onCancel()">Cancel</button>
+            <button mjButton variant="primary" [disabled]="!selectedEntity" (click)="onSelect()">Select</button>
           </div>
         </div>
         `,
@@ -134,8 +129,23 @@ export interface EntitySelectorConfig {
             gap: 12px;
         }
 
+        .search-input-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 10px;
+            color: var(--mj-text-muted);
+            pointer-events: none;
+        }
+
         .search-input {
             flex: 1;
+            padding-left: 32px;
         }
 
         .loading-state,
