@@ -390,10 +390,10 @@ export class RunAIAgentResolver extends ResolverBase {
             // Validate agent
             const agentEntity = await this.validateAgent(agentId, currentUser);
 
-            // @jordanfanapour IMPORTANT TO-DO for various engine classes (via base engine class) and here for AI Agent Runner and for AI Prompt Runner, need to be able to pass in a IMetadataProvider for it to use
-            // for multi-user server environments like this one
-            // Create AI agent runner
-            const agentRunner = new AgentRunner();
+            // Create AI agent runner with the per-request isolated provider so all agent DB operations
+            // (AIAgentRun, AIAgentRunSteps, AIAgentRequests, AIPromptRuns) never share the global
+            // singleton's transaction state with concurrent requests (e.g. conversation deletes).
+            const agentRunner = new AgentRunner(p);
 
             // Track agent run for streaming (use ref to update later)
             const agentRunRef = { current: null as any };
