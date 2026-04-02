@@ -1566,40 +1566,50 @@ This is modeled after the Scratchpad pattern (`packages/AI/Agents/src/Scratchpad
 
 **Step 1 — Artifact Manifest Injection:**
 
-When an agent run starts with input artifacts, the system injects a manifest into the system prompt (same pattern as Scratchpad):
+When an agent run starts with input artifacts, the system injects a **markdown** manifest into the system prompt (same pattern as Scratchpad). Each artifact gets a **short alpha-sequence ID** (A, B, ... Z, AA, AB) — immutable for the run, token-efficient compared to UUIDs, and unique within the context of that single agent run.
 
-```
-You have the following input artifacts available:
+```markdown
+## Available Artifacts
 
-[artifact-1] Data Snapshot: "Sales Dashboard Q4" (3 tables)
-  - monthly_revenue: 12 rows, 5 columns (Month, Revenue, Growth, Region, Category)
-  - top_customers: 847 rows, 8 columns (Name, Revenue, Region, ...)
-  - product_mix: 25 rows, 4 columns (Product, Units, Revenue, Margin)
+**A** — Data Snapshot: "Sales Dashboard Q4" (3 tables)
+  - monthly_revenue: 12 rows, 5 cols (Month, Revenue, Growth, Region, Category)
+  - top_customers: 847 rows, 8 cols (Name, Revenue, Region, ...)
+  - product_mix: 25 rows, 4 cols (Product, Units, Revenue, Margin)
 
-[artifact-2] PDF: "Q4 Board Report" (47 pages, 2.3 MB)
+**B** — PDF: "Q4 Board Report" (47 pages, 2.3 MB)
 
-[artifact-3] Excel: "Budget Forecast.xlsx" (3 sheets: Summary, Detail, Assumptions)
+**C** — Excel: "Budget Forecast.xlsx" (3 sheets: Summary, Detail, Assumptions)
 
-Use the artifact tools below to explore artifact content as needed.
+Use the artifact tools below to explore content. Specify the artifact ID (A, B, C, etc.) with each call.
 Do not request entire large artifacts — request specific slices.
 For small artifacts (< 50 rows or < 2 pages), you may request the full content.
 ```
 
-**Step 2 — Agent Calls Artifact Tools:**
+> **Why alpha IDs, not UUIDs:** An artifact ID appears in every tool call. `"A"` is 1 token; a UUID is 10+ tokens. Over a multi-turn exploration with dozens of calls, this saves hundreds of tokens. The ID only needs to be unique within one agent run — alpha sequence handles that with room to spare (A-Z = 26, then AA-AZ = 26 more, etc.).
 
-The agent decides what it needs and calls tools:
+> **Why markdown, not JSON:** Manifest and tool documentation are injected as markdown, not JSON. Markdown is ~40% fewer tokens for the same information and is generally better understood by LLMs for unstructured documentation. JSON is reserved for the structured `artifactToolCalls` response field where schema validation matters.
+
+**Step 2 — Agent Calls Artifact Tools (supports parallel calls):**
+
+The agent specifies the artifact ID, tool name, and params. Multiple calls can be batched in a single turn for efficiency (e.g., grep across two artifacts simultaneously):
 
 ```json
-{ "name": "artifact_get_rows", "input": { "artifactId": "artifact-1", "table": "top_customers", "start": 0, "count": 10 } }
+"artifactToolCalls": [
+    { "artifactId": "A", "tool": "get_rows", "input": { "table": "top_customers", "start": 0, "count": 10 } },
+    { "artifactId": "A", "tool": "aggregate", "input": { "table": "top_customers", "field": "Revenue", "operation": "sum" } },
+    { "artifactId": "B", "tool": "get_text", "input": { "startPage": 1, "endPage": 3 } }
+]
 ```
+
+All three calls execute in parallel. Results are returned together in the next turn's `_ARTIFACT_TOOL_RESULTS`.
 
 **Step 3 — Tool Handler Executes Locally:**
 
-The tool handler runs on the server against the in-memory artifact content. Only the requested slice is returned as a tool result to the LLM. The full artifact data never leaves the server unless the agent specifically requests it.
+The tool handler resolves the artifact ID → artifact type → pre-computed tool library, then runs against the in-memory artifact content. Only the requested slice is returned as a tool result. The full artifact data never leaves the server unless the agent specifically requests it.
 
 **Step 4 — Agent Iterates:**
 
-The agent can make multiple tool calls across turns to explore the artifact, just like it calls actions. It builds understanding incrementally.
+The agent can make multiple tool calls across turns to explore artifacts, building understanding incrementally. Results from all prior turns are available in `_ARTIFACT_TOOL_RESULTS`.
 
 ### 8.4 Plugin-Based Tool Architecture
 
@@ -1649,41 +1659,108 @@ export interface ArtifactToolResult {
 }
 ```
 
-### 8.4.1 Type-Specific Tool Libraries
+### 8.4.1 Tool Naming & Prompt Emission
 
-Each artifact type provides its own set of tools via a registered `BaseArtifactToolLibrary` subclass. The system auto-injects the appropriate tools based on the input artifact types. Tools from parent types are inherited (e.g., all JSON sub-types get JSON path tools).
+**No `artifact_` prefix.** Tool names are short — `get_rows`, `grep`, `search_text` — not `artifact_get_rows`. The prefix wastes tokens on every tool call. Instead, tools are **grouped by artifact type in the prompt**, so the LLM always knows which type a tool belongs to:
+
+```
+## JSON Artifact Tools
+- json_path(artifactId, path) — Value at JSON path
+- json_keys(artifactId, path?) — Keys at the given path
+- json_search(artifactId, key, pattern) — Matching values with paths
+
+## Data Snapshot Artifact Tools (extends JSON)
+- get_tables(artifactId) — Table names, row counts, column schemas
+- get_rows(artifactId, table, start, count) — Rows as JSON array
+- search_rows(artifactId, table, field, operator, value) — Matching rows
+- aggregate(artifactId, table, field, operation) — Computed value
+
+## PDF Artifact Tools
+- get_text(artifactId, startPage, endPage) — Extracted text for page range
+- search_text(artifactId, query) — Matching text passages with page numbers
+- get_tables(artifactId, page?) — Extracted tables as structured data
+```
+
+**Namespace collisions are fine.** `get_tables` appears in both Data Snapshot and PDF sections. Since the LLM specifies which `artifactId` to use, the `ArtifactToolManager` resolves the correct tool library from the artifact's type. Same tool name, different artifact type → different implementation.
+
+**Conditional emission rules:**
+
+1. **Disabled via LoopAgentTypeParams**: If `includeArtifactToolsDocs === false`, skip the entire section. This lets agents opt out.
+2. **No artifacts = no emission**: If the run starts with zero input artifacts, the tools section is omitted entirely. Zero wasted tokens for agents that don't use artifacts.
+3. **Mid-run artifact generation**: If an artifact is created during the run (e.g., an action generates a PDF), the `ArtifactToolManager` picks it up and the tools section appears in the **next** turn's prompt. The manifest and tools are re-computed each turn.
+
+### 8.4.2 Pre-Computed Tool Trees
+
+Tool libraries are resolved via the `ParentID` chain on `MJ: Artifact Types`. A Data Snapshot (child of JSON) inherits all JSON tools plus its own. Walking this chain per-request is wasteful — the metadata is static.
+
+**Pre-compute at load time in ArtifactEngine:**
+
+When `ArtifactEngine` loads all artifact types (at server startup or metadata refresh), it computes and caches the **resolved tool list** for every leaf artifact type:
+
+```typescript
+// In ArtifactEngine, during metadata load
+for (const artifactType of allArtifactTypes) {
+    // Walk ParentID chain from leaf → root, collect ToolLibraryClass at each level
+    const lineage = this.GetAncestorChain(artifactType);
+    const mergedTools: ArtifactToolDefinition[] = [];
+
+    for (const ancestor of lineage) {
+        if (ancestor.ToolLibraryClass) {
+            const library = ClassFactory.Create<BaseArtifactToolLibrary>(ancestor.ToolLibraryClass);
+            const tools = library.GetToolList();
+            // Child tools override parent tools with same name
+            for (const tool of tools) {
+                const existing = mergedTools.findIndex(t => t.name === tool.name);
+                if (existing >= 0) mergedTools[existing] = tool;
+                else mergedTools.push(tool);
+            }
+        }
+    }
+
+    // Cache the resolved list — no recomputation needed
+    this._resolvedToolsByType.set(artifactType.ID, mergedTools);
+}
+```
+
+The `ArtifactToolManager` reads from this cache — no tree walking at runtime.
+
+### 8.4.3 Type-Specific Tool Libraries
+
+Each artifact type provides its own set of tools via a registered `BaseArtifactToolLibrary` subclass. Tools are inherited from parent types and can be overridden by child types.
+
+> **Note:** The tables below show `artifactId` in the Input column for documentation clarity. In practice, `artifactId` is a top-level field on `ArtifactToolCall` (the alpha ID like "A"), not part of `input`. The manager resolves the artifact before dispatching to the library.
 
 **Data Snapshot tools** (`DataSnapshotToolLibrary`):
 
 | Tool | Input | Returns |
 |---|---|---|
-| `artifact_get_tables` | `artifactId` | Table names, row counts, column schemas |
-| `artifact_get_schema` | `artifactId, table` | Column names, types, descriptions |
-| `artifact_get_rows` | `artifactId, table, start, count` | Rows as JSON array |
-| `artifact_search_rows` | `artifactId, table, field, operator, value` | Matching rows |
-| `artifact_aggregate` | `artifactId, table, field, operation` | Computed value (sum, avg, count, etc.) |
-| `artifact_get_full` | `artifactId` | Full artifact content (for small artifacts only) |
+| `get_tables` | `artifactId` | Table names, row counts, column schemas |
+| `get_schema` | `artifactId, table` | Column names, types, descriptions |
+| `get_rows` | `artifactId, table, start, count` | Rows as JSON array |
+| `search_rows` | `artifactId, table, field, operator, value` | Matching rows |
+| `aggregate` | `artifactId, table, field, operation` | Computed value (sum, avg, count, etc.) |
+| `get_full` | `artifactId` | Full artifact content (for small artifacts only) |
 
 **JSON tools** (`JSONToolLibrary` — inherited by Data Snapshot and all JSON sub-types):
 
 | Tool | Input | Returns |
 |---|---|---|
-| `artifact_json_path` | `artifactId, path` | Value at JSON path (e.g., `$.tables[0].rows`) |
-| `artifact_json_keys` | `artifactId, path?` | Keys at the given path (or root) |
-| `artifact_json_search` | `artifactId, key, pattern` | Matching values with paths (regex on sub-keys) |
-| `artifact_json_iterate` | `artifactId, arrayPath, start, count` | Slice of an array at the given path |
+| `json_path` | `artifactId, path` | Value at JSON path (e.g., `$.tables[0].rows`) |
+| `json_keys` | `artifactId, path?` | Keys at the given path (or root) |
+| `json_search` | `artifactId, key, pattern` | Matching values with paths (regex on sub-keys) |
+| `json_iterate` | `artifactId, arrayPath, start, count` | Slice of an array at the given path |
 
 **PDF tools** (`PDFToolLibrary`):
 
 | Tool | Input | Returns |
 |---|---|---|
-| `artifact_get_page_count` | `artifactId` | Number of pages |
-| `artifact_get_text` | `artifactId, startPage, endPage` | Extracted text for page range |
-| `artifact_search_text` | `artifactId, query` | Matching text passages with page numbers |
-| `artifact_get_tables` | `artifactId, page?` | Extracted tables as structured data (rows/columns) |
-| `artifact_get_images` | `artifactId, page?` | Image metadata (dimensions, alt text, page location) |
-| `artifact_get_metadata` | `artifactId` | Document metadata (title, author, creation date, etc.) |
-| `artifact_get_toc` | `artifactId` | Table of contents / outline structure |
+| `get_page_count` | `artifactId` | Number of pages |
+| `get_text` | `artifactId, startPage, endPage` | Extracted text for page range |
+| `search_text` | `artifactId, query` | Matching text passages with page numbers |
+| `get_tables` | `artifactId, page?` | Extracted tables as structured data (rows/columns) |
+| `get_images` | `artifactId, page?` | Image metadata (dimensions, alt text, page location) |
+| `get_metadata` | `artifactId` | Document metadata (title, author, creation date, etc.) |
+| `get_toc` | `artifactId` | Table of contents / outline structure |
 
 > PDF image/table reasoning requires good extraction libraries (e.g., `pdf-parse`, `tabula-js` for tables, image extraction via `pdf-lib`). These tools return structured data the LLM can reason over.
 
@@ -1691,23 +1768,23 @@ Each artifact type provides its own set of tools via a registered `BaseArtifactT
 
 | Tool | Input | Returns |
 |---|---|---|
-| `artifact_get_sheets` | `artifactId` | Sheet names, dimensions, visibility |
-| `artifact_get_sheet_data` | `artifactId, sheet, range?` | Cell data (optional A1-notation range) |
-| `artifact_get_cell` | `artifactId, sheet, cell` | Single cell value, formula, and format |
-| `artifact_get_formulas` | `artifactId, sheet, range?` | Formulas in the range (not computed values) |
-| `artifact_get_named_ranges` | `artifactId` | Named ranges and their definitions |
-| `artifact_search_cells` | `artifactId, query` | Matching cells with sheet/cell references |
-| `artifact_get_charts` | `artifactId, sheet?` | Chart metadata (type, data ranges, titles) |
-| `artifact_get_pivot_tables` | `artifactId, sheet?` | Pivot table structure and source ranges |
-| `artifact_aggregate_column` | `artifactId, sheet, column, operation` | Computed aggregate over a column |
+| `get_sheets` | `artifactId` | Sheet names, dimensions, visibility |
+| `get_sheet_data` | `artifactId, sheet, range?` | Cell data (optional A1-notation range) |
+| `get_cell` | `artifactId, sheet, cell` | Single cell value, formula, and format |
+| `get_formulas` | `artifactId, sheet, range?` | Formulas in the range (not computed values) |
+| `get_named_ranges` | `artifactId` | Named ranges and their definitions |
+| `search_cells` | `artifactId, query` | Matching cells with sheet/cell references |
+| `get_charts` | `artifactId, sheet?` | Chart metadata (type, data ranges, titles) |
+| `get_pivot_tables` | `artifactId, sheet?` | Pivot table structure and source ranges |
+| `aggregate_column` | `artifactId, sheet, column, operation` | Computed aggregate over a column |
 
 **Text tools** (`TextToolLibrary` — inherited by all text-based artifact types):
 
 | Tool | Input | Returns |
 |---|---|---|
-| `artifact_grep` | `artifactId, pattern, flags?` | Matching lines with line numbers (regex) |
-| `artifact_get_lines` | `artifactId, start, count` | Lines from the content |
-| `artifact_search_replace` | `artifactId, search, replace` | Preview of replacements (for mutable artifacts) |
+| `grep` | `artifactId, pattern, flags?` | Matching lines with line numbers (regex) |
+| `get_lines` | `artifactId, start, count` | Lines from the content |
+| `search_replace` | `artifactId, search, replace` | Preview of replacements (for mutable artifacts) |
 
 > **Note on mutability:** Whether an artifact is writable by an agent is a design question deferred to v2. For now, all artifact tools are **read-only**. Mutation tools (like `search_replace`) would preview changes but not apply them.
 
@@ -1715,16 +1792,16 @@ Each artifact type provides its own set of tools via a registered `BaseArtifactT
 
 | Tool | Input | Returns |
 |---|---|---|
-| `artifact_csv_get_headers` | `artifactId` | Column headers |
-| `artifact_csv_get_rows` | `artifactId, start, count` | Rows as arrays |
-| `artifact_yaml_path` | `artifactId, path` | Value at YAML path |
+| `csv_get_headers` | `artifactId` | Column headers |
+| `csv_get_rows` | `artifactId, start, count` | Rows as arrays |
+| `yaml_path` | `artifactId, path` | Value at YAML path |
 
 **Generic tools** (all types — provided by `BaseArtifactToolLibrary`):
 
 | Tool | Input | Returns |
 |---|---|---|
-| `artifact_get_size` | `artifactId` | Size in bytes/rows/pages (type-dependent) |
-| `artifact_get_content` | `artifactId` | Full content (for small artifacts) |
+| `get_size` | `artifactId` | Size in bytes/rows/pages (type-dependent) |
+| `get_content` | `artifactId` | Full content (for small artifacts) |
 
 ### 8.5 Implementation: ArtifactToolManager
 
@@ -1779,11 +1856,14 @@ export interface LoopAgentResponse<P = any> {
 
 /**
  * A single artifact tool invocation requested by the LLM.
+ * Multiple calls can be batched in one turn for parallel execution.
  */
 export interface ArtifactToolCall {
-    /** Tool name from the documented tool list (e.g., "artifact_get_rows") */
+    /** Alpha-sequence artifact ID assigned at run start (A, B, ... Z, AA, AB, etc.) */
+    artifactId: string;
+    /** Tool name from the documented tool list (e.g., "get_rows"). No prefix — the artifactId resolves the type-specific library. */
     tool: string;
-    /** Tool-specific input parameters */
+    /** Tool-specific input parameters (excludes artifactId — that's a top-level field) */
     input: Record<string, unknown>;
 }
 ```
@@ -1803,13 +1883,23 @@ this._artifactToolManager.Initialize(inputArtifacts);
 // base-agent.ts, preparePromptParams() method
 // After scratchpad injection (lines 1853-1862)...
 
+// Three conditions must ALL be true to emit artifact tools:
+// 1. Not disabled via LoopAgentTypeParams (agent-level opt-out)
+// 2. At least one artifact exists (input artifacts OR mid-run generated)
+// 3. Re-checked each turn — mid-run artifact creation triggers emission
 const artifactToolsEnabled = agentTypePromptParams?.includeArtifactToolsDocs !== false;
 if (artifactToolsEnabled && this._artifactToolManager.HasArtifacts()) {
-    // Manifest: artifact names, types, sizes, table schemas
+    // Manifest (markdown): artifact alpha IDs, names, types, sizes, table schemas
     promptParams.data['_ARTIFACT_MANIFEST'] = this._artifactToolManager.ToManifestString();
 
-    // Tool documentation: available tools based on input artifact types
-    // (walks ParentID chain to inherit parent type tools)
+    // Tool documentation: grouped by artifact type, no redundant prefixes.
+    // Uses pre-computed tool trees from ArtifactEngine (resolved at startup).
+    // Only emits sections for artifact types actually present in this run.
+    // Example output:
+    //   ## JSON Artifact Tools
+    //   - json_path(artifactId, path) — Value at JSON path
+    //   ## Data Snapshot Artifact Tools (extends JSON)
+    //   - get_rows(artifactId, table, start, count) — Rows as JSON array
     promptParams.data['_ARTIFACT_TOOLS'] = this._artifactToolManager.GetToolDocumentation();
 
     // Previous tool results (from prior turns in this run)
@@ -1860,22 +1950,25 @@ Like scratchpad, artifact tool state is **ephemeral per run** but **persistent a
 
 ```
 Turn 1:
-  Prompt includes: _ARTIFACT_MANIFEST (artifact list + schemas)
-                   _ARTIFACT_TOOLS (available tool documentation)
+  Prompt includes: _ARTIFACT_MANIFEST (markdown — artifact A/B/C with schemas)
+                   _ARTIFACT_TOOLS (markdown — grouped by type)
                    _ARTIFACT_TOOL_RESULTS (empty — first turn)
-  LLM responds:    artifactToolCalls: [{ tool: "artifact_get_rows", input: { artifactId: "a1", table: "customers", start: 0, count: 10 } }]
-  Agent executes:  ArtifactToolManager.ExecuteToolCalls() → stores results
+  LLM responds:    artifactToolCalls: [
+                     { artifactId: "A", tool: "get_rows", input: { table: "customers", start: 0, count: 10 } },
+                     { artifactId: "A", tool: "get_schema", input: { table: "customers" } }
+                   ]
+  Agent executes:  Both calls in parallel → stores results
 
 Turn 2:
   Prompt includes: _ARTIFACT_MANIFEST (unchanged)
                    _ARTIFACT_TOOLS (unchanged)
-                   _ARTIFACT_TOOL_RESULTS (contains rows 0-10 from turn 1)
-  LLM responds:    artifactToolCalls: [{ tool: "artifact_aggregate", input: { artifactId: "a1", table: "customers", field: "Revenue", operation: "sum" } }]
+                   _ARTIFACT_TOOL_RESULTS (markdown — rows 0-10 + schema from turn 1)
+  LLM responds:    artifactToolCalls: [{ artifactId: "A", tool: "aggregate", input: { table: "customers", field: "Revenue", operation: "sum" } }]
                    message: "Looking at the top customers, total revenue is..."
-  Agent executes:  More tool calls → stores results
+  Agent executes:  Stores result
 
 Turn 3:
-  Prompt includes: _ARTIFACT_TOOL_RESULTS (contains all prior results)
+  Prompt includes: _ARTIFACT_TOOL_RESULTS (all prior results)
   LLM responds:    message: "Based on my analysis, the top 10 customers represent 45% of revenue..."
                    taskComplete: true
 ```
@@ -1886,35 +1979,47 @@ Turn 3:
 // packages/AI/Agents/src/ArtifactToolManager.ts
 
 export class ArtifactToolManager {
+    /** Alpha-ID → artifact entry (A, B, ... Z, AA, AB, etc.) */
     private artifacts: Map<string, ArtifactEntry>;
     private toolLibraries: Map<string, BaseArtifactToolLibrary>;
     private toolResults: ArtifactToolResult[];
     private accessLog: ArtifactAccessLogEntry[];
+    private nextAlphaId: number = 0;
 
     // ─── LIFECYCLE (mirrors ScratchpadManager) ───
 
-    /** Called at agent run start with all input artifacts */
+    /** Called at agent run start with all input artifacts.
+     *  Assigns immutable alpha-sequence IDs (A, B, ...) to each artifact. */
     Initialize(inputArtifacts: InputArtifact[]): void;
+    /** Register an artifact generated mid-run (e.g., action output).
+     *  Assigns the next alpha ID and makes it available next turn. */
+    RegisterArtifact(artifact: InputArtifact): string;
     /** Reset state between runs */
     Clear(): void;
-    /** Whether any artifacts are available */
+    /** Whether any artifacts are available (input or mid-run generated) */
     HasArtifacts(): boolean;
 
-    // ─── PROMPT INJECTION (mirrors ScratchpadManager) ───
+    // ─── PROMPT INJECTION — ALL OUTPUTS ARE MARKDOWN ───
 
-    /** Compact manifest for prompt: artifact names, types, schemas, sizes */
+    /** Markdown manifest: artifact IDs (A, B, C), names, types, schemas, sizes */
     ToManifestString(): string;
-    /** Documentation of available tools based on artifact types */
+    /** Markdown tool documentation: grouped by artifact type */
     GetToolDocumentation(): string;
-    /** Results from previous turns, formatted for prompt injection */
+    /** Markdown results from previous turns */
     GetPendingResults(): string;
     /** One-line summary for compact contexts */
     GetSummary(): string;
 
     // ─── TOOL EXECUTION (new — scratchpad doesn't have this) ───
 
-    /** Execute tool calls from LLM response, store results */
+    /** Execute tool calls from LLM response (supports parallel batch).
+     *  Resolves alpha ID → artifact → type → tool library, executes, stores results. */
     ExecuteToolCalls(calls: ArtifactToolCall[]): Promise<void>;
+
+    // ─── ID MANAGEMENT ───
+
+    /** Generate next alpha-sequence ID: A, B, ... Z, AA, AB, ... */
+    private NextAlphaId(): string;
 
     // ─── SERIALIZATION (mirrors ScratchpadManager) ───
 
@@ -1932,11 +2037,12 @@ export class ArtifactToolManager {
 
 When `Initialize()` is called, the manager:
 1. Groups input artifacts by artifact type
-2. For each type, looks up `ToolLibraryClass` on `MJ: Artifact Types`
-3. Walks the `ParentID` chain to collect inherited tool libraries
-4. Instantiates each library via `ClassFactory` (same pattern as other MJ plugins)
-5. Merges tool lists (child overrides parent for same-named tools)
-6. Generates the `_ARTIFACT_TOOLS` documentation from the merged tool list
+2. For each distinct type, reads the **pre-computed resolved tool list** from `ArtifactEngine` (computed once at server startup — see Section 8.4.2)
+3. Generates the `_ARTIFACT_TOOLS` documentation grouped by artifact type
+
+No tree walking at runtime — `ArtifactEngine` pre-computes the full `ParentID` → tool inheritance chain for every leaf artifact type at metadata load time. The manager just reads from the cache.
+
+When artifacts are **generated mid-run** (e.g., an action creates a new PDF), the manager detects the new artifact on the next turn and adds the corresponding tool section to the prompt. No reinitialization needed — the resolved tool cache is already populated for all types.
 
 ### 8.7 AI Model Metadata for File Support
 
@@ -2010,6 +2116,8 @@ For small data snapshots (a few hundred rows), storing JSON inline in the `Conte
 - **`ArtifactVersion.FileID`** — references the MJStorage file containing the full row data. This uses the same `FileID` / `ContentMode` infrastructure the file I/O team is building.
 
 The `ArtifactToolManager` handles transparently loading row data from either inline content or MJStorage when artifact tools request it.
+
+> **Open question (flagged by Amith):** How do we determine WHICH MJStorage provider to use, and what happens if none are configured? This affects both data layer (large snapshots) and file I/O (PDF/Excel storage). Must handle gracefully with clear error messages. Coordinate with @bc-izygmunt, @EL-BC, and @madhavrs1 (MJC setup wizard should guide users through configuring MJStorage, Communications, and other MJ services).
 
 ---
 
