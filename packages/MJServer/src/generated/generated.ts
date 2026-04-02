@@ -33736,9 +33736,9 @@ export class MJDuplicateRun_ {
     @MaxLength(36)
     StartedByUserID: string;
         
-    @Field() 
+    @Field({nullable: true, description: `Optional List ID to narrow the scope of duplicate detection. When NULL, all records in the entity are scanned. When set, only records in the specified list are checked for duplicates.`}) 
     @MaxLength(36)
-    SourceListID: string;
+    SourceListID?: string;
         
     @Field() 
     StartedAt: Date;
@@ -33778,9 +33778,9 @@ export class MJDuplicateRun_ {
     @MaxLength(100)
     StartedByUser: string;
         
-    @Field() 
+    @Field({nullable: true}) 
     @MaxLength(100)
-    SourceList: string;
+    SourceList?: string;
         
     @Field({nullable: true}) 
     @MaxLength(100)
@@ -33806,7 +33806,7 @@ export class CreateMJDuplicateRunInput {
     StartedByUserID?: string;
 
     @Field({ nullable: true })
-    SourceListID?: string;
+    SourceListID: string | null;
 
     @Field({ nullable: true })
     StartedAt?: Date;
@@ -33846,7 +33846,7 @@ export class UpdateMJDuplicateRunInput {
     StartedByUserID?: string;
 
     @Field({ nullable: true })
-    SourceListID?: string;
+    SourceListID?: string | null;
 
     @Field({ nullable: true })
     StartedAt?: Date;

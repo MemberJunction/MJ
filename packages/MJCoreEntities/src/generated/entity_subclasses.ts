@@ -11817,11 +11817,12 @@ export const MJDuplicateRunSchema = z.object({
         * * Display Name: Started By User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
-    SourceListID: z.string().describe(`
+    SourceListID: z.string().nullable().describe(`
         * * Field Name: SourceListID
         * * Display Name: Source List
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)`),
+        * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)
+        * * Description: Optional List ID to narrow the scope of duplicate detection. When NULL, all records in the entity are scanned. When set, only records in the specified list are checked for duplicates.`),
     StartedAt: z.date().describe(`
         * * Field Name: StartedAt
         * * Display Name: Started At
@@ -11887,7 +11888,7 @@ export const MJDuplicateRunSchema = z.object({
         * * Field Name: StartedByUser
         * * Display Name: Started By User
         * * SQL Data Type: nvarchar(100)`),
-    SourceList: z.string().describe(`
+    SourceList: z.string().nullable().describe(`
         * * Field Name: SourceList
         * * Display Name: Source List
         * * SQL Data Type: nvarchar(100)`),
@@ -54775,11 +54776,12 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     * * Display Name: Source List
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Lists (vwLists.ID)
+    * * Description: Optional List ID to narrow the scope of duplicate detection. When NULL, all records in the entity are scanned. When set, only records in the specified list are checked for duplicates.
     */
-    get SourceListID(): string {
+    get SourceListID(): string | null {
         return this.Get('SourceListID');
     }
-    set SourceListID(value: string) {
+    set SourceListID(value: string | null) {
         this.Set('SourceListID', value);
     }
 
@@ -54929,7 +54931,7 @@ export class MJDuplicateRunEntity extends BaseEntity<MJDuplicateRunEntityType> {
     * * Display Name: Source List
     * * SQL Data Type: nvarchar(100)
     */
-    get SourceList(): string {
+    get SourceList(): string | null {
         return this.Get('SourceList');
     }
 
