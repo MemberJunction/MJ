@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 import { MJConversationEntity } from '@memberjunction/core-entities';
-import { ConversationDataService } from '../../services/conversation-data.service';
+import { ConversationEngine } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { NotificationService } from '../../services/notification.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
@@ -744,8 +744,12 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
+  private engine = ConversationEngine.Instance;
+
+  // Local UI state for loading/refreshing
+  public IsLoading: boolean = false;
+
   constructor(
-    public conversationData: ConversationDataService,
     private dialogService: DialogService,
     private notificationService: NotificationService,
     private activeTasksService: ActiveTasksService,
@@ -754,10 +758,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   get filteredConversations(): MJConversationEntity[] {
     if (!this.searchQuery || this.searchQuery.trim() === '') {
-      return this.conversationData.conversations;
+      return this.engine.Conversations;
     }
     const lowerQuery = this.searchQuery.toLowerCase();
-    return this.conversationData.conversations.filter(c =>
+    return this.engine.Conversations.filter(c =>
       (c.Name?.toLowerCase().includes(lowerQuery)) ||
       (c.Description?.toLowerCase().includes(lowerQuery))
     );
@@ -773,13 +777,13 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     // Load conversations on init
-    this.conversationData.loadConversations(this.environmentId, this.currentUser);
+    this.engine.LoadConversations(this.environmentId, this.currentUser, false);
 
     // Re-run change detection whenever the conversations list changes (pin, archive, rename, etc.).
     // filteredConversations/pinnedConversations/unpinnedConversations are pure getters that read
-    // conversationData.conversations directly, so Angular doesn't know to re-evaluate them unless
+    // engine.Conversations directly, so Angular doesn't know to re-evaluate them unless
     // we explicitly trigger a check here.
-    this.conversationData.conversations$.pipe(
+    this.engine.Conversations$.pipe(
       takeUntil(this.destroy$)
     ).subscribe(() => {
       this.cdr.detectChanges();
@@ -831,7 +835,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
     this.isRefreshing = true;
     try {
-      await this.conversationData.refreshConversations(this.environmentId, this.currentUser);
+      await this.engine.LoadConversations(this.environmentId, this.currentUser, true);
       // Signal parent to also reload messages in the active conversation
       this.refreshRequested.emit();
     } catch (error) {
@@ -910,7 +914,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
         const newDescription = typeof result === 'string' ? conversation.Description : result.secondValue;
 
         if (newName !== conversation.Name || newDescription !== conversation.Description) {
-          await this.conversationData.saveConversation(
+          await this.engine.SaveConversation(
             conversation.ID,
             { Name: newName, Description: newDescription || '' },
             this.currentUser
@@ -934,7 +938,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
       if (confirmed) {
         const deletedId = conversation.ID;
-        await this.conversationData.deleteConversation(deletedId, this.currentUser);
+        await this.engine.DeleteConversation(deletedId, this.currentUser);
         this.cdr.detectChanges();
         this.conversationDeleted.emit(deletedId);
       }
@@ -957,7 +961,7 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     if (event) event.stopPropagation();
     this.closeMenu(); // Close immediately on user action — don't wait for the async op
     try {
-      await this.conversationData.togglePin(conversation.ID, this.currentUser);
+      await this.engine.PinConversation(conversation.ID, !conversation.IsPinned, this.currentUser);
     } catch (error) {
       console.error('Error toggling pin:', error);
       await this.dialogService.alert('Error', 'Failed to pin/unpin conversation. Please try again.');
@@ -1007,16 +1011,16 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
     if (confirmed) {
       try {
-        const result = await this.conversationData.deleteMultipleConversations(
+        const result = await this.engine.DeleteMultipleConversations(
           Array.from(this.selectedConversationIds),
           this.currentUser
         );
 
         // Show results if there were any failures
-        if (result.failed.length > 0) {
+        if (result.Failed.length > 0) {
           await this.dialogService.alert(
             'Partial Success',
-            `Deleted ${result.successful.length} of ${count} conversations. ${result.failed.length} failed.`
+            `Deleted ${result.Successful.length} of ${count} conversations. ${result.Failed.length} failed.`
           );
         }
 

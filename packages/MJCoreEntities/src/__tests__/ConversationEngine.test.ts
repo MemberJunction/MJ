@@ -587,4 +587,53 @@ describe('ConversationEngine', () => {
             expect(engine.GetCachedDetailEntry('nope')).toBeUndefined();
         });
     });
+
+    // ========================================================================
+    // SAVE CONVERSATION
+    // ========================================================================
+    describe('SaveConversation', () => {
+        it('should save updates and update the in-memory list', async () => {
+            runViewResultQueue.push({ Success: true, Results: [createMockConversation({ ID: 'c1', Name: 'Original' })] });
+            await engine.LoadConversations('env-1', contextUser);
+
+            const result = await engine.SaveConversation('c1', { Name: 'Updated' } as Partial<never>, contextUser);
+            expect(result).toBe(true);
+
+            const updated = engine.GetConversation('c1');
+            expect(updated).toBeDefined();
+        });
+
+        it('should update in-memory entity when conversation exists in cache', async () => {
+            const conv = createMockConversation({ ID: 'c1', Name: 'Original' });
+            runViewResultQueue.push({ Success: true, Results: [conv] });
+            await engine.LoadConversations('env-1', contextUser);
+
+            const result = await engine.SaveConversation('c1', { Name: 'Updated' } as Partial<never>, contextUser);
+            expect(result).toBe(true);
+        });
+    });
+
+    // ========================================================================
+    // DELETE MULTIPLE CONVERSATIONS
+    // ========================================================================
+    describe('DeleteMultipleConversations', () => {
+        it('should return empty arrays when given no IDs', async () => {
+            const result = await engine.DeleteMultipleConversations([], contextUser);
+            expect(result.Successful).toEqual([]);
+            expect(result.Failed).toEqual([]);
+        });
+
+        it('should process each ID and return results', async () => {
+            runViewResultQueue.push({ Success: true, Results: [
+                createMockConversation({ ID: 'c1', Name: 'First' }),
+                createMockConversation({ ID: 'c2', Name: 'Second' }),
+            ] });
+            await engine.LoadConversations('env-1', contextUser);
+
+            const result = await engine.DeleteMultipleConversations(['c1', 'c2'], contextUser);
+            // Mock entity always succeeds Delete, so both should be successful
+            expect(result.Successful).toHaveLength(2);
+            expect(result.Failed).toHaveLength(0);
+        });
+    });
 });

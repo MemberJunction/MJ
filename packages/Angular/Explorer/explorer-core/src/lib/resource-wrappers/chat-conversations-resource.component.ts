@@ -3,8 +3,8 @@ import { Router, NavigationEnd } from '@angular/router';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService } from '@memberjunction/ng-conversations';
+import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
+import { ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService } from '@memberjunction/ng-conversations';
 import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -16,7 +16,7 @@ import { Subject, takeUntil, filter } from 'rxjs';
  * Designed to work with the tab system for multi-tab conversation management
  *
  * This component manages its own selection state locally, following the encapsulation pattern:
- * - Services (ConversationDataService) are used for shared DATA (caching, loading, saving)
+ * - ConversationEngine singleton is used for shared DATA (caching, loading, saving)
  * - Local state variables manage SELECTION state (which conversation is active)
  * - State flows down to children via @Input, events flow up via @Output
  */
@@ -222,9 +222,10 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  private engine = ConversationEngine.Instance;
+
   constructor(
     private navigationService: NavigationService,
-    private conversationData: ConversationDataService,
     private router: Router,
     private mentionAutocompleteService: MentionAutocompleteService,
     private cdr: ChangeDetectorRef,
@@ -343,7 +344,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       // Initialize AIEngine, conversations, and mention service in parallel
       await Promise.all([
         AIEngineBase.Instance.Config(false),
-        this.conversationData.loadConversations(this.environmentId, this.currentUser),
+        this.engine.LoadConversations(this.environmentId, this.currentUser, false),
         this.mentionAutocompleteService.initialize(this.currentUser)
       ]);
 
@@ -393,7 +394,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     if (!conversationId) return;
 
     // Try to get from cache first
-    const conversation = this.conversationData.getConversationById(conversationId);
+    const conversation = this.engine.GetConversation(conversationId);
     if (conversation) {
       this.selectedConversation = conversation;
       this.updateTabTitle();
@@ -451,7 +452,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.isNewUnsavedConversation = false;
 
     // Load the conversation entity from data service
-    const conversation = this.conversationData.getConversationById(conversationId);
+    const conversation = this.engine.GetConversation(conversationId);
     if (conversation) {
       this.selectedConversation = conversation;
     } else {
@@ -610,7 +611,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onConversationDeleted(deletedId: string): void {
     if (this.selectedConversationId === deletedId) {
-      const remaining = this.conversationData.conversations.filter(c => !UUIDsEqual(c.ID, deletedId));
+      const remaining = this.engine.Conversations.filter(c => !UUIDsEqual(c.ID, deletedId));
       if (remaining.length > 0) {
         void this.selectConversation(remaining[0].ID);
         this.updateUrl();

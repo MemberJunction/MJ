@@ -3,7 +3,6 @@ import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, Trans
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ConversationEngine } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ConversationDataService } from '../../services/conversation-data.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
@@ -271,8 +270,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public acceptedFileTypes: string = 'image/*';
   private conversationManagerAgent: MJAIAgentEntityExtended | null = null;
 
+  private engine = ConversationEngine.Instance;
+
   constructor(
-    public conversationData: ConversationDataService,
     private agentStateService: AgentStateService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
@@ -1614,7 +1614,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   async onProjectSelected(project: any): Promise<void> {
     if (this.conversation && project) {
       try {
-        await this.conversationData.saveConversation(
+        await this.engine.SaveConversation(
           this.conversation.ID,
           { ProjectID: project.ID },
           this.currentUser
@@ -1626,7 +1626,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     } else if (this.conversation && !project) {
       // Remove project assignment
       try {
-        await this.conversationData.saveConversation(
+        await this.engine.SaveConversation(
           this.conversation.ID,
           { ProjectID: null },
           this.currentUser
@@ -2111,8 +2111,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     try {
       this.isProcessing = true;
 
-      // Create a new conversation using the data service
-      const newConversation = await this.conversationData.createConversation(
+      // Create a new conversation using the engine
+      const newConversation = await this.engine.CreateConversation(
         'New Conversation', // Temporary name - will be auto-named after first message
         this.environmentId,
         this.currentUser

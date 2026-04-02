@@ -27,7 +27,7 @@ export interface ConversationDetailCache {
  *
  * This engine is the single source of truth for conversation data across all UI
  * consumers (chat area, sidebar, overlay, etc.). It replaces per-component caching
- * that previously lived in ConversationDataService, conversation-chat-area component,
+ * that previously lived in conversation-chat-area component,
  * and other scattered locations.
  *
  * Usage:

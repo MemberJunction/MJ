@@ -14,7 +14,6 @@ export * from './lib/models/navigation-request.model';
 
 // Services - State
 export * from './lib/services/data-cache.service';
-export * from './lib/services/conversation-data.service';
 export * from './lib/services/artifact-state.service';
 export * from './lib/services/agent-state.service';
 export * from './lib/services/conversation-agent.service';
