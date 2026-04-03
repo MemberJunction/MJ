@@ -9,7 +9,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject } from '@angular/core';
 import { Subject } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
-import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, VectorMetadataEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocumentEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -327,8 +327,8 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.cdr.detectChanges();
 
         try {
-            // Use VectorMetadataEngine for cached vector DBs, indexes, and entity docs
-            const engine = VectorMetadataEngine.Instance;
+            // Use KnowledgeHubMetadataEngine for cached vector DBs, indexes, and entity docs
+            const engine = KnowledgeHubMetadataEngine.Instance;
             await engine.Config(false);
 
             this.loadVectorDBProvidersFromEngine(engine.VectorDatabases);

@@ -1,5 +1,5 @@
 import { RegisterClass } from "@memberjunction/global";
-import { AutotagBase } from "../../Core";
+import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams, ContentSourceTypeParamValue } from "../../Engine";
 import { UserInfo, Metadata, RunView, BaseEntity, LogStatus } from "@memberjunction/core";
 import { MJContentSourceEntity, MJContentItemEntity } from "@memberjunction/core-entities";
@@ -17,12 +17,12 @@ export class AutotagEntity extends AutotagBase {
         this.engine = AutotagBaseEngine.Instance;
     }
 
-    public async Autotag(contextUser: UserInfo): Promise<void> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<void> {
         this.contextUser = contextUser;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Entity');
         const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
         const contentItemsToProcess: MJContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, onProgress);
     }
 
     public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {

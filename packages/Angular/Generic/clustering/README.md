@@ -1,6 +1,6 @@
 # @memberjunction/ng-clustering
 
-Reusable Angular components for interactive cluster visualization. Provides an SVG scatter plot, a floating configuration panel, and a headless clustering service that wraps K-Means, DBSCAN, UMAP, and PCA into a single pipeline.
+Reusable Angular components for interactive cluster visualization. Provides an SVG scatter plot with a slide-in detail panel, a floating configuration panel, LLM-generated cluster labels, save/restore of visualizations, and a headless clustering service that wraps K-Means, DBSCAN, UMAP, and PCA into a single pipeline.
 
 ## Architecture
 
@@ -32,7 +32,7 @@ Reusable Angular components for interactive cluster visualization. Provides an S
         (SimpleVectorService)
 ```
 
-The config panel emits a `ClusterConfig`; the parent fetches vectors (from a database, API, or any source), passes them to `ClusteringService.RunClustering()`, and feeds the result into the scatter component.
+The config panel emits a `ClusterConfig`; the parent fetches vectors (from a database, API, or any source), passes them to `ClusteringService.RunClustering()`, and feeds the result into the scatter component. Clicking a point opens a detail panel slide-in showing entity metadata, cluster members, and an "Open Record" button. Cluster labels can be generated via LLM using the "Cluster Naming" AI prompt. Visualizations can be saved and restored with full viewport state and cluster labels.
 
 ## Installation
 
@@ -231,6 +231,69 @@ onBeforeZoom(event: CancelableEvent<ViewportRect>): void {
     }
 }
 ```
+
+---
+
+## Detail Panel
+
+Clicking a data point in the scatter plot opens a slide-in detail panel on the right side. The panel displays:
+
+- **Entity icon and record identifier** at the top
+- **Metadata entries** parsed from the vector's stored metadata (key-value pairs)
+- **Cluster membership** showing all other points in the same cluster, clickable to navigate between members
+- **"Open Record" button** that emits the `OpenRecord` event so the host application can navigate to the entity form
+
+The detail panel state is managed internally by the scatter component via `SelectedPoint`, `ShowDetailPanel`, `DetailMetadataEntries`, and `ClusterMembers` properties.
+
+### Outputs (Detail Panel)
+
+| Output | Payload | Description |
+|---|---|---|
+| `OpenRecord` | `ClusterPoint` | Fires when the user clicks "Open Record" in the detail panel |
+
+### Methods (Detail Panel)
+
+| Method | Signature | Description |
+|---|---|---|
+| `CloseDetailPanel` | `(): void` | Programmatically close the detail panel |
+| `OnClusterMemberClick` | `(point: ClusterPoint): void` | Select a different cluster member |
+| `ToggleClusterMembers` | `(): void` | Toggle cluster members list expansion |
+
+---
+
+## LLM-Generated Cluster Labels
+
+Cluster labels can be generated using the **"Cluster Naming"** AI prompt. When triggered, the service sends representative metadata from each cluster's members to the LLM, which returns concise, descriptive labels. Labels are displayed:
+
+- On the scatter plot as text positioned above cluster centroids
+- In the legend alongside the color swatch
+- In the detail panel's cluster section
+
+Labels are stored as `ClusterLabel[]` (with `ClusterId` and `Label` fields) and included when saving a visualization.
+
+---
+
+## Save and Restore Visualizations
+
+Visualizations can be saved via the config panel's "Save" action and later restored. A `SavedClusterVisualization` includes:
+
+| Field | Description |
+|---|---|
+| `Config` | The `ClusterConfig` used for the run |
+| `Points` | All 2D-projected points |
+| `Clusters` | Cluster summaries |
+| `Metrics` | Clustering quality metrics |
+| `Viewport` | Pan + zoom state (`ViewportRect`) at save time |
+| `ClusterLabels` | LLM-generated (or user-edited) labels |
+| `SavedAt` | Timestamp |
+
+When restoring, the scatter component can be initialized with the saved `Points`, `Clusters`, and viewport state without re-running the clustering algorithm.
+
+---
+
+## Entity Document Selector
+
+When a selected entity has two or more active entity documents, the config panel displays a document selector dropdown. This allows the user to choose which entity document (and its associated embedding model + vector index) to use for fetching vectors. The parent dashboard uses the `FetchEntityVectors` GraphQL query to retrieve vectors from the vector database filtered by the selected entity document.
 
 ---
 

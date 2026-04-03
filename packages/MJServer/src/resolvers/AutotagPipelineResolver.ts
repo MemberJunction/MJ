@@ -81,17 +81,23 @@ export class AutotagPipelineResolver extends ResolverBase {
                 return;
             }
 
-            // Stage: autotagging
-            this.publishProgress(pipelineRunID, 'autotag', 100, 10, startTime, 'Running autotaggers...');
+            // Stage: autotagging — provide a progress callback that publishes per-item updates
+            this.publishProgress(pipelineRunID, 'autotag', 0, 0, startTime, 'Running autotaggers...');
 
-            // Run with both Autotag=1 and Vectorize=1: the action will tag, then embed directly
+            const progressCallback = (processed: number, total: number, currentItem?: string) => {
+                const pct = total > 0 ? Math.round((processed / total) * 80) : 0; // 0-80% for tagging
+                this.publishProgress(pipelineRunID, 'autotag', total, pct, startTime, currentItem || `${processed}/${total} items`);
+            };
+
+            // Run with both Autotag=1 and Vectorize=1: the action will tag and embed in parallel
             const result = await ActionEngineServer.Instance.RunAction({
                 Action: action,
                 ContextUser: currentUser,
                 Filters: [],
                 Params: [
                     { Name: 'Autotag', Value: 1, Type: 'Input' },
-                    { Name: 'Vectorize', Value: 1, Type: 'Input' }
+                    { Name: 'Vectorize', Value: 1, Type: 'Input' },
+                    { Name: '__progressCallback', Value: progressCallback, Type: 'Input' }
                 ]
             });
 

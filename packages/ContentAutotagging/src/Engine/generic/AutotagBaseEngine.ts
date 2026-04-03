@@ -1,5 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core'
-import { MJGlobal, UUIDsEqual, RegisterClass } from '@memberjunction/global'
+import { MJGlobal, UUIDsEqual, NormalizeUUID, RegisterClass } from '@memberjunction/global'
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentFileTypeEntity,
     MJContentProcessRunEntity, MJContentTypeEntity, MJContentSourceTypeEntity,
@@ -15,10 +15,27 @@ import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
 import crypto from 'crypto'
-import { BaseLLM, BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai'
+import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai'
 import { AIEngine } from '@memberjunction/aiengine'
+import { AIPromptRunner } from '@memberjunction/ai-prompts'
+import { AIPromptParams } from '@memberjunction/ai-core-plus'
+import type { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus'
 import { TextChunker, ChunkTextParams } from '@memberjunction/ai-vectors'
 import { VectorDBBase, VectorRecord, BaseResponse } from '@memberjunction/ai-vectordb'
+
+/**
+ * Resolved vector infrastructure for a specific (embeddingModel + vectorIndex) pair.
+ * Items sharing the same pair are batched together for efficient processing.
+ */
+interface ResolvedVectorInfrastructure {
+    embedding: BaseEmbeddings;
+    vectorDB: VectorDBBase;
+    indexName: string;
+    embeddingModelName: string;
+}
+
+/** Default batch size for vectorization processing */
+const DEFAULT_VECTORIZE_BATCH_SIZE = 20;
 
 /**
  * Core engine for content autotagging. Extends BaseEngine to cache content metadata
@@ -83,8 +100,14 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
     /**
      * Given a list of content items, extract the text from each and process with LLM for tagging.
+     * Items are processed in configurable batches with controlled concurrency within each batch.
      */
-    public async ExtractTextAndProcessWithLLM(contentItems: MJContentItemEntity[], contextUser: UserInfo): Promise<void> {
+    public async ExtractTextAndProcessWithLLM(
+        contentItems: MJContentItemEntity[],
+        contextUser: UserInfo,
+        batchSize: number = DEFAULT_VECTORIZE_BATCH_SIZE,
+        onProgress?: (processed: number, total: number, currentItem?: string) => void
+    ): Promise<void> {
         if (!contentItems || contentItems.length === 0) {
             LogStatus('No content items to process');
             return;
@@ -94,16 +117,35 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         processRunParams.sourceID = contentItems[0].ContentSourceID;
         processRunParams.startTime = new Date();
         processRunParams.numItemsProcessed = contentItems.length;
+        let totalProcessed = 0;
 
-        for (const contentItem of contentItems) {
-            try {
-                const processingParams = await this.buildProcessingParams(contentItem, contextUser);
-                await this.ProcessContentItemText(processingParams, contextUser);
-            } catch (e) {
-                LogError(`Failed to process content item: ${contentItem.ID}`, undefined, e);
-                throw e;
-            }
+        LogStatus(`ExtractTextAndProcessWithLLM: processing ${contentItems.length} items in batches of ${batchSize}`);
+        let batchSuccesses = 0;
+        let batchFailures = 0;
+        for (let i = 0; i < contentItems.length; i += batchSize) {
+            const batch = contentItems.slice(i, i + batchSize);
+            const batchNum = Math.floor(i / batchSize) + 1;
+            let batchOk = 0, batchFail = 0;
+            const batchPromises = batch.map(async (contentItem) => {
+                try {
+                    const processingParams = await this.buildProcessingParams(contentItem, contextUser);
+                    await this.ProcessContentItemText(processingParams, contextUser);
+                    totalProcessed++;
+                    batchOk++;
+                    onProgress?.(totalProcessed, contentItems.length, contentItem.Name);
+                } catch (e) {
+                    LogError(`Failed to process content item: ${contentItem.ID}`, undefined, e);
+                    totalProcessed++;
+                    batchFail++;
+                    onProgress?.(totalProcessed, contentItems.length);
+                }
+            });
+            await Promise.all(batchPromises);
+            batchSuccesses += batchOk;
+            batchFailures += batchFail;
+            LogStatus(`Batch ${batchNum}: ${batchOk} succeeded, ${batchFail} failed (${totalProcessed}/${contentItems.length} total)`);
         }
+        LogStatus(`ExtractTextAndProcessWithLLM complete: ${batchSuccesses} succeeded, ${batchFailures} failed out of ${contentItems.length}`);
 
         processRunParams.endTime = new Date();
         await this.saveProcessRun(processRunParams, contextUser);
@@ -136,24 +178,59 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         await this.saveLLMResults(LLMResults, contextUser);
     }
 
+    /**
+     * Resolves the "Content Autotagging" prompt from the AIEngine cache.
+     * Throws if the prompt is not found or not active.
+     */
+    private getAutotagPrompt(): MJAIPromptEntityExtended {
+        const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Content Autotagging');
+        if (!prompt) {
+            throw new Error('AI Prompt "Content Autotagging" not found. Ensure the prompt metadata has been synced to the database.');
+        }
+        if (prompt.Status !== 'Active') {
+            throw new Error(`AI Prompt "Content Autotagging" is not active (Status: ${prompt.Status})`);
+        }
+        return prompt;
+    }
+
+    /**
+     * Builds template data for the autotagging prompt from processing params and chunk context.
+     */
+    private buildPromptData(
+        params: ContentItemProcessParams,
+        chunk: string,
+        previousResults: JsonObject
+    ): Record<string, unknown> {
+        const contentType = this.GetContentTypeName(params.contentTypeID);
+        const contentSourceType = this.GetContentSourceTypeName(params.contentSourceTypeID);
+        const additionalAttributePrompts = this.GetAdditionalContentTypePrompt(params.contentTypeID);
+        const hasPreviousResults = Object.keys(previousResults).length > 0;
+
+        return {
+            contentType,
+            contentSourceType,
+            minTags: params.minTags,
+            maxTags: params.maxTags,
+            additionalAttributePrompts,
+            contentText: chunk,
+            previousResults: hasPreviousResults ? JSON.stringify(previousResults) : undefined,
+        };
+    }
+
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo): Promise<JsonObject> {
-        const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, params.modelID));
-        if (!model) {
-            throw new Error(`AI Model with ID ${params.modelID} not found`);
-        }
+        await AIEngine.Instance.Config(false, contextUser);
 
-        const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass));
-        if (!llm) {
-            throw new Error(`Failed to create LLM instance for driver ${model.DriverClass}`);
-        }
+        const prompt = this.getAutotagPrompt();
 
-        const chunks = this.chunkExtractedText(params.text, model.InputTokenLimit);
+        // Determine token limit for chunking: use override model if set, else first prompt-model, else a default
+        const tokenLimit = this.resolveTokenLimit(params.modelID);
+        const chunks = this.chunkExtractedText(params.text, tokenLimit);
+
         let LLMResults: JsonObject = {};
         const startTime = new Date();
 
         for (const chunk of chunks) {
-            const { systemPrompt, userPrompt } = await this.getLLMPrompts(params, chunk, LLMResults, contextUser);
-            LLMResults = await this.processChunkWithLLM(llm, systemPrompt, userPrompt, LLMResults, model.APIName);
+            LLMResults = await this.processChunkWithPromptRunner(prompt, params, chunk, LLMResults, contextUser);
         }
 
         LLMResults.processStartTime = startTime;
@@ -163,75 +240,86 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return LLMResults;
     }
 
-    public async processChunkWithLLM(llm: BaseLLM, systemPrompt: string, userPrompt: string, LLMResults: JsonObject, modelAPIName: string): Promise<JsonObject> {
-        const response = await llm.ChatCompletion({
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userPrompt }
-            ],
-            model: modelAPIName,
-            temperature: 0.0,
-        });
+    /**
+     * Resolves the input token limit for chunking. Uses the model specified by modelID if available,
+     * otherwise falls back to a conservative default.
+     */
+    private resolveTokenLimit(modelID: string): number {
+        const DEFAULT_TOKEN_LIMIT = 100000;
+        if (modelID) {
+            const model = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, modelID));
+            if (model) {
+                return model.InputTokenLimit;
+            }
+        }
+        return DEFAULT_TOKEN_LIMIT;
+    }
 
-        const queryResponse = response.data.choices[0]?.message?.content?.trim() || '';
+    /**
+     * Processes a single text chunk using AIPromptRunner and merges results.
+     * Uses the prompt's configured model by default. If ContentType.AIModelID is set,
+     * it is passed as a runtime model override via AIPromptParams.override.
+     */
+    public async processChunkWithPromptRunner(
+        prompt: MJAIPromptEntityExtended,
+        params: ContentItemProcessParams,
+        chunk: string,
+        LLMResults: JsonObject,
+        contextUser: UserInfo
+    ): Promise<JsonObject> {
+        const promptParams = new AIPromptParams();
+        promptParams.prompt = prompt;
+        promptParams.contextUser = contextUser;
+        promptParams.data = this.buildPromptData(params, chunk, LLMResults);
+        promptParams.skipValidation = false;
+        promptParams.attemptJSONRepair = true;
+        promptParams.additionalParameters = { temperature: 0.0 };
 
-        let JSONQueryResponse: JsonObject;
-        try {
-            JSONQueryResponse = JSON.parse(queryResponse);
-        } catch (parseError) {
-            LogError('Failed to parse LLM response as JSON', undefined, queryResponse);
+        // If the ContentType specifies a preferred AI model, use it as a runtime override
+        if (params.modelID) {
+            promptParams.override = { modelId: params.modelID };
+        }
+
+        const runner = new AIPromptRunner();
+        // Per-item logging removed for cleanliness — batch-level logging in ExtractTextAndProcessWithLLM
+        const result = await runner.ExecutePrompt<JsonObject>(promptParams);
+
+        if (!result.success) {
+            LogError(`AIPromptRunner FAILED for content item ${params.contentItemID}: ${result.errorMessage ?? 'no error message'}`, undefined, result);
             return LLMResults;
         }
 
-        for (const key in JSONQueryResponse) {
-            const value = JSONQueryResponse[key];
-            if (value !== null) {
-                LLMResults[key] = value;
+
+        // Parse the result — AIPromptRunner may return a raw JSON string or a parsed object
+        let chunkResult: JsonObject | null = null;
+        if (typeof result.result === 'string') {
+            try {
+                chunkResult = JSON.parse(result.result as string) as JsonObject;
+            } catch {
+                LogError(`Failed to parse LLM result as JSON for item ${params.contentItemID}: ${String(result.result).substring(0, 200)}`);
+                return LLMResults;
+            }
+        } else {
+            chunkResult = result.result as JsonObject;
+        }
+
+        // Merge results from this chunk into the accumulated results
+        if (chunkResult) {
+            for (const key in chunkResult) {
+                const value = chunkResult[key];
+                if (value !== null) {
+                    LLMResults[key] = value;
+                }
             }
         }
 
         return LLMResults;
     }
 
-    public async getLLMPrompts(params: ContentItemProcessParams, chunk: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<{ systemPrompt: string; userPrompt: string }> {
-        const contentType = this.GetContentTypeName(params.contentTypeID);
-        const contentSourceType = this.GetContentSourceTypeName(params.contentSourceTypeID);
-        const additionalContentTypePrompts = this.GetAdditionalContentTypePrompt(params.contentTypeID);
-
-        const systemPrompt = `You are a highly skilled text analysis assistant. You have decades of experience and pride yourself on your attention to detail and ability to capture both accurate information, as well as tone and subtext.
-        Your task is to accurately extract key information from a provided piece of text based on a series of prompts. You are provided with text that should be a ${contentType}, that has been extracted from a ${contentSourceType}.
-        The text MUST be of the type ${contentType} for the subsequent processing.`;
-
-        const userPrompt = `
-        If the provided text does not actually appear to be of the type ${contentType}, please disregard everything in the instructions after this and return this exact JSON response: { isValidContent: false (as a boolean) }.
-        Assuming the type of the text is in fact from a ${contentType}, please extract the title of the provided text, a short summary of the provided documents, as well as between ${params.minTags} and ${params.maxTags} topical key words that are most relevant to the text.
-        If there is no title explicitly provided in the text, please provide a title that you think best represents the text.
-        Please provide the keywords in a list format.
-        Make sure the response is just the json file without and formatting or code blocks, and strictly following the format below. Please don't include a greeting in the response, only output the json file:
-
-        {
-            "title": (title here),
-            "description": (description here),
-            "keywords": (list keywords here),
-            "isValidContent": true (as a boolean)
-        }
-
-        ${additionalContentTypePrompts}
-
-        Please make sure the response in is valid JSON format.
-
-        You are also provided with the results so far as additional context, please use them to formulate the best results given the provided text: ${JSON.stringify(LLMResults)}
-        The supplied text is: ${chunk}
-        `;
-
-        return { systemPrompt, userPrompt };
-    }
-
     public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
         if (LLMResults.isValidContent === true) {
             await this.saveResultsToContentItemAttribute(LLMResults, contextUser);
             await this.saveContentItemTags(LLMResults.contentItemID as string, LLMResults, contextUser);
-            LogStatus(`Results for content item ${LLMResults.contentItemID} saved successfully`);
         } else {
             await this.deleteInvalidContentItem(LLMResults.contentItemID as string, contextUser);
         }
@@ -295,17 +383,32 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      */
     public async saveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
         const md = new Metadata();
-        const keywords = LLMResults.keywords as string[];
+        const keywords = LLMResults.keywords;
         if (!keywords || !Array.isArray(keywords)) return;
 
+        // Normalize keywords — support both formats:
+        //   Old: ["keyword1", "keyword2"]
+        //   New: [{ tag: "keyword1", weight: 0.95 }, { tag: "keyword2", weight: 0.7 }]
+        const normalizedTags: Array<{ tag: string; weight: number }> = keywords.map((kw: unknown) => {
+            if (typeof kw === 'string') {
+                return { tag: kw, weight: 1.0 };
+            }
+            const obj = kw as { tag?: string; keyword?: string; weight?: number };
+            return {
+                tag: obj.tag || obj.keyword || String(kw),
+                weight: typeof obj.weight === 'number' ? Math.max(0, Math.min(1, obj.weight)) : 0.5,
+            };
+        });
+
         const BATCH_SIZE = 10;
-        for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
-            const batch = keywords.slice(i, i + BATCH_SIZE);
-            await Promise.all(batch.map(async (keyword: string) => {
+        for (let i = 0; i < normalizedTags.length; i += BATCH_SIZE) {
+            const batch = normalizedTags.slice(i, i + BATCH_SIZE);
+            await Promise.all(batch.map(async (item) => {
                 const contentItemTag: MJContentItemTagEntity = await md.GetEntityObject<MJContentItemTagEntity>('MJ: Content Item Tags', contextUser);
                 contentItemTag.NewRecord();
                 contentItemTag.ItemID = contentItemID;
-                contentItemTag.Tag = keyword;
+                contentItemTag.Tag = item.tag;
+                contentItemTag.Set('Weight', item.weight);
                 await contentItemTag.Save();
             }));
         }
@@ -599,14 +702,17 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     // ---- Direct Vectorization ----
 
     /**
-     * Embeds content items directly and upserts them to the first active vector index.
-     * Bypasses Entity Documents — content items already have unstructured text.
-     * Uses deterministic IDs (SHA-1 of "content-item_" + ID) so re-runs update in place.
+     * Embeds content items and upserts them to the appropriate vector index.
+     * Items are grouped by their resolved (embeddingModel + vectorIndex) pair — derived
+     * from per-ContentSource overrides, per-ContentType defaults, or the global fallback
+     * (first active VectorIndex). Each group is processed in configurable batches with
+     * parallel upserts within each batch.
      */
     public async VectorizeContentItems(
         items: MJContentItemEntity[],
         contextUser: UserInfo,
-        onProgress?: (processed: number, total: number) => void
+        onProgress?: (processed: number, total: number) => void,
+        batchSize: number = DEFAULT_VECTORIZE_BATCH_SIZE
     ): Promise<{ vectorized: number; skipped: number }> {
         const eligible = items.filter(i => i.Text && i.Text.trim().length > 0);
         if (eligible.length === 0) {
@@ -617,21 +723,52 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         // Ensure AIEngine is loaded so we can resolve the embedding model
         await AIEngine.Instance.Config(false, contextUser);
 
-        const { embedding, vectorDB, indexName, embeddingModelName } = await this.getVectorInfrastructure(contextUser);
+        // Load content sources + types for per-item infrastructure resolution
+        const { sourceMap, typeMap } = await this.loadContentSourceAndTypeMaps(eligible, contextUser);
+
+        // Group items by their resolved (embeddingModelID + vectorIndexID) pair
+        const groups = this.groupItemsByInfrastructure(eligible, sourceMap, typeMap);
 
         // Load tags for all items in one query
         const tagMap = await this.loadTagsForItems(eligible, contextUser);
 
-        const BATCH_SIZE = 50;
+        let vectorized = 0;
+        let processed = 0;
+
+        for (const [groupKey, groupItems] of groups) {
+            const infra = await this.resolveGroupInfrastructure(groupKey, contextUser);
+            const groupVectorized = await this.vectorizeGroup(groupItems, infra, tagMap, batchSize, (batchProcessed) => {
+                processed += batchProcessed;
+                onProgress?.(Math.min(processed, eligible.length), eligible.length);
+            });
+            vectorized += groupVectorized;
+        }
+
+        LogStatus(`VectorizeContentItems: ${vectorized} vectorized, ${items.length - eligible.length} skipped (empty text)`);
+        return { vectorized, skipped: items.length - eligible.length };
+    }
+
+    /**
+     * Process a single infrastructure group: embed texts in batches and upsert to vector DB.
+     * Upserts within each batch run in parallel for throughput.
+     */
+    private async vectorizeGroup(
+        items: MJContentItemEntity[],
+        infra: ResolvedVectorInfrastructure,
+        tagMap: Map<string, string[]>,
+        batchSize: number,
+        onBatchComplete: (count: number) => void
+    ): Promise<number> {
         let vectorized = 0;
 
-        for (let i = 0; i < eligible.length; i += BATCH_SIZE) {
-            const batch = eligible.slice(i, i + BATCH_SIZE);
+        for (let i = 0; i < items.length; i += batchSize) {
+            const batch = items.slice(i, i + batchSize);
             const texts = batch.map(item => this.buildEmbeddingText(item));
 
-            const embedResult = await embedding.EmbedTexts({ texts, model: embeddingModelName });
+            const embedResult = await infra.embedding.EmbedTexts({ texts, model: infra.embeddingModelName });
             if (!embedResult.vectors || embedResult.vectors.length !== batch.length) {
                 LogError(`VectorizeContentItems: embedding returned ${embedResult.vectors?.length ?? 0} vectors for ${batch.length} texts`);
+                onBatchComplete(batch.length);
                 continue;
             }
 
@@ -641,18 +778,268 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 metadata: this.buildVectorMetadata(item, tagMap.get(item.ID))
             }));
 
-            const response: BaseResponse = await vectorDB.CreateRecords(records, indexName);
-            if (!response.success) {
-                LogError(`VectorizeContentItems: upsert failed for batch starting at ${i}: ${response.message}`);
-            } else {
+            // Upsert records in parallel sub-batches for throughput
+            const UPSERT_CHUNK = 50;
+            const upsertPromises: Promise<BaseResponse>[] = [];
+            for (let j = 0; j < records.length; j += UPSERT_CHUNK) {
+                const chunk = records.slice(j, j + UPSERT_CHUNK);
+                upsertPromises.push(Promise.resolve(infra.vectorDB.CreateRecords(chunk, infra.indexName)));
+            }
+            const responses = await Promise.all(upsertPromises);
+            let batchSuccess = true;
+            for (const response of responses) {
+                if (!response.success) {
+                    LogError(`VectorizeContentItems: upsert failed: ${response.message}`);
+                    batchSuccess = false;
+                }
+            }
+            if (batchSuccess) {
                 vectorized += batch.length;
             }
 
-            onProgress?.(Math.min(i + BATCH_SIZE, eligible.length), eligible.length);
+            onBatchComplete(batch.length);
         }
 
-        LogStatus(`VectorizeContentItems: ${vectorized} vectorized, ${items.length - eligible.length} skipped (empty text)`);
-        return { vectorized, skipped: items.length - eligible.length };
+        return vectorized;
+    }
+
+    /**
+     * Load content source and content type records for all unique source/type IDs
+     * referenced by the given items. Returns maps keyed by normalized ID.
+     */
+    private async loadContentSourceAndTypeMaps(
+        items: MJContentItemEntity[],
+        contextUser: UserInfo
+    ): Promise<{
+        sourceMap: Map<string, Record<string, unknown>>;
+        typeMap: Map<string, Record<string, unknown>>;
+    }> {
+        const sourceIds = [...new Set(items.map(i => i.ContentSourceID))];
+        const typeIds = [...new Set(items.map(i => i.ContentTypeID))];
+
+        const rv = new RunView();
+        const [sourceResult, typeResult] = await rv.RunViews([
+            {
+                EntityName: 'MJ: Content Sources',
+                ExtraFilter: `ID IN (${sourceIds.map(id => `'${id}'`).join(',')})`,
+                ResultType: 'simple'
+            },
+            {
+                EntityName: 'MJ: Content Types',
+                ExtraFilter: `ID IN (${typeIds.map(id => `'${id}'`).join(',')})`,
+                ResultType: 'simple'
+            }
+        ], contextUser);
+
+        const sourceMap = new Map<string, Record<string, unknown>>();
+        if (sourceResult.Success) {
+            for (const row of sourceResult.Results) {
+                const rec = row as Record<string, unknown>;
+                sourceMap.set(NormalizeUUID(rec['ID'] as string), rec);
+            }
+        }
+
+        const typeMap = new Map<string, Record<string, unknown>>();
+        if (typeResult.Success) {
+            for (const row of typeResult.Results) {
+                const rec = row as Record<string, unknown>;
+                typeMap.set(NormalizeUUID(rec['ID'] as string), rec);
+            }
+        }
+
+        return { sourceMap, typeMap };
+    }
+
+    /**
+     * Resolve the (embeddingModelID, vectorIndexID) pair for a content item using
+     * the cascade: ContentSource override -> ContentType default -> null (global fallback).
+     */
+    private resolveItemInfrastructureIds(
+        item: MJContentItemEntity,
+        sourceMap: Map<string, Record<string, unknown>>,
+        typeMap: Map<string, Record<string, unknown>>
+    ): { embeddingModelID: string | null; vectorIndexID: string | null } {
+        const source = sourceMap.get(NormalizeUUID(item.ContentSourceID));
+        if (source) {
+            const srcEmbedding = source['EmbeddingModelID'] as string | null;
+            const srcVector = source['VectorIndexID'] as string | null;
+            if (srcEmbedding && srcVector) {
+                return { embeddingModelID: srcEmbedding, vectorIndexID: srcVector };
+            }
+        }
+
+        const contentType = typeMap.get(NormalizeUUID(item.ContentTypeID));
+        if (contentType) {
+            const typeEmbedding = contentType['EmbeddingModelID'] as string | null;
+            const typeVector = contentType['VectorIndexID'] as string | null;
+            if (typeEmbedding && typeVector) {
+                return { embeddingModelID: typeEmbedding, vectorIndexID: typeVector };
+            }
+        }
+
+        // Global fallback — will be resolved in resolveGroupInfrastructure
+        return { embeddingModelID: null, vectorIndexID: null };
+    }
+
+    /**
+     * Group items by their resolved (embeddingModelID + vectorIndexID) key.
+     * Items with the same pair share infrastructure and can be batched together.
+     */
+    private groupItemsByInfrastructure(
+        items: MJContentItemEntity[],
+        sourceMap: Map<string, Record<string, unknown>>,
+        typeMap: Map<string, Record<string, unknown>>
+    ): Map<string, MJContentItemEntity[]> {
+        const groups = new Map<string, MJContentItemEntity[]>();
+
+        for (const item of items) {
+            const { embeddingModelID, vectorIndexID } = this.resolveItemInfrastructureIds(item, sourceMap, typeMap);
+            const key = this.infraGroupKey(embeddingModelID, vectorIndexID);
+            const group = groups.get(key) ?? [];
+            group.push(item);
+            groups.set(key, group);
+        }
+
+        return groups;
+    }
+
+    /** Create a stable cache key for an (embeddingModelID, vectorIndexID) pair */
+    private infraGroupKey(embeddingModelID: string | null, vectorIndexID: string | null): string {
+        const e = embeddingModelID ? NormalizeUUID(embeddingModelID) : 'default';
+        const v = vectorIndexID ? NormalizeUUID(vectorIndexID) : 'default';
+        return `${e}|${v}`;
+    }
+
+    /**
+     * Resolve a group key into concrete infrastructure instances. For the 'default|default'
+     * key, falls back to the first active VectorIndex (original behavior).
+     */
+    private async resolveGroupInfrastructure(
+        groupKey: string,
+        contextUser: UserInfo
+    ): Promise<ResolvedVectorInfrastructure> {
+        const [embeddingPart, vectorPart] = groupKey.split('|');
+        const isDefault = embeddingPart === 'default' || vectorPart === 'default';
+
+        if (isDefault) {
+            return this.getDefaultVectorInfrastructure(contextUser);
+        }
+
+        return this.buildVectorInfrastructure(embeddingPart, vectorPart, contextUser);
+    }
+
+    /**
+     * Build infrastructure from explicit embeddingModelID and vectorIndexID.
+     * Looks up the vector index by ID and the embedding model from AIEngine.
+     */
+    private async buildVectorInfrastructure(
+        embeddingModelID: string,
+        vectorIndexID: string,
+        contextUser: UserInfo
+    ): Promise<ResolvedVectorInfrastructure> {
+        const rv = new RunView();
+
+        const indexResult = await rv.RunView({
+            EntityName: 'MJ: Vector Indexes',
+            ExtraFilter: `ID='${vectorIndexID}'`,
+            ResultType: 'simple',
+            MaxRows: 1
+        }, contextUser);
+        if (!indexResult.Success || indexResult.Results.length === 0) {
+            throw new Error(`Vector index ${vectorIndexID} not found`);
+        }
+        const vectorIndex = indexResult.Results[0] as Record<string, unknown>;
+
+        return this.createInfrastructureFromIndex(vectorIndex, embeddingModelID, contextUser);
+    }
+
+    /**
+     * Fallback: resolve infrastructure from the first active VectorIndex (original behavior).
+     */
+    private async getDefaultVectorInfrastructure(contextUser: UserInfo): Promise<ResolvedVectorInfrastructure> {
+        const rv = new RunView();
+
+        const indexResult = await rv.RunView({
+            EntityName: 'MJ: Vector Indexes',
+            ResultType: 'simple',
+            MaxRows: 1
+        }, contextUser);
+        if (!indexResult.Success || indexResult.Results.length === 0) {
+            throw new Error('No vector indexes found — create one in the Configuration tab first');
+        }
+        const vectorIndex = indexResult.Results[0] as Record<string, unknown>;
+        const embeddingModelID = vectorIndex['EmbeddingModelID'] as string;
+
+        return this.createInfrastructureFromIndex(vectorIndex, embeddingModelID, contextUser);
+    }
+
+    /**
+     * Shared helper: given a vector index record and embedding model ID, resolve all
+     * driver instances needed for embedding + upsert.
+     */
+    private async createInfrastructureFromIndex(
+        vectorIndex: Record<string, unknown>,
+        embeddingModelID: string,
+        contextUser: UserInfo
+    ): Promise<ResolvedVectorInfrastructure> {
+        const indexName = vectorIndex['Name'] as string;
+        const vectorDatabaseID = vectorIndex['VectorDatabaseID'] as string;
+
+        const rv = new RunView();
+        const dbResult = await rv.RunView({
+            EntityName: 'MJ: Vector Databases',
+            ExtraFilter: `ID='${vectorDatabaseID}'`,
+            ResultType: 'simple',
+            MaxRows: 1
+        }, contextUser);
+        if (!dbResult.Success || dbResult.Results.length === 0) {
+            throw new Error(`Vector database ${vectorDatabaseID} not found`);
+        }
+        const vectorDBClassKey = (dbResult.Results[0] as Record<string, unknown>)['ClassKey'] as string;
+
+        const aiModel = this.findEmbeddingModel(embeddingModelID);
+        const driverClass = aiModel.DriverClass;
+        const embeddingModelName = aiModel.APIName ?? aiModel.Name;
+
+        LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${indexName}"`);
+
+        const embedding = this.createEmbeddingInstance(driverClass);
+        const vectorDB = this.createVectorDBInstance(vectorDBClassKey);
+
+        return { embedding, vectorDB, indexName, embeddingModelName };
+    }
+
+    /** Find an embedding model by ID in AIEngine, with helpful error reporting */
+    private findEmbeddingModel(embeddingModelID: string): { DriverClass: string; APIName: string; Name: string } {
+        const aiModel = AIEngine.Instance.Models.find(m => UUIDsEqual(m.ID, embeddingModelID));
+        if (!aiModel) {
+            const embModels = AIEngine.Instance.Models.filter(m => m.DriverClass?.includes('Embed') || m.Name?.includes('embed'));
+            LogError(`VectorizeContentItems: embeddingModelID ${embeddingModelID} NOT FOUND. Available: ${JSON.stringify(embModels.map(m => ({ id: m.ID, name: m.Name, driver: m.DriverClass })))}`);
+            throw new Error(`Embedding model ${embeddingModelID} not found in AIEngine — ensure AIEngine is configured`);
+        }
+        return aiModel;
+    }
+
+    /** Create a BaseEmbeddings instance for a given driver class */
+    private createEmbeddingInstance(driverClass: string): BaseEmbeddings {
+        const apiKey = GetAIAPIKey(driverClass);
+        if (!apiKey) {
+            throw new Error(`No API key found for embedding driver ${driverClass} — set AI_VENDOR_API_KEY__${driverClass} in .env`);
+        }
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(BaseEmbeddings, driverClass, apiKey);
+        if (!instance) throw new Error(`Failed to create embedding instance for ${driverClass}`);
+        return instance;
+    }
+
+    /** Create a VectorDBBase instance for a given class key */
+    private createVectorDBInstance(classKey: string): VectorDBBase {
+        const apiKey = GetAIAPIKey(classKey);
+        if (!apiKey) {
+            throw new Error(`No API key found for vector DB ${classKey} — set AI_VENDOR_API_KEY__${classKey} in .env`);
+        }
+        const instance = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(VectorDBBase, classKey, apiKey);
+        if (!instance) throw new Error(`Failed to create vector DB instance for ${classKey}`);
+        return instance;
     }
 
     /** SHA-1 deterministic vector ID for a content item */
@@ -708,90 +1095,5 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             }
         }
         return tagMap;
-    }
-
-    /**
-     * Resolve embedding model + vector DB + index name from the first active VectorIndex.
-     * Uses the VectorIndex's EmbeddingModelID and VectorDatabaseID to find the correct
-     * driver classes and API keys — same pattern as entityVectorSync.
-     */
-    private async getVectorInfrastructure(contextUser: UserInfo): Promise<{
-        embedding: BaseEmbeddings;
-        vectorDB: VectorDBBase;
-        indexName: string;
-        embeddingModelName: string;
-    }> {
-        const rv = new RunView();
-
-        // Get the first vector index (use the view which has denormalized fields)
-        const indexResult = await rv.RunView({
-            EntityName: 'MJ: Vector Indexes',
-            ResultType: 'simple',
-            MaxRows: 1
-        }, contextUser);
-        if (!indexResult.Success || indexResult.Results.length === 0) {
-            throw new Error('No vector indexes found — create one in the Configuration tab first');
-        }
-        const vectorIndex = indexResult.Results[0] as Record<string, unknown>;
-        const indexName = vectorIndex['Name'] as string;
-        const vectorDatabaseID = vectorIndex['VectorDatabaseID'] as string;
-        const embeddingModelID = vectorIndex['EmbeddingModelID'] as string;
-
-        // Get vector database ClassKey
-        const dbResult = await rv.RunView({
-            EntityName: 'MJ: Vector Databases',
-            ExtraFilter: `ID='${vectorDatabaseID}'`,
-            ResultType: 'simple',
-            MaxRows: 1
-        }, contextUser);
-        if (!dbResult.Success || dbResult.Results.length === 0) {
-            throw new Error(`Vector database ${vectorDatabaseID} not found`);
-        }
-        const vectorDBRecord = dbResult.Results[0] as Record<string, unknown>;
-        const vectorDBClassKey = vectorDBRecord['ClassKey'] as string;
-
-        // Get embedding model DriverClass from AIEngine (uses the cached model list)
-        LogStatus(`VectorizeContentItems: searching for embeddingModelID="${embeddingModelID}" in ${AIEngine.Instance.Models.length} models`);
-        const first3 = AIEngine.Instance.Models.slice(0, 3).map(m => `${m.ID}|${m.Name}|${m.DriverClass}`);
-        LogStatus(`VectorizeContentItems: first 3 models: ${JSON.stringify(first3)}`);
-
-        const aiModel = AIEngine.Instance.Models.find(m => {
-            const match = UUIDsEqual(m.ID, embeddingModelID);
-            if (m.Name?.includes('embedding')) {
-                LogStatus(`VectorizeContentItems: checking model ${m.ID} "${m.Name}" driver=${m.DriverClass} match=${match}`);
-            }
-            return match;
-        });
-        if (!aiModel) {
-            // Dump all embedding-related models for debugging
-            const embModels = AIEngine.Instance.Models.filter(m => m.DriverClass?.includes('Embed') || m.Name?.includes('embed'));
-            LogError(`VectorizeContentItems: embeddingModelID ${embeddingModelID} NOT FOUND. Embedding models available: ${JSON.stringify(embModels.map(m => ({id: m.ID, name: m.Name, driver: m.DriverClass})))}`);
-            throw new Error(`Embedding model ${embeddingModelID} not found in AIEngine — ensure AIEngine is configured`);
-        }
-        const driverClass = aiModel.DriverClass;
-        const embeddingModelName = aiModel.APIName ?? aiModel.Name;
-
-        LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}"`);
-
-        const embeddingAPIKey = GetAIAPIKey(driverClass);
-        if (!embeddingAPIKey) {
-            throw new Error(`No API key found for embedding driver ${driverClass} — set AI_VENDOR_API_KEY__${driverClass} in .env`);
-        }
-        const vectorDBAPIKey = GetAIAPIKey(vectorDBClassKey);
-        if (!vectorDBAPIKey) {
-            throw new Error(`No API key found for vector DB ${vectorDBClassKey} — set AI_VENDOR_API_KEY__${vectorDBClassKey} in .env`);
-        }
-
-        const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-            BaseEmbeddings, driverClass, embeddingAPIKey
-        );
-        if (!embedding) throw new Error(`Failed to create embedding instance for ${driverClass}`);
-
-        const vectorDB = MJGlobal.Instance.ClassFactory.CreateInstance<VectorDBBase>(
-            VectorDBBase, vectorDBClassKey, vectorDBAPIKey
-        );
-        if (!vectorDB) throw new Error(`Failed to create vector DB instance for ${vectorDBClassKey}`);
-
-        return { embedding, vectorDB, indexName, embeddingModelName };
     }
 }

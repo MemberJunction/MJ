@@ -20,7 +20,7 @@ import {
     MJAIModelEntity,
     MJTemplateEntity,
     MJTemplateContentEntity,
-    VectorMetadataEngine
+    KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -680,8 +680,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     // ================================================================
 
     private async fetchAllData(): Promise<void> {
-        // Use VectorMetadataEngine for cached global reference data
-        const engine = VectorMetadataEngine.Instance;
+        // Use KnowledgeHubMetadataEngine for cached global reference data
+        const engine = KnowledgeHubMetadataEngine.Instance;
         await engine.Config(false);
 
         this.entityDocuments = engine.EntityDocuments;

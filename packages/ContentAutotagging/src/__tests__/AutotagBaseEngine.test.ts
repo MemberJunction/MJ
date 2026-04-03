@@ -7,6 +7,11 @@ const mockRunViewFn = vi.fn().mockResolvedValue({
   Results: [],
 });
 
+const mockRunViewsFn = vi.fn().mockResolvedValue([
+  { Success: true, Results: [], TotalCount: 0, RowCount: 0, Elapsed: 0, ErrorMessage: '' },
+  { Success: true, Results: [], TotalCount: 0, RowCount: 0, Elapsed: 0, ErrorMessage: '' },
+]);
+
 vi.mock('@memberjunction/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/core')>();
   class MockMetadata {
@@ -33,6 +38,7 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
   }
   class MockRunView {
     RunView = mockRunViewFn;
+    RunViews = mockRunViewsFn;
   }
   return {
     ...actual,
@@ -76,9 +82,26 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 });
 
 vi.mock('@memberjunction/ai', () => ({
-  BaseLLM: vi.fn(),
   BaseEmbeddings: class MockBaseEmbeddings {},
   GetAIAPIKey: vi.fn().mockReturnValue('mock-api-key'),
+}));
+
+vi.mock('@memberjunction/ai-prompts', () => ({
+  AIPromptRunner: vi.fn().mockImplementation(() => ({
+    ExecutePrompt: vi.fn().mockResolvedValue({
+      success: true,
+      result: {
+        title: 'Test Title',
+        description: 'Test Description',
+        keywords: ['tag1', 'tag2'],
+        isValidContent: true,
+      },
+    }),
+  })),
+}));
+
+vi.mock('@memberjunction/ai-core-plus', () => ({
+  AIPromptParams: vi.fn().mockImplementation(() => ({})),
 }));
 
 vi.mock('@memberjunction/ai-vectordb', () => ({
@@ -112,6 +135,32 @@ vi.mock('@memberjunction/ai-vectors', () => ({
   ChunkTextParams: vi.fn(),
 }));
 
+const mockModels = [
+  {
+    ID: 'model-1',
+    DriverClass: 'OpenAILLM',
+    InputTokenLimit: 8000,
+    APIName: 'gpt-4',
+    Name: 'GPT-4',
+  },
+  {
+    ID: 'embed-model-1',
+    DriverClass: 'OpenAIEmbedding',
+    InputTokenLimit: 8192,
+    APIName: 'text-embedding-3-small',
+    Name: 'text-embedding-3-small',
+  },
+];
+
+const mockPrompts = [
+  {
+    ID: 'prompt-autotag',
+    Name: 'Content Autotagging',
+    Status: 'Active',
+    TemplateID: 'template-1',
+  },
+];
+
 vi.mock('@memberjunction/aiengine', () => ({
   AIEngine: class MockAIEngine {
     static getInstance() {
@@ -120,42 +169,16 @@ vi.mock('@memberjunction/aiengine', () => ({
     static get Instance() {
       return {
         Config: vi.fn().mockResolvedValue(undefined),
-        Models: [
-          {
-            ID: 'model-1',
-            DriverClass: 'OpenAILLM',
-            InputTokenLimit: 8000,
-            APIName: 'gpt-4',
-            Name: 'GPT-4',
-          },
-          {
-            ID: 'embed-model-1',
-            DriverClass: 'OpenAIEmbedding',
-            InputTokenLimit: 8192,
-            APIName: 'text-embedding-3-small',
-            Name: 'text-embedding-3-small',
-          },
-        ],
+        Models: mockModels,
+        Prompts: mockPrompts,
       };
     }
     Config = vi.fn().mockResolvedValue(undefined);
     get Models() {
-      return [
-        {
-          ID: 'model-1',
-          DriverClass: 'OpenAILLM',
-          InputTokenLimit: 8000,
-          APIName: 'gpt-4',
-          Name: 'GPT-4',
-        },
-        {
-          ID: 'embed-model-1',
-          DriverClass: 'OpenAIEmbedding',
-          InputTokenLimit: 8192,
-          APIName: 'text-embedding-3-small',
-          Name: 'text-embedding-3-small',
-        },
-      ];
+      return mockModels;
+    }
+    get Prompts() {
+      return mockPrompts;
     }
   },
 }));
@@ -541,17 +564,25 @@ describe('AutotagBaseEngine', () => {
     }
 
     /**
-     * Setup the RunView mock to return vector infrastructure data and the
+     * Setup the RunView/RunViews mocks to return vector infrastructure data and the
      * ClassFactory mock to return embedding + vectorDB instances.
      * Returns references to the mock functions for assertion.
+     *
+     * New flow:
+     * 1. RunViews is called to load content sources + types (returns empty by default — global fallback)
+     * 2. RunView calls resolve vector infrastructure (default index, vector DB, tags)
      */
     async function setupVectorMocks(tagResults?: Record<string, unknown>[]) {
-      // Reconfigure the shared RunView mock to return vector infrastructure data
-      let callCount = 0;
-      mockRunViewFn.mockImplementation(async () => {
-        callCount++;
-        if (callCount === 1) {
-          // Vector index query
+      // RunViews returns empty content sources + types (triggers global fallback path)
+      mockRunViewsFn.mockResolvedValue([
+        { Success: true, Results: [], TotalCount: 0, RowCount: 0, Elapsed: 0, ErrorMessage: '' },
+        { Success: true, Results: [], TotalCount: 0, RowCount: 0, Elapsed: 0, ErrorMessage: '' },
+      ]);
+
+      // RunView calls come in varying order — dispatch by EntityName
+      mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+        const entityName = params['EntityName'] as string;
+        if (entityName === 'MJ: Vector Indexes') {
           return {
             Success: true,
             Results: [{
@@ -561,15 +592,14 @@ describe('AutotagBaseEngine', () => {
             TotalCount: 1, RowCount: 1, Elapsed: 0, ErrorMessage: '',
           } as never;
         }
-        if (callCount === 2) {
-          // Vector DB record query
+        if (entityName === 'MJ: Vector Databases') {
           return {
             Success: true,
             Results: [{ ID: 'vdb-1', Name: 'Pinecone', ClassKey: 'PineconeDB' }],
             TotalCount: 1, RowCount: 1, Elapsed: 0, ErrorMessage: '',
           } as never;
         }
-        // Tags query
+        // Content Item Tags or any other entity
         return {
           Success: true,
           Results: tagResults ?? [],

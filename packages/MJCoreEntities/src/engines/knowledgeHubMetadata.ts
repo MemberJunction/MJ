@@ -3,27 +3,36 @@ import { UUIDsEqual } from "@memberjunction/global";
 import {
     MJEntityDocumentEntity,
     MJVectorIndexEntity,
-    MJVectorDatabaseEntity
+    MJVectorDatabaseEntity,
+    MJContentSourceEntity,
+    MJContentTypeEntity,
+    MJContentSourceTypeEntity,
+    MJContentFileTypeEntity
 } from "../generated/entity_subclasses";
 
 /**
- * Caches vector-related metadata (entity documents, vector indexes, vector databases)
- * and provides helper methods for lookups and filtering. Uses BaseEngine for automatic
+ * Caches Knowledge Hub metadata: entity documents, vector indexes, vector databases,
+ * content sources, content types, content source types, and content file types.
+ * Provides helper methods for lookups and filtering. Uses BaseEngine for automatic
  * caching and entity-event auto-refresh.
  */
-export class VectorMetadataEngine extends BaseEngine<VectorMetadataEngine> {
+export class KnowledgeHubMetadataEngine extends BaseEngine<KnowledgeHubMetadataEngine> {
     /**
      * Returns the global instance of the class. This is a singleton class, so there
      * is only one instance of it in the application. Do not directly create new instances
      * of it, always use this method to get the instance.
      */
-    public static get Instance(): VectorMetadataEngine {
-        return super.getInstance<VectorMetadataEngine>();
+    public static get Instance(): KnowledgeHubMetadataEngine {
+        return super.getInstance<KnowledgeHubMetadataEngine>();
     }
 
     private _entityDocuments: MJEntityDocumentEntity[] = [];
     private _vectorIndexes: MJVectorIndexEntity[] = [];
     private _vectorDatabases: MJVectorDatabaseEntity[] = [];
+    private _contentSources: MJContentSourceEntity[] = [];
+    private _contentTypes: MJContentTypeEntity[] = [];
+    private _contentSourceTypes: MJContentSourceTypeEntity[] = [];
+    private _contentFileTypes: MJContentFileTypeEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
@@ -43,6 +52,30 @@ export class VectorMetadataEngine extends BaseEngine<VectorMetadataEngine> {
                 Type: 'entity',
                 EntityName: 'MJ: Vector Databases',
                 PropertyName: '_vectorDatabases',
+                CacheLocal: true
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content Sources',
+                PropertyName: '_contentSources',
+                CacheLocal: true
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content Types',
+                PropertyName: '_contentTypes',
+                CacheLocal: true
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content Source Types',
+                PropertyName: '_contentSourceTypes',
+                CacheLocal: true
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Content File Types',
+                PropertyName: '_contentFileTypes',
                 CacheLocal: true
             }
         ];
@@ -66,6 +99,26 @@ export class VectorMetadataEngine extends BaseEngine<VectorMetadataEngine> {
     /** All vector databases in the system */
     public get VectorDatabases(): MJVectorDatabaseEntity[] {
         return this._vectorDatabases;
+    }
+
+    /** All content sources */
+    public get ContentSources(): MJContentSourceEntity[] {
+        return this._contentSources;
+    }
+
+    /** All content types */
+    public get ContentTypes(): MJContentTypeEntity[] {
+        return this._contentTypes;
+    }
+
+    /** All content source types (Web, RSS, Email, etc.) */
+    public get ContentSourceTypes(): MJContentSourceTypeEntity[] {
+        return this._contentSourceTypes;
+    }
+
+    /** All content file types (.pdf, .html, etc.) */
+    public get ContentFileTypes(): MJContentFileTypeEntity[] {
+        return this._contentFileTypes;
     }
 
     // ================================================================

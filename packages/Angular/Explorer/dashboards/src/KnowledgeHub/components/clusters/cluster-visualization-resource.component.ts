@@ -13,7 +13,7 @@
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
 import { CompositeKey, Metadata } from '@memberjunction/core';
-import { ResourceData, UserInfoEngine, MJUserSettingEntity, VectorMetadataEngine } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine, MJUserSettingEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
@@ -287,8 +287,8 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     /** Populate the entity options for the config panel dropdown */
     private async loadEntityOptions(): Promise<void> {
         try {
-            // Use VectorMetadataEngine for cached entity document data
-            const engine = VectorMetadataEngine.Instance;
+            // Use KnowledgeHubMetadataEngine for cached entity document data
+            const engine = KnowledgeHubMetadataEngine.Instance;
             await engine.Config(false);
 
             const entityNames = engine.GetEntitiesWithDocuments();
@@ -316,7 +316,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             return;
         }
 
-        const engine = VectorMetadataEngine.Instance;
+        const engine = KnowledgeHubMetadataEngine.Instance;
         const docs = engine.GetEntityDocumentsForEntity(entityName)
             .filter(d => d.Status === 'Active');
 
@@ -339,7 +339,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         // Use the selected entity document, or fall back to first active one
         let entityDocID = config.EntityDocumentID;
         if (!entityDocID) {
-            const engine = VectorMetadataEngine.Instance;
+            const engine = KnowledgeHubMetadataEngine.Instance;
             const entityDocs = engine.GetEntityDocumentsForEntity(config.EntityName)
                 .filter(d => d.Status === 'Active');
             if (entityDocs.length === 0) {

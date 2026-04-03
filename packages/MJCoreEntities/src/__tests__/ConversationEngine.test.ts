@@ -11,7 +11,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  */
 let runViewResultQueue: Array<{ Success: boolean; Results: unknown[]; ErrorMessage?: string }> = [];
 
+/**
+ * Queue of results that the RunQuery mock will return in order.
+ */
+let runQueryResultQueue: Array<{ Success: boolean; Results: unknown[] | null; ErrorMessage?: string }> = [];
+
 const DEFAULT_RV_RESULT = { Success: true, Results: [] };
+const DEFAULT_RQ_RESULT = { Success: true, Results: [] };
+
+function nextRunQueryResult() {
+    return runQueryResultQueue.length > 0 ? runQueryResultQueue.shift()! : DEFAULT_RQ_RESULT;
+}
 
 function nextRunViewResult() {
     return runViewResultQueue.length > 0 ? runViewResultQueue.shift()! : DEFAULT_RV_RESULT;
@@ -30,6 +40,7 @@ const mockConversationEntity = {
     Save: vi.fn().mockResolvedValue(true),
     Delete: vi.fn().mockResolvedValue(true),
     Load: vi.fn().mockResolvedValue(true),
+    LoadFromData: vi.fn(),
 };
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
@@ -42,6 +53,17 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
 });
 
 vi.mock('@memberjunction/core', () => {
+    class MockMetadata {
+        static Provider = {};
+        GetEntityObject() {
+            return Promise.resolve(mockConversationEntity);
+        }
+        async CreateTransactionGroup() {
+            return {
+                Submit: vi.fn().mockResolvedValue(true),
+            };
+        }
+    }
     return {
         BaseEngine: class MockBaseEngine {
             static getInstance<T>(): T {
@@ -60,21 +82,23 @@ vi.mock('@memberjunction/core', () => {
                 // no-op
             }
         },
-        Metadata: class MockMetadata {
-            GetEntityObject() {
-                return Promise.resolve(mockConversationEntity);
-            }
-            async CreateTransactionGroup() {
-                return {
-                    Submit: vi.fn().mockResolvedValue(true),
-                };
-            }
-        },
+        Metadata: MockMetadata,
         RunView: class MockRunView {
             RunView() {
                 return Promise.resolve(nextRunViewResult());
             }
         },
+        RunQuery: class MockRunQuery {
+            RunQuery() {
+                return Promise.resolve(nextRunQueryResult());
+            }
+        },
+        TransformSimpleObjectToEntityObject: vi.fn().mockImplementation(
+            async (_provider: unknown, _entityName: string, rows: unknown[]) => {
+                // Return the rows as-is (they're already mock detail objects)
+                return rows;
+            }
+        ),
         UserInfo: class MockUserInfo {
             ID = 'user-1';
         },
@@ -141,16 +165,32 @@ function createMockAgentRun(overrides: Record<string, unknown> = {}) {
 }
 
 /**
- * Helper: enqueue results for LoadConversationDetails, which makes two RunView calls:
- * 1. Details query
- * 2. Agent runs query
+ * Helper: enqueue results for LoadConversationDetails, which uses RunQuery
+ * to load conversation details via GetConversationComplete stored query.
+ * The query returns ConversationDetailComplete rows (detail fields + JSON columns).
+ * Agent runs are embedded as JSON in AgentRunsJSON column.
  */
 function enqueueDetailsResults(
     details: unknown[],
     agentRuns: unknown[] = []
 ) {
-    runViewResultQueue.push({ Success: true, Results: details });
-    runViewResultQueue.push({ Success: true, Results: agentRuns });
+    // Build ConversationDetailComplete-shaped rows: detail fields + AgentRunsJSON
+    const rows = details.map((detail) => {
+        const d = detail as Record<string, unknown>;
+        const detailId = d['ID'] as string;
+        // Find agent runs matching this detail
+        const matchingRuns = agentRuns.filter(
+            (r) => (r as Record<string, unknown>)['ConversationDetailID'] === detailId
+        );
+        return {
+            ...d,
+            AgentRunsJSON: matchingRuns.length > 0 ? JSON.stringify(matchingRuns) : null,
+            ArtifactsJSON: null,
+            RatingsJSON: null,
+            Role: 'AI',
+        };
+    });
+    runQueryResultQueue.push({ Success: true, Results: rows });
 }
 
 // ---------------------------------------------------------------------------
@@ -179,8 +219,9 @@ describe('ConversationEngine', () => {
         mockConversationEntity.Load.mockResolvedValue(true);
         mockConversationEntity.LatestResult = null;
 
-        // Clear the queue
+        // Clear both queues
         runViewResultQueue = [];
+        runQueryResultQueue = [];
     });
 
     // ========================================================================
@@ -415,7 +456,8 @@ describe('ConversationEngine', () => {
             enqueueDetailsResults(mockDetails);
 
             const result = await engine.LoadConversationDetails('conv-1', contextUser);
-            expect(result).toHaveLength(2);
+            // LoadConversationDetails now returns a ConversationDetailCache object
+            expect(result.Details).toHaveLength(2);
 
             const cached = engine.GetCachedDetails('conv-1');
             expect(cached).toBeDefined();
@@ -428,9 +470,9 @@ describe('ConversationEngine', () => {
             await engine.LoadConversationDetails('conv-1', contextUser);
 
             // Queue should be empty now; a second call should use cache and NOT
-            // hit RunView (which would return DEFAULT_RV_RESULT with empty results)
+            // hit RunQuery (which would return DEFAULT_RQ_RESULT with empty results)
             const result = await engine.LoadConversationDetails('conv-1', contextUser);
-            expect(result).toHaveLength(1);
+            expect(result.Details).toHaveLength(1);
         });
     });
 

@@ -37,6 +37,7 @@ flowchart TD
         CE["ConversationEngine"]
         ME["MCPEngine"]
         TTC["TypeTablesCache"]
+        KHE["KnowledgeHubMetadataEngine"]
     end
 
     subgraph Extraction["Artifact Extraction"]
@@ -120,7 +121,7 @@ A metadata-driven system for extracting structured attributes from artifact cont
 - **272 strongly-typed entity classes** covering all MemberJunction core schema entities
 - **Zod runtime validation** with field-level constraints and value list enums
 - **Extended entity classes** with permission checks, workflow logic, and JSON state parsing
-- **9 singleton engine caches** eliminating redundant database queries
+- **10 singleton engine caches** eliminating redundant database queries (including KnowledgeHubMetadataEngine for vector/content metadata)
 - **Resource permission engine** with role-based access control (View/Edit/Owner levels)
 - **Dashboard permission engine** with owner/direct/category permission hierarchy
 - **User view engine** with filter-to-SQL conversion and smart filter AI support
@@ -426,10 +427,41 @@ ConversationEngine.Instance.ClearCache();
 
 Source: [`src/engines/conversations.ts`](src/engines/conversations.ts)
 
+### KnowledgeHubMetadataEngine
+
+Caches all Knowledge Hub-related metadata in a single singleton, providing fast lookups for entity documents, vector indexes, vector databases, content sources, content types, content source types, and content file types. Uses `BaseEngine` for automatic caching and entity-event auto-refresh.
+
+```typescript
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
+
+const khEngine = KnowledgeHubMetadataEngine.Instance;
+await khEngine.Config(false, contextUser);
+
+// Cached data access (no DB round-trip)
+const activeDocuments = khEngine.GetActiveEntityDocuments();
+const entitiesWithDocs = khEngine.GetEntitiesWithDocuments(); // For dropdowns
+const doc = khEngine.GetEntityDocumentById(docId);
+const docsForEntity = khEngine.GetEntityDocumentsForEntity('Contacts');
+const vectorIndex = khEngine.GetVectorIndexById(indexId);
+const vectorDB = khEngine.GetVectorDatabaseById(dbId);
+
+// Raw cached arrays
+khEngine.EntityDocuments;    // All entity documents
+khEngine.VectorIndexes;      // All vector indexes
+khEngine.VectorDatabases;    // All vector databases
+khEngine.ContentSources;     // All content sources
+khEngine.ContentTypes;       // All content types
+khEngine.ContentSourceTypes; // All content source types (Web, RSS, etc.)
+khEngine.ContentFileTypes;   // All content file types (.pdf, .html, etc.)
+```
+
+Source: [`src/engines/knowledgeHubMetadata.ts`](src/engines/knowledgeHubMetadata.ts)
+
 ### Other Engines
 
 | Engine | Purpose |
 |---|---|
+| `KnowledgeHubMetadataEngine` | Caches entity documents, vector indexes/databases, content sources/types/file types |
 | `ConversationEngine` | Reactive cache for conversations, messages, and agent runs (user-scoped) |
 | `EncryptionEngineBase` | Caches encryption keys, algorithms, and key sources |
 | `FileStorageEngine` | Caches file storage accounts and providers |

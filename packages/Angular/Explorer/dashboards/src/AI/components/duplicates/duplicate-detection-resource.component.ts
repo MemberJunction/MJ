@@ -18,7 +18,7 @@ import {
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJEntityDocumentEntity,
-    VectorMetadataEngine
+    KnowledgeHubMetadataEngine
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
@@ -322,8 +322,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
 
         try {
-            // Use VectorMetadataEngine for cached entity document data
-            const engine = VectorMetadataEngine.Instance;
+            // Use KnowledgeHubMetadataEngine for cached entity document data
+            const engine = KnowledgeHubMetadataEngine.Instance;
             await engine.Config(false);
 
             const rv = new RunView();
@@ -618,7 +618,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         });
     }
 
-    /** Build entity document options from VectorMetadataEngine cached entities */
+    /** Build entity document options from KnowledgeHubMetadataEngine cached entities */
     private buildEntityDocumentOptionsFromEngine(docs: MJEntityDocumentEntity[]): void {
         this.EntityDocuments = docs.map(d => ({
             ID: d.ID,
