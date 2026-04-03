@@ -30,7 +30,7 @@ BEGIN
         ('F5C9A3D4-6E0A-4A8C-BD4F-3B5C7E9A1F2D',
          'D3A7F1B2-4C8E-4E6A-9B2D-1F3A5C7E9D0B', -- Archive authorization
          'E4B8F2C3-5D9F-4F7B-AC3E-2A4B6D8F0E1C', -- Archivist role
-         N'grant');
+         N'Allow');
 END
 
 -- 4. Link Developer role (admin equivalent) to Archive authorization
@@ -43,5 +43,5 @@ BEGIN
         ('A6D0B4E5-7F1B-4B9D-CE5A-4C6D8F0B2A3E',
          'D3A7F1B2-4C8E-4E6A-9B2D-1F3A5C7E9D0B', -- Archive authorization
          'deafccec-6a37-ef11-86d4-000d3a4e707e',   -- Developer role (admin equivalent)
-         N'grant');
+         N'Allow');
 END
