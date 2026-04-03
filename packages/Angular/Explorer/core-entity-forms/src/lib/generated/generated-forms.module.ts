@@ -13,6 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
+import { LayoutModule } from '@progress/kendo-angular-layout';
 
 // Import Generated Components
 import { MJAccessControlRuleFormComponent } from "./Entities/MJAccessControlRule/mjaccesscontrolrule.form.component";
@@ -332,6 +333,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -368,6 +370,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -404,6 +407,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -440,6 +444,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -476,6 +481,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule,
@@ -513,6 +519,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -549,6 +556,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -585,6 +593,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -621,6 +630,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -657,6 +667,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -693,6 +704,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -729,6 +741,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -765,6 +778,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -801,6 +815,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
@@ -827,6 +842,7 @@ declarations: [
 imports: [
     CommonModule,
     FormsModule,
+    LayoutModule,
     BaseFormsModule,
     EntityViewerModule,
     LinkDirectivesModule
