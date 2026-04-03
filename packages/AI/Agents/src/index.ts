@@ -26,6 +26,7 @@ export * from './memory-manager-agent';
 export * from './query-builder-agent';
 export * from './MJAIAgentRequestEntityServer';
 export * from './KnowledgeAgent';
+export * from './ClientToolRequestManager';
 
 // Re-export from ai-reranker for backward compatibility
 export {

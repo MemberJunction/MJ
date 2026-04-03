@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge Hub Clusters - Option C: Full-Featured</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d0d1a;
+    color: #e2e8f0;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Top toolbar */
+  .toolbar {
+    height: 56px;
+    background: #12122a;
+    border-bottom: 1px solid #2a2a4a;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .toolbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-right: 20px;
+  }
+  .toolbar-brand i { color: #264FAF; font-size: 1.1rem; }
+  .toolbar-sep { width: 1px; height: 28px; background: #2a2a4a; }
+  .tb-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tb-label {
+    font-size: 0.68rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 2px;
+  }
+  .tb-select {
+    padding: 6px 10px;
+    background: #1a1a36;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-size: 0.78rem;
+    outline: none;
+  }
+  .tb-select:focus { border-color: #264FAF; }
+  .tb-input {
+    width: 50px;
+    padding: 6px 8px;
+    background: #1a1a36;
+    border: 1px solid #2a2a4a;
+    border-radius: 6px;
+    color: #e2e8f0;
+    font-size: 0.78rem;
+    text-align: center;
+    outline: none;
+  }
+  .tb-pill-group { display: flex; }
+  .tb-pill {
+    padding: 6px 12px;
+    background: #1a1a36;
+    border: 1px solid #2a2a4a;
+    color: #94a3b8;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tb-pill:first-child { border-radius: 6px 0 0 6px; }
+  .tb-pill:last-child { border-radius: 0 6px 6px 0; }
+  .tb-pill.active { background: rgba(38,79,175,0.15); border-color: #264FAF; color: #5b8def; }
+  .spacer { flex: 1; }
+  .tb-btn {
+    padding: 7px 14px;
+    border-radius: 7px;
+    border: none;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tb-btn-primary { background: #264FAF; color: #fff; }
+  .tb-btn-primary:hover { background: #3060cf; }
+  .tb-btn-ghost { background: transparent; border: 1px solid #2a2a4a; color: #94a3b8; }
+  .tb-btn-ghost:hover { border-color: #3a3a6a; color: #e2e8f0; }
+
+  /* Body layout */
+  .body-layout {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  /* Left: saved list (narrow) */
+  .saved-panel {
+    width: 200px;
+    background: #0f0f24;
+    border-right: 1px solid #2a2a4a;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .sp-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #2a2a4a;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .sp-header button {
+    background: none;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    font-size: 0.75rem;
+  }
+  .sp-header button:hover { color: #5b8def; }
+  .sp-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .sp-item {
+    padding: 10px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    margin-bottom: 2px;
+    transition: background 0.15s;
+  }
+  .sp-item:hover { background: #1a1a36; }
+  .sp-item.active { background: rgba(38,79,175,0.12); border-left: 2px solid #264FAF; }
+  .sp-item .sp-name { font-size: 0.78rem; font-weight: 500; margin-bottom: 2px; }
+  .sp-item .sp-meta { font-size: 0.65rem; color: #475569; }
+
+  /* Center: scatter plot */
+  .center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .metrics-bar {
+    height: 40px;
+    background: #0f0f24;
+    border-bottom: 1px solid #1a1a36;
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 24px;
+    flex-shrink: 0;
+  }
+  .mb-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.72rem;
+    color: #64748b;
+  }
+  .mb-item .mb-val { color: #e2e8f0; font-weight: 600; }
+  .mb-item .mb-val.good { color: #34d399; }
+  .scatter-container { flex: 1; position: relative; }
+  .scatter-container svg { width: 100%; height: 100%; }
+
+  /* Right: cluster details */
+  .detail-panel {
+    width: 300px;
+    background: #12122a;
+    border-left: 1px solid #2a2a4a;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .dp-header {
+    padding: 16px;
+    border-bottom: 1px solid #2a2a4a;
+  }
+  .dp-header h3 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .dp-header .dp-sub { font-size: 0.7rem; color: #64748b; }
+
+  .cluster-tabs {
+    display: flex;
+    border-bottom: 1px solid #2a2a4a;
+  }
+  .cluster-tab {
+    flex: 1;
+    padding: 10px 8px;
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #64748b;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .cluster-tab:hover { color: #94a3b8; }
+  .cluster-tab.active { color: #5b8def; border-bottom-color: #264FAF; }
+
+  .cluster-list { flex: 1; overflow-y: auto; }
+  .cl-section {
+    padding: 14px 16px;
+    border-bottom: 1px solid #1a1a36;
+  }
+  .cl-section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .cl-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .cl-name { font-size: 0.82rem; font-weight: 600; }
+  .cl-count { font-size: 0.7rem; color: #64748b; margin-left: auto; }
+  .cl-members { }
+  .cl-member {
+    display: flex;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 0.75rem;
+    gap: 8px;
+    cursor: pointer;
+    transition: color 0.1s;
+  }
+  .cl-member:hover { color: #5b8def; }
+  .cl-member .cm-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: #1a1a36;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    color: #64748b;
+    flex-shrink: 0;
+  }
+  .cl-member .cm-name { flex: 1; }
+  .cl-member .cm-action { color: #475569; font-size: 0.65rem; }
+  .cl-member:hover .cm-action { color: #5b8def; }
+  .cl-more {
+    font-size: 0.7rem;
+    color: #5b8def;
+    cursor: pointer;
+    margin-top: 6px;
+    display: inline-block;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: absolute;
+    top: 120px;
+    left: 300px;
+    background: rgba(18,18,42,0.96);
+    backdrop-filter: blur(16px);
+    border: 1px solid #3a3a5a;
+    border-radius: 10px;
+    padding: 14px 16px;
+    width: 210px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    pointer-events: none;
+    z-index: 5;
+  }
+  .tooltip .tt-name { font-size: 0.82rem; font-weight: 600; margin-bottom: 3px; }
+  .tooltip .tt-cluster { font-size: 0.7rem; color: #fbbf24; margin-bottom: 5px; }
+  .tooltip .tt-fields { font-size: 0.7rem; color: #94a3b8; line-height: 1.6; }
+  .tooltip .tt-action { margin-top: 7px; padding-top: 7px; border-top: 1px solid #2a2a4a; font-size: 0.68rem; color: #64748b; }
+
+  .back-link {
+    position: fixed; top: 14px; right: 16px; z-index: 100;
+    font-size: 0.72rem; color: #64748b; text-decoration: none;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .back-link:hover { color: #94a3b8; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<!-- Top Toolbar -->
+<div class="toolbar">
+  <div class="toolbar-brand"><i class="fa-solid fa-circle-nodes"></i> Clusters</div>
+  <div class="toolbar-sep"></div>
+  <div class="tb-group">
+    <span class="tb-label">Entity</span>
+    <select class="tb-select"><option>Members</option><option>Organizations</option><option>Event Registrations</option><option>Products</option></select>
+  </div>
+  <div class="tb-group">
+    <span class="tb-label">Filter</span>
+    <input class="tb-select" style="width:180px" type="text" value="MemberType != 'Inactive'">
+  </div>
+  <div class="toolbar-sep"></div>
+  <div class="tb-group">
+    <span class="tb-label">Algorithm</span>
+    <div class="tb-pill-group">
+      <div class="tb-pill active">K-Means</div>
+      <div class="tb-pill">DBSCAN</div>
+    </div>
+  </div>
+  <div class="tb-group">
+    <span class="tb-label">K</span>
+    <input class="tb-input" type="number" value="4">
+  </div>
+  <div class="tb-group">
+    <span class="tb-label">Metric</span>
+    <select class="tb-select"><option>Cosine</option><option>Euclidean</option><option>Manhattan</option></select>
+  </div>
+  <div class="tb-group">
+    <span class="tb-label">Max</span>
+    <input class="tb-input" style="width:60px" type="number" value="500">
+  </div>
+  <div class="spacer"></div>
+  <button class="tb-btn tb-btn-primary"><i class="fa-solid fa-play"></i> Run</button>
+  <button class="tb-btn tb-btn-ghost"><i class="fa-solid fa-bookmark"></i> Save</button>
+</div>
+
+<!-- Body -->
+<div class="body-layout">
+  <!-- Left saved panel -->
+  <div class="saved-panel">
+    <div class="sp-header">
+      <span><i class="fa-solid fa-bookmark"></i> Saved</span>
+      <button><i class="fa-solid fa-plus"></i></button>
+    </div>
+    <div class="sp-list">
+      <div class="sp-item active">
+        <div class="sp-name">Member Segments Q1</div>
+        <div class="sp-meta">Members - 487 records</div>
+      </div>
+      <div class="sp-item">
+        <div class="sp-name">Org Revenue Tiers</div>
+        <div class="sp-meta">Organizations - 312</div>
+      </div>
+      <div class="sp-item">
+        <div class="sp-name">Event Attendance</div>
+        <div class="sp-meta">Registrations - 1,204</div>
+      </div>
+      <div class="sp-item">
+        <div class="sp-name">Product Groups</div>
+        <div class="sp-meta">Products - 89</div>
+      </div>
+      <div class="sp-item">
+        <div class="sp-name">Support Tickets</div>
+        <div class="sp-meta">Tickets - 756</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Center scatter -->
+  <div class="center">
+    <div class="metrics-bar">
+      <div class="mb-item"><i class="fa-solid fa-circle-dot"></i> Records: <span class="mb-val">487</span></div>
+      <div class="mb-item"><i class="fa-solid fa-layer-group"></i> Clusters: <span class="mb-val">4</span></div>
+      <div class="mb-item"><i class="fa-solid fa-chart-line"></i> Silhouette: <span class="mb-val good">0.72</span></div>
+      <div class="mb-item"><i class="fa-solid fa-clock"></i> Time: <span class="mb-val">1.8s</span></div>
+      <div class="mb-item"><i class="fa-solid fa-compress-arrows-alt"></i> Reduction: <span class="mb-val">t-SNE</span></div>
+    </div>
+    <div class="scatter-container">
+      <svg viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <radialGradient id="g1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#5b8def" stop-opacity="0.1"/><stop offset="100%" stop-color="#5b8def" stop-opacity="0"/></radialGradient>
+          <radialGradient id="g2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#34d399" stop-opacity="0.1"/><stop offset="100%" stop-color="#34d399" stop-opacity="0"/></radialGradient>
+          <radialGradient id="g3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fbbf24" stop-opacity="0.1"/><stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/></radialGradient>
+          <radialGradient id="g4" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#f472b6" stop-opacity="0.1"/><stop offset="100%" stop-color="#f472b6" stop-opacity="0"/></radialGradient>
+        </defs>
+        <g stroke="#1a1a36" stroke-width="0.5">
+          <line x1="0" y1="125" x2="800" y2="125"/><line x1="0" y1="250" x2="800" y2="250"/>
+          <line x1="0" y1="375" x2="800" y2="375"/><line x1="200" y1="0" x2="200" y2="500"/>
+          <line x1="400" y1="0" x2="400" y2="500"/><line x1="600" y1="0" x2="600" y2="500"/>
+        </g>
+        <circle cx="180" cy="160" r="95" fill="url(#g1)"/>
+        <circle cx="600" cy="130" r="85" fill="url(#g2)"/>
+        <circle cx="380" cy="370" r="90" fill="url(#g3)"/>
+        <circle cx="660" cy="380" r="75" fill="url(#g4)"/>
+        <!-- Cluster labels -->
+        <text x="180" y="90" text-anchor="middle" font-size="11" fill="#5b8def" opacity="0.5" font-weight="600">Enterprise Clients</text>
+        <text x="600" y="70" text-anchor="middle" font-size="11" fill="#34d399" opacity="0.5" font-weight="600">Small Businesses</text>
+        <text x="380" y="300" text-anchor="middle" font-size="11" fill="#fbbf24" opacity="0.5" font-weight="600">Non-Profits</text>
+        <text x="660" y="320" text-anchor="middle" font-size="11" fill="#f472b6" opacity="0.5" font-weight="600">Government</text>
+        <!-- Cluster 1: blue -->
+        <circle cx="155" cy="135" r="4" fill="#5b8def" opacity="0.8"/><circle cx="180" cy="150" r="4" fill="#5b8def" opacity="0.8"/>
+        <circle cx="195" cy="170" r="4" fill="#5b8def" opacity="0.8"/><circle cx="165" cy="175" r="4" fill="#5b8def" opacity="0.8"/>
+        <circle cx="210" cy="155" r="4" fill="#5b8def" opacity="0.8"/><circle cx="185" cy="140" r="4" fill="#5b8def" opacity="0.8"/>
+        <circle cx="150" cy="160" r="4" fill="#5b8def" opacity="0.8"/><circle cx="220" cy="145" r="4" fill="#5b8def" opacity="0.8"/>
+        <circle cx="175" cy="185" r="4" fill="#5b8def" opacity="0.8"/><circle cx="140" cy="150" r="4" fill="#5b8def" opacity="0.8"/>
+        <circle cx="200" cy="130" r="4" fill="#5b8def" opacity="0.8"/><circle cx="170" cy="195" r="4" fill="#5b8def" opacity="0.8"/>
+        <circle cx="225" cy="165" r="4" fill="#5b8def" opacity="0.8"/><circle cx="160" cy="125" r="4" fill="#5b8def" opacity="0.8"/>
+        <circle cx="190" cy="200" r="4" fill="#5b8def" opacity="0.8"/><circle cx="135" cy="170" r="4" fill="#5b8def" opacity="0.8"/>
+        <circle cx="215" cy="140" r="4" fill="#5b8def" opacity="0.8"/><circle cx="145" cy="185" r="4" fill="#5b8def" opacity="0.8"/>
+        <circle cx="205" cy="180" r="4" fill="#5b8def" opacity="0.8"/><circle cx="175" cy="120" r="4" fill="#5b8def" opacity="0.8"/>
+        <circle cx="230" cy="158" r="4" fill="#5b8def" opacity="0.8"/><circle cx="152" cy="200" r="4" fill="#5b8def" opacity="0.8"/>
+        <circle cx="188" cy="115" r="4" fill="#5b8def" opacity="0.8"/><circle cx="240" cy="150" r="4" fill="#5b8def" opacity="0.8"/>
+        <!-- Cluster 2: green -->
+        <circle cx="580" cy="115" r="4" fill="#34d399" opacity="0.8"/><circle cx="605" cy="130" r="4" fill="#34d399" opacity="0.8"/>
+        <circle cx="620" cy="145" r="4" fill="#34d399" opacity="0.8"/><circle cx="595" cy="150" r="4" fill="#34d399" opacity="0.8"/>
+        <circle cx="635" cy="125" r="4" fill="#34d399" opacity="0.8"/><circle cx="610" cy="110" r="4" fill="#34d399" opacity="0.8"/>
+        <circle cx="590" cy="140" r="4" fill="#34d399" opacity="0.8"/><circle cx="645" cy="135" r="4" fill="#34d399" opacity="0.8"/>
+        <circle cx="600" cy="160" r="4" fill="#34d399" opacity="0.8"/><circle cx="570" cy="130" r="4" fill="#34d399" opacity="0.8"/>
+        <circle cx="630" cy="105" r="4" fill="#34d399" opacity="0.8"/><circle cx="615" cy="165" r="4" fill="#34d399" opacity="0.8"/>
+        <circle cx="585" cy="120" r="4" fill="#34d399" opacity="0.8"/><circle cx="650" cy="150" r="4" fill="#34d399" opacity="0.8"/>
+        <circle cx="575" cy="155" r="4" fill="#34d399" opacity="0.8"/><circle cx="640" cy="115" r="4" fill="#34d399" opacity="0.8"/>
+        <circle cx="625" cy="170" r="4" fill="#34d399" opacity="0.8"/><circle cx="560" cy="140" r="4" fill="#34d399" opacity="0.8"/>
+        <!-- Cluster 3: yellow -->
+        <circle cx="360" cy="355" r="4" fill="#fbbf24" opacity="0.8"/><circle cx="385" cy="370" r="4" fill="#fbbf24" opacity="0.8"/>
+        <circle cx="400" cy="360" r="4" fill="#fbbf24" opacity="0.8"/><circle cx="370" cy="385" r="4" fill="#fbbf24" opacity="0.8"/>
+        <circle cx="415" cy="375" r="4" fill="#fbbf24" opacity="0.8"/><circle cx="350" cy="375" r="4" fill="#fbbf24" opacity="0.8"/>
+        <circle cx="380" cy="345" r="4" fill="#fbbf24" opacity="0.8"/><circle cx="405" cy="395" r="4" fill="#fbbf24" opacity="0.8"/>
+        <circle cx="340" cy="365" r="4" fill="#fbbf24" opacity="0.8"/><circle cx="420" cy="380" r="4" fill="#fbbf24" opacity="0.8"/>
+        <circle cx="365" cy="400" r="4" fill="#fbbf24" opacity="0.8"/><circle cx="395" cy="340" r="4" fill="#fbbf24" opacity="0.8"/>
+        <circle cx="375" cy="410" r="4" fill="#fbbf24" opacity="0.8"/><circle cx="425" cy="355" r="4" fill="#fbbf24" opacity="0.8"/>
+        <circle cx="335" cy="380" r="4" fill="#fbbf24" opacity="0.8"/><circle cx="410" cy="340" r="4" fill="#fbbf24" opacity="0.8"/>
+        <!-- Cluster 4: pink -->
+        <circle cx="645" cy="365" r="4" fill="#f472b6" opacity="0.8"/><circle cx="665" cy="380" r="4" fill="#f472b6" opacity="0.8"/>
+        <circle cx="680" cy="370" r="4" fill="#f472b6" opacity="0.8"/><circle cx="655" cy="390" r="4" fill="#f472b6" opacity="0.8"/>
+        <circle cx="690" cy="375" r="4" fill="#f472b6" opacity="0.8"/><circle cx="650" cy="355" r="4" fill="#f472b6" opacity="0.8"/>
+        <circle cx="670" cy="395" r="4" fill="#f472b6" opacity="0.8"/><circle cx="640" cy="375" r="4" fill="#f472b6" opacity="0.8"/>
+        <circle cx="685" cy="360" r="4" fill="#f472b6" opacity="0.8"/><circle cx="660" cy="405" r="4" fill="#f472b6" opacity="0.8"/>
+        <circle cx="675" cy="350" r="4" fill="#f472b6" opacity="0.8"/><circle cx="695" cy="390" r="4" fill="#f472b6" opacity="0.8"/>
+        <!-- Highlight -->
+        <circle cx="385" cy="370" r="8" fill="none" stroke="#fbbf24" stroke-width="2" opacity="0.7"/>
+      </svg>
+
+      <!-- Tooltip -->
+      <div class="tooltip">
+        <div class="tt-name">Green Earth Foundation</div>
+        <div class="tt-cluster"><i class="fa-solid fa-circle" style="font-size:7px;vertical-align:middle"></i> Non-Profits</div>
+        <div class="tt-fields">Budget: $1.2M<br>Staff: 45<br>Focus: Environment</div>
+        <div class="tt-action"><i class="fa-solid fa-arrow-up-right-from-square"></i> Click to open record</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right detail panel -->
+  <div class="detail-panel">
+    <div class="dp-header">
+      <h3>Cluster Details</h3>
+      <div class="dp-sub">4 clusters from 487 records</div>
+    </div>
+    <div class="cluster-tabs">
+      <div class="cluster-tab active">Members</div>
+      <div class="cluster-tab">Statistics</div>
+      <div class="cluster-tab">Features</div>
+    </div>
+    <div class="cluster-list">
+      <!-- Cluster 1 -->
+      <div class="cl-section">
+        <div class="cl-section-header">
+          <div class="cl-dot" style="background:#5b8def"></div>
+          <div class="cl-name">Enterprise Clients</div>
+          <div class="cl-count">156</div>
+        </div>
+        <div class="cl-members">
+          <div class="cl-member"><div class="cm-avatar">AC</div><div class="cm-name">Acme Corporation</div><div class="cm-action"><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div>
+          <div class="cl-member"><div class="cm-avatar">GI</div><div class="cm-name">Global Industries</div><div class="cm-action"><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div>
+          <div class="cl-member"><div class="cm-avatar">TG</div><div class="cm-name">TechGiant Inc.</div><div class="cm-action"><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div>
+          <div class="cl-more">+ 153 more</div>
+        </div>
+      </div>
+      <!-- Cluster 2 -->
+      <div class="cl-section">
+        <div class="cl-section-header">
+          <div class="cl-dot" style="background:#34d399"></div>
+          <div class="cl-name">Small Businesses</div>
+          <div class="cl-count">132</div>
+        </div>
+        <div class="cl-members">
+          <div class="cl-member"><div class="cm-avatar">BF</div><div class="cm-name">Bright Future LLC</div><div class="cm-action"><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div>
+          <div class="cl-member"><div class="cm-avatar">LC</div><div class="cm-name">LocalCraft Co.</div><div class="cm-action"><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div>
+          <div class="cl-member"><div class="cm-avatar">NS</div><div class="cm-name">NexStep Solutions</div><div class="cm-action"><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div>
+          <div class="cl-more">+ 129 more</div>
+        </div>
+      </div>
+      <!-- Cluster 3 -->
+      <div class="cl-section">
+        <div class="cl-section-header">
+          <div class="cl-dot" style="background:#fbbf24"></div>
+          <div class="cl-name">Non-Profits</div>
+          <div class="cl-count">118</div>
+        </div>
+        <div class="cl-members">
+          <div class="cl-member"><div class="cm-avatar">GE</div><div class="cm-name">Green Earth Foundation</div><div class="cm-action"><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div>
+          <div class="cl-member"><div class="cm-avatar">HH</div><div class="cm-name">Helping Hands</div><div class="cm-action"><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div>
+          <div class="cl-member"><div class="cm-avatar">CF</div><div class="cm-name">Community First</div><div class="cm-action"><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div>
+          <div class="cl-more">+ 115 more</div>
+        </div>
+      </div>
+      <!-- Cluster 4 -->
+      <div class="cl-section">
+        <div class="cl-section-header">
+          <div class="cl-dot" style="background:#f472b6"></div>
+          <div class="cl-name">Government</div>
+          <div class="cl-count">81</div>
+        </div>
+        <div class="cl-members">
+          <div class="cl-member"><div class="cm-avatar">DS</div><div class="cm-name">Dept. of Services</div><div class="cm-action"><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div>
+          <div class="cl-member"><div class="cm-avatar">CA</div><div class="cm-name">City Admin Office</div><div class="cm-action"><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div>
+          <div class="cl-member"><div class="cm-avatar">SR</div><div class="cm-name">State Regulatory</div><div class="cm-action"><i class="fa-solid fa-arrow-up-right-from-square"></i></div></div>
+          <div class="cl-more">+ 78 more</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

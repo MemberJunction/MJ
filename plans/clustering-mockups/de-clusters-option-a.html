@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Explorer Clusters - Option A: Inline</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d0d1a;
+    color: #e2e8f0;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Simulated Data Explorer header */
+  .de-header {
+    height: 52px;
+    background: #12122a;
+    border-bottom: 1px solid #2a2a4a;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .de-header .entity-name {
+    font-size: 1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .de-header .entity-name i { color: #264FAF; }
+  .de-header .record-badge {
+    padding: 4px 10px;
+    background: rgba(38,79,175,0.12);
+    border-radius: 12px;
+    font-size: 0.7rem;
+    color: #5b8def;
+    font-weight: 500;
+  }
+  .spacer { flex: 1; }
+  .de-header .search-box {
+    padding: 6px 12px 6px 32px;
+    background: #1a1a36;
+    border: 1px solid #2a2a4a;
+    border-radius: 7px;
+    color: #e2e8f0;
+    font-size: 0.8rem;
+    width: 220px;
+    outline: none;
+    position: relative;
+  }
+  .search-wrap { position: relative; }
+  .search-wrap i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #475569; font-size: 0.75rem; }
+
+  /* Filter bar */
+  .filter-bar {
+    height: 42px;
+    background: #0f0f24;
+    border-bottom: 1px solid #2a2a4a;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  .filter-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    background: rgba(38,79,175,0.1);
+    border: 1px solid rgba(38,79,175,0.25);
+    border-radius: 6px;
+    font-size: 0.72rem;
+    color: #5b8def;
+  }
+  .filter-chip .fc-close { cursor: pointer; opacity: 0.6; }
+  .filter-chip .fc-close:hover { opacity: 1; }
+  .add-filter {
+    font-size: 0.72rem;
+    color: #475569;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .add-filter:hover { color: #94a3b8; }
+
+  /* View mode tabs */
+  .view-tabs {
+    height: 40px;
+    background: #12122a;
+    border-bottom: 1px solid #2a2a4a;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+  .view-tab {
+    padding: 8px 14px;
+    font-size: 0.75rem;
+    color: #64748b;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+  }
+  .view-tab:hover { color: #94a3b8; }
+  .view-tab.active { color: #5b8def; border-bottom-color: #264FAF; }
+  .tab-spacer { flex: 1; }
+
+  /* Cluster controls bar */
+  .cluster-controls {
+    height: 44px;
+    background: #0f0f24;
+    border-bottom: 1px solid #1a1a36;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 14px;
+    flex-shrink: 0;
+  }
+  .cc-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .cc-label { font-size: 0.68rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.3px; }
+  .cc-select {
+    padding: 5px 8px;
+    background: #1a1a36;
+    border: 1px solid #2a2a4a;
+    border-radius: 5px;
+    color: #e2e8f0;
+    font-size: 0.75rem;
+    outline: none;
+  }
+  .cc-input {
+    width: 44px;
+    padding: 5px 6px;
+    background: #1a1a36;
+    border: 1px solid #2a2a4a;
+    border-radius: 5px;
+    color: #e2e8f0;
+    font-size: 0.75rem;
+    text-align: center;
+    outline: none;
+  }
+  .cc-btn {
+    padding: 5px 12px;
+    background: #264FAF;
+    border: none;
+    border-radius: 5px;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .cc-btn:hover { background: #3060cf; }
+  .cc-sep { width: 1px; height: 22px; background: #2a2a4a; }
+  .cc-stat {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .cc-stat .val { font-weight: 600; color: #e2e8f0; }
+  .cc-stat .val.good { color: #34d399; }
+  .cluster-badge {
+    padding: 4px 10px;
+    background: rgba(52,211,153,0.1);
+    border: 1px solid rgba(52,211,153,0.2);
+    border-radius: 12px;
+    font-size: 0.7rem;
+    color: #34d399;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  /* Scatter area */
+  .scatter-area {
+    flex: 1;
+    position: relative;
+    padding: 16px;
+  }
+  .scatter-area svg {
+    width: 100%;
+    height: 100%;
+    border-radius: 10px;
+    background: #0a0a1a;
+    border: 1px solid #1a1a36;
+  }
+
+  /* Legend overlay */
+  .legend {
+    position: absolute;
+    bottom: 28px;
+    left: 28px;
+    background: rgba(15,15,36,0.92);
+    backdrop-filter: blur(12px);
+    border: 1px solid #2a2a4a;
+    border-radius: 9px;
+    padding: 12px 16px;
+    display: flex;
+    gap: 16px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.74rem;
+  }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .legend-count { color: #64748b; font-size: 0.68rem; }
+
+  /* Tooltip */
+  .tooltip {
+    position: absolute;
+    top: 140px;
+    left: 340px;
+    background: rgba(18,18,42,0.96);
+    backdrop-filter: blur(16px);
+    border: 1px solid #3a3a5a;
+    border-radius: 10px;
+    padding: 12px 14px;
+    width: 200px;
+    box-shadow: 0 10px 36px rgba(0,0,0,0.4);
+    pointer-events: none;
+    z-index: 5;
+  }
+  .tooltip .tt-name { font-size: 0.82rem; font-weight: 600; margin-bottom: 3px; }
+  .tooltip .tt-cluster { font-size: 0.7rem; color: #5b8def; margin-bottom: 4px; }
+  .tooltip .tt-fields { font-size: 0.7rem; color: #94a3b8; line-height: 1.5; }
+  .tooltip .tt-action { margin-top: 6px; padding-top: 6px; border-top: 1px solid #2a2a4a; font-size: 0.68rem; color: #64748b; }
+
+  .back-link {
+    position: fixed; top: 12px; right: 16px; z-index: 100;
+    font-size: 0.72rem; color: #64748b; text-decoration: none;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .back-link:hover { color: #94a3b8; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<!-- Data Explorer Header -->
+<div class="de-header">
+  <div class="entity-name"><i class="fa-solid fa-building"></i> Organizations</div>
+  <div class="record-badge"><i class="fa-solid fa-circle-nodes"></i> Clustering 487 records</div>
+  <div class="spacer"></div>
+  <div class="search-wrap">
+    <i class="fa-solid fa-search"></i>
+    <input class="search-box" type="text" placeholder="Search organizations...">
+  </div>
+</div>
+
+<!-- Filter Bar -->
+<div class="filter-bar">
+  <div class="filter-chip">Status = Active <span class="fc-close"><i class="fa-solid fa-xmark"></i></span></div>
+  <div class="filter-chip">Type != Individual <span class="fc-close"><i class="fa-solid fa-xmark"></i></span></div>
+  <div class="add-filter"><i class="fa-solid fa-plus"></i> Add filter</div>
+</div>
+
+<!-- View Mode Tabs -->
+<div class="view-tabs">
+  <div class="view-tab"><i class="fa-solid fa-table"></i> Grid</div>
+  <div class="view-tab"><i class="fa-solid fa-id-card"></i> Cards</div>
+  <div class="view-tab"><i class="fa-solid fa-timeline"></i> Timeline</div>
+  <div class="view-tab active"><i class="fa-solid fa-circle-nodes"></i> Clusters</div>
+  <div class="tab-spacer"></div>
+</div>
+
+<!-- Cluster Controls -->
+<div class="cluster-controls">
+  <div class="cc-group">
+    <span class="cc-label">Algorithm</span>
+    <select class="cc-select"><option>K-Means</option><option>DBSCAN</option></select>
+  </div>
+  <div class="cc-group">
+    <span class="cc-label">K</span>
+    <input class="cc-input" type="number" value="4">
+  </div>
+  <div class="cc-group">
+    <span class="cc-label">Metric</span>
+    <select class="cc-select"><option>Cosine</option><option>Euclidean</option></select>
+  </div>
+  <button class="cc-btn"><i class="fa-solid fa-play"></i> Run</button>
+  <div class="cc-sep"></div>
+  <div class="cc-stat">Silhouette: <span class="val good">0.72</span></div>
+  <div class="cc-stat">Time: <span class="val">1.8s</span></div>
+  <div class="spacer"></div>
+  <div class="cluster-badge"><i class="fa-solid fa-layer-group"></i> 4 clusters</div>
+</div>
+
+<!-- Scatter Area -->
+<div class="scatter-area">
+  <svg viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <radialGradient id="g1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#5b8def" stop-opacity="0.1"/><stop offset="100%" stop-color="#5b8def" stop-opacity="0"/></radialGradient>
+      <radialGradient id="g2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#34d399" stop-opacity="0.1"/><stop offset="100%" stop-color="#34d399" stop-opacity="0"/></radialGradient>
+      <radialGradient id="g3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fbbf24" stop-opacity="0.1"/><stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/></radialGradient>
+      <radialGradient id="g4" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#f472b6" stop-opacity="0.1"/><stop offset="100%" stop-color="#f472b6" stop-opacity="0"/></radialGradient>
+    </defs>
+    <g stroke="#1a1a36" stroke-width="0.5">
+      <line x1="0" y1="140" x2="1000" y2="140"/><line x1="0" y1="280" x2="1000" y2="280"/>
+      <line x1="0" y1="420" x2="1000" y2="420"/><line x1="250" y1="0" x2="250" y2="560"/>
+      <line x1="500" y1="0" x2="500" y2="560"/><line x1="750" y1="0" x2="750" y2="560"/>
+    </g>
+    <circle cx="200" cy="180" r="110" fill="url(#g1)"/>
+    <circle cx="720" cy="150" r="95" fill="url(#g2)"/>
+    <circle cx="450" cy="420" r="100" fill="url(#g3)"/>
+    <circle cx="800" cy="420" r="85" fill="url(#g4)"/>
+    <!-- Cluster 1: blue -->
+    <circle cx="170" cy="155" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="195" cy="170" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <circle cx="210" cy="195" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="180" cy="200" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <circle cx="225" cy="180" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="200" cy="160" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <circle cx="170" cy="185" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="235" cy="170" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <circle cx="195" cy="210" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="155" cy="175" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <circle cx="220" cy="150" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="185" cy="220" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <circle cx="245" cy="190" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="175" cy="145" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <circle cx="205" cy="230" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="150" cy="195" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <circle cx="240" cy="165" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="160" cy="210" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <circle cx="230" cy="205" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="190" cy="140" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <circle cx="215" cy="215" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="145" cy="165" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <circle cx="250" cy="178" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="168" cy="225" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <circle cx="260" cy="160" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="140" cy="185" r="4.5" fill="#5b8def" opacity="0.8"/>
+    <!-- Cluster 2: green -->
+    <circle cx="700" cy="135" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="725" cy="150" r="4.5" fill="#34d399" opacity="0.8"/>
+    <circle cx="740" cy="165" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="715" cy="170" r="4.5" fill="#34d399" opacity="0.8"/>
+    <circle cx="755" cy="145" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="710" cy="130" r="4.5" fill="#34d399" opacity="0.8"/>
+    <circle cx="690" cy="155" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="765" cy="155" r="4.5" fill="#34d399" opacity="0.8"/>
+    <circle cx="720" cy="180" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="680" cy="145" r="4.5" fill="#34d399" opacity="0.8"/>
+    <circle cx="750" cy="125" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="735" cy="175" r="4.5" fill="#34d399" opacity="0.8"/>
+    <circle cx="695" cy="120" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="770" cy="170" r="4.5" fill="#34d399" opacity="0.8"/>
+    <circle cx="685" cy="165" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="760" cy="135" r="4.5" fill="#34d399" opacity="0.8"/>
+    <circle cx="705" cy="185" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="745" cy="115" r="4.5" fill="#34d399" opacity="0.8"/>
+    <circle cx="730" cy="190" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="675" cy="155" r="4.5" fill="#34d399" opacity="0.8"/>
+    <!-- Cluster 3: yellow -->
+    <circle cx="430" cy="400" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="455" cy="420" r="4.5" fill="#fbbf24" opacity="0.8"/>
+    <circle cx="470" cy="405" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="440" cy="435" r="4.5" fill="#fbbf24" opacity="0.8"/>
+    <circle cx="485" cy="415" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="420" cy="425" r="4.5" fill="#fbbf24" opacity="0.8"/>
+    <circle cx="450" cy="390" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="475" cy="440" r="4.5" fill="#fbbf24" opacity="0.8"/>
+    <circle cx="410" cy="410" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="495" cy="425" r="4.5" fill="#fbbf24" opacity="0.8"/>
+    <circle cx="435" cy="450" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="465" cy="385" r="4.5" fill="#fbbf24" opacity="0.8"/>
+    <circle cx="445" cy="460" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="500" cy="400" r="4.5" fill="#fbbf24" opacity="0.8"/>
+    <circle cx="405" cy="420" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="480" cy="380" r="4.5" fill="#fbbf24" opacity="0.8"/>
+    <!-- Cluster 4: pink -->
+    <circle cx="780" cy="405" r="4.5" fill="#f472b6" opacity="0.8"/><circle cx="805" cy="420" r="4.5" fill="#f472b6" opacity="0.8"/>
+    <circle cx="820" cy="410" r="4.5" fill="#f472b6" opacity="0.8"/><circle cx="795" cy="430" r="4.5" fill="#f472b6" opacity="0.8"/>
+    <circle cx="830" cy="415" r="4.5" fill="#f472b6" opacity="0.8"/><circle cx="790" cy="395" r="4.5" fill="#f472b6" opacity="0.8"/>
+    <circle cx="810" cy="435" r="4.5" fill="#f472b6" opacity="0.8"/><circle cx="775" cy="415" r="4.5" fill="#f472b6" opacity="0.8"/>
+    <circle cx="825" cy="400" r="4.5" fill="#f472b6" opacity="0.8"/><circle cx="800" cy="445" r="4.5" fill="#f472b6" opacity="0.8"/>
+    <circle cx="815" cy="390" r="4.5" fill="#f472b6" opacity="0.8"/><circle cx="785" cy="440" r="4.5" fill="#f472b6" opacity="0.8"/>
+    <!-- Highlighted -->
+    <circle cx="195" cy="170" r="8" fill="none" stroke="#5b8def" stroke-width="2" opacity="0.8"/>
+  </svg>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:#5b8def"></div> Enterprise Clients <span class="legend-count">(156)</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#34d399"></div> Small Businesses <span class="legend-count">(132)</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div> Non-Profits <span class="legend-count">(118)</span></div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f472b6"></div> Government <span class="legend-count">(81)</span></div>
+  </div>
+
+  <!-- Tooltip -->
+  <div class="tooltip">
+    <div class="tt-name">Acme Corporation</div>
+    <div class="tt-cluster"><i class="fa-solid fa-circle" style="font-size:7px;vertical-align:middle"></i> Enterprise Clients</div>
+    <div class="tt-fields">Revenue: $2.4M<br>Employees: 340<br>Industry: Manufacturing</div>
+    <div class="tt-action"><i class="fa-solid fa-arrow-up-right-from-square"></i> Click to open record</div>
+  </div>
+</div>
+</body>
+</html>

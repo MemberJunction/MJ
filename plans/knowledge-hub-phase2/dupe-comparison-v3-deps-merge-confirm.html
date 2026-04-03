@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate Comparison v3 — Dependencies + Merge Confirmation</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #0f1729;
+    --mj-bg-surface: #1a2332;
+    --mj-bg-surface-card: #1e2a3a;
+    --mj-bg-surface-sunken: #151e2d;
+    --mj-bg-surface-elevated: #222f42;
+    --mj-bg-surface-hover: #253347;
+    --mj-bg-overlay: rgba(0,0,0,0.45);
+    --mj-text-primary: #e2e8f0;
+    --mj-text-secondary: #94a3b8;
+    --mj-text-muted: #64748b;
+    --mj-text-disabled: #475569;
+    --mj-text-inverse: #ffffff;
+    --mj-border-default: #334155;
+    --mj-border-subtle: #1e293b;
+    --mj-border-strong: #475569;
+    --mj-brand-primary: #5b8def;
+    --mj-brand-primary-hover: #4a7de0;
+    --mj-status-success: #22c55e;
+    --mj-status-success-bg: rgba(34,197,94,0.12);
+    --mj-status-success-text: #4ade80;
+    --mj-status-success-border: rgba(34,197,94,0.3);
+    --mj-status-warning: #f59e0b;
+    --mj-status-warning-bg: rgba(245,158,11,0.12);
+    --mj-status-warning-text: #fbbf24;
+    --mj-status-warning-border: rgba(245,158,11,0.3);
+    --mj-status-error: #ef4444;
+    --mj-status-error-bg: rgba(239,68,68,0.12);
+    --mj-status-error-text: #f87171;
+    --mj-status-error-border: rgba(239,68,68,0.3);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); height: 100vh; overflow: hidden; }
+
+  /* Backdrop + Panel (same as before) */
+  .slide-backdrop { position: fixed; inset: 0; background: var(--mj-bg-overlay); z-index: 9999; }
+  .comparison-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 82vw; max-width: 1300px; background: var(--mj-bg-surface); border-left: 1px solid var(--mj-border-default); box-shadow: -8px 0 40px rgba(0,0,0,0.4); z-index: 10000; display: flex; flex-direction: column; }
+  .comparison-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--mj-border-default); flex-shrink: 0; gap: 12px; }
+  .comparison-header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .comparison-entity-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); color: var(--mj-brand-primary); font-size: 1rem; flex-shrink: 0; }
+  .comparison-title { font-size: 1rem; font-weight: 700; }
+  .comparison-entity-badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 0.65rem; font-weight: 500; background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); margin-right: 6px; }
+  .comparison-match-count { font-size: 0.72rem; color: var(--mj-text-muted); }
+  .comparison-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .comparison-toggle { display: flex; border: 1px solid var(--mj-border-default); border-radius: 6px; overflow: hidden; }
+  .toggle-btn { padding: 5px 12px; font-size: 0.7rem; font-weight: 500; border: none; cursor: pointer; background: var(--mj-bg-surface); color: var(--mj-text-secondary); }
+  .toggle-btn:first-child { border-right: 1px solid var(--mj-border-default); }
+  .toggle-btn.toggle-active { background: var(--mj-brand-primary); color: var(--mj-text-inverse); }
+  .comparison-close-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 6px; cursor: pointer; background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); font-size: 0.85rem; }
+
+  /* Grid */
+  .comparison-grid-wrapper { flex: 1; overflow: auto; min-height: 0; }
+  .comparison-grid { display: grid; grid-template-columns: 160px repeat(5, minmax(180px, 1fr)); min-width: 100%; }
+  .comparison-grid > div { padding: 8px 12px; font-size: 0.78rem; border-bottom: 1px solid var(--mj-border-subtle); border-right: 1px solid var(--mj-border-subtle); }
+  .grid-corner-cell { position: sticky; top: 0; left: 0; z-index: 4; background: var(--mj-bg-surface-elevated); font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--mj-text-muted); display: flex; align-items: flex-end; padding-bottom: 6px; }
+  .grid-col-header { position: sticky; top: 0; z-index: 3; background: var(--mj-bg-surface-elevated); padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .grid-col-source { border-left: 3px solid var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface-elevated)); }
+  .col-header-label { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--mj-brand-primary); }
+  .col-header-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .col-header-name { font-size: 0.82rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .col-header-diff-count { font-size: 0.65rem; color: var(--mj-status-warning-text); }
+  .score-indicator { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; padding: 2px 7px; border-radius: 10px; font-size: 0.68rem; font-weight: 700; flex-shrink: 0; }
+  .score-high { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); border: 1px solid var(--mj-status-success-border); }
+  .score-medium { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); border: 1px solid var(--mj-status-warning-border); }
+
+  /* Surviving record selector */
+  .surviving-selector { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+  .surviving-radio { appearance: none; width: 14px; height: 14px; border: 2px solid var(--mj-border-strong); border-radius: 50%; cursor: pointer; flex-shrink: 0; }
+  .surviving-radio:checked { border-color: var(--mj-brand-primary); background: var(--mj-brand-primary); box-shadow: inset 0 0 0 2px var(--mj-bg-surface-elevated); }
+  .surviving-label { font-size: 0.65rem; color: var(--mj-text-muted); cursor: pointer; }
+  .surviving-label.is-survivor { color: var(--mj-brand-primary); font-weight: 600; }
+  .use-all-btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border: 1px solid var(--mj-border-default); border-radius: 4px; background: var(--mj-bg-surface); color: var(--mj-text-secondary); font-size: 0.62rem; cursor: pointer; margin-top: 2px; }
+  .use-all-btn.all-selected { background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); color: var(--mj-brand-primary); border-color: var(--mj-brand-primary); }
+
+  /* ══════ NEW: Dependencies Summary ══════ */
+  .deps-summary {
+    margin-top: 6px;
+    padding: 6px 8px;
+    background: var(--mj-bg-surface-sunken);
+    border-radius: 6px;
+    font-size: 0.68rem;
+  }
+  .deps-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    color: var(--mj-text-secondary);
+    font-weight: 600;
+  }
+  .deps-header i { font-size: 0.6rem; color: var(--mj-text-muted); }
+  .deps-total {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+    margin-bottom: 2px;
+  }
+  .deps-total-number {
+    background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    padding: 0 6px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+  .deps-total-recommended {
+    font-size: 0.58rem;
+    color: var(--mj-status-success-text);
+    font-weight: 600;
+    margin-left: 4px;
+  }
+  .deps-detail-list {
+    margin-top: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .deps-detail-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 2px 0;
+    font-size: 0.65rem;
+    color: var(--mj-text-muted);
+  }
+  .deps-detail-entity { color: var(--mj-text-secondary); }
+  .deps-detail-count { color: var(--mj-text-primary); font-weight: 600; }
+
+  /* Value cells */
+  .grid-label-cell { position: sticky; left: 0; z-index: 2; background: var(--mj-bg-surface); font-size: 0.72rem; font-weight: 600; color: var(--mj-text-secondary); display: flex; align-items: center; }
+  .grid-row-odd { background: color-mix(in srgb, var(--mj-bg-surface-sunken) 50%, var(--mj-bg-surface)); }
+  .grid-label-cell.grid-row-odd { background: color-mix(in srgb, var(--mj-bg-surface-sunken) 50%, var(--mj-bg-surface)); }
+  .grid-value-cell { font-size: 0.78rem; line-height: 1.45; word-break: break-word; position: relative; cursor: pointer; }
+  .grid-source-cell { background: color-mix(in srgb, var(--mj-brand-primary) 3%, var(--mj-bg-surface)); border-left: 3px solid transparent; }
+  .grid-source-cell.has-diff-in-row { font-weight: 600; }
+  .value-same { color: var(--mj-text-muted); }
+  .value-different { background: color-mix(in srgb, var(--mj-status-warning) 8%, transparent) !important; border-left: 3px solid var(--mj-status-warning); }
+  .field-not-available { font-style: italic; font-size: 0.72rem; color: var(--mj-text-disabled); }
+  .field-select-radio { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); appearance: none; width: 16px; height: 16px; border: 2px solid var(--mj-border-strong); border-radius: 50%; cursor: pointer; opacity: 0.4; }
+  .field-select-radio:checked { border-color: var(--mj-brand-primary); background: var(--mj-brand-primary); box-shadow: inset 0 0 0 2.5px var(--mj-bg-surface); opacity: 1; }
+  .grid-value-cell.field-selected { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)) !important; border-left: 3px solid var(--mj-brand-primary); }
+  .grid-value-cell.field-selected .field-select-radio { opacity: 1; }
+
+  /* Footer */
+  .comparison-footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 20px; border-top: 1px solid var(--mj-border-default); flex-shrink: 0; }
+  .comparison-footer-left { display: flex; align-items: center; gap: 16px; }
+  .comparison-summary { font-size: 0.72rem; color: var(--mj-text-muted); }
+  .merge-summary { font-size: 0.72rem; color: var(--mj-brand-primary); display: flex; align-items: center; gap: 6px; }
+  .merge-summary i { font-size: 0.65rem; }
+  .comparison-footer-right { display: flex; gap: 8px; }
+  .action-btn { display: flex; align-items: center; gap: 5px; padding: 7px 14px; border: 1px solid; border-radius: 7px; cursor: pointer; font-size: 0.78rem; font-weight: 500; }
+  .reject-btn { background: var(--mj-status-error-bg); color: var(--mj-status-error-text); border-color: var(--mj-status-error-border); }
+  .merge-btn { background: var(--mj-brand-primary); color: var(--mj-text-inverse); border-color: var(--mj-brand-primary); }
+
+  /* ══════ NEW: Merge Confirmation Overlay ══════ */
+  .merge-confirm-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 20000;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .merge-confirm-panel {
+    width: 560px;
+    max-height: 80vh;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 14px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .merge-confirm-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--mj-border-default);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .merge-confirm-icon {
+    width: 40px; height: 40px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));
+    color: var(--mj-status-warning-text);
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .merge-confirm-title { font-size: 1.05rem; font-weight: 700; }
+  .merge-confirm-subtitle { font-size: 0.75rem; color: var(--mj-text-muted); margin-top: 2px; }
+  .merge-confirm-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Surviving record card */
+  .merge-survivor-card {
+    padding: 14px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+    border: 1px solid var(--mj-brand-primary);
+    border-radius: 8px;
+  }
+  .merge-survivor-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--mj-brand-primary); margin-bottom: 4px; }
+  .merge-survivor-name { font-size: 0.95rem; font-weight: 600; }
+  .merge-survivor-detail { font-size: 0.72rem; color: var(--mj-text-muted); margin-top: 4px; }
+
+  /* Cherry-picked fields section */
+  .merge-section-label { font-size: 0.7rem; font-weight: 700; color: var(--mj-text-secondary); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 6px; }
+  .merge-field-override {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    font-size: 0.78rem;
+  }
+  .merge-field-name { font-weight: 600; color: var(--mj-text-secondary); min-width: 110px; flex-shrink: 0; }
+  .merge-field-value { color: var(--mj-text-primary); }
+  .merge-field-source { font-size: 0.65rem; color: var(--mj-text-muted); margin-left: auto; white-space: nowrap; }
+
+  /* Records to delete */
+  .merge-delete-card {
+    padding: 10px 14px;
+    background: color-mix(in srgb, var(--mj-status-error) 5%, var(--mj-bg-surface));
+    border: 1px solid var(--mj-status-error-border);
+    border-radius: 8px;
+  }
+  .merge-delete-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: var(--mj-status-error-text); margin-bottom: 6px; }
+  .merge-delete-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 5px 0;
+    font-size: 0.78rem;
+    border-bottom: 1px solid var(--mj-border-subtle);
+  }
+  .merge-delete-item:last-child { border-bottom: none; }
+  .merge-delete-name { font-weight: 500; }
+  .merge-delete-deps { font-size: 0.65rem; color: var(--mj-text-muted); }
+
+  /* Dependency transfer summary */
+  .merge-deps-transfer {
+    padding: 10px 14px;
+    background: color-mix(in srgb, var(--mj-status-info-bg, var(--mj-brand-primary)) 8%, var(--mj-bg-surface));
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+  }
+  .merge-deps-transfer-label { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: var(--mj-brand-primary); margin-bottom: 6px; }
+  .merge-deps-transfer-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 3px 0;
+    font-size: 0.75rem;
+    color: var(--mj-text-secondary);
+  }
+  .merge-deps-transfer-row i { color: var(--mj-brand-primary); font-size: 0.65rem; width: 14px; text-align: center; }
+
+  /* Confirm footer */
+  .merge-confirm-footer {
+    padding: 14px 24px;
+    border-top: 1px solid var(--mj-border-default);
+    display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  }
+  .cancel-btn { background: var(--mj-bg-surface); color: var(--mj-text-secondary); border-color: var(--mj-border-default); }
+  .confirm-merge-btn { background: var(--mj-brand-primary); color: var(--mj-text-inverse); border-color: var(--mj-brand-primary); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- ═══ SLIDE-IN COMPARISON PANEL (condensed — focus on new features) ═══ -->
+<div class="slide-backdrop"></div>
+<div class="comparison-panel">
+  <div class="comparison-header">
+    <div class="comparison-header-left">
+      <div class="comparison-entity-icon"><i class="fa-solid fa-microchip"></i></div>
+      <div>
+        <div class="comparison-title">Claude 3.5 Sonnet</div>
+        <span class="comparison-entity-badge">MJ: AI Models</span>
+        <span class="comparison-match-count">4 potential duplicates</span>
+      </div>
+    </div>
+    <div class="comparison-header-right">
+      <div class="comparison-toggle">
+        <button class="toggle-btn toggle-active">All Fields</button>
+        <button class="toggle-btn">Differences Only</button>
+      </div>
+      <button class="comparison-close-btn"><i class="fa-solid fa-times"></i></button>
+    </div>
+  </div>
+
+  <div class="comparison-grid-wrapper">
+    <div class="comparison-grid">
+      <div class="grid-corner-cell">Field</div>
+
+      <!-- SOURCE COLUMN -->
+      <div class="grid-col-header grid-col-source">
+        <span class="col-header-label">Source</span>
+        <span class="col-header-name">Claude 3.5 Sonnet</span>
+        <div class="surviving-selector">
+          <input type="radio" name="survivor" class="surviving-radio" checked>
+          <span class="surviving-label is-survivor">Surviving Record</span>
+        </div>
+        <button class="use-all-btn all-selected"><i class="fa-solid fa-check-double"></i> Using all fields</button>
+        <!-- ══ NEW: Dependencies Summary ══ -->
+        <div class="deps-summary">
+          <div class="deps-total">
+            <i class="fa-solid fa-link"></i>
+            <span class="deps-total-number">12</span> dependencies
+          </div>
+          <div class="deps-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'flex' : 'none'">
+            <span>Show details</span>
+            <i class="fa-solid fa-chevron-down"></i>
+          </div>
+          <div class="deps-detail-list" style="display: none">
+            <div class="deps-detail-row">
+              <span class="deps-detail-entity">AI Prompt Models</span>
+              <span class="deps-detail-count">5</span>
+            </div>
+            <div class="deps-detail-row">
+              <span class="deps-detail-entity">AI Agent Prompts</span>
+              <span class="deps-detail-count">3</span>
+            </div>
+            <div class="deps-detail-row">
+              <span class="deps-detail-entity">AI Configurations</span>
+              <span class="deps-detail-count">2</span>
+            </div>
+            <div class="deps-detail-row">
+              <span class="deps-detail-entity">AI Prompt Runs</span>
+              <span class="deps-detail-count">2</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MATCH 1 -->
+      <div class="grid-col-header">
+        <div class="col-header-top">
+          <span class="col-header-name">Claude 3 - Sonnet</span>
+          <span class="score-indicator score-high">96%</span>
+        </div>
+        <span class="col-header-diff-count">3 differences</span>
+        <div class="surviving-selector">
+          <input type="radio" name="survivor" class="surviving-radio">
+          <span class="surviving-label">Set as survivor</span>
+        </div>
+        <button class="use-all-btn"><i class="fa-solid fa-clone"></i> Use all fields</button>
+        <div class="deps-summary">
+          <div class="deps-total">
+            <i class="fa-solid fa-link"></i>
+            <span class="deps-total-number">28</span> dependencies
+            <span class="deps-total-recommended"><i class="fa-solid fa-star"></i> Most deps</span>
+          </div>
+          <div class="deps-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'flex' : 'none'">
+            <span>Show details</span>
+            <i class="fa-solid fa-chevron-down"></i>
+          </div>
+          <div class="deps-detail-list" style="display: none">
+            <div class="deps-detail-row"><span class="deps-detail-entity">AI Prompt Models</span><span class="deps-detail-count">12</span></div>
+            <div class="deps-detail-row"><span class="deps-detail-entity">AI Agent Prompts</span><span class="deps-detail-count">8</span></div>
+            <div class="deps-detail-row"><span class="deps-detail-entity">AI Configurations</span><span class="deps-detail-count">5</span></div>
+            <div class="deps-detail-row"><span class="deps-detail-entity">AI Prompt Runs</span><span class="deps-detail-count">3</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MATCH 2 -->
+      <div class="grid-col-header">
+        <div class="col-header-top">
+          <span class="col-header-name">Claude 3.7 Sonnet</span>
+          <span class="score-indicator score-high">93%</span>
+        </div>
+        <span class="col-header-diff-count">4 differences</span>
+        <div class="surviving-selector">
+          <input type="radio" name="survivor" class="surviving-radio">
+          <span class="surviving-label">Set as survivor</span>
+        </div>
+        <button class="use-all-btn"><i class="fa-solid fa-clone"></i> Use all fields</button>
+        <div class="deps-summary">
+          <div class="deps-total"><i class="fa-solid fa-link"></i> <span class="deps-total-number">3</span> dependencies</div>
+        </div>
+      </div>
+
+      <!-- MATCH 3 -->
+      <div class="grid-col-header">
+        <div class="col-header-top">
+          <span class="col-header-name">Claude 4 Sonnet</span>
+          <span class="score-indicator score-high">92%</span>
+        </div>
+        <span class="col-header-diff-count">5 differences</span>
+        <div class="surviving-selector">
+          <input type="radio" name="survivor" class="surviving-radio">
+          <span class="surviving-label">Set as survivor</span>
+        </div>
+        <button class="use-all-btn"><i class="fa-solid fa-clone"></i> Use all fields</button>
+        <div class="deps-summary">
+          <div class="deps-total"><i class="fa-solid fa-link"></i> <span class="deps-total-number">0</span> dependencies</div>
+        </div>
+      </div>
+
+      <!-- MATCH 4 -->
+      <div class="grid-col-header">
+        <div class="col-header-top">
+          <span class="col-header-name">Claude Sonnet 4.6</span>
+          <span class="score-indicator score-medium">82%</span>
+        </div>
+        <span class="col-header-diff-count">6 differences</span>
+        <div class="surviving-selector">
+          <input type="radio" name="survivor" class="surviving-radio">
+          <span class="surviving-label">Set as survivor</span>
+        </div>
+        <button class="use-all-btn"><i class="fa-solid fa-clone"></i> Use all fields</button>
+        <div class="deps-summary">
+          <div class="deps-total"><i class="fa-solid fa-link"></i> <span class="deps-total-number">1</span> dependency</div>
+        </div>
+      </div>
+
+      <!-- Sample field rows -->
+      <div class="grid-label-cell">Name</div>
+      <div class="grid-value-cell grid-source-cell has-diff-in-row field-selected">Claude 3.5 Sonnet <input type="radio" name="f1" class="field-select-radio" checked></div>
+      <div class="grid-value-cell value-different">Claude 3 - Sonnet <input type="radio" name="f1" class="field-select-radio"></div>
+      <div class="grid-value-cell value-different">Claude 3.7 Sonnet <input type="radio" name="f1" class="field-select-radio"></div>
+      <div class="grid-value-cell value-different">Claude 4 Sonnet <input type="radio" name="f1" class="field-select-radio"></div>
+      <div class="grid-value-cell value-different">Claude Sonnet 4.6 <input type="radio" name="f1" class="field-select-radio"></div>
+
+      <div class="grid-label-cell grid-row-odd">Description</div>
+      <div class="grid-value-cell grid-source-cell grid-row-odd has-diff-in-row">Fast, affordable model <input type="radio" name="f2" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-different">Previous gen Sonnet <input type="radio" name="f2" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-different">Enhanced reasoning <input type="radio" name="f2" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-different field-selected">Frontier intelligence <input type="radio" name="f2" class="field-select-radio" checked></div>
+      <div class="grid-value-cell grid-row-odd value-different">Superior reasoning <input type="radio" name="f2" class="field-select-radio"></div>
+
+      <div class="grid-label-cell">Status</div>
+      <div class="grid-value-cell grid-source-cell field-selected">Active <input type="radio" name="f3" class="field-select-radio" checked></div>
+      <div class="grid-value-cell value-same">Active</div>
+      <div class="grid-value-cell value-same">Active</div>
+      <div class="grid-value-cell value-same">Active</div>
+      <div class="grid-value-cell value-same">Active</div>
+
+      <div class="grid-label-cell grid-row-odd">Power Rank</div>
+      <div class="grid-value-cell grid-source-cell grid-row-odd has-diff-in-row field-selected">3 <input type="radio" name="f4" class="field-select-radio" checked></div>
+      <div class="grid-value-cell grid-row-odd value-different">2 <input type="radio" name="f4" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-different">4 <input type="radio" name="f4" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-different">5 <input type="radio" name="f4" class="field-select-radio"></div>
+      <div class="grid-value-cell grid-row-odd value-different">6 <input type="radio" name="f4" class="field-select-radio"></div>
+    </div>
+  </div>
+
+  <div class="comparison-footer">
+    <div class="comparison-footer-left">
+      <span class="comparison-summary">Showing 4 of 18 fields</span>
+      <span class="merge-summary">
+        <i class="fa-solid fa-code-merge"></i>
+        Surviving: <strong>Claude 3.5 Sonnet</strong> · 1 field cherry-picked
+      </span>
+    </div>
+    <div class="comparison-footer-right">
+      <button class="action-btn reject-btn"><i class="fa-solid fa-times"></i> Reject All</button>
+      <button class="action-btn merge-btn"><i class="fa-solid fa-code-merge"></i> Merge Records</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ -->
+<!-- MERGE CONFIRMATION OVERLAY (shown after clicking Merge)    -->
+<!-- ═══════════════════════════════════════════════════════════ -->
+<div class="merge-confirm-backdrop">
+  <div class="merge-confirm-panel">
+    <div class="merge-confirm-header">
+      <div class="merge-confirm-icon"><i class="fa-solid fa-code-merge"></i></div>
+      <div>
+        <div class="merge-confirm-title">Confirm Record Merge</div>
+        <div class="merge-confirm-subtitle">This action cannot be undone. Please review carefully.</div>
+      </div>
+    </div>
+
+    <div class="merge-confirm-body">
+      <!-- Surviving Record -->
+      <div class="merge-survivor-card">
+        <div class="merge-survivor-label"><i class="fa-solid fa-shield-check"></i> Surviving Record</div>
+        <div class="merge-survivor-name">Claude 3.5 Sonnet</div>
+        <div class="merge-survivor-detail">This record's ID will be retained. All dependencies from merged records will be transferred here.</div>
+      </div>
+
+      <!-- Cherry-picked field overrides -->
+      <div>
+        <div class="merge-section-label">Field Value Overrides (1 field)</div>
+        <div class="merge-field-override">
+          <span class="merge-field-name">Description</span>
+          <span class="merge-field-value">"Frontier intelligence"</span>
+          <span class="merge-field-source">from Claude 4 Sonnet</span>
+        </div>
+      </div>
+
+      <!-- Dependency transfer -->
+      <div class="merge-deps-transfer">
+        <div class="merge-deps-transfer-label"><i class="fa-solid fa-arrow-right-arrow-left"></i> Dependencies to Transfer</div>
+        <div class="merge-deps-transfer-row">
+          <i class="fa-solid fa-arrow-right"></i>
+          <span><strong>28</strong> dependencies from <strong>Claude 3 - Sonnet</strong> → Claude 3.5 Sonnet</span>
+        </div>
+        <div class="merge-deps-transfer-row">
+          <i class="fa-solid fa-arrow-right"></i>
+          <span><strong>3</strong> dependencies from <strong>Claude 3.7 Sonnet</strong> → Claude 3.5 Sonnet</span>
+        </div>
+        <div class="merge-deps-transfer-row">
+          <i class="fa-solid fa-arrow-right"></i>
+          <span><strong>0</strong> dependencies from <strong>Claude 4 Sonnet</strong></span>
+        </div>
+        <div class="merge-deps-transfer-row">
+          <i class="fa-solid fa-arrow-right"></i>
+          <span><strong>1</strong> dependency from <strong>Claude Sonnet 4.6</strong> → Claude 3.5 Sonnet</span>
+        </div>
+      </div>
+
+      <!-- Records to be deleted -->
+      <div class="merge-delete-card">
+        <div class="merge-delete-label"><i class="fa-solid fa-trash"></i> Records to Delete After Merge</div>
+        <div class="merge-delete-item">
+          <span class="merge-delete-name">Claude 3 - Sonnet</span>
+          <span class="merge-delete-deps">28 deps transferring</span>
+        </div>
+        <div class="merge-delete-item">
+          <span class="merge-delete-name">Claude 3.7 Sonnet</span>
+          <span class="merge-delete-deps">3 deps transferring</span>
+        </div>
+        <div class="merge-delete-item">
+          <span class="merge-delete-name">Claude 4 Sonnet</span>
+          <span class="merge-delete-deps">no deps</span>
+        </div>
+        <div class="merge-delete-item">
+          <span class="merge-delete-name">Claude Sonnet 4.6</span>
+          <span class="merge-delete-deps">1 dep transferring</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="merge-confirm-footer">
+      <button class="action-btn cancel-btn"><i class="fa-solid fa-arrow-left"></i> Back</button>
+      <button class="action-btn confirm-merge-btn"><i class="fa-solid fa-code-merge"></i> Confirm Merge (4 records → 1)</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

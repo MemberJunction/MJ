@@ -1,158 +1,817 @@
-<!-- Content Autotagging Pipeline Monitor -->
-<div class="autotagging-container">
-    @if (IsLoading) {
-        <div class="loading-overlay">
-            <mj-loading text="Loading pipeline data..."></mj-loading>
-        </div>
-    }
+<!-- Content Autotagging Dashboard -->
+<div class="at-dashboard">
 
-    @if (ErrorMessage) {
-        <div class="error-banner">
-            <i class="fa-solid fa-triangle-exclamation"></i>
-            <span>{{ ErrorMessage }}</span>
-            <button class="refresh-btn" (click)="RefreshData()">
-                <i class="fa-solid fa-rotate-right"></i> Retry
-            </button>
+    <!-- ══════ LEFT NAV ══════ -->
+    <div class="at-left-nav">
+        <div class="at-left-nav-header">
+            <h2><i class="fa-solid fa-tags"></i> Autotagging</h2>
         </div>
-    }
-
-    @if (!IsLoading) {
-        <!-- Header -->
-        <div class="header-row">
-            <div class="header-title">
-                <i class="fa-solid fa-tags header-icon"></i>
-                <h2>Content Autotagging Pipeline</h2>
+        <div class="at-left-nav-items">
+            @for (item of NavItems; track item.Tab) {
+                <div class="at-nav-item" [class.active]="ActiveTab === item.Tab" (click)="SwitchTab(item.Tab)">
+                    <i [class]="item.Icon"></i> {{ item.Label }}
+                    @if (item.BadgeText) {
+                        <span class="at-nav-badge" [class.at-nav-badge-live]="item.BadgeClass === 'nav-badge-live'">{{ item.BadgeText }}</span>
+                    }
+                </div>
+            }
+            <div class="at-nav-divider"></div>
+            <div class="at-nav-item" [class.active]="ActiveTab === 'history'" (click)="SwitchTab('history')">
+                <i class="fa-solid fa-clock-rotate-left"></i> Run History
             </div>
-            <button class="refresh-btn" (click)="RefreshData()">
-                <i class="fa-solid fa-rotate-right"></i> Refresh
+        </div>
+        <div class="at-left-nav-footer">
+            <button class="at-run-pipeline-btn" (click)="RunPipeline()" [disabled]="IsRunning">
+                @if (IsRunning) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Running...
+                } @else {
+                    <i class="fa-solid fa-play"></i> Run Pipeline
+                }
             </button>
         </div>
+    </div>
 
-        <!-- KPI Strip -->
-        <div class="kpi-strip">
-            @for (metric of KPIMetrics; track metric.Label) {
-                <div class="kpi-card" [class]="metric.ColorClass">
-                    <div class="kpi-icon">
-                        <i [class]="metric.Icon"></i>
+    <!-- ══════ MAIN AREA ══════ -->
+    <div class="at-main-area">
+
+        @if (IsLoading) {
+            <div class="at-loading-overlay">
+                <mj-loading text="Loading autotagging data..."></mj-loading>
+            </div>
+        }
+
+        @if (!IsLoading) {
+
+            <!-- ════════════════════════════════════════════ -->
+            <!-- TAB 1: PIPELINE MONITOR -->
+            <!-- ════════════════════════════════════════════ -->
+            @if (ActiveTab === 'pipeline') {
+                <div class="at-page-header">
+                    <div>
+                        <div class="at-page-title">Pipeline Monitor</div>
+                        <div class="at-page-subtitle">Real-time processing status and recent activity</div>
                     </div>
-                    <div class="kpi-content">
-                        <span class="kpi-value">{{ metric.Value | number }}</span>
-                        <span class="kpi-label">{{ metric.Label }}</span>
+                    <div class="at-page-actions">
+                        <button class="at-action-btn at-secondary-btn" (click)="LoadPipelineData()">
+                            <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+                <div class="at-page-body">
+                    <!-- KPIs -->
+                    <div class="at-kpi-strip">
+                        @for (kpi of KPIMetrics; track kpi.Label) {
+                            <div class="at-kpi-card">
+                                <div class="at-kpi-value" [class.at-kpi-error-value]="kpi.Label === 'Errors' && kpi.Value > 0">{{ kpi.Value | number }}</div>
+                                <div class="at-kpi-label">{{ kpi.Label }}</div>
+                                @if (kpi.Trend) {
+                                    <div class="at-kpi-trend" [class.up]="kpi.TrendUp">
+                                        @if (kpi.TrendUp) { <i class="fa-solid fa-arrow-up"></i> }
+                                        {{ kpi.Trend }}
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="at-pipeline-layout">
+                        <div class="at-pipeline-center">
+                            <!-- Pipeline stages visualization hidden for now — can re-enable with animation later -->
+
+                            <!-- Progress bar (visible during run) -->
+                            @if (IsRunning) {
+                                <div class="at-progress-section">
+                                    <div class="at-progress-header">
+                                        <span class="at-progress-stage-label">{{ RunStage }}</span>
+                                        <span class="at-progress-pct">{{ RunProgress }}%</span>
+                                    </div>
+                                    <div class="at-progress-bar"><div class="at-progress-fill" [style.width.%]="RunProgress"></div></div>
+                                    @if (RunCurrentItem) {
+                                        <div class="at-progress-current">{{ RunCurrentItem }}</div>
+                                    }
+                                </div>
+                            }
+
+                            <!-- Recent Processing Feed -->
+                            <div class="at-card" style="flex: 1;">
+                                <div class="at-card-header">
+                                    <span class="at-card-title"><i class="fa-solid fa-bolt"></i> Recent Processing</span>
+                                </div>
+                                <div class="at-card-body">
+                                    @if (FeedItems.length === 0) {
+                                        <div class="at-empty-state">
+                                            <i class="fa-solid fa-inbox"></i>
+                                            <p>No processed items yet.</p>
+                                        </div>
+                                    }
+                                    @for (item of FeedItems; track $index) {
+                                        <div class="at-feed-item at-feed-item-clickable" (click)="OpenFeedItemDetail($index)">
+                                            <div class="at-feed-status-dot" [class]="item.Status"></div>
+                                            <span class="at-feed-item-name">{{ item.Name }}</span>
+                                            <span class="at-feed-item-source">{{ item.SourceName }}</span>
+                                            <div class="at-feed-item-tags">
+                                                @for (tag of item.Tags; track tag) {
+                                                    <span class="at-feed-tag">{{ tag }}</span>
+                                                }
+                                            </div>
+                                            <span class="at-feed-item-time">{{ item.TimeAgo }}</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right sidebar -->
+                        <div class="at-pipeline-right">
+                            <!-- Sources Quick List -->
+                            <div class="at-card">
+                                <div class="at-card-header">
+                                    <span class="at-card-title"><i class="fa-solid fa-database"></i> Sources</span>
+                                </div>
+                                <div class="at-card-body">
+                                    @for (source of SourceMinis; track source.ID) {
+                                        <div class="at-source-mini">
+                                            <div class="at-source-mini-icon"><i [class]="source.Icon"></i></div>
+                                            <div class="at-source-mini-info">
+                                                <div class="at-source-mini-name">{{ source.Name }}</div>
+                                                <div class="at-source-mini-meta">{{ source.Meta }}</div>
+                                            </div>
+                                            <div class="at-source-mini-status" [class]="source.StatusClass"></div>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                            <!-- Trending Tags -->
+                            <div class="at-card at-tag-cloud-card">
+                                <div class="at-card-title" style="margin-bottom: 10px;"><i class="fa-solid fa-chart-bar"></i> Trending Tags</div>
+                                <div class="at-tag-cloud">
+                                    @for (tag of TrendingTags; track tag.Tag) {
+                                        <span class="at-tag-pill" [class]="tag.SizeClass"
+                                              [style.opacity]="0.4 + tag.AvgWeight * 0.6"
+                                              [title]="'Weight: ' + tag.AvgWeight.toFixed(2)">{{ tag.Tag }}</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             }
-        </div>
 
-        <!-- Pipeline Stages Visualization -->
-        <div class="pipeline-section">
-            <h3 class="section-title">
-                <i class="fa-solid fa-diagram-project"></i> Pipeline Stages
-            </h3>
-            <div class="pipeline-flow">
-                @for (stage of PipelineStages; track stage.Name; let last = $last) {
-                    <div class="pipeline-stage" [class]="'stage-' + stage.Status">
-                        <div class="stage-icon">
-                            <i [class]="stage.Icon"></i>
-                        </div>
-                        <span class="stage-name">{{ stage.Name }}</span>
-                        <span class="stage-count">
-                            @if (stage.ActiveCount > 0) {
-                                {{ stage.ActiveCount }} active
-                            } @else {
-                                Idle
-                            }
-                        </span>
-                        <div class="stage-indicator"></div>
+            <!-- ════════════════════════════════════════════ -->
+            <!-- TAB 2: SOURCES -->
+            <!-- ════════════════════════════════════════════ -->
+            @if (ActiveTab === 'sources') {
+                <div class="at-page-header">
+                    <div>
+                        <div class="at-page-title">Content Sources</div>
+                        <div class="at-page-subtitle">Configure where content is ingested from</div>
                     </div>
-                    @if (!last) {
-                        <div class="stage-connector">
-                            <i class="fa-solid fa-chevron-right"></i>
+                    <div class="at-page-actions">
+                        <button class="at-action-btn at-primary-btn" (click)="OpenAddSourceForm()">
+                            <i class="fa-solid fa-plus"></i> Add Source
+                        </button>
+                    </div>
+                </div>
+                <div class="at-page-body">
+                    <div class="at-sources-grid">
+                        @for (card of SourceCards; track card.ID) {
+                            <div class="at-source-card-full at-source-card-clickable" (click)="OpenSourceDetail(card)">
+                                <div class="at-source-card-header">
+                                    <div class="at-source-card-icon"><i [class]="card.Icon"></i></div>
+                                    <div>
+                                        <div class="at-source-card-title">{{ card.Name }}</div>
+                                        <div class="at-source-card-type">{{ card.SourceTypeName }} · {{ card.FileTypeName }}</div>
+                                    </div>
+                                    <div class="at-source-card-status" [class]="card.StatusClass">
+                                        <div class="at-source-mini-status" [class]="card.StatusClass"></div>
+                                        {{ card.StatusLabel }}
+                                    </div>
+                                </div>
+                                @if (card.URL) {
+                                    <div class="at-source-card-url">{{ card.URL }}</div>
+                                }
+                                <div class="at-source-card-stats">
+                                    <div class="at-source-stat">
+                                        <div class="at-source-stat-value">{{ formatNumber(card.ItemCount) }}</div>
+                                        <div class="at-source-stat-label">Items</div>
+                                    </div>
+                                    <div class="at-source-stat">
+                                        <div class="at-source-stat-value">{{ formatNumber(card.TagCount) }}</div>
+                                        <div class="at-source-stat-label">Tags</div>
+                                    </div>
+                                    <div class="at-source-stat">
+                                        <div class="at-source-stat-value">{{ card.AvgTags }}</div>
+                                        <div class="at-source-stat-label">Avg Tags</div>
+                                    </div>
+                                    <div class="at-source-stat">
+                                        <div class="at-source-stat-value">{{ card.LastRunAgo }}</div>
+                                        <div class="at-source-stat-label">Last Run</div>
+                                    </div>
+                                </div>
+                                <div class="at-source-card-actions">
+                                    <button class="at-source-action-btn" (click)="OpenEditSourceForm(card); $event.stopPropagation()"><i class="fa-solid fa-pen"></i> Edit</button>
+                                    <button class="at-source-action-btn" (click)="RunPipeline(); $event.stopPropagation()"><i class="fa-solid fa-play"></i> Run</button>
+                                    <button class="at-source-action-btn at-source-delete-btn" (click)="DeleteSource(card); $event.stopPropagation()"><i class="fa-solid fa-trash"></i> Delete</button>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Add Source Card -->
+                        <div class="at-add-source-card" (click)="OpenAddSourceForm()">
+                            <i class="fa-solid fa-plus-circle"></i>
+                            <span style="font-size: 0.85rem; font-weight: 600;">Add Content Source</span>
+                            <span style="font-size: 0.72rem;">Web, RSS, Email, Files, API</span>
                         </div>
-                    }
+                    </div>
+                </div>
+            }
+
+            <!-- ════════════════════════════════════════════ -->
+            <!-- TAB 3: CONTENT TYPES -->
+            <!-- ════════════════════════════════════════════ -->
+            @if (ActiveTab === 'types') {
+                <div class="at-page-header">
+                    <div>
+                        <div class="at-page-title">Content Types</div>
+                        <div class="at-page-subtitle">Configure AI tagging rules per content category</div>
+                    </div>
+                    <div class="at-page-actions">
+                        <button class="at-action-btn at-primary-btn" (click)="OpenAddTypeForm()">
+                            <i class="fa-solid fa-plus"></i> Add Type
+                        </button>
+                    </div>
+                </div>
+                <div class="at-page-body">
+                    <div class="at-ct-grid">
+                        @for (card of ContentTypeCards; track card.ID) {
+                            <div class="at-ct-card">
+                                <div class="at-ct-card-header">
+                                    <span class="at-ct-card-name">{{ card.Name }}</span>
+                                    <span class="at-ct-card-model">{{ card.AIModelName }}</span>
+                                </div>
+                                <div class="at-ct-field">
+                                    <span class="at-ct-field-label">Description</span>
+                                    <span class="at-ct-field-value">{{ card.Description || '\u2014' }}</span>
+                                </div>
+                                <div class="at-ct-field">
+                                    <span class="at-ct-field-label">Sources Using</span>
+                                    <span class="at-ct-field-value">{{ card.SourcesUsing }}</span>
+                                </div>
+                                <div class="at-ct-field">
+                                    <span class="at-ct-field-label">Items Tagged</span>
+                                    <span class="at-ct-field-value">{{ formatNumber(card.ItemsTagged) }}</span>
+                                </div>
+                                <div class="at-ct-tag-range">
+                                    <i class="fa-solid fa-tags"></i>
+                                    <span>{{ card.MinTags }}</span>
+                                    <div class="at-ct-tag-range-bar">
+                                        <div class="at-ct-tag-range-fill" [style.left.%]="card.RangeLeftPct" [style.right.%]="card.RangeRightPct"></div>
+                                    </div>
+                                    <span>{{ card.MaxTags }}</span>
+                                    <span class="at-ct-range-suffix">tags/item</span>
+                                </div>
+                                <div class="at-source-card-actions" style="margin-top: 10px;">
+                                    <button class="at-source-action-btn" (click)="OpenEditTypeForm(card)"><i class="fa-solid fa-pen"></i> Edit</button>
+                                </div>
+                            </div>
+                        }
+                        <!-- Add Content Type Card -->
+                        <div class="at-add-type-card" (click)="OpenAddTypeForm()">
+                            <i class="fa-solid fa-plus-circle"></i>
+                            <span style="font-size: 0.85rem; font-weight: 600;">Add Content Type</span>
+                            <span style="font-size: 0.72rem;">Configure tagging rules</span>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- ════════════════════════════════════════════ -->
+            <!-- TAB 4: TAG LIBRARY -->
+            <!-- ════════════════════════════════════════════ -->
+            @if (ActiveTab === 'tags') {
+                <div class="at-page-header">
+                    <div>
+                        <div class="at-page-title">Tag Library</div>
+                        <div class="at-page-subtitle">{{ TagRows.length }} unique tags across all content sources</div>
+                    </div>
+                    <div class="at-page-actions">
+                        <input type="text" class="at-search-input" placeholder="Search tags..."
+                               [(ngModel)]="TagSearchQuery" (input)="FilterTags()">
+                    </div>
+                </div>
+                <div class="at-page-body">
+                    <div class="at-tag-lib-layout">
+                        <div class="at-tag-lib-main">
+                            <div class="at-card">
+                                <div class="at-card-body" style="max-height: 500px; overflow-y: auto;">
+                                    <table class="at-tag-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Tag</th>
+                                                <th>Count</th>
+                                                <th>Avg Weight</th>
+                                                <th>Distribution</th>
+                                                <th>Top Source</th>
+                                                <th>First Seen</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (row of FilteredTagRows; track row.Tag) {
+                                                <tr>
+                                                    <td class="at-tag-name-cell">{{ row.Tag }}</td>
+                                                    <td>{{ row.UsageCount }}</td>
+                                                    <td>
+                                                        <div class="at-weight-indicator">
+                                                            <div class="at-weight-bar">
+                                                                <div class="at-weight-bar-fill" [style.width.%]="row.AvgWeight * 100"
+                                                                     [class.at-weight-high]="row.AvgWeight >= 0.7"
+                                                                     [class.at-weight-medium]="row.AvgWeight >= 0.4 && row.AvgWeight < 0.7"
+                                                                     [class.at-weight-low]="row.AvgWeight < 0.4"></div>
+                                                            </div>
+                                                            <span class="at-weight-value">{{ row.AvgWeight.toFixed(2) }}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="at-tag-bar">
+                                                            <div class="at-tag-bar-fill" [style.width.%]="row.BarWidthPct"></div>
+                                                        </div>
+                                                    </td>
+                                                    <td>{{ row.TopSource }}</td>
+                                                    <td>{{ row.FirstSeen }}</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="at-tag-lib-sidebar">
+                            <div class="at-card at-tag-cloud-card">
+                                <div class="at-card-title" style="margin-bottom: 12px;"><i class="fa-solid fa-cloud"></i> Tag Cloud</div>
+                                <div class="at-tag-cloud">
+                                    @for (tag of TagCloud; track tag.Tag) {
+                                        <span class="at-tag-pill" [class]="tag.SizeClass"
+                                              [style.opacity]="0.4 + tag.AvgWeight * 0.6"
+                                              [title]="'Weight: ' + tag.AvgWeight.toFixed(2)">{{ tag.Tag }}</span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="at-card" style="padding: 16px; margin-top: 12px;">
+                                <div class="at-card-title" style="margin-bottom: 10px;"><i class="fa-solid fa-chart-pie"></i> By Source</div>
+                                <div class="at-tags-by-source">
+                                    @for (s of TagsBySource; track s.SourceName) {
+                                        <div class="at-tag-source-row">
+                                            <span>{{ s.SourceName }}</span>
+                                            <strong>{{ s.Count }}</strong>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- ════════════════════════════════════════════ -->
+            <!-- TAB 5: RUN HISTORY -->
+            <!-- ════════════════════════════════════════════ -->
+            @if (ActiveTab === 'history') {
+                <div class="at-page-header">
+                    <div>
+                        <div class="at-page-title">Run History</div>
+                        <div class="at-page-subtitle">Processing run log across all content sources</div>
+                    </div>
+                    <div class="at-page-actions">
+                        <select class="at-filter-select" [(ngModel)]="HistorySourceFilter" (change)="FilterRunHistory()">
+                            <option value="">All Sources</option>
+                            @for (s of HistorySourceOptions; track s) {
+                                <option [value]="s">{{ s }}</option>
+                            }
+                        </select>
+                        <select class="at-filter-select" [(ngModel)]="HistoryStatusFilter" (change)="FilterRunHistory()">
+                            <option value="">All Status</option>
+                            <option value="complete">Complete</option>
+                            <option value="failed">Failed</option>
+                            <option value="running">Running</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="at-page-body">
+                    <div class="at-card">
+                        <div class="at-card-body" style="max-height: 600px; overflow-y: auto;">
+                            <table class="at-run-table">
+                                <thead>
+                                    <tr>
+                                        <th>Status</th>
+                                        <th>Source</th>
+                                        <th>Started</th>
+                                        <th>Duration</th>
+                                        <th>Items</th>
+                                        <th>Tags</th>
+                                        <th>Errors</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (row of FilteredRunRows; track row.ID) {
+                                        <tr>
+                                            <td>
+                                                <span class="at-run-status-badge" [class]="row.StatusClass">
+                                                    @if (row.StatusClass === 'running') {
+                                                        <i class="fa-solid fa-spinner fa-spin" style="font-size: 0.55rem"></i>
+                                                    }
+                                                    {{ row.Status }}
+                                                </span>
+                                            </td>
+                                            <td class="at-run-source-name">{{ row.SourceName }}</td>
+                                            <td>{{ row.StartedDisplay }}</td>
+                                            <td class="at-run-duration">{{ row.Duration }}</td>
+                                            <td>{{ row.Items }}</td>
+                                            <td>{{ row.Tags }}</td>
+                                            <td [class]="row.ErrorClass">{{ row.Errors }}</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    <!-- ══════ SLIDE-IN FORM OVERLAY ══════ -->
+    @if (FormMode !== 'none') {
+        <div class="at-slide-overlay" (click)="CloseForm()"></div>
+        <div class="at-slide-panel">
+            <div class="at-slide-header">
+                <h3>
+                    @if (FormMode === 'add-source') { Add Content Source }
+                    @else if (FormMode === 'edit-source') { Edit Content Source }
+                    @else if (FormMode === 'add-type') { Add Content Type }
+                    @else if (FormMode === 'edit-type') { Edit Content Type }
+                </h3>
+                <button class="at-slide-close" (click)="CloseForm()"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div class="at-slide-body">
+
+                <!-- Source form -->
+                @if (FormMode === 'add-source' || FormMode === 'edit-source') {
+                    <div class="at-form-group">
+                        <label class="at-form-label">Name</label>
+                        <input type="text" class="at-form-input" [(ngModel)]="FormSourceName" placeholder="Source name">
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Source Type</label>
+                        <select class="at-form-select" [(ngModel)]="FormSourceTypeID">
+                            <option value="">Select source type...</option>
+                            @for (opt of SourceTypeOptions; track opt.ID) {
+                                <option [value]="opt.ID">{{ opt.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Content Type</label>
+                        <select class="at-form-select" [(ngModel)]="FormContentTypeID">
+                            <option value="">Select content type...</option>
+                            @for (opt of ContentTypeOptions; track opt.ID) {
+                                <option [value]="opt.ID">{{ opt.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">File Type</label>
+                        <select class="at-form-select" [(ngModel)]="FormFileTypeID">
+                            <option value="">Select file type...</option>
+                            @for (opt of FileTypeOptions; track opt.ID) {
+                                <option [value]="opt.ID">{{ opt.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">URL</label>
+                        <input type="text" class="at-form-input" [(ngModel)]="FormSourceURL" placeholder="https://...">
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Embedding Model Override</label>
+                        <mj-tree-dropdown
+                            [BranchConfig]="AIModelVendorBranch"
+                            [LeafConfig]="EmbeddingModelsLeaf"
+                            SelectionMode="single"
+                            SelectableTypes="leaf"
+                            Placeholder="Use system default"
+                            [Clearable]="true"
+                            [Value]="ToCompositeKey(FormSourceEmbeddingModelID)"
+                            (ValueChange)="FormSourceEmbeddingModelID = FromCompositeKey($event)">
+                        </mj-tree-dropdown>
+                        <span class="at-form-hint">Overrides Content Type default</span>
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Vector Index Override</label>
+                        <select class="at-form-select" [(ngModel)]="FormSourceVectorIndexID">
+                            <option value="">Use system default</option>
+                            @for (opt of VectorIndexOptions; track opt.ID) {
+                                <option [value]="opt.ID">{{ opt.Name }}</option>
+                            }
+                        </select>
+                        <span class="at-form-hint">Overrides Content Type default</span>
+                    </div>
+                    <div class="at-form-actions">
+                        <button class="at-action-btn at-primary-btn" (click)="SaveSource()" [disabled]="FormSaving">
+                            @if (FormSaving) { <i class="fa-solid fa-spinner fa-spin"></i> Saving... }
+                            @else { <i class="fa-solid fa-check"></i> Save }
+                        </button>
+                        <button class="at-action-btn at-secondary-btn" (click)="CloseForm()">Cancel</button>
+                    </div>
+                }
+
+                <!-- Content Type form -->
+                @if (FormMode === 'add-type' || FormMode === 'edit-type') {
+                    <div class="at-form-group">
+                        <label class="at-form-label">Name</label>
+                        <input type="text" class="at-form-input" [(ngModel)]="FormTypeName" placeholder="Content type name">
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Description</label>
+                        <textarea class="at-form-textarea" [(ngModel)]="FormTypeDescription" rows="3" placeholder="Description..."></textarea>
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">AI Model (for tagging)</label>
+                        <mj-tree-dropdown
+                            [BranchConfig]="AIModelVendorBranch"
+                            [LeafConfig]="AllModelsLeaf"
+                            SelectionMode="single"
+                            SelectableTypes="leaf"
+                            Placeholder="Select AI model..."
+                            [Clearable]="true"
+                            [Value]="ToCompositeKey(FormTypeAIModelID)"
+                            (ValueChange)="FormTypeAIModelID = FromCompositeKey($event)">
+                        </mj-tree-dropdown>
+                    </div>
+                    <div class="at-form-row">
+                        <div class="at-form-group" style="flex: 1;">
+                            <label class="at-form-label">Min Tags</label>
+                            <input type="number" class="at-form-input" [(ngModel)]="FormTypeMinTags" min="0">
+                        </div>
+                        <div class="at-form-group" style="flex: 1;">
+                            <label class="at-form-label">Max Tags</label>
+                            <input type="number" class="at-form-input" [(ngModel)]="FormTypeMaxTags" min="1">
+                        </div>
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Embedding Model</label>
+                        <mj-tree-dropdown
+                            [BranchConfig]="AIModelVendorBranch"
+                            [LeafConfig]="EmbeddingModelsLeaf"
+                            SelectionMode="single"
+                            SelectableTypes="leaf"
+                            Placeholder="Use system default"
+                            [Clearable]="true"
+                            [Value]="ToCompositeKey(FormTypeEmbeddingModelID)"
+                            (ValueChange)="FormTypeEmbeddingModelID = FromCompositeKey($event)">
+                        </mj-tree-dropdown>
+                    </div>
+                    <div class="at-form-group">
+                        <label class="at-form-label">Vector Index</label>
+                        <select class="at-form-select" [(ngModel)]="FormTypeVectorIndexID">
+                            <option value="">Use system default</option>
+                            @for (opt of VectorIndexOptions; track opt.ID) {
+                                <option [value]="opt.ID">{{ opt.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="at-form-actions">
+                        <button class="at-action-btn at-primary-btn" (click)="SaveContentType()" [disabled]="FormSaving">
+                            @if (FormSaving) { <i class="fa-solid fa-spinner fa-spin"></i> Saving... }
+                            @else { <i class="fa-solid fa-check"></i> Save }
+                        </button>
+                        <button class="at-action-btn at-secondary-btn" (click)="CloseForm()">Cancel</button>
+                    </div>
                 }
             </div>
         </div>
+    }
 
-        <!-- Main content area: Feed + Sources sidebar -->
-        <div class="main-content">
-            <!-- Recent Processing Feed -->
-            <div class="feed-section">
-                <h3 class="section-title">
-                    <i class="fa-solid fa-clock-rotate-left"></i> Recent Processing
-                </h3>
-                <div class="feed-list">
-                    @if (ProcessedItems.length === 0) {
-                        <div class="empty-state">
-                            <i class="fa-solid fa-inbox"></i>
-                            <p>No processed items yet.</p>
+    <!-- ══════ ITEM DETAIL SLIDE-IN ══════ -->
+    @if (ShowItemDetail && SelectedFeedItem) {
+        <div class="at-slide-overlay" (click)="CloseItemDetail()"></div>
+        <div class="at-slide-panel at-detail-panel">
+            <div class="at-slide-header">
+                <h3><i class="fa-solid fa-file-lines"></i> Content Item</h3>
+                <button class="at-slide-close" (click)="CloseItemDetail()"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div class="at-slide-body">
+                <!-- Header -->
+                <div class="at-detail-item-header">
+                    <h4 class="at-detail-item-name">{{ SelectedFeedItem.Name }}</h4>
+                    <div class="at-detail-badges">
+                        <span class="at-detail-badge at-detail-badge-source">{{ SelectedFeedItem.SourceName }}</span>
+                        <span class="at-detail-badge at-detail-badge-type">{{ SelectedFeedItem.ContentTypeName }}</span>
+                        @if (SelectedFeedItem.FileTypeName) {
+                            <span class="at-detail-badge at-detail-badge-file"><i class="fa-solid fa-file"></i> {{ SelectedFeedItem.FileTypeName }}</span>
+                        }
+                    </div>
+                </div>
+
+                <!-- URL -->
+                @if (SelectedFeedItem.URL) {
+                    <div class="at-detail-section">
+                        <div class="at-detail-section-label">URL</div>
+                        <a [href]="SelectedFeedItem.URL" target="_blank" class="at-detail-link">
+                            {{ SelectedFeedItem.URL }}
+                            <i class="fa-solid fa-external-link-alt" style="font-size: 0.65rem; margin-left: 4px;"></i>
+                        </a>
+                    </div>
+                }
+
+                <!-- Text Preview -->
+                @if (SelectedFeedItem.TextContent) {
+                    <div class="at-detail-section">
+                        <div class="at-detail-section-label">Content Preview</div>
+                        <div class="at-detail-text-preview">{{ SelectedFeedItem.TextContent }}</div>
+                    </div>
+                }
+
+                <!-- Tags -->
+                @if (SelectedFeedItem.Tags.length > 0) {
+                    <div class="at-detail-section">
+                        <div class="at-detail-section-label">Tags ({{ SelectedFeedItem.Tags.length }})</div>
+                        <div class="at-detail-tags">
+                            @for (tag of SelectedFeedItem.Tags; track tag) {
+                                <span class="at-tag-pill">{{ tag }}</span>
+                            }
                         </div>
-                    }
-                    @for (item of ProcessedItems; track $index) {
-                        <div class="feed-item">
-                            <div class="feed-item-header">
-                                <span class="feed-item-name" [title]="item.Name">{{ item.Name }}</span>
-                                <span class="feed-item-status" [class]="GetStatusClass(item.Status)">
-                                    {{ item.Status }}
-                                </span>
+                    </div>
+                }
+
+                <!-- Metadata -->
+                <div class="at-detail-section">
+                    <div class="at-detail-section-label">Metadata</div>
+                    <div class="at-detail-meta-grid">
+                        @if (SelectedFeedItem.Checksum) {
+                            <div class="at-detail-meta-row">
+                                <span class="at-detail-meta-key">Checksum</span>
+                                <span class="at-detail-meta-value at-detail-meta-mono">{{ SelectedFeedItem.Checksum }}</span>
                             </div>
-                            <div class="feed-item-details">
-                                <span class="feed-detail">
-                                    <i class="fa-solid fa-database"></i> {{ item.SourceName }}
-                                </span>
-                                <span class="feed-detail">
-                                    <i class="fa-solid fa-stopwatch"></i> {{ FormatDuration(item.ProcessingTimeMs) }}
-                                </span>
-                                <span class="feed-detail">
-                                    <i class="fa-solid fa-tags"></i> {{ item.TagCount }} tags
-                                </span>
-                                <span class="feed-detail feed-time">
-                                    {{ FormatRelativeTime(item.ProcessedAt) }}
-                                </span>
-                            </div>
+                        }
+                        <div class="at-detail-meta-row">
+                            <span class="at-detail-meta-key">Created</span>
+                            <span class="at-detail-meta-value">{{ SelectedFeedItem.CreatedAt }}</span>
                         </div>
-                    }
+                        <div class="at-detail-meta-row">
+                            <span class="at-detail-meta-key">Updated</span>
+                            <span class="at-detail-meta-value">{{ SelectedFeedItem.UpdatedAt }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="at-detail-actions">
+                    <button class="at-action-btn at-primary-btn" (click)="OpenRecordFromItem(SelectedFeedItem)">
+                        <i class="fa-solid fa-external-link-alt"></i> Open Record
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" disabled>
+                        <i class="fa-solid fa-magnifying-glass"></i> See Similar Items
+                    </button>
                 </div>
             </div>
+        </div>
+    }
 
-            <!-- Source Configuration Panel (right sidebar) -->
-            <div class="sources-panel">
-                <h3 class="section-title">
-                    <i class="fa-solid fa-gear"></i> Content Sources
-                </h3>
-                <div class="sources-list">
-                    @if (ContentSources.length === 0) {
-                        <div class="empty-state">
-                            <i class="fa-solid fa-plug-circle-xmark"></i>
-                            <p>No sources configured.</p>
-                        </div>
-                    }
-                    @for (source of ContentSources; track source.ID) {
-                        <div class="source-card">
-                            <div class="source-header">
-                                <div class="source-icon">
-                                    <i [class]="source.TypeIcon"></i>
-                                </div>
-                                <div class="source-info">
-                                    <span class="source-name">{{ source.Name }}</span>
-                                    <span class="source-type">{{ source.TypeName }}</span>
-                                </div>
-                                <span class="source-status" [class]="GetStatusClass(source.Status)">
-                                    {{ source.Status }}
-                                </span>
-                            </div>
-                            <div class="source-meta">
-                                <span class="source-meta-item">
-                                    <i class="fa-solid fa-clock"></i>
-                                    {{ FormatRelativeTime(source.LastRunAt) }}
-                                </span>
-                                <span class="source-meta-item">
-                                    <i class="fa-solid fa-file-lines"></i>
-                                    {{ source.ItemCount | number }} items
+    <!-- ══════ SOURCE DETAIL SLIDE-IN ══════ -->
+    @if (ShowSourceDetail) {
+        <div class="at-slide-overlay" (click)="CloseSourceDetail()"></div>
+        <div class="at-slide-panel at-detail-panel">
+            <div class="at-slide-header">
+                <h3><i class="fa-solid fa-database"></i> Source Detail</h3>
+                <button class="at-slide-close" (click)="CloseSourceDetail()"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div class="at-slide-body">
+                @if (SourceDetailLoading) {
+                    <div class="at-loading-overlay">
+                        <mj-loading text="Loading source details..."></mj-loading>
+                    </div>
+                }
+                @if (!SourceDetailLoading && SelectedSource) {
+                    <!-- Source Header -->
+                    <div class="at-detail-source-header">
+                        <div class="at-source-card-icon"><i [class]="SelectedSource.Icon"></i></div>
+                        <div>
+                            <h4 class="at-detail-item-name">{{ SelectedSource.Name }}</h4>
+                            <div class="at-detail-badges">
+                                <span class="at-detail-badge at-detail-badge-type">{{ SelectedSource.SourceTypeName }}</span>
+                                <span class="at-detail-badge" [class]="'at-detail-badge-status-' + SelectedSource.StatusClass">
+                                    {{ SelectedSource.StatusLabel }}
                                 </span>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Configuration -->
+                    <div class="at-detail-section">
+                        <div class="at-detail-section-label">Configuration</div>
+                        <div class="at-detail-meta-grid">
+                            @if (SelectedSource.URL) {
+                                <div class="at-detail-meta-row">
+                                    <span class="at-detail-meta-key">URL</span>
+                                    <a [href]="SelectedSource.URL" target="_blank" class="at-detail-link at-detail-meta-value">{{ SelectedSource.URL }}</a>
+                                </div>
+                            }
+                            <div class="at-detail-meta-row">
+                                <span class="at-detail-meta-key">Content Type</span>
+                                <span class="at-detail-meta-value">{{ SelectedSource.ContentTypeName }}</span>
+                            </div>
+                            <div class="at-detail-meta-row">
+                                <span class="at-detail-meta-key">File Type</span>
+                                <span class="at-detail-meta-value">{{ SelectedSource.FileTypeName }}</span>
+                            </div>
+                            <div class="at-detail-meta-row">
+                                <span class="at-detail-meta-key">Embedding Model</span>
+                                <span class="at-detail-meta-value">{{ SelectedSource.EmbeddingModelName }}</span>
+                            </div>
+                            <div class="at-detail-meta-row">
+                                <span class="at-detail-meta-key">Vector Index</span>
+                                <span class="at-detail-meta-value">{{ SelectedSource.VectorIndexName }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stats -->
+                    <div class="at-detail-section">
+                        <div class="at-detail-section-label">Statistics</div>
+                        <div class="at-detail-stats-strip">
+                            <div class="at-detail-stat">
+                                <div class="at-detail-stat-value">{{ formatNumber(SelectedSource.ItemCount) }}</div>
+                                <div class="at-detail-stat-label">Items</div>
+                            </div>
+                            <div class="at-detail-stat">
+                                <div class="at-detail-stat-value">{{ formatNumber(SelectedSource.TagCount) }}</div>
+                                <div class="at-detail-stat-label">Tags</div>
+                            </div>
+                            <div class="at-detail-stat">
+                                <div class="at-detail-stat-value">{{ SelectedSource.AvgTags }}</div>
+                                <div class="at-detail-stat-label">Avg Tags</div>
+                            </div>
+                            <div class="at-detail-stat">
+                                <div class="at-detail-stat-value">{{ SelectedSource.LastRunAgo }}</div>
+                                <div class="at-detail-stat-label">Last Run</div>
+                            </div>
+                            <div class="at-detail-stat">
+                                <div class="at-detail-stat-value" [class.at-kpi-error-value]="SelectedSource.ErrorCount > 0">{{ SelectedSource.ErrorCount }}</div>
+                                <div class="at-detail-stat-label">Errors</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content Library -->
+                    <div class="at-detail-section">
+                        <div class="at-detail-section-label">Content Library ({{ SelectedSource.ContentItems.length }})</div>
+                        <div class="at-detail-content-list">
+                            @if (SelectedSource.ContentItems.length === 0) {
+                                <div class="at-empty-state" style="padding: 16px;">
+                                    <p>No content items yet.</p>
+                                </div>
+                            }
+                            @for (ci of SelectedSource.ContentItems; track ci.ID) {
+                                <div class="at-detail-content-item" (click)="OpenContentItemDetail(ci)">
+                                    <div class="at-feed-status-dot" [class]="ci.StatusDot"></div>
+                                    <span class="at-detail-content-item-name">{{ ci.Name }}</span>
+                                    <span class="at-detail-content-item-tags">{{ ci.TagCount }} tags</span>
+                                    <span class="at-detail-content-item-time">{{ ci.UpdatedAt }}</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Run History -->
+                    @if (SelectedSource.RunHistory.length > 0) {
+                        <div class="at-detail-section">
+                            <div class="at-detail-section-label">Recent Runs</div>
+                            <div class="at-detail-run-history">
+                                @for (run of SelectedSource.RunHistory; track run.ID) {
+                                    <div class="at-detail-run-row">
+                                        <span class="at-run-status-badge" [class]="run.StatusClass">{{ run.Status }}</span>
+                                        <span class="at-detail-run-time">{{ run.StartedDisplay }}</span>
+                                        <span class="at-detail-run-duration">{{ run.Duration }}</span>
+                                        <span class="at-detail-run-items">{{ run.Items }} items</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
                     }
-                </div>
+
+                    <!-- Actions -->
+                    <div class="at-detail-actions">
+                        <button class="at-action-btn at-primary-btn" (click)="OpenEditSourceFromDetail()">
+                            <i class="fa-solid fa-pen"></i> Edit
+                        </button>
+                        <button class="at-action-btn at-secondary-btn" (click)="RunSourceFromDetail()">
+                            <i class="fa-solid fa-play"></i> Run Now
+                        </button>
+                        <button class="at-action-btn at-secondary-btn at-source-delete-btn" (click)="DeleteSourceFromDetail()">
+                            <i class="fa-solid fa-trash"></i> Delete
+                        </button>
+                    </div>
+                }
             </div>
         </div>
     }
