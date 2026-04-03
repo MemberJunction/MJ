@@ -1029,6 +1029,59 @@ export const MJAIAgentCategorySchema = z.object({
 export type MJAIAgentCategoryEntityType = z.infer<typeof MJAIAgentCategorySchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Client Tools
+ */
+export const MJAIAgentClientToolSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
+    ClientToolDefinitionID: z.string().describe(`
+        * * Field Name: ClientToolDefinitionID
+        * * Display Name: Tool Definition
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Client Tool Definitions (vwAIClientToolDefinitions.ID)`),
+    IsRequired: z.boolean().describe(`
+        * * Field Name: IsRequired
+        * * Display Name: Is Required
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, the agent expects this tool to always be available on the client. If the client has not registered a handler, agent execution may warn or fail depending on configuration.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Sort order for tool listing in prompts. Lower numbers appear first. Tools with the same priority are listed alphabetically.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    ClientToolDefinition: z.string().describe(`
+        * * Field Name: ClientToolDefinition
+        * * Display Name: Tool Name
+        * * SQL Data Type: nvarchar(200)`),
+});
+
+export type MJAIAgentClientToolEntityType = z.infer<typeof MJAIAgentClientToolSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Configurations
  */
 export const MJAIAgentConfigurationSchema = z.object({
@@ -3328,7 +3381,7 @@ export const MJAIAgentSchema = z.object({
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
-        * * Display Name: Context Compression Prompt
+        * * Display Name: Compression Prompt
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
@@ -3497,7 +3550,7 @@ if this limit is exceeded.`),
         * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner
+        * * Display Name: Owner User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -3616,7 +3669,7 @@ if this limit is exceeded.`),
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Storage Threshold (Bytes)
+        * * Display Name: Inline Storage Threshold Bytes
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
@@ -3631,13 +3684,13 @@ if this limit is exceeded.`),
         * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}`),
     NoteRetentionDays: z.number().nullable().describe(`
         * * Field Name: NoteRetentionDays
-        * * Display Name: Note Retention (Days)
+        * * Display Name: Note Retention Days
         * * SQL Data Type: int
         * * Default Value: 90
         * * Description: Number of days to retain notes before archiving due to inactivity. Default 90. NULL means use system default.`),
     ExampleRetentionDays: z.number().nullable().describe(`
         * * Field Name: ExampleRetentionDays
-        * * Display Name: Example Retention (Days)
+        * * Display Name: Example Retention Days
         * * SQL Data Type: int
         * * Default Value: 180
         * * Description: Number of days to retain examples before archiving due to inactivity. Default 180. NULL means use system default.`),
@@ -3658,6 +3711,12 @@ if this limit is exceeded.`),
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Categories (vwAIAgentCategories.ID)
         * * Description: Foreign key to AIAgentCategory. Assigns this agent to an organizational category for grouping, filtering, and inherited assignment strategy resolution.`),
+    AllowEphemeralClientTools: z.boolean().describe(`
+        * * Field Name: AllowEphemeralClientTools
+        * * Display Name: Allow Ephemeral Client Tools
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Name
@@ -3676,7 +3735,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().describe(`
         * * Field Name: OwnerUser
-        * * Display Name: Owner Name
+        * * Display Name: Owner User Name
         * * SQL Data Type: nvarchar(100)`),
     AttachmentStorageProvider: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProvider
@@ -3760,6 +3819,65 @@ export const MJAIArchitectureSchema = z.object({
 });
 
 export type MJAIArchitectureEntityType = z.infer<typeof MJAIArchitectureSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Client Tool Definitions
+ */
+export const MJAIClientToolDefinitionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Tool Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Unique identifier for the client tool (e.g., NavigateToApp, NavigateToRecord). Used to match tool invocations from the LLM to registered handlers on the client.`),
+    Description: z.string().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable description of what the tool does. This text is injected into the LLM system prompt so it knows when and how to use the tool.`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Tool category for grouping and filtering (e.g., navigation, form, display, data).`),
+    InputSchemaJSON: z.string().nullable().describe(`
+        * * Field Name: InputSchemaJSON
+        * * Display Name: Input Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Schema defining the input parameters the tool accepts. Included in the LLM prompt so it generates valid parameter objects.`),
+    OutputSchemaJSON: z.string().nullable().describe(`
+        * * Field Name: OutputSchemaJSON
+        * * Display Name: Output Schema
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON Schema describing the return value from the tool. Optional — used for documentation and LLM context.`),
+    DefaultTimeoutMs: z.number().nullable().describe(`
+        * * Field Name: DefaultTimeoutMs
+        * * Display Name: Default Timeout (ms)
+        * * SQL Data Type: int
+        * * Default Value: 30000
+        * * Description: Default timeout in milliseconds for this tool. Can be overridden per-invocation by the LLM or per-run by execution params. Default is 30000ms (30 seconds).`),
+    RequiresContextType: z.string().nullable().describe(`
+        * * Field Name: RequiresContextType
+        * * Display Name: Required Context Type
+        * * SQL Data Type: nvarchar(100)
+        * * Description: When set, the client only sends this tool to the server when the user is in the specified context (e.g., entity-form, dashboard, search). Null means the tool is always available.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJAIClientToolDefinitionEntityType = z.infer<typeof MJAIClientToolDefinitionSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Configuration Params
@@ -26334,6 +26452,142 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
 
 
 /**
+ * MJ: AI Agent Client Tools - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentClientTool
+ * * Base View: vwAIAgentClientTools
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Client Tools')
+export class MJAIAgentClientToolEntity extends BaseEntity<MJAIAgentClientToolEntityType> {
+    /**
+    * Loads the MJ: AI Agent Client Tools record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Client Tools record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentClientToolEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: ClientToolDefinitionID
+    * * Display Name: Tool Definition
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Client Tool Definitions (vwAIClientToolDefinitions.ID)
+    */
+    get ClientToolDefinitionID(): string {
+        return this.Get('ClientToolDefinitionID');
+    }
+    set ClientToolDefinitionID(value: string) {
+        this.Set('ClientToolDefinitionID', value);
+    }
+
+    /**
+    * * Field Name: IsRequired
+    * * Display Name: Is Required
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, the agent expects this tool to always be available on the client. If the client has not registered a handler, agent execution may warn or fail depending on configuration.
+    */
+    get IsRequired(): boolean {
+        return this.Get('IsRequired');
+    }
+    set IsRequired(value: boolean) {
+        this.Set('IsRequired', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Sort order for tool listing in prompts. Lower numbers appear first. Tools with the same priority are listed alphabetically.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: ClientToolDefinition
+    * * Display Name: Tool Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get ClientToolDefinition(): string {
+        return this.Get('ClientToolDefinition');
+    }
+}
+
+
+/**
  * MJ: AI Agent Configurations - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentConfiguration
@@ -32514,7 +32768,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionPromptID
-    * * Display Name: Context Compression Prompt
+    * * Display Name: Compression Prompt
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
     */
@@ -32891,7 +33145,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner
+    * * Display Name: Owner User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
@@ -33138,7 +33392,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Storage Threshold (Bytes)
+    * * Display Name: Inline Storage Threshold Bytes
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -33177,7 +33431,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: NoteRetentionDays
-    * * Display Name: Note Retention (Days)
+    * * Display Name: Note Retention Days
     * * SQL Data Type: int
     * * Default Value: 90
     * * Description: Number of days to retain notes before archiving due to inactivity. Default 90. NULL means use system default.
@@ -33191,7 +33445,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ExampleRetentionDays
-    * * Display Name: Example Retention (Days)
+    * * Display Name: Example Retention Days
     * * SQL Data Type: int
     * * Default Value: 180
     * * Description: Number of days to retain examples before archiving due to inactivity. Default 180. NULL means use system default.
@@ -33245,6 +33499,20 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: AllowEphemeralClientTools
+    * * Display Name: Allow Ephemeral Client Tools
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.
+    */
+    get AllowEphemeralClientTools(): boolean {
+        return this.Get('AllowEphemeralClientTools');
+    }
+    set AllowEphemeralClientTools(value: boolean) {
+        this.Set('AllowEphemeralClientTools', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
@@ -33282,7 +33550,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: OwnerUser
-    * * Display Name: Owner Name
+    * * Display Name: Owner User Name
     * * SQL Data Type: nvarchar(100)
     */
     get OwnerUser(): string {
@@ -33489,6 +33757,162 @@ export class MJAIArchitectureEntity extends BaseEntity<MJAIArchitectureEntityTyp
     */
     get RootParentArchitectureID(): string | null {
         return this.Get('RootParentArchitectureID');
+    }
+}
+
+
+/**
+ * MJ: AI Client Tool Definitions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIClientToolDefinition
+ * * Base View: vwAIClientToolDefinitions
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Client Tool Definitions')
+export class MJAIClientToolDefinitionEntity extends BaseEntity<MJAIClientToolDefinitionEntityType> {
+    /**
+    * Loads the MJ: AI Client Tool Definitions record from the database
+    * @param ID: string - primary key value to load the MJ: AI Client Tool Definitions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIClientToolDefinitionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Tool Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Unique identifier for the client tool (e.g., NavigateToApp, NavigateToRecord). Used to match tool invocations from the LLM to registered handlers on the client.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable description of what the tool does. This text is injected into the LLM system prompt so it knows when and how to use the tool.
+    */
+    get Description(): string {
+        return this.Get('Description');
+    }
+    set Description(value: string) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Tool category for grouping and filtering (e.g., navigation, form, display, data).
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+    set Category(value: string | null) {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: InputSchemaJSON
+    * * Display Name: Input Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema defining the input parameters the tool accepts. Included in the LLM prompt so it generates valid parameter objects.
+    */
+    get InputSchemaJSON(): string | null {
+        return this.Get('InputSchemaJSON');
+    }
+    set InputSchemaJSON(value: string | null) {
+        this.Set('InputSchemaJSON', value);
+    }
+
+    /**
+    * * Field Name: OutputSchemaJSON
+    * * Display Name: Output Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema describing the return value from the tool. Optional — used for documentation and LLM context.
+    */
+    get OutputSchemaJSON(): string | null {
+        return this.Get('OutputSchemaJSON');
+    }
+    set OutputSchemaJSON(value: string | null) {
+        this.Set('OutputSchemaJSON', value);
+    }
+
+    /**
+    * * Field Name: DefaultTimeoutMs
+    * * Display Name: Default Timeout (ms)
+    * * SQL Data Type: int
+    * * Default Value: 30000
+    * * Description: Default timeout in milliseconds for this tool. Can be overridden per-invocation by the LLM or per-run by execution params. Default is 30000ms (30 seconds).
+    */
+    get DefaultTimeoutMs(): number | null {
+        return this.Get('DefaultTimeoutMs');
+    }
+    set DefaultTimeoutMs(value: number | null) {
+        this.Set('DefaultTimeoutMs', value);
+    }
+
+    /**
+    * * Field Name: RequiresContextType
+    * * Display Name: Required Context Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: When set, the client only sends this tool to the server when the user is in the specified context (e.g., entity-form, dashboard, search). Null means the tool is always available.
+    */
+    get RequiresContextType(): string | null {
+        return this.Get('RequiresContextType');
+    }
+    set RequiresContextType(value: string | null) {
+        this.Set('RequiresContextType', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
