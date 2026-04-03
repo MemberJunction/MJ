@@ -673,6 +673,13 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
     return content;
   }
 
+  /**
+   * Generates the description string for a Zod schema field, including field metadata,
+   * value list documentation, and JSONType annotations with entity-prefixed type names.
+   * @param entityField - The entity field to generate a description for
+   * @param entity - Optional entity context, used to compute the entity-prefixed JSONType name
+   * @returns A formatted description string for the Zod `.describe()` call
+   */
   public GenerateZodDescription(entityField: EntityFieldInfo, entity?: EntityInfo): string {
     let result: string = '';
 
