@@ -176,15 +176,22 @@
         <!-- Kanban Board -->
         <div class="kanban-board">
             <!-- Pending Column -->
-            <div class="kanban-column">
+            <div class="kanban-column" [class.drop-target-active]="DragOverColumn === 'Pending' && DraggedGroup?.ApprovalStatus !== 'Pending'">
                 <div class="column-header column-header-pending">
                     <i class="fa-solid fa-clock"></i>
                     <span class="column-title">Pending Review</span>
                     <span class="column-count">{{ PendingCount }}</span>
                 </div>
-                <div class="column-body">
+                <div class="column-body"
+                     (dragover)="OnDragOver($event, 'Pending')"
+                     (dragleave)="OnDragLeave($event, 'Pending')"
+                     (drop)="OnDrop($event, 'Pending')">
                     @for (group of PendingGroups; track group.DetailId) {
-                        <div class="kanban-card" (click)="OpenComparison(group)">
+                        <div class="kanban-card"
+                             draggable="true"
+                             (dragstart)="OnDragStart($event, group)"
+                             (dragend)="OnDragEnd()"
+                             (click)="OpenComparison(group)">
                             <div class="card-header">
                                 <div class="card-header-left">
                                     <div class="card-icon">
@@ -227,12 +234,12 @@
                             <div class="card-actions">
                                 <button class="action-btn approve-btn"
                                         [disabled]="IsSaving"
-                                        (click)="ApproveMatch(group)">
+                                        (click)="ApproveMatch(group); $event.stopPropagation()">
                                     <i class="fa-solid fa-check"></i> Approve
                                 </button>
                                 <button class="action-btn reject-btn"
                                         [disabled]="IsSaving"
-                                        (click)="RejectMatch(group)">
+                                        (click)="RejectMatch(group); $event.stopPropagation()">
                                     <i class="fa-solid fa-times"></i> Reject
                                 </button>
                             </div>
@@ -248,15 +255,22 @@
             </div>
 
             <!-- Approved Column -->
-            <div class="kanban-column">
+            <div class="kanban-column" [class.drop-target-active]="DragOverColumn === 'Approved' && DraggedGroup?.ApprovalStatus !== 'Approved'">
                 <div class="column-header column-header-approved">
                     <i class="fa-solid fa-check-circle"></i>
                     <span class="column-title">Approved</span>
                     <span class="column-count">{{ ApprovedCount }}</span>
                 </div>
-                <div class="column-body">
+                <div class="column-body"
+                     (dragover)="OnDragOver($event, 'Approved')"
+                     (dragleave)="OnDragLeave($event, 'Approved')"
+                     (drop)="OnDrop($event, 'Approved')">
                     @for (group of ApprovedGroups; track group.DetailId) {
-                        <div class="kanban-card" (click)="OpenComparison(group)">
+                        <div class="kanban-card"
+                             draggable="true"
+                             (dragstart)="OnDragStart($event, group)"
+                             (dragend)="OnDragEnd()"
+                             (click)="OpenComparison(group)">
                             <div class="card-header">
                                 <div class="card-header-left">
                                     <div class="card-icon">
@@ -308,15 +322,22 @@
             </div>
 
             <!-- Rejected Column -->
-            <div class="kanban-column">
+            <div class="kanban-column" [class.drop-target-active]="DragOverColumn === 'Rejected' && DraggedGroup?.ApprovalStatus !== 'Rejected'">
                 <div class="column-header column-header-rejected">
                     <i class="fa-solid fa-ban"></i>
                     <span class="column-title">Rejected</span>
                     <span class="column-count">{{ RejectedCount }}</span>
                 </div>
-                <div class="column-body">
+                <div class="column-body"
+                     (dragover)="OnDragOver($event, 'Rejected')"
+                     (dragleave)="OnDragLeave($event, 'Rejected')"
+                     (drop)="OnDrop($event, 'Rejected')">
                     @for (group of RejectedGroups; track group.DetailId) {
-                        <div class="kanban-card" (click)="OpenComparison(group)">
+                        <div class="kanban-card"
+                             draggable="true"
+                             (dragstart)="OnDragStart($event, group)"
+                             (dragend)="OnDragEnd()"
+                             (click)="OpenComparison(group)">
                             <div class="card-header">
                                 <div class="card-header-left">
                                     <div class="card-icon">

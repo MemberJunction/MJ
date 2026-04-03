@@ -442,6 +442,75 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         await this.updateGroupApprovalStatus(group, 'Rejected');
     }
 
+    // ════════════════════════════════════════════
+    // Drag and Drop
+    // ════════════════════════════════════════════
+
+    /** The group currently being dragged */
+    public DraggedGroup: DuplicateGroup | null = null;
+    /** Which column is being dragged over (for highlight) */
+    public DragOverColumn: 'Pending' | 'Approved' | 'Rejected' | null = null;
+
+    public OnDragStart(event: DragEvent, group: DuplicateGroup): void {
+        this.DraggedGroup = group;
+        if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'move';
+            event.dataTransfer.setData('text/plain', group.DetailId);
+        }
+        // Add a slight delay so the drag ghost renders before we add the dragging class
+        setTimeout(() => this.cdr.detectChanges(), 0);
+    }
+
+    public OnDragEnd(): void {
+        this.DraggedGroup = null;
+        this.DragOverColumn = null;
+        this.cdr.detectChanges();
+    }
+
+    public OnDragOver(event: DragEvent, column: 'Pending' | 'Approved' | 'Rejected'): void {
+        event.preventDefault(); // Required to allow drop
+        if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = 'move';
+        }
+        if (this.DragOverColumn !== column) {
+            this.DragOverColumn = column;
+            this.cdr.detectChanges();
+        }
+    }
+
+    public OnDragLeave(event: DragEvent, column: 'Pending' | 'Approved' | 'Rejected'): void {
+        // Only clear if leaving the column (not entering a child element)
+        const related = event.relatedTarget as HTMLElement;
+        const columnEl = (event.currentTarget as HTMLElement);
+        if (!columnEl.contains(related)) {
+            if (this.DragOverColumn === column) {
+                this.DragOverColumn = null;
+                this.cdr.detectChanges();
+            }
+        }
+    }
+
+    public async OnDrop(event: DragEvent, targetStatus: 'Pending' | 'Approved' | 'Rejected'): Promise<void> {
+        event.preventDefault();
+        this.DragOverColumn = null;
+
+        if (!this.DraggedGroup) return;
+        if (this.DraggedGroup.ApprovalStatus === targetStatus) {
+            this.DraggedGroup = null;
+            this.cdr.detectChanges();
+            return; // Already in this column
+        }
+
+        const group = this.DraggedGroup;
+        this.DraggedGroup = null;
+        await this.updateGroupApprovalStatus(group, targetStatus);
+    }
+
+    /** Whether a card is currently being dragged */
+    public get IsDragging(): boolean {
+        return this.DraggedGroup !== null;
+    }
+
     /** Handle filter changes with debounce */
     public OnFilterChange(): void {
         this.filterSubject.next();
@@ -1474,7 +1543,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     /** Update the ApprovalStatus of all matches within a group and re-sort. */
     private async updateGroupApprovalStatus(
         group: DuplicateGroup,
-        status: 'Approved' | 'Rejected'
+        status: 'Approved' | 'Rejected' | 'Pending'
     ): Promise<void> {
         this.IsSaving = true;
         this.cdr.detectChanges();

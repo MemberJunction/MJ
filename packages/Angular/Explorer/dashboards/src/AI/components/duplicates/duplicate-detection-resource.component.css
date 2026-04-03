@@ -553,6 +553,25 @@ app-duplicate-detection-resource {
     box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-text-primary) 8%, transparent);
 }
 
+/* Drag and Drop */
+.kanban-card[draggable="true"] {
+    cursor: grab;
+}
+
+.kanban-card[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.drop-target-active {
+    outline: 2px dashed var(--mj-brand-primary);
+    outline-offset: -2px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface-card)) !important;
+}
+
+.drop-target-active .column-body {
+    min-height: 100px;
+}
+
 .card-header {
     display: flex;
     align-items: flex-start;
