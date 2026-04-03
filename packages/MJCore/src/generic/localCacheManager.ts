@@ -125,8 +125,8 @@ export interface LocalCacheManagerConfig {
 
 const DEFAULT_CONFIG: LocalCacheManagerConfig = {
     enabled: true,
-    maxSizeBytes: 50 * 1024 * 1024, // 50MB
-    maxEntries: 1000,
+    maxSizeBytes: 150 * 1024 * 1024, // 150MB
+    maxEntries: 5000,
     defaultTTLMs: 5 * 60 * 1000, // 5 minutes
     evictionPolicy: 'lru'
 };
