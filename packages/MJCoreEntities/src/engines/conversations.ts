@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, BaseEntityEvent, IMetadataProvider, Metadata, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, Metadata, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
@@ -423,7 +423,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             }
         }
 
-        conversation.SetMany(updates, true);
+        this.mergeDataOntoRecord(conversation, updates);
 
         this._selfMutating = true;
         try {
@@ -962,7 +962,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         detail.Role = role;
         detail.Message = message;
         if (additionalFields) {
-            detail.SetMany(additionalFields, true);
+            this.mergeDataOntoRecord(detail, additionalFields);
         }
 
         this._selfMutating = true;
@@ -1126,6 +1126,20 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
+     * Safely merges data onto a target object that may or may not be a BaseEntity.
+     * If the target has SetMany (i.e., it's a BaseEntity), uses that to properly handle
+     * read-only fields like __mj_CreatedAt. Otherwise falls back to Object.assign.
+     */
+    private mergeDataOntoRecord(target: unknown, data: Record<string, unknown>): void {
+        const t = target as { SetMany?: (obj: unknown, ignore: boolean) => void };
+        if (typeof t.SetMany === 'function') {
+            t.SetMany(data, true);
+        } else {
+            Object.assign(target as Record<string, unknown>, data);
+        }
+    }
+
+    /**
      * Handles save/delete events on Conversation entities from local or remote code.
      */
     private handleConversationEntityEvent(event: BaseEntityEvent, action: string): boolean {
@@ -1136,7 +1150,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (action === 'save') {
             const existing = this.GetConversation(id);
             if (existing) {
-                existing.SetMany(data, true);
+                this.mergeDataOntoRecord(existing, data);
                 this._conversations$.next([...this._conversations$.value]);
             }
         } else if (action === 'delete') {
@@ -1171,7 +1185,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 if (entity) {
                     cached.Details[existingIdx] = entity;
                 } else {
-                    cached.Details[existingIdx].SetMany(data, true);
+                    this.mergeDataOntoRecord(cached.Details[existingIdx], data);
                 }
             } else if (entity) {
                 // New detail from local event — append the entity
@@ -1209,7 +1223,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                         // Remote event — update existing agent run in place, or skip if not cached
                         const existing = cached.AgentRunsByDetailId.get(detailId);
                         if (existing) {
-                            existing.SetMany(data, true);
+                            this.mergeDataOntoRecord(existing, data);
                         }
                     }
                 } else if (action === 'delete') {

@@ -337,8 +337,6 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       console.error('Error loading AI agents:', error);
     } finally {
       this.isLoading = false;
-      // force change detection to update the view
-      this.cdr.detectChanges();
     }
   }
 
