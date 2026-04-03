@@ -111,6 +111,12 @@ export interface ConversationDetailCache {
     ArtifactsByDetailId: Map<string, ArtifactJSON[]>;
     /** Timestamp of when this cache entry was populated */
     LoadedAt: Date;
+    /**
+     * When true, peripheral data (artifacts/ratings) has changed externally and
+     * needs to be re-fetched via a full query reload. Set by entity event handlers
+     * for junction entities whose joined fields can't be reconstructed from events alone.
+     */
+    PeripheralDataStale: boolean;
 }
 
 /**
@@ -572,7 +578,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
                 UserAvatars: new Map(),
                 RatingsByDetailId: new Map(),
                 ArtifactsByDetailId: new Map(),
-                LoadedAt: new Date()
+                LoadedAt: new Date(),
+                PeripheralDataStale: false
             };
             return empty;
         }
@@ -658,7 +665,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             UserAvatars: userAvatars,
             RatingsByDetailId: ratingsByDetailId,
             ArtifactsByDetailId: artifactsByDetailId,
-            LoadedAt: new Date()
+            LoadedAt: new Date(),
+            PeripheralDataStale: false
         };
     }
 
@@ -938,19 +946,33 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return true;
         }
 
-        const entityName = event.baseEntity?.EntityInfo?.Name;
+        // Entity name comes from baseEntity for local events, or event.entityName for remote-invalidate
+        const entityName = event.baseEntity?.EntityInfo?.Name || event.entityName;
         if (!entityName) {
             return await super.HandleIndividualBaseEntityEvent(event);
         }
 
         const normalizedName = entityName.toLowerCase().trim();
 
+        // For remote-invalidate events, resolve the action to save/delete for our handlers
+        const effectiveType = event.type === 'remote-invalidate'
+            ? (event.payload as { action?: string })?.action || 'save'
+            : event.type;
+
         if (normalizedName === 'mj: conversations') {
-            return this.handleConversationEntityEvent(event);
+            return this.handleConversationEntityEvent(event, effectiveType);
         }
 
         if (normalizedName === 'mj: conversation details') {
-            return this.handleConversationDetailEntityEvent(event);
+            return this.handleConversationDetailEntityEvent(event, effectiveType);
+        }
+
+        if (normalizedName === 'mj: ai agent runs') {
+            return this.handleAgentRunEntityEvent(event, effectiveType);
+        }
+
+        if (normalizedName === 'mj: conversation detail artifacts' || normalizedName === 'mj: conversation detail ratings') {
+            return this.handlePeripheralJunctionEntityEvent(event);
         }
 
         // Not a conversation entity — let BaseEngine handle it
@@ -958,26 +980,49 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * Handles save/delete events on Conversation entities from external code.
+     * Extracts record data from a BaseEntityEvent.
+     * For local events: uses baseEntity directly.
+     * For remote-invalidate events: parses recordData JSON from the payload.
+     * Returns null if no data is available.
      */
-    private handleConversationEntityEvent(event: BaseEntityEvent): boolean {
-        const entity = event.baseEntity as MJConversationEntity;
-        if (!entity?.ID) return true;
+    private extractRecordData(event: BaseEntityEvent): Record<string, unknown> | null {
+        // Local event — entity is available directly
+        if (event.baseEntity) {
+            return event.baseEntity.GetAll();
+        }
 
-        if (event.type === 'save') {
-            // Check if this conversation is in our list
-            const existing = this.GetConversation(entity.ID);
+        // Remote event — parse from payload
+        const payload = event.payload as { recordData?: string } | undefined;
+        if (payload?.recordData) {
+            try {
+                return JSON.parse(payload.recordData);
+            } catch {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Handles save/delete events on Conversation entities from local or remote code.
+     */
+    private handleConversationEntityEvent(event: BaseEntityEvent, action: string): boolean {
+        const data = this.extractRecordData(event);
+        const id = data?.['ID'] as string;
+        if (!id) return true;
+
+        if (action === 'save') {
+            const existing = this.GetConversation(id);
             if (existing) {
-                // Update the cached entity with the new data
-                Object.assign(existing, entity.GetAll());
+                Object.assign(existing, data);
                 this._conversations$.next([...this._conversations$.value]);
             }
-            // If not in our list, it might be for a different user/environment — ignore
-        } else if (event.type === 'delete') {
-            const existing = this.GetConversation(entity.ID);
+        } else if (action === 'delete') {
+            const existing = this.GetConversation(id);
             if (existing) {
-                this.removeFromList(entity.ID);
-                this.removeDetailCache(entity.ID);
+                this.removeFromList(id);
+                this.removeDetailCache(id);
             }
         }
 
@@ -985,29 +1030,96 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     /**
-     * Handles save/delete events on ConversationDetail entities from external code.
+     * Handles save/delete events on ConversationDetail entities from local or remote code.
      */
-    private handleConversationDetailEntityEvent(event: BaseEntityEvent): boolean {
-        const entity = event.baseEntity as MJConversationDetailEntity;
-        if (!entity?.ID || !entity?.ConversationID) return true;
+    private handleConversationDetailEntityEvent(event: BaseEntityEvent, action: string): boolean {
+        const entity = event.baseEntity as MJConversationDetailEntity | null;
+        const data = this.extractRecordData(event);
+        const id = data?.['ID'] as string;
+        const conversationId = data?.['ConversationID'] as string;
+        if (!id || !conversationId) return true;
 
-        const key = NormalizeUUID(entity.ConversationID);
+        const key = NormalizeUUID(conversationId);
         const cached = this._detailCache.get(key);
-        if (!cached) return true; // Not cached — nothing to sync
+        if (!cached) return true;
 
-        if (event.type === 'save') {
-            // Check if this detail is already in the cache
-            const existingIdx = cached.Details.findIndex(d => UUIDsEqual(d.ID, entity.ID));
+        if (action === 'save') {
+            const existingIdx = cached.Details.findIndex(d => UUIDsEqual(d.ID, id));
             if (existingIdx >= 0) {
-                // Update existing — replace with the new entity data
-                cached.Details[existingIdx] = entity;
-            } else {
-                // New detail added externally — append to cache
+                // For local events, use the entity directly; for remote, update fields in place
+                if (entity) {
+                    cached.Details[existingIdx] = entity;
+                } else {
+                    Object.assign(cached.Details[existingIdx], data);
+                }
+            } else if (entity) {
+                // New detail from local event — append the entity
                 cached.Details.push(entity);
             }
-        } else if (event.type === 'delete') {
-            cached.Details = cached.Details.filter(d => !UUIDsEqual(d.ID, entity.ID));
-            cached.AgentRunsByDetailId.delete(entity.ID);
+            // For new details from remote events, we can't construct a full entity here
+            // — the next loadMessages will pick it up from the engine cache
+        } else if (action === 'delete') {
+            cached.Details = cached.Details.filter(d => !UUIDsEqual(d.ID, id));
+            cached.AgentRunsByDetailId.delete(id);
+        }
+
+        return true;
+    }
+
+    /**
+     * Handles save/delete events on AI Agent Run entities from local or remote code.
+     * Updates the AgentRunsByDetailId map so timers and status reflect reality.
+     */
+    private handleAgentRunEntityEvent(event: BaseEntityEvent, action: string): boolean {
+        const data = this.extractRecordData(event);
+        const id = data?.['ID'] as string;
+        const detailId = data?.['ConversationDetailID'] as string;
+        if (!id || !detailId) return true;
+
+        // Find which conversation cache entry contains this detail ID
+        for (const [_key, cached] of this._detailCache) {
+            const detail = cached.Details.find(d => UUIDsEqual(d.ID, detailId));
+            if (detail) {
+                if (action === 'save') {
+                    // For local events, use the entity directly
+                    if (event.baseEntity) {
+                        cached.AgentRunsByDetailId.set(detailId, event.baseEntity as MJAIAgentRunEntity);
+                    } else {
+                        // Remote event — update existing agent run in place, or skip if not cached
+                        const existing = cached.AgentRunsByDetailId.get(detailId);
+                        if (existing) {
+                            Object.assign(existing, data);
+                        }
+                    }
+                } else if (action === 'delete') {
+                    cached.AgentRunsByDetailId.delete(detailId);
+                }
+                break;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Handles save/delete events on junction entities (Conversation Detail Artifacts,
+     * Conversation Detail Ratings) from local or remote code.
+     *
+     * These entities have joined fields (ArtifactName, UserName, etc.) that can't be
+     * reconstructed from the entity event alone, so we flag the cache as stale.
+     * The UI component checks PeripheralDataStale and force-refreshes when needed.
+     */
+    private handlePeripheralJunctionEntityEvent(event: BaseEntityEvent): boolean {
+        const data = this.extractRecordData(event);
+        const detailId = data?.['ConversationDetailID'] as string;
+        if (!detailId) return true;
+
+        for (const [_key, cached] of this._detailCache) {
+            const detail = cached.Details.find(d => UUIDsEqual(d.ID, detailId));
+            if (detail) {
+                cached.PeripheralDataStale = true;
+                break;
+            }
         }
 
         return true;

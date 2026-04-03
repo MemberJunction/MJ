@@ -31,7 +31,7 @@
             <span class="pin-chip-count">{{ pinnedMessages.length }}</span>
           </button>
         }
-        @if (artifactCountDisplay > 0) {
+        @if (showArtifactIndicator && artifactCountDisplay > 0) {
           <button class="artifact-indicator" (click)="viewArtifacts()" title="View artifacts">
             <i class="fas fa-cube"></i>
             <span class="artifact-badge">{{ artifactCountDisplay }}</span>
@@ -43,17 +43,21 @@
             <span class="members-badge">{{ memberCount }}</span>
           </button>
         }
-        <button mjButton variant="flat" size="sm" (click)="exportConversation()" title="Export conversation">
-          <i class="fas fa-download"></i>
-          <span class="btn-label">Export</span>
-        </button>
-        <button mjButton variant="flat" size="sm"
-          [class.shared]="isShared"
-          (click)="shareConversation()"
-          [title]="isShared ? 'Manage sharing' : 'Share conversation'">
-          <i class="fas fa-share-nodes"></i>
-          <span class="btn-label">Share</span>
-        </button>
+        @if (showExportButton) {
+          <button mjButton variant="flat" size="sm" (click)="exportConversation()" title="Export conversation">
+            <i class="fas fa-download"></i>
+            <span class="btn-label">Export</span>
+          </button>
+        }
+        @if (showShareButton) {
+          <button mjButton variant="flat" size="sm"
+            [class.shared]="isShared"
+            (click)="shareConversation()"
+            [title]="isShared ? 'Manage sharing' : 'Share conversation'">
+            <i class="fas fa-share-nodes"></i>
+            <span class="btn-label">Share</span>
+          </button>
+        }
       </div>
     </div>
   }

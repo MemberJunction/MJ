@@ -99,6 +99,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   /** When true, the component is rendered inside the floating overlay (hides suggested topics, etc.) */
   @Input() overlayMode: boolean = false;
 
+  /** Show the Export button in the conversation header. Default true. */
+  @Input() showExportButton: boolean = true;
+
+  /** Show the Share button in the conversation header. Default true. */
+  @Input() showShareButton: boolean = true;
+
+  /** Show the artifact count indicator in the conversation header. Default true. */
+  @Input() showArtifactIndicator: boolean = true;
+
   // Sidebar toggle - when true, shows toggle button in header to expand sidebar
   @Input() showSidebarToggle: boolean = false;
 
@@ -592,7 +601,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     try {
       // Single source of truth: ConversationEngine handles caching and DB queries.
       // Cache hit = instant (no DB). Cache miss = one GetConversationComplete query.
-      const cacheEntry = await this.engine.LoadConversationDetails(conversationId, this.currentUser);
+      // If peripheral data (artifacts/ratings) changed externally, force refresh to pick up joined fields.
+      const existingEntry = this.engine.GetCachedDetailEntry(conversationId);
+      const forceRefresh = existingEntry?.PeripheralDataStale === true;
+      const cacheEntry = await this.engine.LoadConversationDetails(conversationId, this.currentUser, forceRefresh);
 
       // Set messages from engine cache
       this.messages = cacheEntry.Details;
