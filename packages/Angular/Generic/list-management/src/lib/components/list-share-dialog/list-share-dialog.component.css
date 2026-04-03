@@ -298,8 +298,3 @@
   color: var(--mj-status-warning);
 }
 
-/* Dialog actions - buttons on left */
-:host ::ng-deep kendo-dialog-actions {
-  flex-direction: row;
-  justify-content: flex-start;
-}
