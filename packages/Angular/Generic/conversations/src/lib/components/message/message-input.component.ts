@@ -1,11 +1,10 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
-import { ConversationDataService } from '../../services/conversation-data.service';
 import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMetadata } from '../../services/conversation-streaming.service';
@@ -19,9 +18,10 @@ import { Mention, MentionParseResult } from '../../models/conversation-state.mod
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
 
 @Component({
   standalone: false,
@@ -47,6 +47,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, MJAIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
   @Input() emptyStateMode: boolean = false; // When true, emits emptyStateSubmit instead of creating messages directly
+  @Input() appContext: Record<string, unknown> | null = null; // Application context for AI agent awareness
 
   // Initial message to send automatically - using getter/setter for precise control
   private _initialMessage: string | null = null;
@@ -137,17 +138,19 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   // Track pending attachments from the input box
   private pendingAttachments: PendingAttachment[] = [];
 
+  private engine = ConversationEngine.Instance;
+
   constructor(
     private dialogService: DialogService,
     private toastService: ToastService,
     private agentService: ConversationAgentService,
-    private conversationData: ConversationDataService,
     private dataCache: DataCacheService,
     private activeTasks: ActiveTasksService,
     private streamingService: ConversationStreamingService,
     private mentionParser: MentionParserService,
     private mentionAutocomplete: MentionAutocompleteService,
-    private attachmentService: ConversationAttachmentService
+    private attachmentService: ConversationAttachmentService,
+    private bridge: ConversationBridgeService
   ) {}
 
   async ngOnInit() {
@@ -933,7 +936,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         userMessage,
         this.conversationHistory,
         conversationManagerMessage.ID,
-        this.createProgressCallback(conversationManagerMessage, 'Sage')
+        this.createProgressCallback(conversationManagerMessage, 'Sage'),
+        this.appContext
       );
 
       // Task will be removed automatically in markMessageComplete()
@@ -2208,16 +2212,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       ]);
 
       if (result && result.success && (result.parsedResult || result.output)) {
-        // Use parsedResult if available, otherwise parse output
+        // Use parsedResult if available, otherwise clean and parse output
+        // (CleanAndParseJSON handles markdown code blocks like ```json ... ```)
         const parsed = result.parsedResult ||
-          (result.output ? JSON.parse(result.output) : null);
+          (result.output ? CleanAndParseJSON(result.output) : null);
 
         if (parsed) {
           const { name, description } = parsed;
 
           if (name) {
             // Update the conversation name and description in database AND state immediately
-            await this.conversationData.saveConversation(
+            await this.engine.SaveConversation(
               this.conversationId,
               { Name: name, Description: description || '' },
               this.currentUser
@@ -2275,12 +2280,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       this.activeTasks.remove(task.id);
 
-      // Show completion notification
-      MJNotificationService.Instance?.CreateSimpleNotification(
-        `${task.agentName} completed in ${task.conversationName || 'conversation'}`,
-        'success',
-        3000
-      );
+      // Show toast only if the user isn't currently viewing this conversation.
+      // If they're watching, the inline completion is sufficient.
+      const isConvoVisible = UUIDsEqual(this.bridge.ActiveConversationID$.value, task.conversationId)
+        && (this.bridge.OverlayActive$.value || this.bridge.WorkspaceActive$.value);
+      if (!isConvoVisible) {
+        MJNotificationService.Instance?.CreateSimpleNotification(
+          `${task.agentName} completed in ${task.conversationName || 'conversation'}`,
+          'success',
+          3000
+        );
+      }
     } else {
       console.warn(`⚠️ No task found for completed message ${conversationDetail.ID} - task may have been removed prematurely or not added`);
     }
